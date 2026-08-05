@@ -1,6 +1,7 @@
 import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
+import { toInt32, toUint32 } from '../src/runtime/conversion.js';
 
 /**
  * @param {string} source
@@ -287,6 +288,28 @@ const tests = [
     run() {
       // 4294967297 === 2**32 + 1; toInt32 of that is 1
       assertSame(run('4294967297 | 0;'), 1);
+    },
+  },
+  {
+    // Regression: ToInt32(-0) must return +0, not -0 (spec §9.5 step 3).
+    name: 'toInt32(-0) returns +0, not -0',
+    run() {
+      const result = toInt32(-0);
+      // Object.is(result, -0) would be true for -0; we want +0, confirmed by
+      // 1/result === Infinity (true for +0, -Infinity for -0).
+      if (1 / result !== Infinity) {
+        throw new Error(`Expected toInt32(-0) === +0, got ${result}`);
+      }
+    },
+  },
+  {
+    // Regression: ToUint32(-0.5) must return +0, not -0 (spec §9.6 step 3).
+    name: 'toUint32(-0.5) returns +0, not -0',
+    run() {
+      const result = toUint32(-0.5);
+      if (1 / result !== Infinity) {
+        throw new Error(`Expected toUint32(-0.5) === +0, got ${result}`);
+      }
     },
   },
 ];

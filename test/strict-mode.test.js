@@ -357,6 +357,63 @@ const tests = [
       assertNormal(run('function f(a, b) {} f.length = 5; f.length;'), 2);
     },
   },
+
+  // ---------------------------------------------------------------------------
+  // Strict compound assignment and update expression on non-writable property
+  // ---------------------------------------------------------------------------
+  {
+    name: 'strict script: compound assignment += to non-writable fn.length throws TypeError',
+    run() {
+      const realm = createRealm();
+      const result = runIn(
+        realm,
+        '"use strict"; function f(a, b) {} f.length += 1;',
+      );
+      assertGuestThrow(result, 'TypeError', realm);
+    },
+  },
+  {
+    name: 'strict script: prefix ++ on non-writable fn.length throws TypeError',
+    run() {
+      const realm = createRealm();
+      const result = runIn(
+        realm,
+        '"use strict"; function f(a, b) {} f.length++;',
+      );
+      assertGuestThrow(result, 'TypeError', realm);
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // delete inside strict try/catch
+  // ---------------------------------------------------------------------------
+  {
+    // ES5 11.4.1 step 5: deleting a non-configurable property in strict mode
+    // throws a TypeError. Inside a try/catch, that TypeError must be catchable
+    // as a normal guest throw.
+    name: 'strict try/catch: delete of non-configurable property throws catchable TypeError',
+    run() {
+      const realm = createRealm();
+      // f.length is non-configurable; deleting it in strict mode must throw.
+      const result = runIn(
+        realm,
+        [
+          '"use strict";',
+          'var caught;',
+          'try {',
+          '  function f(a, b) {}',
+          '  delete f.length;',
+          '} catch (e) {',
+          '  caught = e;',
+          '}',
+          'caught instanceof TypeError;',
+        ].join('\n'),
+      );
+      // The TypeError must have been caught and `caught instanceof TypeError`
+      // evaluated as true.
+      assertNormal(result, true);
+    },
+  },
 ];
 
 export default tests;

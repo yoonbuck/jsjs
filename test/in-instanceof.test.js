@@ -169,6 +169,22 @@ const tests = [
       assertGuestThrow(evaluateScript(realm, "'x' in 42;"), 'TypeError', realm);
     },
   },
+  {
+    // Regression: ES5 11.8.7 step 5 requires the RHS type check BEFORE any
+    // ToString(lhs) call. A guest toString on the LHS must NOT run (and must
+    // not be able to change the thrown error type) when the RHS is not an
+    // object.
+    name: 'in: RHS type check fires before LHS toString (no side-effect, throws TypeError not RangeError)',
+    run() {
+      const realm = createRealm();
+      const c = evaluateScript(
+        realm,
+        'var o = { toString: function () { throw new RangeError("boom"); } }; o in 5;',
+      );
+      // Must be a TypeError (RHS non-object), not a RangeError from LHS toString.
+      assertGuestThrow(c, 'TypeError', realm);
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // `instanceof` — basic
