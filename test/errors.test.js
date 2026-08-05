@@ -49,6 +49,30 @@ function assertGuestThrow(completion, constructorName, realm) {
 }
 
 const tests = [
+  {
+    name: 'Error message uses guest ToString and preserves side effects',
+    run() {
+      const realm = createRealm();
+      const result = evaluateScript(
+        realm,
+        'var hit = 0; var error = new Error({ toString: function () { hit = 1; return "custom"; } }); error.message + ":" + hit;',
+      );
+      assertSame(result.type, 'normal');
+      assertSame(result.value, 'custom:1');
+    },
+  },
+  {
+    name: 'Error message conversion propagates guest throws',
+    run() {
+      const realm = createRealm();
+      const result = evaluateScript(
+        realm,
+        'var sentinel = new RangeError("boom"); try { new Error({ toString: function () { throw sentinel; } }); false; } catch (error) { error === sentinel; }',
+      );
+      assertSame(result.type, 'normal');
+      assertSame(result.value, true);
+    },
+  },
   // ---------------------------------------------------------------------------
   // GuestErrorSignal
   // ---------------------------------------------------------------------------
@@ -90,7 +114,6 @@ const tests = [
       assertSame(e.get('message'), 'msg');
     },
   },
-
   // ---------------------------------------------------------------------------
   // Error with no argument: no own 'message' property
   // ---------------------------------------------------------------------------

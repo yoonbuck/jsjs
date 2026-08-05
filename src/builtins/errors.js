@@ -1,6 +1,7 @@
 import { EngineObject } from '../runtime/object.js';
 import { EngineFunction } from '../runtime/function-object.js';
 import { createReturnCompletion } from '../runtime/completion.js';
+import { toString } from '../runtime/conversion.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -96,7 +97,7 @@ function buildErrorConstructor(realm, name, errorPrototype) {
 
       if (args[0] !== undefined) {
         instance.defineOwnProperty('message', {
-          value: String(args[0]),
+          value: toString(args[0]),
           writable: true,
           enumerable: false,
           configurable: true,
