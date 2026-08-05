@@ -103,4 +103,3 @@ arrays, and an initial Test262 runner. It is complete when all local tests pass 
 Node and a browser, the JavaScriptCore launcher passes when `jsc` is installed, and
 the supported Test262 subset produces a reproducible report with no unexpected
 failures.
-

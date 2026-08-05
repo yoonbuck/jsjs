@@ -21,12 +21,14 @@
 ### Task 1: Portable project and test foundation
 
 **Files:**
+
 - Create: `package.json`, `jsconfig.json`, `eslint.config.js`, `.prettierrc.json`
 - Create: `test/harness/assert.js`, `test/harness/runner.js`
 - Create: `test/run-node.js`, `test/run-browser.html`, `test/run-browser.js`
 - Create: `test/foundation.test.js`
 
 **Interfaces:**
+
 - Produces: `assertSame(actual, expected)`, `assertThrows(fn, ErrorType)`, and `runTests(tests, reporter)`.
 
 - [ ] Write `test/foundation.test.js` with one passing assertion, one captured failure, and deterministic JSON result assertions.
@@ -38,11 +40,13 @@
 ### Task 2: Parser and runtime records
 
 **Files:**
+
 - Create: `src/parser.js`
 - Create: `src/runtime/completion.js`, `src/runtime/reference.js`, `src/runtime/errors.js`
 - Create: `test/parser.test.js`, `test/runtime-records.test.js`
 
 **Interfaces:**
+
 - Produces: `parseScript(source, options)`, completion factories, `Reference`, `getValue(reference)`, and `putValue(reference, value)`.
 
 - [ ] Add tests for valid scripts, normalized syntax errors, all completion kinds, resolvable references, and unresolvable-reference errors.
@@ -54,11 +58,13 @@
 ### Task 3: Objects, descriptors, and abstract operations
 
 **Files:**
+
 - Create: `src/runtime/object.js`, `src/runtime/descriptors.js`
 - Create: `src/runtime/conversion.js`, `src/runtime/operators.js`
 - Create: `test/objects.test.js`, `test/abstract-operations.test.js`
 
 **Interfaces:**
+
 - Consumes: runtime errors from Task 2.
 - Produces: `EngineObject`, descriptor validation, `toPrimitive`, `toNumber`, `toString`, equality, arithmetic, and relational operations.
 
@@ -71,11 +77,13 @@
 ### Task 4: Environments, realms, and API shell
 
 **Files:**
+
 - Create: `src/runtime/environment.js`, `src/runtime/realm.js`
 - Create: `src/builtins/fundamental.js`, `src/api.js`, `src/index.js`
 - Create: `test/environments.test.js`, `test/realms.test.js`
 
 **Interfaces:**
+
 - Consumes: `EngineObject` and runtime records.
 - Produces: declarative/object/global environment records, `createRealm()`, and `evaluateScript(realm, source)`.
 
@@ -88,11 +96,13 @@
 ### Task 5: Expression and statement evaluation
 
 **Files:**
+
 - Create: `src/evaluator/index.js`, `src/evaluator/expressions.js`, `src/evaluator/statements.js`
 - Create: `src/evaluator/declarations.js`
 - Create: `test/evaluator-expressions.test.js`, `test/evaluator-statements.test.js`
 
 **Interfaces:**
+
 - Consumes: parser, realm, references, completions, and abstract operations.
 - Produces: `evaluate(node, context)` with explicit completion propagation.
 
@@ -105,11 +115,13 @@
 ### Task 6: Functions, objects, and arrays
 
 **Files:**
+
 - Create: `src/runtime/function-object.js`, `src/runtime/array-object.js`
 - Modify: `src/evaluator/expressions.js`, `src/evaluator/declarations.js`
 - Create: `test/functions.test.js`, `test/object-array-literals.test.js`
 
 **Interfaces:**
+
 - Produces: callable engine functions, activation environments, arguments binding, object literals, array literals, property access, and calls.
 
 - [ ] Add tests for closures, recursion, `this`, arguments, return/throw, constructors, sparse arrays, accessors, and member calls.
@@ -121,12 +133,14 @@
 ### Task 7: Initial Test262 runner and runtime adapters
 
 **Files:**
+
 - Create: `tools/test262/metadata.js`, `tools/test262/runner.js`, `tools/test262/report.js`
 - Create: `tools/test262/adapters/node.js`, `tools/test262/adapters/jsc.js`, `tools/test262/adapters/browser.js`
 - Create: `test/test262-runner.test.js`, `test/fixtures/test262/`
 - Modify: `package.json`, `README.md`
 
 **Interfaces:**
+
 - Consumes: `createRealm()` and `evaluateScript()`.
 - Produces: metadata parsing, strict/non-strict variants, include loading, negative-test handling, feature filtering, and deterministic JSON-lines reports.
 
@@ -140,11 +154,13 @@
 ### Task 8: CI and milestone report
 
 **Files:**
+
 - Create: `.github/workflows/ci.yml`
 - Create: `tools/test262/features.json`
 - Modify: `README.md`
 
 **Interfaces:**
+
 - Consumes: all test and static-check scripts.
 - Produces: repeatable Node/browser CI and a checked-in supported-feature manifest.
 
@@ -153,4 +169,3 @@
 - [ ] Add CI jobs for formatting, linting, type checking, Node tests, browser tests, and the pinned Test262 subset.
 - [ ] Run every CI command locally and generate the initial Test262 report.
 - [ ] Commit with `ci: verify es5 engine foundation`.
-

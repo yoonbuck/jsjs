@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "groups": [
+    {
+      "name": "expressions",
+      "summary": "operators that need no standard library: comma, conditional, logical and/or",
+      "paths": [
+        "test/language/expressions/comma/S11.14_A3.js",
+        "test/language/expressions/conditional/S11.12_A3_T4.js",
+        "test/language/expressions/logical-and/S11.11.1_A3_T1.js",
+        "test/language/expressions/logical-or/S11.11.2_A2.1_T4.js"
+      ]
+    },
+    {
+      "name": "lexical",
+      "summary": "comments, line terminators, and white space",
+      "paths": [
+        "test/language/comments/S7.4_A3.js",
+        "test/language/comments/S7.4_A4_T1.js",
+        "test/language/line-terminators/S7.3_A2.1_T2.js",
+        "test/language/line-terminators/S7.3_A6_T1.js",
+        "test/language/white-space/S7.2_A2.1_T2.js",
+        "test/language/white-space/S7.2_A5_T1.js"
+      ]
+    },
+    {
+      "name": "statements",
+      "summary": "block, do-while, empty, if, return, and while statements",
+      "paths": [
+        "test/language/statements/block/S12.1_A4_T1.js",
+        "test/language/statements/do-while/S12.6.1_A1.js",
+        "test/language/statements/do-while/S12.6.1_A4_T1.js",
+        "test/language/statements/empty/S12.3_A1.js",
+        "test/language/statements/if/S12.5_A1_T1.js",
+        "test/language/statements/if/S12.5_A6_T1.js",
+        "test/language/statements/return/S12.9_A1_T1.js",
+        "test/language/statements/return/S12.9_A3.js",
+        "test/language/statements/while/S12.6.2_A1.js",
+        "test/language/statements/while/S12.6.2_A4_T1.js"
+      ]
+    },
+    {
+      "name": "types",
+      "summary": "the primitive types boolean, null, number, string, and undefined",
+      "paths": [
+        "test/language/types/boolean/S8.3_A1_T1.js",
+        "test/language/types/boolean/S8.3_A2.1.js",
+        "test/language/types/null/S8.2_A1_T1.js",
+        "test/language/types/null/S8.2_A2.js",
+        "test/language/types/number/S8.5_A2.1.js",
+        "test/language/types/number/S8.5_A3.js",
+        "test/language/types/number/S8.5_A5.js",
+        "test/language/types/string/S8.4_A1.js",
+        "test/language/types/string/S8.4_A2.js",
+        "test/language/types/undefined/S8.1_A1_T1.js",
+        "test/language/types/undefined/S8.1_A2_T1.js",
+        "test/language/types/undefined/S8.1_A3_T1.js"
+      ]
+    }
+  ]
+}
