@@ -1,5 +1,6 @@
 import { EngineObject } from './object.js';
 import { toNumber } from './conversion.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyDescriptorRecord} PropertyDescriptorRecord
@@ -234,13 +235,18 @@ function toUint32(value) {
 }
 
 /**
+ * Signals a guest-visible array-operation rejection, matching the same
+ * mechanism as `rejectOperation` in `object.js`. When `throwOnError` is
+ * true, throws a `GuestErrorSignal` so the nearest realm-aware boundary
+ * can materialise a proper guest `TypeError` throw completion.
+ *
  * @param {boolean} throwOnError
  * @param {string} message
  * @returns {false}
  */
 function rejectOperation(throwOnError, message) {
   if (throwOnError) {
-    throw new TypeError(message);
+    throw new GuestErrorSignal('TypeError', message);
   }
 
   return false;

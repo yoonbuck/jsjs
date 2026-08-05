@@ -1,6 +1,7 @@
 import { assertSame, assertThrows } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 /**
  * @param {string} source
@@ -351,7 +352,7 @@ const tests = [
       assertSame(array.value.defineOwnProperty('length', { value: 1 }), false);
       const lengthError = assertThrows(
         () => array.value.defineOwnProperty('length', { value: 1 }, true),
-        TypeError,
+        GuestErrorSignal,
       );
       assertSame(
         lengthError.message,
@@ -361,7 +362,7 @@ const tests = [
       assertSame(array.value.defineOwnProperty('5', dataDescriptor(6)), false);
       const indexError = assertThrows(
         () => array.value.defineOwnProperty('5', dataDescriptor(6), true),
-        TypeError,
+        GuestErrorSignal,
       );
       assertSame(
         indexError.message,
@@ -411,7 +412,7 @@ const tests = [
 
       const error = assertThrows(
         () => a.defineOwnProperty('length', { value: 0 }, true),
-        TypeError,
+        GuestErrorSignal,
       );
       assertSame(
         error.message,
