@@ -1,6 +1,14 @@
 import { EngineObject } from '../runtime/object.js';
+import { EngineArray } from '../runtime/array-object.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
+import { isDataDescriptor } from '../runtime/descriptors.js';
 import { toObject, toString } from '../runtime/conversion.js';
-import { requireCallable } from './shared.js';
+import {
+  fromPropertyDescriptor,
+  requireCallable,
+  requireObjectReceiver,
+  toPropertyDescriptor,
+} from './shared.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -148,6 +156,7 @@ export function createObjectIntrinsics(realm) {
       },
     }),
   );
+  installObjectReflectionMethods(realm, objectConstructor);
 
   return { objectConstructor };
 }
@@ -179,4 +188,241 @@ function defineMethod(target, name, method) {
     enumerable: false,
     configurable: true,
   });
+}
+
+/**
+ * @param {Realm} realm
+ * @param {import('./shared.js').NativeFunction} objectConstructor
+ * @returns {void}
+ */
+function installObjectReflectionMethods(realm, objectConstructor) {
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'getPrototypeOf',
+    1,
+    (_this, args) => requireObjectArgument(args[0]).getPrototype(),
+  );
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'getOwnPropertyDescriptor',
+    2,
+    (_this, args) =>
+      fromPropertyDescriptor(
+        realm,
+        requireObjectArgument(args[0]).getOwnProperty(toString(args[1])),
+      ),
+  );
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'getOwnPropertyNames',
+    1,
+    (_this, args) =>
+      createArrayFromList(
+        realm,
+        requireObjectArgument(args[0]).ownPropertyKeys(),
+      ),
+  );
+  defineNativeMethod(realm, objectConstructor, 'create', 2, (_this, args) => {
+    const prototype = args[0];
+
+    if (prototype !== null && !(prototype instanceof EngineObject)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Object prototype may only be an object or null',
+      );
+    }
+
+    const object = new EngineObject(prototype);
+
+    if (args.length > 1 && args[1] !== undefined) {
+      defineProperties(realm, object, args[1]);
+    }
+
+    return object;
+  });
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'defineProperty',
+    3,
+    (_this, args) => {
+      const object = requireObjectArgument(args[0]);
+      const name = toString(args[1]);
+      const descriptor = toPropertyDescriptor(args[2]);
+      object.defineOwnProperty(name, descriptor, true);
+      return object;
+    },
+  );
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'defineProperties',
+    2,
+    (_this, args) =>
+      defineProperties(realm, requireObjectArgument(args[0]), args[1]),
+  );
+  defineNativeMethod(realm, objectConstructor, 'seal', 1, (_this, args) => {
+    const object = requireObjectArgument(args[0]);
+
+    for (const name of object.ownPropertyKeys()) {
+      object.defineOwnProperty(name, { configurable: false }, true);
+    }
+
+    object.preventExtensions();
+    return object;
+  });
+  defineNativeMethod(realm, objectConstructor, 'freeze', 1, (_this, args) => {
+    const object = requireObjectArgument(args[0]);
+
+    for (const name of object.ownPropertyKeys()) {
+      const descriptor = object.getOwnProperty(name);
+      object.defineOwnProperty(
+        name,
+        isDataDescriptor(descriptor)
+          ? { writable: false, configurable: false }
+          : { configurable: false },
+        true,
+      );
+    }
+
+    object.preventExtensions();
+    return object;
+  });
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'preventExtensions',
+    1,
+    (_this, args) => requireObjectArgument(args[0]).preventExtensions(),
+  );
+  defineNativeMethod(realm, objectConstructor, 'isSealed', 1, (_this, args) => {
+    const object = requireObjectArgument(args[0]);
+
+    if (object.isExtensible()) {
+      return false;
+    }
+
+    for (const name of object.ownPropertyKeys()) {
+      if (object.getOwnProperty(name)?.configurable !== false) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+  defineNativeMethod(realm, objectConstructor, 'isFrozen', 1, (_this, args) => {
+    const object = requireObjectArgument(args[0]);
+
+    if (object.isExtensible()) {
+      return false;
+    }
+
+    for (const name of object.ownPropertyKeys()) {
+      const descriptor = object.getOwnProperty(name);
+
+      if (
+        descriptor?.configurable !== false ||
+        (isDataDescriptor(descriptor) && descriptor.writable !== false)
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'isExtensible',
+    1,
+    (_this, args) => requireObjectArgument(args[0]).isExtensible(),
+  );
+  defineNativeMethod(realm, objectConstructor, 'keys', 1, (_this, args) => {
+    const object = requireObjectArgument(args[0]);
+    const names = [];
+
+    for (const name of object.ownPropertyKeys()) {
+      if (object.getOwnProperty(name)?.enumerable === true) {
+        names.push(name);
+      }
+    }
+
+    return createArrayFromList(realm, names);
+  });
+}
+
+/**
+ * @param {Realm} realm
+ * @param {EngineObject} object
+ * @param {unknown} propertiesValue
+ * @returns {EngineObject}
+ */
+function defineProperties(realm, object, propertiesValue) {
+  const properties = toObject(realm, propertiesValue);
+  /** @type {{ name: string | symbol, descriptor: import('../runtime/descriptors.js').PropertyDescriptorRecord }[]} */
+  const definitions = [];
+
+  for (const name of properties.ownPropertyKeys()) {
+    if (properties.getOwnProperty(name)?.enumerable !== true) {
+      continue;
+    }
+
+    definitions.push({
+      name,
+      descriptor: toPropertyDescriptor(properties.get(name)),
+    });
+  }
+
+  for (const { name, descriptor } of definitions) {
+    object.defineOwnProperty(name, descriptor, true);
+  }
+
+  return object;
+}
+
+/**
+ * @param {Realm} realm
+ * @param {readonly (string | symbol)[]} values
+ * @returns {EngineArray}
+ */
+function createArrayFromList(realm, values) {
+  const array = new EngineArray(realm.intrinsics.arrayPrototype);
+
+  for (let index = 0; index < values.length; index += 1) {
+    array.defineOwnProperty(String(index), {
+      value: values[index],
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  return array;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {EngineObject}
+ */
+function requireObjectArgument(value) {
+  return requireObjectReceiver(value, 'Object method requires an object');
+}
+
+/**
+ * @param {Realm} realm
+ * @param {EngineObject} target
+ * @param {string} name
+ * @param {number} length
+ * @param {import('./shared.js').NativeFunctionOptions['call']} call
+ * @returns {void}
+ */
+function defineNativeMethod(realm, target, name, length, call) {
+  defineMethod(
+    target,
+    name,
+    realm.createNativeFunction({ name, length, call }),
+  );
 }

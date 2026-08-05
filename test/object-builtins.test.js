@@ -135,6 +135,172 @@ const tests = [
       );
     },
   },
+  {
+    name: 'Object descriptor APIs define and report data and accessor properties',
+    run() {
+      assertSame(
+        run(
+          'var o = {}; var returned = Object.defineProperty(o, "x", {value: 3}); ' +
+            'var d = Object.getOwnPropertyDescriptor(o, "x"); ' +
+            '(returned === o) && d.value === 3 && d.writable === false && ' +
+            'd.enumerable === false && d.configurable === false;',
+        ),
+        true,
+      );
+      assertSame(
+        run(
+          'var o = {}; var stored = 1; ' +
+            'Object.defineProperty(o, "x", {' +
+            'get: function () { return stored; }, ' +
+            'set: function (value) { stored = value; }, ' +
+            'enumerable: true, configurable: true}); ' +
+            'o.x = 7; var d = Object.getOwnPropertyDescriptor(o, "x"); ' +
+            'o.x === 7 && typeof d.get === "function" && typeof d.set === "function";',
+        ),
+        true,
+      );
+      assertSame(
+        run('Object.getOwnPropertyDescriptor({}, "missing");'),
+        undefined,
+      );
+    },
+  },
+  {
+    name: 'Object descriptor APIs enforce invariants and convert all definitions before mutation',
+    run() {
+      assertSame(
+        run(
+          'var o = {}; Object.defineProperty(o, "x", {value: 1}); var name; ' +
+            'try { Object.defineProperty(o, "x", {value: 2}); } ' +
+            'catch (error) { name = error.name; } name + ":" + o.x;',
+        ),
+        'TypeError:1',
+      );
+      assertSame(
+        run(
+          'var target = {}; var trace = ""; var definitions = {' +
+            'get first() { trace = trace + "a"; return {value: 1}; },' +
+            'get second() { trace = trace + "b"; return {get: 1}; }' +
+            '}; var name; try { Object.defineProperties(target, definitions); } ' +
+            'catch (error) { name = error.name; } ' +
+            'trace + ":" + name + ":" + target.hasOwnProperty("first");',
+        ),
+        'ab:TypeError:false',
+      );
+      assertSame(
+        run(
+          'var target = {}; Object.defineProperties(target, {' +
+            'a: {value: 1, enumerable: true}, b: {value: 2, writable: true}' +
+            '}); target.a + target.b;',
+        ),
+        3,
+      );
+    },
+  },
+  {
+    name: 'Object prototype and creation APIs preserve requested prototype identity',
+    run() {
+      assertSame(
+        run(
+          'var proto = {answer: 42}; var o = Object.create(proto); ' +
+            'Object.getPrototypeOf(o) === proto && o.answer === 42;',
+        ),
+        true,
+      );
+      assertSame(
+        run(
+          'var o = Object.create(null, {x: {value: 5, enumerable: true}}); ' +
+            'Object.getPrototypeOf(o) === null && o.x === 5;',
+        ),
+        true,
+      );
+      assertSame(
+        run(
+          'var name; try { Object.create(1); } catch (error) { name = error.name; } name;',
+        ),
+        'TypeError',
+      );
+    },
+  },
+  {
+    name: 'Object own-name enumeration distinguishes enumerable properties',
+    run() {
+      assertSame(
+        run(
+          'var o = {first: 1}; Object.defineProperty(o, "hidden", {value: 2}); ' +
+            'o.last = 3; var names = Object.getOwnPropertyNames(o); ' +
+            'names.length + ":" + names[0] + ":" + names[1] + ":" + names[2];',
+        ),
+        '3:first:hidden:last',
+      );
+      assertSame(
+        run(
+          'var o = {first: 1}; Object.defineProperty(o, "hidden", {value: 2}); ' +
+            'o.last = 3; var names = Object.keys(o); ' +
+            'names.length + ":" + names[0] + ":" + names[1];',
+        ),
+        '2:first:last',
+      );
+    },
+  },
+  {
+    name: 'Object extensibility, sealing, and freezing update every descriptor',
+    run() {
+      assertSame(
+        run(
+          'var o = {}; var returned = Object.preventExtensions(o); ' +
+            '(returned === o) && !Object.isExtensible(o);',
+        ),
+        true,
+      );
+      assertSame(
+        run(
+          'var o = {}; Object.preventExtensions(o); var name; ' +
+            'try { Object.defineProperty(o, "x", {value: 1}); } ' +
+            'catch (error) { name = error.name; } name;',
+        ),
+        'TypeError',
+      );
+      assertSame(
+        run(
+          'var o = {x: 1}; var returned = Object.seal(o); var d = ' +
+            'Object.getOwnPropertyDescriptor(o, "x"); ' +
+            '(returned === o) && Object.isSealed(o) && !Object.isFrozen(o) && ' +
+            'd.writable && !d.configurable;',
+        ),
+        true,
+      );
+      assertSame(
+        run(
+          'var o = {x: 1}; var returned = Object.freeze(o); var d = ' +
+            'Object.getOwnPropertyDescriptor(o, "x"); ' +
+            '(returned === o) && Object.isSealed(o) && Object.isFrozen(o) && ' +
+            '!d.writable && !d.configurable;',
+        ),
+        true,
+      );
+      assertSame(run('Object.isSealed({});'), false);
+      assertSame(run('Object.isFrozen({});'), false);
+    },
+  },
+  {
+    name: 'Object reflection APIs reject primitive targets with guest TypeErrors',
+    run() {
+      assertSame(run('typeof Object.keys;'), 'function');
+      assertSame(
+        run(
+          'var name; try { Object.keys(1); } catch (error) { name = error.name; } name;',
+        ),
+        'TypeError',
+      );
+      assertSame(
+        run(
+          'var name; try { Object.freeze(null); } catch (error) { name = error.name; } name;',
+        ),
+        'TypeError',
+      );
+    },
+  },
 ];
 
 export default tests;
