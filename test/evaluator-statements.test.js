@@ -224,7 +224,7 @@ const tests = [
     },
   },
   {
-    name: 'break exits the innermost while/do-while/for loop with a normal completion',
+    name: 'break exits a while loop with a normal completion',
     run() {
       const realm = createRealm();
       const completion = evaluateScript(
@@ -233,6 +233,20 @@ const tests = [
       );
 
       assertSame(completion.type, 'normal');
+      assertSame(realm.globalObject.get('i'), 3);
+    },
+  },
+  {
+    name: 'break exits a do-while loop with the last meaningful completion value',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        'var i = 0; do { if (i === 3) { break; } i = i + 1; } while (true);',
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 3);
       assertSame(realm.globalObject.get('i'), 3);
     },
   },
@@ -250,7 +264,7 @@ const tests = [
     },
   },
   {
-    name: 'continue skips the remainder of the current iteration only',
+    name: 'continue in a while loop skips the remainder of the current iteration only',
     run() {
       const realm = createRealm();
       evaluateScript(
@@ -260,6 +274,35 @@ const tests = [
 
       assertSame(realm.globalObject.get('i'), 5);
       assertSame(realm.globalObject.get('sum'), 9); // 1 + 3 + 5
+    },
+  },
+  {
+    name: 'continue in a do-while loop still evaluates the test after a continued iteration',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        'var i = 0; var sum = 0; var checks = 0; do { i = i + 1; if (i % 2 === 0) { continue; } sum = sum + i; } while ((checks = checks + 1) && i < 5);',
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 9);
+      assertSame(realm.globalObject.get('checks'), 5);
+      assertSame(realm.globalObject.get('i'), 5);
+      assertSame(realm.globalObject.get('sum'), 9); // 1 + 3 + 5
+    },
+  },
+  {
+    name: 'continue in a for loop still runs the update clause before the next test',
+    run() {
+      const realm = createRealm();
+      evaluateScript(
+        realm,
+        'var order = ""; for (var i = 0; (order = order + "T") && i < 5; i = ((order = order + "U") && (i + 1))) { if (i === 1) { i = i + 1; order = order + "C"; continue; } order = order + i; }',
+      );
+
+      assertSame(realm.globalObject.get('i'), 5);
+      assertSame(realm.globalObject.get('order'), 'T0UTCUT3UT4UT');
     },
   },
   {
