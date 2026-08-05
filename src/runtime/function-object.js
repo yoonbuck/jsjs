@@ -167,12 +167,19 @@ export class EngineFunction extends EngineObject {
  * The non-strict `arguments` object of ECMA-262 10.6. Indices that
  * correspond to a formal parameter stay *mapped* to that parameter's
  * binding: reading the index reads the binding, writing the index writes
- * the binding, and both `delete arguments[i]` and redefining the index as
- * an accessor or as non-writable break the mapping.
+ * the binding, and redefining the index as an accessor or as non-writable
+ * breaks the mapping.
  *
  * The mapping lives in an internal parameter map rather than in accessor
  * descriptors, so the object's own properties stay observable as ordinary
  * writable data properties exactly as the specification requires.
+ *
+ * ES5 10.6 also unmaps an index on `delete arguments[i]`. That branch is
+ * not implemented here because nothing can reach it: the `delete` operator
+ * is an unsupported unary operator, this class is not part of the engine's
+ * public surface, and no engine-internal caller deletes an arguments
+ * property. It belongs with the task that implements `delete`, where it
+ * can be driven by a test.
  */
 export class ArgumentsObject extends EngineObject {
   /**
@@ -247,21 +254,6 @@ export class ArgumentsObject extends EngineObject {
     }
 
     return true;
-  }
-
-  /**
-   * @param {PropertyKey} name
-   * @param {boolean} [throwOnError=false]
-   * @returns {boolean}
-   */
-  delete(name, throwOnError = false) {
-    const deleted = super.delete(name, throwOnError);
-
-    if (deleted) {
-      this._parameterMap.delete(name);
-    }
-
-    return deleted;
   }
 }
 

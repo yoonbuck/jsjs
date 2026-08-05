@@ -25,6 +25,32 @@ const tests = [
     },
   },
   {
+    name: 'block-nested function declarations hoist eagerly, deviating from Annex B',
+    run() {
+      assertSame(run('var r = f(); { function f() { return 1; } } r;'), 1);
+      assertSame(
+        run('var r = f(); while (false) { function f() { return 2; } } r;'),
+        2,
+      );
+
+      // Annex B leaves the binding `undefined` until the declaration is
+      // evaluated, so a real engine reports 'undefined' for both of these.
+      // The current engine binds the function during declaration
+      // instantiation regardless of whether the block ever runs; this
+      // pins that known deviation rather than endorsing it.
+      assertSame(
+        run('if (false) { function f() { return 1; } } typeof f;'),
+        'function',
+      );
+      assertSame(
+        run(
+          'function g() { if (false) { function h() { return 2; } } return typeof h; } g();',
+        ),
+        'function',
+      );
+    },
+  },
+  {
     name: 'a function body without a return statement completes with undefined',
     run() {
       assertSame(run('function f() { 1; } f();'), undefined);

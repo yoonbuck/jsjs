@@ -183,8 +183,8 @@ function applyLoopBodyResult(bodyResult, value) {
     return { value: updated.value, action: 'continue' };
   }
 
-  // 'return' / 'throw': neither is produced by any supported statement yet,
-  // but propagate faithfully rather than assuming it cannot happen.
+  // 'return' and 'throw' both escape the loop entirely: a `return` in a
+  // loop body ends the whole function, and a `throw` unwinds past it.
   return { value: updated.value, action: 'propagate' };
 }
 

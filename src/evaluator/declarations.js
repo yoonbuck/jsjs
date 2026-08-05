@@ -257,9 +257,16 @@ function collectVarNames(node, names) {
  *
  * ES5's grammar only allows function declarations as source elements
  * (directly in a program or function body), but the parser accepts the
- * block-nested form every real engine hoists, so descending through those
- * containers keeps `{ function f() {} } f();` working instead of leaving
- * `f` unbound.
+ * block-nested form, so descending through those containers keeps
+ * `{ function f() {} } f();` working instead of leaving `f` unbound.
+ *
+ * This is a deliberate simplification rather than Annex B compatibility:
+ * a real engine creates the var-scoped binding during instantiation but
+ * only assigns the function object when the declaration is actually
+ * evaluated, so `if (false) { function f() {} } typeof f` is
+ * `'undefined'` there and `'function'` here. Matching that needs a
+ * block-scoped binding for the declaration, which arrives with block
+ * scoping in a later task.
  *
  * @param {any} node
  * @param {any[]} declarations

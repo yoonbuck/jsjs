@@ -12,14 +12,47 @@ function run(source) {
 }
 
 /**
+ * Evaluates `source` in a fresh realm and returns both the realm and the
+ * named global, so a test can keep evaluating guest code against the same
+ * object after inspecting or reconfiguring it through the object protocol.
+ *
+ * @param {string} source
+ * @param {string} name
+ * @returns {{ realm: any, value: any, evaluate: (source: string) => any }}
+ */
+function globalOfRealm(source, name) {
+  const realm = createRealm();
+  evaluateScript(realm, source);
+
+  return {
+    realm,
+    value: realm.globalObject.get(name),
+    evaluate: (nextSource) => evaluateScript(realm, nextSource).value,
+  };
+}
+
+/**
  * @param {string} source
  * @param {string} name
  * @returns {any}
  */
 function ownPropertyOfGlobal(source, name) {
-  const realm = createRealm();
-  evaluateScript(realm, source);
-  return realm.globalObject.get(name);
+  return globalOfRealm(source, name).value;
+}
+
+/**
+ * @param {unknown} value
+ * @param {Partial<{ writable: boolean, enumerable: boolean, configurable: boolean }>} [overrides={}]
+ * @returns {any}
+ */
+function dataDescriptor(value, overrides = {}) {
+  return {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+    ...overrides,
+  };
 }
 
 const tests = [
@@ -300,6 +333,109 @@ const tests = [
       assertSame(run('var a = [1]; a.length = 3; a.length;'), 3);
 
       const a = ownPropertyOfGlobal('var a = [1]; a.length = 3;', 'a');
+      assertSame(a.getOwnProperty('2'), undefined);
+    },
+  },
+  {
+    name: 'a non-writable length rejects length changes and elements beyond it',
+    run() {
+      const array = globalOfRealm('var a = [1, 2, 3];', 'a');
+      array.value.defineOwnProperty('length', { writable: false });
+
+      assertSame(array.evaluate('a.length = 1; a.length;'), 3);
+      assertSame(array.evaluate('a.length = 9; a.length;'), 3);
+      assertSame(array.evaluate('a[5] = 6; a.length;'), 3);
+      assertSame(array.evaluate('typeof a[5];'), 'undefined');
+      assertSame(array.evaluate('a[0] = 9; a[0];'), 9);
+
+      assertSame(array.value.defineOwnProperty('length', { value: 1 }), false);
+      const lengthError = assertThrows(
+        () => array.value.defineOwnProperty('length', { value: 1 }, true),
+        TypeError,
+      );
+      assertSame(
+        lengthError.message,
+        'Cannot change the length of a non-writable array length',
+      );
+
+      assertSame(array.value.defineOwnProperty('5', dataDescriptor(6)), false);
+      const indexError = assertThrows(
+        () => array.value.defineOwnProperty('5', dataDescriptor(6), true),
+        TypeError,
+      );
+      assertSame(
+        indexError.message,
+        'Cannot add an element beyond a non-writable array length',
+      );
+
+      assertSame(array.value.getOwnProperty('5'), undefined);
+      assertSame(array.value.getOwnProperty('length').value, 3);
+    },
+  },
+  {
+    name: 'a shrink that clears writable deletes the elements first and then re-locks length',
+    run() {
+      const a = ownPropertyOfGlobal('var a = [1, 2, 3];', 'a');
+
+      assertSame(
+        a.defineOwnProperty('length', { value: 1, writable: false }),
+        true,
+      );
+
+      const length = a.getOwnProperty('length');
+      assertSame(length.value, 1);
+      assertSame(length.writable, false);
+      assertSame(a.getOwnProperty('0').value, 1);
+      assertSame(a.getOwnProperty('1'), undefined);
+      assertSame(a.getOwnProperty('2'), undefined);
+
+      assertSame(a.defineOwnProperty('length', { value: 0 }), false);
+      assertSame(a.defineOwnProperty('1', dataDescriptor(2)), false);
+      assertSame(a.getOwnProperty('length').value, 1);
+    },
+  },
+  {
+    name: 'a non-configurable element stops a shrink and leaves length just above it',
+    run() {
+      const a = ownPropertyOfGlobal('var a = [1, 2, 3];', 'a');
+      a.defineOwnProperty('1', dataDescriptor(2, { configurable: false }));
+
+      assertSame(a.defineOwnProperty('length', { value: 0 }), false);
+
+      const length = a.getOwnProperty('length');
+      assertSame(length.value, 2);
+      assertSame(length.writable, true);
+      assertSame(a.getOwnProperty('2'), undefined);
+      assertSame(a.getOwnProperty('1').value, 2);
+      assertSame(a.getOwnProperty('0').value, 1);
+
+      const error = assertThrows(
+        () => a.defineOwnProperty('length', { value: 0 }, true),
+        TypeError,
+      );
+      assertSame(
+        error.message,
+        'Cannot delete a non-configurable array element',
+      );
+      assertSame(a.getOwnProperty('length').value, 2);
+      assertSame(a.getOwnProperty('0').value, 1);
+    },
+  },
+  {
+    name: 'a stopped shrink that clears writable locks length above the surviving element',
+    run() {
+      const a = ownPropertyOfGlobal('var a = [1, 2, 3];', 'a');
+      a.defineOwnProperty('1', dataDescriptor(2, { configurable: false }));
+
+      assertSame(
+        a.defineOwnProperty('length', { value: 0, writable: false }),
+        false,
+      );
+
+      const length = a.getOwnProperty('length');
+      assertSame(length.value, 2);
+      assertSame(length.writable, false);
+      assertSame(a.getOwnProperty('1').value, 2);
       assertSame(a.getOwnProperty('2'), undefined);
     },
   },
