@@ -4,6 +4,16 @@
   "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
   "groups": [
     {
+      "name": "delete",
+      "summary": "delete operator: property removal and DontDelete semantics",
+      "paths": [
+        "test/language/expressions/delete/S11.4.1_A2.2_T1.js",
+        "test/language/expressions/delete/S11.4.1_A3.1.js",
+        "test/language/expressions/delete/S11.4.1_A3.2_T2.js",
+        "test/language/expressions/delete/S11.4.1_A3.3_T1.js"
+      ]
+    },
+    {
       "name": "expressions",
       "summary": "operators that need no standard library: comma, conditional, logical and/or",
       "paths": [
@@ -11,6 +21,18 @@
         "test/language/expressions/conditional/S11.12_A3_T4.js",
         "test/language/expressions/logical-and/S11.11.1_A3_T1.js",
         "test/language/expressions/logical-or/S11.11.2_A2.1_T4.js"
+      ]
+    },
+    {
+      "name": "in-and-instanceof",
+      "summary": "in and instanceof relational operators",
+      "paths": [
+        "test/language/expressions/in/S11.8.7_A2.1_T2.js",
+        "test/language/expressions/in/S11.8.7_A3.js",
+        "test/language/expressions/in/S11.8.7_A4.js",
+        "test/language/expressions/instanceof/S11.8.6_A2.1_T2.js",
+        "test/language/expressions/instanceof/S11.8.6_A3.js",
+        "test/language/expressions/instanceof/S11.8.6_A6_T1.js"
       ]
     },
     {
@@ -42,6 +64,42 @@
       ]
     },
     {
+      "name": "strict-mode",
+      "summary": "directive-prologue detection and strict-mode runtime semantics",
+      "paths": [
+        "test/language/directive-prologue/func-decl-final-runtime.js",
+        "test/language/directive-prologue/func-decl-inside-func-decl-runtime.js",
+        "test/language/directive-prologue/func-decl-no-semi-runtime.js",
+        "test/language/directive-prologue/func-decl-not-first-runtime.js",
+        "test/language/directive-prologue/func-decl-runtime.js",
+        "test/language/directive-prologue/func-expr-runtime.js"
+      ]
+    },
+    {
+      "name": "switch-and-labeled",
+      "summary": "switch statement and labelled break/continue",
+      "paths": [
+        "test/language/statements/do-while/S12.6.1_A4_T5.js",
+        "test/language/statements/switch/S12.11_A1_T1.js",
+        "test/language/statements/switch/S12.11_A1_T3.js",
+        "test/language/statements/switch/S12.11_A4_T1.js",
+        "test/language/statements/while/S12.6.2_A4_T5.js"
+      ]
+    },
+    {
+      "name": "try-catch-finally",
+      "summary": "try/catch/finally control flow and exception propagation",
+      "paths": [
+        "test/language/statements/try/S12.14_A1.js",
+        "test/language/statements/try/S12.14_A2.js",
+        "test/language/statements/try/S12.14_A3.js",
+        "test/language/statements/try/S12.14_A5.js",
+        "test/language/statements/try/S12.14_A6.js",
+        "test/language/statements/try/S12.14_A8.js",
+        "test/language/statements/try/S12.14_A9_T1.js"
+      ]
+    },
+    {
       "name": "types",
       "summary": "the primitive types boolean, null, number, string, and undefined",
       "paths": [
@@ -57,6 +115,19 @@
         "test/language/types/undefined/S8.1_A1_T1.js",
         "test/language/types/undefined/S8.1_A2_T1.js",
         "test/language/types/undefined/S8.1_A3_T1.js"
+      ]
+    },
+    {
+      "name": "update-and-compound-assignment",
+      "summary": "prefix/postfix ++/--, and compound assignment operators",
+      "paths": [
+        "test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.1.js",
+        "test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.2.js",
+        "test/language/expressions/compound-assignment/S11.13.2_A2.1_T2.1.js",
+        "test/language/expressions/postfix-decrement/S11.3.2_A2.2_T1.js",
+        "test/language/expressions/postfix-increment/S11.3.1_A2.2_T1.js",
+        "test/language/expressions/prefix-decrement/S11.4.5_A2.2_T1.js",
+        "test/language/expressions/prefix-increment/S11.4.4_A2.2_T1.js"
       ]
     }
   ]
