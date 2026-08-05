@@ -3,13 +3,7 @@ import { EngineObject } from '../src/runtime/object.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 
-const HOST_ONLY_GLOBAL_NAMES = [
-  'process',
-  'globalThis',
-  'require',
-  'Array',
-  'console',
-];
+const HOST_ONLY_GLOBAL_NAMES = ['process', 'globalThis', 'require', 'console'];
 
 const tests = [
   {

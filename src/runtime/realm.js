@@ -18,6 +18,10 @@ import {
   createFunctionIntrinsics,
   installFunctionConstructor,
 } from '../builtins/function.js';
+import {
+  createArrayIntrinsics,
+  installArrayConstructor,
+} from '../builtins/array.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -73,6 +77,10 @@ export class Realm {
     const functionIntrinsics = createFunctionIntrinsics(this);
     Object.assign(this.intrinsics, functionIntrinsics);
     installFunctionConstructor(this.globalObject, functionIntrinsics);
+
+    const arrayIntrinsics = createArrayIntrinsics(this);
+    Object.assign(this.intrinsics, arrayIntrinsics);
+    installArrayConstructor(this.globalObject, arrayIntrinsics);
   }
 
   /**
