@@ -91,6 +91,9 @@ const tests = [
       assertSame(toNumber(null), 0);
       assertSame(Object.is(toNumber('-0'), -0), true);
       assertSame(toNumber(' 0x10 '), 16);
+      assertSame(Number.isNaN(toNumber('0b101')), true);
+      assertSame(Number.isNaN(toNumber('0o17')), true);
+      assertSame(Number.isNaN(toNumber('1_0')), true);
       assertSame(toString(-0), '0');
       assertSame(toString(true), 'true');
       assertThrows(() => checkObjectCoercible(null), TypeError);
