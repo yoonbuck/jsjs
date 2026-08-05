@@ -1,7 +1,8 @@
 import { EngineObject } from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
 import { createUnsupportedOperationError } from './errors.js';
-import { ThrowSignal } from './completion.js';
+import { ThrowSignal, GuestErrorSignal } from './completion.js';
+import { createGuestError } from '../builtins/errors.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -80,11 +81,26 @@ export class EngineFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = []) {
-    const completion = this._execute(
-      this,
-      this.resolveThisValue(thisValue),
-      args,
-    );
+    let completion;
+
+    try {
+      completion = this._execute(this, this.resolveThisValue(thisValue), args);
+    } catch (error) {
+      if (error instanceof ThrowSignal) {
+        throw error;
+      }
+
+      if (error instanceof GuestErrorSignal) {
+        // Convert the pre-construction signal into a fully-built guest error
+        // object and re-throw as a ThrowSignal so the evaluator's throw
+        // machinery and future try/catch handling can intercept it.
+        throw new ThrowSignal(
+          createGuestError(this.realm, error.typeName, error.guestMessage),
+        );
+      }
+
+      throw error;
+    }
 
     if (completion.type === 'return') {
       return completion.value;

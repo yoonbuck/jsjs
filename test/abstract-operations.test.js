@@ -6,6 +6,7 @@ import {
   toString,
 } from '../src/runtime/conversion.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
 import {
   abstractEqualityComparison,
   abstractRelationalComparison,
@@ -81,7 +82,7 @@ const tests = [
         true,
       );
 
-      assertThrows(() => toPrimitive(invalid), TypeError);
+      assertThrows(() => toPrimitive(invalid), GuestErrorSignal);
     },
   },
   {

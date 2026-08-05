@@ -424,10 +424,11 @@ const tests = [
       const realm = createRealm();
       evaluateScript(realm, 'var order = ""; var notCallable = 1;');
 
-      assertThrows(
-        () => evaluateScript(realm, 'notCallable((order = order + "a"));'),
-        TypeError,
+      const result = evaluateScript(
+        realm,
+        'notCallable((order = order + "a"));',
       );
+      assertSame(result.type, 'throw');
       assertSame(realm.globalObject.get('order'), 'a');
     },
   },
@@ -549,10 +550,12 @@ const tests = [
     },
   },
   {
-    name: 'new on a value that is not a constructor throws a TypeError',
+    name: 'new on a value that is not a constructor produces a guest TypeError',
     run() {
-      assertThrows(() => run('var x = 1; new x();'), TypeError);
-      assertThrows(() => run('var o = {}; new o.missing();'), TypeError);
+      const r1 = evaluateScript(createRealm(), 'var x = 1; new x();');
+      assertSame(r1.type, 'throw');
+      const r2 = evaluateScript(createRealm(), 'var o = {}; new o.missing();');
+      assertSame(r2.type, 'throw');
     },
   },
   {
@@ -654,10 +657,12 @@ const tests = [
     },
   },
   {
-    name: 'calling a value that is not callable throws a TypeError',
+    name: 'calling a value that is not callable produces a guest TypeError',
     run() {
-      assertThrows(() => run('var x = 1; x();'), TypeError);
-      assertThrows(() => run('var x; x();'), TypeError);
+      const r1 = evaluateScript(createRealm(), 'var x = 1; x();');
+      assertSame(r1.type, 'throw');
+      const r2 = evaluateScript(createRealm(), 'var x; x();');
+      assertSame(r2.type, 'throw');
     },
   },
 ];

@@ -35,10 +35,11 @@ const tests = [
     },
   },
   {
-    name: 'reading an undeclared identifier throws a ReferenceError',
+    name: 'reading an undeclared identifier produces a guest ReferenceError',
     run() {
       const realm = createRealm();
-      assertThrows(() => evaluateScript(realm, 'undeclared;'), ReferenceError);
+      const result = evaluateScript(realm, 'undeclared;');
+      assertSame(result.type, 'throw');
     },
   },
   {
@@ -141,7 +142,7 @@ const tests = [
       assertSame(first.globalObject.get('isolated'), 5);
       assertSame(second.globalObject.hasProperty('isolated'), false);
       assertSame(evaluateScript(second, 'typeof isolated;').value, 'undefined');
-      assertThrows(() => evaluateScript(second, 'isolated;'), ReferenceError);
+      assertSame(evaluateScript(second, 'isolated;').type, 'throw');
       assertSame(
         Object.prototype.hasOwnProperty.call(globalThis, 'isolated'),
         false,

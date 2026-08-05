@@ -1,4 +1,4 @@
-import { createUnresolvableReferenceError } from './errors.js';
+import { GuestErrorSignal } from './completion.js';
 
 export class Reference {
   /**
@@ -110,7 +110,10 @@ export function getValue(reference) {
   }
 
   if (reference.base === null || reference.base === undefined) {
-    throw createUnresolvableReferenceError(String(reference.referencedName));
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      `${String(reference.referencedName)} is not defined`,
+    );
   }
 
   if (isEnvironmentRecord(reference.base)) {
@@ -185,7 +188,10 @@ function putUnresolvableValue(reference, value) {
   const globalObject = /** @type {any} */ (reference).globalObject;
 
   if (reference.strict || !isGlobalPutTarget(globalObject)) {
-    throw createUnresolvableReferenceError(String(reference.referencedName));
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      `${String(reference.referencedName)} is not defined`,
+    );
   }
 
   globalObject.put(reference.referencedName, value, false);

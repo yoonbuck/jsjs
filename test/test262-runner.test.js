@@ -592,7 +592,7 @@ export default [
         'unknown-type.js': fixture(
           'expects an error type the realm does not define',
           'throw 1;',
-          'negative:\n  phase: runtime\n  type: TypeError\n',
+          'negative:\n  phase: runtime\n  type: UnknownErrorType\n',
         ),
       });
 

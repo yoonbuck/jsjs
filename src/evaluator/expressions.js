@@ -4,8 +4,8 @@ import {
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
-import { EngineFunction } from '../runtime/function-object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { isCallable } from '../runtime/descriptors.js';
 import {
   checkObjectCoercible,
   toBoolean,
@@ -28,6 +28,7 @@ import {
   createUnsupportedOperationError,
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
 import { createFunctionObject } from './declarations.js';
 
 /**
@@ -336,11 +337,16 @@ function evaluateCallExpression(node, context) {
   const thisValue = referenceThisValue(calleeReference);
   const args = evaluateArguments(node.arguments, context);
 
-  if (!(callee instanceof EngineFunction)) {
-    throw new TypeError(`${describeCallee(node.callee)} is not a function`);
+  if (!isCallable(callee)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      `${describeCallee(node.callee)} is not a function`,
+    );
   }
 
-  return callee.callFunction(thisValue, args);
+  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
+    callee
+  ).callFunction(thisValue, args);
 }
 
 /**
@@ -375,11 +381,14 @@ function evaluateNewExpression(node, context) {
   const callee = evaluateExpressionValue(node.callee, context);
   const args = evaluateArguments(node.arguments ?? [], context);
 
-  if (!(callee instanceof EngineFunction)) {
-    throw new TypeError(`${describeCallee(node.callee)} is not a constructor`);
+  if (!isCallable(callee)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      `${describeCallee(node.callee)} is not a constructor`,
+    );
   }
 
-  return callee.constructFunction(args);
+  return /** @type {any} */ (callee).constructFunction(args);
 }
 
 /**
@@ -490,7 +499,7 @@ function toObjectBase(baseValue) {
  *
  * @param {any} node
  * @param {EvaluationContext} context
- * @returns {EngineFunction}
+ * @returns {import('../runtime/function-object.js').EngineFunction}
  */
 function evaluateFunctionExpression(node, context) {
   if (!node.id) {

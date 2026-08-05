@@ -6,6 +6,7 @@ import {
   isDataDescriptor,
   validatePropertyDescriptor,
 } from './descriptors.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./descriptors.js').CompletePropertyDescriptor} CompletePropertyDescriptor
@@ -382,7 +383,10 @@ export class EngineObject {
       }
     }
 
-    throw new TypeError('Cannot convert object to primitive value');
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Cannot convert object to primitive value',
+    );
   }
 
   /**
@@ -433,13 +437,20 @@ function callAccessor(accessor, thisValue, args) {
 }
 
 /**
+ * Signals a guest-visible property-operation rejection. When `throwOnError`
+ * is true, throws a `GuestErrorSignal` so the nearest realm-aware boundary
+ * (`EngineFunction#callFunction` or `evaluateScript`) can convert it into a
+ * proper guest `TypeError` throw completion. When false, returns `false` so
+ * callers that propagate boolean success flags (e.g. non-strict `[[Put]]`)
+ * can continue without an exception.
+ *
  * @param {boolean} throwOnError
  * @param {string} message
  * @returns {false}
  */
 function rejectOperation(throwOnError, message) {
   if (throwOnError) {
-    throw new TypeError(message);
+    throw new GuestErrorSignal('TypeError', message);
   }
 
   return false;
