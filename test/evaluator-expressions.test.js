@@ -266,15 +266,11 @@ const tests = [
     },
   },
   {
-    name: 'unsupported unary operators (bitwise not, delete) throw explicitly',
+    name: 'unsupported unary operators (bitwise not) throw explicitly',
     run() {
       const bitwiseNot = assertThrows(() => run('~1;'), Error);
       assertSame(bitwiseNot.name, 'UnsupportedOperatorError');
       assertSame(/** @type {any} */ (bitwiseNot).operator, '~');
-
-      const del = assertThrows(() => run('delete x;'), Error);
-      assertSame(del.name, 'UnsupportedOperatorError');
-      assertSame(/** @type {any} */ (del).operator, 'delete');
     },
   },
   {

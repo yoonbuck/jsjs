@@ -30,6 +30,8 @@ import tryStatements from './try-statements.test.js';
 import switchLabels from './switch-labels.test.js';
 import updateAssignment from './update-assignment.test.js';
 import inInstanceof from './in-instanceof.test.js';
+import strictMode from './strict-mode.test.js';
+import deleteOperator from './delete.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -84,5 +86,13 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/in-instanceof.test.js',
     tests: inInstanceof,
+  }),
+  Object.freeze({
+    file: 'test/strict-mode.test.js',
+    tests: strictMode,
+  }),
+  Object.freeze({
+    file: 'test/delete.test.js',
+    tests: deleteOperator,
   }),
 ]);

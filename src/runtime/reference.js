@@ -59,9 +59,10 @@ function isReference(reference) {
  * @returns {base is {
  *   getBindingValue: (name: string | symbol, strict: boolean) => unknown,
  *   setMutableBinding: (name: string | symbol, value: unknown, strict: boolean) => void,
+ *   deleteBinding: (name: string | symbol) => boolean,
  * }}
  */
-function isEnvironmentRecord(base) {
+export function isEnvironmentRecord(base) {
   return (
     !!base &&
     typeof base === 'object' &&

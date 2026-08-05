@@ -11,6 +11,7 @@ import {
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateStatementList } from './statements.js';
+import { hasUseStrictDirective } from './directive.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -167,11 +168,17 @@ export function createFunctionObject(node, scope, context) {
     parameterNames.push(parameter.name);
   }
 
+  // A function is strict when its enclosing scope is already strict OR when
+  // the function's own body opens with a "use strict" directive prologue
+  // (ECMA-262 10.1.1 — "once strict, always strict" applies transitively).
+  const strict =
+    context.strict || hasUseStrictDirective(node.body.body);
+
   return new EngineFunction({
     realm: context.realm,
     parameterNames,
     scope,
-    strict: context.strict,
+    strict,
     execute: (functionObject, thisValue, args) =>
       executeFunctionBody(node, functionObject, thisValue, args),
   });

@@ -73,6 +73,30 @@ export class EngineFunction extends EngineObject {
       enumerable: false,
       configurable: false,
     });
+
+    // ECMA-262 13.2 strict-function-only steps: define non-configurable,
+    // non-enumerable accessor properties for "caller" and "arguments" that
+    // both read and write through the realm's shared %ThrowTypeError%
+    // intrinsic. Non-strict functions have no such own properties, so
+    // reading nonStrictFn.caller/.arguments returns undefined via ordinary
+    // property lookup miss.
+    if (strict) {
+      const thrower = /** @type {EngineFunction | undefined} */ (
+        realm.intrinsics.throwTypeErrorFunction
+      );
+
+      if (thrower !== undefined) {
+        /** @type {import('./descriptors.js').PropertyDescriptorRecord} */
+        const poisonPill = {
+          get: thrower,
+          set: thrower,
+          enumerable: false,
+          configurable: false,
+        };
+        this.defineOwnProperty('caller', poisonPill);
+        this.defineOwnProperty('arguments', poisonPill);
+      }
+    }
   }
 
   /**
@@ -275,6 +299,28 @@ export class ArgumentsObject extends EngineObject {
   }
 
   /**
+   * Extends the base `[[Delete]]` to unmap a parameter binding when the
+   * corresponding index property is deleted (ECMA-262 10.6 step 14.c.iii).
+   * Without this, deleting `arguments[0]` would remove the own property but
+   * leave the mapping alive, so subsequent writes to `arguments[0]` would
+   * still reach the parameter binding even though the index is no longer
+   * present.
+   *
+   * @param {PropertyKey} name
+   * @param {boolean} [throwOnError=false]
+   * @returns {boolean}
+   */
+  delete(name, throwOnError = false) {
+    const deleted = super.delete(name, throwOnError);
+
+    if (deleted) {
+      this._parameterMap.delete(name);
+    }
+
+    return deleted;
+  }
+
+  /**
    * @param {PropertyKey} name
    * @param {import('./descriptors.js').PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
@@ -361,12 +407,32 @@ export function createArgumentsObject(functionObject, args, env) {
     }
   }
 
-  argumentsObject.defineOwnProperty('callee', {
-    value: functionObject,
-    writable: true,
-    enumerable: false,
-    configurable: true,
-  });
+  if (functionObject.strict) {
+    // ECMA-262 10.6 strict-arguments steps: "callee" and "caller" become
+    // non-configurable accessor properties that each throw a TypeError on
+    // read or write.  The shared %ThrowTypeError% intrinsic is used so every
+    // strict arguments object in the same realm shares the same thrower.
+    const thrower = /** @type {EngineFunction} */ (
+      functionObject.realm.intrinsics.throwTypeErrorFunction
+    );
+
+    /** @type {import('./descriptors.js').PropertyDescriptorRecord} */
+    const poisonPill = {
+      get: thrower,
+      set: thrower,
+      enumerable: false,
+      configurable: false,
+    };
+    argumentsObject.defineOwnProperty('callee', poisonPill);
+    argumentsObject.defineOwnProperty('caller', poisonPill);
+  } else {
+    argumentsObject.defineOwnProperty('callee', {
+      value: functionObject,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+  }
 
   return argumentsObject;
 }

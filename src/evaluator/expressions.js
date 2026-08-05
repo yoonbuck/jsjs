@@ -1,4 +1,4 @@
-import { Reference, getValue, putValue } from '../runtime/reference.js';
+import { Reference, getValue, putValue, isEnvironmentRecord } from '../runtime/reference.js';
 import {
   getIdentifierReference,
   newDeclarativeEnvironment,
@@ -175,6 +175,8 @@ function evaluateLiteral(node) {
  */
 function evaluateUnaryExpression(node, context) {
   switch (node.operator) {
+    case 'delete':
+      return evaluateDeleteExpression(node.argument, context);
     case 'typeof':
       return evaluateTypeofExpression(node.argument, context);
     case 'void':
@@ -189,6 +191,46 @@ function evaluateUnaryExpression(node, context) {
     default:
       throw createUnsupportedOperatorError('unary', node.operator);
   }
+}
+
+/**
+ * Implements ECMA-262 11.4.1 `delete` operator.
+ *
+ * Step 1: evaluate the argument as a Reference (not its value).
+ * Step 2: non-Reference results (e.g. `delete (1+1)`) always return `true`.
+ * Step 3: unresolvable references (base is `undefined`) return `true` — Acorn
+ *         already rejects `delete <bareIdentifier>` in strict mode at parse
+ *         time, so the strict SyntaxError branch of step 3.a is never reached
+ *         at runtime.
+ * Step 4/5: dispatch to `EngineObject#delete` (property reference) or
+ *           `EnvironmentRecord#deleteBinding` (environment reference).
+ *
+ * @param {any} argument
+ * @param {EvaluationContext} context
+ * @returns {boolean}
+ */
+function evaluateDeleteExpression(argument, context) {
+  const ref = evaluateExpression(argument, context);
+
+  if (!(ref instanceof Reference)) {
+    return true;
+  }
+
+  if (ref.base === undefined) {
+    return true;
+  }
+
+  if (isEnvironmentRecord(ref.base)) {
+    return ref.base.deleteBinding(ref.referencedName);
+  }
+
+  // Property reference: delegate to [[Delete]], which already throws a
+  // GuestErrorSignal('TypeError') when strict is true and the property is
+  // non-configurable.
+  return /** @type {any} */ (ref.base).delete(
+    ref.referencedName,
+    ref.strict,
+  );
 }
 
 /**

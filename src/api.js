@@ -4,6 +4,7 @@ import { EMPTY, ThrowSignal, GuestErrorSignal } from './runtime/completion.js';
 import { globalDeclarationInstantiation } from './evaluator/declarations.js';
 import { evaluateStatementList } from './evaluator/statements.js';
 import { createGuestError } from './builtins/errors.js';
+import { hasUseStrictDirective } from './evaluator/directive.js';
 
 export { parseScript, createRealm, Realm };
 
@@ -43,7 +44,7 @@ export function evaluateScript(realm, source, parserOptions = {}) {
   const context = {
     realm,
     env: realm.globalEnvironment,
-    strict: false,
+    strict: hasUseStrictDirective(program.body),
     thisValue: realm.globalEnvironment.getThisBinding(),
   };
   globalDeclarationInstantiation(program, context);

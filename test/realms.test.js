@@ -122,9 +122,10 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      // `delete` is not implemented, so it is still explicitly unsupported.
+      // `~` (bitwise NOT) is still unsupported; verify the engine reports it
+      // explicitly rather than silently passing or crashing.
       const error = assertThrows(
-        () => evaluateScript(realm, 'delete x;'),
+        () => evaluateScript(realm, '~0;'),
         Error,
       );
       assertSame(/** @type {any} */ (error).name, 'UnsupportedOperatorError');

@@ -1,4 +1,5 @@
 import { EngineObject } from './object.js';
+import { EngineFunction } from './function-object.js';
 import { GlobalEnvironmentRecord } from './environment.js';
 import {
   createFundamentalIntrinsics,
@@ -8,6 +9,7 @@ import {
   createErrorIntrinsics,
   installErrorConstructors,
 } from '../builtins/errors.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('../builtins/fundamental.js').FundamentalIntrinsics} FundamentalIntrinsics
@@ -38,6 +40,25 @@ export class Realm {
     const errorIntrinsics = createErrorIntrinsics(this);
     Object.assign(this.intrinsics, errorIntrinsics);
     installErrorConstructors(this.globalObject, errorIntrinsics);
+
+    // The %ThrowTypeError% intrinsic (ECMA-262 13.2 strict-function steps and
+    // 10.6 strict-arguments step): a single per-realm native function that
+    // always throws a guest TypeError. Shared by every strict function's
+    // "caller"/"arguments" accessor pairs and every strict arguments object's
+    // "caller"/"callee" accessors. Created after error intrinsics exist so
+    // the thrown error can be a proper guest TypeError.
+    this.intrinsics.throwTypeErrorFunction = new EngineFunction({
+      realm: this,
+      parameterNames: [],
+      scope: this.globalEnvironment,
+      strict: false,
+      execute() {
+        throw new GuestErrorSignal(
+          'TypeError',
+          'Restricted property access in strict mode',
+        );
+      },
+    });
   }
 }
 
