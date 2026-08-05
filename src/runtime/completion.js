@@ -57,8 +57,9 @@ export function createThrowCompletion(value) {
  * inside a called function has no completion record to travel through on
  * its way back to the caller. `EngineFunction#callFunction` converts a
  * body's throw completion into this signal, and the script API converts it
- * back into a throw completion at the boundary; a future `try`/`catch` has
- * exactly one thing to intercept.
+ * back into a throw completion at the boundary; `try`/`catch` (implemented
+ * in the evaluator's `TryStatement` handling) has exactly one thing to
+ * intercept.
  */
 export class ThrowSignal extends Error {
   /**
@@ -84,7 +85,12 @@ export class ThrowSignal extends Error {
  * `EngineFunction#callFunction` or `evaluateScript` — converts it into a
  * proper guest `EngineObject` and wraps it in a `ThrowSignal` (or returns
  * a throw completion directly). Guest code that handles its own errors via
- * `try`/`catch` (Task 5) will intercept the resulting `ThrowSignal`.
+ * `try`/`catch` (implemented in Task 2) will intercept the resulting
+ * `ThrowSignal`.
+ *
+ * The realm-aware boundaries that materialise this signal are:
+ * `EngineFunction#callFunction`, `evaluateScript`, and the `runToCompletion`
+ * helper in `evaluateTryStatement` (in `src/evaluator/statements.js`).
  *
  * This is intentionally distinct from `ThrowSignal`: a `ThrowSignal`
  * already holds a fully-constructed guest value, whereas `GuestErrorSignal`

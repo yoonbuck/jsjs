@@ -439,8 +439,9 @@ function callAccessor(accessor, thisValue, args) {
 /**
  * Signals a guest-visible property-operation rejection. When `throwOnError`
  * is true, throws a `GuestErrorSignal` so the nearest realm-aware boundary
- * (`EngineFunction#callFunction` or `evaluateScript`) can convert it into a
- * proper guest `TypeError` throw completion. When false, returns `false` so
+ * (`EngineFunction#callFunction`, `evaluateScript`, or the `runToCompletion`
+ * helper in `evaluateTryStatement`) can convert it into a proper guest
+ * `TypeError` throw completion. When false, returns `false` so
  * callers that propagate boolean success flags (e.g. non-strict `[[Put]]`)
  * can continue without an exception.
  *

@@ -451,6 +451,7 @@ function evaluateLabeledStatement(node, context, labelSet) {
 }
 
 /**
+ * Runs `fn` and converts any `GuestErrorSignal` or `ThrowSignal`
  * that escapes into a `throw` completion record, re-throwing everything else
  * unchanged. This bridges the gap between expression evaluation (which
  * surfaces guest throws as host exceptions) and the completion-record world

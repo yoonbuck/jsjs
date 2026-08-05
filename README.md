@@ -204,7 +204,9 @@ postfix `++`/`--`, bitwise operators (`& | ^ << >> >>>`), `in`, `instanceof`,
 `Infinity`, `undefined` globals.
 
 Not implemented yet, and therefore not exercised: the standard library
-(`Object`, `Array`, `String`, `Error`, …).
+(`Object` static methods, `Array`, `String`, and similar). The error
+constructors (`Error`, `TypeError`, `ReferenceError`, `SyntaxError`,
+`RangeError`) are already implemented and available on the global object.
 
 Strict mode is fully implemented at runtime. A `'use strict'` directive
 prologue activates strict semantics for the script or function body it appears
