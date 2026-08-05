@@ -28,6 +28,7 @@ import test262Runner from './test262-runner.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
 import switchLabels from './switch-labels.test.js';
+import updateAssignment from './update-assignment.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -74,5 +75,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/switch-labels.test.js',
     tests: switchLabels,
+  }),
+  Object.freeze({
+    file: 'test/update-assignment.test.js',
+    tests: updateAssignment,
   }),
 ]);

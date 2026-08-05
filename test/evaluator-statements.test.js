@@ -26,7 +26,7 @@ const tests = [
         thisValue: realm.globalObject,
       };
 
-      for (const type of ['ForInStatement', 'UpdateExpression', 'NotANode']) {
+      for (const type of ['ForInStatement', 'NotANode']) {
         const error = assertThrows(
           () => evaluate({ type, body: null }, context),
           Error,

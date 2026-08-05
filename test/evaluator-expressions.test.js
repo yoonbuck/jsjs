@@ -278,15 +278,9 @@ const tests = [
     },
   },
   {
-    name: 'unsupported binary operators (bitwise, instanceof, in) throw explicitly',
+    name: 'unsupported binary operators (instanceof, in) throw explicitly',
     run() {
       for (const [source, operator] of [
-        ['1 & 1;', '&'],
-        ['1 | 1;', '|'],
-        ['1 ^ 1;', '^'],
-        ['1 << 1;', '<<'],
-        ['1 >> 1;', '>>'],
-        ['1 >>> 1;', '>>>'],
         ['1 instanceof Object;', 'instanceof'],
         ['"a" in {};', 'in'],
       ]) {
@@ -297,25 +291,31 @@ const tests = [
     },
   },
   {
-    name: 'compound assignment operators throw an explicit unsupported-operator error',
+    name: 'bitwise binary operators are now supported',
     run() {
-      const realm = createRealm();
-      evaluateScript(realm, 'var x = 1;');
-
-      const error = assertThrows(() => evaluateScript(realm, 'x += 1;'), Error);
-      assertSame(error.name, 'UnsupportedOperatorError');
-      assertSame(/** @type {any} */ (error).operator, '+=');
+      assertSame(run('1 & 3;'), 1);
+      assertSame(run('1 | 2;'), 3);
+      assertSame(run('3 ^ 1;'), 2);
+      assertSame(run('1 << 2;'), 4);
+      assertSame(run('8 >> 1;'), 4);
+      assertSame(run('1 >>> 0;'), 1);
     },
   },
   {
-    name: 'update expressions (++/--) are not supported yet and throw explicitly',
+    name: 'compound assignment operators are now supported',
     run() {
       const realm = createRealm();
       evaluateScript(realm, 'var x = 1;');
-
-      const error = assertThrows(() => evaluateScript(realm, 'x++;'), Error);
-      assertSame(error.name, 'UnsupportedNodeError');
-      assertSame(/** @type {any} */ (error).nodeType, 'UpdateExpression');
+      assertSame(evaluateScript(realm, 'x += 2;').value, 3);
+    },
+  },
+  {
+    name: 'update expressions (++/--) are now supported',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'var x = 1;');
+      assertSame(evaluateScript(realm, 'x++;').value, 1);
+      assertSame(evaluateScript(realm, 'x;').value, 2);
     },
   },
   {

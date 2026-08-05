@@ -16,12 +16,18 @@ import {
   abstractEqualityComparison,
   abstractRelationalComparison,
   add,
+  bitwiseAND,
+  bitwiseOR,
+  bitwiseXOR,
   divide,
+  leftShift,
   multiply,
   remainder,
+  signedRightShift,
   strictEqualityComparison,
   subtract,
   typeOf,
+  unsignedRightShift,
 } from '../runtime/operators.js';
 import {
   createUnsupportedNodeError,
@@ -49,6 +55,12 @@ const SUPPORTED_BINARY_OPERATORS = new Set([
   '<=',
   '>',
   '>=',
+  '<<',
+  '>>',
+  '>>>',
+  '&',
+  '^',
+  '|',
 ]);
 
 /**
@@ -66,6 +78,7 @@ export const EXPRESSION_TYPES = new Set([
   'LogicalExpression',
   'ConditionalExpression',
   'AssignmentExpression',
+  'UpdateExpression',
   'CallExpression',
   'MemberExpression',
   'FunctionExpression',
@@ -104,6 +117,8 @@ export function evaluateExpression(node, context) {
       return evaluateConditionalExpression(node, context);
     case 'AssignmentExpression':
       return evaluateAssignmentExpression(node, context);
+    case 'UpdateExpression':
+      return evaluateUpdateExpression(node, context);
     case 'CallExpression':
       return evaluateCallExpression(node, context);
     case 'MemberExpression':
@@ -202,20 +217,16 @@ function evaluateTypeofExpression(argument, context) {
 }
 
 /**
- * @param {any} node
- * @param {EvaluationContext} context
+ * Applies a binary operator to two already-evaluated values (ECMA-262 §11.5–
+ * §11.10). Extracted so `BinaryExpression` evaluation and compound assignment
+ * can share a single dispatch site.
+ *
+ * @param {string} operator
+ * @param {unknown} left
+ * @param {unknown} right
  * @returns {unknown}
  */
-function evaluateBinaryExpression(node, context) {
-  const operator = node.operator;
-
-  if (!SUPPORTED_BINARY_OPERATORS.has(operator)) {
-    throw createUnsupportedOperatorError('binary', operator);
-  }
-
-  const left = evaluateExpressionValue(node.left, context);
-  const right = evaluateExpressionValue(node.right, context);
-
+function applyBinaryOperator(operator, left, right) {
   switch (operator) {
     case '+':
       return add(left, right);
@@ -247,12 +258,42 @@ function evaluateBinaryExpression(node, context) {
       const result = abstractRelationalComparison(right, left, false);
       return result === undefined || result === true ? false : true;
     }
-    default: {
-      // '>='
+    case '>=': {
       const result = abstractRelationalComparison(left, right, true);
       return result === undefined || result === true ? false : true;
     }
+    case '<<':
+      return leftShift(left, right);
+    case '>>':
+      return signedRightShift(left, right);
+    case '>>>':
+      return unsignedRightShift(left, right);
+    case '&':
+      return bitwiseAND(left, right);
+    case '^':
+      return bitwiseXOR(left, right);
+    default:
+      // '|'
+      return bitwiseOR(left, right);
   }
+}
+
+/**
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateBinaryExpression(node, context) {
+  const operator = node.operator;
+
+  if (!SUPPORTED_BINARY_OPERATORS.has(operator)) {
+    throw createUnsupportedOperatorError('binary', operator);
+  }
+
+  const left = evaluateExpressionValue(node.left, context);
+  const right = evaluateExpressionValue(node.right, context);
+
+  return applyBinaryOperator(operator, left, right);
 }
 
 /**
@@ -297,24 +338,55 @@ function evaluateConditionalExpression(node, context) {
  * @returns {unknown}
  */
 function evaluateAssignmentExpression(node, context) {
-  if (node.operator !== '=') {
-    throw createUnsupportedOperatorError('assignment', node.operator);
-  }
-
   if (
     node.left.type !== 'Identifier' &&
     node.left.type !== 'MemberExpression'
   ) {
-    // Only identifier and property references are valid ES5 assignment
-    // targets; reject anything else explicitly rather than guessing at
-    // semantics.
     throw createUnsupportedNodeError(node.left);
   }
 
-  const reference = evaluateExpression(node.left, context);
-  const value = evaluateExpressionValue(node.right, context);
-  putValue(/** @type {Reference} */ (reference), value);
-  return value;
+  const reference = /** @type {Reference} */ (
+    evaluateExpression(node.left, context)
+  );
+
+  if (node.operator === '=') {
+    const value = evaluateExpressionValue(node.right, context);
+    putValue(reference, value);
+    return value;
+  }
+
+  // Compound assignment: strip trailing '=' to get the binary operator.
+  const binaryOperator = node.operator.slice(0, -1);
+
+  if (!SUPPORTED_BINARY_OPERATORS.has(binaryOperator)) {
+    throw createUnsupportedOperatorError('assignment', node.operator);
+  }
+
+  const leftValue = getValue(reference);
+  const rightValue = evaluateExpressionValue(node.right, context);
+  const result = applyBinaryOperator(binaryOperator, leftValue, rightValue);
+  putValue(reference, result);
+  return result;
+}
+
+/**
+ * Implements prefix and postfix `++`/`--` (ECMA-262 §11.3, §11.4.4/11.4.5).
+ * The argument is evaluated to a reference exactly once; `getValue` is called
+ * once to obtain the old numeric value; `putValue` is called once with the
+ * updated value; prefix forms return the new value, postfix return the old.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {number}
+ */
+function evaluateUpdateExpression(node, context) {
+  const reference = /** @type {Reference} */ (
+    evaluateExpression(node.argument, context)
+  );
+  const oldValue = toNumber(getValue(reference));
+  const newValue = node.operator === '++' ? oldValue + 1 : oldValue - 1;
+  putValue(reference, newValue);
+  return node.prefix ? newValue : oldValue;
 }
 
 /**

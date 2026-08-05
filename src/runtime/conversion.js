@@ -149,3 +149,53 @@ function isPrimitive(value) {
     value === null || (typeof value !== 'object' && typeof value !== 'function')
   );
 }
+
+/**
+ * ECMA-262 5.1 §9.5 ToInt32.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toInt32(value) {
+  const number = toNumber(value);
+
+  if (!Number.isFinite(number)) {
+    return +0;
+  }
+
+  const posInt = Math.sign(number) * Math.floor(Math.abs(number));
+  let int32bit = posInt % 2 ** 32;
+
+  if (int32bit < 0) {
+    int32bit += 2 ** 32;
+  }
+
+  if (int32bit >= 2 ** 31) {
+    return int32bit - 2 ** 32;
+  }
+
+  return int32bit;
+}
+
+/**
+ * ECMA-262 5.1 §9.6 ToUint32.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toUint32(value) {
+  const number = toNumber(value);
+
+  if (!Number.isFinite(number)) {
+    return +0;
+  }
+
+  const posInt = Math.sign(number) * Math.floor(Math.abs(number));
+  let int32bit = posInt % 2 ** 32;
+
+  if (int32bit < 0) {
+    int32bit += 2 ** 32;
+  }
+
+  return int32bit;
+}

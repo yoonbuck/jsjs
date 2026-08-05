@@ -122,12 +122,12 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      // Increment/decrement are not implemented, so an `UpdateExpression`
-      // inside an expression statement is still explicitly unsupported.
-      evaluateScript(realm, 'var a = 1;');
-
-      const error = assertThrows(() => evaluateScript(realm, 'a++;'), Error);
-      assertSame(/** @type {any} */ (error).nodeType, 'UpdateExpression');
+      // `in` is not implemented, so it is still explicitly unsupported.
+      const error = assertThrows(
+        () => evaluateScript(realm, '"a" in {};'),
+        Error,
+      );
+      assertSame(/** @type {any} */ (error).name, 'UnsupportedOperatorError');
     },
   },
   {
