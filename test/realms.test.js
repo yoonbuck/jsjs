@@ -107,14 +107,14 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      // Task 5 implements `var x = 1;`; functions are Task 6, so
-      // `FunctionDeclaration` is still an explicitly unsupported node.
+      // `for-in` is not implemented, so `ForInStatement` is still an
+      // explicitly unsupported node.
       const error = assertThrows(
-        () => evaluateScript(realm, 'function f() {}'),
+        () => evaluateScript(realm, 'for (var k in {}) {}'),
         Error,
       );
       assertSame(/Unsupported AST node/.test(error.message), true);
-      assertSame(/** @type {any} */ (error).nodeType, 'FunctionDeclaration');
+      assertSame(/** @type {any} */ (error).nodeType, 'ForInStatement');
     },
   },
   {
@@ -122,11 +122,12 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      // Task 5 implements `1 + 1;`; member access is Task 6, so a
-      // `MemberExpression` inside an expression statement is still
-      // explicitly unsupported.
-      const error = assertThrows(() => evaluateScript(realm, 'a.b;'), Error);
-      assertSame(/** @type {any} */ (error).nodeType, 'MemberExpression');
+      // Increment/decrement are not implemented, so an `UpdateExpression`
+      // inside an expression statement is still explicitly unsupported.
+      evaluateScript(realm, 'var a = 1;');
+
+      const error = assertThrows(() => evaluateScript(realm, 'a++;'), Error);
+      assertSame(/** @type {any} */ (error).nodeType, 'UpdateExpression');
     },
   },
   {

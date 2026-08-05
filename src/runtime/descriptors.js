@@ -4,8 +4,8 @@
  * @typedef {{
  *   value?: unknown,
  *   writable?: boolean,
- *   get?: (() => unknown) | undefined,
- *   set?: ((value: unknown) => void) | undefined,
+ *   get?: (() => unknown) | CallableLike | undefined,
+ *   set?: ((value: unknown) => void) | CallableLike | undefined,
  *   enumerable?: boolean,
  *   configurable?: boolean,
  * }} PropertyDescriptorRecord
@@ -14,7 +14,32 @@
  *   enumerable: boolean,
  *   configurable: boolean,
  * }} CompletePropertyDescriptor
+ *
+ * @typedef {{
+ *   callFunction: (thisValue: unknown, args: readonly unknown[]) => unknown,
+ * }} CallableLike
  */
+
+/**
+ * Implements ECMA-262 9.11 `IsCallable` for engine values: an engine
+ * object is callable when it implements the engine's call protocol.
+ *
+ * It lives in this module because `descriptors.js` imports nothing, so
+ * every layer that needs the predicate — property access, `typeof`, and
+ * accessor validation below — can share one definition without creating an
+ * import cycle with the object model or the function specialization that
+ * defines callable objects.
+ *
+ * @param {unknown} value
+ * @returns {value is CallableLike}
+ */
+export function isCallable(value) {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (/** @type {any} */ (value).callFunction) === 'function'
+  );
+}
 
 /**
  * @param {PropertyDescriptorRecord | CompletePropertyDescriptor | undefined} descriptor
@@ -66,7 +91,8 @@ export function validatePropertyDescriptor(descriptor) {
   if (
     'get' in copy &&
     copy.get !== undefined &&
-    typeof copy.get !== 'function'
+    typeof copy.get !== 'function' &&
+    !isCallable(copy.get)
   ) {
     throw new TypeError('Getter must be callable or undefined');
   }
@@ -74,7 +100,8 @@ export function validatePropertyDescriptor(descriptor) {
   if (
     'set' in copy &&
     copy.set !== undefined &&
-    typeof copy.set !== 'function'
+    typeof copy.set !== 'function' &&
+    !isCallable(copy.set)
   ) {
     throw new TypeError('Setter must be callable or undefined');
   }

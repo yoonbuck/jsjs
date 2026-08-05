@@ -118,3 +118,31 @@ export class UnsupportedOperatorError extends Error {
 export function createUnsupportedOperatorError(kind, operator) {
   return new UnsupportedOperatorError(kind, operator);
 }
+
+/**
+ * Signals that the engine recognizes an operation but cannot perform it
+ * yet because a piece of the runtime it depends on does not exist. It is
+ * used for `ToObject` on a primitive value, which ES5 answers with a
+ * `String`/`Number`/`Boolean` wrapper object — none of which this
+ * milestone provides. Like the unsupported-node/operator errors this is an
+ * engine-limitation error, not a guest-visible completion.
+ */
+export class UnsupportedOperationError extends Error {
+  /**
+   * @param {string} operation
+   */
+  constructor(operation) {
+    super(`Unsupported runtime operation: ${operation}`);
+    this.name = 'UnsupportedOperationError';
+    /** @type {string} */
+    this.operation = operation;
+  }
+}
+
+/**
+ * @param {string} operation
+ * @returns {UnsupportedOperationError}
+ */
+export function createUnsupportedOperationError(operation) {
+  return new UnsupportedOperationError(operation);
+}

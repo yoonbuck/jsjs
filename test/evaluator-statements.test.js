@@ -3,13 +3,49 @@ import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { parseScript } from '../src/parser.js';
 import { evaluate } from '../src/evaluator/index.js';
+import { STATEMENT_TYPES } from '../src/evaluator/statements.js';
+import { EXPRESSION_TYPES } from '../src/evaluator/expressions.js';
 
 const tests = [
+  {
+    name: 'the statement and expression dispatch tables are disjoint',
+    run() {
+      for (const type of STATEMENT_TYPES) {
+        assertSame(EXPRESSION_TYPES.has(type), false);
+      }
+    },
+  },
+  {
+    name: 'evaluate() dispatches a node type in neither table to an explicit unsupported-node error',
+    run() {
+      const realm = createRealm();
+      const context = {
+        realm,
+        env: realm.globalEnvironment,
+        strict: false,
+        thisValue: realm.globalObject,
+      };
+
+      for (const type of ['ForInStatement', 'UpdateExpression', 'NotANode']) {
+        const error = assertThrows(
+          () => evaluate({ type, body: null }, context),
+          Error,
+        );
+        assertSame(error.name, 'UnsupportedNodeError');
+        assertSame(/** @type {any} */ (error).nodeType, type);
+      }
+    },
+  },
   {
     name: 'evaluate() dispatches statement nodes to a completion record and expression nodes to a value',
     run() {
       const realm = createRealm();
-      const context = { realm, env: realm.globalEnvironment, strict: false };
+      const context = {
+        realm,
+        env: realm.globalEnvironment,
+        strict: false,
+        thisValue: realm.globalObject,
+      };
 
       const statementProgram = parseScript('1 + 2;');
       const completion = /** @type {{ type: string, value: unknown }} */ (
@@ -321,20 +357,18 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects FunctionDeclaration explicitly (Task 6)',
+    name: 'a function declaration statement produces no completion value of its own',
     run() {
       const realm = createRealm();
+      const completion = evaluateScript(realm, '1; function f() {}');
 
-      const error = assertThrows(
-        () => evaluateScript(realm, 'function f() {}'),
-        Error,
-      );
-      assertSame(error.name, 'UnsupportedNodeError');
-      assertSame(/** @type {any} */ (error).nodeType, 'FunctionDeclaration');
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 1);
+      assertSame(typeof realm.globalObject.get('f'), 'object');
     },
   },
   {
-    name: 'evaluateScript rejects for-in, switch, try, throw, with, and labeled statements explicitly',
+    name: 'evaluateScript rejects for-in, switch, try, with, and labeled statements explicitly',
     run() {
       const realm = createRealm();
 
@@ -358,15 +392,6 @@ const tests = [
         Error,
       );
       assertSame(/** @type {any} */ (tryStatement).nodeType, 'TryStatement');
-
-      const throwStatement = assertThrows(
-        () => evaluateScript(realm, 'throw 1;'),
-        Error,
-      );
-      assertSame(
-        /** @type {any} */ (throwStatement).nodeType,
-        'ThrowStatement',
-      );
 
       const withStatement = assertThrows(
         () => evaluateScript(realm, 'with ({}) {}'),

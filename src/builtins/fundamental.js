@@ -4,24 +4,27 @@ import { EngineObject } from '../runtime/object.js';
  * @typedef {{
  *   objectPrototype: EngineObject,
  *   functionPrototype: EngineObject,
+ *   arrayPrototype: EngineObject,
  * }} FundamentalIntrinsics
  */
 
 /**
  * Builds the minimal, per-realm intrinsic graph this milestone needs: the
- * root `%Object.prototype%` (whose own `[[Prototype]]` is `null`) and
- * `%Function.prototype%` (an ordinary object inheriting from
- * `%Object.prototype%`, standing in until function objects exist). Every
- * call returns brand-new `EngineObject` instances so realms never share
- * intrinsic identity.
+ * root `%Object.prototype%` (whose own `[[Prototype]]` is `null`) plus
+ * `%Function.prototype%` and `%Array.prototype%`, ordinary objects
+ * inheriting from `%Object.prototype%` that give the function and array
+ * specializations a distinct per-realm prototype identity. None of them
+ * carries its standard methods yet. Every call returns brand-new
+ * `EngineObject` instances so realms never share intrinsic identity.
  *
  * @returns {FundamentalIntrinsics}
  */
 export function createFundamentalIntrinsics() {
   const objectPrototype = new EngineObject(null);
   const functionPrototype = new EngineObject(objectPrototype);
+  const arrayPrototype = new EngineObject(objectPrototype);
 
-  return { objectPrototype, functionPrototype };
+  return { objectPrototype, functionPrototype, arrayPrototype };
 }
 
 /**
@@ -53,4 +56,3 @@ export function defineGlobalValueProperties(globalObject) {
     });
   }
 }
-

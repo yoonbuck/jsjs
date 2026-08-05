@@ -2,6 +2,7 @@ import {
   completePropertyDescriptor,
   copyPropertyDescriptor,
   isAccessorDescriptor,
+  isCallable,
   isDataDescriptor,
   validatePropertyDescriptor,
 } from './descriptors.js';
@@ -107,7 +108,9 @@ export class EngineObject {
       return descriptor.value;
     }
 
-    return descriptor.get === undefined ? undefined : descriptor.get.call(this);
+    return descriptor.get === undefined
+      ? undefined
+      : callAccessor(descriptor.get, this, []);
   }
 
   /**
@@ -158,10 +161,13 @@ export class EngineObject {
 
     if (own !== undefined && isAccessorDescriptor(own)) {
       if (own.set === undefined) {
-        return rejectOperation(throwOnError, 'Cannot assign to accessor property');
+        return rejectOperation(
+          throwOnError,
+          'Cannot assign to accessor property',
+        );
       }
 
-      own.set.call(this, value);
+      callAccessor(own.set, this, [value]);
       return true;
     }
 
@@ -176,7 +182,7 @@ export class EngineObject {
         );
       }
 
-      inherited.set.call(this, value);
+      callAccessor(inherited.set, this, [value]);
       return true;
     }
 
@@ -365,11 +371,12 @@ export class EngineObject {
     for (const name of methodNames) {
       const method = this.get(name);
 
-      if (typeof method !== 'function') {
+      if (typeof method !== 'function' && !isCallable(method)) {
         continue;
       }
 
-      const result = method.call(this);
+      const result = callAccessor(/** @type {any} */ (method), this, []);
+
       if (isPrimitive(result)) {
         return result;
       }
@@ -395,6 +402,34 @@ export class EngineObject {
   setReferencedValue(name, value, strict = false) {
     this.put(name, value, strict);
   }
+}
+
+/**
+ * Invokes a function value that the object model holds internally — an
+ * accessor's getter/setter or a `toString`/`valueOf` method found during
+ * `[[DefaultValue]]`.
+ *
+ * Two callable shapes reach this point: engine functions created by guest
+ * code, which use the engine call protocol, and plain host callbacks,
+ * which engine-internal code (realm bootstrapping, tests) may install
+ * directly. Guest values are never host functions, so the host branch can
+ * never be reached from guest code.
+ *
+ * @param {((...args: any[]) => unknown) | import('./descriptors.js').CallableLike} accessor
+ * @param {unknown} thisValue
+ * @param {unknown[]} args
+ * @returns {unknown}
+ */
+function callAccessor(accessor, thisValue, args) {
+  if (typeof accessor === 'function') {
+    return accessor.call(thisValue, ...args);
+  }
+
+  if (isCallable(accessor)) {
+    return accessor.callFunction(thisValue, args);
+  }
+
+  throw new TypeError('Accessor is not callable');
 }
 
 /**

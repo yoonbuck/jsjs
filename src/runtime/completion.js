@@ -50,6 +50,29 @@ export function createThrowCompletion(value) {
 }
 
 /**
+ * Carries a guest throw completion across host call frames.
+ *
+ * Completion records describe abrupt completions *within* one evaluator
+ * frame, but expression evaluation returns plain values, so a `throw`
+ * inside a called function has no completion record to travel through on
+ * its way back to the caller. `EngineFunction#callFunction` converts a
+ * body's throw completion into this signal, and the script API converts it
+ * back into a throw completion at the boundary; a future `try`/`catch` has
+ * exactly one thing to intercept.
+ */
+export class ThrowSignal extends Error {
+  /**
+   * @param {unknown} value
+   */
+  constructor(value) {
+    super('Uncaught guest throw completion');
+    this.name = 'ThrowSignal';
+    /** @type {unknown} */
+    this.value = value;
+  }
+}
+
+/**
  * Implements ECMA-262's `UpdateEmpty(completionRecord, value)`: when the
  * completion's own value is the `EMPTY` sentinel, return an equivalent
  * completion carrying `value` instead; otherwise return the completion

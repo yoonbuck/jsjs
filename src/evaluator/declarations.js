@@ -1,36 +1,206 @@
-import { getIdentifierReference } from '../runtime/environment.js';
+import {
+  getIdentifierReference,
+  newDeclarativeEnvironment,
+} from '../runtime/environment.js';
 import { putValue } from '../runtime/reference.js';
 import { EMPTY, createNormalCompletion } from '../runtime/completion.js';
+import {
+  EngineFunction,
+  createArgumentsObject,
+} from '../runtime/function-object.js';
+import { createUnsupportedNodeError } from '../runtime/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
+import { evaluateStatementList } from './statements.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
  */
 
 /**
- * Performs (a deliberately ES5-only, function-free slice of) Global
- * Declaration Instantiation: walks the program body for every `var`
+ * Performs (a deliberately ES5-only slice of) Global Declaration
+ * Instantiation: walks the program body for every function and `var`
  * declaration reachable without crossing a function boundary and creates a
- * mutable, non-configurable global var binding for each name, initialized
- * to `undefined`. This must run before the program's statement list is
- * evaluated so identifier references and hoisted reads see the binding
- * even before its declaration statement executes.
+ * mutable, non-configurable global binding for each name. Function
+ * declarations are instantiated first and bound to their function object;
+ * `var` names are created afterwards and initialized to `undefined` only
+ * when no binding of that name exists yet, so `var f;` never clobbers a
+ * `function f() {}` of the same name (ECMA-262 10.5 steps 5 and 8).
+ *
+ * This must run before the program's statement list is evaluated so
+ * identifier references and hoisted reads/calls see the binding even
+ * before its declaration statement executes.
  *
  * @param {any} program
- * @param {import('../runtime/realm.js').Realm} realm
+ * @param {EvaluationContext} context
  * @returns {void}
  */
-export function globalDeclarationInstantiation(program, realm) {
+export function globalDeclarationInstantiation(program, context) {
+  const globalEnvironment = context.realm.globalEnvironment;
+
   /** @type {Set<string>} */
   const varNames = new Set();
+  /** @type {any[]} */
+  const functionDeclarations = [];
 
   for (const statement of program.body) {
     collectVarNames(statement, varNames);
+    collectFunctionDeclarations(statement, functionDeclarations);
+  }
+
+  for (const declaration of functionDeclarations) {
+    const functionObject = instantiateFunctionObject(declaration, context);
+    const name = declaration.id.name;
+    globalEnvironment.createGlobalVarBinding(name, false);
+    globalEnvironment.setMutableBinding(name, functionObject, false);
   }
 
   for (const name of varNames) {
-    realm.globalEnvironment.createGlobalVarBinding(name, false);
+    globalEnvironment.createGlobalVarBinding(name, false);
   }
+}
+
+/**
+ * Performs the per-call half of declaration instantiation (ECMA-262 10.5)
+ * inside an already-created activation environment: binds formal
+ * parameters to their arguments, instantiates the body's function
+ * declarations, and creates `undefined`-initialized bindings for the
+ * body's `var` names that nothing has claimed yet.
+ *
+ * @param {any} functionNode
+ * @param {import('../runtime/function-object.js').EngineFunction} functionObject
+ * @param {readonly unknown[]} args
+ * @param {EvaluationContext} context
+ * @returns {void}
+ */
+export function functionDeclarationInstantiation(
+  functionNode,
+  functionObject,
+  args,
+  context,
+) {
+  const env =
+    /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
+      context.env
+    );
+  const parameterNames = functionObject.parameterNames;
+
+  for (let index = 0; index < parameterNames.length; index += 1) {
+    const name = parameterNames[index];
+
+    if (!env.hasBinding(name)) {
+      env.createMutableBinding(name, false);
+    }
+
+    env.initializeBinding(name, index < args.length ? args[index] : undefined);
+  }
+
+  /** @type {Set<string>} */
+  const varNames = new Set();
+  /** @type {any[]} */
+  const functionDeclarations = [];
+
+  for (const statement of functionNode.body.body) {
+    collectVarNames(statement, varNames);
+    collectFunctionDeclarations(statement, functionDeclarations);
+  }
+
+  for (const declaration of functionDeclarations) {
+    const name = declaration.id.name;
+    const nested = instantiateFunctionObject(declaration, context);
+
+    if (!env.hasBinding(name)) {
+      env.createMutableBinding(name, false);
+    }
+
+    env.initializeBinding(name, nested);
+  }
+
+  if (!env.hasBinding('arguments')) {
+    env.createMutableBinding('arguments', false);
+    env.initializeBinding(
+      'arguments',
+      createArgumentsObject(functionObject, args, env),
+    );
+  }
+
+  for (const name of varNames) {
+    if (!env.hasBinding(name)) {
+      env.createMutableBinding(name, false);
+      env.initializeBinding(name, undefined);
+    }
+  }
+}
+
+/**
+ * Creates the function object for a `FunctionDeclaration`, capturing
+ * `context.env` as its `[[Scope]]`.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {EngineFunction}
+ */
+export function instantiateFunctionObject(node, context) {
+  return createFunctionObject(node, context.env, context);
+}
+
+/**
+ * Shared "Creating Function Objects" path (ECMA-262 13.2) for function
+ * declarations and function expressions.
+ *
+ * @param {any} node
+ * @param {import('../runtime/environment.js').EnvironmentRecordLike} scope
+ * @param {EvaluationContext} context
+ * @returns {EngineFunction}
+ */
+export function createFunctionObject(node, scope, context) {
+  /** @type {string[]} */
+  const parameterNames = [];
+
+  for (const parameter of node.params) {
+    if (parameter.type !== 'Identifier') {
+      // ES5 formal parameters are always plain identifiers; anything else
+      // (destructuring, defaults, rest) is a later-edition form this
+      // engine does not implement.
+      throw createUnsupportedNodeError(parameter);
+    }
+
+    parameterNames.push(parameter.name);
+  }
+
+  return new EngineFunction({
+    realm: context.realm,
+    parameterNames,
+    scope,
+    strict: context.strict,
+    execute: (functionObject, thisValue, args) =>
+      executeFunctionBody(node, functionObject, thisValue, args),
+  });
+}
+
+/**
+ * Runs a function body in a fresh activation environment whose outer
+ * environment is the function's captured `[[Scope]]`, so closures observe
+ * the environment their function was created in rather than the caller's.
+ *
+ * @param {any} node
+ * @param {EngineFunction} functionObject
+ * @param {unknown} thisValue
+ * @param {readonly unknown[]} args
+ * @returns {{ type: string, value: unknown }}
+ */
+function executeFunctionBody(node, functionObject, thisValue, args) {
+  const env = newDeclarativeEnvironment(functionObject.scope);
+  /** @type {EvaluationContext} */
+  const context = {
+    realm: functionObject.realm,
+    env,
+    strict: functionObject.strict,
+    thisValue,
+  };
+
+  functionDeclarationInstantiation(node, functionObject, args, context);
+
+  return evaluateStatementList(node.body.body, context);
 }
 
 /**
@@ -38,9 +208,10 @@ export function globalDeclarationInstantiation(program, realm) {
  * every ES5 statement form that shares its enclosing variable scope
  * (blocks, `if` branches, loop bodies, and a `for` loop's own
  * initializer). Any other node type — including statement forms the
- * evaluator does not support yet, and function boundaries once they exist
- * — is left alone: it is not a var-hoisting container, so no names are
- * collected and no descent happens.
+ * evaluator does not support yet, and function boundaries — is left alone:
+ * it is not a var-hoisting container, so no names are collected and no
+ * descent happens. A `FunctionDeclaration` therefore stops the walk, which
+ * is exactly the function-boundary behavior var hoisting requires.
  *
  * @param {any} node
  * @param {Set<string>} names
@@ -73,6 +244,47 @@ function collectVarNames(node, names) {
         collectVarNames(node.init, names);
       }
       collectVarNames(node.body, names);
+      return;
+    default:
+      return;
+  }
+}
+
+/**
+ * Recursively collects `FunctionDeclaration` nodes that hoist into the
+ * enclosing variable scope, using the same scope-sharing statement forms
+ * `collectVarNames` walks and stopping at nested function boundaries.
+ *
+ * ES5's grammar only allows function declarations as source elements
+ * (directly in a program or function body), but the parser accepts the
+ * block-nested form every real engine hoists, so descending through those
+ * containers keeps `{ function f() {} } f();` working instead of leaving
+ * `f` unbound.
+ *
+ * @param {any} node
+ * @param {any[]} declarations
+ * @returns {void}
+ */
+function collectFunctionDeclarations(node, declarations) {
+  switch (node.type) {
+    case 'FunctionDeclaration':
+      declarations.push(node);
+      return;
+    case 'BlockStatement':
+      for (const statement of node.body) {
+        collectFunctionDeclarations(statement, declarations);
+      }
+      return;
+    case 'IfStatement':
+      collectFunctionDeclarations(node.consequent, declarations);
+      if (node.alternate) {
+        collectFunctionDeclarations(node.alternate, declarations);
+      }
+      return;
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+    case 'ForStatement':
+      collectFunctionDeclarations(node.body, declarations);
       return;
     default:
       return;

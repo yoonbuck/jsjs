@@ -1,4 +1,5 @@
 import { toNumber, toPrimitive, toString } from './conversion.js';
+import { isCallable } from './descriptors.js';
 
 /**
  * @param {unknown} left
@@ -170,8 +171,8 @@ export function abstractRelationalComparison(left, right, leftFirst = true) {
 /**
  * Implements the abstract semantics behind ECMA-262's `typeof` operator
  * (11.4.3's result table), independent of the `UnaryExpression` dispatch
- * that applies it. No callable engine objects exist yet (Task 6), so every
- * non-primitive value reports `'object'`.
+ * that applies it. Callable engine objects report `'function'`; every
+ * other non-primitive value reports `'object'`.
  *
  * @param {unknown} value
  * @returns {'undefined' | 'object' | 'boolean' | 'number' | 'string' | 'function'}
@@ -195,7 +196,7 @@ export function typeOf(value) {
     case 'function':
       return 'function';
     default:
-      return 'object';
+      return isCallable(value) ? 'function' : 'object';
   }
 }
 

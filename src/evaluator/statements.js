@@ -3,6 +3,8 @@ import {
   createBreakCompletion,
   createContinueCompletion,
   createNormalCompletion,
+  createReturnCompletion,
+  createThrowCompletion,
   updateEmpty,
 } from '../runtime/completion.js';
 import { toBoolean } from '../runtime/conversion.js';
@@ -14,6 +16,27 @@ import { evaluateVariableDeclaration } from './declarations.js';
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
  * @typedef {{ type: string, value: unknown, target?: string | undefined }} Completion
  */
+
+/**
+ * Every node type `evaluateStatement` dispatches. Exported so the
+ * evaluator's entry point can route nodes by an explicit, single source of
+ * truth instead of guessing that anything unrecognized is an expression.
+ */
+export const STATEMENT_TYPES = new Set([
+  'ExpressionStatement',
+  'EmptyStatement',
+  'BlockStatement',
+  'VariableDeclaration',
+  'FunctionDeclaration',
+  'IfStatement',
+  'WhileStatement',
+  'DoWhileStatement',
+  'ForStatement',
+  'BreakStatement',
+  'ContinueStatement',
+  'ReturnStatement',
+  'ThrowStatement',
+]);
 
 /**
  * Evaluates a single statement node to a completion record.
@@ -34,6 +57,11 @@ export function evaluateStatement(node, context) {
       return evaluateStatementList(node.body, context);
     case 'VariableDeclaration':
       return evaluateVariableDeclaration(node, context);
+    case 'FunctionDeclaration':
+      // Declaration instantiation already created and bound the function
+      // object before the statement list ran, so reaching the declaration
+      // in source order produces no value (ECMA-262 13).
+      return createNormalCompletion(EMPTY);
     case 'IfStatement':
       return evaluateIfStatement(node, context);
     case 'WhileStatement':
@@ -46,6 +74,16 @@ export function evaluateStatement(node, context) {
       return evaluateBreakStatement(node);
     case 'ContinueStatement':
       return evaluateContinueStatement(node);
+    case 'ThrowStatement':
+      return createThrowCompletion(
+        evaluateExpressionValue(node.argument, context),
+      );
+    case 'ReturnStatement':
+      return createReturnCompletion(
+        node.argument === null || node.argument === undefined
+          ? undefined
+          : evaluateExpressionValue(node.argument, context),
+      );
     default:
       throw createUnsupportedNodeError(node);
   }
@@ -161,10 +199,7 @@ function evaluateWhileStatement(node, context) {
 
   while (toBoolean(evaluateExpressionValue(node.test, context))) {
     const bodyResult = evaluateStatement(node.body, context);
-    const { value: nextValue, action } = applyLoopBodyResult(
-      bodyResult,
-      value,
-    );
+    const { value: nextValue, action } = applyLoopBodyResult(bodyResult, value);
     value = nextValue;
 
     if (action === 'break') {
@@ -190,10 +225,7 @@ function evaluateDoWhileStatement(node, context) {
 
   do {
     const bodyResult = evaluateStatement(node.body, context);
-    const { value: nextValue, action } = applyLoopBodyResult(
-      bodyResult,
-      value,
-    );
+    const { value: nextValue, action } = applyLoopBodyResult(bodyResult, value);
     value = nextValue;
 
     if (action === 'break') {
@@ -230,10 +262,7 @@ function evaluateForStatement(node, context) {
     toBoolean(evaluateExpressionValue(node.test, context))
   ) {
     const bodyResult = evaluateStatement(node.body, context);
-    const { value: nextValue, action } = applyLoopBodyResult(
-      bodyResult,
-      value,
-    );
+    const { value: nextValue, action } = applyLoopBodyResult(bodyResult, value);
     value = nextValue;
 
     if (action === 'break') {

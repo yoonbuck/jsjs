@@ -1,6 +1,7 @@
 import { assertSame, assertThrows } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
+import { evaluate } from '../src/evaluator/index.js';
 
 /**
  * @param {string} source
@@ -220,17 +221,33 @@ const tests = [
     },
   },
   {
-    name: 'assigning to a member expression throws an explicit unsupported-node error',
+    name: 'assigning to anything other than an identifier or member expression throws an explicit unsupported-node error',
     run() {
+      // An ES5 parser rejects every other assignment target itself, so the
+      // evaluator's guard is exercised with a synthetic node.
       const realm = createRealm();
-      evaluateScript(realm, 'var x;');
+      const context = {
+        realm,
+        env: realm.globalEnvironment,
+        strict: false,
+        thisValue: realm.globalObject,
+      };
 
       const error = assertThrows(
-        () => evaluateScript(realm, 'x.y = 1;'),
+        () =>
+          evaluate(
+            {
+              type: 'AssignmentExpression',
+              operator: '=',
+              left: { type: 'ArrayPattern', elements: [] },
+              right: { type: 'Literal', value: 1 },
+            },
+            context,
+          ),
         Error,
       );
       assertSame(error.name, 'UnsupportedNodeError');
-      assertSame(/** @type {any} */ (error).nodeType, 'MemberExpression');
+      assertSame(/** @type {any} */ (error).nodeType, 'ArrayPattern');
     },
   },
   {
@@ -242,22 +259,14 @@ const tests = [
     },
   },
   {
-    name: 'object literals, array literals, calls, new, and function expressions are unsupported (Task 6)',
+    name: 'object literals, array literals, calls, new, function expressions, and sequences evaluate to values',
     run() {
-      const cases = [
-        ['({a: 1});', 'ObjectExpression'],
-        ['[1, 2];', 'ArrayExpression'],
-        ['f();', 'CallExpression'],
-        ['new Foo();', 'NewExpression'],
-        ['(function () {});', 'FunctionExpression'],
-        ['(1, 2);', 'SequenceExpression'],
-      ];
-
-      for (const [source, nodeType] of cases) {
-        const error = assertThrows(() => run(source), Error);
-        assertSame(error.name, 'UnsupportedNodeError');
-        assertSame(/** @type {any} */ (error).nodeType, nodeType);
-      }
+      assertSame(run('typeof ({a: 1});'), 'object');
+      assertSame(run('[1, 2].length;'), 2);
+      assertSame(run('function f() { return 1; } f();'), 1);
+      assertSame(run('function P() { this.a = 2; } new P().a;'), 2);
+      assertSame(run('typeof (function () {});'), 'function');
+      assertSame(run('(1, 2);'), 2);
     },
   },
 ];
