@@ -191,6 +191,17 @@ const tests = [
     },
   },
   {
+    name: 'guest numeric coercion follows ES5 StringNumericLiteral syntax',
+    run() {
+      assertSame(run('+"\\u00a0+12.5e1\\ufeff";'), 125);
+      assertSame(run('+"Infinity";'), Infinity);
+      assertSame(run('+"0x10";'), 16);
+      assertSame(run('+"0b101";'), NaN);
+      assertSame(run('+"0o17";'), NaN);
+      assertSame(run('+"1_0";'), NaN);
+    },
+  },
+  {
     name: 'binary arithmetic operators follow abstract numeric/string coercion',
     run() {
       assertSame(run('1 + 2;'), 3);

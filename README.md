@@ -201,9 +201,9 @@ simple `=` assignment, `if`/`while`/`do`/`for`/`return`/`throw`, and the
 
 Not implemented yet, and therefore not exercised: `try`/`catch`, `++`/`--`,
 compound assignment, `in`, `instanceof`, `switch`, labelled statements,
-getters/setters, and the standard library (`Object`, `Array`, `String`,
-`Error`, …). Strict mode is only honoured at parse time, so the strict variant
-catches early errors such as legacy octal literals but not runtime strictness.
+and the standard library (`Object`, `Array`, `String`, `Error`, …). Strict mode
+is only honoured at parse time, so the strict variant catches early errors such
+as legacy octal literals but not runtime strictness.
 
 Assignment to an undeclared identifier follows ES5 8.7.2 step 3: it creates (or
 updates) a property on the realm's global object with the same attributes an

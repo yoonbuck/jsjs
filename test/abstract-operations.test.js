@@ -102,6 +102,28 @@ const tests = [
     },
   },
   {
+    name: 'string toNumber accepts exactly the ES5 StringNumericLiteral grammar',
+    run() {
+      const whitespace =
+        '\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u180e\u2000\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+
+      assertSame(toNumber(whitespace), 0);
+      assertSame(toNumber(`${whitespace}+Infinity${whitespace}`), Infinity);
+      assertSame(toNumber('-Infinity'), -Infinity);
+      assertSame(toNumber('+12.5e-1'), 1.25);
+      assertSame(toNumber('.5'), 0.5);
+      assertSame(toNumber('1.'), 1);
+      assertSame(Object.is(toNumber('-0'), -0), true);
+      assertSame(toNumber('0x10'), 16);
+      assertSame(toNumber('0XfF'), 255);
+      assertSame(toNumber('+0x10'), NaN);
+      assertSame(toNumber('-0x10'), NaN);
+      assertSame(toNumber('infinity'), NaN);
+      assertSame(toNumber('1e'), NaN);
+      assertSame(toNumber('.'), NaN);
+    },
+  },
+  {
     name: 'toPrimitive rejects host wrappers arrays and plain objects',
     run() {
       assertThrows(() => toPrimitive(new Number(1)), TypeError);
