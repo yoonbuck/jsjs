@@ -2,7 +2,6 @@ import { EngineObject } from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
 import { createUnsupportedOperationError } from './errors.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
-import { createGuestError } from '../builtins/errors.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -50,6 +49,8 @@ export class EngineFunction extends EngineObject {
     this.scope = scope;
     /** @type {boolean} */
     this.strict = strict;
+    /** @type {boolean} */
+    this._isConstructor = true;
     /** @type {FunctionBodyExecutor} */
     this._execute = execute;
 
@@ -125,7 +126,7 @@ export class EngineFunction extends EngineObject {
         // object and re-throw as a ThrowSignal so the evaluator's throw
         // machinery and try/catch handling can intercept it.
         throw new ThrowSignal(
-          createGuestError(this.realm, error.typeName, error.guestMessage),
+          this.realm.createGuestError(error.typeName, error.guestMessage),
         );
       }
 

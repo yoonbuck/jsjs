@@ -42,6 +42,18 @@ export function isCallable(value) {
 }
 
 /**
+ * @param {unknown} value
+ * @returns {value is CallableLike & {
+ *   constructFunction: (args?: readonly unknown[]) => unknown,
+ * }}
+ */
+export function isConstructor(value) {
+  return (
+    isCallable(value) && /** @type {any} */ (value)._isConstructor === true
+  );
+}
+
+/**
  * @param {PropertyDescriptorRecord | CompletePropertyDescriptor | undefined} descriptor
  * @returns {boolean}
  */

@@ -10,8 +10,7 @@ import {
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
-import { EngineFunction } from '../runtime/function-object.js';
-import { isCallable } from '../runtime/descriptors.js';
+import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import {
   checkObjectCoercible,
   toBoolean,
@@ -340,7 +339,7 @@ function applyBinaryOperator(operator, left, right) {
         );
       }
 
-      if (!(right instanceof EngineFunction)) {
+      if (!isHasInstanceCallable(right)) {
         throw new GuestErrorSignal(
           'TypeError',
           "Right-hand side of 'instanceof' is not callable",
@@ -525,9 +524,9 @@ function evaluateSequenceExpression(node, context) {
 }
 
 /**
- * Evaluates a `new` expression (ECMA-262 11.2.2). Every function object in
- * this milestone is also a constructor, so the constructability check and
- * the callability check coincide.
+ * Evaluates a `new` expression (ECMA-262 11.2.2), distinguishing callable
+ * values from constructor values so built-ins can reject `new` without
+ * affecting ordinary calls.
  *
  * @param {any} node
  * @param {EvaluationContext} context
@@ -537,7 +536,7 @@ function evaluateNewExpression(node, context) {
   const callee = evaluateExpressionValue(node.callee, context);
   const args = evaluateArguments(node.arguments ?? [], context);
 
-  if (!isCallable(callee)) {
+  if (!isConstructor(callee)) {
     throw new GuestErrorSignal(
       'TypeError',
       `${describeCallee(node.callee)} is not a constructor`,
@@ -565,6 +564,19 @@ function referenceThisValue(reference) {
   }
 
   return undefined;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is import('../runtime/descriptors.js').CallableLike & {
+ *   hasInstance: (argument: unknown) => boolean,
+ * }}
+ */
+function isHasInstanceCallable(value) {
+  return (
+    isCallable(value) &&
+    typeof (/** @type {any} */ (value).hasInstance) === 'function'
+  );
 }
 
 /**

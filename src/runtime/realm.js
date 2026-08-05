@@ -1,11 +1,12 @@
 import { EngineObject } from './object.js';
-import { EngineFunction } from './function-object.js';
 import { GlobalEnvironmentRecord } from './environment.js';
+import { createNativeFunction } from '../builtins/shared.js';
 import {
   createFundamentalIntrinsics,
   defineGlobalValueProperties,
 } from '../builtins/fundamental.js';
 import {
+  createGuestError,
   createErrorIntrinsics,
   installErrorConstructors,
 } from '../builtins/errors.js';
@@ -32,10 +33,9 @@ export class Realm {
     defineGlobalValueProperties(this.globalObject);
     this.globalEnvironment = new GlobalEnvironmentRecord(this.globalObject);
 
-    // Error intrinsics are created after the global environment exists so
-    // error constructor EngineFunction instances can reference it as their
-    // lexical scope. The resulting prototypes and constructors are merged
-    // into the intrinsics map so engine internals can reach them via
+    // Error intrinsics are created once the realm's global object and
+    // environment exist so the resulting constructors/prototypes can be
+    // published immediately and engine internals can reach them via
     // `realm.intrinsics.typeErrorPrototype` etc.
     const errorIntrinsics = createErrorIntrinsics(this);
     Object.assign(this.intrinsics, errorIntrinsics);
@@ -47,18 +47,33 @@ export class Realm {
     // "caller"/"arguments" accessor pairs and every strict arguments object's
     // "caller"/"callee" accessors. Created after error intrinsics exist so
     // the thrown error can be a proper guest TypeError.
-    this.intrinsics.throwTypeErrorFunction = new EngineFunction({
-      realm: this,
-      parameterNames: [],
-      scope: this.globalEnvironment,
-      strict: false,
-      execute() {
+    this.intrinsics.throwTypeErrorFunction = this.createNativeFunction({
+      name: '',
+      length: 0,
+      call() {
         throw new GuestErrorSignal(
           'TypeError',
           'Restricted property access in strict mode',
         );
       },
     });
+  }
+
+  /**
+   * @param {import('../builtins/shared.js').NativeFunctionOptions} options
+   * @returns {import('../builtins/shared.js').NativeFunction}
+   */
+  createNativeFunction(options) {
+    return createNativeFunction(this, options);
+  }
+
+  /**
+   * @param {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'Error'} typeName
+   * @param {string} message
+   * @returns {EngineObject}
+   */
+  createGuestError(typeName, message) {
+    return createGuestError(this, typeName, message);
   }
 }
 
