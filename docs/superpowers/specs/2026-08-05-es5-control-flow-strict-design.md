@@ -53,4 +53,3 @@ produce equivalent reports.
 The milestone is complete when all repository checks pass, the newly supported
 Test262 selection has zero unexpected failures, and strict variants execute with
 runtime strictness rather than duplicating non-strict behavior.
-

@@ -59,4 +59,3 @@ arguments restrictions.
 Pin representative upstream groups for all new features, update the supported
 feature manifest and README, remove stale getter/setter limitations, and verify
 byte-equivalent Node/JSC/browser reports with zero unexpected failures.
-
