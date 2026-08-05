@@ -336,6 +336,27 @@ const tests = [
       assertNormal(result, true);
     },
   },
+
+  // ---------------------------------------------------------------------------
+  // Strict assignment to a non-writable property
+  // ---------------------------------------------------------------------------
+  {
+    name: 'strict script: assigning to a non-writable property (fn.length) throws TypeError',
+    run() {
+      const realm = createRealm();
+      const result = runIn(
+        realm,
+        '"use strict"; function f(a, b) {} f.length = 5;',
+      );
+      assertGuestThrow(result, 'TypeError', realm);
+    },
+  },
+  {
+    name: 'non-strict script: assigning to a non-writable property silently no-ops',
+    run() {
+      assertNormal(run('function f(a, b) {} f.length = 5; f.length;'), 2);
+    },
+  },
 ];
 
 export default tests;
