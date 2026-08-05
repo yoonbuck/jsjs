@@ -5,6 +5,7 @@ import {
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { EngineFunction } from '../runtime/function-object.js';
 import { isCallable } from '../runtime/descriptors.js';
 import {
   checkObjectCoercible,
@@ -292,14 +293,14 @@ function applyBinaryOperator(operator, left, right) {
         );
       }
 
-      if (typeof (/** @type {any} */ (right)).hasInstance !== 'function') {
+      if (!(right instanceof EngineFunction)) {
         throw new GuestErrorSignal(
           'TypeError',
           "Right-hand side of 'instanceof' is not callable",
         );
       }
 
-      return /** @type {any} */ (right).hasInstance(left);
+      return right.hasInstance(left);
     }
     default:
       // '|'

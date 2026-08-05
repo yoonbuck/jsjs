@@ -145,22 +145,6 @@ export class EngineFunction extends EngineObject {
   }
 
   /**
-   * Implements the non-strict half of ECMA-262 10.4.3 "Entering Function
-   * Code": `null`/`undefined` become the realm's global object and objects
-   * are used as-is.
-   *
-   * A primitive `this` would be replaced by its `ToObject` wrapper, which
-   * needs `String`/`Number`/`Boolean` objects this milestone does not
-   * provide, so it is rejected explicitly. Guest code cannot reach that
-   * branch yet — property access on a primitive base already rejects for
-   * the same reason, and there is no `Function.prototype.call`/`apply` to
-   * pass an arbitrary `this` — but embedders calling `callFunction`
-   * directly can.
-   *
-   * @param {unknown} thisValue
-   * @returns {unknown}
-   */
-  /**
    * Implements ECMA-262 15.3.5.3 `[[HasInstance]]` (V): walks `V`'s
    * prototype chain looking for `F.prototype`. Returns `false` when `V` is
    * not an object; throws a guest `TypeError` when `F.prototype` is not an
@@ -197,6 +181,18 @@ export class EngineFunction extends EngineObject {
   }
 
   /**
+   * Implements the non-strict half of ECMA-262 10.4.3 "Entering Function
+   * Code": `null`/`undefined` become the realm's global object and objects
+   * are used as-is.
+   *
+   * A primitive `this` would be replaced by its `ToObject` wrapper, which
+   * needs `String`/`Number`/`Boolean` objects this milestone does not
+   * provide, so it is rejected explicitly. Guest code cannot reach that
+   * branch yet — property access on a primitive base already rejects for
+   * the same reason, and there is no `Function.prototype.call`/`apply` to
+   * pass an arbitrary `this` — but embedders calling `callFunction`
+   * directly can.
+   *
    * @param {unknown} thisValue
    * @returns {unknown}
    */

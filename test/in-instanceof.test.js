@@ -239,6 +239,21 @@ const tests = [
     },
   },
 
+  {
+    name: 'instanceof: function with non-object prototype throws guest TypeError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        evaluateScript(
+          realm,
+          'function F() {} F.prototype = 5; new F() instanceof F;',
+        ),
+        'TypeError',
+        realm,
+      );
+    },
+  },
+
   // ---------------------------------------------------------------------------
   // `instanceof` — non-object rhs throws TypeError
   // ---------------------------------------------------------------------------
