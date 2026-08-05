@@ -1,6 +1,4 @@
 import { EngineObject } from '../runtime/object.js';
-import { EngineFunction } from '../runtime/function-object.js';
-import { createReturnCompletion } from '../runtime/completion.js';
 import { toString } from '../runtime/conversion.js';
 
 /**
@@ -64,57 +62,50 @@ function buildNativeErrorPrototype(errorPrototype, name) {
  * object inheriting from `errorPrototype`, sets an own `message` property
  * only when the first argument is not `undefined` (matching real engines so
  * that `.message` resolves to `""` from the prototype in the no-arg case),
- * and returns that object. Because the execute body always returns an
- * `EngineObject`, `EngineFunction#constructFunction` uses the returned
- * object as the result of `new Error(…)`, discarding the pre-built instance
- * — the semantics remain identical to 15.11.2.1 since both paths produce
- * an identical object.
+ * and returns that object. The shared native-function factory installs
+ * identical call and construct hooks, so `Error(message)` and
+ * `new Error(message)` both delegate to the same realm-local algorithm.
  *
- * The function's auto-generated `prototype` property (set by `EngineFunction`'s
- * constructor) is replaced with `errorPrototype` and made non-writable per
- * 15.11.3.1. `errorPrototype.constructor` is then pointed back to the
- * returned constructor per 15.11.4/15.11.7.
+ * The native-function factory also installs the constructor's `prototype`
+ * property with the standard built-in attributes (`[[Writable]]: false`,
+ * `[[Enumerable]]: false`, `[[Configurable]]: false`); this helper only
+ * needs to wire `errorPrototype.constructor` back to the created function.
  *
  * @param {Realm} realm
  * @param {string} name
  * @param {EngineObject} errorPrototype
- * @returns {EngineFunction}
+ * @returns {import('./shared.js').NativeFunction}
  */
 function buildErrorConstructor(realm, name, errorPrototype) {
-  const ctor = new EngineFunction({
-    realm,
-    parameterNames: ['message'],
-    scope: realm.globalEnvironment,
-    strict: false,
-    /**
-     * @param {EngineFunction} _fn
-     * @param {unknown} _thisValue
-     * @param {readonly unknown[]} args
-     * @returns {{ type: string, value: unknown }}
-     */
-    execute(_fn, _thisValue, args) {
-      const instance = new EngineObject(errorPrototype);
+  /**
+   * @param {readonly unknown[]} args
+   * @returns {EngineObject}
+   */
+  function createErrorInstance(args) {
+    const instance = new EngineObject(errorPrototype);
 
-      if (args[0] !== undefined) {
-        instance.defineOwnProperty('message', {
-          value: toString(args[0]),
-          writable: true,
-          enumerable: false,
-          configurable: true,
-        });
-      }
+    if (args[0] !== undefined) {
+      instance.defineOwnProperty('message', {
+        value: toString(args[0]),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+    }
 
-      return createReturnCompletion(instance);
+    return instance;
+  }
+
+  const ctor = realm.createNativeFunction({
+    name,
+    length: 1,
+    prototype: errorPrototype,
+    call(_thisValue, args) {
+      return createErrorInstance(args);
     },
-  });
-
-  // Replace the auto-generated prototype with the error prototype object
-  // and mark it non-writable (15.11.3.1).
-  ctor.defineOwnProperty('prototype', {
-    value: errorPrototype,
-    writable: false,
-    enumerable: false,
-    configurable: false,
+    construct(args) {
+      return createErrorInstance(args);
+    },
   });
 
   // Wire constructor back-reference (15.11.4.1 / 15.11.7.7).
@@ -123,15 +114,6 @@ function buildErrorConstructor(realm, name, errorPrototype) {
     writable: true,
     enumerable: false,
     configurable: true,
-  });
-
-  // Name of the error subclass, per 15.11.7.9 (the auto-generated name from
-  // EngineFunction is empty; we shadow it with the real error name here).
-  ctor.defineOwnProperty('name', {
-    value: name,
-    writable: false,
-    enumerable: false,
-    configurable: false,
   });
 
   return ctor;
@@ -145,17 +127,16 @@ function buildErrorConstructor(realm, name, errorPrototype) {
  * string. This gives every error instance a consistent `.name`/`.message`
  * read path through the prototype chain.
  *
- * Call this **after** `realm.globalEnvironment` is available (the
- * constructor objects need it as their lexical scope) but **before** any
- * guest code runs.
+ * Call this after the realm's global object/environment exist but before
+ * any guest code runs.
  *
  * @param {Realm} realm
  * @returns {ErrorIntrinsics & {
- *   errorConstructor: EngineFunction,
- *   typeErrorConstructor: EngineFunction,
- *   referenceErrorConstructor: EngineFunction,
- *   syntaxErrorConstructor: EngineFunction,
- *   rangeErrorConstructor: EngineFunction,
+ *   errorConstructor: import('./shared.js').NativeFunction,
+ *   typeErrorConstructor: import('./shared.js').NativeFunction,
+ *   referenceErrorConstructor: import('./shared.js').NativeFunction,
+ *   syntaxErrorConstructor: import('./shared.js').NativeFunction,
+ *   rangeErrorConstructor: import('./shared.js').NativeFunction,
  * }}
  */
 export function createErrorIntrinsics(realm) {
@@ -171,10 +152,10 @@ export function createErrorIntrinsics(realm) {
   );
 
   // Each native error subtype: prototype inherits from %Error.prototype%,
-  // constructor inherits from %Function.prototype% (via EngineFunction).
+  // constructor inherits from %Function.prototype% via the native factory.
   /** @type {Record<string, EngineObject>} */
   const nativePrototypes = {};
-  /** @type {Record<string, EngineFunction>} */
+  /** @type {Record<string, import('./shared.js').NativeFunction>} */
   const nativeConstructors = {};
 
   for (const name of ERROR_NAMES) {
@@ -188,19 +169,21 @@ export function createErrorIntrinsics(realm) {
     errorPrototype,
     errorConstructor,
     typeErrorPrototype: nativePrototypes['TypeError'],
-    typeErrorConstructor: /** @type {EngineFunction} */ (
+    typeErrorConstructor: /** @type {import('./shared.js').NativeFunction} */ (
       nativeConstructors['TypeError']
     ),
     referenceErrorPrototype: nativePrototypes['ReferenceError'],
-    referenceErrorConstructor: /** @type {EngineFunction} */ (
-      nativeConstructors['ReferenceError']
-    ),
+    referenceErrorConstructor:
+      /** @type {import('./shared.js').NativeFunction} */ (
+        nativeConstructors['ReferenceError']
+      ),
     syntaxErrorPrototype: nativePrototypes['SyntaxError'],
-    syntaxErrorConstructor: /** @type {EngineFunction} */ (
-      nativeConstructors['SyntaxError']
-    ),
+    syntaxErrorConstructor:
+      /** @type {import('./shared.js').NativeFunction} */ (
+        nativeConstructors['SyntaxError']
+      ),
     rangeErrorPrototype: nativePrototypes['RangeError'],
-    rangeErrorConstructor: /** @type {EngineFunction} */ (
+    rangeErrorConstructor: /** @type {import('./shared.js').NativeFunction} */ (
       nativeConstructors['RangeError']
     ),
   };
@@ -215,7 +198,7 @@ export function createErrorIntrinsics(realm) {
  * @returns {void}
  */
 export function installErrorConstructors(globalObject, errorIntrinsics) {
-  /** @type {[string, EngineFunction][]} */
+  /** @type {[string, import('./shared.js').NativeFunction][]} */
   const ctors = [
     ['Error', errorIntrinsics.errorConstructor],
     ['TypeError', errorIntrinsics.typeErrorConstructor],

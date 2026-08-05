@@ -12,7 +12,6 @@ import {
 import { toBoolean } from '../runtime/conversion.js';
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 import { newDeclarativeEnvironment } from '../runtime/environment.js';
-import { createGuestError } from '../builtins/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateVariableDeclaration } from './declarations.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
@@ -471,7 +470,7 @@ function runToCompletion(fn, realm) {
 
     if (error instanceof GuestErrorSignal) {
       return createThrowCompletion(
-        createGuestError(realm, error.typeName, error.guestMessage),
+        realm.createGuestError(error.typeName, error.guestMessage),
       );
     }
 

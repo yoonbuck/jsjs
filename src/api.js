@@ -3,7 +3,6 @@ import { createRealm, Realm } from './runtime/realm.js';
 import { EMPTY, ThrowSignal, GuestErrorSignal } from './runtime/completion.js';
 import { globalDeclarationInstantiation } from './evaluator/declarations.js';
 import { evaluateStatementList } from './evaluator/statements.js';
-import { createGuestError } from './builtins/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
 
 export { parseScript, createRealm, Realm };
@@ -69,7 +68,7 @@ export function evaluateScript(realm, source, parserOptions = {}) {
       // realm is in scope.
       return {
         type: 'throw',
-        value: createGuestError(realm, error.typeName, error.guestMessage),
+        value: realm.createGuestError(error.typeName, error.guestMessage),
       };
     }
 

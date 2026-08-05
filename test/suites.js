@@ -32,6 +32,7 @@ import updateAssignment from './update-assignment.test.js';
 import inInstanceof from './in-instanceof.test.js';
 import strictMode from './strict-mode.test.js';
 import deleteOperator from './delete.test.js';
+import builtinsShared from './builtins-shared.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -94,5 +95,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/delete.test.js',
     tests: deleteOperator,
+  }),
+  Object.freeze({
+    file: 'test/builtins-shared.test.js',
+    tests: builtinsShared,
   }),
 ]);
