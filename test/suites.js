@@ -1,0 +1,66 @@
+/**
+ * The registry of portable test suites.
+ *
+ * Every suite listed here runs unchanged in Node, in headless Chromium, and in
+ * the `jsc` shell, so all three runners (`run-node.js`, `run-browser.js`,
+ * `run-jsc.js`) take their default work from this one list instead of each
+ * keeping its own. The imports are static because the `jsc` shell has no
+ * directory listing and no argument vector: a checked-in list is the only way
+ * it can know what to run.
+ *
+ * Suites that need host APIs live in `test/node/` and are registered by
+ * `run-node.js` alone. `test/node/repository-invariants.test.js` fails if a
+ * suite file exists that no runner registers.
+ */
+
+import foundation from './foundation.test.js';
+import parser from './parser.test.js';
+import runtimeRecords from './runtime-records.test.js';
+import objects from './objects.test.js';
+import abstractOperations from './abstract-operations.test.js';
+import environments from './environments.test.js';
+import realms from './realms.test.js';
+import evaluatorExpressions from './evaluator-expressions.test.js';
+import evaluatorStatements from './evaluator-statements.test.js';
+import functions from './functions.test.js';
+import objectArrayLiterals from './object-array-literals.test.js';
+import test262Runner from './test262-runner.test.js';
+
+/**
+ * @typedef {import('./harness/runner.js').TestCase} TestCase
+ * @typedef {{ file: string, tests: readonly TestCase[] }} TestSuite
+ */
+
+/** @type {readonly TestSuite[]} */
+export const PORTABLE_SUITES = Object.freeze([
+  Object.freeze({ file: 'test/foundation.test.js', tests: foundation }),
+  Object.freeze({ file: 'test/parser.test.js', tests: parser }),
+  Object.freeze({
+    file: 'test/runtime-records.test.js',
+    tests: runtimeRecords,
+  }),
+  Object.freeze({ file: 'test/objects.test.js', tests: objects }),
+  Object.freeze({
+    file: 'test/abstract-operations.test.js',
+    tests: abstractOperations,
+  }),
+  Object.freeze({ file: 'test/environments.test.js', tests: environments }),
+  Object.freeze({ file: 'test/realms.test.js', tests: realms }),
+  Object.freeze({
+    file: 'test/evaluator-expressions.test.js',
+    tests: evaluatorExpressions,
+  }),
+  Object.freeze({
+    file: 'test/evaluator-statements.test.js',
+    tests: evaluatorStatements,
+  }),
+  Object.freeze({ file: 'test/functions.test.js', tests: functions }),
+  Object.freeze({
+    file: 'test/object-array-literals.test.js',
+    tests: objectArrayLiterals,
+  }),
+  Object.freeze({
+    file: 'test/test262-runner.test.js',
+    tests: test262Runner,
+  }),
+]);

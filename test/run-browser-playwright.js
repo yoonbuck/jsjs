@@ -10,7 +10,7 @@
  * Usage: `node test/run-browser-playwright.js [test/foo.test.js ...]`
  */
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const REPOSITORY_ROOT = new URL('../', import.meta.url);
@@ -39,11 +39,10 @@ main().then(
  * @returns {Promise<number>}
  */
 async function main() {
-  const files =
-    process.argv.slice(2).length > 0
-      ? process.argv.slice(2)
-      : await listTestFiles();
-  const query = files
+  // With no arguments the page runs the shared registry from `test/suites.js`,
+  // so the browser sweep cannot drift from the Node and `jsc` sweeps.
+  const query = process.argv
+    .slice(2)
     .map((file) => `test=${encodeURIComponent(`../${file}`)}`)
     .join('&');
   const browser = await chromium.launch();
@@ -92,18 +91,6 @@ async function main() {
   } finally {
     await browser.close();
   }
-}
-
-/**
- * @returns {Promise<string[]>}
- */
-async function listTestFiles() {
-  const entries = await readdir(new URL('./', import.meta.url));
-
-  return entries
-    .filter((entry) => entry.endsWith('.test.js'))
-    .sort()
-    .map((entry) => `test/${entry}`);
 }
 
 /**

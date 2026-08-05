@@ -2,18 +2,19 @@
  * JavaScriptCore (`jsc` shell) adapter for the portable Test262 runner.
  *
  * The shell has no directory listing and no `fetch`, so file access goes
- * through its `readFile`/`read` global and the test list comes from the same
- * checked-in `manifest.json` the browser adapter uses. Like the other
- * adapters this file contributes no test semantics: it only maps host APIs
- * onto the `Test262Host` protocol and prints the shared report.
+ * through its `readFile`/`read` global and the selection comes from the same
+ * checked-in manifest the browser adapter uses, parsed by `selection.js`. Like
+ * the other adapters this file contributes no test semantics: it only maps host
+ * APIs onto the `Test262Host` protocol.
  */
 
-import { runTest262Suite } from '../runner.js';
-import { formatReportLines } from '../report.js';
+import {
+  DEFAULT_HARNESS_DIRECTORY,
+  TEST262_MANIFEST_FILE,
+} from '../selection.js';
 
 /**
  * @typedef {import('../runner.js').Test262Host} Test262Host
- * @typedef {import('../runner.js').Test262Engine} Test262Engine
  */
 
 /**
@@ -26,7 +27,8 @@ import { formatReportLines } from '../report.js';
  */
 export function createJscTest262Host(options) {
   const root = toDirectoryPath(options.root);
-  const harnessDirectory = options.harnessDirectory ?? 'harness';
+  const harnessDirectory =
+    options.harnessDirectory ?? DEFAULT_HARNESS_DIRECTORY;
   const readFileImpl =
     options.readFileImpl ??
     /** @type {((path: string) => string) | undefined} */ (
@@ -45,45 +47,8 @@ export function createJscTest262Host(options) {
       return readFileImpl(`${root}${harnessDirectory}/${name}`);
     },
     readManifest() {
-      return readFileImpl(`${root}manifest.json`);
+      return readFileImpl(`${root}${TEST262_MANIFEST_FILE}`);
     },
-  };
-}
-
-/**
- * @param {{
- *   engine: Test262Engine,
- *   host: Test262Host,
- *   supportedFeatures?: readonly string[],
- *   skipFeatures?: readonly string[],
- *   includeMalformed?: boolean,
- * }} options
- * @returns {Promise<{ lines: string[], failed: number }>}
- */
-export async function runJscTest262Manifest(options) {
-  const { host } = options;
-
-  if (!host.readManifest) {
-    throw new TypeError('The Test262 host cannot read a manifest');
-  }
-
-  const manifest = JSON.parse(await host.readManifest());
-  const tests = Array.isArray(manifest.tests) ? manifest.tests : [];
-  const malformed =
-    options.includeMalformed && Array.isArray(manifest.malformed)
-      ? manifest.malformed
-      : [];
-  const { records, summary } = await runTest262Suite({
-    engine: options.engine,
-    host,
-    paths: [...tests, ...malformed],
-    supportedFeatures: options.supportedFeatures,
-    skipFeatures: options.skipFeatures,
-  });
-
-  return {
-    lines: formatReportLines([...records, summary]),
-    failed: summary.failed,
   };
 }
 

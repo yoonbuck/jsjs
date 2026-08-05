@@ -1,10 +1,11 @@
 /**
  * Node adapter for the portable Test262 runner.
  *
- * The adapter is deliberately thin: it turns a directory of test files into
- * the `Test262Host` protocol (`readTest`, `readInclude`, `readManifest`,
- * `listTests`) and provides a CLI entry point. All test semantics live in
- * `tools/test262/runner.js`, which never imports this file.
+ * The adapter is deliberately thin: it turns a directory of test files into the
+ * `Test262Host` protocol (`readTest`, `readInclude`, `readManifest`,
+ * `listTests`), parses a CLI, and writes the shared report. Which tests run and
+ * what a record looks like are decided by `tools/test262/selection.js` and
+ * `tools/test262/runner.js`, which never import this file.
  *
  * Roots are resolved against the repository, not the current working
  * directory, so npm scripts behave the same no matter where they are invoked
@@ -14,8 +15,11 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createRealm, evaluateScript } from '../../../src/index.js';
-import { runTest262Suite } from '../runner.js';
-import { formatReport } from '../report.js';
+import { runTest262 } from '../runner.js';
+import {
+  DEFAULT_HARNESS_DIRECTORY,
+  TEST262_MANIFEST_FILE,
+} from '../selection.js';
 
 /**
  * @typedef {import('../runner.js').Test262Host} Test262Host
@@ -29,7 +33,8 @@ const REPOSITORY_ROOT = new URL('../../../', import.meta.url);
  */
 export function createNodeTest262Host(options) {
   const root = toDirectoryUrl(options.root);
-  const harnessDirectory = options.harnessDirectory ?? 'harness';
+  const harnessDirectory =
+    options.harnessDirectory ?? DEFAULT_HARNESS_DIRECTORY;
 
   return {
     readTest(file) {
@@ -39,11 +44,10 @@ export function createNodeTest262Host(options) {
       return readFile(new URL(`${harnessDirectory}/${name}`, root), 'utf8');
     },
     readManifest() {
-      return readFile(new URL('manifest.json', root), 'utf8');
+      return readFile(new URL(TEST262_MANIFEST_FILE, root), 'utf8');
     },
     async listTests() {
-      const files = await listJavaScriptFiles(root, '', harnessDirectory);
-      return files.sort();
+      return listJavaScriptFiles(root, '', harnessDirectory);
     },
   };
 }
@@ -58,51 +62,20 @@ export async function main(argv) {
     root: options.root,
     harnessDirectory: options.harnessDirectory,
   });
-  const paths = await resolvePaths(host, options);
-  const { records, summary } = await runTest262Suite({
+  const { lines, failed } = await runTest262({
     engine: { createRealm, evaluateScript },
     host,
-    paths,
+    paths: options.paths,
+    includeMalformed: options.includeMalformed,
     supportedFeatures: options.features,
     skipFeatures: options.skipFeatures,
   });
 
-  process.stdout.write(formatReport([...records, summary]));
-
-  return summary.failed > 0 ? 1 : 0;
-}
-
-/**
- * @param {Test262Host} host
- * @param {ReturnType<typeof parseArguments>} options
- * @returns {Promise<string[]>}
- */
-async function resolvePaths(host, options) {
-  if (options.paths.length > 0) {
-    return [...options.paths];
+  for (const line of lines) {
+    process.stdout.write(`${line}\n`);
   }
 
-  /** @type {string | null} */
-  let manifestText = null;
-
-  try {
-    manifestText = host.readManifest ? await host.readManifest() : null;
-  } catch {
-    manifestText = null;
-  }
-
-  if (manifestText === null) {
-    return host.listTests ? [...(await host.listTests())] : [];
-  }
-
-  const manifest = JSON.parse(manifestText);
-  const tests = Array.isArray(manifest.tests) ? manifest.tests : [];
-  const malformed =
-    options.includeMalformed && Array.isArray(manifest.malformed)
-      ? manifest.malformed
-      : [];
-
-  return [...tests, ...malformed];
+  return failed > 0 ? 1 : 0;
 }
 
 /**
@@ -118,7 +91,7 @@ async function resolvePaths(host, options) {
  */
 function parseArguments(argv) {
   let root = 'test/fixtures/test262';
-  let harnessDirectory = 'harness';
+  let harnessDirectory = DEFAULT_HARNESS_DIRECTORY;
   /** @type {string[]} */
   let features = [];
   /** @type {string[]} */

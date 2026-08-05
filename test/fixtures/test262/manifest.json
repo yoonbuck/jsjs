@@ -1,5 +1,4 @@
 {
-  "harnessDirectory": "harness",
   "tests": [
     "test/feature-skip.js",
     "test/includes.js",

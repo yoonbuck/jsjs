@@ -5,11 +5,13 @@
  * imports that module for its host implementation and must not trigger a run.
  * The shell has no argument vector, so configuration comes from globals the
  * launcher can set (`jsjsTest262Root`, `jsjsTest262Features`) and otherwise
- * falls back to the checked-in fixture tree.
+ * falls back to the checked-in fixture tree. Selection, execution, and report
+ * formatting all come from the shared `runTest262`, so this file only prints.
  */
 
 import { createRealm, evaluateScript } from '../../../src/index.js';
-import { createJscTest262Host, runJscTest262Manifest } from './jsc.js';
+import { runTest262 } from '../runner.js';
+import { createJscTest262Host } from './jsc.js';
 import { moduleUrl, resolveRelativePath } from './paths.js';
 
 const DEFAULT_ROOT = resolveRelativePath(
@@ -29,7 +31,7 @@ const host = createJscTest262Host({
 
 // Promise chaining rather than top level await: the project's host floor is
 // ES2020, where top level await does not exist yet.
-runJscTest262Manifest({
+runTest262({
   engine: { createRealm, evaluateScript },
   host,
   supportedFeatures: /** @type {string[] | undefined} */ (

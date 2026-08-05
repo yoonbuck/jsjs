@@ -1,9 +1,7 @@
-// Acorn is imported by relative path rather than by the bare `acorn`
-// specifier because bare specifiers are a Node resolution feature: browsers
-// and the `jsc` shell reject them outright, and this milestone's Test262
-// adapters run this exact source in both. The path points at Acorn's ES
-// module build so no bundler or import map is needed anywhere.
-import { parse as acornParse } from '../node_modules/acorn/dist/acorn.mjs';
+// The parser dependency is reached through `./parser-dependency.js`, the one
+// engine module that names it: see that file for why the vendored build exists
+// and how it keeps Node, browser, and `jsc` runs on the same source.
+import { parse as acornParse } from './parser-dependency.js';
 import { normalizeSyntaxError } from './runtime/errors.js';
 
 const PARSER_OPTIONS = Object.freeze({

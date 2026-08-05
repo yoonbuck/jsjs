@@ -9,14 +9,22 @@ import {
 import {
   DEFAULT_INCLUDES,
   decideSkip,
+  runTest262,
   runTest262Suite,
-  sortTestPaths,
 } from '../tools/test262/runner.js';
+import {
+  Test262SelectionError,
+  parseTest262Manifest,
+  resolveTest262Paths,
+  selectTest262Paths,
+  sortTestPaths,
+} from '../tools/test262/selection.js';
 import {
   createSummaryRecord,
   createTestRecord,
   formatReport,
   formatRecordLine,
+  formatReportLines,
 } from '../tools/test262/report.js';
 import { createFixtureTest262Host } from './harness/test262-host.js';
 
@@ -26,20 +34,22 @@ import { createFixtureTest262Host } from './harness/test262-host.js';
 
 const engine = { createRealm, evaluateScript };
 
-/**
- * Reads and parses the fixture manifest, failing loudly when a host cannot
- * enumerate it (the fixture hosts always can).
- *
- * @param {Test262Host} host
- * @returns {Promise<{ tests: string[], malformed: string[] }>}
- */
-async function readFixtureManifest(host) {
-  if (typeof host.readManifest !== 'function') {
-    throw new Error('fixture host does not implement readManifest');
-  }
+const FIXTURE_TESTS = [
+  'test/feature-skip.js',
+  'test/includes.js',
+  'test/no-strict.js',
+  'test/only-strict.js',
+  'test/parse-negative.js',
+  'test/positive.js',
+  'test/raw.js',
+  'test/runtime-negative.js',
+  'test/supported-feature.js',
+];
 
-  return JSON.parse(await host.readManifest());
-}
+const FIXTURE_MALFORMED = [
+  'malformed/missing-frontmatter.js',
+  'malformed/negative-without-type.js',
+];
 
 const HARNESS = {
   'assert.js': [
@@ -131,9 +141,7 @@ function summarizeRecords(records) {
     .join('\n');
 }
 
-const FIXTURE_REPORT = [
-  '{"type":"test","file":"malformed/missing-frontmatter.js","variant":null,"status":"failed","reason":"metadata-error","message":"Missing Test262 frontmatter block"}',
-  '{"type":"test","file":"malformed/negative-without-type.js","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
+const FIXTURE_TEST_LINES = [
   '{"type":"test","file":"test/feature-skip.js","variant":null,"status":"skipped","reason":"unsupported-feature","message":"unsupported features: Proxy, Reflect","features":["Proxy","Reflect"]}',
   '{"type":"test","file":"test/includes.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/includes.js","variant":"strict","status":"passed"}',
@@ -148,6 +156,24 @@ const FIXTURE_REPORT = [
   '{"type":"test","file":"test/runtime-negative.js","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/supported-feature.js","variant":"non-strict","status":"passed","features":["fixture-subset"]}',
   '{"type":"test","file":"test/supported-feature.js","variant":"strict","status":"passed","features":["fixture-subset"]}',
+];
+
+const FIXTURE_MALFORMED_LINES = [
+  '{"type":"test","file":"malformed/missing-frontmatter.js","variant":null,"status":"failed","reason":"metadata-error","message":"Missing Test262 frontmatter block"}',
+  '{"type":"test","file":"malformed/negative-without-type.js","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
+];
+
+/** The default selection: exactly what `npm run test262:fixtures` writes. */
+const FIXTURE_REPORT = [
+  ...FIXTURE_TEST_LINES,
+  '{"type":"summary","total":14,"passed":13,"failed":0,"skipped":1}',
+  '',
+].join('\n');
+
+/** The `--include-malformed` selection, malformed paths sorting first. */
+const FIXTURE_MALFORMED_REPORT = [
+  ...FIXTURE_MALFORMED_LINES,
+  ...FIXTURE_TEST_LINES,
   '{"type":"summary","total":16,"passed":13,"failed":2,"skipped":1}',
   '',
 ].join('\n');
@@ -411,6 +437,43 @@ export default [
         ['ok.js|non-strict|passed|', 'ok.js|strict|passed|'].join('\n'),
       );
       assertSame(summary.passed, 2);
+    },
+  },
+  {
+    name: 'a failing assertion reports a deterministic unexpected-throw record',
+    run: async () => {
+      const { records, summary } = await runMemorySuite({
+        'failing-assertion.js': fixture(
+          'an assertion that does not hold',
+          "assert.sameValue(1 + 1, 3, 'arithmetic');",
+        ),
+      });
+
+      assertSame(
+        formatReportLines([...records, summary]).join('\n'),
+        [
+          '{"type":"test","file":"failing-assertion.js","variant":"non-strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: assert.sameValue failed: arithmetic"}',
+          '{"type":"test","file":"failing-assertion.js","variant":"strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: assert.sameValue failed: arithmetic"}',
+          '{"type":"summary","total":2,"passed":0,"failed":2,"skipped":0}',
+        ].join('\n'),
+      );
+    },
+  },
+  {
+    name: 'an unexpected throw of a primitive describes the value without a phase guess',
+    run: async () => {
+      const { records } = await runMemorySuite({
+        'throws-string.js': fixture(
+          'throws a primitive at runtime',
+          "throw 'boom';",
+          'flags: [noStrict]\n',
+        ),
+      });
+
+      assertSame(
+        formatRecordLine(records[0]),
+        '{"type":"test","file":"throws-string.js","variant":"non-strict","status":"failed","reason":"unexpected-throw","message":"guest string: boom"}',
+      );
     },
   },
   {
@@ -762,20 +825,198 @@ export default [
     },
   },
   {
-    name: 'the fixture suite produces the expected deterministic report',
+    name: 'the manifest parser accepts the selection shape and rejects everything else',
+    run: () => {
+      assertSame(
+        JSON.stringify(
+          parseTest262Manifest(
+            '{"tests":["b.js","a.js"],"malformed":["m.js"]}',
+          ),
+        ),
+        '{"tests":["b.js","a.js"],"malformed":["m.js"]}',
+      );
+      assertSame(
+        JSON.stringify(parseTest262Manifest('{"tests":["a.js"]}')),
+        '{"tests":["a.js"],"malformed":[]}',
+      );
+
+      for (const text of [
+        'not json',
+        '[]',
+        'null',
+        '{"tests":"a.js"}',
+        '{"tests":[1]}',
+        '{"tests":[""]}',
+        '{"tests":[],"malformed":{}}',
+        '{"tests":[],"harnessDirectory":"harness"}',
+      ]) {
+        assertThrows(() => parseTest262Manifest(text), Test262SelectionError);
+      }
+    },
+  },
+  {
+    name: 'selection prefers explicit paths, then the manifest, then a listing',
+    run: () => {
+      const manifest = { tests: ['b.js', 'a.js'], malformed: ['m.js'] };
+      const listing = ['listed.js'];
+
+      assertSame(
+        selectTest262Paths({
+          paths: ['explicit.js'],
+          manifest,
+          listing,
+          includeMalformed: true,
+        }).join(','),
+        'explicit.js',
+      );
+      assertSame(
+        selectTest262Paths({ manifest, listing }).join(','),
+        'a.js,b.js',
+      );
+      assertSame(
+        selectTest262Paths({ manifest, listing, includeMalformed: true }).join(
+          ',',
+        ),
+        'a.js,b.js,m.js',
+      );
+      assertSame(selectTest262Paths({ listing }).join(','), 'listed.js');
+      assertSame(selectTest262Paths({}).length, 0);
+    },
+  },
+  {
+    name: 'path resolution reads the manifest through the host and falls back to a listing',
+    run: async () => {
+      /**
+       * @param {Partial<Test262Host>} overrides
+       * @returns {Test262Host}
+       */
+      const hostWith = (overrides) => ({
+        readTest: () => '',
+        readInclude: () => '',
+        ...overrides,
+      });
+
+      assertSame(
+        (
+          await resolveTest262Paths({
+            host: hostWith({
+              readManifest: () =>
+                '{"tests":["b.js","a.js"],"malformed":["m.js"]}',
+              listTests: () => ['listed.js'],
+            }),
+          })
+        ).join(','),
+        'a.js,b.js',
+      );
+
+      assertSame(
+        (
+          await resolveTest262Paths({
+            host: hostWith({
+              readManifest: () => {
+                throw new Error('ENOENT');
+              },
+              listTests: () => ['listed.js'],
+            }),
+          })
+        ).join(','),
+        'listed.js',
+      );
+
+      assertSame(
+        (
+          await resolveTest262Paths({
+            host: hostWith({ listTests: () => ['only-listed.js'] }),
+          })
+        ).join(','),
+        'only-listed.js',
+      );
+
+      assertSame(
+        (
+          await resolveTest262Paths({
+            host: hostWith({ readManifest: () => '{"tests":["ignored.js"]}' }),
+            paths: ['chosen.js'],
+          })
+        ).join(','),
+        'chosen.js',
+      );
+
+      let selectionError = null;
+
+      try {
+        await resolveTest262Paths({ host: hostWith({}) });
+      } catch (error) {
+        selectionError = error;
+      }
+
+      assertSame(selectionError instanceof Test262SelectionError, true);
+
+      let manifestError = null;
+
+      try {
+        await resolveTest262Paths({
+          // A readable but malformed manifest must fail loudly rather than
+          // silently falling back to a listing that selects other tests.
+          host: hostWith({
+            readManifest: () => '{"tests":[1]}',
+            listTests: () => ['listed.js'],
+          }),
+        });
+      } catch (error) {
+        manifestError = error;
+      }
+
+      assertSame(manifestError instanceof Test262SelectionError, true);
+    },
+  },
+  {
+    name: 'every host adapter selects the fixture tests through shared selection',
     run: async () => {
       const host = await createFixtureTest262Host();
-      const manifest = await readFixtureManifest(host);
-      const paths = [...manifest.tests, ...manifest.malformed];
 
-      const { records, summary } = await runTest262Suite({
+      assertSame(
+        (await resolveTest262Paths({ host })).join(','),
+        FIXTURE_TESTS.join(','),
+      );
+      assertSame(
+        (await resolveTest262Paths({ host, includeMalformed: true })).join(','),
+        [...FIXTURE_MALFORMED, ...FIXTURE_TESTS].join(','),
+      );
+      assertSame(
+        (await resolveTest262Paths({ host, paths: ['test/positive.js'] })).join(
+          ',',
+        ),
+        'test/positive.js',
+      );
+    },
+  },
+  {
+    name: 'the shared run produces the deterministic fixture report every adapter prints',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      const run = await runTest262({
         engine,
         host,
-        paths,
         supportedFeatures: ['fixture-subset'],
       });
 
-      assertSame(formatReport([...records, summary]), FIXTURE_REPORT);
+      assertSame(`${run.lines.join('\n')}\n`, FIXTURE_REPORT);
+      assertSame(run.failed, 0);
+      assertSame(formatReport([...run.records, run.summary]), FIXTURE_REPORT);
+
+      const withMalformed = await runTest262({
+        engine,
+        host,
+        includeMalformed: true,
+        supportedFeatures: ['fixture-subset'],
+      });
+
+      assertSame(
+        `${withMalformed.lines.join('\n')}\n`,
+        FIXTURE_MALFORMED_REPORT,
+      );
+      assertSame(withMalformed.failed, 2);
     },
   },
   {
@@ -787,10 +1028,15 @@ export default [
         return;
       }
 
-      const manifest = await readFixtureManifest(host);
-      const declared = [...manifest.tests, ...manifest.malformed].sort();
+      const declared = await resolveTest262Paths({
+        host,
+        includeMalformed: true,
+      });
 
-      assertSame((await host.listTests()).join(','), declared.join(','));
+      assertSame(
+        sortTestPaths(await host.listTests()).join(','),
+        sortTestPaths(declared).join(','),
+      );
     },
   },
 ];

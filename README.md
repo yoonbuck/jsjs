@@ -7,17 +7,33 @@ Node, in a browser, and in the JavaScriptCore (`jsc`) shell: nothing in `src/`
 imports a host module, and guest behaviour never leans on host `eval`,
 `Function`, or host objects.
 
+The one runtime dependency, the Acorn parser, is reached through
+`src/parser-dependency.js`, the single engine module that names it. It imports
+`vendor/acorn/`, a project-owned directory that `tools/vendor/sync.js` fills from
+the version pinned in `package.json`. That indirection is what keeps a plain
+relative import working in all three hosts: bare specifiers need Node
+resolution, browsers would need an import map, and the `jsc` shell supports
+neither. `vendor/` is generated rather than committed; `npm install` populates it
+through `prepare`.
+
 ## Commands
 
 | Command                    | What it does                                                       |
 | -------------------------- | ------------------------------------------------------------------ |
-| `npm test`                 | Node unit suites, then the Test262 fixture suite through the CLI   |
-| `npm run test:node`        | Every `test/*.test.js` suite under Node                            |
-| `npm run test:browser`     | Every suite in headless Chromium via Playwright                    |
+| `npm test`                 | The Node suites, then the Test262 fixture suite through the CLI    |
+| `npm run test:node`        | Every portable suite plus the Node-only suites in `test/node/`     |
+| `npm run test:browser`     | Every portable suite in headless Chromium via Playwright           |
+| `npm run test:jsc`         | Every portable suite in the `jsc` shell                            |
 | `npm run test262:fixtures` | Test262 runner over `test/fixtures/test262` (JSON lines on stdout) |
 | `npm run test262:jsc`      | The same fixture suite under the `jsc` shell                       |
+| `npm run vendor:sync`      | Refresh `vendor/` from the pinned dependencies                     |
+| `npm run vendor:check`     | Fail if `vendor/` has drifted from the pinned dependencies         |
 | `npm run typecheck`        | `tsc` in checkJs mode                                              |
 | `npm run lint`             | ESLint plus a Prettier format check                                |
+
+`test/suites.js` is the one registry of portable suites; all three runners take
+their default work from it, and `test/node/repository-invariants.test.js` fails
+if a suite file exists that no runner registers.
 
 `npm run test:browser` needs the Playwright browser binaries once:
 
@@ -25,8 +41,8 @@ imports a host module, and guest behaviour never leans on host `eval`,
 npx playwright install chromium --only-shell
 ```
 
-`npm run test262:jsc` needs `jsc` on `PATH`. macOS ships it inside the
-JavaScriptCore framework rather than in a bin directory:
+`npm run test:jsc` and `npm run test262:jsc` need `jsc` on `PATH`. macOS ships it
+inside the JavaScriptCore framework rather than in a bin directory:
 
 ```sh
 PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run test262:jsc
@@ -69,15 +85,22 @@ Upstream revision is pinned in `package.json` under the `test262` key:
 - `metadata.js` parses the Test262 frontmatter subset (`description`, `esid`,
   `es5id`, `info`, `flags`, `includes`, `features`, `negative`) without `eval`,
   expands strict/non-strict/raw variants, and resolves includes.
+- `selection.js` decides _which_ tests run: the manifest's name, shape, and
+  validation, the precedence between explicit paths, a manifest, and a host
+  listing, and the code-unit ordering reports depend on.
 - `runner.js` executes a variant in a fresh realm, evaluates includes before the
   test, classifies negative expectations by phase and constructor identity, and
-  decides feature and flag skips.
+  decides feature and flag skips. `runTest262` ties selection, execution, and
+  report formatting together in one shared call.
 - `report.js` renders records as deterministic JSON lines.
 
-Adapters are thin: they only supply file access. `adapters/node.js` reads from
-disk and provides the CLI, `adapters/browser.js` fetches over HTTP,
-`adapters/jsc.js` uses the shell's `readFile`, and `adapters/paths.js` resolves
-module-relative paths without `URL` (which `jsc` lacks).
+Adapters are thin: they supply file access, and for the two entry points, a CLI
+and printing. `adapters/node.js` reads from disk, `adapters/browser.js` fetches
+over HTTP, `adapters/jsc.js` uses the shell's `readFile`, and `adapters/paths.js`
+resolves module-relative paths without `URL` (which `jsc` lacks). None of them
+parse a manifest, expand a selection, or format a record; the manifest exists
+only because browsers and `jsc` cannot list directories, and Node reads the same
+one so all three hosts select the same tests.
 
 ### Supported subset
 
@@ -130,6 +153,10 @@ names the decision:
 | `excluded-feature`          | Skipped: feature named in `--skip-features`              |
 | `unsupported-feature`       | Skipped: feature outside `--features`                    |
 
-Byte-identical output across Node, Chromium, and `jsc` is a checked property:
-`test/test262-runner.test.js` compares the whole fixture report against a golden
-string, and that suite runs in all three runtimes.
+Byte-identical output across Node, Chromium, and `jsc` is a checked property, in
+two ways. `test/test262-runner.test.js` compares the whole fixture report against
+a golden string and asserts that the runtime's own adapter selects the fixture
+paths through `selection.js`; that suite runs under `npm run test:node`,
+`npm run test:browser`, and `npm run test:jsc`. Separately, the `jsc` and Node
+CLI entry points print the same 15-line report, which `cmp` confirms is
+byte-identical.

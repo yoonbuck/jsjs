@@ -3,13 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:node && npm run test262:fixtures",
-    "test:node": "node test/run-node.js test/foundation.test.js && node test/run-node.js test/parser.test.js && node test/run-node.js test/runtime-records.test.js && node test/run-node.js test/objects.test.js && node test/run-node.js test/abstract-operations.test.js && node test/run-node.js test/environments.test.js && node test/run-node.js test/realms.test.js && node test/run-node.js test/evaluator-expressions.test.js && node test/run-node.js test/evaluator-statements.test.js && node test/run-node.js test/functions.test.js && node test/run-node.js test/object-array-literals.test.js && node test/run-node.js test/test262-runner.test.js",
-    "test:browser": "node test/run-browser-playwright.js",
+    "test": "npm run vendor:sync && npm run test:node && npm run test262:fixtures",
+    "test:node": "node test/run-node.js",
+    "test:browser": "npm run vendor:sync && node test/run-browser-playwright.js",
+    "test:jsc": "npm run vendor:sync && jsc -m test/run-jsc.js",
     "test262:fixtures": "node tools/test262/adapters/node.js --root=test/fixtures/test262 --features=fixture-subset",
-    "test262:jsc": "jsc -m tools/test262/adapters/jsc-run.js",
+    "test262:jsc": "npm run vendor:sync && jsc -m tools/test262/adapters/jsc-run.js",
+    "vendor:sync": "node tools/vendor/sync.js",
+    "vendor:check": "node tools/vendor/sync.js --check",
+    "prepare": "node tools/vendor/sync.js",
     "typecheck": "tsc -p jsconfig.json",
-    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint . && prettier --check package.json jsconfig.json eslint.config.js .prettierrc.json test/*.js test/harness/*.js tools/test262/*.js tools/test262/adapters/*.js types/*.d.ts"
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint . && prettier --check package.json jsconfig.json eslint.config.js .prettierrc.json src/parser-dependency.js test/*.js test/harness/*.js test/node/*.js tools/test262/*.js tools/test262/adapters/*.js tools/vendor/*.js types/*.d.ts"
   },
   "test262": {
     "repository": "https://github.com/tc39/test262.git",

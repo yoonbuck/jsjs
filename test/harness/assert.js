@@ -1,12 +1,16 @@
 /**
  * @param {unknown} actual
  * @param {unknown} expected
+ * @param {string} [message] Appended to the failure, for assertions whose
+ *   values do not explain themselves.
  * @returns {void}
  */
-export function assertSame(actual, expected) {
+export function assertSame(actual, expected, message) {
   if (!sameValue(actual, expected)) {
     throw new Error(
-      `Expected ${formatValue(actual)} to be the same value as ${formatValue(expected)}`,
+      `Expected ${formatValue(actual)} to be the same value as ${formatValue(expected)}${
+        message === undefined ? '' : `: ${message}`
+      }`,
     );
   }
 }

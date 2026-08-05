@@ -3,11 +3,12 @@
  *
  * This module owns everything that must behave identically on every host:
  * metadata-driven skips, variant expansion, harness include loading, negative
- * parse/runtime expectations, and record shapes. It touches no host API — file
- * access arrives through an injected `Test262Host`, and the engine arrives
- * through an injected `{ createRealm, evaluateScript }` pair — so Node,
- * JavaScriptCore, and browser adapters can stay thin and cannot drift apart on
- * test semantics.
+ * parse/runtime expectations, and record shapes. Which tests run is decided by
+ * `selection.js`, which this module drives so no adapter has to. It touches no
+ * host API — file access arrives through an injected `Test262Host`, and the
+ * engine arrives through an injected `{ createRealm, evaluateScript }` pair — so
+ * Node, JavaScriptCore, and browser adapters can stay thin and cannot drift
+ * apart on test semantics.
  *
  * Each (file, variant) pair runs in its own realm. Includes are evaluated as
  * separate scripts before the test source, in declaration order, so a broken
@@ -22,7 +23,16 @@ import {
   parseTest262Metadata,
   resolveIncludes,
 } from './metadata.js';
-import { createSummaryRecord, createTestRecord } from './report.js';
+import {
+  createSummaryRecord,
+  createTestRecord,
+  formatReportLines,
+} from './report.js';
+import {
+  resolveTest262Paths,
+  sortStrings,
+  sortTestPaths,
+} from './selection.js';
 
 export { DEFAULT_INCLUDES };
 
@@ -56,6 +66,15 @@ export { DEFAULT_INCLUDES };
  *   supportedFeatures?: readonly string[],
  *   skipFeatures?: readonly string[],
  * }} Test262SuiteOptions
+ *
+ * @typedef {{
+ *   engine: Test262Engine,
+ *   host: Test262Host,
+ *   paths?: readonly string[],
+ *   includeMalformed?: boolean,
+ *   supportedFeatures?: readonly string[],
+ *   skipFeatures?: readonly string[],
+ * }} Test262RunOptions
  */
 
 /**
@@ -72,28 +91,6 @@ export const UNSUPPORTED_FLAGS = Object.freeze([
 ]);
 
 const STRICT_DIRECTIVE = '"use strict";\n';
-
-/**
- * Orders test paths by code unit. `Array.prototype.sort`'s default comparator
- * is already code-unit based, but it is spelled out here so the report order
- * never depends on a host's locale collation.
- *
- * @param {readonly string[]} paths
- * @returns {string[]}
- */
-export function sortTestPaths(paths) {
-  return sortStrings(paths);
-}
-
-/**
- * @param {readonly string[]} values
- * @returns {string[]}
- */
-function sortStrings(values) {
-  return [...values].sort((left, right) =>
-    left < right ? -1 : left > right ? 1 : 0,
-  );
-}
 
 /**
  * Decides whether a test runs at all. Explicit exclusions win over the
@@ -136,6 +133,42 @@ export function decideSkip(metadata, options = {}) {
   }
 
   return null;
+}
+
+/**
+ * Selects, runs, and formats in one shared step: the whole of what an adapter
+ * does beyond file access and printing. Adapters call this rather than
+ * `runTest262Suite` so selection, execution, and report formatting can never
+ * differ between hosts.
+ *
+ * @param {Test262RunOptions} options
+ * @returns {Promise<{
+ *   records: readonly Test262TestRecord[],
+ *   summary: Test262SummaryRecord,
+ *   lines: string[],
+ *   failed: number,
+ * }>}
+ */
+export async function runTest262(options) {
+  const paths = await resolveTest262Paths({
+    host: options.host,
+    paths: options.paths,
+    includeMalformed: options.includeMalformed,
+  });
+  const { records, summary } = await runTest262Suite({
+    engine: options.engine,
+    host: options.host,
+    paths,
+    supportedFeatures: options.supportedFeatures,
+    skipFeatures: options.skipFeatures,
+  });
+
+  return {
+    records,
+    summary,
+    lines: formatReportLines([...records, summary]),
+    failed: summary.failed,
+  };
 }
 
 /**

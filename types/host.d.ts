@@ -19,6 +19,11 @@ declare module 'node:fs/promises' {
     path: string | URL,
     options: { withFileTypes: true },
   ): Promise<Dirent[]>;
+  export function writeFile(path: string | URL, data: string): Promise<void>;
+  export function mkdir(
+    path: string | URL,
+    options?: { recursive?: boolean },
+  ): Promise<string | undefined>;
 }
 
 declare module 'node:url' {
