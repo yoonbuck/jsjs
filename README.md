@@ -205,6 +205,15 @@ getters/setters, and the standard library (`Object`, `Array`, `String`,
 `Error`, …). Strict mode is only honoured at parse time, so the strict variant
 catches early errors such as legacy octal literals but not runtime strictness.
 
+Assignment to an undeclared identifier follows ES5 8.7.2 step 3: it creates (or
+updates) a property on the realm's global object with the same attributes an
+ordinary assignment to a global property gets — writable, enumerable, and
+configurable, unlike the non-configurable property a `var` declaration creates.
+The reference records themselves honour the strict flag and throw a
+`ReferenceError` instead, but nothing sets that flag from a `'use strict'`
+directive yet, so a strict script still creates the global; that is the same
+runtime-strictness gap as above.
+
 Tests carrying `module`, `async`, `CanBlockIsFalse`, `CanBlockIsTrue`, or
 `non-deterministic` flags are skipped rather than failed, as are tests whose
 `features` are outside the allowlist. `negative` tests whose expected error

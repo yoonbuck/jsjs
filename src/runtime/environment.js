@@ -1,5 +1,5 @@
 import { EngineObject } from './object.js';
-import { Reference } from './reference.js';
+import { Reference, UnresolvableReference } from './reference.js';
 import {
   createUninitializedBindingError,
   createUnresolvableReferenceError,
@@ -452,8 +452,11 @@ export function newObjectEnvironment(bindingObject, outer) {
  * Walks an environment chain looking for the innermost record that already
  * has a binding for `name`, and returns a `Reference` rooted at that record.
  * When no environment in the chain has the binding, the returned reference
- * has an `undefined` base and is unresolvable, matching identifier lookup
- * failure semantics.
+ * is an `UnresolvableReference` carrying the global object of the
+ * `GlobalEnvironmentRecord` the chain is rooted in — the object a non-strict
+ * assignment must create the property on (ECMA-262 8.7.2 step 3.b). A chain
+ * that is not rooted in a global environment carries `null` instead, so a
+ * reference resolved outside a realm has nothing to fall back to.
  *
  * @param {EnvironmentRecordLike | null} env
  * @param {string | symbol} name
@@ -462,12 +465,24 @@ export function newObjectEnvironment(bindingObject, outer) {
  */
 export function getIdentifierReference(env, name, strict) {
   if (env === null) {
-    return new Reference(undefined, name, strict);
+    return new UnresolvableReference(name, strict, null);
   }
 
   if (env.hasBinding(name)) {
     return new Reference(env, name, strict);
   }
 
+  if (env.outer === null) {
+    return new UnresolvableReference(name, strict, globalObjectOf(env));
+  }
+
   return getIdentifierReference(env.outer, name, strict);
+}
+
+/**
+ * @param {EnvironmentRecordLike} env
+ * @returns {EngineObject | null}
+ */
+function globalObjectOf(env) {
+  return env instanceof GlobalEnvironmentRecord ? env.globalObject : null;
 }

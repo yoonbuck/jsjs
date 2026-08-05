@@ -63,6 +63,92 @@ const tests = [
     },
   },
   {
+    name: 'assigning to an undeclared identifier creates a property on the realm global object',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(realm, 'created = 5; created;');
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 5);
+      assertSame(realm.globalObject.get('created'), 5);
+      assertSame(realm.globalEnvironment.hasBinding('created'), true);
+    },
+  },
+  {
+    name: 'an implicitly created global carries the same attributes as an ordinary global assignment, not var semantics',
+    run() {
+      const realm = createRealm();
+      evaluateScript(
+        realm,
+        'implicit = 1; this.explicit = 1; var declared = 1;',
+      );
+
+      const implicit = realm.globalObject.getOwnProperty('implicit');
+      const explicit = realm.globalObject.getOwnProperty('explicit');
+      const declared = realm.globalObject.getOwnProperty('declared');
+
+      assertSame(implicit === undefined, false, 'implicit global was created');
+      assertSame(
+        JSON.stringify(implicit),
+        JSON.stringify(explicit),
+        'an implicit global matches an ordinary [[Put]] on the global object',
+      );
+      assertSame(/** @type {any} */ (implicit).writable, true);
+      assertSame(/** @type {any} */ (implicit).enumerable, true);
+      assertSame(/** @type {any} */ (implicit).configurable, true);
+      assertSame(
+        /** @type {any} */ (declared).configurable,
+        false,
+        'a var-declared global stays non-configurable',
+      );
+    },
+  },
+  {
+    name: 'an implicitly created global is read and updated by later scripts instead of being recreated',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'counter = 1;');
+      evaluateScript(realm, 'counter = counter + 2;');
+
+      assertSame(evaluateScript(realm, 'counter;').value, 3);
+      assertSame(
+        realm.globalObject.ownPropertyKeys().filter((key) => key === 'counter')
+          .length,
+        1,
+      );
+    },
+  },
+  {
+    name: 'a function body assigning an undeclared name creates the global through the whole scope chain',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        'function f() { fromFunction = 7; } f(); fromFunction;',
+      );
+
+      assertSame(completion.value, 7);
+      assertSame(realm.globalObject.get('fromFunction'), 7);
+    },
+  },
+  {
+    name: 'implicitly created globals stay inside their realm and never reach host globals',
+    run() {
+      const first = createRealm();
+      const second = createRealm();
+      evaluateScript(first, 'isolated = 5;');
+
+      assertSame(first.globalObject.get('isolated'), 5);
+      assertSame(second.globalObject.hasProperty('isolated'), false);
+      assertSame(evaluateScript(second, 'typeof isolated;').value, 'undefined');
+      assertThrows(() => evaluateScript(second, 'isolated;'), ReferenceError);
+      assertSame(
+        Object.prototype.hasOwnProperty.call(globalThis, 'isolated'),
+        false,
+      );
+    },
+  },
+  {
     name: 'typeof reports guest primitive types and undefined for unresolved identifiers',
     run() {
       const realm = createRealm();

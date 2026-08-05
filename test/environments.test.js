@@ -1,5 +1,6 @@
 import { assertSame, assertThrows } from './harness/assert.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { createRealm } from '../src/runtime/realm.js';
 import { getValue, putValue, Reference } from '../src/runtime/reference.js';
 import {
   DeclarativeEnvironmentRecord,
@@ -94,6 +95,64 @@ const tests = [
 
       assertSame(reference.base, undefined);
       assertThrows(() => getValue(reference), ReferenceError);
+    },
+  },
+  {
+    name: 'an unresolvable identifier reference carries the global object of the realm its chain is rooted in',
+    run() {
+      const realm = createRealm();
+      const inner = newDeclarativeEnvironment(
+        newDeclarativeEnvironment(realm.globalEnvironment),
+      );
+      const reference = getIdentifierReference(inner, 'missing', false);
+
+      assertSame(reference.base, undefined);
+      assertSame(
+        /** @type {any} */ (reference).globalObject,
+        realm.globalObject,
+      );
+      assertThrows(() => getValue(reference), ReferenceError);
+    },
+  },
+  {
+    name: 'sloppy assignment through an unresolvable identifier reference creates the property on the realm global object',
+    run() {
+      const realm = createRealm();
+      const inner = newDeclarativeEnvironment(realm.globalEnvironment);
+
+      putValue(getIdentifierReference(inner, 'created', false), 5);
+
+      assertSame(realm.globalObject.get('created'), 5);
+      assertSame(
+        getValue(getIdentifierReference(inner, 'created', false)),
+        5,
+        'the created property resolves as an ordinary global binding afterwards',
+      );
+    },
+  },
+  {
+    name: 'strict assignment through an unresolvable identifier reference throws and creates nothing',
+    run() {
+      const realm = createRealm();
+      const inner = newDeclarativeEnvironment(realm.globalEnvironment);
+
+      assertThrows(
+        () => putValue(getIdentifierReference(inner, 'strictOnly', true), 5),
+        ReferenceError,
+      );
+      assertSame(realm.globalObject.hasProperty('strictOnly'), false);
+    },
+  },
+  {
+    name: 'an environment chain with no global environment has no global object to create a property on',
+    run() {
+      const detached = newDeclarativeEnvironment(
+        newDeclarativeEnvironment(null),
+      );
+      const reference = getIdentifierReference(detached, 'missing', false);
+
+      assertSame(/** @type {any} */ (reference).globalObject, null);
+      assertThrows(() => putValue(reference, 5), ReferenceError);
     },
   },
   {

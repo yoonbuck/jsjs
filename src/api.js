@@ -27,6 +27,11 @@ export { parseScript, createRealm, Realm };
  * carry it. Guest throws are values, not host exceptions — engine defects
  * and unimplemented operations remain host errors.
  *
+ * Evaluation is non-strict, so an assignment to an identifier no
+ * environment in scope binds creates that property on `realm.globalObject`
+ * (ECMA-262 8.7.2) rather than throwing; reading such an identifier still
+ * throws a `ReferenceError`.
+ *
  * @param {import('./runtime/realm.js').Realm} realm
  * @param {string} source
  * @param {Record<string, unknown>} [parserOptions]

@@ -6,7 +6,12 @@ import {
   createReturnCompletion,
   createThrowCompletion,
 } from '../src/runtime/completion.js';
-import { Reference, getValue, putValue } from '../src/runtime/reference.js';
+import {
+  Reference,
+  UnresolvableReference,
+  getValue,
+  putValue,
+} from '../src/runtime/reference.js';
 
 const tests = [
   {
@@ -108,6 +113,69 @@ const tests = [
 
       assertThrows(() => getValue(reference), ReferenceError);
       assertThrows(() => putValue(reference, 1), ReferenceError);
+    },
+  },
+  {
+    name: 'a sloppy unresolvable reference with no engine-owned global object still throws instead of reaching a host global',
+    run() {
+      const reference = new Reference(undefined, 'missing', false);
+
+      assertThrows(() => getValue(reference), ReferenceError);
+      assertThrows(() => putValue(reference, 1), ReferenceError);
+    },
+  },
+  {
+    name: 'a sloppy unresolvable reference creates the property on the global object it carries',
+    run() {
+      /** @type {Array<[string, unknown, boolean]>} */
+      const puts = [];
+      const globalObject = {
+        /**
+         * @param {string} name
+         * @param {unknown} value
+         * @param {boolean} throwOnError
+         * @returns {boolean}
+         */
+        put(name, value, throwOnError) {
+          puts.push([name, value, throwOnError]);
+          return true;
+        },
+      };
+      const reference = new UnresolvableReference(
+        'created',
+        false,
+        /** @type {any} */ (globalObject),
+      );
+
+      assertSame(reference.base, undefined);
+      assertSame(putValue(reference, 5), 5);
+      assertSame(JSON.stringify(puts), JSON.stringify([['created', 5, false]]));
+      assertThrows(() => getValue(reference), ReferenceError);
+    },
+  },
+  {
+    name: 'a strict unresolvable reference throws even when it carries a global object',
+    run() {
+      /** @type {string[]} */
+      const puts = [];
+      const globalObject = {
+        /**
+         * @param {string} name
+         * @returns {boolean}
+         */
+        put(name) {
+          puts.push(name);
+          return true;
+        },
+      };
+      const reference = new UnresolvableReference(
+        'created',
+        true,
+        /** @type {any} */ (globalObject),
+      );
+
+      assertThrows(() => putValue(reference, 5), ReferenceError);
+      assertSame(puts.join(','), '');
     },
   },
 ];
