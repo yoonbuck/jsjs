@@ -258,7 +258,7 @@ export function fromPropertyDescriptor(realm, descriptor) {
   if ('value' in descriptor || 'writable' in descriptor) {
     defineDescriptorField(object, 'value', descriptor.value);
     defineDescriptorField(object, 'writable', Boolean(descriptor.writable));
-  } else {
+  } else if ('get' in descriptor || 'set' in descriptor) {
     defineDescriptorField(object, 'get', descriptor.get);
     defineDescriptorField(object, 'set', descriptor.set);
   }

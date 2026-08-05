@@ -313,6 +313,44 @@ const tests = [
     },
   },
   {
+    name: 'toPropertyDescriptor gets each present field once and ignores absent fields',
+    async run() {
+      const realm = createRealm();
+      const { toPropertyDescriptor } =
+        await import('../src/builtins/shared.js');
+      /** @type {string[]} */
+      const trace = [];
+      const prototype = new EngineObject(realm.intrinsics.objectPrototype);
+      prototype.defineOwnProperty('enumerable', {
+        get() {
+          trace.push('get:enumerable');
+          return 1;
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      const descriptor = new EngineObject(prototype);
+      descriptor.defineOwnProperty('value', {
+        get() {
+          trace.push('get:value');
+          return 42;
+        },
+        enumerable: true,
+        configurable: true,
+      });
+
+      const record = toPropertyDescriptor(descriptor);
+
+      assertSame(JSON.stringify(trace), '["get:enumerable","get:value"]');
+      assertSame(record.enumerable, true);
+      assertSame(record.value, 42);
+      assertSame('configurable' in record, false);
+      assertSame('writable' in record, false);
+      assertSame('get' in record, false);
+      assertSame('set' in record, false);
+    },
+  },
+  {
     name: 'fromPropertyDescriptor materializes guest descriptor objects with only present fields',
     async run() {
       const realm = createRealm();
@@ -344,6 +382,29 @@ const tests = [
       assertSame(object.get('configurable'), false);
       assertSame(object.hasProperty('value'), false);
       assertSame(object.hasProperty('writable'), false);
+    },
+  },
+  {
+    name: 'fromPropertyDescriptor leaves generic descriptors generic',
+    async run() {
+      const realm = createRealm();
+      const { fromPropertyDescriptor } =
+        await import('../src/builtins/shared.js');
+
+      const object = expectDefined(
+        fromPropertyDescriptor(realm, {
+          enumerable: true,
+          configurable: false,
+        }),
+        'Expected descriptor object',
+      );
+
+      assertSame(object.get('enumerable'), true);
+      assertSame(object.get('configurable'), false);
+      assertSame(object.hasProperty('value'), false);
+      assertSame(object.hasProperty('writable'), false);
+      assertSame(object.hasProperty('get'), false);
+      assertSame(object.hasProperty('set'), false);
     },
   },
   {
