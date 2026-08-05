@@ -140,6 +140,24 @@ export function toNumber(value) {
 
 /**
  * @param {unknown} value
+ * @returns {number}
+ */
+export function toInteger(value) {
+  const number = toNumber(value);
+
+  if (Number.isNaN(number)) {
+    return 0;
+  }
+
+  if (number === 0 || !Number.isFinite(number)) {
+    return number;
+  }
+
+  return Math.sign(number) * Math.floor(Math.abs(number));
+}
+
+/**
+ * @param {unknown} value
  * @returns {string}
  */
 export function toString(value) {

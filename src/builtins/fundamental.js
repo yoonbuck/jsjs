@@ -1,4 +1,6 @@
 import { EngineObject } from '../runtime/object.js';
+import { EngineArray } from '../runtime/array-object.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
 
 /**
  * @typedef {{
@@ -21,10 +23,70 @@ import { EngineObject } from '../runtime/object.js';
  */
 export function createFundamentalIntrinsics() {
   const objectPrototype = new EngineObject(null);
-  const functionPrototype = new EngineObject(objectPrototype);
-  const arrayPrototype = new EngineObject(objectPrototype);
+  const functionPrototype = new IntrinsicFunctionPrototype(objectPrototype);
+  const arrayPrototype = new EngineArray(objectPrototype);
 
   return { objectPrototype, functionPrototype, arrayPrototype };
+}
+
+class IntrinsicFunctionPrototype extends EngineObject {
+  /**
+   * @param {EngineObject} objectPrototype
+   */
+  constructor(objectPrototype) {
+    super(objectPrototype, 'Function');
+    this._isConstructor = false;
+    this.defineOwnProperty('length', {
+      value: 0,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    this.defineOwnProperty('name', {
+      value: '',
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+  }
+
+  /**
+   * @returns {undefined}
+   */
+  callFunction() {
+    return undefined;
+  }
+
+  /**
+   * @param {unknown} value
+   * @returns {boolean}
+   */
+  hasInstance(value) {
+    if (!(value instanceof EngineObject)) {
+      return false;
+    }
+
+    const prototype = this.get('prototype');
+
+    if (!(prototype instanceof EngineObject)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Function has non-object prototype in instanceof check',
+      );
+    }
+
+    let current = value.getPrototype();
+
+    while (current !== null) {
+      if (current === prototype) {
+        return true;
+      }
+
+      current = current.getPrototype();
+    }
+
+    return false;
+  }
 }
 
 /**

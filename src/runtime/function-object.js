@@ -1,7 +1,7 @@
 import { EngineObject } from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
-import { createUnsupportedOperationError } from './errors.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
+import { toObject } from './conversion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -240,9 +240,7 @@ export class EngineFunction extends EngineObject {
       return thisValue;
     }
 
-    throw createUnsupportedOperationError(
-      `ToObject on a ${typeof thisValue} this value`,
-    );
+    return toObject(this.realm, thisValue);
   }
 }
 
