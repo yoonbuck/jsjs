@@ -203,10 +203,20 @@ postfix `++`/`--`, bitwise operators (`& | ^ << >> >>>`), `in`, `instanceof`,
 `switch`, labelled statements with `break`/`continue`, and the `NaN`,
 `Infinity`, `undefined` globals.
 
-Not implemented yet, and therefore not exercised: the standard library
-(`Object` static methods, `Array`, `String`, and similar). The error
-constructors (`Error`, `TypeError`, `ReferenceError`, `SyntaxError`,
-`RangeError`) are already implemented and available on the global object.
+The implemented ES5 core built-in families are:
+
+| Family     | Supported APIs                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Object`   | Call/construct coercion; `Object.prototype.constructor`, `toString`, `toLocaleString`, `valueOf`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable`; descriptor queries and definitions; `getPrototypeOf`, `create`, `getOwnPropertyNames`, `keys`; extensibility, sealing, and freezing APIs                               |
+| `Function` | Callable `Function.prototype`; `toString`, `apply`, `call`, `bind`; bound calls, construction, `instanceof`, and adjusted `length`. The dynamic `Function` constructor is installed but deliberately throws a guest `Error` because engine policy forbids runtime code generation.                                                  |
+| `Array`    | Call/construct overloads, sparse length construction, `Array.isArray`; `push`, `pop`, `shift`, `unshift`, `reverse`, `sort`, `splice`; `concat`, `join`, `slice`, `indexOf`, `lastIndexOf`; `every`, `some`, `forEach`, `map`, `filter`, `reduce`, `reduceRight`. Methods are generic where ES5 requires and preserve sparse holes. |
+
+The public boxed primitive families (`String`, `Number`, and `Boolean`) and the
+remaining standard library are not implemented yet. Internal primitive wrappers
+exist only to perform ES5 `ToObject` for `Object(value)`, primitive receivers,
+and non-strict function calls. The error constructors (`Error`, `TypeError`,
+`ReferenceError`, `SyntaxError`, `RangeError`) remain available on every realm's
+global object.
 
 Strict mode is fully implemented at runtime. A `'use strict'` directive
 prologue activates strict semantics for the script or function body it appears
@@ -385,12 +395,102 @@ that looks like a pass is how a contract quietly stops being one.
 This milestone claims no Test262 `features` tag as supported: the manifest holds
 no entries, consistent with the ES5-only subset described above. The initial
 deterministic conformance report is the real output of `npm run test262:upstream`
-against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 67 files,
-125 (file, variant) records, all passing:
+against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 112 files,
+215 (file, variant) records, all passing:
 
 <!-- test262-upstream-report:begin -->
 
 ```json
+{"type":"test","file":"test/built-ins/Array/S15.4.1_A1.1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/S15.4.1_A1.1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/isArray/15.4.3.2-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/isArray/15.4.3.2-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/concat/S15.4.4.4_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/concat/S15.4.4.4_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/every/15.4.4.16-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/every/15.4.4.16-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/filter/15.4.4.20-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/filter/15.4.4.20-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/forEach/15.4.4.18-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/forEach/15.4.4.18-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/join/S15.4.4.5_A1.1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/join/S15.4.4.5_A1.1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/map/15.4.4.19-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/map/15.4.4.19-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/pop/S15.4.4.6_A1.1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/pop/S15.4.4.6_A1.1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/push/S15.4.4.7_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/push/S15.4.4.7_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/reduce/15.4.4.21-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/reduce/15.4.4.21-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/reverse/S15.4.4.8_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/reverse/S15.4.4.8_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/shift/S15.4.4.9_A1.1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/shift/S15.4.4.9_A1.1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/slice/S15.4.4.10_A1.1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/slice/S15.4.4.10_A1.1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/some/15.4.4.17-1-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/some/15.4.4.17-1-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/sort/S15.4.4.11_A1.1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/sort/S15.4.4.11_A1.1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/splice/S15.4.4.12_A1.1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/splice/S15.4.4.12_A1.1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/unshift/S15.4.4.13_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/unshift/S15.4.4.13_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Function/prototype/apply/S15.3.4.3_A12.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Function/prototype/apply/S15.3.4.3_A12.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Function/prototype/bind/15.3.4.5-10-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Function/prototype/bind/15.3.4.5-10-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Function/prototype/call/S15.3.4.4_A13.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Function/prototype/call/S15.3.4.4_A13.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/S15.2.1.1_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/S15.2.1.1_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/create/15.2.3.5-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/create/15.2.3.5-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/defineProperties/15.2.3.7-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/defineProperties/15.2.3.7-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/freeze/15.2.3.9-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/freeze/15.2.3.9-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getPrototypeOf/15.2.3.2-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getPrototypeOf/15.2.3.2-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/isExtensible/15.2.3.13-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/isExtensible/15.2.3.13-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/isFrozen/15.2.3.12-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/isFrozen/15.2.3.12-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/isSealed/15.2.3.11-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/isSealed/15.2.3.11-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/keys/15.2.3.14-2-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/keys/15.2.3.14-2-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/preventExtensions/15.2.3.10-0-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/preventExtensions/15.2.3.10-0-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/constructor/S15.2.4.1_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/constructor/S15.2.4.1_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/isPrototypeOf/undefined-this-and-object-arg-throws.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/isPrototypeOf/undefined-this-and-object-arg-throws.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/propertyIsEnumerable/S15.2.4.7_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/propertyIsEnumerable/S15.2.4.7_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/toLocaleString/S15.2.4.3_A1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/toLocaleString/S15.2.4.3_A1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/toString/Object.prototype.toString.call-array.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/toString/Object.prototype.toString.call-array.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/valueOf/15.2.4.4-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/prototype/valueOf/15.2.4.4-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/seal/object-seal-extensible-of-o-is-set-as-false-even-if-o-has-no-own-property.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/seal/object-seal-extensible-of-o-is-set-as-false-even-if-o-has-no-own-property.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/comments/S7.4_A3.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/comments/S7.4_A3.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/comments/S7.4_A4_T1.js","variant":"non-strict","status":"passed"}
@@ -516,18 +616,21 @@ against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 67 file
 {"type":"test","file":"test/language/white-space/S7.2_A2.1_T2.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"strict","status":"passed"}
+{"type":"baseline","group":"array-builtins","files":21,"records":42,"passed":42,"failed":0,"skipped":0}
 {"type":"baseline","group":"delete","files":4,"records":5,"passed":5,"failed":0,"skipped":0}
 {"type":"baseline","group":"expressions","files":4,"records":8,"passed":8,"failed":0,"skipped":0}
+{"type":"baseline","group":"function-builtins","files":3,"records":6,"passed":6,"failed":0,"skipped":0}
 {"type":"baseline","group":"in-and-instanceof","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
 {"type":"baseline","group":"lexical","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
+{"type":"baseline","group":"object-builtins","files":21,"records":42,"passed":42,"failed":0,"skipped":0}
 {"type":"baseline","group":"statements","files":10,"records":20,"passed":20,"failed":0,"skipped":0}
 {"type":"baseline","group":"strict-mode","files":6,"records":6,"passed":6,"failed":0,"skipped":0}
 {"type":"baseline","group":"switch-and-labeled","files":5,"records":10,"passed":10,"failed":0,"skipped":0}
 {"type":"baseline","group":"try-catch-finally","files":7,"records":14,"passed":14,"failed":0,"skipped":0}
 {"type":"baseline","group":"types","files":12,"records":24,"passed":24,"failed":0,"skipped":0}
 {"type":"baseline","group":"update-and-compound-assignment","files":7,"records":14,"passed":14,"failed":0,"skipped":0}
-{"type":"features","supported":[],"tagged":[],"untagged":125}
-{"type":"summary","total":125,"passed":125,"failed":0,"skipped":0}
+{"type":"features","supported":[],"tagged":[],"untagged":215}
+{"type":"summary","total":215,"passed":215,"failed":0,"skipped":0}
 ```
 
 <!-- test262-upstream-report:end -->
@@ -540,6 +643,6 @@ counts the records that carried no tag at all. There is no per-feature progress
 table because there are no features to report on yet; inventing one would
 describe something the run never measured.
 
-`npm run ci:contract` regenerates this block's expected content and fails if the
+`npm run ci:contract` derives this block's expected content and fails if the
 committed README no longer matches, so the milestone report cannot drift from
 what the command actually prints.
