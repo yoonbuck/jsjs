@@ -26,7 +26,10 @@ import {
   DEFAULT_HARNESS_DIRECTORY,
   TEST262_MANIFEST_FILE,
 } from '../selection.js';
-import { resolveSupportedFeatures } from '../features.js';
+import {
+  EMPTY_FEATURES_MANIFEST,
+  resolveSupportedFeatures,
+} from '../features.js';
 
 /**
  * @typedef {import('../runner.js').Test262Host} Test262Host
@@ -102,7 +105,7 @@ async function readFeaturesManifestText() {
   try {
     return await readFile(FEATURES_MANIFEST_URL, 'utf8');
   } catch {
-    return '[]';
+    return EMPTY_FEATURES_MANIFEST;
   }
 }
 

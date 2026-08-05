@@ -18,31 +18,36 @@ through `prepare`.
 
 ## Commands
 
-| Command                    | What it does                                                                                                               |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                 | The Node suites, then the Test262 fixture suite through the CLI                                                           |
-| `npm run test:node`        | Every portable suite plus the Node-only suites in `test/node/`                                                             |
-| `npm run test:browser`     | Every portable suite in headless Chromium via Playwright                                                                  |
-| `npm run test:jsc`         | Every portable suite in the `jsc` shell                                                                                    |
-| `npm run test262:fixtures` | Test262 runner over `test/fixtures/test262`, forcing the fixture-only `fixture-subset` feature (JSON lines on stdout)     |
-| `npm run test262:subset`   | Test262 runner over `test/fixtures/test262`, feature allowlist defaulted from `tools/test262/features.json` — the pinned milestone subset |
-| `npm run test262:jsc`      | The fixture suite under the `jsc` shell                                                                                    |
-| `npm run vendor:sync`      | Refresh `vendor/` from the pinned dependencies                                                                             |
-| `npm run vendor:check`     | Fail if `vendor/` has drifted from the pinned dependencies                                                                 |
-| `npm run typecheck`        | `tsc` in checkJs mode                                                                                                       |
-| `npm run format`           | Prettier `--check` over every tracked source file                                                                          |
-| `npm run lint`             | ESLint only                                                                                                                 |
-| `npm run ci:generate`      | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                          |
-| `npm run ci:check`         | Fail if the committed workflow has drifted from `tools/ci/pipeline.js`                                                    |
+| Command                             | What it does                                                                                                                 |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                          | The Node suites, then the Test262 fixture suite through the CLI                                                              |
+| `npm run test:node`                 | Every portable suite plus the Node-only suites in `test/node/`                                                               |
+| `npm run test:browser`              | Every portable suite in the headless Chromium shell via Playwright                                                           |
+| `npm run test:jsc`                  | Every portable suite in the `jsc` shell                                                                                      |
+| `npm run test262:fixtures`          | Test262 runner over `test/fixtures/test262`, forcing the fixture-only `fixture-subset` feature (JSON lines on stdout)        |
+| `npm run test262:fixtures:manifest` | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                |
+| `npm run test262:upstream`          | The pinned upstream subset from a real `tc39/test262` checkout (JSON lines on stdout and in `test262-upstream-report.jsonl`) |
+| `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                      |
+| `npm run vendor:sync`               | Refresh `vendor/` from the pinned dependencies                                                                               |
+| `npm run vendor:check`              | Fail if `vendor/` has drifted from the pinned dependencies                                                                   |
+| `npm run typecheck`                 | `tsc` in checkJs mode                                                                                                        |
+| `npm run format`                    | Prettier `--check` over every tracked source file                                                                            |
+| `npm run lint`                      | ESLint only                                                                                                                  |
+| `npm run ci:generate`               | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                            |
+| `npm run ci:check`                  | Fail if the committed workflow has drifted from `tools/ci/pipeline.js`                                                       |
+| `npm run ci:contract`               | The full local CI contract: every command CI runs, for real (see [Continuous integration](#continuous-integration))          |
 
 `test/suites.js` is the one registry of portable suites; all three runners take
 their default work from it, and `test/node/repository-invariants.test.js` fails
 if a suite file exists that no runner registers.
 
-`npm run test:browser` needs the Playwright browser binaries once:
+`npm run test:browser` needs Playwright's headless Chromium shell once. This is
+the exact command CI runs, and the flags matter: the headless shell is a
+separate download from full Chromium, so installing one and launching the other
+is how a browser job ends up silently skipping.
 
 ```sh
-npx playwright install chromium --only-shell
+npx playwright install --with-deps --only-shell chromium
 ```
 
 `npm run test:jsc` and `npm run test262:jsc` need `jsc` on `PATH`. macOS ships it
@@ -82,8 +87,8 @@ list) always overrides the manifest; only its complete omission defers to the
 file. `npm run test262:fixtures` passes `--features=fixture-subset` explicitly
 so it keeps exercising the runner's own skip/pass logic against the fixture
 tree's synthetic feature tag regardless of what the manifest says; `npm run
-test262:subset` omits `--features` so it reports the engine's real,
-manifest-backed conformance claim.
+test262:fixtures:manifest` omits `--features` so it reports what the real,
+checked-in manifest allows.
 
 ## Test262
 
@@ -91,21 +96,78 @@ Upstream revision is pinned in `package.json` under the `test262` key:
 
 - repository: `https://github.com/tc39/test262.git`
 - revision: `b363f29d3c43c626dc852744ad64a0b48a003693` (2026-07-31)
-- checkout path: `vendor/test262` (not vendored yet; the fixture tree in
-  `test/fixtures/test262` mirrors its layout)
+- checkout path: `vendor/test262` (generated, gitignored like the rest of
+  `vendor/`)
 
-`tools/test262/features.json` is the checked-in supported-feature manifest: a
-JSON array of Test262 feature names the engine actually implements and has
-tests for. `tools/test262/features.js` parses and validates it (a JSON array
-of unique, non-empty strings, sorted the same way `selection.js` sorts test
-paths) and is what the Node CLI defaults `--features` from when the flag is
-omitted. The manifest currently holds `[]`: the engine is ES5-only today, so no
-Test262 `features` tag is yet claimed as supported, and any test that declares
-one is skipped rather than run. Every entry the manifest ever gains must be
-backed by tests the engine actually passes — `test/node/ci-contract.test.js`
-enforces this by running the shared runner once with each declared feature
-supported and once without, asserting a real `passed`/`skipped` split rather
-than trusting the file's contents.
+`npm run test262:upstream` runs the pinned subset against that checkout. It is
+not a local copy of upstream tests: it reads the real files out of a real
+`tc39/test262` tree, and refuses to run at all unless the tree's `HEAD` is
+exactly the pinned revision, because a conformance number measured against a
+different tree is worse than no number. Reproduce a CI run locally with:
+
+```sh
+git clone --filter=blob:none https://github.com/tc39/test262.git vendor/test262
+git -C vendor/test262 checkout b363f29d3c43c626dc852744ad64a0b48a003693
+npm run test262:upstream
+```
+
+The report goes to stdout and to `test262-upstream-report.jsonl` — the same
+bytes, from the same string — and CI uploads that file as an artifact even when
+the run fails, which is when the per-test records are worth reading.
+
+`tools/test262/upstream-subset.json` is the checked-in selection: a schema
+version, the repository and revision it was curated against, and named groups of
+upstream-relative test paths. The paths are explicit rather than a glob because a
+glob would change meaning every time the pin moves, so a green run would say
+nothing about which tests actually ran; every path was verified to pass with this
+engine, so a new failure is a real regression rather than a newly matched test.
+`tools/test262/upstream.js` parses it (rejecting an abbreviated revision, an
+unsorted or duplicated path, or a path outside `test/`) and summarizes a finished
+run per group. The groups carry no execution semantics — they exist so the
+milestone report can say which parts of the language the baseline covers.
+
+The local fixture tree in `test/fixtures/test262` stays separate and is run by
+`npm run test262:fixtures`. The two suites answer different questions: the
+fixtures exercise the _runner_ (metadata parsing, variants, negative
+expectations, skip decisions) against a tiny hand-written tree, and the upstream
+subset exercises the _engine_ against real Test262 tests.
+
+`tools/test262/features.json` is the checked-in supported-feature manifest, and
+each entry is a record rather than a bare name:
+
+```json
+{
+  "version": 1,
+  "features": [
+    {
+      "name": "SomeFeature",
+      "probe": "/* engine source that only completes if the feature works */",
+      "tests": ["test/path/to/an/upstream/test.js"]
+    }
+  ]
+}
+```
+
+`tools/test262/features.js` parses and validates it, and — more importantly —
+`runFeatureProbe` _executes_ each entry's `probe` against a real engine in a
+fresh realm. A probe is not a placeholder: it must complete normally on an
+engine that implements the feature and must throw, or fail to parse, on one that
+does not, and `featureProbeTestSource` renders it as a `raw` Test262 file tagged
+with the feature so the same skip decision a real tagged test would earn is
+exercised end to end. `tests` names upstream tests that really carry the tag;
+`npm run ci:contract` reads each one out of the pinned checkout, asserts the tag
+is really there, and asserts the test really passes once the feature is allowed.
+A feature therefore cannot be claimed by editing a list.
+
+The manifest currently holds no features. The engine is ES5-only today, so no
+Test262 `features` tag is claimed as supported, and any test that declares one is
+skipped rather than run. The baseline upstream subset is intentionally untagged —
+none of its tests declare a `features` tag — so today's run skips nothing and the
+report says exactly that: `{"type":"features","supported":[],"tagged":[],"untagged":64}`.
+The schema, the probe execution, and the upstream correspondence check are all
+exercised regardless, by a synthetic feature in
+`test/node/workflow-contract.test.js` and a known feature-tagged upstream test in
+`test/ci/full-contract.test.js`, so an empty manifest is never a vacuous check.
 
 `tools/test262/` holds the portable half of the runner:
 
@@ -191,44 +253,68 @@ byte-identical.
 ## Continuous integration
 
 `.github/workflows/ci.yml` is a generated file. `tools/ci/pipeline.js` is the
-source of truth: it declares the job list as data (`CI_JOBS`) and renders the
-workflow YAML from it, the same way `tools/vendor/sync.js` is the source of
-truth for `vendor/`. Run `npm run ci:generate` after editing `CI_JOBS` to
-rewrite the committed file, and `npm run ci:check` to fail (without writing) if
-the two have drifted — that check is itself one of the CI jobs, so a change to
-`pipeline.js` without regenerating the workflow fails CI the same way a vendor
-change without `vendor:sync` fails `vendor:check`.
+source of truth: it declares the job list as data and renders the workflow YAML
+from it, the same way `tools/vendor/sync.js` is the source of truth for
+`vendor/`. Run `npm run ci:generate` after editing the pipeline to rewrite the
+committed file, and `npm run ci:check` to fail (without writing) if the two have
+drifted. That check is a real CI job — `ci-drift` — so a change to `pipeline.js`
+without regenerating the workflow fails CI the same way a vendor change without
+`vendor:sync` fails `vendor:check`.
 
-Every push and pull request against `main` runs seven jobs:
+The upstream Test262 pin is not duplicated in the pipeline: `loadCiPipeline`
+reads `package.json`, so the workflow checks out exactly the revision the local
+tooling pins and moving the pin regenerates the workflow.
 
-| Job              | What it runs                                             | Depends on |
-| ----------------- | --------------------------------------------------------- | ---------- |
-| `vendor`          | `npm run vendor:check`                                    | —          |
-| `format`          | `npm run format` (Prettier `--check`)                      | —          |
-| `lint`            | `npm run lint` (ESLint only)                               | —          |
-| `typecheck`       | `npm run typecheck` (`tsc` in checkJs mode)                 | —          |
-| `test-node`       | `npm run test:node`                                        | `vendor`   |
-| `test-browser`    | `npm run test:browser` (Playwright, Chromium)              | `vendor`   |
-| `test262-subset`  | `npm run test262:subset` (the pinned feature-manifest subset) | `vendor`   |
+Every push and pull request against `main` runs nine jobs:
+
+| Job                | What it runs                                                  | Depends on |
+| ------------------ | ------------------------------------------------------------- | ---------- |
+| `ci-drift`         | `npm run ci:check`                                            | —          |
+| `vendor`           | `npm run vendor:check`                                        | —          |
+| `format`           | `npm run format` (Prettier `--check`)                         | —          |
+| `lint`             | `npm run lint` (ESLint only)                                  | —          |
+| `typecheck`        | `npm run typecheck` (`tsc` in checkJs mode)                   | —          |
+| `test-node`        | `npm run test:node`                                           | `vendor`   |
+| `test-browser`     | `npm run test:browser` (Playwright's headless Chromium shell) | `vendor`   |
+| `test262-fixtures` | `npm run test262:fixtures` (the local fixture tree)           | `vendor`   |
+| `test262-upstream` | `npm run test262:upstream` (the pinned upstream subset)       | `vendor`   |
 
 `format` and `lint` are separate jobs (and separate npm scripts) so a
 formatting-only failure and a linting-only failure are distinguishable in CI
 without re-reading combined output. `vendor` runs `vendor:check` — a read-only
-integrity check — as a fast-failing gate that `test-node`, `test-browser`, and
-`test262-subset` depend on via `needs`, so a pin/vendor drift is caught before
-those jobs spend time on it; `npm ci`'s `prepare` script already writes
-`vendor/` fresh on every job, so this specifically guards against the checked
-`package.json` pin and `tools/vendor/sync.js` disagreeing with each other, the
-same property `vendor:check` guards locally.
+integrity check — as a fast-failing gate the test jobs depend on via `needs`, so
+pin/vendor drift is caught before those jobs spend time on it; `npm ci`'s
+`prepare` script already writes `vendor/` fresh on every job, so this
+specifically guards against the checked `package.json` pin and
+`tools/vendor/sync.js` disagreeing with each other.
 
-`test-browser` installs Playwright's browser binaries reproducibly with
-`npx playwright install --with-deps chromium` before running the suite, so the
-job doesn't depend on whatever happens to be cached on a runner image.
+`test-browser` installs the browser with
+`npx playwright install --with-deps --only-shell chromium` — the same command
+documented under [Commands](#commands) — before running the suite, so the job
+does not depend on whatever happens to be cached on a runner image.
 
-Each job runs on `ubuntu-latest` with `actions/setup-node@v4` pinned to Node 20
-(with the built-in npm cache) and `npm ci`, matching the npm lockfile and the
-project's ES2020 host floor; the repository has no `.nvmrc` or `engines` field
-yet to anchor this further.
+`test262-upstream` checks out `tc39/test262` at the pinned revision into
+`vendor/test262` with a second `actions/checkout` step, runs the curated subset
+against it, and uploads `test262-upstream-report.jsonl` with `if: always()` and
+`if-no-files-found: error`, so the JSON-lines report is available as an artifact
+whether the run passed or failed.
+
+Two security properties are encoded in the pipeline rather than left to whoever
+edits the workflow next, and both are asserted by
+`test/node/workflow-contract.test.js`:
+
+- The workflow grants `permissions: contents: read` at the top level and no job
+  widens it, so a compromised action cannot write to the repository.
+- Every `uses:` names a full 40-character commit SHA, because a tag like `v4` is
+  a moving pointer its owner can repoint at any time. The release version follows
+  in a trailing comment (`# v7.0.1`), so a bump reviews as a version change
+  rather than as forty opaque characters. Both checkout steps also pass
+  `persist-credentials: false`.
+
+Each job runs on `ubuntu-latest` with Node 20 (via `actions/setup-node` with the
+built-in npm cache) and `npm ci`, matching the npm lockfile and the project's
+ES2020 host floor; the repository has no `.nvmrc` or `engines` field yet to
+anchor this further.
 
 JSC is a documented local/conditional adapter, not a hosted CI job. GitHub's
 hosted `ubuntu-latest`/`macos-latest` runners do not ship a standalone `jsc`
@@ -236,52 +322,132 @@ binary on `PATH` the way macOS's JavaScriptCore framework does locally, so
 `test:jsc` and `test262:jsc` stay commands you run yourself (see
 [Commands](#commands)) rather than CI jobs; the byte-identical-output guarantee
 between Node, Chromium, and `jsc` is still enforced by
-`test/test262-runner.test.js`, just outside hosted CI. A self-hosted runner
-with `jsc` on `PATH` could add `test-jsc`/`test262-jsc` jobs later without
-changing anything else in `tools/ci/pipeline.js`.
+`test/test262-runner.test.js`, just outside hosted CI. A self-hosted runner with
+`jsc` on `PATH` could add `test-jsc`/`test262-jsc` jobs later without changing
+anything else in `tools/ci/pipeline.js`.
 
-`test/node/ci-contract.test.js` is the local, TDD-first test that keeps all of
-this honest: it asserts `CI_JOBS` declares a job for each required check, that
-every `npm run` command CI references actually exists in `package.json`, that
-the browser job's install step is reproducible, and that the committed
-`ci.yml` is byte-identical to what `pipeline.js` renders — and then it goes
-further than structure, actually executing `vendor:check`, `format`, `lint`,
-`typecheck`, and `test262:subset` as real subprocesses (plus `test:browser`
-when Playwright's Chromium is installed locally) and asserting on their real
-exit codes and output, so a broken command fails this suite locally before it
-would ever reach CI.
+### The two contracts
+
+Keeping CI honest takes two suites, deliberately split, because they have
+opposite requirements.
+
+`test/node/workflow-contract.test.js` runs inside `npm run test:node`. It is
+deterministic and machine-independent: it never spawns a subprocess, never
+touches the network, and never runs the pipeline it describes. It parses the
+committed YAML with a real YAML parser and checks it against an expectation
+table written out in the test — which job runs which command, the top-level
+permissions, every action pin, the upstream revision and artifact step — rather
+than against the generator that produced it, so a byte comparison with
+`pipeline.js` is a drift check rather than the whole contract. It also parses
+both Test262 manifests and executes every declared feature probe for real.
+
+`npm run ci:contract` (`test/ci/full-contract.test.js`, through
+`test/run-ci-contract.js`) is the full local contract: it executes every command
+CI runs — `vendor:check`, `format`, `lint`, `typecheck`, `ci:check`, `test:node`,
+`test262:fixtures`, `test:browser`, `test262:upstream` — as real subprocesses and
+asserts on their real exit codes and output. It is _not_ registered with the Node
+runner, and `test/node/repository-invariants.test.js` fails if it ever is:
+running the whole pipeline from inside one of its own jobs would be recursive,
+and it would make `test:node` depend on a browser install and an upstream
+checkout.
+
+Nothing in the full contract is conditional. A missing browser or a missing
+upstream checkout fails with the exact command needed to fix it, because a skip
+that looks like a pass is how a contract quietly stops being one.
 
 ## Milestone report
 
-`tools/test262/features.json` — the checked-in supported-feature manifest —
-currently holds `[]`: this milestone claims no Test262 `features` tag as
-supported yet, consistent with the ES5-only subset described above. The
-initial, deterministic Test262 subset report, produced by
-`npm run test262:subset` against `test/fixtures/test262` with that manifest as
-the (empty) feature allowlist:
+This milestone claims no Test262 `features` tag as supported: the manifest holds
+no entries, consistent with the ES5-only subset described above. The initial
+deterministic conformance report is the real output of `npm run test262:upstream`
+against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 32 files,
+64 (file, variant) records, all passing:
+
+<!-- test262-upstream-report:begin -->
 
 ```json
-{"type":"test","file":"test/feature-skip.js","variant":null,"status":"skipped","reason":"unsupported-feature","message":"unsupported features: Proxy, Reflect","features":["Proxy","Reflect"]}
-{"type":"test","file":"test/includes.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/includes.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/no-strict.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/only-strict.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/parse-negative.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/parse-negative.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/positive.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/positive.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/raw.js","variant":"raw","status":"passed"}
-{"type":"test","file":"test/runtime-negative.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/runtime-negative.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/supported-feature.js","variant":null,"status":"skipped","reason":"unsupported-feature","message":"unsupported features: fixture-subset","features":["fixture-subset"]}
-{"type":"summary","total":13,"passed":11,"failed":0,"skipped":2}
+{"type":"test","file":"test/language/comments/S7.4_A3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/comments/S7.4_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/comments/S7.4_A4_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/comments/S7.4_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/comma/S11.14_A3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/comma/S11.14_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/conditional/S11.12_A3_T4.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/conditional/S11.12_A3_T4.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/logical-and/S11.11.1_A3_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/logical-and/S11.11.1_A3_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/logical-or/S11.11.2_A2.1_T4.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/logical-or/S11.11.2_A2.1_T4.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/line-terminators/S7.3_A2.1_T2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/line-terminators/S7.3_A2.1_T2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/line-terminators/S7.3_A6_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/line-terminators/S7.3_A6_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/block/S12.1_A4_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/block/S12.1_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/S12.6.1_A1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/S12.6.1_A1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/S12.5_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/S12.5_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/S12.5_A6_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/S12.5_A6_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/return/S12.9_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/return/S12.9_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/return/S12.9_A3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/return/S12.9_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/S12.6.2_A1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/S12.6.2_A1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/boolean/S8.3_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/boolean/S8.3_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/boolean/S8.3_A2.1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/boolean/S8.3_A2.1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/null/S8.2_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/null/S8.2_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/null/S8.2_A2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/null/S8.2_A2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/number/S8.5_A2.1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/number/S8.5_A2.1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/number/S8.5_A3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/number/S8.5_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/number/S8.5_A5.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/number/S8.5_A5.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/string/S8.4_A1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/string/S8.4_A1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/string/S8.4_A2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/string/S8.4_A2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/undefined/S8.1_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/undefined/S8.1_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/undefined/S8.1_A2_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/undefined/S8.1_A2_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/types/undefined/S8.1_A3_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/types/undefined/S8.1_A3_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/white-space/S7.2_A2.1_T2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/white-space/S7.2_A2.1_T2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"strict","status":"passed"}
+{"type":"baseline","group":"expressions","files":4,"records":8,"passed":8,"failed":0,"skipped":0}
+{"type":"baseline","group":"lexical","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
+{"type":"baseline","group":"statements","files":10,"records":20,"passed":20,"failed":0,"skipped":0}
+{"type":"baseline","group":"types","files":12,"records":24,"passed":24,"failed":0,"skipped":0}
+{"type":"features","supported":[],"tagged":[],"untagged":64}
+{"type":"summary","total":64,"passed":64,"failed":0,"skipped":0}
 ```
 
-This differs from the `test262:fixtures` report earlier in this document only
-in `test/supported-feature.js`: `test262:fixtures` explicitly passes
-`--features=fixture-subset` so that fixture passes, while `test262:subset`
-takes its allowlist from the (currently empty) real manifest, so the same file
-is correctly skipped as `unsupported-feature` instead. Both reports are
-otherwise identical because the real upstream `vendor/test262` tree is not
-checked out yet (see [Test262](#test262)); once it is, `test262:subset` is the
-command that reports the engine's real, pinned conformance subset against it.
+<!-- test262-upstream-report:end -->
+
+The `baseline` lines are the per-group summary; the `features` line is what the
+run can honestly say about optional features. `supported` is what the manifest
+claims (nothing yet), `tagged` is the feature tags actually seen on the tests
+that ran (none — the ES5 baseline is intentionally untagged), and `untagged`
+counts the records that carried no tag at all. There is no per-feature progress
+table because there are no features to report on yet; inventing one would
+describe something the run never measured.
+
+`npm run ci:contract` regenerates this block's expected content and fails if the
+committed README no longer matches, so the milestone report cannot drift from
+what the command actually prints.

@@ -182,7 +182,10 @@ export default [
       const files = await listFiles('test/', (name) =>
         name.endsWith('.test.js'),
       );
-      const portable = files.filter((file) => !file.startsWith('test/node/'));
+      const portable = files.filter(
+        (file) =>
+          !file.startsWith('test/node/') && !file.startsWith('test/ci/'),
+      );
       /** @type {string[]} */
       const unregistered = [];
 
@@ -214,6 +217,46 @@ export default [
 
       assertSame(unregistered.join(','), '');
       assertSame(files.length > 0, true, 'node-only suites were found');
+    },
+  },
+  {
+    name: 'the CI contract suites are registered with their own runner and with no other',
+    run: async () => {
+      const contractRunner = await readSource('test/run-ci-contract.js');
+      const nodeRunner = await readSource('test/run-node.js');
+      const portableRegistry = await readSource('test/suites.js');
+      const files = await listFiles('test/ci/', (name) =>
+        name.endsWith('.test.js'),
+      );
+      /** @type {string[]} */
+      const unregistered = [];
+      /** @type {string[]} */
+      const leaked = [];
+
+      for (const file of files) {
+        const specifier = `'./${file.slice('test/'.length)}'`;
+
+        if (!contractRunner.includes(specifier)) {
+          unregistered.push(file);
+        }
+
+        for (const [name, source] of [
+          ['test/run-node.js', nodeRunner],
+          ['test/suites.js', portableRegistry],
+        ]) {
+          if (importSpecifiers(source).includes(specifier.slice(1, -1))) {
+            leaked.push(`${file} is imported by ${name}`);
+          }
+        }
+      }
+
+      assertSame(unregistered.join(','), '');
+      assertSame(
+        leaked.join('\n'),
+        '',
+        'the full CI contract must not run inside npm test/test:node; it would rerun the whole pipeline recursively',
+      );
+      assertSame(files.length > 0, true, 'CI contract suites were found');
     },
   },
 ];

@@ -6,13 +6,19 @@
  * run in the browser or the `jsc` shell. A path argument runs that single suite,
  * which is how focused runs stay cheap.
  *
+ * The suites in `test/ci/` are deliberately not registered here. They execute
+ * the whole CI pipeline as real subprocesses (including this runner), so
+ * registering them would make this sweep recursive, slow, and dependent on a
+ * browser and an upstream Test262 checkout being present. `npm run ci:contract`
+ * runs them through `test/run-ci-contract.js` instead.
+ *
  * Usage: `node test/run-node.js [test/foo.test.js]`
  */
 
 import { runTests } from './harness/runner.js';
 import { PORTABLE_SUITES } from './suites.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
-import ciContract from './node/ci-contract.test.js';
+import workflowContract from './node/workflow-contract.test.js';
 
 /**
  * @typedef {import('./suites.js').TestSuite} TestSuite
@@ -25,8 +31,8 @@ const NODE_ONLY_SUITES = Object.freeze([
     tests: repositoryInvariants,
   }),
   Object.freeze({
-    file: 'test/node/ci-contract.test.js',
-    tests: ciContract,
+    file: 'test/node/workflow-contract.test.js',
+    tests: workflowContract,
   }),
 ]);
 

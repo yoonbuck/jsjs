@@ -7,6 +7,7 @@
     "target": "ES2020",
     "module": "ES2022",
     "moduleResolution": "Node",
+    "maxNodeModuleJsDepth": 0,
     "lib": ["ES2020", "DOM"],
     "skipLibCheck": true
   },

@@ -19,7 +19,11 @@ declare module 'node:fs/promises' {
     path: string | URL,
     options: { withFileTypes: true },
   ): Promise<Dirent[]>;
-  export function writeFile(path: string | URL, data: string): Promise<void>;
+  export function writeFile(
+    path: string | URL,
+    data: string,
+    encoding?: string,
+  ): Promise<void>;
   export function mkdir(
     path: string | URL,
     options?: { recursive?: boolean },
@@ -35,14 +39,34 @@ declare module 'node:fs' {
   export function existsSync(path: string | URL): boolean;
 }
 
-// The CI contract test shells out to run declared npm/CI commands for real,
-// rather than grepping source text for their expected effect.
+// The full local CI contract shells out to run every declared CI command for
+// real, rather than grepping source text for its expected effect.
 declare module 'node:child_process' {
   export function execFileSync(
     command: string,
     args?: string[],
     options?: { cwd?: string; encoding: 'utf8' },
   ): string;
+  export function spawnSync(
+    command: string,
+    args?: string[],
+    options?: {
+      cwd?: string;
+      encoding: 'utf8';
+      maxBuffer?: number;
+    },
+  ): {
+    status: number | null;
+    stdout: string;
+    stderr: string;
+    error?: Error;
+  };
+}
+
+// The workflow contract parses the generated YAML with a real parser instead of
+// pattern-matching its text. js-yaml ships no typings of its own.
+declare module 'js-yaml' {
+  export function load(text: string): unknown;
 }
 
 // `jsc` shell globals (JavaScriptCore's command line interpreter).

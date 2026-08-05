@@ -4,4 +4,7 @@ declare const process: {
   stdout: {
     write(chunk: string): void;
   };
+  stderr: {
+    write(chunk: string): void;
+  };
 };

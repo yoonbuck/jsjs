@@ -8,16 +8,18 @@
     "test:browser": "npm run vendor:sync && node test/run-browser-playwright.js",
     "test:jsc": "npm run vendor:sync && jsc -m test/run-jsc.js",
     "test262:fixtures": "node tools/test262/adapters/node.js --root=test/fixtures/test262 --features=fixture-subset",
-    "test262:subset": "node tools/test262/adapters/node.js --root=test/fixtures/test262",
+    "test262:fixtures:manifest": "node tools/test262/adapters/node.js --root=test/fixtures/test262",
+    "test262:upstream": "node tools/test262/upstream-run.js",
     "test262:jsc": "npm run vendor:sync && jsc -m tools/test262/adapters/jsc-run.js",
     "vendor:sync": "node tools/vendor/sync.js",
     "vendor:check": "node tools/vendor/sync.js --check",
     "prepare": "node tools/vendor/sync.js",
     "typecheck": "tsc -p jsconfig.json",
-    "format": "prettier --check package.json jsconfig.json eslint.config.js .prettierrc.json src/parser-dependency.js test/*.js test/harness/*.js test/node/*.js tools/ci/*.js tools/test262/*.js tools/test262/*.json tools/test262/adapters/*.js tools/vendor/*.js types/*.d.ts",
+    "format": "prettier --check package.json jsconfig.json eslint.config.js .prettierrc.json src/parser-dependency.js test/*.js test/harness/*.js test/node/*.js test/ci/*.js tools/ci/*.js tools/test262/*.js tools/test262/*.json tools/test262/adapters/*.js tools/vendor/*.js types/*.d.ts",
     "lint": "ESLINT_USE_FLAT_CONFIG=true eslint .",
     "ci:generate": "node tools/ci/pipeline.js",
-    "ci:check": "node tools/ci/pipeline.js --check"
+    "ci:check": "node tools/ci/pipeline.js --check",
+    "ci:contract": "node test/run-ci-contract.js"
   },
   "test262": {
     "repository": "https://github.com/tc39/test262.git",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "eslint": "^8.57.1",
+    "js-yaml": "4.3.1",
     "playwright": "^1.62.1",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0"
