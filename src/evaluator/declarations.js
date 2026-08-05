@@ -171,8 +171,7 @@ export function createFunctionObject(node, scope, context) {
   // A function is strict when its enclosing scope is already strict OR when
   // the function's own body opens with a "use strict" directive prologue
   // (ECMA-262 10.1.1 — "once strict, always strict" applies transitively).
-  const strict =
-    context.strict || hasUseStrictDirective(node.body.body);
+  const strict = context.strict || hasUseStrictDirective(node.body.body);
 
   return new EngineFunction({
     realm: context.realm,

@@ -48,9 +48,7 @@ function assertGuestThrow(completion, constructorName, realm) {
     if (cur === proto) return;
     cur = cur.getPrototype();
   }
-  throw new Error(
-    `Thrown value is not an instance of ${constructorName}`,
-  );
+  throw new Error(`Thrown value is not an instance of ${constructorName}`);
 }
 
 const tests = [
@@ -60,7 +58,10 @@ const tests = [
   {
     name: 'try/catch catches a direct throw in the try block',
     run() {
-      assertNormal(run('var x = 0; try { throw 42; } catch (e) { x = e; } x'), 42);
+      assertNormal(
+        run('var x = 0; try { throw 42; } catch (e) { x = e; } x'),
+        42,
+      );
     },
   },
   {
@@ -99,9 +100,16 @@ const tests = [
     name: 'try/catch catches a guest TypeError from null member access',
     run() {
       const realm = createRealm();
-      const result = evaluateScript(realm, 'try { null.foo; } catch (e) { e; }');
+      const result = evaluateScript(
+        realm,
+        'try { null.foo; } catch (e) { e; }',
+      );
       assertSame(result.type, 'normal');
-      assertGuestThrow({ type: 'throw', value: result.value }, 'TypeError', realm);
+      assertGuestThrow(
+        { type: 'throw', value: result.value },
+        'TypeError',
+        realm,
+      );
     },
   },
 
@@ -111,7 +119,10 @@ const tests = [
   {
     name: 'try/finally: finally still runs when try does not throw',
     run() {
-      assertNormal(run('var x = 0; try { x = 1; } finally { x = x + 10; } x'), 11);
+      assertNormal(
+        run('var x = 0; try { x = 1; } finally { x = x + 10; } x'),
+        11,
+      );
     },
   },
   {
@@ -190,7 +201,9 @@ const tests = [
     name: 'try/catch/finally: no throw means catch is skipped, finally still runs',
     run() {
       assertNormal(
-        run('var x = 0; try { x = 1; } catch (e) { x = 99; } finally { x = x + 10; } x'),
+        run(
+          'var x = 0; try { x = 1; } catch (e) { x = 99; } finally { x = x + 10; } x',
+        ),
         11,
       );
     },
@@ -258,7 +271,10 @@ const tests = [
     name: 'rethrow: catch(e){throw e} propagates as a throw completion',
     run() {
       const realm = createRealm();
-      const result = evaluateScript(realm, 'try { throw 7; } catch (e) { throw e; }');
+      const result = evaluateScript(
+        realm,
+        'try { throw 7; } catch (e) { throw e; }',
+      );
       assertSame(result.type, 'throw');
       assertSame(result.value, 7);
     },
@@ -267,7 +283,9 @@ const tests = [
     name: 'rethrow: inner rethrow is caught by outer try',
     run() {
       assertNormal(
-        run('var r; try { try { throw 7; } catch (e) { throw e; } } catch (e2) { r = e2; } r'),
+        run(
+          'var r; try { try { throw 7; } catch (e) { throw e; } } catch (e2) { r = e2; } r',
+        ),
         7,
       );
     },
@@ -285,7 +303,11 @@ const tests = [
         'var r; try { null.x; } catch (e) { r = e; } r;',
       );
       assertSame(result.type, 'normal');
-      assertGuestThrow({ type: 'throw', value: result.value }, 'TypeError', realm);
+      assertGuestThrow(
+        { type: 'throw', value: result.value },
+        'TypeError',
+        realm,
+      );
     },
   },
   {
@@ -297,7 +319,11 @@ const tests = [
         'var r; try { undefined.x; } catch (e) { r = e; } r;',
       );
       assertSame(result.type, 'normal');
-      assertGuestThrow({ type: 'throw', value: result.value }, 'TypeError', realm);
+      assertGuestThrow(
+        { type: 'throw', value: result.value },
+        'TypeError',
+        realm,
+      );
     },
   },
 
@@ -313,7 +339,11 @@ const tests = [
         'var r; try { var a = []; a.length = -1; } catch (e) { r = e; } r;',
       );
       assertSame(result.type, 'normal');
-      assertGuestThrow({ type: 'throw', value: result.value }, 'RangeError', realm);
+      assertGuestThrow(
+        { type: 'throw', value: result.value },
+        'RangeError',
+        realm,
+      );
     },
   },
 ];

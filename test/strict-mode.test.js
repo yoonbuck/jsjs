@@ -146,9 +146,7 @@ const tests = [
     name: 'non-strict function inside strict script can access outer scope normally',
     run() {
       assertNormal(
-        run(
-          '"use strict"; var x = 1; function f() { return x; } f();',
-        ),
+        run('"use strict"; var x = 1; function f() { return x; } f();'),
         1,
       );
     },
@@ -161,9 +159,7 @@ const tests = [
     name: 'strict function called without receiver has this === undefined',
     run() {
       assertNormal(
-        run(
-          'function f() { "use strict"; return typeof this; } f();',
-        ),
+        run('function f() { "use strict"; return typeof this; } f();'),
         'undefined',
       );
     },
@@ -172,10 +168,7 @@ const tests = [
     name: 'non-strict function called without receiver has this === global object',
     run() {
       const realm = createRealm();
-      const result = runIn(
-        realm,
-        'function f() { return this; } f();',
-      );
+      const result = runIn(realm, 'function f() { return this; } f();');
       assertSame(result.type, 'normal');
       assertSame(result.value, realm.globalObject);
     },
@@ -188,9 +181,7 @@ const tests = [
     name: 'non-strict function: arguments[0] is aliased to the first parameter',
     run() {
       assertNormal(
-        run(
-          'function f(a) { a = 99; return arguments[0]; } f(1);',
-        ),
+        run('function f(a) { a = 99; return arguments[0]; } f(1);'),
         99,
       );
     },
@@ -259,10 +250,7 @@ const tests = [
     name: 'strict function .caller read throws TypeError',
     run() {
       const realm = createRealm();
-      const result = runIn(
-        realm,
-        'function f() { "use strict"; } f.caller;',
-      );
+      const result = runIn(realm, 'function f() { "use strict"; } f.caller;');
       assertGuestThrow(result, 'TypeError', realm);
     },
   },

@@ -28,7 +28,10 @@ const tests = [
       env.setMutableBinding('count', 2, true);
       assertSame(env.getBindingValue('count', true), 2);
 
-      assertThrows(() => env.getBindingValue('missing', true), GuestErrorSignal);
+      assertThrows(
+        () => env.getBindingValue('missing', true),
+        GuestErrorSignal,
+      );
       assertThrows(
         () => env.setMutableBinding('missing', 1, true),
         GuestErrorSignal,
@@ -46,7 +49,10 @@ const tests = [
       env.initializeBinding('total', 10);
       assertSame(env.getBindingValue('total', true), 10);
 
-      assertThrows(() => env.setMutableBinding('total', 11, true), GuestErrorSignal);
+      assertThrows(
+        () => env.setMutableBinding('total', 11, true),
+        GuestErrorSignal,
+      );
       // Non-strict writes to an immutable binding are silently ignored.
       env.setMutableBinding('total', 12, false);
       assertSame(env.getBindingValue('total', true), 10);
@@ -228,11 +234,17 @@ const tests = [
       env.createImmutableBinding('MAX');
       env.initializeBinding('MAX', 100);
       assertSame(env.getBindingValue('MAX', true), 100);
-      assertThrows(() => env.setMutableBinding('MAX', 200, true), GuestErrorSignal);
+      assertThrows(
+        () => env.setMutableBinding('MAX', 200, true),
+        GuestErrorSignal,
+      );
 
       assertSame(env.getThisBinding(), globalObject);
 
-      assertThrows(() => env.getBindingValue('missing', true), GuestErrorSignal);
+      assertThrows(
+        () => env.getBindingValue('missing', true),
+        GuestErrorSignal,
+      );
     },
   },
   {

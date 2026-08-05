@@ -1,4 +1,10 @@
-import { toNumber, toPrimitive, toString, toInt32, toUint32 } from './conversion.js';
+import {
+  toNumber,
+  toPrimitive,
+  toString,
+  toInt32,
+  toUint32,
+} from './conversion.js';
 import { isCallable } from './descriptors.js';
 
 /**

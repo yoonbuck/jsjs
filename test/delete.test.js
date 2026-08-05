@@ -73,10 +73,7 @@ const tests = [
   {
     name: 'delete own configurable property returns true and removes it',
     run() {
-      assertNormal(
-        run('var o = { x: 1 }; var r = delete o.x; r;'),
-        true,
-      );
+      assertNormal(run('var o = { x: 1 }; var r = delete o.x; r;'), true);
       assertNormal(run("var o = { x: 1 }; delete o.x; 'x' in o;"), false);
     },
   },

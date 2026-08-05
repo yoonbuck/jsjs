@@ -156,10 +156,7 @@ function evaluateIfStatement(node, context) {
  * @returns {Completion}
  */
 function evaluateBreakStatement(node) {
-  return createBreakCompletion(
-    node.label ? node.label.name : undefined,
-    EMPTY,
-  );
+  return createBreakCompletion(node.label ? node.label.name : undefined, EMPTY);
 }
 
 /**
@@ -228,7 +225,11 @@ function evaluateWhileStatement(node, context, labelSet) {
 
   while (toBoolean(evaluateExpressionValue(node.test, context))) {
     const bodyResult = evaluateStatement(node.body, context);
-    const { value: nextValue, action } = applyLoopBodyResult(bodyResult, value, labelSet);
+    const { value: nextValue, action } = applyLoopBodyResult(
+      bodyResult,
+      value,
+      labelSet,
+    );
     value = nextValue;
 
     if (action === 'break') {
@@ -255,7 +256,11 @@ function evaluateDoWhileStatement(node, context, labelSet) {
 
   do {
     const bodyResult = evaluateStatement(node.body, context);
-    const { value: nextValue, action } = applyLoopBodyResult(bodyResult, value, labelSet);
+    const { value: nextValue, action } = applyLoopBodyResult(
+      bodyResult,
+      value,
+      labelSet,
+    );
     value = nextValue;
 
     if (action === 'break') {
@@ -293,7 +298,11 @@ function evaluateForStatement(node, context, labelSet) {
     toBoolean(evaluateExpressionValue(node.test, context))
   ) {
     const bodyResult = evaluateStatement(node.body, context);
-    const { value: nextValue, action } = applyLoopBodyResult(bodyResult, value, labelSet);
+    const { value: nextValue, action } = applyLoopBodyResult(
+      bodyResult,
+      value,
+      labelSet,
+    );
     value = nextValue;
 
     if (action === 'break') {
@@ -324,7 +333,13 @@ function evaluateForStatement(node, context, labelSet) {
  * @param {unknown} initialValue
  * @returns {Completion}
  */
-function runSwitchCasesFrom(cases, startIndex, context, labelSet, initialValue) {
+function runSwitchCasesFrom(
+  cases,
+  startIndex,
+  context,
+  labelSet,
+  initialValue,
+) {
   /** @type {unknown} */
   let value = initialValue;
 
@@ -337,7 +352,8 @@ function runSwitchCasesFrom(cases, startIndex, context, labelSet, initialValue) 
       if (updated.type !== 'normal') {
         if (
           updated.type === 'break' &&
-          (updated.target === undefined || labelSet.includes(/** @type {string} */ (updated.target)))
+          (updated.target === undefined ||
+            labelSet.includes(/** @type {string} */ (updated.target)))
         ) {
           return createNormalCompletion(value);
         }

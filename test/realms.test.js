@@ -124,10 +124,7 @@ const tests = [
 
       // `~` (bitwise NOT) is still unsupported; verify the engine reports it
       // explicitly rather than silently passing or crashing.
-      const error = assertThrows(
-        () => evaluateScript(realm, '~0;'),
-        Error,
-      );
+      const error = assertThrows(() => evaluateScript(realm, '~0;'), Error);
       assertSame(/** @type {any} */ (error).name, 'UnsupportedOperatorError');
     },
   },

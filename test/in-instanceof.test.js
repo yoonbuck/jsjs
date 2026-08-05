@@ -166,11 +166,7 @@ const tests = [
     name: 'in: non-object rhs TypeError is catchable as guest TypeError instance',
     run() {
       const realm = createRealm();
-      assertGuestThrow(
-        evaluateScript(realm, "'x' in 42;"),
-        'TypeError',
-        realm,
-      );
+      assertGuestThrow(evaluateScript(realm, "'x' in 42;"), 'TypeError', realm);
     },
   },
 
@@ -198,10 +194,7 @@ const tests = [
   {
     name: 'instanceof: non-object value (number) always returns false',
     run() {
-      assertNormal(
-        run('function F() {} 42 instanceof F;'),
-        false,
-      );
+      assertNormal(run('function F() {} 42 instanceof F;'), false);
     },
   },
 
@@ -214,10 +207,10 @@ const tests = [
       assertNormal(
         run(
           'function Base() {}\n' +
-          'function Derived() {}\n' +
-          'Derived.prototype = new Base();\n' +
-          'var o = new Derived();\n' +
-          'o instanceof Base;',
+            'function Derived() {}\n' +
+            'Derived.prototype = new Base();\n' +
+            'var o = new Derived();\n' +
+            'o instanceof Base;',
         ),
         true,
       );
@@ -229,10 +222,10 @@ const tests = [
       assertNormal(
         run(
           'function Base() {}\n' +
-          'function Derived() {}\n' +
-          'Derived.prototype = new Base();\n' +
-          'var o = new Derived();\n' +
-          'o instanceof Derived;',
+            'function Derived() {}\n' +
+            'Derived.prototype = new Base();\n' +
+            'var o = new Derived();\n' +
+            'o instanceof Derived;',
         ),
         true,
       );
@@ -300,7 +293,7 @@ const tests = [
       const realm = createRealm();
       const c = evaluateScript(
         realm,
-        "var e; try { var o = {}; o instanceof {}; } catch (err) { e = err; } e.name;",
+        'var e; try { var o = {}; o instanceof {}; } catch (err) { e = err; } e.name;',
       );
       assertSame(c.type, 'normal');
       assertSame(c.value, 'TypeError');

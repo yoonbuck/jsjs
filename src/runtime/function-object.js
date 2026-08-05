@@ -187,7 +187,7 @@ export class EngineFunction extends EngineObject {
     if (!(proto instanceof EngineObject)) {
       throw new GuestErrorSignal(
         'TypeError',
-        "Function has non-object prototype in instanceof check",
+        'Function has non-object prototype in instanceof check',
       );
     }
 

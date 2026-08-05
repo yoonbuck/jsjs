@@ -1,4 +1,9 @@
-import { Reference, getValue, putValue, isEnvironmentRecord } from '../runtime/reference.js';
+import {
+  Reference,
+  getValue,
+  putValue,
+  isEnvironmentRecord,
+} from '../runtime/reference.js';
 import {
   getIdentifierReference,
   newDeclarativeEnvironment,
@@ -227,10 +232,7 @@ function evaluateDeleteExpression(argument, context) {
   // Property reference: delegate to [[Delete]], which already throws a
   // GuestErrorSignal('TypeError') when strict is true and the property is
   // non-configurable.
-  return /** @type {any} */ (ref.base).delete(
-    ref.referencedName,
-    ref.strict,
-  );
+  return /** @type {any} */ (ref.base).delete(ref.referencedName, ref.strict);
 }
 
 /**

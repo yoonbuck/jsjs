@@ -227,10 +227,7 @@ const tests = [
       // Prove RHS runs after LHS read by checking that rhs() was called.
       // We can't push to an array (no guest push yet), so use a counter.
       runIn(realm, 'var x = 1; var rhsCalled = 0;');
-      runIn(
-        realm,
-        'function rhs() { rhsCalled = rhsCalled + 1; return x; }',
-      );
+      runIn(realm, 'function rhs() { rhsCalled = rhsCalled + 1; return x; }');
       runIn(realm, 'x += rhs();');
       assertSame(runIn(realm, 'rhsCalled;'), 1);
       assertSame(runIn(realm, 'x;'), 2);

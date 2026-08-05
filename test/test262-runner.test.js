@@ -722,10 +722,7 @@ export default [
     name: 'unsupported syntax is reported as an engine error, not a pass',
     run: async () => {
       const { records } = await runMemorySuite({
-        'unsupported.js': fixture(
-          'uses an unsupported operator',
-          '~0;',
-        ),
+        'unsupported.js': fixture('uses an unsupported operator', '~0;'),
       });
 
       assertSame(records[0].reason, 'engine-error');
