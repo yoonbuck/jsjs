@@ -47,10 +47,18 @@ function isEnvironmentRecord(base) {
 
 /**
  * @param {unknown} base
- * @returns {base is object}
+ * @returns {base is {
+ *   getReferencedValue: (name: string | symbol) => unknown,
+ *   setReferencedValue: (name: string | symbol, value: unknown, strict: boolean) => void,
+ * }}
  */
-function isObjectLike(base) {
-  return !!base && (typeof base === 'object' || typeof base === 'function');
+function isPropertyReferenceBase(base) {
+  return (
+    !!base &&
+    typeof base === 'object' &&
+    typeof (/** @type {any} */ (base).getReferencedValue) === 'function' &&
+    typeof (/** @type {any} */ (base).setReferencedValue) === 'function'
+  );
 }
 
 /**
@@ -73,8 +81,8 @@ export function getValue(reference) {
     );
   }
 
-  if (isObjectLike(reference.base)) {
-    return /** @type {any} */ (reference.base)[reference.referencedName];
+  if (isPropertyReferenceBase(reference.base)) {
+    return reference.base.getReferencedValue(reference.referencedName);
   }
 
   throw new TypeError('Unsupported reference base');
@@ -103,8 +111,12 @@ export function putValue(reference, value) {
     return value;
   }
 
-  if (isObjectLike(reference.base)) {
-    /** @type {any} */ (reference.base)[reference.referencedName] = value;
+  if (isPropertyReferenceBase(reference.base)) {
+    reference.base.setReferencedValue(
+      reference.referencedName,
+      value,
+      reference.strict,
+    );
     return value;
   }
 

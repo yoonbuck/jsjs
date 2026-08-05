@@ -33,14 +33,72 @@ const tests = [
     },
   },
   {
-    name: 'references resolve and assign through getValue and putValue',
+    name: 'references resolve and assign through the property-base protocol',
     run() {
-      const target = { count: 2 };
-      const reference = new Reference(target, 'count', false);
+      /** @type {Record<string, number>} */
+      const values = { count: 2 };
+      const propertyBase = {
+        values,
+        /**
+         * @param {string} name
+         * @returns {number}
+         */
+        getReferencedValue(name) {
+          return this.values[name];
+        },
+        /**
+         * @param {string} name
+         * @param {number} value
+         * @returns {void}
+         */
+        setReferencedValue(name, value) {
+          this.values[name] = value;
+        },
+      };
+      const reference = new Reference(propertyBase, 'count', false);
 
       assertSame(getValue(reference), 2);
       putValue(reference, 3);
-      assertSame(target.count, 3);
+      assertSame(propertyBase.values.count, 3);
+    },
+  },
+  {
+    name: 'references resolve and assign through environment records',
+    run() {
+      /** @type {Record<string, number>} */
+      const values = { count: 2 };
+      const environmentRecord = {
+        values,
+        /**
+         * @param {string} name
+         * @returns {number}
+         */
+        getBindingValue(name) {
+          return this.values[name];
+        },
+        /**
+         * @param {string} name
+         * @param {number} value
+         * @returns {void}
+         */
+        setMutableBinding(name, value) {
+          this.values[name] = value;
+        },
+      };
+      const reference = new Reference(environmentRecord, 'count', true);
+
+      assertSame(getValue(reference), 2);
+      putValue(reference, 4);
+      assertSame(environmentRecord.values.count, 4);
+    },
+  },
+  {
+    name: 'references reject bare host objects as bases',
+    run() {
+      const reference = new Reference({ count: 2 }, 'count', false);
+
+      assertThrows(() => getValue(reference), TypeError);
+      assertThrows(() => putValue(reference, 3), TypeError);
     },
   },
   {

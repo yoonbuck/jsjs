@@ -3,7 +3,14 @@
  * @returns {SyntaxError}
  */
 export function normalizeSyntaxError(error) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message =
+    error instanceof Error
+      ? error.message
+      : error &&
+          typeof error === 'object' &&
+          typeof (/** @type {any} */ (error).message) === 'string'
+        ? /** @type {any} */ (error).message
+        : String(error);
   const normalized = new SyntaxError(message);
 
   if (error && typeof error === 'object') {
