@@ -368,7 +368,7 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects for-in, switch, try, with, and labeled statements explicitly',
+    name: 'evaluateScript rejects for-in, switch, with, and labeled statements explicitly',
     run() {
       const realm = createRealm();
 
@@ -386,12 +386,6 @@ const tests = [
         /** @type {any} */ (switchStatement).nodeType,
         'SwitchStatement',
       );
-
-      const tryStatement = assertThrows(
-        () => evaluateScript(realm, 'try {} catch (e) {}'),
-        Error,
-      );
-      assertSame(/** @type {any} */ (tryStatement).nodeType, 'TryStatement');
 
       const withStatement = assertThrows(
         () => evaluateScript(realm, 'with ({}) {}'),

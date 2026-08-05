@@ -26,6 +26,7 @@ import functions from './functions.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
 import test262Runner from './test262-runner.test.js';
 import errors from './errors.test.js';
+import tryStatements from './try-statements.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -65,4 +66,8 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: test262Runner,
   }),
   Object.freeze({ file: 'test/errors.test.js', tests: errors }),
+  Object.freeze({
+    file: 'test/try-statements.test.js',
+    tests: tryStatements,
+  }),
 ]);

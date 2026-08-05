@@ -1,4 +1,5 @@
 import { EngineObject } from './object.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @param {unknown} value
@@ -6,7 +7,7 @@ import { EngineObject } from './object.js';
  */
 export function checkObjectCoercible(value) {
   if (value === null || value === undefined) {
-    throw new TypeError('Cannot convert null or undefined');
+    throw new GuestErrorSignal('TypeError', 'Cannot convert null or undefined');
   }
 
   return value;

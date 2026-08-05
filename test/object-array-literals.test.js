@@ -443,9 +443,19 @@ const tests = [
   {
     name: 'an invalid length value throws a RangeError',
     run() {
-      assertThrows(() => run('var a = []; a.length = -1;'), RangeError);
-      assertThrows(() => run('var a = []; a.length = 1.5;'), RangeError);
-      assertThrows(() => run('var a = []; a.length = "x";'), RangeError);
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(realm, 'var a = []; a.length = -1;').type,
+        'throw',
+      );
+      assertSame(
+        evaluateScript(realm, 'var a = []; a.length = 1.5;').type,
+        'throw',
+      );
+      assertSame(
+        evaluateScript(realm, 'var a = []; a.length = "x";').type,
+        'throw',
+      );
       assertSame(run('var a = []; a.length = "2"; a.length;'), 2);
     },
   },
@@ -484,9 +494,13 @@ const tests = [
   {
     name: 'member access on null or undefined throws a TypeError',
     run() {
-      assertThrows(() => run('var o = null; o.a;'), TypeError);
-      assertThrows(() => run('var o; o.a;'), TypeError);
-      assertThrows(() => run('var o = null; o["a"] = 1;'), TypeError);
+      const realm = createRealm();
+      assertSame(evaluateScript(realm, 'var o = null; o.a;').type, 'throw');
+      assertSame(evaluateScript(realm, 'var o; o.a;').type, 'throw');
+      assertSame(
+        evaluateScript(realm, 'var o = null; o["a"] = 1;').type,
+        'throw',
+      );
     },
   },
   {

@@ -459,7 +459,7 @@ export default [
       assertSame(
         runFeatureProbe({
           engine,
-          feature: syntheticFeature('try { } catch (error) { }'),
+          feature: syntheticFeature('for (var k in {}) {}'),
         }).outcome,
         'engine-error',
       );

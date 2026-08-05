@@ -6,9 +6,13 @@ import {
   createReturnCompletion,
   createThrowCompletion,
   updateEmpty,
+  ThrowSignal,
+  GuestErrorSignal,
 } from '../runtime/completion.js';
 import { toBoolean } from '../runtime/conversion.js';
 import { createUnsupportedNodeError } from '../runtime/errors.js';
+import { newDeclarativeEnvironment } from '../runtime/environment.js';
+import { createGuestError } from '../builtins/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateVariableDeclaration } from './declarations.js';
 
@@ -36,6 +40,7 @@ export const STATEMENT_TYPES = new Set([
   'ContinueStatement',
   'ReturnStatement',
   'ThrowStatement',
+  'TryStatement',
 ]);
 
 /**
@@ -78,6 +83,8 @@ export function evaluateStatement(node, context) {
       return createThrowCompletion(
         evaluateExpressionValue(node.argument, context),
       );
+    case 'TryStatement':
+      return evaluateTryStatement(node, context);
     case 'ReturnStatement':
       return createReturnCompletion(
         node.argument === null || node.argument === undefined
@@ -279,4 +286,91 @@ function evaluateForStatement(node, context) {
   }
 
   return createNormalCompletion(value);
+}
+
+/**
+ * Runs `fn` and converts any host-level `ThrowSignal` or `GuestErrorSignal`
+ * that escapes into a `throw` completion record, re-throwing everything else
+ * unchanged. This bridges the gap between expression evaluation (which
+ * surfaces guest throws as host exceptions) and the completion-record world
+ * that `TryStatement` operates in.
+ *
+ * @param {() => Completion} fn
+ * @param {import('../runtime/realm.js').Realm} realm
+ * @returns {Completion}
+ */
+function runToCompletion(fn, realm) {
+  try {
+    return fn();
+  } catch (error) {
+    if (error instanceof ThrowSignal) {
+      return createThrowCompletion(error.value);
+    }
+
+    if (error instanceof GuestErrorSignal) {
+      return createThrowCompletion(
+        createGuestError(realm, error.typeName, error.guestMessage),
+      );
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Evaluates a `TryStatement` node, implementing ECMA-262 12.14 runtime
+ * semantics for all three forms: `try/catch`, `try/finally`, and
+ * `try/catch/finally`.
+ *
+ * The catch clause gets its own declarative environment so the catch
+ * parameter shadows any outer binding of the same name for the duration of
+ * the catch body, then disappears.
+ *
+ * Any `ThrowSignal` or `GuestErrorSignal` that escapes the try block, catch
+ * body, or finally body is intercepted by `runToCompletion` and converted
+ * into a `throw` completion record so that the completion-precedence rules
+ * can apply uniformly.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Completion}
+ */
+function evaluateTryStatement(node, context) {
+  // Evaluate the try block, capturing any host-level throw signals.
+  let blockCompletion = runToCompletion(
+    () => evaluateStatementList(node.block.body, context),
+    context.realm,
+  );
+
+  // Run the catch clause when there is one and the try block threw.
+  if (node.handler !== null) {
+    if (blockCompletion.type === 'throw') {
+      const catchEnv = newDeclarativeEnvironment(context.env);
+      const paramName = node.handler.param.name;
+      catchEnv.createMutableBinding(paramName);
+      catchEnv.initializeBinding(paramName, blockCompletion.value);
+
+      const catchContext = { ...context, env: catchEnv };
+
+      blockCompletion = runToCompletion(
+        () => evaluateStatementList(node.handler.body.body, catchContext),
+        context.realm,
+      );
+      blockCompletion = updateEmpty(blockCompletion, undefined);
+    }
+  }
+
+  // Run the finally block (if any), in the original environment.
+  if (node.finalizer !== null) {
+    const finallyCompletion = runToCompletion(
+      () => evaluateStatementList(node.finalizer.body, context),
+      context.realm,
+    );
+
+    if (finallyCompletion.type !== 'normal') {
+      return finallyCompletion;
+    }
+  }
+
+  return blockCompletion;
 }

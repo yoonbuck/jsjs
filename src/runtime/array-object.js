@@ -82,7 +82,7 @@ export class EngineArray extends EngineObject {
     const newLength = toUint32(descriptor.value);
 
     if (newLength !== toNumber(descriptor.value)) {
-      throw new RangeError('Invalid array length');
+      throw new GuestErrorSignal('RangeError', 'Invalid array length');
     }
 
     /** @type {PropertyDescriptorRecord} */

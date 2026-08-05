@@ -97,8 +97,8 @@ const tests = [
       assertSame(Number.isNaN(toNumber('1_0')), true);
       assertSame(toString(-0), '0');
       assertSame(toString(true), 'true');
-      assertThrows(() => checkObjectCoercible(null), TypeError);
-      assertThrows(() => checkObjectCoercible(undefined), TypeError);
+      assertThrows(() => checkObjectCoercible(null), GuestErrorSignal);
+      assertThrows(() => checkObjectCoercible(undefined), GuestErrorSignal);
       assertSame(checkObjectCoercible('ready'), 'ready');
     },
   },
