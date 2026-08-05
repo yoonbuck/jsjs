@@ -6,6 +6,7 @@ import {
   toString,
 } from '../src/runtime/conversion.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
 import {
   abstractEqualityComparison,
   abstractRelationalComparison,
@@ -81,7 +82,7 @@ const tests = [
         true,
       );
 
-      assertThrows(() => toPrimitive(invalid), TypeError);
+      assertThrows(() => toPrimitive(invalid), GuestErrorSignal);
     },
   },
   {
@@ -96,8 +97,8 @@ const tests = [
       assertSame(Number.isNaN(toNumber('1_0')), true);
       assertSame(toString(-0), '0');
       assertSame(toString(true), 'true');
-      assertThrows(() => checkObjectCoercible(null), TypeError);
-      assertThrows(() => checkObjectCoercible(undefined), TypeError);
+      assertThrows(() => checkObjectCoercible(null), GuestErrorSignal);
+      assertThrows(() => checkObjectCoercible(undefined), GuestErrorSignal);
       assertSame(checkObjectCoercible('ready'), 'ready');
     },
   },

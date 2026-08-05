@@ -25,6 +25,13 @@ import evaluatorStatements from './evaluator-statements.test.js';
 import functions from './functions.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
 import test262Runner from './test262-runner.test.js';
+import errors from './errors.test.js';
+import tryStatements from './try-statements.test.js';
+import switchLabels from './switch-labels.test.js';
+import updateAssignment from './update-assignment.test.js';
+import inInstanceof from './in-instanceof.test.js';
+import strictMode from './strict-mode.test.js';
+import deleteOperator from './delete.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -62,5 +69,30 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,
+  }),
+  Object.freeze({ file: 'test/errors.test.js', tests: errors }),
+  Object.freeze({
+    file: 'test/try-statements.test.js',
+    tests: tryStatements,
+  }),
+  Object.freeze({
+    file: 'test/switch-labels.test.js',
+    tests: switchLabels,
+  }),
+  Object.freeze({
+    file: 'test/update-assignment.test.js',
+    tests: updateAssignment,
+  }),
+  Object.freeze({
+    file: 'test/in-instanceof.test.js',
+    tests: inInstanceof,
+  }),
+  Object.freeze({
+    file: 'test/strict-mode.test.js',
+    tests: strictMode,
+  }),
+  Object.freeze({
+    file: 'test/delete.test.js',
+    tests: deleteOperator,
   }),
 ]);

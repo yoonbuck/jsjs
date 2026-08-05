@@ -10,6 +10,7 @@ import {
   newDeclarativeEnvironment,
   newObjectEnvironment,
 } from '../src/runtime/environment.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 const tests = [
   {
@@ -27,10 +28,13 @@ const tests = [
       env.setMutableBinding('count', 2, true);
       assertSame(env.getBindingValue('count', true), 2);
 
-      assertThrows(() => env.getBindingValue('missing', true), ReferenceError);
+      assertThrows(
+        () => env.getBindingValue('missing', true),
+        GuestErrorSignal,
+      );
       assertThrows(
         () => env.setMutableBinding('missing', 1, true),
-        ReferenceError,
+        GuestErrorSignal,
       );
     },
   },
@@ -40,12 +44,15 @@ const tests = [
       const env = new DeclarativeEnvironmentRecord();
 
       env.createImmutableBinding('total');
-      assertThrows(() => env.getBindingValue('total', true), ReferenceError);
+      assertThrows(() => env.getBindingValue('total', true), GuestErrorSignal);
 
       env.initializeBinding('total', 10);
       assertSame(env.getBindingValue('total', true), 10);
 
-      assertThrows(() => env.setMutableBinding('total', 11, true), TypeError);
+      assertThrows(
+        () => env.setMutableBinding('total', 11, true),
+        GuestErrorSignal,
+      );
       // Non-strict writes to an immutable binding are silently ignored.
       env.setMutableBinding('total', 12, false);
       assertSame(env.getBindingValue('total', true), 10);
@@ -94,7 +101,7 @@ const tests = [
       const reference = getIdentifierReference(inner, 'missing', true);
 
       assertSame(reference.base, undefined);
-      assertThrows(() => getValue(reference), ReferenceError);
+      assertThrows(() => getValue(reference), GuestErrorSignal);
     },
   },
   {
@@ -111,7 +118,7 @@ const tests = [
         /** @type {any} */ (reference).globalObject,
         realm.globalObject,
       );
-      assertThrows(() => getValue(reference), ReferenceError);
+      assertThrows(() => getValue(reference), GuestErrorSignal);
     },
   },
   {
@@ -138,7 +145,7 @@ const tests = [
 
       assertThrows(
         () => putValue(getIdentifierReference(inner, 'strictOnly', true), 5),
-        ReferenceError,
+        GuestErrorSignal,
       );
       assertSame(realm.globalObject.hasProperty('strictOnly'), false);
     },
@@ -152,7 +159,7 @@ const tests = [
       const reference = getIdentifierReference(detached, 'missing', false);
 
       assertSame(/** @type {any} */ (reference).globalObject, null);
-      assertThrows(() => putValue(reference, 5), ReferenceError);
+      assertThrows(() => putValue(reference, 5), GuestErrorSignal);
     },
   },
   {
@@ -171,7 +178,7 @@ const tests = [
       assertSame(env.getBindingValue('x', true), 5);
       assertSame(bindingObject.get('x'), 5);
 
-      assertThrows(() => env.getBindingValue('y', true), ReferenceError);
+      assertThrows(() => env.getBindingValue('y', true), GuestErrorSignal);
       assertSame(env.getBindingValue('y', false), undefined);
 
       assertSame(env.deleteBinding('x'), true);
@@ -227,11 +234,17 @@ const tests = [
       env.createImmutableBinding('MAX');
       env.initializeBinding('MAX', 100);
       assertSame(env.getBindingValue('MAX', true), 100);
-      assertThrows(() => env.setMutableBinding('MAX', 200, true), TypeError);
+      assertThrows(
+        () => env.setMutableBinding('MAX', 200, true),
+        GuestErrorSignal,
+      );
 
       assertSame(env.getThisBinding(), globalObject);
 
-      assertThrows(() => env.getBindingValue('missing', true), ReferenceError);
+      assertThrows(
+        () => env.getBindingValue('missing', true),
+        GuestErrorSignal,
+      );
     },
   },
   {
@@ -310,7 +323,7 @@ const tests = [
       // reference in strict mode since no property was ever created.
       assertThrows(
         () => env.getBindingValue('missingVar', true),
-        ReferenceError,
+        GuestErrorSignal,
       );
     },
   },

@@ -11,6 +11,7 @@ import {
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateStatementList } from './statements.js';
+import { hasUseStrictDirective } from './directive.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -167,11 +168,16 @@ export function createFunctionObject(node, scope, context) {
     parameterNames.push(parameter.name);
   }
 
+  // A function is strict when its enclosing scope is already strict OR when
+  // the function's own body opens with a "use strict" directive prologue
+  // (ECMA-262 10.1.1 — "once strict, always strict" applies transitively).
+  const strict = context.strict || hasUseStrictDirective(node.body.body);
+
   return new EngineFunction({
     realm: context.realm,
     parameterNames,
     scope,
-    strict: context.strict,
+    strict,
     execute: (functionObject, thisValue, args) =>
       executeFunctionBody(node, functionObject, thisValue, args),
   });
@@ -245,6 +251,25 @@ function collectVarNames(node, names) {
       }
       collectVarNames(node.body, names);
       return;
+    case 'TryStatement':
+      collectVarNames(node.block, names);
+      if (node.handler !== null) {
+        collectVarNames(node.handler.body, names);
+      }
+      if (node.finalizer !== null) {
+        collectVarNames(node.finalizer, names);
+      }
+      return;
+    case 'SwitchStatement':
+      for (const switchCase of node.cases) {
+        for (const statement of switchCase.consequent) {
+          collectVarNames(statement, names);
+        }
+      }
+      return;
+    case 'LabeledStatement':
+      collectVarNames(node.body, names);
+      return;
     default:
       return;
   }
@@ -291,6 +316,25 @@ function collectFunctionDeclarations(node, declarations) {
     case 'WhileStatement':
     case 'DoWhileStatement':
     case 'ForStatement':
+      collectFunctionDeclarations(node.body, declarations);
+      return;
+    case 'TryStatement':
+      collectFunctionDeclarations(node.block, declarations);
+      if (node.handler !== null) {
+        collectFunctionDeclarations(node.handler.body, declarations);
+      }
+      if (node.finalizer !== null) {
+        collectFunctionDeclarations(node.finalizer, declarations);
+      }
+      return;
+    case 'SwitchStatement':
+      for (const switchCase of node.cases) {
+        for (const statement of switchCase.consequent) {
+          collectFunctionDeclarations(statement, declarations);
+        }
+      }
+      return;
+    case 'LabeledStatement':
       collectFunctionDeclarations(node.body, declarations);
       return;
     default:

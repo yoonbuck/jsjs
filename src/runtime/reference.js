@@ -1,4 +1,4 @@
-import { createUnresolvableReferenceError } from './errors.js';
+import { GuestErrorSignal } from './completion.js';
 
 export class Reference {
   /**
@@ -59,9 +59,10 @@ function isReference(reference) {
  * @returns {base is {
  *   getBindingValue: (name: string | symbol, strict: boolean) => unknown,
  *   setMutableBinding: (name: string | symbol, value: unknown, strict: boolean) => void,
+ *   deleteBinding: (name: string | symbol) => boolean,
  * }}
  */
-function isEnvironmentRecord(base) {
+export function isEnvironmentRecord(base) {
   return (
     !!base &&
     typeof base === 'object' &&
@@ -110,7 +111,10 @@ export function getValue(reference) {
   }
 
   if (reference.base === null || reference.base === undefined) {
-    throw createUnresolvableReferenceError(String(reference.referencedName));
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      `${String(reference.referencedName)} is not defined`,
+    );
   }
 
   if (isEnvironmentRecord(reference.base)) {
@@ -185,7 +189,10 @@ function putUnresolvableValue(reference, value) {
   const globalObject = /** @type {any} */ (reference).globalObject;
 
   if (reference.strict || !isGlobalPutTarget(globalObject)) {
-    throw createUnresolvableReferenceError(String(reference.referencedName));
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      `${String(reference.referencedName)} is not defined`,
+    );
   }
 
   globalObject.put(reference.referencedName, value, false);

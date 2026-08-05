@@ -1,7 +1,8 @@
 import { EngineObject } from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
 import { createUnsupportedOperationError } from './errors.js';
-import { ThrowSignal } from './completion.js';
+import { ThrowSignal, GuestErrorSignal } from './completion.js';
+import { createGuestError } from '../builtins/errors.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -72,6 +73,36 @@ export class EngineFunction extends EngineObject {
       enumerable: false,
       configurable: false,
     });
+
+    // ECMA-262 13.2 strict-function-only steps: define non-configurable,
+    // non-enumerable accessor properties for "caller" and "arguments" that
+    // both read and write through the realm's shared %ThrowTypeError%
+    // intrinsic. Non-strict functions have no such own properties, so
+    // reading nonStrictFn.caller/.arguments returns undefined via ordinary
+    // property lookup miss.
+    if (strict) {
+      const thrower = /** @type {EngineFunction | undefined} */ (
+        realm.intrinsics.throwTypeErrorFunction
+      );
+
+      if (thrower === undefined) {
+        // The realm always bootstraps %ThrowTypeError% before any function
+        // is created, so a missing thrower indicates a broken realm setup.
+        throw new TypeError(
+          'Realm is missing required %ThrowTypeError% intrinsic',
+        );
+      }
+
+      /** @type {import('./descriptors.js').PropertyDescriptorRecord} */
+      const poisonPill = {
+        get: thrower,
+        set: thrower,
+        enumerable: false,
+        configurable: false,
+      };
+      this.defineOwnProperty('caller', poisonPill);
+      this.defineOwnProperty('arguments', poisonPill);
+    }
   }
 
   /**
@@ -80,11 +111,26 @@ export class EngineFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = []) {
-    const completion = this._execute(
-      this,
-      this.resolveThisValue(thisValue),
-      args,
-    );
+    let completion;
+
+    try {
+      completion = this._execute(this, this.resolveThisValue(thisValue), args);
+    } catch (error) {
+      if (error instanceof ThrowSignal) {
+        throw error;
+      }
+
+      if (error instanceof GuestErrorSignal) {
+        // Convert the pre-construction signal into a fully-built guest error
+        // object and re-throw as a ThrowSignal so the evaluator's throw
+        // machinery and try/catch handling can intercept it.
+        throw new ThrowSignal(
+          createGuestError(this.realm, error.typeName, error.guestMessage),
+        );
+      }
+
+      throw error;
+    }
 
     if (completion.type === 'return') {
       return completion.value;
@@ -126,6 +172,42 @@ export class EngineFunction extends EngineObject {
     const result = this.callFunction(instance, args);
 
     return result instanceof EngineObject ? result : instance;
+  }
+
+  /**
+   * Implements ECMA-262 15.3.5.3 `[[HasInstance]]` (V): walks `V`'s
+   * prototype chain looking for `F.prototype`. Returns `false` when `V` is
+   * not an object; throws a guest `TypeError` when `F.prototype` is not an
+   * object (spec-required check, guards against e.g. `F.prototype = 5`).
+   *
+   * @param {unknown} value
+   * @returns {boolean}
+   */
+  hasInstance(value) {
+    if (!(value instanceof EngineObject)) {
+      return false;
+    }
+
+    const proto = this.get('prototype');
+
+    if (!(proto instanceof EngineObject)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Function has non-object prototype in instanceof check',
+      );
+    }
+
+    let current = /** @type {EngineObject | null} */ (value.getPrototype());
+
+    while (current !== null) {
+      if (current === proto) {
+        return true;
+      }
+
+      current = current.getPrototype();
+    }
+
+    return false;
   }
 
   /**
@@ -174,12 +256,10 @@ export class EngineFunction extends EngineObject {
  * descriptors, so the object's own properties stay observable as ordinary
  * writable data properties exactly as the specification requires.
  *
- * ES5 10.6 also unmaps an index on `delete arguments[i]`. That branch is
- * not implemented here because nothing can reach it: the `delete` operator
- * is an unsupported unary operator, this class is not part of the engine's
- * public surface, and no engine-internal caller deletes an arguments
- * property. It belongs with the task that implements `delete`, where it
- * can be driven by a test.
+ * ES5 10.6 also unmaps an index on `delete arguments[i]`. This is implemented
+ * in `ArgumentsObject.delete()` below: the override calls `super.delete()` to
+ * remove the own property, then removes the corresponding entry from the
+ * parameter map so the alias to the formal-parameter binding is severed.
  */
 export class ArgumentsObject extends EngineObject {
   /**
@@ -220,6 +300,28 @@ export class ArgumentsObject extends EngineObject {
       ...descriptor,
       value: this._environment.getBindingValue(parameterName, false),
     };
+  }
+
+  /**
+   * Extends the base `[[Delete]]` to unmap a parameter binding when the
+   * corresponding index property is deleted (ECMA-262 10.6 step 14.c.iii).
+   * Without this, deleting `arguments[0]` would remove the own property but
+   * leave the mapping alive, so subsequent writes to `arguments[0]` would
+   * still reach the parameter binding even though the index is no longer
+   * present.
+   *
+   * @param {PropertyKey} name
+   * @param {boolean} [throwOnError=false]
+   * @returns {boolean}
+   */
+  delete(name, throwOnError = false) {
+    const deleted = super.delete(name, throwOnError);
+
+    if (deleted) {
+      this._parameterMap.delete(name);
+    }
+
+    return deleted;
   }
 
   /**
@@ -309,12 +411,40 @@ export function createArgumentsObject(functionObject, args, env) {
     }
   }
 
-  argumentsObject.defineOwnProperty('callee', {
-    value: functionObject,
-    writable: true,
-    enumerable: false,
-    configurable: true,
-  });
+  if (functionObject.strict) {
+    // ECMA-262 10.6 strict-arguments steps: "callee" and "caller" become
+    // non-configurable accessor properties that each throw a TypeError on
+    // read or write.  The shared %ThrowTypeError% intrinsic is used so every
+    // strict arguments object in the same realm shares the same thrower.
+    const thrower = /** @type {EngineFunction | undefined} */ (
+      functionObject.realm.intrinsics.throwTypeErrorFunction
+    );
+
+    if (thrower === undefined) {
+      // The realm always bootstraps %ThrowTypeError% before any function
+      // is created, so a missing thrower indicates a broken realm setup.
+      throw new TypeError(
+        'Realm is missing required %ThrowTypeError% intrinsic',
+      );
+    }
+
+    /** @type {import('./descriptors.js').PropertyDescriptorRecord} */
+    const poisonPill = {
+      get: thrower,
+      set: thrower,
+      enumerable: false,
+      configurable: false,
+    };
+    argumentsObject.defineOwnProperty('callee', poisonPill);
+    argumentsObject.defineOwnProperty('caller', poisonPill);
+  } else {
+    argumentsObject.defineOwnProperty('callee', {
+      value: functionObject,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+  }
 
   return argumentsObject;
 }

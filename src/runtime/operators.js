@@ -1,4 +1,10 @@
-import { toNumber, toPrimitive, toString } from './conversion.js';
+import {
+  toNumber,
+  toPrimitive,
+  toString,
+  toInt32,
+  toUint32,
+} from './conversion.js';
 import { isCallable } from './descriptors.js';
 
 /**
@@ -166,6 +172,72 @@ export function abstractRelationalComparison(left, right, leftFirst = true) {
   }
 
   return leftNumber < rightNumber;
+}
+
+/**
+ * ECMA-262 5.1 §11.7.1 Left shift.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ * @returns {number}
+ */
+export function leftShift(left, right) {
+  return toInt32(left) << (toUint32(right) & 0x1f);
+}
+
+/**
+ * ECMA-262 5.1 §11.7.2 Signed right shift.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ * @returns {number}
+ */
+export function signedRightShift(left, right) {
+  return toInt32(left) >> (toUint32(right) & 0x1f);
+}
+
+/**
+ * ECMA-262 5.1 §11.7.3 Unsigned right shift.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ * @returns {number}
+ */
+export function unsignedRightShift(left, right) {
+  return toUint32(left) >>> (toUint32(right) & 0x1f);
+}
+
+/**
+ * ECMA-262 5.1 §11.10 Bitwise AND.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ * @returns {number}
+ */
+export function bitwiseAND(left, right) {
+  return toInt32(left) & toInt32(right);
+}
+
+/**
+ * ECMA-262 5.1 §11.10 Bitwise XOR.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ * @returns {number}
+ */
+export function bitwiseXOR(left, right) {
+  return toInt32(left) ^ toInt32(right);
+}
+
+/**
+ * ECMA-262 5.1 §11.10 Bitwise OR.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ * @returns {number}
+ */
+export function bitwiseOR(left, right) {
+  return toInt32(left) | toInt32(right);
 }
 
 /**

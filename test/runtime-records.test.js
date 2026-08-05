@@ -5,6 +5,7 @@ import {
   createNormalCompletion,
   createReturnCompletion,
   createThrowCompletion,
+  GuestErrorSignal,
 } from '../src/runtime/completion.js';
 import {
   Reference,
@@ -111,8 +112,8 @@ const tests = [
     run() {
       const reference = new Reference(undefined, 'missing', true);
 
-      assertThrows(() => getValue(reference), ReferenceError);
-      assertThrows(() => putValue(reference, 1), ReferenceError);
+      assertThrows(() => getValue(reference), GuestErrorSignal);
+      assertThrows(() => putValue(reference, 1), GuestErrorSignal);
     },
   },
   {
@@ -120,8 +121,8 @@ const tests = [
     run() {
       const reference = new Reference(undefined, 'missing', false);
 
-      assertThrows(() => getValue(reference), ReferenceError);
-      assertThrows(() => putValue(reference, 1), ReferenceError);
+      assertThrows(() => getValue(reference), GuestErrorSignal);
+      assertThrows(() => putValue(reference, 1), GuestErrorSignal);
     },
   },
   {
@@ -150,7 +151,7 @@ const tests = [
       assertSame(reference.base, undefined);
       assertSame(putValue(reference, 5), 5);
       assertSame(JSON.stringify(puts), JSON.stringify([['created', 5, false]]));
-      assertThrows(() => getValue(reference), ReferenceError);
+      assertThrows(() => getValue(reference), GuestErrorSignal);
     },
   },
   {
@@ -174,7 +175,7 @@ const tests = [
         /** @type {any} */ (globalObject),
       );
 
-      assertThrows(() => putValue(reference, 5), ReferenceError);
+      assertThrows(() => putValue(reference, 5), GuestErrorSignal);
       assertSame(puts.join(','), '');
     },
   },

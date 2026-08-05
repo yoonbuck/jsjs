@@ -592,7 +592,7 @@ export default [
         'unknown-type.js': fixture(
           'expects an error type the realm does not define',
           'throw 1;',
-          'negative:\n  phase: runtime\n  type: TypeError\n',
+          'negative:\n  phase: runtime\n  type: UnknownErrorType\n',
         ),
       });
 
@@ -722,7 +722,7 @@ export default [
     name: 'unsupported syntax is reported as an engine error, not a pass',
     run: async () => {
       const { records } = await runMemorySuite({
-        'update.js': fixture('uses an update expression', 'var a = 1; a++;'),
+        'unsupported.js': fixture('uses an unsupported operator', '~0;'),
       });
 
       assertSame(records[0].reason, 'engine-error');

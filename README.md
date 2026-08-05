@@ -163,7 +163,7 @@ The manifest currently holds no features. The engine is ES5-only today, so no
 Test262 `features` tag is claimed as supported, and any test that declares one is
 skipped rather than run. The baseline upstream subset is intentionally untagged —
 none of its tests declare a `features` tag — so today's run skips nothing and the
-report says exactly that: `{"type":"features","supported":[],"tagged":[],"untagged":64}`.
+report says exactly that: `{"type":"features","supported":[],"tagged":[],"untagged":125}`.
 The schema, the probe execution, and the upstream correspondence check are all
 exercised regardless, by a synthetic feature in
 `test/node/workflow-contract.test.js` and a known feature-tagged upstream test in
@@ -194,25 +194,33 @@ one so all three hosts select the same tests.
 ### Supported subset
 
 Fixtures deliberately stay inside what the engine implements today: `var`,
-function declarations and expressions, object and array literals, member access
-and calls, `new`, arithmetic, comparison, logical and conditional operators,
-simple `=` assignment, `if`/`while`/`do`/`for`/`return`/`throw`, and the
-`NaN`, `Infinity`, `undefined` globals.
+function declarations and expressions, object and array literals (including
+getter/setter syntax), member access and calls, `new`, arithmetic, comparison,
+logical and conditional operators, simple `=` assignment, all compound
+assignment operators (`+= -= *= /= %= <<= >>= >>>= &= ^= |=`), prefix and
+postfix `++`/`--`, bitwise operators (`& | ^ << >> >>>`), `in`, `instanceof`,
+`delete`, `if`/`while`/`do`/`for`/`return`/`throw`, `try`/`catch`/`finally`,
+`switch`, labelled statements with `break`/`continue`, and the `NaN`,
+`Infinity`, `undefined` globals.
 
-Not implemented yet, and therefore not exercised: `try`/`catch`, `++`/`--`,
-compound assignment, `in`, `instanceof`, `switch`, labelled statements,
-and the standard library (`Object`, `Array`, `String`, `Error`, …). Strict mode
-is only honoured at parse time, so the strict variant catches early errors such
-as legacy octal literals but not runtime strictness.
+Not implemented yet, and therefore not exercised: the standard library
+(`Object` static methods, `Array`, `String`, and similar). The error
+constructors (`Error`, `TypeError`, `ReferenceError`, `SyntaxError`,
+`RangeError`) are already implemented and available on the global object.
 
-Assignment to an undeclared identifier follows ES5 8.7.2 step 3: it creates (or
-updates) a property on the realm's global object with the same attributes an
-ordinary assignment to a global property gets — writable, enumerable, and
-configurable, unlike the non-configurable property a `var` declaration creates.
-The reference records themselves honour the strict flag and throw a
-`ReferenceError` instead, but nothing sets that flag from a `'use strict'`
-directive yet, so a strict script still creates the global; that is the same
-runtime-strictness gap as above.
+Strict mode is fully implemented at runtime. A `'use strict'` directive
+prologue activates strict semantics for the script or function body it appears
+at the start of, and this propagates to nested functions. In strict code,
+assignment to an undeclared identifier throws a `ReferenceError` rather than
+creating an implicit global, `this` inside a called function is not coerced to
+the global object, and the `caller`/`arguments` properties of strict functions
+and their `arguments` objects are poison-pill accessors.
+
+Assignment to an undeclared identifier in **non-strict** code follows ES5 8.7.2
+step 3: it creates (or updates) a property on the realm's global object with
+the same attributes an ordinary assignment to a global property gets —
+writable, enumerable, and configurable, unlike the non-configurable property a
+`var` declaration creates.
 
 Tests carrying `module`, `async`, `CanBlockIsFalse`, `CanBlockIsTrue`, or
 `non-deterministic` flags are skipped rather than failed, as are tests whose
@@ -377,8 +385,8 @@ that looks like a pass is how a contract quietly stops being one.
 This milestone claims no Test262 `features` tag as supported: the manifest holds
 no entries, consistent with the ES5-only subset described above. The initial
 deterministic conformance report is the real output of `npm run test262:upstream`
-against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 32 files,
-64 (file, variant) records, all passing:
+against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 67 files,
+125 (file, variant) records, all passing:
 
 <!-- test262-upstream-report:begin -->
 
@@ -387,14 +395,51 @@ against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 32 file
 {"type":"test","file":"test/language/comments/S7.4_A3.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/comments/S7.4_A4_T1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/comments/S7.4_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/directive-prologue/func-decl-final-runtime.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/directive-prologue/func-decl-inside-func-decl-runtime.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/directive-prologue/func-decl-no-semi-runtime.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/directive-prologue/func-decl-not-first-runtime.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/directive-prologue/func-decl-runtime.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/directive-prologue/func-expr-runtime.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/comma/S11.14_A3.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/comma/S11.14_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T2.1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T2.1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/conditional/S11.12_A3_T4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/conditional/S11.12_A3_T4.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/delete/S11.4.1_A2.2_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.2_T2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.2_T2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.3_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/in/S11.8.7_A2.1_T2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/in/S11.8.7_A2.1_T2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/in/S11.8.7_A3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/in/S11.8.7_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/in/S11.8.7_A4.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/in/S11.8.7_A4.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A2.1_T2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A2.1_T2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A6_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A6_T1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/logical-and/S11.11.1_A3_T1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/logical-and/S11.11.1_A3_T1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/logical-or/S11.11.2_A2.1_T4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/expressions/logical-or/S11.11.2_A2.1_T4.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/postfix-decrement/S11.3.2_A2.2_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/postfix-decrement/S11.3.2_A2.2_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/postfix-increment/S11.3.1_A2.2_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/postfix-increment/S11.3.1_A2.2_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/prefix-decrement/S11.4.5_A2.2_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/prefix-decrement/S11.4.5_A2.2_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/prefix-increment/S11.4.4_A2.2_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/expressions/prefix-increment/S11.4.4_A2.2_T1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/line-terminators/S7.3_A2.1_T2.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/line-terminators/S7.3_A2.1_T2.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/line-terminators/S7.3_A6_T1.js","variant":"non-strict","status":"passed"}
@@ -405,6 +450,8 @@ against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 32 file
 {"type":"test","file":"test/language/statements/do-while/S12.6.1_A1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T5.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T5.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/if/S12.5_A1_T1.js","variant":"non-strict","status":"passed"}
@@ -415,10 +462,32 @@ against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 32 file
 {"type":"test","file":"test/language/statements/return/S12.9_A1_T1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/return/S12.9_A3.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/return/S12.9_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/switch/S12.11_A1_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/switch/S12.11_A1_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/switch/S12.11_A1_T3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/switch/S12.11_A1_T3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/switch/S12.11_A4_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/switch/S12.11_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A2.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A2.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A3.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A3.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A5.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A5.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A6.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A6.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A8.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A8.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A9_T1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/try/S12.14_A9_T1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/S12.6.2_A1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/S12.6.2_A1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/S12.6.2_A4_T1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/S12.6.2_A4_T1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T5.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T5.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/types/boolean/S8.3_A1_T1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/types/boolean/S8.3_A1_T1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/types/boolean/S8.3_A2.1.js","variant":"non-strict","status":"passed"}
@@ -447,12 +516,18 @@ against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 32 file
 {"type":"test","file":"test/language/white-space/S7.2_A2.1_T2.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"strict","status":"passed"}
+{"type":"baseline","group":"delete","files":4,"records":5,"passed":5,"failed":0,"skipped":0}
 {"type":"baseline","group":"expressions","files":4,"records":8,"passed":8,"failed":0,"skipped":0}
+{"type":"baseline","group":"in-and-instanceof","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
 {"type":"baseline","group":"lexical","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
 {"type":"baseline","group":"statements","files":10,"records":20,"passed":20,"failed":0,"skipped":0}
+{"type":"baseline","group":"strict-mode","files":6,"records":6,"passed":6,"failed":0,"skipped":0}
+{"type":"baseline","group":"switch-and-labeled","files":5,"records":10,"passed":10,"failed":0,"skipped":0}
+{"type":"baseline","group":"try-catch-finally","files":7,"records":14,"passed":14,"failed":0,"skipped":0}
 {"type":"baseline","group":"types","files":12,"records":24,"passed":24,"failed":0,"skipped":0}
-{"type":"features","supported":[],"tagged":[],"untagged":64}
-{"type":"summary","total":64,"passed":64,"failed":0,"skipped":0}
+{"type":"baseline","group":"update-and-compound-assignment","files":7,"records":14,"passed":14,"failed":0,"skipped":0}
+{"type":"features","supported":[],"tagged":[],"untagged":125}
+{"type":"summary","total":125,"passed":125,"failed":0,"skipped":0}
 ```
 
 <!-- test262-upstream-report:end -->

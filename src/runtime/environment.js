@@ -1,9 +1,6 @@
 import { EngineObject } from './object.js';
 import { Reference, UnresolvableReference } from './reference.js';
-import {
-  createUninitializedBindingError,
-  createUnresolvableReferenceError,
-} from './errors.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -89,16 +86,25 @@ export class DeclarativeEnvironmentRecord {
     const binding = this._bindings.get(name);
 
     if (binding === undefined) {
-      throw createUnresolvableReferenceError(String(name));
+      throw new GuestErrorSignal(
+        'ReferenceError',
+        `${String(name)} is not defined`,
+      );
     }
 
     if (!binding.initialized) {
-      throw createUninitializedBindingError(String(name));
+      throw new GuestErrorSignal(
+        'ReferenceError',
+        `Cannot access '${String(name)}' before initialization`,
+      );
     }
 
     if (!binding.mutable) {
       if (strict) {
-        throw new TypeError(`Assignment to constant binding ${String(name)}`);
+        throw new GuestErrorSignal(
+          'TypeError',
+          `Assignment to constant variable.`,
+        );
       }
 
       return;
@@ -120,11 +126,17 @@ export class DeclarativeEnvironmentRecord {
     const binding = this._bindings.get(name);
 
     if (binding === undefined) {
-      throw createUnresolvableReferenceError(String(name));
+      throw new GuestErrorSignal(
+        'ReferenceError',
+        `${String(name)} is not defined`,
+      );
     }
 
     if (!binding.initialized) {
-      throw createUninitializedBindingError(String(name));
+      throw new GuestErrorSignal(
+        'ReferenceError',
+        `Cannot access '${String(name)}' before initialization`,
+      );
     }
 
     return binding.value;
@@ -167,7 +179,7 @@ export class DeclarativeEnvironmentRecord {
     const binding = this._bindings.get(name);
 
     if (binding === undefined) {
-      throw createUnresolvableReferenceError(String(name));
+      throw new ReferenceError(`No binding for ${String(name)}`);
     }
 
     return binding;
@@ -259,7 +271,10 @@ export class ObjectEnvironmentRecord {
   getBindingValue(name, strict) {
     if (!this.bindingObject.hasProperty(name)) {
       if (strict) {
-        throw createUnresolvableReferenceError(String(name));
+        throw new GuestErrorSignal(
+          'ReferenceError',
+          `${String(name)} is not defined`,
+        );
       }
 
       return undefined;

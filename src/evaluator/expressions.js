@@ -1,11 +1,17 @@
-import { Reference, getValue, putValue } from '../runtime/reference.js';
+import {
+  Reference,
+  getValue,
+  putValue,
+  isEnvironmentRecord,
+} from '../runtime/reference.js';
 import {
   getIdentifierReference,
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
-import { EngineFunction } from '../runtime/function-object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { EngineFunction } from '../runtime/function-object.js';
+import { isCallable } from '../runtime/descriptors.js';
 import {
   checkObjectCoercible,
   toBoolean,
@@ -16,18 +22,25 @@ import {
   abstractEqualityComparison,
   abstractRelationalComparison,
   add,
+  bitwiseAND,
+  bitwiseOR,
+  bitwiseXOR,
   divide,
+  leftShift,
   multiply,
   remainder,
+  signedRightShift,
   strictEqualityComparison,
   subtract,
   typeOf,
+  unsignedRightShift,
 } from '../runtime/operators.js';
 import {
   createUnsupportedNodeError,
   createUnsupportedOperationError,
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
 import { createFunctionObject } from './declarations.js';
 
 /**
@@ -48,6 +61,14 @@ const SUPPORTED_BINARY_OPERATORS = new Set([
   '<=',
   '>',
   '>=',
+  '<<',
+  '>>',
+  '>>>',
+  '&',
+  '^',
+  '|',
+  'in',
+  'instanceof',
 ]);
 
 /**
@@ -65,6 +86,7 @@ export const EXPRESSION_TYPES = new Set([
   'LogicalExpression',
   'ConditionalExpression',
   'AssignmentExpression',
+  'UpdateExpression',
   'CallExpression',
   'MemberExpression',
   'FunctionExpression',
@@ -103,6 +125,8 @@ export function evaluateExpression(node, context) {
       return evaluateConditionalExpression(node, context);
     case 'AssignmentExpression':
       return evaluateAssignmentExpression(node, context);
+    case 'UpdateExpression':
+      return evaluateUpdateExpression(node, context);
     case 'CallExpression':
       return evaluateCallExpression(node, context);
     case 'MemberExpression':
@@ -156,6 +180,8 @@ function evaluateLiteral(node) {
  */
 function evaluateUnaryExpression(node, context) {
   switch (node.operator) {
+    case 'delete':
+      return evaluateDeleteExpression(node.argument, context);
     case 'typeof':
       return evaluateTypeofExpression(node.argument, context);
     case 'void':
@@ -170,6 +196,43 @@ function evaluateUnaryExpression(node, context) {
     default:
       throw createUnsupportedOperatorError('unary', node.operator);
   }
+}
+
+/**
+ * Implements ECMA-262 11.4.1 `delete` operator.
+ *
+ * Step 1: evaluate the argument as a Reference (not its value).
+ * Step 2: non-Reference results (e.g. `delete (1+1)`) always return `true`.
+ * Step 3: unresolvable references (base is `undefined`) return `true` — Acorn
+ *         already rejects `delete <bareIdentifier>` in strict mode at parse
+ *         time, so the strict SyntaxError branch of step 3.a is never reached
+ *         at runtime.
+ * Step 4/5: dispatch to `EngineObject#delete` (property reference) or
+ *           `EnvironmentRecord#deleteBinding` (environment reference).
+ *
+ * @param {any} argument
+ * @param {EvaluationContext} context
+ * @returns {boolean}
+ */
+function evaluateDeleteExpression(argument, context) {
+  const ref = evaluateExpression(argument, context);
+
+  if (!(ref instanceof Reference)) {
+    return true;
+  }
+
+  if (ref.base === undefined) {
+    return true;
+  }
+
+  if (isEnvironmentRecord(ref.base)) {
+    return ref.base.deleteBinding(ref.referencedName);
+  }
+
+  // Property reference: delegate to [[Delete]], which already throws a
+  // GuestErrorSignal('TypeError') when strict is true and the property is
+  // non-configurable.
+  return /** @type {any} */ (ref.base).delete(ref.referencedName, ref.strict);
 }
 
 /**
@@ -201,20 +264,16 @@ function evaluateTypeofExpression(argument, context) {
 }
 
 /**
- * @param {any} node
- * @param {EvaluationContext} context
+ * Applies a binary operator to two already-evaluated values (ECMA-262 §11.5–
+ * §11.10). Extracted so `BinaryExpression` evaluation and compound assignment
+ * can share a single dispatch site.
+ *
+ * @param {string} operator
+ * @param {unknown} left
+ * @param {unknown} right
  * @returns {unknown}
  */
-function evaluateBinaryExpression(node, context) {
-  const operator = node.operator;
-
-  if (!SUPPORTED_BINARY_OPERATORS.has(operator)) {
-    throw createUnsupportedOperatorError('binary', operator);
-  }
-
-  const left = evaluateExpressionValue(node.left, context);
-  const right = evaluateExpressionValue(node.right, context);
-
+function applyBinaryOperator(operator, left, right) {
   switch (operator) {
     case '+':
       return add(left, right);
@@ -246,12 +305,72 @@ function evaluateBinaryExpression(node, context) {
       const result = abstractRelationalComparison(right, left, false);
       return result === undefined || result === true ? false : true;
     }
-    default: {
-      // '>='
+    case '>=': {
       const result = abstractRelationalComparison(left, right, true);
       return result === undefined || result === true ? false : true;
     }
+    case '<<':
+      return leftShift(left, right);
+    case '>>':
+      return signedRightShift(left, right);
+    case '>>>':
+      return unsignedRightShift(left, right);
+    case '&':
+      return bitwiseAND(left, right);
+    case '^':
+      return bitwiseXOR(left, right);
+    case 'in': {
+      // ES5 11.8.7 step 5: check RHS type BEFORE any ToString(lval) call,
+      // so a guest toString/valueOf on the LHS cannot run or override the
+      // thrown error when the RHS is not an object.
+      if (!(right instanceof EngineObject)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          `Cannot use 'in' operator to search for key in ${right === null ? 'null' : typeof right}`,
+        );
+      }
+
+      return right.hasProperty(toString(left));
+    }
+    case 'instanceof': {
+      if (!(right instanceof EngineObject)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          "Right-hand side of 'instanceof' is not an object",
+        );
+      }
+
+      if (!(right instanceof EngineFunction)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          "Right-hand side of 'instanceof' is not callable",
+        );
+      }
+
+      return right.hasInstance(left);
+    }
+    default:
+      // '|'
+      return bitwiseOR(left, right);
   }
+}
+
+/**
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateBinaryExpression(node, context) {
+  const operator = node.operator;
+
+  if (!SUPPORTED_BINARY_OPERATORS.has(operator)) {
+    throw createUnsupportedOperatorError('binary', operator);
+  }
+
+  const left = evaluateExpressionValue(node.left, context);
+  const right = evaluateExpressionValue(node.right, context);
+
+  return applyBinaryOperator(operator, left, right);
 }
 
 /**
@@ -296,24 +415,62 @@ function evaluateConditionalExpression(node, context) {
  * @returns {unknown}
  */
 function evaluateAssignmentExpression(node, context) {
-  if (node.operator !== '=') {
-    throw createUnsupportedOperatorError('assignment', node.operator);
-  }
-
   if (
     node.left.type !== 'Identifier' &&
     node.left.type !== 'MemberExpression'
   ) {
-    // Only identifier and property references are valid ES5 assignment
-    // targets; reject anything else explicitly rather than guessing at
-    // semantics.
     throw createUnsupportedNodeError(node.left);
   }
 
-  const reference = evaluateExpression(node.left, context);
-  const value = evaluateExpressionValue(node.right, context);
-  putValue(/** @type {Reference} */ (reference), value);
-  return value;
+  const reference = /** @type {Reference} */ (
+    evaluateExpression(node.left, context)
+  );
+
+  if (node.operator === '=') {
+    const value = evaluateExpressionValue(node.right, context);
+    putValue(reference, value);
+    return value;
+  }
+
+  // Compound assignment: strip trailing '=' to get the binary operator.
+  const binaryOperator = node.operator.slice(0, -1);
+
+  if (!SUPPORTED_BINARY_OPERATORS.has(binaryOperator)) {
+    throw createUnsupportedOperatorError('assignment', node.operator);
+  }
+
+  const leftValue = getValue(reference);
+  const rightValue = evaluateExpressionValue(node.right, context);
+  const result = applyBinaryOperator(binaryOperator, leftValue, rightValue);
+  putValue(reference, result);
+  return result;
+}
+
+/**
+ * Implements prefix and postfix `++`/`--` (ECMA-262 §11.3, §11.4.4/11.4.5).
+ * The argument is evaluated to a reference exactly once; `getValue` is called
+ * once to obtain the old numeric value; `putValue` is called once with the
+ * updated value; prefix forms return the new value, postfix return the old.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {number}
+ */
+function evaluateUpdateExpression(node, context) {
+  if (
+    node.argument.type !== 'Identifier' &&
+    node.argument.type !== 'MemberExpression'
+  ) {
+    throw createUnsupportedNodeError(node.argument);
+  }
+
+  const reference = /** @type {Reference} */ (
+    evaluateExpression(node.argument, context)
+  );
+  const oldValue = toNumber(getValue(reference));
+  const newValue = node.operator === '++' ? oldValue + 1 : oldValue - 1;
+  putValue(reference, newValue);
+  return node.prefix ? newValue : oldValue;
 }
 
 /**
@@ -336,11 +493,16 @@ function evaluateCallExpression(node, context) {
   const thisValue = referenceThisValue(calleeReference);
   const args = evaluateArguments(node.arguments, context);
 
-  if (!(callee instanceof EngineFunction)) {
-    throw new TypeError(`${describeCallee(node.callee)} is not a function`);
+  if (!isCallable(callee)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      `${describeCallee(node.callee)} is not a function`,
+    );
   }
 
-  return callee.callFunction(thisValue, args);
+  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
+    callee
+  ).callFunction(thisValue, args);
 }
 
 /**
@@ -375,11 +537,14 @@ function evaluateNewExpression(node, context) {
   const callee = evaluateExpressionValue(node.callee, context);
   const args = evaluateArguments(node.arguments ?? [], context);
 
-  if (!(callee instanceof EngineFunction)) {
-    throw new TypeError(`${describeCallee(node.callee)} is not a constructor`);
+  if (!isCallable(callee)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      `${describeCallee(node.callee)} is not a constructor`,
+    );
   }
 
-  return callee.constructFunction(args);
+  return /** @type {any} */ (callee).constructFunction(args);
 }
 
 /**
@@ -490,7 +655,7 @@ function toObjectBase(baseValue) {
  *
  * @param {any} node
  * @param {EvaluationContext} context
- * @returns {EngineFunction}
+ * @returns {import('../runtime/function-object.js').EngineFunction}
  */
 function evaluateFunctionExpression(node, context) {
   if (!node.id) {

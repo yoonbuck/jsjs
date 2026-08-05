@@ -35,10 +35,11 @@ const tests = [
     },
   },
   {
-    name: 'reading an undeclared identifier throws a ReferenceError',
+    name: 'reading an undeclared identifier produces a guest ReferenceError',
     run() {
       const realm = createRealm();
-      assertThrows(() => evaluateScript(realm, 'undeclared;'), ReferenceError);
+      const result = evaluateScript(realm, 'undeclared;');
+      assertSame(result.type, 'throw');
     },
   },
   {
@@ -141,7 +142,7 @@ const tests = [
       assertSame(first.globalObject.get('isolated'), 5);
       assertSame(second.globalObject.hasProperty('isolated'), false);
       assertSame(evaluateScript(second, 'typeof isolated;').value, 'undefined');
-      assertThrows(() => evaluateScript(second, 'isolated;'), ReferenceError);
+      assertSame(evaluateScript(second, 'isolated;').type, 'throw');
       assertSame(
         Object.prototype.hasOwnProperty.call(globalThis, 'isolated'),
         false,
@@ -265,56 +266,50 @@ const tests = [
     },
   },
   {
-    name: 'unsupported unary operators (bitwise not, delete) throw explicitly',
+    name: 'unsupported unary operators (bitwise not) throw explicitly',
     run() {
       const bitwiseNot = assertThrows(() => run('~1;'), Error);
       assertSame(bitwiseNot.name, 'UnsupportedOperatorError');
       assertSame(/** @type {any} */ (bitwiseNot).operator, '~');
-
-      const del = assertThrows(() => run('delete x;'), Error);
-      assertSame(del.name, 'UnsupportedOperatorError');
-      assertSame(/** @type {any} */ (del).operator, 'delete');
     },
   },
   {
-    name: 'unsupported binary operators (bitwise, instanceof, in) throw explicitly',
+    name: 'unsupported binary operators (instanceof, in) are now supported',
     run() {
-      for (const [source, operator] of [
-        ['1 & 1;', '&'],
-        ['1 | 1;', '|'],
-        ['1 ^ 1;', '^'],
-        ['1 << 1;', '<<'],
-        ['1 >> 1;', '>>'],
-        ['1 >>> 1;', '>>>'],
-        ['1 instanceof Object;', 'instanceof'],
-        ['"a" in {};', 'in'],
-      ]) {
-        const error = assertThrows(() => run(source), Error);
-        assertSame(error.name, 'UnsupportedOperatorError');
-        assertSame(/** @type {any} */ (error).operator, operator);
-      }
+      assertSame(run('"x" in { x: 1 };'), true);
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(realm, 'function F() {} new F() instanceof F;').value,
+        true,
+      );
     },
   },
   {
-    name: 'compound assignment operators throw an explicit unsupported-operator error',
+    name: 'bitwise binary operators are now supported',
+    run() {
+      assertSame(run('1 & 3;'), 1);
+      assertSame(run('1 | 2;'), 3);
+      assertSame(run('3 ^ 1;'), 2);
+      assertSame(run('1 << 2;'), 4);
+      assertSame(run('8 >> 1;'), 4);
+      assertSame(run('1 >>> 0;'), 1);
+    },
+  },
+  {
+    name: 'compound assignment operators are now supported',
     run() {
       const realm = createRealm();
       evaluateScript(realm, 'var x = 1;');
-
-      const error = assertThrows(() => evaluateScript(realm, 'x += 1;'), Error);
-      assertSame(error.name, 'UnsupportedOperatorError');
-      assertSame(/** @type {any} */ (error).operator, '+=');
+      assertSame(evaluateScript(realm, 'x += 2;').value, 3);
     },
   },
   {
-    name: 'update expressions (++/--) are not supported yet and throw explicitly',
+    name: 'update expressions (++/--) are now supported',
     run() {
       const realm = createRealm();
       evaluateScript(realm, 'var x = 1;');
-
-      const error = assertThrows(() => evaluateScript(realm, 'x++;'), Error);
-      assertSame(error.name, 'UnsupportedNodeError');
-      assertSame(/** @type {any} */ (error).nodeType, 'UpdateExpression');
+      assertSame(evaluateScript(realm, 'x++;').value, 1);
+      assertSame(evaluateScript(realm, 'x;').value, 2);
     },
   },
   {

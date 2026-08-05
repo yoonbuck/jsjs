@@ -1,5 +1,6 @@
 import { EngineObject } from './object.js';
-import { toNumber } from './conversion.js';
+import { toNumber, toUint32 } from './conversion.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyDescriptorRecord} PropertyDescriptorRecord
@@ -81,7 +82,7 @@ export class EngineArray extends EngineObject {
     const newLength = toUint32(descriptor.value);
 
     if (newLength !== toNumber(descriptor.value)) {
-      throw new RangeError('Invalid array length');
+      throw new GuestErrorSignal('RangeError', 'Invalid array length');
     }
 
     /** @type {PropertyDescriptorRecord} */
@@ -224,23 +225,18 @@ export function toArrayIndex(name) {
 }
 
 /**
- * Implements ECMA-262 9.6 `ToUint32`.
+ * Signals a guest-visible array-operation rejection, matching the same
+ * mechanism as `rejectOperation` in `object.js`. When `throwOnError` is
+ * true, throws a `GuestErrorSignal` so the nearest realm-aware boundary
+ * can materialise a proper guest `TypeError` throw completion.
  *
- * @param {unknown} value
- * @returns {number}
- */
-function toUint32(value) {
-  return toNumber(value) >>> 0;
-}
-
-/**
  * @param {boolean} throwOnError
  * @param {string} message
  * @returns {false}
  */
 function rejectOperation(throwOnError, message) {
   if (throwOnError) {
-    throw new TypeError(message);
+    throw new GuestErrorSignal('TypeError', message);
   }
 
   return false;

@@ -1,4 +1,5 @@
 import { EngineObject } from './object.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @param {unknown} value
@@ -6,7 +7,7 @@ import { EngineObject } from './object.js';
  */
 export function checkObjectCoercible(value) {
   if (value === null || value === undefined) {
-    throw new TypeError('Cannot convert null or undefined');
+    throw new GuestErrorSignal('TypeError', 'Cannot convert null or undefined');
   }
 
   return value;
@@ -147,4 +148,58 @@ function isPrimitive(value) {
   return (
     value === null || (typeof value !== 'object' && typeof value !== 'function')
   );
+}
+
+/**
+ * ECMA-262 5.1 §9.5 ToInt32.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toInt32(value) {
+  const number = toNumber(value);
+
+  if (!Number.isFinite(number)) {
+    return +0;
+  }
+
+  const posInt = Math.sign(number) * Math.floor(Math.abs(number));
+  let int32bit = posInt % 2 ** 32;
+
+  if (int32bit < 0) {
+    int32bit += 2 ** 32;
+  }
+
+  if (int32bit >= 2 ** 31) {
+    return int32bit - 2 ** 32;
+  }
+
+  // Normalize -0 to +0: the spec's ToInt32 result set is [-2^31, 2^31),
+  // which does not include -0 (only integer values are in the result).
+  return int32bit === 0 ? 0 : int32bit;
+}
+
+/**
+ * ECMA-262 5.1 §9.6 ToUint32.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toUint32(value) {
+  const number = toNumber(value);
+
+  if (!Number.isFinite(number)) {
+    return +0;
+  }
+
+  const posInt = Math.sign(number) * Math.floor(Math.abs(number));
+  let int32bit = posInt % 2 ** 32;
+
+  if (int32bit < 0) {
+    int32bit += 2 ** 32;
+  }
+
+  // Normalize -0 to +0: the spec's ToUint32 result set is [0, 2^32), which
+  // does not include -0.
+  return int32bit === 0 ? 0 : int32bit;
 }

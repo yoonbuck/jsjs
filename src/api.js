@@ -1,8 +1,10 @@
 import { parseScript } from './parser.js';
 import { createRealm, Realm } from './runtime/realm.js';
-import { EMPTY, ThrowSignal } from './runtime/completion.js';
+import { EMPTY, ThrowSignal, GuestErrorSignal } from './runtime/completion.js';
 import { globalDeclarationInstantiation } from './evaluator/declarations.js';
 import { evaluateStatementList } from './evaluator/statements.js';
+import { createGuestError } from './builtins/errors.js';
+import { hasUseStrictDirective } from './evaluator/directive.js';
 
 export { parseScript, createRealm, Realm };
 
@@ -27,10 +29,13 @@ export { parseScript, createRealm, Realm };
  * carry it. Guest throws are values, not host exceptions — engine defects
  * and unimplemented operations remain host errors.
  *
- * Evaluation is non-strict, so an assignment to an identifier no
+ * Evaluation strictness is determined by a `"use strict"` directive prologue
+ * (ES5 §14.1). In non-strict scripts, an assignment to an identifier no
  * environment in scope binds creates that property on `realm.globalObject`
  * (ECMA-262 8.7.2) rather than throwing; reading such an identifier still
- * throws a `ReferenceError`.
+ * throws a `ReferenceError`. In strict scripts (those beginning with a
+ * `"use strict"` directive), the same assignment instead throws a
+ * `ReferenceError` rather than creating an implicit global.
  *
  * @param {import('./runtime/realm.js').Realm} realm
  * @param {string} source
@@ -42,7 +47,7 @@ export function evaluateScript(realm, source, parserOptions = {}) {
   const context = {
     realm,
     env: realm.globalEnvironment,
-    strict: false,
+    strict: hasUseStrictDirective(program.body),
     thisValue: realm.globalEnvironment.getThisBinding(),
   };
   globalDeclarationInstantiation(program, context);
@@ -55,6 +60,17 @@ export function evaluateScript(realm, source, parserOptions = {}) {
   } catch (error) {
     if (error instanceof ThrowSignal) {
       return { type: 'throw', value: error.value };
+    }
+
+    if (error instanceof GuestErrorSignal) {
+      // A guest-visible error was thrown at the top level of the script
+      // (not inside a called function — those are caught by callFunction).
+      // Convert the signal into a proper guest error object now that the
+      // realm is in scope.
+      return {
+        type: 'throw',
+        value: createGuestError(realm, error.typeName, error.guestMessage),
+      };
     }
 
     throw error;

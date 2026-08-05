@@ -35,30 +35,6 @@ export function normalizeSyntaxError(error) {
 }
 
 /**
- * @param {string} referenceName
- * @returns {ReferenceError}
- */
-export function createUnresolvableReferenceError(referenceName) {
-  const error = new ReferenceError(
-    `Cannot resolve unresolvable reference ${referenceName}`,
-  );
-  /** @type {any} */ (error).referenceName = referenceName;
-  return error;
-}
-
-/**
- * @param {string} bindingName
- * @returns {ReferenceError}
- */
-export function createUninitializedBindingError(bindingName) {
-  const error = new ReferenceError(
-    `Cannot access uninitialized binding ${bindingName}`,
-  );
-  /** @type {any} */ (error).referenceName = bindingName;
-  return error;
-}
-
-/**
  * Signals that the API's minimal AST dispatcher has not yet implemented
  * evaluation for a given node type. This is an engine-limitation error, not a
  * guest-visible completion, and is expected to disappear as the evaluator

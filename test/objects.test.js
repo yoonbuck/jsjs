@@ -8,6 +8,7 @@ import {
   validatePropertyDescriptor,
 } from '../src/runtime/descriptors.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 const tests = [
   {
@@ -117,14 +118,14 @@ const tests = [
       );
       assertThrows(
         () => object.defineOwnProperty('locked', { configurable: true }, true),
-        TypeError,
+        GuestErrorSignal,
       );
       assertThrows(
         () => object.defineOwnProperty('locked', { value: 2 }, true),
-        TypeError,
+        GuestErrorSignal,
       );
       assertSame(object.delete('locked'), false);
-      assertThrows(() => object.delete('locked', true), TypeError);
+      assertThrows(() => object.delete('locked', true), GuestErrorSignal);
     },
   },
   {
@@ -148,7 +149,7 @@ const tests = [
       );
       assertThrows(
         () => object.defineOwnProperty('locked', { enumerable: false }, true),
-        TypeError,
+        GuestErrorSignal,
       );
       const descriptor = object.getOwnProperty('locked');
       if (descriptor === undefined) {
@@ -187,7 +188,7 @@ const tests = [
 
       assertSame(object.put('readOnly', 2), false);
       assertSame(object.getOwnProperty('readOnly'), undefined);
-      assertThrows(() => object.put('readOnly', 2, true), TypeError);
+      assertThrows(() => object.put('readOnly', 2, true), GuestErrorSignal);
       assertSame(object.put('sink', 7, true), true);
       assertSame(setterValue, '7');
       assertSame(object.getOwnProperty('sink'), undefined);
@@ -225,7 +226,7 @@ const tests = [
       assertSame(setterValue, '9');
       assertSame(isAccessorDescriptor(object.getOwnProperty('sink')), true);
       assertSame(object.put('getterOnly', 2), false);
-      assertThrows(() => object.put('getterOnly', 2, true), TypeError);
+      assertThrows(() => object.put('getterOnly', 2, true), GuestErrorSignal);
     },
   },
 ];
