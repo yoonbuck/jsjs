@@ -16,7 +16,7 @@ import { toBoolean, toUint32 } from '../runtime/conversion.js';
  *     args: readonly unknown[],
  *     functionObject: NativeFunction,
  *   ) => unknown,
- *   construct?: ((args: readonly unknown[], functionObject: NativeFunction) => unknown) | undefined,
+ *   construct?: ((args: readonly unknown[], functionObject: NativeFunction) => EngineObject) | undefined,
  *   prototype?: EngineObject | undefined,
  * }} NativeFunctionOptions
  */
@@ -93,7 +93,13 @@ export class NativeFunction extends EngineObject {
       );
     }
 
-    return runNativeBody(this.realm, () => construct(args, this));
+    const result = runNativeBody(this.realm, () => construct(args, this));
+
+    if (!(result instanceof EngineObject)) {
+      throw new TypeError('Native constructor must return an object');
+    }
+
+    return result;
   }
 
   /**

@@ -138,6 +138,25 @@ const tests = [
     },
   },
   {
+    name: 'realm native-function factory rejects primitive construction results',
+    run() {
+      const realm = createRealm();
+      const fn = realm.createNativeFunction({
+        name: 'BrokenConstructor',
+        length: 0,
+        prototype: new EngineObject(realm.intrinsics.objectPrototype),
+        call() {
+          return undefined;
+        },
+        construct() {
+          return /** @type {any} */ (1);
+        },
+      });
+
+      assertThrows(() => fn.constructFunction([]), TypeError);
+    },
+  },
+  {
     name: 'constructible native built-ins participate in guest instanceof checks',
     run() {
       const realm = createRealm();
