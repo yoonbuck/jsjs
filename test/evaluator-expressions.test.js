@@ -278,16 +278,14 @@ const tests = [
     },
   },
   {
-    name: 'unsupported binary operators (instanceof, in) throw explicitly',
+    name: 'unsupported binary operators (instanceof, in) are now supported',
     run() {
-      for (const [source, operator] of [
-        ['1 instanceof Object;', 'instanceof'],
-        ['"a" in {};', 'in'],
-      ]) {
-        const error = assertThrows(() => run(source), Error);
-        assertSame(error.name, 'UnsupportedOperatorError');
-        assertSame(/** @type {any} */ (error).operator, operator);
-      }
+      assertSame(run('"x" in { x: 1 };'), true);
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(realm, 'function F() {} new F() instanceof F;').value,
+        true,
+      );
     },
   },
   {

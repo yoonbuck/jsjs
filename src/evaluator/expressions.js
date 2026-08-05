@@ -61,6 +61,8 @@ const SUPPORTED_BINARY_OPERATORS = new Set([
   '&',
   '^',
   '|',
+  'in',
+  'instanceof',
 ]);
 
 /**
@@ -272,6 +274,33 @@ function applyBinaryOperator(operator, left, right) {
       return bitwiseAND(left, right);
     case '^':
       return bitwiseXOR(left, right);
+    case 'in': {
+      if (!(right instanceof EngineObject)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          `Cannot use 'in' operator to search for '${toString(left)}' in ${right === null ? 'null' : typeof right}`,
+        );
+      }
+
+      return right.hasProperty(toString(left));
+    }
+    case 'instanceof': {
+      if (!(right instanceof EngineObject)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          "Right-hand side of 'instanceof' is not an object",
+        );
+      }
+
+      if (typeof (/** @type {any} */ (right)).hasInstance !== 'function') {
+        throw new GuestErrorSignal(
+          'TypeError',
+          "Right-hand side of 'instanceof' is not callable",
+        );
+      }
+
+      return /** @type {any} */ (right).hasInstance(left);
+    }
     default:
       // '|'
       return bitwiseOR(left, right);

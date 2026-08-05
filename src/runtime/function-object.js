@@ -160,6 +160,46 @@ export class EngineFunction extends EngineObject {
    * @param {unknown} thisValue
    * @returns {unknown}
    */
+  /**
+   * Implements ECMA-262 15.3.5.3 `[[HasInstance]]` (V): walks `V`'s
+   * prototype chain looking for `F.prototype`. Returns `false` when `V` is
+   * not an object; throws a guest `TypeError` when `F.prototype` is not an
+   * object (spec-required check, guards against e.g. `F.prototype = 5`).
+   *
+   * @param {unknown} value
+   * @returns {boolean}
+   */
+  hasInstance(value) {
+    if (!(value instanceof EngineObject)) {
+      return false;
+    }
+
+    const proto = this.get('prototype');
+
+    if (!(proto instanceof EngineObject)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        "Function has non-object prototype in instanceof check",
+      );
+    }
+
+    let current = /** @type {EngineObject | null} */ (value.getPrototype());
+
+    while (current !== null) {
+      if (current === proto) {
+        return true;
+      }
+
+      current = current.getPrototype();
+    }
+
+    return false;
+  }
+
+  /**
+   * @param {unknown} thisValue
+   * @returns {unknown}
+   */
   resolveThisValue(thisValue) {
     if (this.strict) {
       return thisValue;

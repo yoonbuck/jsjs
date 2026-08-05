@@ -724,7 +724,7 @@ export default [
       const { records } = await runMemorySuite({
         'unsupported.js': fixture(
           'uses an unsupported operator',
-          '"a" in {};',
+          'delete x;',
         ),
       });
 

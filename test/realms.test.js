@@ -122,9 +122,9 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      // `in` is not implemented, so it is still explicitly unsupported.
+      // `delete` is not implemented, so it is still explicitly unsupported.
       const error = assertThrows(
-        () => evaluateScript(realm, '"a" in {};'),
+        () => evaluateScript(realm, 'delete x;'),
         Error,
       );
       assertSame(/** @type {any} */ (error).name, 'UnsupportedOperatorError');
