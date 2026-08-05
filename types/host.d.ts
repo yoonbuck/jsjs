@@ -31,6 +31,20 @@ declare module 'node:url' {
   export function fileURLToPath(url: string | URL): string;
 }
 
+declare module 'node:fs' {
+  export function existsSync(path: string | URL): boolean;
+}
+
+// The CI contract test shells out to run declared npm/CI commands for real,
+// rather than grepping source text for their expected effect.
+declare module 'node:child_process' {
+  export function execFileSync(
+    command: string,
+    args?: string[],
+    options?: { cwd?: string; encoding: 'utf8' },
+  ): string;
+}
+
 // `jsc` shell globals (JavaScriptCore's command line interpreter).
 declare var readFile: ((path: string) => string) | undefined;
 declare var read: ((path: string) => string) | undefined;

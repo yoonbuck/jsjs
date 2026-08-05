@@ -12,6 +12,7 @@
 import { runTests } from './harness/runner.js';
 import { PORTABLE_SUITES } from './suites.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
+import ciContract from './node/ci-contract.test.js';
 
 /**
  * @typedef {import('./suites.js').TestSuite} TestSuite
@@ -22,6 +23,10 @@ const NODE_ONLY_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/node/repository-invariants.test.js',
     tests: repositoryInvariants,
+  }),
+  Object.freeze({
+    file: 'test/node/ci-contract.test.js',
+    tests: ciContract,
   }),
 ]);
 

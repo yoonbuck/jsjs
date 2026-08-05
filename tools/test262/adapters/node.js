@@ -10,6 +10,12 @@
  * Roots are resolved against the repository, not the current working
  * directory, so npm scripts behave the same no matter where they are invoked
  * from.
+ *
+ * When `--features` is omitted, the supported-feature allowlist comes from
+ * the checked-in `tools/test262/features.json` manifest rather than an
+ * empty default baked into this file — `resolveSupportedFeatures` (from
+ * `../features.js`) decides the precedence, this adapter only reads the raw
+ * text, exactly like it reads a test file or the selection manifest.
  */
 
 import { readFile, readdir } from 'node:fs/promises';
@@ -20,12 +26,14 @@ import {
   DEFAULT_HARNESS_DIRECTORY,
   TEST262_MANIFEST_FILE,
 } from '../selection.js';
+import { resolveSupportedFeatures } from '../features.js';
 
 /**
  * @typedef {import('../runner.js').Test262Host} Test262Host
  */
 
 const REPOSITORY_ROOT = new URL('../../../', import.meta.url);
+const FEATURES_MANIFEST_URL = new URL('../features.json', import.meta.url);
 
 /**
  * @param {{ root: string | URL, harnessDirectory?: string }} options
@@ -62,12 +70,16 @@ export async function main(argv) {
     root: options.root,
     harnessDirectory: options.harnessDirectory,
   });
+  const supportedFeatures = resolveSupportedFeatures({
+    cliFeatures: options.features,
+    manifestText: await readFeaturesManifestText(),
+  });
   const { lines, failed } = await runTest262({
     engine: { createRealm, evaluateScript },
     host,
     paths: options.paths,
     includeMalformed: options.includeMalformed,
-    supportedFeatures: options.features,
+    supportedFeatures,
     skipFeatures: options.skipFeatures,
   });
 
@@ -79,11 +91,27 @@ export async function main(argv) {
 }
 
 /**
+ * Reads the checked-in feature manifest's raw text. A missing file is
+ * treated as an empty manifest — the same "unreadable is absent" rule
+ * `selection.js` applies to the test-selection manifest — rather than
+ * crashing every invocation of this CLI on a tree that predates the file.
+ *
+ * @returns {Promise<string>}
+ */
+async function readFeaturesManifestText() {
+  try {
+    return await readFile(FEATURES_MANIFEST_URL, 'utf8');
+  } catch {
+    return '[]';
+  }
+}
+
+/**
  * @param {readonly string[]} argv
  * @returns {{
  *   root: string,
  *   harnessDirectory: string,
- *   features: string[],
+ *   features: string[] | undefined,
  *   skipFeatures: string[],
  *   includeMalformed: boolean,
  *   paths: string[],
@@ -92,8 +120,8 @@ export async function main(argv) {
 function parseArguments(argv) {
   let root = 'test/fixtures/test262';
   let harnessDirectory = DEFAULT_HARNESS_DIRECTORY;
-  /** @type {string[]} */
-  let features = [];
+  /** @type {string[] | undefined} */
+  let features;
   /** @type {string[]} */
   let skipFeatures = [];
   let includeMalformed = false;
