@@ -39,7 +39,7 @@ export class EngineFunction extends EngineObject {
    * @param {EngineFunctionOptions} options
    */
   constructor({ realm, parameterNames, scope, strict, execute }) {
-    super(realm.intrinsics.functionPrototype);
+    super(realm.intrinsics.functionPrototype, 'Function');
 
     /** @type {Realm} */
     this.realm = realm;
@@ -268,7 +268,7 @@ export class ArgumentsObject extends EngineObject {
    * @param {EnvironmentRecordLike} env
    */
   constructor(prototype, env) {
-    super(prototype);
+    super(prototype, 'Arguments');
 
     /** @type {EnvironmentRecordLike} */
     this._environment = env;

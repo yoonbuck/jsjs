@@ -7,7 +7,6 @@ const HOST_ONLY_GLOBAL_NAMES = [
   'process',
   'globalThis',
   'require',
-  'Object',
   'Array',
   'console',
 ];

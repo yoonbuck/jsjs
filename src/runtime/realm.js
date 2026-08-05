@@ -10,6 +10,10 @@ import {
   createErrorIntrinsics,
   installErrorConstructors,
 } from '../builtins/errors.js';
+import {
+  createObjectIntrinsics,
+  installObjectConstructor,
+} from '../builtins/object.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -57,6 +61,10 @@ export class Realm {
         );
       },
     });
+
+    const objectIntrinsics = createObjectIntrinsics(this);
+    Object.assign(this.intrinsics, objectIntrinsics);
+    installObjectConstructor(this.globalObject, objectIntrinsics);
   }
 
   /**

@@ -17,8 +17,9 @@ import { GuestErrorSignal } from './completion.js';
 export class EngineObject {
   /**
    * @param {EngineObject | null} [prototype=null]
+   * @param {string} [className='Object']
    */
-  constructor(prototype = null) {
+  constructor(prototype = null, className = 'Object') {
     if (prototype !== null && !(prototype instanceof EngineObject)) {
       throw new TypeError(
         'EngineObject prototype must be an EngineObject or null',
@@ -26,9 +27,17 @@ export class EngineObject {
     }
 
     this._prototype = prototype;
+    this._className = className;
     this._extensible = true;
     /** @type {Map<PropertyKey, CompletePropertyDescriptor>} */
     this._properties = new Map();
+  }
+
+  /**
+   * @returns {string}
+   */
+  getClassName() {
+    return this._className;
   }
 
   /**
