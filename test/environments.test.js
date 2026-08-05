@@ -190,6 +190,71 @@ const tests = [
       assertSame(env.getBindingValue('value', true), 'mutated-directly');
     },
   },
+  {
+    name: 'createGlobalVarBinding creates an own non-configurable property for a name inherited from the global prototype',
+    run() {
+      const globalPrototype = new EngineObject(null);
+      globalPrototype.defineOwnProperty('toString', {
+        value: 'inherited',
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const globalObject = new EngineObject(globalPrototype);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      // Sanity check: the property is only inherited, not own, before the
+      // var binding is created.
+      assertSame(globalObject.getOwnProperty('toString'), undefined);
+      assertSame(globalObject.hasProperty('toString'), true);
+
+      // `var toString;` at the top level, i.e. a non-deletable global var
+      // binding colliding with an inherited intrinsic name.
+      env.createGlobalVarBinding('toString', false);
+
+      const ownDescriptor = globalObject.getOwnProperty('toString');
+      if (ownDescriptor === undefined) {
+        throw new Error('Expected toString to become an own property');
+      }
+      assertSame(ownDescriptor.value, undefined);
+      assertSame(ownDescriptor.writable, true);
+      assertSame(ownDescriptor.configurable, false);
+
+      // Assigning through the binding must not be able to widen
+      // configurability of the own property that was already created.
+      env.setMutableBinding('toString', 'assigned', true);
+      const afterAssignment = globalObject.getOwnProperty('toString');
+      if (afterAssignment === undefined) {
+        throw new Error('Expected toString to remain an own property');
+      }
+      assertSame(afterAssignment.value, 'assigned');
+      assertSame(afterAssignment.configurable, false);
+
+      // Deleting must fail: the property is non-configurable and the name
+      // was declared non-deletable.
+      assertSame(env.deleteBinding('toString'), false);
+    },
+  },
+  {
+    name: 'createGlobalVarBinding is a no-op on a non-extensible global object without the own property',
+    run() {
+      const globalObject = new EngineObject(null);
+      globalObject.preventExtensions();
+
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      env.createGlobalVarBinding('missingVar', true);
+
+      assertSame(globalObject.getOwnProperty('missingVar'), undefined);
+      // Reading the binding value should behave as an unresolvable
+      // reference in strict mode since no property was ever created.
+      assertThrows(
+        () => env.getBindingValue('missingVar', true),
+        ReferenceError,
+      );
+    },
+  },
 ];
 
 export default tests;

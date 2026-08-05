@@ -204,6 +204,26 @@ export class ObjectEnvironmentRecord {
   }
 
   /**
+   * Reports whether the binding object carries `name` as an *own* property,
+   * ignoring anything only visible through the prototype chain. Used by
+   * `GlobalEnvironmentRecord#createGlobalVarBinding`, which must not treat
+   * an inherited intrinsic (e.g. `toString`) as already declared.
+   *
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  hasOwnBinding(name) {
+    return this.bindingObject.getOwnProperty(name) !== undefined;
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  isExtensible() {
+    return this.bindingObject.isExtensible();
+  }
+
+  /**
    * @param {PropertyKey} name
    * @param {boolean} [deletable=true]
    * @returns {void}
@@ -320,12 +340,28 @@ export class GlobalEnvironmentRecord {
    * Ensures the global object carries a mutable, `var`-style binding for
    * `name`, initialized to `undefined` if it did not already exist.
    *
+   * Existence is checked via the binding object's *own*-property presence
+   * (not `HasBinding`/`[[HasProperty]]`, which also sees inherited
+   * properties): a `var` declaration whose name collides with an inherited
+   * intrinsic (e.g. `toString`) must still create an own property on the
+   * global object with the caller-supplied `deletable`/configurable
+   * semantics. Skipping creation here would leave the first assignment to
+   * fall through to `[[Put]]`, which always creates new own properties as
+   * configurable, silently losing the intended non-configurable var
+   * semantics. If the global object is not extensible and does not already
+   * have an own property for `name`, the property is not created (matching
+   * `CreateGlobalVarBinding`'s extensibility check) and `name` still isn't
+   * bound afterward.
+   *
    * @param {PropertyKey} name
    * @param {boolean} deletable
    * @returns {void}
    */
   createGlobalVarBinding(name, deletable) {
-    if (!this.objectRecord.hasBinding(name)) {
+    const hasOwnProperty = this.objectRecord.hasOwnBinding(name);
+    const extensible = this.objectRecord.isExtensible();
+
+    if (!hasOwnProperty && extensible) {
       this.objectRecord.createMutableBinding(name, deletable);
       this.objectRecord.setMutableBinding(name, undefined, false);
     }
