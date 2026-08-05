@@ -1,0 +1,18 @@
+{
+  "harnessDirectory": "harness",
+  "tests": [
+    "test/feature-skip.js",
+    "test/includes.js",
+    "test/no-strict.js",
+    "test/only-strict.js",
+    "test/parse-negative.js",
+    "test/positive.js",
+    "test/raw.js",
+    "test/runtime-negative.js",
+    "test/supported-feature.js"
+  ],
+  "malformed": [
+    "malformed/missing-frontmatter.js",
+    "malformed/negative-without-type.js"
+  ]
+}

@@ -10,7 +10,9 @@ const globals = {
 
 export default [
   {
-    ignores: ['**/node_modules/**'],
+    // Test262 fixtures are guest scripts, not host modules: they reference
+    // harness globals and deliberately contain invalid syntax.
+    ignores: ['**/node_modules/**', 'test/fixtures/**'],
   },
   {
     files: ['**/*.js'],

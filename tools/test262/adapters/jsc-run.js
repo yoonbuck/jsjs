@@ -1,0 +1,55 @@
+/**
+ * Entry point for `jsc -m tools/test262/adapters/jsc-run.js`.
+ *
+ * It exists so `adapters/jsc.js` stays import-safe: the shared test suite
+ * imports that module for its host implementation and must not trigger a run.
+ * The shell has no argument vector, so configuration comes from globals the
+ * launcher can set (`jsjsTest262Root`, `jsjsTest262Features`) and otherwise
+ * falls back to the checked-in fixture tree.
+ */
+
+import { createRealm, evaluateScript } from '../../../src/index.js';
+import { createJscTest262Host, runJscTest262Manifest } from './jsc.js';
+import { moduleUrl, resolveRelativePath } from './paths.js';
+
+const DEFAULT_ROOT = resolveRelativePath(
+  moduleUrl(import.meta),
+  '../../../test/fixtures/test262/',
+);
+const print = /** @type {(text: string) => void} */ (globalThis.print);
+const quit = /** @type {((code?: number) => void) | undefined} */ (
+  globalThis.quit
+);
+
+const host = createJscTest262Host({
+  root:
+    /** @type {string | undefined} */ (globalThis.jsjsTest262Root) ??
+    DEFAULT_ROOT,
+});
+
+// Promise chaining rather than top level await: the project's host floor is
+// ES2020, where top level await does not exist yet.
+runJscTest262Manifest({
+  engine: { createRealm, evaluateScript },
+  host,
+  supportedFeatures: /** @type {string[] | undefined} */ (
+    globalThis.jsjsTest262Features
+  ) ?? ['fixture-subset'],
+}).then(
+  ({ lines, failed }) => {
+    for (const line of lines) {
+      print(line);
+    }
+
+    if (failed > 0 && typeof quit === 'function') {
+      quit(1);
+    }
+  },
+  (error) => {
+    print(String((error && error.stack) || error));
+
+    if (typeof quit === 'function') {
+      quit(1);
+    }
+  },
+);
