@@ -101,9 +101,7 @@ export function toNumber(value) {
     }
 
     if (
-      !/^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/.test(
-        source,
-      )
+      !/^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/.test(source)
     ) {
       return NaN;
     }
