@@ -298,6 +298,169 @@ const tests = [
       );
     },
   },
+  {
+    name: 'Array concat flattens arrays one level and preserves holes',
+    run() {
+      assertSame(
+        run(
+          'var nested = [2, [3]]; var result = [1].concat(nested, 4); ' +
+            'result.length + ":" + result[0] + ":" + result[1] + ":" + ' +
+            'Array.isArray(result[2]) + ":" + result[3];',
+        ),
+        '4:1:2:true:4',
+      );
+      assertSame(
+        run(
+          'var sparse = Array(2); sparse[1] = "x"; var result = [].concat(sparse); ' +
+            'result.length + ":" + result.hasOwnProperty("0") + ":" + ' +
+            'result.hasOwnProperty("1") + ":" + result[1];',
+        ),
+        '2:false:true:x',
+      );
+      assertSame(
+        run(
+          'var o = {0: "x", length: 1}; var result = Array.prototype.concat.call(o, "y"); ' +
+            'result.length + ":" + (result[0] === o) + ":" + result[1];',
+        ),
+        '2:true:y',
+      );
+    },
+  },
+  {
+    name: 'Array join and slice are generic and preserve holes where required',
+    run() {
+      assertSame(run('[1, null, undefined, 4].join("-");'), '1---4');
+      assertSame(
+        run('Array.prototype.join.call({0: "a", 2: "c", length: 3}, "|");'),
+        'a||c',
+      );
+      assertSame(
+        run(
+          'var a = Array(4); a[1] = "x"; var result = a.slice(-3, 3); ' +
+            'result.length + ":" + result.hasOwnProperty("0") + ":" + ' +
+            'result[0] + ":" + result.hasOwnProperty("1");',
+        ),
+        '2:true:x:false',
+      );
+      assertSame(
+        run(
+          'var result = Array.prototype.slice.call({0: "a", 1: "b", length: 2}, 1); ' +
+            'result.length + ":" + result[0];',
+        ),
+        '1:b',
+      );
+    },
+  },
+  {
+    name: 'Array indexOf and lastIndexOf use strict equality and skip holes',
+    run() {
+      assertSame(run('[1, 2, 1].indexOf(1);'), 0);
+      assertSame(run('[1, 2, 1].lastIndexOf(1);'), 2);
+      assertSame(run('[NaN].indexOf(NaN);'), -1);
+      assertSame(run('Array(2).indexOf(undefined);'), -1);
+      assertSame(run('[0, 1, 2, 1].indexOf(1, -2);'), 3);
+      assertSame(run('[0, 1, 2, 1].lastIndexOf(1, -2);'), 1);
+      assertSame(
+        run('Array.prototype.indexOf.call({0: "x", length: 1}, "x");'),
+        0,
+      );
+    },
+  },
+  {
+    name: 'Array every, some, and forEach skip holes and pass callback arguments in order',
+    run() {
+      assertSame(
+        run(
+          'var trace = ""; var a = Array(3); a[1] = 2; ' +
+            'var result = a.every(function (value, index, array) { ' +
+            'trace = trace + value + index + (array === a); return value === 2; }); ' +
+            'result + ":" + trace;',
+        ),
+        'true:21true',
+      );
+      assertSame(
+        run(
+          'var calls = 0; var result = [1, 2, 3].some(function (value) { ' +
+            'calls = calls + 1; return value === 2; }); result + ":" + calls;',
+        ),
+        'true:2',
+      );
+      assertSame(
+        run(
+          'var a = [1, 2, 3]; var trace = ""; a.forEach(function (value, index) { ' +
+            'trace = trace + value + index; if (index === 0) { delete a[1]; a[2] = 4; } }); trace;',
+        ),
+        '1042',
+      );
+      assertSame(
+        run(
+          'var name; try { [1].every(1); } catch (error) { name = error.name; } name;',
+        ),
+        'TypeError',
+      );
+    },
+  },
+  {
+    name: 'Array map and filter preserve callback side effects and hole semantics',
+    run() {
+      assertSame(
+        run(
+          'var a = Array(3); a[1] = 2; var mapped = a.map(function (value) { return value * 3; }); ' +
+            'mapped.length + ":" + mapped.hasOwnProperty("0") + ":" + mapped[1] + ":" + ' +
+            'mapped.hasOwnProperty("2");',
+        ),
+        '3:false:6:false',
+      );
+      assertSame(
+        run(
+          'var filtered = [1, 2, 3, 4].filter(function (value, index) { return value % 2 === 0 && index > 0; }); ' +
+            'filtered.length + ":" + filtered[0] + ":" + filtered[1];',
+        ),
+        '2:2:4',
+      );
+      assertSame(
+        run(
+          'var value; try { [1].map(function () { throw "stop"; }); } ' +
+            'catch (error) { value = error; } value;',
+        ),
+        'stop',
+      );
+    },
+  },
+  {
+    name: 'Array reduce and reduceRight select initial accumulators and skip holes',
+    run() {
+      assertSame(
+        run('[1, 2, 3].reduce(function (a, b) { return a + b; });'),
+        6,
+      );
+      assertSame(
+        run('[1, 2, 3].reduceRight(function (a, b) { return a - b; });'),
+        0,
+      );
+      assertSame(
+        run(
+          'var a = Array(4); a[2] = 5; a.reduce(function (accumulator, value) { return accumulator + value; }, 1);',
+        ),
+        6,
+      );
+      assertSame(
+        run(
+          'var name; try { Array(2).reduce(function (a, b) { return a + b; }); } ' +
+            'catch (error) { name = error.name; } name;',
+        ),
+        'TypeError',
+      );
+      assertSame(
+        run(
+          'var args = ""; [1, 2].reduce(function (accumulator, value, index, array) { ' +
+            'args = accumulator + ":" + value + ":" + index + ":" + (array.length === 2); ' +
+            'return accumulator + value; }, 0); args;',
+        ),
+        '1:2:1:true',
+      );
+    },
+  },
 ];
 
 export default tests;
