@@ -2,7 +2,10 @@ import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineArray } from '../src/runtime/array-object.js';
-import { EngineObject } from '../src/runtime/object.js';
+
+/**
+ * @typedef {import('../src/runtime/object.js').EngineObject} EngineObject
+ */
 
 /**
  * @param {string} source

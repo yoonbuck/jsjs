@@ -1,4 +1,4 @@
-import { assertSame, assertThrows } from './harness/assert.js';
+import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';

@@ -216,13 +216,9 @@ export class EngineFunction extends EngineObject {
    * Code": `null`/`undefined` become the realm's global object and objects
    * are used as-is.
    *
-   * A primitive `this` would be replaced by its `ToObject` wrapper, which
-   * needs `String`/`Number`/`Boolean` objects this milestone does not
-   * provide, so it is rejected explicitly. Guest code cannot reach that
-   * branch yet — property access on a primitive base already rejects for
-   * the same reason, and there is no `Function.prototype.call`/`apply` to
-   * pass an arbitrary `this` — but embedders calling `callFunction`
-   * directly can.
+   * Primitive values are boxed with realm-owned internal wrappers, preserving
+   * ES5 `ToObject` behavior without requiring public `String`, `Number`, or
+   * `Boolean` constructors.
    *
    * @param {unknown} thisValue
    * @returns {unknown}

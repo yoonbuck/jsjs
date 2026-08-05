@@ -1,5 +1,4 @@
 import { EngineArray } from '../runtime/array-object.js';
-import { EngineObject } from '../runtime/object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import {
   toInteger,
@@ -13,6 +12,7 @@ import { requireCallable } from './shared.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
+ * @typedef {import('../runtime/object.js').EngineObject} EngineObject
  */
 
 /**
@@ -277,6 +277,8 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
       relativeStart < 0
         ? maximum(length + relativeStart, 0)
         : minimum(relativeStart, length);
+    // Production ES5 engines delete through the end when deleteCount is omitted,
+    // despite ES5.1's literal undefined-deleteCount wording.
     const deleteCount =
       args.length < 2
         ? args.length === 0
