@@ -368,7 +368,7 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects for-in, switch, with, and labeled statements explicitly',
+    name: 'evaluateScript rejects for-in and with statements explicitly',
     run() {
       const realm = createRealm();
 
@@ -378,26 +378,11 @@ const tests = [
       );
       assertSame(/** @type {any} */ (forIn).nodeType, 'ForInStatement');
 
-      const switchStatement = assertThrows(
-        () => evaluateScript(realm, 'switch (1) { case 1: break; }'),
-        Error,
-      );
-      assertSame(
-        /** @type {any} */ (switchStatement).nodeType,
-        'SwitchStatement',
-      );
-
       const withStatement = assertThrows(
         () => evaluateScript(realm, 'with ({}) {}'),
         Error,
       );
       assertSame(/** @type {any} */ (withStatement).nodeType, 'WithStatement');
-
-      const labeled = assertThrows(
-        () => evaluateScript(realm, 'foo: while (false) { break foo; }'),
-        Error,
-      );
-      assertSame(/** @type {any} */ (labeled).nodeType, 'LabeledStatement');
     },
   },
 ];

@@ -245,6 +245,25 @@ function collectVarNames(node, names) {
       }
       collectVarNames(node.body, names);
       return;
+    case 'TryStatement':
+      collectVarNames(node.block, names);
+      if (node.handler !== null) {
+        collectVarNames(node.handler.body, names);
+      }
+      if (node.finalizer !== null) {
+        collectVarNames(node.finalizer, names);
+      }
+      return;
+    case 'SwitchStatement':
+      for (const switchCase of node.cases) {
+        for (const statement of switchCase.consequent) {
+          collectVarNames(statement, names);
+        }
+      }
+      return;
+    case 'LabeledStatement':
+      collectVarNames(node.body, names);
+      return;
     default:
       return;
   }
@@ -291,6 +310,25 @@ function collectFunctionDeclarations(node, declarations) {
     case 'WhileStatement':
     case 'DoWhileStatement':
     case 'ForStatement':
+      collectFunctionDeclarations(node.body, declarations);
+      return;
+    case 'TryStatement':
+      collectFunctionDeclarations(node.block, declarations);
+      if (node.handler !== null) {
+        collectFunctionDeclarations(node.handler.body, declarations);
+      }
+      if (node.finalizer !== null) {
+        collectFunctionDeclarations(node.finalizer, declarations);
+      }
+      return;
+    case 'SwitchStatement':
+      for (const switchCase of node.cases) {
+        for (const statement of switchCase.consequent) {
+          collectFunctionDeclarations(statement, declarations);
+        }
+      }
+      return;
+    case 'LabeledStatement':
       collectFunctionDeclarations(node.body, declarations);
       return;
     default:
