@@ -128,6 +128,36 @@ const tests = [
     },
   },
   {
+    name: 'non-configurable properties reject enumerable changes',
+    run() {
+      const object = new EngineObject();
+      object.defineOwnProperty(
+        'locked',
+        {
+          value: 1,
+          writable: true,
+          enumerable: true,
+          configurable: false,
+        },
+        true,
+      );
+
+      assertSame(
+        object.defineOwnProperty('locked', { enumerable: false }),
+        false,
+      );
+      assertThrows(
+        () => object.defineOwnProperty('locked', { enumerable: false }, true),
+        TypeError,
+      );
+      const descriptor = object.getOwnProperty('locked');
+      if (descriptor === undefined) {
+        throw new Error('Expected locked descriptor');
+      }
+      assertSame(descriptor.enumerable, true);
+    },
+  },
+  {
     name: 'put respects inherited writability and inherited setters',
     run() {
       const prototype = new EngineObject();

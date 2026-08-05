@@ -142,24 +142,23 @@ export function remainder(left, right) {
  * @returns {boolean | undefined}
  */
 export function abstractRelationalComparison(left, right, leftFirst = true) {
-  const leftPrimitive = leftFirst ? toPrimitive(left, 'number') : undefined;
-  const rightPrimitive = leftFirst
-    ? toPrimitive(right, 'number')
-    : toPrimitive(right, 'number');
-  const finalLeftPrimitive = leftFirst
-    ? leftPrimitive
-    : toPrimitive(left, 'number');
-  const finalRightPrimitive = leftFirst ? rightPrimitive : rightPrimitive;
+  let leftPrimitive;
+  let rightPrimitive;
 
-  if (
-    typeof finalLeftPrimitive === 'string' &&
-    typeof finalRightPrimitive === 'string'
-  ) {
-    return finalLeftPrimitive < finalRightPrimitive;
+  if (leftFirst) {
+    leftPrimitive = toPrimitive(left, 'number');
+    rightPrimitive = toPrimitive(right, 'number');
+  } else {
+    rightPrimitive = toPrimitive(right, 'number');
+    leftPrimitive = toPrimitive(left, 'number');
   }
 
-  const leftNumber = toNumber(finalLeftPrimitive);
-  const rightNumber = toNumber(finalRightPrimitive);
+  if (typeof leftPrimitive === 'string' && typeof rightPrimitive === 'string') {
+    return leftPrimitive < rightPrimitive;
+  }
+
+  const leftNumber = toNumber(leftPrimitive);
+  const rightNumber = toNumber(rightPrimitive);
 
   if (Number.isNaN(leftNumber) || Number.isNaN(rightNumber)) {
     return undefined;

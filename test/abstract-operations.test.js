@@ -99,6 +99,14 @@ const tests = [
     },
   },
   {
+    name: 'toPrimitive rejects host wrappers arrays and plain objects',
+    run() {
+      assertThrows(() => toPrimitive(new Number(1)), TypeError);
+      assertThrows(() => toPrimitive([]), TypeError);
+      assertThrows(() => toPrimitive({}), TypeError);
+    },
+  },
+  {
     name: 'equality operations follow strict and abstract comparison rules',
     run() {
       const numericObject = new EngineObject();
@@ -151,7 +159,7 @@ const tests = [
     },
   },
   {
-    name: 'abstract relational comparison preserves coercion order and NaN behavior',
+    name: 'abstract relational comparison preserves left-first coercion order',
     run() {
       /** @type {string[]} */
       const trace = [];
@@ -186,9 +194,50 @@ const tests = [
 
       assertSame(abstractRelationalComparison(left, right, true), true);
       assertSame(JSON.stringify(trace), '["left","right"]');
+    },
+  },
+  {
+    name: 'abstract relational comparison preserves right-first coercion order',
+    run() {
+      /** @type {string[]} */
+      const trace = [];
+      const left = new EngineObject();
+      left.defineOwnProperty(
+        'valueOf',
+        {
+          value() {
+            trace.push('left');
+            return 2;
+          },
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        },
+        true,
+      );
+      const right = new EngineObject();
+      right.defineOwnProperty(
+        'valueOf',
+        {
+          value() {
+            trace.push('right');
+            return 3;
+          },
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        },
+        true,
+      );
+
       trace.length = 0;
       assertSame(abstractRelationalComparison(left, right, false), true);
       assertSame(JSON.stringify(trace), '["right","left"]');
+    },
+  },
+  {
+    name: 'abstract relational comparison handles NaN and string comparison',
+    run() {
       assertSame(abstractRelationalComparison(NaN, 1), undefined);
       assertSame(abstractRelationalComparison('20', '3'), true);
     },
