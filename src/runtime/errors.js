@@ -87,3 +87,34 @@ export function createUnsupportedNodeError(node) {
       : String(node);
   return new UnsupportedNodeError(type);
 }
+
+/**
+ * Signals that the evaluator recognizes a node (e.g. `UnaryExpression`,
+ * `BinaryExpression`, `AssignmentExpression`) but not the specific operator
+ * it carries (e.g. bitwise `&`, compound `+=`). This is an engine-limitation
+ * error distinct from `UnsupportedNodeError`, which is reserved for AST node
+ * types the evaluator does not dispatch at all.
+ */
+export class UnsupportedOperatorError extends Error {
+  /**
+   * @param {string} kind
+   * @param {string} operator
+   */
+  constructor(kind, operator) {
+    super(`Unsupported ${kind} operator: ${operator}`);
+    this.name = 'UnsupportedOperatorError';
+    /** @type {string} */
+    this.kind = kind;
+    /** @type {string} */
+    this.operator = operator;
+  }
+}
+
+/**
+ * @param {string} kind
+ * @param {string} operator
+ * @returns {UnsupportedOperatorError}
+ */
+export function createUnsupportedOperatorError(kind, operator) {
+  return new UnsupportedOperatorError(kind, operator);
+}

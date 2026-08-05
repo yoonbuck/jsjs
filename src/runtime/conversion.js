@@ -33,6 +33,27 @@ export function toPrimitive(value, preferredType = 'default') {
 
 /**
  * @param {unknown} value
+ * @returns {boolean}
+ */
+export function toBoolean(value) {
+  if (value === undefined || value === null) {
+    return false;
+  }
+
+  switch (typeof value) {
+    case 'boolean':
+      return value;
+    case 'number':
+      return value !== 0 && !Number.isNaN(value);
+    case 'string':
+      return value.length > 0;
+    default:
+      return true;
+  }
+}
+
+/**
+ * @param {unknown} value
  * @returns {number}
  */
 export function toNumber(value) {

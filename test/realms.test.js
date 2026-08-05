@@ -107,12 +107,14 @@ const tests = [
     run() {
       const realm = createRealm();
 
+      // Task 5 implements `var x = 1;`; functions are Task 6, so
+      // `FunctionDeclaration` is still an explicitly unsupported node.
       const error = assertThrows(
-        () => evaluateScript(realm, 'var x = 1;'),
+        () => evaluateScript(realm, 'function f() {}'),
         Error,
       );
       assertSame(/Unsupported AST node/.test(error.message), true);
-      assertSame(/** @type {any} */ (error).nodeType, 'VariableDeclaration');
+      assertSame(/** @type {any} */ (error).nodeType, 'FunctionDeclaration');
     },
   },
   {
@@ -120,8 +122,11 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      const error = assertThrows(() => evaluateScript(realm, '1 + 1;'), Error);
-      assertSame(/** @type {any} */ (error).nodeType, 'ExpressionStatement');
+      // Task 5 implements `1 + 1;`; member access is Task 6, so a
+      // `MemberExpression` inside an expression statement is still
+      // explicitly unsupported.
+      const error = assertThrows(() => evaluateScript(realm, 'a.b;'), Error);
+      assertSame(/** @type {any} */ (error).nodeType, 'MemberExpression');
     },
   },
   {
