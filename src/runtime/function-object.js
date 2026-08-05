@@ -85,17 +85,23 @@ export class EngineFunction extends EngineObject {
         realm.intrinsics.throwTypeErrorFunction
       );
 
-      if (thrower !== undefined) {
-        /** @type {import('./descriptors.js').PropertyDescriptorRecord} */
-        const poisonPill = {
-          get: thrower,
-          set: thrower,
-          enumerable: false,
-          configurable: false,
-        };
-        this.defineOwnProperty('caller', poisonPill);
-        this.defineOwnProperty('arguments', poisonPill);
+      if (thrower === undefined) {
+        // The realm always bootstraps %ThrowTypeError% before any function
+        // is created, so a missing thrower indicates a broken realm setup.
+        throw new TypeError(
+          'Realm is missing required %ThrowTypeError% intrinsic',
+        );
       }
+
+      /** @type {import('./descriptors.js').PropertyDescriptorRecord} */
+      const poisonPill = {
+        get: thrower,
+        set: thrower,
+        enumerable: false,
+        configurable: false,
+      };
+      this.defineOwnProperty('caller', poisonPill);
+      this.defineOwnProperty('arguments', poisonPill);
     }
   }
 
@@ -117,7 +123,7 @@ export class EngineFunction extends EngineObject {
       if (error instanceof GuestErrorSignal) {
         // Convert the pre-construction signal into a fully-built guest error
         // object and re-throw as a ThrowSignal so the evaluator's throw
-        // machinery and future try/catch handling can intercept it.
+        // machinery and try/catch handling can intercept it.
         throw new ThrowSignal(
           createGuestError(this.realm, error.typeName, error.guestMessage),
         );
@@ -250,12 +256,10 @@ export class EngineFunction extends EngineObject {
  * descriptors, so the object's own properties stay observable as ordinary
  * writable data properties exactly as the specification requires.
  *
- * ES5 10.6 also unmaps an index on `delete arguments[i]`. That branch is
- * not implemented here because nothing can reach it: the `delete` operator
- * is an unsupported unary operator, this class is not part of the engine's
- * public surface, and no engine-internal caller deletes an arguments
- * property. It belongs with the task that implements `delete`, where it
- * can be driven by a test.
+ * ES5 10.6 also unmaps an index on `delete arguments[i]`. This is implemented
+ * in `ArgumentsObject.delete()` below: the override calls `super.delete()` to
+ * remove the own property, then removes the corresponding entry from the
+ * parameter map so the alias to the formal-parameter binding is severed.
  */
 export class ArgumentsObject extends EngineObject {
   /**
@@ -412,9 +416,17 @@ export function createArgumentsObject(functionObject, args, env) {
     // non-configurable accessor properties that each throw a TypeError on
     // read or write.  The shared %ThrowTypeError% intrinsic is used so every
     // strict arguments object in the same realm shares the same thrower.
-    const thrower = /** @type {EngineFunction} */ (
+    const thrower = /** @type {EngineFunction | undefined} */ (
       functionObject.realm.intrinsics.throwTypeErrorFunction
     );
+
+    if (thrower === undefined) {
+      // The realm always bootstraps %ThrowTypeError% before any function
+      // is created, so a missing thrower indicates a broken realm setup.
+      throw new TypeError(
+        'Realm is missing required %ThrowTypeError% intrinsic',
+      );
+    }
 
     /** @type {import('./descriptors.js').PropertyDescriptorRecord} */
     const poisonPill = {

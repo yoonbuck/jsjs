@@ -1,5 +1,5 @@
 import { EngineObject } from './object.js';
-import { toNumber } from './conversion.js';
+import { toNumber, toUint32 } from './conversion.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -222,16 +222,6 @@ export function toArrayIndex(name) {
   }
 
   return index;
-}
-
-/**
- * Implements ECMA-262 9.6 `ToUint32`.
- *
- * @param {unknown} value
- * @returns {number}
- */
-function toUint32(value) {
-  return toNumber(value) >>> 0;
 }
 
 /**

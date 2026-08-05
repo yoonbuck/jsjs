@@ -16,8 +16,10 @@ import { createReturnCompletion } from '../runtime/completion.js';
  */
 
 /**
- * The five native error names this milestone installs, in the order they are
- * listed in ECMA-262 15.11.6.
+ * The four native error names this milestone installs. ECMA-262 15.11.6 lists
+ * six (`EvalError`, `RangeError`, `ReferenceError`, `SyntaxError`,
+ * `TypeError`, `URIError`); this engine implements the four that are needed
+ * for current guest-visible semantics.
  */
 const ERROR_NAMES = /** @type {const} */ ([
   'TypeError',
@@ -122,7 +124,8 @@ function buildErrorConstructor(realm, name, errorPrototype) {
     configurable: true,
   });
 
-  // Length is 1 per the spec (the `message` parameter).
+  // Name of the error subclass, per 15.11.7.9 (the auto-generated name from
+  // EngineFunction is empty; we shadow it with the real error name here).
   ctor.defineOwnProperty('name', {
     value: name,
     writable: false,
@@ -256,14 +259,12 @@ export function createGuestError(realm, typeName, message) {
 
   const instance = new EngineObject(proto);
 
-  if (message !== undefined) {
-    instance.defineOwnProperty('message', {
-      value: message,
-      writable: true,
-      enumerable: false,
-      configurable: true,
-    });
-  }
+  instance.defineOwnProperty('message', {
+    value: message,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
 
   return instance;
 }

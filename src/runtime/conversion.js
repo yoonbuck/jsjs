@@ -174,7 +174,9 @@ export function toInt32(value) {
     return int32bit - 2 ** 32;
   }
 
-  return int32bit;
+  // Normalize -0 to +0: the spec's ToInt32 result set is [-2^31, 2^31),
+  // which does not include -0 (only integer values are in the result).
+  return int32bit === 0 ? 0 : int32bit;
 }
 
 /**
@@ -197,5 +199,7 @@ export function toUint32(value) {
     int32bit += 2 ** 32;
   }
 
-  return int32bit;
+  // Normalize -0 to +0: the spec's ToUint32 result set is [0, 2^32), which
+  // does not include -0.
+  return int32bit === 0 ? 0 : int32bit;
 }

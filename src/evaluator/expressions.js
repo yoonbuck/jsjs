@@ -320,10 +320,13 @@ function applyBinaryOperator(operator, left, right) {
     case '^':
       return bitwiseXOR(left, right);
     case 'in': {
+      // ES5 11.8.7 step 5: check RHS type BEFORE any ToString(lval) call,
+      // so a guest toString/valueOf on the LHS cannot run or override the
+      // thrown error when the RHS is not an object.
       if (!(right instanceof EngineObject)) {
         throw new GuestErrorSignal(
           'TypeError',
-          `Cannot use 'in' operator to search for '${toString(left)}' in ${right === null ? 'null' : typeof right}`,
+          `Cannot use 'in' operator to search for key in ${right === null ? 'null' : typeof right}`,
         );
       }
 
@@ -454,6 +457,13 @@ function evaluateAssignmentExpression(node, context) {
  * @returns {number}
  */
 function evaluateUpdateExpression(node, context) {
+  if (
+    node.argument.type !== 'Identifier' &&
+    node.argument.type !== 'MemberExpression'
+  ) {
+    throw createUnsupportedNodeError(node.argument);
+  }
+
   const reference = /** @type {Reference} */ (
     evaluateExpression(node.argument, context)
   );
