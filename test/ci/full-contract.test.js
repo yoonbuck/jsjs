@@ -17,7 +17,7 @@
  * one.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { assertSame } from '../harness/assert.js';
@@ -113,6 +113,30 @@ function npmRun(script, hint) {
 }
 
 /**
+ * Runs an npm script that is *expected* to fail and returns its combined
+ * output, so a contract can assert on the failure itself instead of only on
+ * the happy path.
+ *
+ * @param {string} script
+ * @returns {{ status: number | null, output: string }}
+ */
+function npmRunExpectingFailure(script) {
+  const result = spawnSync('npm', ['run', '--silent', script], {
+    cwd: REPOSITORY_ROOT_PATH,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+
+  if (result.error !== undefined) {
+    throw new Error(
+      `npm run ${script} could not start: ${result.error.message}`,
+    );
+  }
+
+  return { status: result.status, output: `${result.stdout}${result.stderr}` };
+}
+
+/**
  * @param {string} output
  * @returns {any[]}
  */
@@ -179,6 +203,31 @@ export default [
     name: 'npm run format passes for real',
     run: () => {
       npmRun('format');
+    },
+  },
+  {
+    name: 'npm run format really checks engine sources, not only the tooling around them',
+    run: async () => {
+      const probe = 'src/format-scope-probe.js';
+      const probeUrl = new URL(probe, REPOSITORY_ROOT_URL);
+      await writeFile(probeUrl, 'export const probe   =   1\n');
+
+      try {
+        const { status, output } = npmRunExpectingFailure('format');
+
+        assertSame(
+          status === 0,
+          false,
+          'a misformatted engine source must fail npm run format',
+        );
+        assertSame(
+          output.includes(probe),
+          true,
+          `npm run format never looked at ${probe}:\n${output}`,
+        );
+      } finally {
+        await rm(probeUrl, { force: true });
+      }
     },
   },
   {

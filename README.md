@@ -31,7 +31,7 @@ through `prepare`.
 | `npm run vendor:sync`               | Refresh `vendor/` from the pinned dependencies                                                                               |
 | `npm run vendor:check`              | Fail if `vendor/` has drifted from the pinned dependencies                                                                   |
 | `npm run typecheck`                 | `tsc` in checkJs mode                                                                                                        |
-| `npm run format`                    | Prettier `--check` over every tracked source file                                                                            |
+| `npm run format`                    | Prettier `--check` over the whole repository, minus the generated and guest-owned trees `.prettierignore` names              |
 | `npm run lint`                      | ESLint only                                                                                                                  |
 | `npm run ci:generate`               | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                            |
 | `npm run ci:check`                  | Fail if the committed workflow has drifted from `tools/ci/pipeline.js`                                                       |
@@ -290,7 +290,15 @@ Every push and pull request against `main` runs nine jobs:
 
 `format` and `lint` are separate jobs (and separate npm scripts) so a
 formatting-only failure and a linting-only failure are distinguishable in CI
-without re-reading combined output. `vendor` runs `vendor:check` — a read-only
+without re-reading combined output. `format` checks the repository as a whole
+(`prettier --check .`) rather than an allowlist of paths, so a new source file
+is covered the moment it is written; the only exclusions are the generated and
+guest-owned trees `.prettierignore` names, each with the reason it owns its own
+bytes. `test/node/repository-invariants.test.js` fails if an engine source ever
+falls outside that scope — through a narrowed script or through a new ignore
+entry — and `npm run ci:contract` proves the scope for real by making
+`npm run format` fail on a deliberately misformatted file under `src/`.
+`vendor` runs `vendor:check` — a read-only
 integrity check — as a fast-failing gate the test jobs depend on via `needs`, so
 pin/vendor drift is caught before those jobs spend time on it; `npm ci`'s
 `prepare` script already writes `vendor/` fresh on every job, so this

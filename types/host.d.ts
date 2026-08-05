@@ -28,6 +28,10 @@ declare module 'node:fs/promises' {
     path: string | URL,
     options?: { recursive?: boolean },
   ): Promise<string | undefined>;
+  export function rm(
+    path: string | URL,
+    options?: { force?: boolean; recursive?: boolean },
+  ): Promise<void>;
 }
 
 declare module 'node:url' {

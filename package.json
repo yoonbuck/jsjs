@@ -15,7 +15,7 @@
     "vendor:check": "node tools/vendor/sync.js --check",
     "prepare": "node tools/vendor/sync.js",
     "typecheck": "tsc -p jsconfig.json",
-    "format": "prettier --check package.json jsconfig.json eslint.config.js .prettierrc.json src/parser-dependency.js test/*.js test/harness/*.js test/node/*.js test/ci/*.js tools/ci/*.js tools/test262/*.js tools/test262/*.json tools/test262/adapters/*.js tools/vendor/*.js types/*.d.ts",
+    "format": "prettier --check .",
     "lint": "ESLINT_USE_FLAT_CONFIG=true eslint .",
     "ci:generate": "node tools/ci/pipeline.js",
     "ci:check": "node tools/ci/pipeline.js --check",
