@@ -70,6 +70,6 @@ function isSyntaxErrorLike(error) {
       typeof error === 'object' &&
       typeof (/** @type {any} */ (error).message) === 'string' &&
       typeof (/** @type {any} */ (error).pos) === 'number' &&
-      !!/** @type {any} */ (error).loc)
+      !!(/** @type {any} */ (error).loc))
   );
 }
