@@ -6,7 +6,7 @@
 export function assertSame(actual, expected) {
   if (!sameValue(actual, expected)) {
     throw new Error(
-      `Expected ${formatValue(actual)} to deeply equal ${formatValue(expected)}`,
+      `Expected ${formatValue(actual)} to be the same value as ${formatValue(expected)}`,
     );
   }
 }
@@ -47,80 +47,5 @@ function formatValue(value) {
  * @returns {boolean}
  */
 function sameValue(actual, expected) {
-  if (Object.is(actual, expected)) {
-    return true;
-  }
-
-  if (!isComparableObject(actual) || !isComparableObject(expected)) {
-    return false;
-  }
-
-  if (Object.getPrototypeOf(actual) !== Object.getPrototypeOf(expected)) {
-    return false;
-  }
-
-  if (Array.isArray(actual)) {
-    return sameArray(
-      /** @type {readonly unknown[]} */ (actual),
-      /** @type {readonly unknown[]} */ (expected),
-    );
-  }
-
-  return sameRecord(
-    /** @type {Record<string, unknown>} */ (actual),
-    /** @type {Record<string, unknown>} */ (expected),
-  );
-}
-
-/**
- * @param {readonly unknown[]} actual
- * @param {readonly unknown[]} expected
- * @returns {boolean}
- */
-function sameArray(actual, expected) {
-  if (actual.length !== expected.length) {
-    return false;
-  }
-
-  for (let index = 0; index < actual.length; index += 1) {
-    if (!sameValue(actual[index], expected[index])) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * @param {Record<string, unknown>} actual
- * @param {Record<string, unknown>} expected
- * @returns {boolean}
- */
-function sameRecord(actual, expected) {
-  const actualKeys = Object.keys(actual);
-  const expectedKeys = Object.keys(expected);
-
-  if (actualKeys.length !== expectedKeys.length) {
-    return false;
-  }
-
-  for (const key of actualKeys) {
-    if (!Object.prototype.hasOwnProperty.call(expected, key)) {
-      return false;
-    }
-
-    if (!sameValue(actual[key], expected[key])) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown> | readonly unknown[]}
- */
-function isComparableObject(value) {
-  return typeof value === 'object' && value !== null;
+  return Object.is(actual, expected);
 }

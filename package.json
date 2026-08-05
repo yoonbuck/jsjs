@@ -5,10 +5,10 @@
   "scripts": {
     "test": "node test/run-node.js test/foundation.test.js",
     "typecheck": "tsc -p jsconfig.json",
-    "lint": "eslint . && prettier --check package.json jsconfig.json eslint.config.js .prettierrc.json test/*.js test/harness/*.js types/*.d.ts"
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint . && prettier --check package.json jsconfig.json eslint.config.js .prettierrc.json test/*.js test/harness/*.js types/*.d.ts"
   },
   "devDependencies": {
-    "eslint": "^9.0.0",
+    "eslint": "^8.57.1",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0"
   }

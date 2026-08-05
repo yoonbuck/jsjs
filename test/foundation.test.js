@@ -3,10 +3,17 @@ import { runTests } from './harness/runner.js';
 
 const tests = [
   {
-    name: 'assert helpers work',
+    name: 'assertSame uses same-value semantics',
     run() {
-      assertSame({ ok: true }, { ok: true });
-      assertThrows(() => assertSame(1, 2), Error);
+      assertSame(NaN, NaN);
+      assertThrows(() => assertSame(0, -0), Error);
+      assertThrows(() => assertSame(new Date(0), new Date(0)), Error);
+      assertThrows(() => assertSame(/ab/i, /ab/), Error);
+      assertThrows(
+        () => assertSame(new Map([['a', 1]]), new Map([['a', 1]])),
+        Error,
+      );
+      assertThrows(() => assertSame(new Set([1]), new Set([1])), Error);
     },
   },
   {
@@ -16,7 +23,7 @@ const tests = [
         {
           name: 'passing assertion',
           run() {
-            assertSame({ ok: true }, { ok: true });
+            assertSame('ready', 'ready');
           },
         },
         {
@@ -43,7 +50,7 @@ const tests = [
             status: 'failed',
             error: {
               name: 'Error',
-              message: 'Expected 1 to deeply equal 2',
+              message: 'Expected 1 to be the same value as 2',
             },
           },
         ]),
