@@ -30,6 +30,16 @@ export class DeclarativeEnvironmentRecord {
   }
 
   /**
+   * ECMA-262 5.1 §10.2.1.1.6: a declarative environment never provides a
+   * `this` value to a call whose callee it resolves.
+   *
+   * @returns {undefined}
+   */
+  implicitThisValue() {
+    return undefined;
+  }
+
+  /**
    * @param {PropertyKey} name
    * @returns {boolean}
    */
@@ -196,8 +206,9 @@ export class ObjectEnvironmentRecord {
   /**
    * @param {EngineObject} bindingObject
    * @param {EnvironmentRecordLike | null} [outer=null]
+   * @param {boolean} [provideThis=false]
    */
-  constructor(bindingObject, outer = null) {
+  constructor(bindingObject, outer = null, provideThis = false) {
     if (!(bindingObject instanceof EngineObject)) {
       throw new TypeError(
         'ObjectEnvironmentRecord requires an EngineObject binding object',
@@ -206,6 +217,20 @@ export class ObjectEnvironmentRecord {
 
     this.outer = outer;
     this.bindingObject = bindingObject;
+    // ECMA-262 5.1 §10.2.1.2: the `with` statement sets this flag so the
+    // binding object becomes the `this` value of calls resolved through it
+    // (§10.2.1.2.6). The global object's object record leaves it false.
+    this.provideThis = provideThis;
+  }
+
+  /**
+   * ECMA-262 5.1 §10.2.1.2.6: return the binding object when `provideThis`
+   * is set (inside a `with`), otherwise `undefined`.
+   *
+   * @returns {EngineObject | undefined}
+   */
+  implicitThisValue() {
+    return this.provideThis ? this.bindingObject : undefined;
   }
 
   /**
@@ -508,6 +533,16 @@ export class GlobalEnvironmentRecord {
   getThisBinding() {
     return this.globalObject;
   }
+
+  /**
+   * ECMA-262 5.1 §10.2.3: the global environment never supplies an implicit
+   * `this` to calls it resolves; the caller falls back to `undefined`.
+   *
+   * @returns {undefined}
+   */
+  implicitThisValue() {
+    return undefined;
+  }
 }
 
 /**
@@ -525,10 +560,15 @@ export function newDeclarativeEnvironment(outer) {
 /**
  * @param {EngineObject} bindingObject
  * @param {EnvironmentRecordLike | null} outer
+ * @param {boolean} [provideThis=false]
  * @returns {ObjectEnvironmentRecord}
  */
-export function newObjectEnvironment(bindingObject, outer) {
-  return new ObjectEnvironmentRecord(bindingObject, outer);
+export function newObjectEnvironment(
+  bindingObject,
+  outer,
+  provideThis = false,
+) {
+  return new ObjectEnvironmentRecord(bindingObject, outer, provideThis);
 }
 
 /**

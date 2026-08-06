@@ -656,6 +656,15 @@ function referenceThisValue(reference) {
       : reference.thisValue;
   }
 
+  // ECMA-262 5.1 §11.2.3 step 7 / §10.3.1: when the callee resolves through an
+  // environment record, the `this` value comes from that record's
+  // ImplicitThisValue. Only a `with` object record (provideThis) yields a
+  // non-`undefined` value here; declarative and global records return
+  // `undefined`.
+  if (reference instanceof Reference && isEnvironmentRecord(reference.base)) {
+    return reference.base.implicitThisValue();
+  }
+
   return undefined;
 }
 

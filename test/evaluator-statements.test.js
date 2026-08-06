@@ -27,7 +27,7 @@ const tests = [
         thisValue: realm.globalObject,
       };
 
-      for (const type of ['WithStatement', 'NotANode']) {
+      for (const type of ['ClassDeclaration', 'NotANode']) {
         const error = assertThrows(
           () => evaluate({ type, body: null }, context),
           Error,
@@ -370,15 +370,19 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects with statements explicitly',
+    name: 'evaluateScript dispatches with statements instead of rejecting them',
     run() {
       const realm = createRealm();
 
-      const withStatement = assertThrows(
-        () => evaluateScript(realm, 'with ({}) {}'),
-        Error,
+      // `with` was previously an explicitly unsupported node; it now
+      // dispatches like any other statement and resolves names against its
+      // object environment.
+      const completion = evaluateScript(
+        realm,
+        'var o = { a: 3 }; var r; with (o) { r = a; } r;',
       );
-      assertSame(/** @type {any} */ (withStatement).nodeType, 'WithStatement');
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 3);
     },
   },
   {

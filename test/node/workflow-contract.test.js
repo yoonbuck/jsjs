@@ -511,11 +511,18 @@ export default [
       );
       assertSame(
         runFeatureProbe({
-          engine,
-          // `with` is still an explicitly unsupported statement node (see
-          // `test/realms.test.js`); `for-in` was this synthetic probe's
-          // original example, but it is real engine behavior now.
-          feature: syntheticFeature('with ({}) {}'),
+          // Every ES5 construct now evaluates, so an engine limitation can no
+          // longer be provoked from source (`with` used to be the example).
+          // Model one directly: an engine whose `evaluateScript` throws a host
+          // error that is not a SyntaxError must be reported as `engine-error`,
+          // never silently accepted as `completed`.
+          engine: {
+            createRealm,
+            evaluateScript() {
+              throw new Error('synthetic engine limitation');
+            },
+          },
+          feature: syntheticFeature('ENGINE_LIMITATION;'),
         }).outcome,
         'engine-error',
       );

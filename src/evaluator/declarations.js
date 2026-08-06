@@ -398,6 +398,11 @@ function collectVarNames(node, names) {
     case 'LabeledStatement':
       collectVarNames(node.body, names);
       return;
+    case 'WithStatement':
+      // ECMA-262 5.1 §12.10: a `with` body shares the enclosing variable
+      // scope, so `var` declarations inside it hoist through unchanged.
+      collectVarNames(node.body, names);
+      return;
     default:
       return;
   }
@@ -464,6 +469,11 @@ function collectFunctionDeclarations(node, declarations) {
       }
       return;
     case 'LabeledStatement':
+      collectFunctionDeclarations(node.body, declarations);
+      return;
+    case 'WithStatement':
+      // A `with` body shares the enclosing variable scope, so a function
+      // declaration inside it hoists like any other block-nested one.
       collectFunctionDeclarations(node.body, declarations);
       return;
     default:

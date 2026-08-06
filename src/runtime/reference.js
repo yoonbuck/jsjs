@@ -76,6 +76,7 @@ function isReference(reference) {
  *   getBindingValue: (name: string | symbol, strict: boolean) => unknown,
  *   setMutableBinding: (name: string | symbol, value: unknown, strict: boolean) => void,
  *   deleteBinding: (name: string | symbol) => boolean,
+ *   implicitThisValue: () => unknown,
  * }}
  */
 export function isEnvironmentRecord(base) {

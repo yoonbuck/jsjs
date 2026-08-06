@@ -96,18 +96,19 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects unsupported statement nodes explicitly',
+    name: 'evaluateScript supports the with statement through the public API',
     run() {
       const realm = createRealm();
 
-      // `with` is not implemented, so `WithStatement` is still an
-      // explicitly unsupported node.
-      const error = assertThrows(
-        () => evaluateScript(realm, 'with ({}) {}'),
-        Error,
+      // `with` was the last explicitly unsupported statement node; it now
+      // resolves identifiers against its object environment like a real
+      // engine, so the public API evaluates it end to end.
+      const completion = evaluateScript(
+        realm,
+        'var o = { a: 41 }; var r; with (o) { r = a; } r;',
       );
-      assertSame(/Unsupported AST node/.test(error.message), true);
-      assertSame(/** @type {any} */ (error).nodeType, 'WithStatement');
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 41);
     },
   },
   {

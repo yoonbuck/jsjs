@@ -22,6 +22,7 @@ import environments from './environments.test.js';
 import realms from './realms.test.js';
 import evaluatorExpressions from './evaluator-expressions.test.js';
 import evaluatorStatements from './evaluator-statements.test.js';
+import withStatements from './with-statement.test.js';
 import functions from './functions.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
 import test262Runner from './test262-runner.test.js';
@@ -85,6 +86,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/evaluator-statements.test.js',
     tests: evaluatorStatements,
+  }),
+  Object.freeze({
+    file: 'test/with-statement.test.js',
+    tests: withStatements,
   }),
   Object.freeze({ file: 'test/functions.test.js', tests: functions }),
   Object.freeze({

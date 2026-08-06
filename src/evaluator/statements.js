@@ -14,6 +14,7 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
 import {
   getIdentifierReference,
   newDeclarativeEnvironment,
+  newObjectEnvironment,
 } from '../runtime/environment.js';
 import { putValue } from '../runtime/reference.js';
 import { enumerableKeysForIn, isEnumerableForIn } from '../runtime/object.js';
@@ -50,6 +51,7 @@ export const STATEMENT_TYPES = new Set([
   'SwitchStatement',
   'LabeledStatement',
   'DebuggerStatement',
+  'WithStatement',
 ]);
 
 /**
@@ -111,6 +113,8 @@ export function evaluateStatement(node, context, labelSet = []) {
       // ECMA-262 5.1 12.15: with no attached debugger the production
       // evaluates to a normal, empty completion — a pure no-op.
       return createNormalCompletion(EMPTY);
+    case 'WithStatement':
+      return evaluateWithStatement(node, context);
     default:
       throw createUnsupportedNodeError(node);
   }
@@ -591,6 +595,41 @@ function runToCompletion(fn, realm) {
 
     throw error;
   }
+}
+
+/**
+ * Evaluates a `WithStatement` node (ECMA-262 5.1 §12.10).
+ *
+ * The object environment created here augments only the *lexical*
+ * environment: `context.variableEnv` is threaded through unchanged, so a
+ * `var` — or a direct `eval("var …")` — inside the body still hoists into the
+ * enclosing function or global variable environment rather than onto the
+ * `with` object, while identifier *resolution* inside the body consults the
+ * object first (§10.2.1). The new object environment sets `provideThis`, so a
+ * method invoked as a bare `name()` inside the body sees the binding object as
+ * its `this` (§10.2.1.2.6, surfaced through `referenceThisValue`).
+ *
+ * The augmented environment exists only in the derived context, so every exit
+ * path — normal, `throw`, `break`, `continue`, `return` — restores the prior
+ * environment automatically, with no `try/finally` required. `ToObject`
+ * (§12.10 step 2) raises a guest `TypeError` for `null`/`undefined`, which
+ * propagates as a host signal exactly like a sub-expression fault in any other
+ * statement and is converted to a `throw` completion at the guest boundary.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Completion}
+ */
+function evaluateWithStatement(node, context) {
+  const value = evaluateExpressionValue(node.object, context);
+  const object = toObject(context.realm, value);
+  const withEnv = newObjectEnvironment(object, context.env, true);
+  const withContext = { ...context, env: withEnv };
+
+  // ECMA-262 5.1 §12.10 returns the body completion; the engine follows the
+  // ES2015 §13.11.7 refinement (matching every real engine and the try
+  // statement above) of replacing an empty value with `undefined`.
+  return updateEmpty(evaluateStatement(node.body, withContext), undefined);
 }
 
 /**
