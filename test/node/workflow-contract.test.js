@@ -72,6 +72,17 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
 const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
+/**
+ * Representative fixtures for each ES5 Date family the engine completed.
+ *
+ * These began as the exact contents of hand-curated `date-*` subset groups,
+ * back when the pinned subset was a small curated selection. The subset is now
+ * derived from upstream directories, so `built-ins/Date` is selected wholesale
+ * and those curated group names no longer exist. The fixtures are still the
+ * independent expectation: whatever the derivation rules become, the subset has
+ * to keep covering every family listed here, so a selection change that quietly
+ * dropped Date coverage still fails this contract.
+ */
 const DATE_GROUPS = Object.freeze({
   'date-accessors-mutators': Object.freeze([
     'test/built-ins/Date/prototype/getUTCFullYear/this-value-valid-date.js',
@@ -662,19 +673,16 @@ export default [
       const subset = parseUpstreamSubset(
         await readRepositoryFile(UPSTREAM_SUBSET_FILE),
       );
-      const groups = new Map(subset.groups.map((group) => [group.name, group]));
+      const selected = new Set(upstreamSubsetPaths(subset));
 
       for (const [name, paths] of Object.entries(DATE_GROUPS)) {
-        const group = groups.get(name);
-
-        assertSame(group !== undefined, true, `missing Date group ${name}`);
-        assertSame(
-          /** @type {import('../../tools/test262/upstream.js').Test262UpstreamGroup} */ (
-            group
-          ).paths.join('\n'),
-          paths.join('\n'),
-          `${name} must keep its compact, representative Date fixtures`,
-        );
+        for (const path of paths) {
+          assertSame(
+            selected.has(path),
+            true,
+            `${name} coverage lost representative fixture ${path}`,
+          );
+        }
       }
     },
   },

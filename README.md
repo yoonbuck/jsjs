@@ -594,8 +594,8 @@ defined exactly under
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 10,833   | 10,833    | 10,833 | 20.22%  |
-| (file, variant) | 102,906     | 20,565   | 20,565    | 20,565 | 19.984% |
+| Files           | 53,575      | 11,328   | 11,328    | 11,328 | 21.144% |
+| (file, variant) | 102,906     | 21,555   | 21,555    | 21,555 | 20.946% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).
