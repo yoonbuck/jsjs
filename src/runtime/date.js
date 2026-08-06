@@ -332,6 +332,7 @@ export class EngineDate extends EngineObject {
 /**
  * @typedef {{
  *   now: () => number,
+ *   standardTimezoneOffset: number,
  *   timezoneOffset: (utcMilliseconds: number) => number,
  * }} DateHost
  */
@@ -341,7 +342,11 @@ export class EngineDate extends EngineObject {
  * clock/time-zone facilities. `timezoneOffset` uses the `getTimezoneOffset`
  * convention: minutes to add to local time to obtain UTC.
  *
- * @param {Partial<DateHost> & { clock?: () => number, timeZoneOffset?: (utcMilliseconds: number) => number }} [adapter]
+ * @param {Partial<DateHost> & {
+ *   clock?: () => number,
+ *   standardTimeZoneOffset?: number,
+ *   timeZoneOffset?: (utcMilliseconds: number) => number,
+ * }} [adapter]
  * @returns {DateHost}
  */
 export function createDateHost(adapter = {}) {
@@ -350,12 +355,18 @@ export function createDateHost(adapter = {}) {
     adapter.timezoneOffset ??
     adapter.timeZoneOffset ??
     ((utcMilliseconds) => new Date(utcMilliseconds).getTimezoneOffset());
+  const standardTimezoneOffset =
+    adapter.standardTimezoneOffset ?? adapter.standardTimeZoneOffset ?? 0;
 
-  if (typeof now !== 'function' || typeof timezoneOffset !== 'function') {
+  if (
+    typeof now !== 'function' ||
+    typeof timezoneOffset !== 'function' ||
+    !Number.isFinite(standardTimezoneOffset)
+  ) {
     throw new TypeError('Date host adapters must be functions');
   }
 
-  return { now, timezoneOffset };
+  return { now, standardTimezoneOffset, timezoneOffset };
 }
 
 /**
@@ -412,11 +423,11 @@ export function dateUTC(args) {
  * call form. Parsing is deliberately independent of host Date.parse.
  *
  * @param {string} source
- * @param {DateHost} host
+ * @param {DateHost} _host
  * @returns {number}
  */
-export function parseDateString(source, host) {
-  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?$/.exec(
+export function parseDateString(source, _host) {
+  const iso = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/.exec(
     source,
   );
 
@@ -424,8 +435,8 @@ export function parseDateString(source, host) {
     const [, yearText, monthText, dateText, hourText, minuteText, secondText, millisecondText, zone] =
       iso;
     const year = Number(yearText);
-    const month = Number(monthText);
-    const date = Number(dateText);
+    const month = monthText === undefined ? 1 : Number(monthText);
+    const date = dateText === undefined ? 1 : Number(dateText);
     const hour = hourText === undefined ? 0 : Number(hourText);
     const minute = minuteText === undefined ? 0 : Number(minuteText);
     const second = secondText === undefined ? 0 : Number(secondText);
@@ -446,12 +457,11 @@ export function parseDateString(source, host) {
       minute,
       second,
       millisecond,
+      false,
     );
 
     if (zone === undefined) {
-      return timeClip(
-        hourText === undefined ? localTime : utcFromLocalTime(localTime, host),
-      );
+      return timeClip(localTime);
     }
 
     if (zone === 'Z') {
@@ -543,6 +553,7 @@ export function dateCallString(utcMilliseconds, host) {
  * @param {number} minute
  * @param {number} second
  * @param {number} millisecond
+ * @param {boolean} [adjustTwoDigitYear=true]
  * @returns {number}
  */
 function dateFromComponents(
@@ -553,10 +564,15 @@ function dateFromComponents(
   minute,
   second,
   millisecond,
+  adjustTwoDigitYear = true,
 ) {
+  if (!Number.isFinite(year)) {
+    return NaN;
+  }
+
   const normalizedYear = toInteger(year);
   const calendarYear =
-    normalizedYear >= 0 && normalizedYear <= 99
+    adjustTwoDigitYear && normalizedYear >= 0 && normalizedYear <= 99
       ? normalizedYear + 1900
       : normalizedYear;
   return makeDate(
@@ -575,7 +591,10 @@ function utcFromLocalTime(localTime, host) {
     return NaN;
   }
 
-  const offset = host.timezoneOffset(localTime);
+  const utcMilliseconds = timeClip(
+    localTime + host.standardTimezoneOffset * MS_PER_MINUTE,
+  );
+  const offset = host.timezoneOffset(utcMilliseconds);
   return Number.isFinite(offset) ? localTime + offset * MS_PER_MINUTE : NaN;
 }
 

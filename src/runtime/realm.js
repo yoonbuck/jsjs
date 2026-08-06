@@ -54,6 +54,8 @@ import { createDateHost } from './date.js';
  *   dateHost?: Partial<import('./date.js').DateHost>,
  *   now?: () => number,
  *   clock?: () => number,
+ *   standardTimezoneOffset?: number,
+ *   standardTimeZoneOffset?: number,
  *   timezoneOffset?: (utcMilliseconds: number) => number,
  *   timeZoneOffset?: (utcMilliseconds: number) => number,
  * }} RealmOptions

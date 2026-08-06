@@ -75,3 +75,68 @@
   repository invariant identified them; the source now passes that invariant.
 - Confirmed the scope contains no public Date getters, setters, or formatting
   method family.
+
+## Round 2 redo
+
+### History and baseline
+
+- Reverted round-one commit `23e8fa6` non-destructively in `bb006bf` before
+  making any new production changes. The revert commit includes the required
+  `Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>`
+  trailer.
+- `git diff --exit-code e4b8279 -- src/builtins/date.js src/runtime/date.js src/runtime/realm.js test/date-builtins.test.js test/suites.js`
+  succeeded, and the pre-existing focused Date suite passed (5 passed), proving
+  the production baseline was restored before the new tests were added.
+
+### Genuine RED
+
+After adding the six focused findings (while production remained at the
+restored baseline), `node test/run-node.js test/date-builtins.test.js` exited
+with status 1. The six expected behavioral failures were:
+
+```text
+Date constructor preserves invalid component years
+Expected false to be the same value as true
+Date.parse defaults incomplete date-only forms to UTC
+Expected NaN to be the same value as 0
+Date.parse defaults unzoned date-times to UTC
+Expected -7200000 to be the same value as 0
+Date constructor applies String-hint conversion to Date objects
+Expected 0 to be the same value as 1
+Date host receives UTC milliseconds for Date call and ES5 local construction
+Expected 18000000 to be the same value as 14400000
+Date.prototype is an invalid Date-branded object
+Expected false to be the same value as true
+```
+
+The existing plain-clone assertion, `new Date(new Date(123)) => 123`, remained
+in that RED run and passed.
+
+### Implementation and GREEN
+
+- Invalid component years now remain invalid before the two-digit component-year
+  adjustment.
+- ISO `YYYY`, `YYYY-MM`, and unzoned date-times parse as UTC; ISO years do not
+  receive component-constructor two-digit-year adjustment.
+- Date construction preserves ordinary internal-value cloning, but invokes
+  String-hint conversion when instance, Date-prototype, or inherited conversion
+  methods have changed.
+- The date host accepts `standardTimezoneOffset` (and
+  `standardTimeZoneOffset`) for choosing the UTC instant supplied to the
+  timezone adapter during local construction.
+- `%Date.prototype%` is a Date-branded object with a `NaN` time value.
+
+`node test/run-node.js test/date-builtins.test.js` passed all 12 focused cases.
+The review follow-up tests for `Date.parse("0000")` and inherited
+`Object.prototype.toString` conversion were separately added RED first, then
+passed GREEN.
+
+### Validation
+
+| Command | Result |
+| --- | --- |
+| `node test/run-node.js test/date-builtins.test.js` | 12 passed |
+| `node test/run-node.js test/date-arithmetic.test.js` | 4 passed |
+| `node test/run-node.js test/node/repository-invariants.test.js` | 14 passed |
+| `npm run typecheck` | Passed |
+| `npm run lint -- --quiet` | Passed |
