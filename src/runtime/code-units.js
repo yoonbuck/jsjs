@@ -105,3 +105,28 @@ export function charCodeOfCodeUnit(unit) {
 
   return low;
 }
+
+/**
+ * Reads the code units of `value` in the half-open range `[from, to)` one
+ * bracket-indexed code unit at a time -- never `String.prototype.slice`/
+ * `substring`/`substr`, which are themselves built-ins this engine defines.
+ * Reading one code unit by index is the representation glue this module's
+ * header describes, while the range/clamp/swap math that produces `from`
+ * and `to` is fully engine-defined at each call site. When `to <= from` (an
+ * empty, swapped, or fully out-of-range pair) the loop never executes and
+ * this returns `""`.
+ *
+ * @param {string} value
+ * @param {number} from
+ * @param {number} to
+ * @returns {string}
+ */
+export function codeUnitsBetween(value, from, to) {
+  let result = '';
+
+  for (let index = from; index < to; index += 1) {
+    result += value[index];
+  }
+
+  return result;
+}

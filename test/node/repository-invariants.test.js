@@ -371,10 +371,25 @@ export default [
     // `src/runtime/code-units.js`.
     name: 'the String built-ins never delegate to a host String.prototype method',
     run: async () => {
-      const files = [
+      // Discovered rather than listed, so a String source file added later
+      // cannot quietly escape the invariant: everything that implements a
+      // String built-in or its data, plus the one file allowed to touch a
+      // host String primitive.
+      const named = [
         'src/builtins/primitive-wrappers.js',
+        'src/builtins/unicode-case-data.js',
         'src/runtime/code-units.js',
       ];
+      const discovered = await listFiles('src/builtins/', (name) =>
+        /^string-.*\.js$/.test(name),
+      );
+      const files = [...named, ...discovered].sort();
+
+      assertSame(
+        discovered.length > 0,
+        true,
+        'the String built-in sources must be discoverable',
+      );
       const hostMethodCall =
         /\.(charAt|charCodeAt|codePointAt|concat|slice|substring|substr|indexOf|lastIndexOf|split|replace|search|match|trim|toLowerCase|toUpperCase|toLocaleLowerCase|toLocaleUpperCase|localeCompare|repeat|padStart|padEnd|startsWith|endsWith|includes|normalize)\s*\(/g;
       /** @type {string[]} */

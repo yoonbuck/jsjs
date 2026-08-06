@@ -11,11 +11,29 @@ import {
   toNumber,
   toString,
   toUint16,
+  toUint32,
 } from '../runtime/conversion.js';
 import {
   charCodeOfCodeUnit,
   codeUnitFromCharCode,
+  codeUnitsBetween,
 } from '../runtime/code-units.js';
+import { isCallable } from '../runtime/descriptors.js';
+import { toLowerCaseString, toUpperCaseString } from './string-case.js';
+import {
+  expandReplacement,
+  matchLiteralPattern,
+  rejectRegExpPattern,
+  replaceFirst,
+  requireLiteralPattern,
+  splitOnString,
+} from './string-pattern.js';
+import {
+  compareCodeUnits,
+  stringIndexOf,
+  stringLastIndexOf,
+  trimString,
+} from './string-search.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import {
   numberToExponential,
@@ -269,6 +287,222 @@ export function createPrimitiveWrapperIntrinsics(realm) {
     }),
   );
   defineMethod(
+    stringPrototype,
+    'indexOf',
+    realm.createNativeFunction({
+      name: 'indexOf',
+      length: 1,
+      call(thisValue, args) {
+        // ES5 15.5.4.7: receiver, then searchString, then position -- and
+        // `ToInteger(undefined)` is +0, so an omitted position starts the
+        // search at the beginning.
+        const value = stringMethodReceiver(thisValue);
+        const search = toString(args[0]);
+        const position = toInteger(args[1]);
+        const start = clampToLength(position, value.length);
+
+        return stringIndexOf(value, search, start);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'lastIndexOf',
+    realm.createNativeFunction({
+      name: 'lastIndexOf',
+      length: 1,
+      call(thisValue, args) {
+        // ES5 15.5.4.8 steps 4-5 differ from indexOf's: the position goes
+        // through ToNumber first, and a NaN result (which includes an
+        // omitted argument) means +Infinity, not +0.
+        const value = stringMethodReceiver(thisValue);
+        const search = toString(args[0]);
+        const numberPosition = toNumber(args[1]);
+        const position = Number.isNaN(numberPosition)
+          ? Infinity
+          : toInteger(numberPosition);
+        const start = clampToLength(position, value.length);
+
+        return stringLastIndexOf(value, search, start);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'localeCompare',
+    realm.createNativeFunction({
+      name: 'localeCompare',
+      length: 1,
+      call(thisValue, args) {
+        // ES5 15.5.4.9 leaves the ordering implementation-defined; this
+        // engine defines it as code-unit lexicographic order (see
+        // `string-search.js`), which is deterministic and host-locale-free.
+        const value = stringMethodReceiver(thisValue);
+
+        return compareCodeUnits(value, toString(args[0]));
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'toLowerCase',
+    realm.createNativeFunction({
+      name: 'toLowerCase',
+      length: 0,
+      call(thisValue) {
+        return toLowerCaseString(stringMethodReceiver(thisValue));
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'toLocaleLowerCase',
+    realm.createNativeFunction({
+      name: 'toLocaleLowerCase',
+      length: 0,
+      call(thisValue) {
+        // ES5 15.5.4.17 permits (but does not require) the host locale to
+        // change the result. This engine has no locale of its own and must
+        // not consult the host's, so it is a documented deterministic alias
+        // of `toLowerCase` -- the locale-insensitive mapping, everywhere.
+        return toLowerCaseString(stringMethodReceiver(thisValue));
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'toUpperCase',
+    realm.createNativeFunction({
+      name: 'toUpperCase',
+      length: 0,
+      call(thisValue) {
+        return toUpperCaseString(stringMethodReceiver(thisValue));
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'toLocaleUpperCase',
+    realm.createNativeFunction({
+      name: 'toLocaleUpperCase',
+      length: 0,
+      call(thisValue) {
+        // ES5 15.5.4.19, the same deterministic alias as
+        // `toLocaleLowerCase` above.
+        return toUpperCaseString(stringMethodReceiver(thisValue));
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'trim',
+    realm.createNativeFunction({
+      name: 'trim',
+      length: 0,
+      call(thisValue) {
+        return trimString(stringMethodReceiver(thisValue));
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'match',
+    realm.createNativeFunction({
+      name: 'match',
+      length: 1,
+      call(thisValue, args) {
+        // ES5 15.5.4.10: the receiver first, then the pattern. A non-RegExp
+        // pattern becomes `new RegExp(ToString(pattern))`, and an omitted
+        // argument becomes `new RegExp(undefined)` -- the empty pattern,
+        // which matches the empty string at position 0.
+        const value = stringMethodReceiver(thisValue);
+        rejectRegExpPattern(args[0], 'match');
+        const pattern = requireLiteralPattern(
+          args[0] === undefined ? '' : toString(args[0]),
+          'match',
+        );
+
+        return matchLiteralPattern(realm, value, pattern);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'search',
+    realm.createNativeFunction({
+      name: 'search',
+      length: 1,
+      call(thisValue, args) {
+        // ES5 15.5.4.12, the same pattern treatment as `match`. There is no
+        // position parameter: the search always starts at 0.
+        const value = stringMethodReceiver(thisValue);
+        rejectRegExpPattern(args[0], 'search');
+        const pattern = requireLiteralPattern(
+          args[0] === undefined ? '' : toString(args[0]),
+          'search',
+        );
+
+        return stringIndexOf(value, pattern, 0);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'replace',
+    realm.createNativeFunction({
+      name: 'replace',
+      length: 2,
+      call(thisValue, args) {
+        // ES5 15.5.4.11's non-RegExp branch: the first occurrence of
+        // ToString(searchValue) only. ES5 leaves the point at which a
+        // non-callable replacement is converted implicit; ES2015 made it
+        // explicit (before the search, so it happens even when nothing
+        // matches) and that is what every engine does, so it is what this
+        // engine does too.
+        const value = stringMethodReceiver(thisValue);
+        rejectRegExpPattern(args[0], 'replace');
+        const search = toString(args[0]);
+        const replaceValue = args[1];
+
+        if (isCallable(replaceValue)) {
+          return replaceFirst(value, search, (matched, position, whole) =>
+            toString(
+              replaceValue.callFunction(undefined, [matched, position, whole]),
+            ),
+          );
+        }
+
+        const replacement = toString(replaceValue);
+
+        return replaceFirst(value, search, (matched, position, whole) =>
+          expandReplacement(replacement, matched, position, whole),
+        );
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'split',
+    realm.createNativeFunction({
+      name: 'split',
+      length: 2,
+      call(thisValue, args) {
+        // ES5 15.5.4.14: the limit (step 5) is converted before the
+        // separator (step 8), and an undefined separator yields the whole
+        // string rather than a search for "undefined".
+        const value = stringMethodReceiver(thisValue);
+        rejectRegExpPattern(args[0], 'split');
+        const limit = args[1] === undefined ? 4294967295 : toUint32(args[1]);
+        // Step 6 returns before step 8, so a zero limit never converts the
+        // separator at all.
+        const separator =
+          limit === 0 || args[0] === undefined ? undefined : toString(args[0]);
+
+        return splitOnString(realm, value, separator, limit);
+      },
+    }),
+  );
+  defineMethod(
     stringConstructor,
     'fromCharCode',
     realm.createNativeFunction({
@@ -467,32 +701,6 @@ function stringMethodReceiver(thisValue) {
  */
 function clampToLength(value, length) {
   return Math.min(Math.max(value, 0), length);
-}
-
-/**
- * Reads the code units of `value` in the half-open range `[from, to)` one
- * bracket-indexed code unit at a time -- never `String.prototype.slice`/
- * `substring`/`substr` -- consistent with the "primitive string
- * indexing/length" allowance `runtime/primitive-object.js` documents:
- * engine strings are host primitive strings, so reading one code unit by
- * index is representation glue, while the range/clamp/swap math that
- * produces `from`/`to` at each call site is fully engine-defined. When
- * `to <= from` (an empty, swapped, or fully out-of-range pair) the loop
- * never executes and this returns `""`.
- *
- * @param {string} value
- * @param {number} from
- * @param {number} to
- * @returns {string}
- */
-function codeUnitsBetween(value, from, to) {
-  let result = '';
-
-  for (let index = from; index < to; index += 1) {
-    result += value[index];
-  }
-
-  return result;
 }
 
 /**

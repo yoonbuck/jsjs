@@ -20,7 +20,19 @@
     "lint": "ESLINT_USE_FLAT_CONFIG=true eslint .",
     "ci:generate": "node tools/ci/pipeline.js",
     "ci:check": "node tools/ci/pipeline.js --check",
-    "ci:contract": "node test/run-ci-contract.js"
+    "ci:contract": "node test/run-ci-contract.js",
+    "unicode:generate": "node tools/unicode/generate-case-data.js",
+    "unicode:check": "node tools/unicode/generate-case-data.js --check"
+  },
+  "unicode": {
+    "version": "16.0.0",
+    "baseUrl": "https://www.unicode.org/Public/16.0.0/ucd/",
+    "files": {
+      "unicodeData": "UnicodeData.txt",
+      "specialCasing": "SpecialCasing.txt",
+      "derivedCoreProperties": "DerivedCoreProperties.txt"
+    },
+    "generatedModule": "src/builtins/unicode-case-data.js"
   },
   "test262": {
     "repository": "https://github.com/tc39/test262.git",
