@@ -132,6 +132,7 @@ unsorted or duplicated path, or a path outside `test/`) and summarizes a finishe
 run per group. The groups carry no execution semantics — they exist so the
 coverage report can say which parts of the language the baseline covers.
 
+
 The local fixture tree in `test/fixtures/test262` stays separate and is run by
 `npm run test262:fixtures`. The two suites answer different questions: the
 fixtures exercise the _runner_ (metadata parsing, variants, negative
@@ -226,6 +227,91 @@ exist only to perform ES5 `ToObject` for `Object(value)`, primitive receivers,
 and non-strict function calls. The error constructors (`Error`, `TypeError`,
 `ReferenceError`, `SyntaxError`, `RangeError`) remain available on every realm's
 global object.
+
+The remaining standard library — `RegExp`, `Math`, `Date`, `JSON`, the
+global `parseInt`/`parseFloat`/`isNaN`/`isFinite` functions, and the ES5 URI
+functions `encodeURI`/`decodeURI`/`encodeURIComponent`/`decodeURIComponent`
+plus Annex B's `escape`/`unescape` — is not implemented yet. The error
+constructors (`Error`, `TypeError`, `ReferenceError`, `SyntaxError`,
+`RangeError`) remain available on every realm's global object.
+
+#### Boxed primitives, autoboxing, realms, and descriptors
+
+All three constructors are realm-local: `createRealm()` builds a fresh
+`String`/`Number`/`Boolean` and a fresh prototype chain, so a wrapper from one
+realm is not an `instanceof` the other realm's constructor and prototype
+mutations never leak between realms. Each constructor is a data property of the
+global object with `{ [[Writable]]: true, [[Enumerable]]: false,
+[[Configurable]]: true }`, each carries a non-writable, non-enumerable,
+non-configurable `prototype`, and every prototype method is
+`{ [[Writable]]: true, [[Enumerable]]: false, [[Configurable]]: true }` with the
+ES5 `length`.
+
+`Boolean.prototype`, `Number.prototype`, and `String.prototype` are themselves
+boxed primitives with `[[Class]]` `"Boolean"`, `"Number"`, and `"String"` and
+primitive values `false`, `+0`, and `""`, so `Object.prototype.toString.call`
+reports the right class and `Number.prototype.valueOf()` is `0`.
+
+Autoboxing goes through the same intrinsics: a property access on a primitive
+performs ES5 `ToObject` against the current realm, so `"abc".charAt(1)` and
+`(1).toFixed(2)` work without materialising a persistent wrapper, and
+`String.prototype.toString`/`valueOf` and the `Boolean`/`Number` equivalents
+still reject a foreign receiver with a `TypeError`. String index access stays
+lazy: `[[GetOwnProperty]]` synthesises `{ [[Writable]]: false, [[Enumerable]]:
+true, [[Configurable]]: false }` for an in-range index rather than eagerly
+populating one property per code unit.
+
+Methods that ES5 defines generically (`charAt`, `indexOf`, `slice`,
+`substring`, `split`, `trim`, the case methods, …) only `CheckObjectCoercible`
+and `ToString` their receiver, so they work on any object; the ones ES5 defines
+on "this String value" (`toString`, `valueOf`) require a String primitive or
+wrapper.
+
+#### Intentional deviations
+
+| Area                                     | Behaviour and why                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `match`, `search` with a string pattern  | ES5 15.5.4.10/15.5.4.12 build `new RegExp(ToString(pattern))`; until the RegExp milestone this engine searches for that string **literally**, syntax characters included, so `"abc".match(".")` is `null`. Every non-RegExp pattern is treated the same way by all four pattern methods, so the rule guest code sees is uniform. |
+| A real `RegExp` argument                 | `match`, `replace`, `search`, and `split` refuse an object whose `[[Class]]` is `"RegExp"` loudly, as an engine limitation, rather than silently coercing it to a string.                                                                                                                                                        |
+| `toExponential(f)` on `0`                | Literal ES5 15.7.4.6 step 8.a resets `f` to 0, making `(0).toExponential(5)` be `"0e+0"`. This follows the ES2015+ errata fix every engine ships: `"0.00000e+0"`.                                                                                                                                                                |
+| `toFixed` receiver vs. argument order    | Literal ES5 15.7.4.5 range-checks `fractionDigits` before validating the receiver. This validates the receiver first (the ES2015+ order, and the order ES5 already used for `toExponential`/`toPrecision`), so `Number.prototype.toFixed.call({}, 21)` throws `TypeError`, not `RangeError`.                                     |
+| `toPrecision(1)` in exponential notation | Literal ES5 15.7.4.7 step 10.c always splits `m` around a `.`, giving `"1.e+2"`. This applies the ES2015+ `p !== 1` guard, so `(123).toPrecision(1)` is `"1e+2"`.                                                                                                                                                                |
+| ES5 argument ranges                      | `toFixed` and `toExponential` accept 0–20 digits and `toPrecision` accepts 1–21, throwing `RangeError` outside them — the ES5.1 ranges, not the wider ES2018+ `toFixed` 0–100 range.                                                                                                                                             |
+| `toLocaleString`                         | ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly `toString()`'s result, with no locale, separator, or `Intl` dependency.                                                                                                                                                                                  |
+| `localeCompare`                          | ES5 15.5.4.9's ordering is implementation-defined and only _recommends_ that canonically equivalent strings compare equal. This uses plain code-unit lexicographic order — the same order the relational operators use — so it is deterministic and host-independent, and `"\u00e9"` vs. `"e\u0301"` compares nonzero.           |
+| `toLocaleLowerCase`/`toLocaleUpperCase`  | ES5 15.5.4.17/15.5.4.19 permit locale-sensitive results; these return exactly their locale-insensitive counterparts, so no host locale or ICU build can change engine output.                                                                                                                                                    |
+| `toLowerCase`/`toUpperCase`              | The Unicode Default Case Conversion algorithm over _code points_, including the locale-insensitive `SpecialCasing.txt` entries and the Final_Sigma condition. Surrogate pairs are decoded, mapped, and re-encoded; unpaired surrogates pass through.                                                                             |
+| `substr`                                 | Annex B rather than the main ES5 body, implemented because it is web reality; `start`/`length` follow B.2.3 including negative `start`.                                                                                                                                                                                          |
+
+#### Unicode data
+
+`String.prototype`'s case methods and `trim` need Unicode tables, and the engine
+carries them as project-owned generated source rather than as a host call:
+`src/builtins/unicode-case-data.js` is written by
+`tools/unicode/generate-case-data.js` from the UCD version pinned in
+`package.json`'s `unicode` field, and its header records the pinned version, the
+three source URLs, and their sha256 digests.
+
+`npm run unicode:check` re-derives every table from those files and fails if the
+module has drifted, but it downloads the UCD (or reads it from `--from=DIR`), so
+it is a documented **local** command and deliberately not a CI job. CI is not
+network-free overall — `npm ci`, the `test-browser` job's Playwright install,
+and the `test262-upstream` job's `tc39/test262` checkout all fetch over the
+network — but no CI job fetches unpinned UCD data, and Unicode conformance
+itself is never verified against the network in CI. What CI does enforce,
+offline, is that the pin and the generated module _agree with each other_ —
+`test/node/repository-invariants.test.js` fails if the module's
+`UNICODE_VERSION` differs from the pinned version, if the pinned `baseUrl` does
+not name that version, if the module header does not record exactly the pinned
+UCD files (no fewer, no stale extras) each with a well-formed sha256 digest
+line. This is a self-consistency check, not a content check: without a local
+copy of the UCD to hash, it cannot confirm a recorded digest is the _correct_
+one for the file it names, only that the pin, the file set, and the header
+shape all agree. A half-updated pin — a version bump without regenerating, or a
+regenerated module without updating the pin — therefore fails
+`npm run test:node` without a network; a wrong-but-well-formed digest, or a
+correctly-shaped header hand-edited to match a stale pin, would not be caught
+by this check alone.
 
 Strict mode is fully implemented at runtime. A `'use strict'` directive
 prologue activates strict semantics for the script or function body it appears
@@ -465,8 +551,8 @@ defined exactly under
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 112      | 112       | 112    | 0.209%  |
-| (file, variant) | 102,075     | 215      | 215       | 215    | 0.211%  |
+| Files           | 53,575      | 355      | 355       | 355    | 0.663%  |
+| (file, variant) | 102,075     | 701      | 701       | 701    | 0.687%  |
 
 430 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).
