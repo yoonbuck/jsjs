@@ -45,8 +45,11 @@ import { createFunctionObject } from './declarations.js';
 // implementation. This closes a loop through the pre-existing intra-evaluator
 // cycle expressions <-> declarations <-> statements; performEval is a
 // call-time function reference, so the ES module live binding is resolved
-// before it is ever invoked. No cycle crosses the realm/builtins boundary
-// because eval.js reaches neither realm.js nor any builtin at runtime.
+// before it is ever invoked. No cycle crosses the realm/builtins boundary:
+// eval.js does reach a builtin transitively (eval.js -> statements.js /
+// declarations.js -> this module -> builtins/regexp.js), but that edge is
+// acyclic because builtins/regexp.js imports only runtime modules and
+// nothing from the evaluator, and no module here reaches realm.js.
 import { performEval } from './eval.js';
 import { createRegExpFromPattern } from '../builtins/regexp.js';
 
