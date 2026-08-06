@@ -443,6 +443,16 @@ const tests = [
             'catch (e) { e instanceof RangeError; }',
           true,
         ],
+        // Array traversal is lazy: an abrupt completion at the first index
+        // must happen without materializing every key up to the captured length.
+        [
+          'try { JSON.parse("[0,[]]", function (k, v) { ' +
+            'if (k === "0" && this.length === 2) { ' +
+            'this[1].length = 4294967295; ' +
+            'Object.defineProperty(this[1], "0", { get: function () { throw new RangeError("first"); } }); ' +
+            '} return v; }); } catch (e) { e instanceof RangeError; }',
+          true,
+        ],
       ]);
     },
   },

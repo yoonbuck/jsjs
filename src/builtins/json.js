@@ -512,8 +512,9 @@ function parseJSONText(realm, text) {
  *
  * A property whose revived value is `undefined` is deleted rather than set,
  * which for an array leaves a hole and does *not* shorten it — the traversal
- * captures the length and the key list before it starts, so a reviver that
- * mutates the structure cannot make the walk revisit or skip a key.
+ * captures an array's length or an object's key list before it starts, so a
+ * reviver that mutates the structure cannot make the walk revisit or skip a
+ * key.
  *
  * @param {EngineObject} holder
  * @param {string} name
@@ -554,19 +555,14 @@ function walk(holder, name, reviver) {
 
 /**
  * @param {EngineObject} array
- * @returns {string[]}
+ * @returns {Generator<string, void, void>}
  */
-function arrayIndexKeys(array) {
+function* arrayIndexKeys(array) {
   const length = toUint32(array.get('length'));
 
-  /** @type {string[]} */
-  const keys = [];
-
   for (let index = 0; index < length; index += 1) {
-    keys.push(String(index));
+    yield String(index);
   }
-
-  return keys;
 }
 
 /**

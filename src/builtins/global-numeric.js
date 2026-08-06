@@ -35,6 +35,7 @@ const INFINITY_TEXT = 'Infinity';
 /** Base-10^7 limbs keep every intermediate product exactly representable. */
 const LIMB_BASE = 10000000;
 const LIMB_DIGITS = 7;
+const OVERFLOW_CHECK_LIMBS = 45;
 
 /**
  * Builds this realm's four numeric global functions (ES5 15.1.2): `parseInt`,
@@ -370,7 +371,9 @@ function radixDigitValue(code, radix) {
  * step rounds), rendered as a decimal string, and handed to the engine's own
  * `ToNumber`, whose decimal-string conversion is correctly rounded by
  * definition. Radix 10 skips the re-encoding, since the digit run already
- * *is* that decimal string.
+ * *is* that decimal string. Once an exact non-decimal prefix itself converts
+ * to Infinity, every longer prefix must do so too, so accumulation stops there
+ * instead of growing limbs for the rest of an arbitrarily long digit run.
  *
  * @param {string} digits
  * @param {number} radix
@@ -398,15 +401,32 @@ function digitRunToNumber(digits, radix) {
       limbs.push(carry % LIMB_BASE);
       carry = Math.floor(carry / LIMB_BASE);
     }
+
+    // Forty-five base-10^7 limbs is the first size that can hold a 309-digit
+    // integer. Smaller positive integers cannot overflow a binary64 Number.
+    if (
+      limbs.length >= OVERFLOW_CHECK_LIMBS &&
+      toNumber(limbsToDecimal(limbs)) === Infinity
+    ) {
+      return Infinity;
+    }
   }
 
+  return toNumber(limbsToDecimal(limbs));
+}
+
+/**
+ * @param {number[]} limbs Little-endian base-10^7 limbs.
+ * @returns {string}
+ */
+function limbsToDecimal(limbs) {
   let decimal = String(limbs[limbs.length - 1]);
 
   for (let limb = limbs.length - 2; limb >= 0; limb -= 1) {
     decimal += padLimb(limbs[limb]);
   }
 
-  return toNumber(decimal);
+  return decimal;
 }
 
 /**

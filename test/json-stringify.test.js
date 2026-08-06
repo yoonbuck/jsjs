@@ -318,6 +318,14 @@ const tests = [
           'var f = function (k, v) { return v; }; JSON.stringify({a:1}, f)',
           '{"a":1}',
         ],
+        // Replacer-array traversal is lazy: index 0 is read before any later
+        // index key is materialized, even at the maximum array length.
+        [
+          'var r = []; r.length = 4294967295; ' +
+            'Object.defineProperty(r, "0", { get: function () { throw new RangeError("first"); } }); ' +
+            'try { JSON.stringify({}, r); } catch (e) { e instanceof RangeError; }',
+          true,
+        ],
       ]);
     },
   },

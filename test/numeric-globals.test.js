@@ -220,6 +220,21 @@ const tests = [
     },
   },
   {
+    name: 'parseInt stops exact non-decimal accumulation once the result must be Infinity',
+    run() {
+      const realm = createRealm();
+
+      realm.globalObject.defineOwnProperty('digits', {
+        value: '1'.repeat(200000),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(evaluateScript(realm, 'parseInt(digits, 2);').value, Infinity);
+    },
+  },
+  {
     name: 'parseInt coerces its string argument with ToString before it reads the radix',
     run() {
       assertExpressions([
@@ -373,6 +388,19 @@ const tests = [
         ),
         true,
       );
+    },
+  },
+  {
+    name: 'Number, isNaN, and isFinite do not trim U+180E as whitespace',
+    run() {
+      assertExpressions([
+        ['Number("\\u180e")', NaN],
+        ['Number("\\u180e1")', NaN],
+        ['isNaN("\\u180e")', true],
+        ['isNaN("\\u180e1")', true],
+        ['isFinite("\\u180e")', false],
+        ['isFinite("\\u180e1")', false],
+      ]);
     },
   },
   {
