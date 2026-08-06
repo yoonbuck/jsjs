@@ -177,6 +177,30 @@ const tests = [
     },
   },
   {
+    name: 'an abrupt with body threads the surrounding loop completion value (ES5.1 12.10 with 13.11.7)',
+    run() {
+      // Regression for the upstream `with/cptn-abrupt-empty` behaviour: a
+      // `break`/`continue` out of a `with` body carries the last meaningful
+      // value the loop produced, and an empty body value becomes undefined.
+      assertSame(
+        run('1; do { 2; with ({}) { 3; break; } 4; } while (false);'),
+        3,
+      );
+      assertSame(
+        run('5; do { 6; with ({}) { break; } 7; } while (false);'),
+        undefined,
+      );
+      assertSame(
+        run('8; do { 9; with ({}) { 10; continue; } 11; } while (false);'),
+        10,
+      );
+      assertSame(
+        run('12; do { 13; with ({}) { continue; } 14; } while (false);'),
+        undefined,
+      );
+    },
+  },
+  {
     name: 'the with environment is restored after a thrown exception',
     run() {
       assertSame(
