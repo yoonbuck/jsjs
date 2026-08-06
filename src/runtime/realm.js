@@ -30,6 +30,16 @@ import {
   createRegExpIntrinsics,
   installRegExpConstructor,
 } from '../builtins/regexp.js';
+import { createMathIntrinsics, installMathObject } from '../builtins/math.js';
+import {
+  createNumericGlobalIntrinsics,
+  installNumericGlobals,
+} from '../builtins/global-numeric.js';
+import {
+  createURIGlobalIntrinsics,
+  installURIGlobals,
+} from '../builtins/global-uri.js';
+import { createJSONIntrinsics, installJSONObject } from '../builtins/json.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -100,6 +110,22 @@ export class Realm {
     const regExpIntrinsics = createRegExpIntrinsics(this);
     Object.assign(this.intrinsics, regExpIntrinsics);
     installRegExpConstructor(this.globalObject, regExpIntrinsics);
+
+    const mathIntrinsics = createMathIntrinsics(this);
+    Object.assign(this.intrinsics, mathIntrinsics);
+    installMathObject(this.globalObject, mathIntrinsics);
+
+    const numericGlobalIntrinsics = createNumericGlobalIntrinsics(this);
+    Object.assign(this.intrinsics, numericGlobalIntrinsics);
+    installNumericGlobals(this.globalObject, numericGlobalIntrinsics);
+
+    const uriGlobalIntrinsics = createURIGlobalIntrinsics(this);
+    Object.assign(this.intrinsics, uriGlobalIntrinsics);
+    installURIGlobals(this.globalObject, uriGlobalIntrinsics);
+
+    const jsonIntrinsics = createJSONIntrinsics(this);
+    Object.assign(this.intrinsics, jsonIntrinsics);
+    installJSONObject(this.globalObject, jsonIntrinsics);
   }
 
   /**
@@ -111,7 +137,7 @@ export class Realm {
   }
 
   /**
-   * @param {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'Error'} typeName
+   * @param {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'URIError' | 'Error'} typeName
    * @param {string} message
    * @returns {EngineObject}
    */

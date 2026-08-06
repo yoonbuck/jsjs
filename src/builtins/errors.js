@@ -11,21 +11,43 @@ import { toString } from '../runtime/conversion.js';
  *   referenceErrorPrototype: EngineObject,
  *   syntaxErrorPrototype: EngineObject,
  *   rangeErrorPrototype: EngineObject,
+ *   uriErrorPrototype: EngineObject,
  * }} ErrorIntrinsics
  */
 
 /**
- * The four native error names this milestone installs. ECMA-262 15.11.6 lists
- * six (`EvalError`, `RangeError`, `ReferenceError`, `SyntaxError`,
- * `TypeError`, `URIError`); this engine implements the four that are needed
- * for current guest-visible semantics.
+ * The native error names this engine installs. ECMA-262 15.11.6 lists six
+ * (`EvalError`, `RangeError`, `ReferenceError`, `SyntaxError`, `TypeError`,
+ * `URIError`); these five are the ones some algorithm in this engine can
+ * actually throw. `EvalError` is left out because ES5 itself says nothing in
+ * the specification throws it — it exists only for compatibility — and this
+ * engine has no `eval` to change that.
  */
 const ERROR_NAMES = /** @type {const} */ ([
   'TypeError',
   'ReferenceError',
   'SyntaxError',
   'RangeError',
+  'URIError',
 ]);
+
+/**
+ * The intrinsic key each native error prototype is published under.
+ *
+ * This is a table rather than a name transformation because the readable key
+ * for `URIError` is `uriErrorPrototype`, which no lowercase-the-first-letter
+ * rule produces — that rule yields `uRIErrorPrototype`. Writing the mapping
+ * out once keeps `createErrorIntrinsics` and `createGuestError` reading the
+ * same key for the same error, which is the only property that matters here.
+ */
+const ERROR_PROTOTYPE_KEYS = Object.freeze({
+  Error: 'errorPrototype',
+  TypeError: 'typeErrorPrototype',
+  ReferenceError: 'referenceErrorPrototype',
+  SyntaxError: 'syntaxErrorPrototype',
+  RangeError: 'rangeErrorPrototype',
+  URIError: 'uriErrorPrototype',
+});
 
 /**
  * Builds one `[[ErrorPrototype]]` object inheriting from `errorPrototype`,
@@ -120,7 +142,7 @@ function buildErrorConstructor(realm, name, errorPrototype) {
 }
 
 /**
- * Builds all five ES5 error constructors and their prototypes for one realm
+ * Builds all six ES5 error constructors and their prototypes for one realm
  * (ECMA-262 15.11). The `%Error.prototype%` object carries `name: "Error"`
  * and `message: ""` as own non-enumerable data properties; each native error
  * prototype inherits from it and shadows only `name` with its own type
@@ -137,6 +159,7 @@ function buildErrorConstructor(realm, name, errorPrototype) {
  *   referenceErrorConstructor: import('./shared.js').NativeFunction,
  *   syntaxErrorConstructor: import('./shared.js').NativeFunction,
  *   rangeErrorConstructor: import('./shared.js').NativeFunction,
+ *   uriErrorConstructor: import('./shared.js').NativeFunction,
  * }}
  */
 export function createErrorIntrinsics(realm) {
@@ -186,11 +209,15 @@ export function createErrorIntrinsics(realm) {
     rangeErrorConstructor: /** @type {import('./shared.js').NativeFunction} */ (
       nativeConstructors['RangeError']
     ),
+    uriErrorPrototype: nativePrototypes['URIError'],
+    uriErrorConstructor: /** @type {import('./shared.js').NativeFunction} */ (
+      nativeConstructors['URIError']
+    ),
   };
 }
 
 /**
- * Installs the five error constructors on `globalObject` as non-enumerable,
+ * Installs the six error constructors on `globalObject` as non-enumerable,
  * writable, configurable data properties per ECMA-262 15.1.
  *
  * @param {EngineObject} globalObject
@@ -205,6 +232,7 @@ export function installErrorConstructors(globalObject, errorIntrinsics) {
     ['ReferenceError', errorIntrinsics.referenceErrorConstructor],
     ['SyntaxError', errorIntrinsics.syntaxErrorConstructor],
     ['RangeError', errorIntrinsics.rangeErrorConstructor],
+    ['URIError', errorIntrinsics.uriErrorConstructor],
   ];
 
   for (const [name, ctor] of ctors) {
@@ -223,9 +251,10 @@ export function installErrorConstructors(globalObject, errorIntrinsics) {
  * `undefined`. This is the internal factory that `GuestErrorSignal`
  * consumers call after locating the appropriate prototype in `intrinsics`.
  *
- * The prototype key mapping follows the intrinsic property names added by
- * `createErrorIntrinsics`: `"TypeError"` → `intrinsics.typeErrorPrototype`,
- * etc. An unknown type name falls back to `intrinsics.errorPrototype`.
+ * The prototype key mapping is `ERROR_PROTOTYPE_KEYS` above:
+ * `"TypeError"` → `intrinsics.typeErrorPrototype`, `"URIError"` →
+ * `intrinsics.uriErrorPrototype`, and so on. An unknown type name falls back
+ * to `intrinsics.errorPrototype`.
  *
  * @param {import('../runtime/realm.js').Realm} realm
  * @param {string} typeName
@@ -235,9 +264,11 @@ export function installErrorConstructors(globalObject, errorIntrinsics) {
 export function createGuestError(realm, typeName, message) {
   const intrinsics = /** @type {any} */ (realm.intrinsics);
 
-  const protoKey = `${typeName.charAt(0).toLowerCase()}${typeName.slice(1)}Prototype`;
+  const protoKey = /** @type {Record<string, string>} */ (ERROR_PROTOTYPE_KEYS)[
+    typeName
+  ];
   const proto =
-    intrinsics[protoKey] instanceof EngineObject
+    protoKey !== undefined && intrinsics[protoKey] instanceof EngineObject
       ? /** @type {EngineObject} */ (intrinsics[protoKey])
       : intrinsics.errorPrototype;
 

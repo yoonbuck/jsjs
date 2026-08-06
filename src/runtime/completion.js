@@ -98,13 +98,13 @@ export class ThrowSignal extends Error {
  */
 export class GuestErrorSignal extends Error {
   /**
-   * @param {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'Error'} typeName
+   * @param {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'URIError' | 'Error'} typeName
    * @param {string} message
    */
   constructor(typeName, message) {
     super(message);
     this.name = 'GuestErrorSignal';
-    /** @type {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'Error'} */
+    /** @type {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'URIError' | 'Error'} */
     this.typeName = typeName;
     /** @type {string} */
     this.guestMessage = message;

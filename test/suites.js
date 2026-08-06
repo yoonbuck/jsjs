@@ -48,6 +48,11 @@ import regexpSyntax from './regexp-syntax.test.js';
 import regexpBuiltins from './regexp-builtins.test.js';
 import regexpExec from './regexp-exec.test.js';
 import stringRegexp from './string-regexp.test.js';
+import mathBuiltins from './math-builtins.test.js';
+import numericGlobals from './numeric-globals.test.js';
+import uriGlobals from './uri-globals.test.js';
+import jsonParse from './json-parse.test.js';
+import jsonStringify from './json-stringify.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -174,5 +179,25 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/string-regexp.test.js',
     tests: stringRegexp,
+  }),
+  Object.freeze({
+    file: 'test/math-builtins.test.js',
+    tests: mathBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/numeric-globals.test.js',
+    tests: numericGlobals,
+  }),
+  Object.freeze({
+    file: 'test/uri-globals.test.js',
+    tests: uriGlobals,
+  }),
+  Object.freeze({
+    file: 'test/json-parse.test.js',
+    tests: jsonParse,
+  }),
+  Object.freeze({
+    file: 'test/json-stringify.test.js',
+    tests: jsonStringify,
   }),
 ]);
