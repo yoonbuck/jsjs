@@ -26,6 +26,14 @@ import {
   formatRecordLine,
   formatReportLines,
 } from '../tools/test262/report.js';
+import {
+  Test262CoverageError,
+  collectTest262Inventory,
+  formatCoverageLines,
+  isTest262TestPath,
+  renderCoverageSummary,
+  summarizeTest262Coverage,
+} from '../tools/test262/coverage.js';
 import { createFixtureTest262Host } from './harness/test262-host.js';
 
 /**
@@ -50,6 +58,9 @@ const FIXTURE_MALFORMED = [
   'malformed/missing-frontmatter.js',
   'malformed/negative-without-type.js',
 ];
+
+/** Every fixture file, in the code-unit order the inventory reports them in. */
+const FIXTURE_INVENTORY_PATHS = [...FIXTURE_MALFORMED, ...FIXTURE_TESTS];
 
 const HARNESS = {
   'assert.js': [
@@ -1036,6 +1047,244 @@ export default [
       assertSame(
         sortTestPaths(await host.listTests()).join(','),
         sortTestPaths(declared).join(','),
+      );
+    },
+  },
+  {
+    name: 'the whole-tree inventory expands every file into records without executing any of them',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      const inventory = await collectTest262Inventory({
+        host,
+        paths: [...FIXTURE_MALFORMED, ...FIXTURE_TESTS],
+      });
+
+      assertSame(inventory.files.join(','), FIXTURE_INVENTORY_PATHS.join(','));
+      assertSame(inventory.totals.files, 11);
+      assertSame(
+        inventory.totals.records,
+        15,
+        'nine fixture tests expand into fifteen (file, variant) records',
+      );
+      assertSame(inventory.totals.malformed, 2);
+      assertSame(inventory.malformed.join(','), FIXTURE_MALFORMED.join(','));
+      assertSame(inventory.variants.get('test/positive.js'), 2);
+      assertSame(inventory.variants.get('test/only-strict.js'), 1);
+      assertSame(inventory.variants.get('test/no-strict.js'), 1);
+      assertSame(inventory.variants.get('test/raw.js'), 1);
+      assertSame(
+        inventory.variants.get('test/feature-skip.js'),
+        2,
+        'a skipped test still expands into the records it would have run',
+      );
+      assertSame(
+        inventory.variants.has('malformed/missing-frontmatter.js'),
+        false,
+        'a file whose frontmatter cannot be parsed contributes no records',
+      );
+    },
+  },
+  {
+    name: 'the inventory counts unparseable frontmatter instead of dropping the file',
+    run: async () => {
+      const inventory = await collectTest262Inventory({
+        host: createMemoryHost({
+          'test/plain.js': fixture('Two variants', 'var value = 1;'),
+          'test/raw.js': fixture(
+            'One variant',
+            'var value = 1;',
+            'flags: [raw]\n',
+          ),
+          'test/broken.js': 'var withoutFrontmatter = 1;\n',
+        }),
+        paths: ['test/plain.js', 'test/raw.js', 'test/broken.js'],
+      });
+
+      assertSame(inventory.totals.files, 3);
+      assertSame(inventory.totals.records, 3);
+      assertSame(inventory.totals.malformed, 1);
+      assertSame(inventory.malformed.join(','), 'test/broken.js');
+    },
+  },
+  {
+    name: 'the inventory fails loudly when a file cannot be read rather than shrinking the denominator',
+    run: async () => {
+      /** @type {unknown} */
+      let failure;
+
+      try {
+        await collectTest262Inventory({
+          host: createMemoryHost({}),
+          paths: ['test/missing.js'],
+        });
+      } catch (error) {
+        failure = error;
+      }
+
+      assertSame(failure instanceof Test262CoverageError, true);
+    },
+  },
+  {
+    name: 'only upstream test files count towards the whole-suite denominator',
+    run: () => {
+      assertSame(
+        isTest262TestPath('test/language/types/undefined/S8.1_A1_T1.js'),
+        true,
+      );
+      assertSame(
+        isTest262TestPath('test/intl402/DateTimeFormat/prototype.js'),
+        true,
+      );
+      assertSame(
+        isTest262TestPath('test/language/module-code/instn-star_FIXTURE.js'),
+        false,
+        'a _FIXTURE.js support file is imported by a test, not run as one',
+      );
+      assertSame(isTest262TestPath('harness/assert.js'), false);
+      assertSame(isTest262TestPath('tools/lint/lint.js'), false);
+      assertSame(isTest262TestPath('test/README.md'), false);
+    },
+  },
+  {
+    name: 'coverage counts selected, attempted, and passed against the whole-suite totals',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      const coverage = summarizeTest262Coverage({
+        inventory: await collectTest262Inventory({
+          host,
+          paths: [...FIXTURE_MALFORMED, ...FIXTURE_TESTS],
+        }),
+        selected: FIXTURE_TESTS,
+        records: (
+          await runTest262Suite({
+            engine,
+            host,
+            paths: FIXTURE_TESTS,
+            supportedFeatures: ['fixture-subset'],
+          })
+        ).records,
+      });
+
+      assertSame(coverage.files.total, 11);
+      assertSame(coverage.files.selected, 9);
+      assertSame(
+        coverage.files.attempted,
+        8,
+        'the feature-skipped file is selected but never attempted',
+      );
+      assertSame(coverage.files.passed, 8);
+      assertSame(coverage.files.malformed, 2);
+      assertSame(coverage.records.total, 15);
+      assertSame(coverage.records.selected, 15);
+      assertSame(coverage.records.attempted, 13);
+      assertSame(coverage.records.passed, 13);
+    },
+  },
+  {
+    name: 'coverage percentages are whole-suite ratios rounded deterministically',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      const coverage = summarizeTest262Coverage({
+        inventory: await collectTest262Inventory({
+          host,
+          paths: [...FIXTURE_MALFORMED, ...FIXTURE_TESTS],
+        }),
+        selected: FIXTURE_TESTS,
+        records: (
+          await runTest262Suite({
+            engine,
+            host,
+            paths: FIXTURE_TESTS,
+            supportedFeatures: ['fixture-subset'],
+          })
+        ).records,
+      });
+
+      assertSame(coverage.files.selectedPercent, 81.818);
+      assertSame(coverage.files.attemptedPercent, 72.727);
+      assertSame(coverage.files.passedPercent, 72.727);
+      assertSame(coverage.records.selectedPercent, 100);
+      assertSame(coverage.records.attemptedPercent, 86.667);
+      assertSame(coverage.records.passedPercent, 86.667);
+
+      const empty = summarizeTest262Coverage({
+        inventory: await collectTest262Inventory({
+          host: createMemoryHost({}),
+          paths: [],
+        }),
+        selected: [],
+        records: [],
+      });
+
+      assertSame(empty.files.passedPercent, 0, 'an empty tree is not a crash');
+      assertSame(empty.records.passedPercent, 0);
+    },
+  },
+  {
+    name: 'coverage records use a stable key order and report the inventory alongside the ratios',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      const coverage = summarizeTest262Coverage({
+        inventory: await collectTest262Inventory({
+          host,
+          paths: [...FIXTURE_MALFORMED, ...FIXTURE_TESTS],
+        }),
+        selected: FIXTURE_TESTS,
+        records: (
+          await runTest262Suite({
+            engine,
+            host,
+            paths: FIXTURE_TESTS,
+            supportedFeatures: ['fixture-subset'],
+          })
+        ).records,
+      });
+
+      assertSame(
+        formatCoverageLines(coverage).join('\n'),
+        [
+          '{"type":"inventory","files":11,"records":15,"malformed":2}',
+          '{"type":"coverage","scope":"files","total":11,"selected":9,"attempted":8,"passed":8,"selectedPercent":81.818,"attemptedPercent":72.727,"passedPercent":72.727}',
+          '{"type":"coverage","scope":"records","total":15,"selected":15,"attempted":13,"passed":13,"selectedPercent":100,"attemptedPercent":86.667,"passedPercent":86.667}',
+        ].join('\n'),
+      );
+    },
+  },
+  {
+    name: 'the compact coverage summary renders a table that links to the detailed report',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      const coverage = summarizeTest262Coverage({
+        inventory: await collectTest262Inventory({
+          host,
+          paths: [...FIXTURE_MALFORMED, ...FIXTURE_TESTS],
+        }),
+        selected: FIXTURE_TESTS,
+        records: (
+          await runTest262Suite({
+            engine,
+            host,
+            paths: FIXTURE_TESTS,
+            supportedFeatures: ['fixture-subset'],
+          })
+        ).records,
+      });
+      const summary = renderCoverageSummary({
+        coverage,
+        reportPath: 'docs/test262-report.jsonl',
+      });
+
+      assertSame(
+        summary,
+        [
+          '| Denominator     | Whole suite | Selected | Attempted | Passed | Passing |',
+          '| --------------- | ----------- | -------- | --------- | ------ | ------- |',
+          '| Files           | 11          | 9        | 8         | 8      | 72.727% |',
+          '| (file, variant) | 15          | 15       | 13        | 13     | 86.667% |',
+          '',
+          '2 of the 11 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.',
+          'Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).',
+        ].join('\n'),
       );
     },
   },

@@ -65,11 +65,29 @@ export const WORKFLOW_FILE = '.github/workflows/ci.yml';
 export const NODE_VERSION = '20';
 
 /**
- * Where the upstream Test262 run writes its JSON-lines report. CI uploads this
- * exact path as an artifact — including on failure, which is when the per-test
- * records matter most — so the constant is shared rather than spelled twice.
+ * Where the upstream Test262 run writes its JSON-lines report. The file is
+ * committed — it is the project's detailed conformance report, kept out of the
+ * README so the README can stay a summary — and CI uploads this exact path as an
+ * artifact, including on failure, which is when the per-test records matter
+ * most. The constant is shared rather than spelled twice.
  */
-export const TEST262_REPORT_FILE = 'test262-upstream-report.jsonl';
+export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
+
+/**
+ * The command that fails CI when the committed report or the README's generated
+ * coverage block no longer matches what the run just produced. It follows the
+ * run in the same job, so it compares a freshly written tree against the commit
+ * rather than re-running a suite that has already run.
+ *
+ * `git diff` alone would not be enough: it compares the working tree against the
+ * index and says nothing at all about a path git does not track, so a report
+ * that was never committed — one the run itself had just written — would look
+ * permanently clean. `ls-files --error-unmatch` fails on exactly that case.
+ */
+export const TEST262_REPORT_DRIFT_COMMAND = [
+  `git ls-files --error-unmatch ${TEST262_REPORT_FILE} README.md > /dev/null`,
+  `git diff --exit-code -- ${TEST262_REPORT_FILE} README.md`,
+].join(' && ');
 
 /**
  * The exact command CI uses to install a browser. Playwright's headless shell is
@@ -210,7 +228,10 @@ export function toGithubSlug(repository) {
  * `test262-upstream` checks out the real `tc39/test262` tree at exactly the
  * pinned revision and runs the curated subset against it, which exercises the
  * engine — and uploads its report even on failure, because a red conformance run
- * is precisely when the per-test records are worth reading.
+ * is precisely when the per-test records are worth reading. That run also
+ * rewrites the two generated artifacts it owns, so the job compares the working
+ * tree against the commit afterwards: a stale committed report fails CI the same
+ * way a hand-edited workflow does.
  *
  * @param {Test262Pin} test262
  * @returns {readonly WorkflowJob[]}
@@ -273,6 +294,10 @@ export function createCiJobs(test262) {
         }),
         runStep('Install dependencies', 'npm ci'),
         runStep('Run the pinned Test262 subset', 'npm run test262:upstream'),
+        runStep(
+          'Check the generated report is current',
+          TEST262_REPORT_DRIFT_COMMAND,
+        ),
         usesStep(
           'Publish the Test262 report',
           'actions/upload-artifact',

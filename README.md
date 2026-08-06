@@ -18,24 +18,25 @@ through `prepare`.
 
 ## Commands
 
-| Command                             | What it does                                                                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                          | The Node suites, then the Test262 fixture suite through the CLI                                                              |
-| `npm run test:node`                 | Every portable suite plus the Node-only suites in `test/node/`                                                               |
-| `npm run test:browser`              | Every portable suite in the headless Chromium shell via Playwright                                                           |
-| `npm run test:jsc`                  | Every portable suite in the `jsc` shell                                                                                      |
-| `npm run test262:fixtures`          | Test262 runner over `test/fixtures/test262`, forcing the fixture-only `fixture-subset` feature (JSON lines on stdout)        |
-| `npm run test262:fixtures:manifest` | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                |
-| `npm run test262:upstream`          | The pinned upstream subset from a real `tc39/test262` checkout (JSON lines on stdout and in `test262-upstream-report.jsonl`) |
-| `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                      |
-| `npm run vendor:sync`               | Refresh `vendor/` from the pinned dependencies                                                                               |
-| `npm run vendor:check`              | Fail if `vendor/` has drifted from the pinned dependencies                                                                   |
-| `npm run typecheck`                 | `tsc` in checkJs mode                                                                                                        |
-| `npm run format`                    | Prettier `--check` over the whole repository, minus the generated and guest-owned trees `.prettierignore` names              |
-| `npm run lint`                      | ESLint only                                                                                                                  |
-| `npm run ci:generate`               | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                            |
-| `npm run ci:check`                  | Fail if the committed workflow has drifted from `tools/ci/pipeline.js`                                                       |
-| `npm run ci:contract`               | The full local CI contract: every command CI runs, for real (see [Continuous integration](#continuous-integration))          |
+| Command                             | What it does                                                                                                                                                                 |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                          | The Node suites, then the Test262 fixture suite through the CLI                                                                                                              |
+| `npm run test:node`                 | Every portable suite plus the Node-only suites in `test/node/`                                                                                                               |
+| `npm run test:browser`              | Every portable suite in the headless Chromium shell via Playwright                                                                                                           |
+| `npm run test:jsc`                  | Every portable suite in the `jsc` shell                                                                                                                                      |
+| `npm run test262:fixtures`          | Test262 runner over `test/fixtures/test262`, forcing the fixture-only `fixture-subset` feature (JSON lines on stdout)                                                        |
+| `npm run test262:fixtures:manifest` | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                |
+| `npm run test262:upstream`          | The pinned upstream subset from a real `tc39/test262` checkout (compact coverage summary on stdout; regenerates `docs/test262-report.jsonl` and the README's coverage block) |
+| `npm run test262:upstream:check`    | The same run, writing nothing: fails if either generated artifact is stale                                                                                                   |
+| `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                                      |
+| `npm run vendor:sync`               | Refresh `vendor/` from the pinned dependencies                                                                                                                               |
+| `npm run vendor:check`              | Fail if `vendor/` has drifted from the pinned dependencies                                                                                                                   |
+| `npm run typecheck`                 | `tsc` in checkJs mode                                                                                                                                                        |
+| `npm run format`                    | Prettier `--check` over the whole repository, minus the generated and guest-owned trees `.prettierignore` names                                                              |
+| `npm run lint`                      | ESLint only                                                                                                                                                                  |
+| `npm run ci:generate`               | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                                                                            |
+| `npm run ci:check`                  | Fail if the committed workflow has drifted from `tools/ci/pipeline.js`                                                                                                       |
+| `npm run ci:contract`               | The full local CI contract: every command CI runs, for real (see [Continuous integration](#continuous-integration))                                                          |
 
 `test/suites.js` is the one registry of portable suites; all three runners take
 their default work from it, and `test/node/repository-invariants.test.js` fails
@@ -111,9 +112,14 @@ git -C vendor/test262 checkout b363f29d3c43c626dc852744ad64a0b48a003693
 npm run test262:upstream
 ```
 
-The report goes to stdout and to `test262-upstream-report.jsonl` — the same
-bytes, from the same string — and CI uploads that file as an artifact even when
-the run fails, which is when the per-test records are worth reading.
+The report goes to `docs/test262-report.jsonl`, and a compact coverage summary
+goes to stdout; failing records go to stderr next to it, because a red run's log
+has to name what broke. CI uploads the report file as an artifact even when the
+run fails, which is when the per-test records are worth reading. The same run
+regenerates the coverage block in this README, so `npm run test262:upstream` is
+the one command that produces every published number, and
+`npm run test262:upstream:check` re-derives them without writing and fails if
+either file is stale.
 
 `tools/test262/upstream-subset.json` is the checked-in selection: a schema
 version, the repository and revision it was curated against, and named groups of
@@ -124,7 +130,7 @@ engine, so a new failure is a real regression rather than a newly matched test.
 `tools/test262/upstream.js` parses it (rejecting an abbreviated revision, an
 unsorted or duplicated path, or a path outside `test/`) and summarizes a finished
 run per group. The groups carry no execution semantics — they exist so the
-milestone report can say which parts of the language the baseline covers.
+coverage report can say which parts of the language the baseline covers.
 
 The local fixture tree in `test/fixtures/test262` stays separate and is run by
 `npm run test262:fixtures`. The two suites answer different questions: the
@@ -182,6 +188,9 @@ exercised regardless, by a synthetic feature in
   decides feature and flag skips. `runTest262` ties selection, execution, and
   report formatting together in one shared call.
 - `report.js` renders records as deterministic JSON lines.
+- `coverage.js` inventories a whole tree — every file's frontmatter expanded
+  into the records it would run, without running any of them — and measures a
+  finished run against it.
 
 Adapters are thin: they supply file access, and for the two entry points, a CLI
 and printing. `adapters/node.js` reads from disk, `adapters/browser.js` fetches
@@ -240,8 +249,11 @@ constructor is not a binding on the realm's global object report
 
 ### Reading the report
 
-Every line is one JSON object; there is no other output on stdout. Test records
-come first, sorted by file path then variant, followed by one summary record:
+Every line is one JSON object. The fixture adapters print those lines on stdout
+and nothing else; the upstream run writes them to `docs/test262-report.jsonl`
+and prints the compact coverage summary instead. Test records come first, sorted
+by file path then variant, followed by the per-group baseline, the feature line,
+the coverage records, and one summary record:
 
 ```json
 {"type":"test","file":"test/positive.js","variant":"non-strict","status":"passed"}
@@ -276,6 +288,49 @@ paths through `selection.js`; that suite runs under `npm run test:node`,
 `npm run test:browser`, and `npm run test:jsc`. Separately, the `jsc` and Node
 CLI entry points print the same 15-line report, which `cmp` confirms is
 byte-identical.
+
+### What the coverage numbers count
+
+A conformance percentage means nothing without its denominator, so the upstream
+report states both. An `inventory` record carries the whole-suite totals, and one
+`coverage` record per denominator measures the run against them. For example,
+with synthetic counts:
+
+```json
+{"type":"inventory","files":100,"records":180,"malformed":2}
+{"type":"coverage","scope":"files","total":100,"selected":5,"attempted":4,"passed":3,"selectedPercent":5,"attemptedPercent":4,"passedPercent":3}
+```
+
+The semantics are exact, and `tools/test262/coverage.js` is where they are
+implemented:
+
+- **The tree is the denominator.** Every `test/**/*.js` file in the pinned
+  checkout counts — `annexB`, `intl402`, and `staging` included — minus the
+  `_FIXTURE.js` files upstream's `INTERPRETING.md` defines as inputs to other
+  tests rather than tests themselves. `harness/` and upstream's own `tools/` are
+  not tests and never count.
+- **Two units.** `scope: "files"` counts source files; `scope: "records"` counts
+  the `(file, variant)` pairs those files expand into once the
+  `raw`/`onlyStrict`/`noStrict`/`module` rules are applied — two for an ordinary
+  file, one for a file pinned to a single variant. Records are the unit the
+  runner reports, so a pass rate has to be quoted in them.
+- **Expansion never executes.** The inventory reads frontmatter and nothing
+  else, so the denominator costs one pass over the tree rather than a
+  conformance run of tests this engine cannot yet survive.
+- **Three counts, three questions.** `selected` is what
+  `upstream-subset.json` asks for, `attempted` is what actually executed (a
+  skipped test is selected but never attempted), and `passed` is what
+  conformance is claimed for. A file counts as passed only when every one of its
+  records passed.
+- **Malformed frontmatter is counted, not dropped.** A file this tooling cannot
+  parse still counts as a file, but expands into no records, and the count is
+  published in the `inventory` record. Dropping those files would shrink the
+  denominator and inflate the percentage.
+- **A file that cannot be read is an error**, not a zero: a truncated checkout
+  must fail loudly rather than report better coverage of a smaller suite.
+- **Percentages** are `part / total * 100`, rounded to three decimals so two runs
+  of the same inputs serialize identically, and always taken against the
+  whole-suite total rather than the selection.
 
 ## Continuous integration
 
@@ -330,9 +385,14 @@ does not depend on whatever happens to be cached on a runner image.
 
 `test262-upstream` checks out `tc39/test262` at the pinned revision into
 `vendor/test262` with a second `actions/checkout` step, runs the curated subset
-against it, and uploads `test262-upstream-report.jsonl` with `if: always()` and
-`if-no-files-found: error`, so the JSON-lines report is available as an artifact
-whether the run passed or failed.
+against it, then fails if the committed report or the README coverage block is
+not what the run just produced. The check is `git ls-files --error-unmatch`
+followed by `git diff --exit-code` over both paths: the run writes its own
+artifacts, so a path git does not track would have no diff to show and would
+look clean forever. It uploads `docs/test262-report.jsonl` with `if: always()`
+and `if-no-files-found: error`, so the JSON-lines report is available as an
+artifact whether the run passed or failed — and the uploaded copy is the fresh
+one, since the run writes it before the drift check reads it.
 
 Two security properties are encoded in the pipeline rather than left to whoever
 edits the workflow next, and both are asserted by
@@ -390,259 +450,40 @@ Nothing in the full contract is conditional. A missing browser or a missing
 upstream checkout fails with the exact command needed to fix it, because a skip
 that looks like a pass is how a contract quietly stops being one.
 
-## Milestone report
+## Coverage
 
-This milestone claims no Test262 `features` tag as supported: the manifest holds
-no entries, consistent with the ES5-only subset described above. The initial
-deterministic conformance report is the real output of `npm run test262:upstream`
-against `tc39/test262` at `b363f29d3c43c626dc852744ad64a0b48a003693` — 112 files,
-215 (file, variant) records, all passing:
+The numbers below are generated: `npm run test262:upstream` runs the pinned
+subset against `tc39/test262` at the revision `package.json` names, writes every
+per-test record to [`docs/test262-report.jsonl`](docs/test262-report.jsonl), and
+rewrites this block from the same run. `npm run test262:upstream:check` fails if
+either artifact has drifted, and the `test262-upstream` job fails CI the same way,
+so no number here can outlive the run that produced it. The denominators are
+defined exactly under
+[What the coverage numbers count](#what-the-coverage-numbers-count).
 
-<!-- test262-upstream-report:begin -->
+<!-- test262-coverage:begin -->
 
-```json
-{"type":"test","file":"test/built-ins/Array/S15.4.1_A1.1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/S15.4.1_A1.1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/isArray/15.4.3.2-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/isArray/15.4.3.2-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/concat/S15.4.4.4_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/concat/S15.4.4.4_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/every/15.4.4.16-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/every/15.4.4.16-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/filter/15.4.4.20-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/filter/15.4.4.20-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/forEach/15.4.4.18-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/forEach/15.4.4.18-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/join/S15.4.4.5_A1.1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/join/S15.4.4.5_A1.1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/map/15.4.4.19-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/map/15.4.4.19-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/pop/S15.4.4.6_A1.1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/pop/S15.4.4.6_A1.1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/push/S15.4.4.7_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/push/S15.4.4.7_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/reduce/15.4.4.21-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/reduce/15.4.4.21-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/reverse/S15.4.4.8_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/reverse/S15.4.4.8_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/shift/S15.4.4.9_A1.1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/shift/S15.4.4.9_A1.1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/slice/S15.4.4.10_A1.1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/slice/S15.4.4.10_A1.1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/some/15.4.4.17-1-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/some/15.4.4.17-1-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/sort/S15.4.4.11_A1.1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/sort/S15.4.4.11_A1.1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/splice/S15.4.4.12_A1.1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/splice/S15.4.4.12_A1.1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/unshift/S15.4.4.13_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Array/prototype/unshift/S15.4.4.13_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Function/prototype/apply/S15.3.4.3_A12.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Function/prototype/apply/S15.3.4.3_A12.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Function/prototype/bind/15.3.4.5-10-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Function/prototype/bind/15.3.4.5-10-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Function/prototype/call/S15.3.4.4_A13.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Function/prototype/call/S15.3.4.4_A13.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/S15.2.1.1_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/S15.2.1.1_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/create/15.2.3.5-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/create/15.2.3.5-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/defineProperties/15.2.3.7-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/defineProperties/15.2.3.7-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/freeze/15.2.3.9-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/freeze/15.2.3.9-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/getPrototypeOf/15.2.3.2-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/getPrototypeOf/15.2.3.2-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/isExtensible/15.2.3.13-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/isExtensible/15.2.3.13-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/isFrozen/15.2.3.12-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/isFrozen/15.2.3.12-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/isSealed/15.2.3.11-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/isSealed/15.2.3.11-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/keys/15.2.3.14-2-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/keys/15.2.3.14-2-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/preventExtensions/15.2.3.10-0-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/preventExtensions/15.2.3.10-0-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/constructor/S15.2.4.1_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/constructor/S15.2.4.1_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/isPrototypeOf/undefined-this-and-object-arg-throws.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/isPrototypeOf/undefined-this-and-object-arg-throws.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/propertyIsEnumerable/S15.2.4.7_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/propertyIsEnumerable/S15.2.4.7_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/toLocaleString/S15.2.4.3_A1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/toLocaleString/S15.2.4.3_A1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/toString/Object.prototype.toString.call-array.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/toString/Object.prototype.toString.call-array.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/valueOf/15.2.4.4-1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/prototype/valueOf/15.2.4.4-1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/seal/object-seal-extensible-of-o-is-set-as-false-even-if-o-has-no-own-property.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Object/seal/object-seal-extensible-of-o-is-set-as-false-even-if-o-has-no-own-property.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/comments/S7.4_A3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/comments/S7.4_A3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/comments/S7.4_A4_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/comments/S7.4_A4_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/directive-prologue/func-decl-final-runtime.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/directive-prologue/func-decl-inside-func-decl-runtime.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/directive-prologue/func-decl-no-semi-runtime.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/directive-prologue/func-decl-not-first-runtime.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/directive-prologue/func-decl-runtime.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/directive-prologue/func-expr-runtime.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/comma/S11.14_A3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/comma/S11.14_A3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T1.2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T2.1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/compound-assignment/S11.13.2_A2.1_T2.1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/conditional/S11.12_A3_T4.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/conditional/S11.12_A3_T4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/delete/S11.4.1_A2.2_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.2_T2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.2_T2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/delete/S11.4.1_A3.3_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/in/S11.8.7_A2.1_T2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/in/S11.8.7_A2.1_T2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/in/S11.8.7_A3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/in/S11.8.7_A3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/in/S11.8.7_A4.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/in/S11.8.7_A4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A2.1_T2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A2.1_T2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A6_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/instanceof/S11.8.6_A6_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/logical-and/S11.11.1_A3_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/logical-and/S11.11.1_A3_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/logical-or/S11.11.2_A2.1_T4.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/logical-or/S11.11.2_A2.1_T4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/postfix-decrement/S11.3.2_A2.2_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/postfix-decrement/S11.3.2_A2.2_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/postfix-increment/S11.3.1_A2.2_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/postfix-increment/S11.3.1_A2.2_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/prefix-decrement/S11.4.5_A2.2_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/prefix-decrement/S11.4.5_A2.2_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/prefix-increment/S11.4.4_A2.2_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/expressions/prefix-increment/S11.4.4_A2.2_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/line-terminators/S7.3_A2.1_T2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/line-terminators/S7.3_A2.1_T2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/line-terminators/S7.3_A6_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/line-terminators/S7.3_A6_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/block/S12.1_A4_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/block/S12.1_A4_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/do-while/S12.6.1_A1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/do-while/S12.6.1_A1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T5.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/do-while/S12.6.1_A4_T5.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/if/S12.5_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/if/S12.5_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/if/S12.5_A6_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/if/S12.5_A6_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/return/S12.9_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/return/S12.9_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/return/S12.9_A3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/return/S12.9_A3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/switch/S12.11_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/switch/S12.11_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/switch/S12.11_A1_T3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/switch/S12.11_A1_T3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/switch/S12.11_A4_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/switch/S12.11_A4_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A5.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A5.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A6.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A6.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A8.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A8.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A9_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/try/S12.14_A9_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/while/S12.6.2_A1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/while/S12.6.2_A1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T5.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/while/S12.6.2_A4_T5.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/boolean/S8.3_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/boolean/S8.3_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/boolean/S8.3_A2.1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/boolean/S8.3_A2.1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/null/S8.2_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/null/S8.2_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/null/S8.2_A2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/null/S8.2_A2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/number/S8.5_A2.1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/number/S8.5_A2.1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/number/S8.5_A3.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/number/S8.5_A3.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/number/S8.5_A5.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/number/S8.5_A5.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/string/S8.4_A1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/string/S8.4_A1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/string/S8.4_A2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/string/S8.4_A2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/undefined/S8.1_A1_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/undefined/S8.1_A1_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/undefined/S8.1_A2_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/undefined/S8.1_A2_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/types/undefined/S8.1_A3_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/types/undefined/S8.1_A3_T1.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/white-space/S7.2_A2.1_T2.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/white-space/S7.2_A2.1_T2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/white-space/S7.2_A5_T1.js","variant":"strict","status":"passed"}
-{"type":"baseline","group":"array-builtins","files":21,"records":42,"passed":42,"failed":0,"skipped":0}
-{"type":"baseline","group":"delete","files":4,"records":5,"passed":5,"failed":0,"skipped":0}
-{"type":"baseline","group":"expressions","files":4,"records":8,"passed":8,"failed":0,"skipped":0}
-{"type":"baseline","group":"function-builtins","files":3,"records":6,"passed":6,"failed":0,"skipped":0}
-{"type":"baseline","group":"in-and-instanceof","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
-{"type":"baseline","group":"lexical","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
-{"type":"baseline","group":"object-builtins","files":21,"records":42,"passed":42,"failed":0,"skipped":0}
-{"type":"baseline","group":"statements","files":10,"records":20,"passed":20,"failed":0,"skipped":0}
-{"type":"baseline","group":"strict-mode","files":6,"records":6,"passed":6,"failed":0,"skipped":0}
-{"type":"baseline","group":"switch-and-labeled","files":5,"records":10,"passed":10,"failed":0,"skipped":0}
-{"type":"baseline","group":"try-catch-finally","files":7,"records":14,"passed":14,"failed":0,"skipped":0}
-{"type":"baseline","group":"types","files":12,"records":24,"passed":24,"failed":0,"skipped":0}
-{"type":"baseline","group":"update-and-compound-assignment","files":7,"records":14,"passed":14,"failed":0,"skipped":0}
-{"type":"features","supported":[],"tagged":[],"untagged":215}
-{"type":"summary","total":215,"passed":215,"failed":0,"skipped":0}
-```
+| Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
+| --------------- | ----------- | -------- | --------- | ------ | ------- |
+| Files           | 53,575      | 112      | 112       | 112    | 0.209%  |
+| (file, variant) | 102,075     | 215      | 215       | 215    | 0.211%  |
 
-<!-- test262-upstream-report:end -->
+430 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
+Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).
 
-The `baseline` lines are the per-group summary; the `features` line is what the
-run can honestly say about optional features. `supported` is what the manifest
-claims (nothing yet), `tagged` is the feature tags actually seen on the tests
-that ran (none — the ES5 baseline is intentionally untagged), and `untagged`
-counts the records that carried no tag at all. There is no per-feature progress
-table because there are no features to report on yet; inventing one would
-describe something the run never measured.
+<!-- test262-coverage:end -->
 
-`npm run ci:contract` derives this block's expected content and fails if the
-committed README no longer matches, so the milestone report cannot drift from
-what the command actually prints.
+The detailed report is JSON lines: one `test` record per (file, variant) pair,
+then the `baseline` lines that summarize the run per subset group, a `features`
+line, the `inventory` and `coverage` records, and the `summary`. The `features`
+line is what the run can honestly say about optional features: `supported` is
+what the manifest claims (nothing yet), `tagged` is the feature tags actually
+seen on the tests that ran (none — the ES5 baseline is intentionally untagged),
+and `untagged` counts the records that carried no tag at all. There is no
+per-feature progress table because there are no features to report on yet;
+inventing one would describe something the run never measured.
+
+The selected subset is small by construction: every path in it was verified to
+pass with this engine, so the low whole-suite percentage is an honest statement
+of how much of Test262 an ES5-only engine has been pointed at, not a pass rate
+over tests it was never asked to run.

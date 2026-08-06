@@ -15,9 +15,20 @@
  * fails with the commands needed to fix it rather than running a different set
  * of tests and reporting success.
  *
- * The report is written twice — to stdout for local use and to
- * `TEST262_REPORT_FILE` for CI to upload as an artifact even when the run fails
- * — from the same string, so the artifact can never disagree with the log.
+ * The run produces two generated artifacts from one string each, so they can
+ * never disagree with each other:
+ *
+ * - `docs/test262-report.jsonl` — every per-test record, the per-group baseline,
+ *   the whole-suite inventory and coverage, and the summary. CI uploads this
+ *   file even when the run fails, which is when the per-test records are worth
+ *   reading.
+ * - The coverage block in `README.md` — a compact table, because a README that
+ *   inlines two hundred JSON lines is a report nobody reads.
+ *
+ * Stdout is the compact summary rather than the whole report: it is what a CI
+ * log should show at a glance, and any failing records go to stderr next to it.
+ * `--check` writes nothing and fails when either artifact is stale, which is how
+ * the local contract proves the committed files are the real output.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -33,6 +44,12 @@ import {
   parseFeatureManifest,
 } from './features.js';
 import {
+  collectTest262Inventory,
+  formatCoverageLines,
+  renderCoverageSummary,
+  summarizeTest262Coverage,
+} from './coverage.js';
+import {
   UPSTREAM_SUBSET_FILE,
   formatUpstreamSummaryLines,
   parseUpstreamSubset,
@@ -41,6 +58,13 @@ import {
 } from './upstream.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+
+/** The file whose generated block carries the compact coverage summary. */
+export const README_FILE = 'README.md';
+
+/** Markers delimiting the generated block in `README.md`. */
+export const COVERAGE_MARKER_BEGIN = '<!-- test262-coverage:begin -->';
+export const COVERAGE_MARKER_END = '<!-- test262-coverage:end -->';
 
 /**
  * @param {string} path Repository-relative.
@@ -111,9 +135,11 @@ async function assertPinnedCheckout(pin) {
 }
 
 /**
+ * @param {readonly string[]} argv
  * @returns {Promise<number>}
  */
-export async function main() {
+export async function main(argv = []) {
+  const check = parseOptions(argv);
   const pin = await readTest262Pin();
 
   await assertPinnedCheckout(pin);
@@ -137,33 +163,168 @@ export async function main() {
   const supportedFeatures = featureNames(
     parseFeatureManifest(await readRepositoryFile(FEATURES_MANIFEST_FILE)),
   );
+  const host = createNodeTest262Host({ root: pin.checkoutPath });
+  const paths = upstreamSubsetPaths(subset);
   const { records, summary } = await runTest262Suite({
     engine: { createRealm, evaluateScript },
-    host: createNodeTest262Host({ root: pin.checkoutPath }),
-    paths: upstreamSubsetPaths(subset),
+    host,
+    paths,
     supportedFeatures,
+  });
+  const coverage = summarizeTest262Coverage({
+    inventory: await collectTest262Inventory({ host }),
+    records,
+    selected: paths,
   });
   const report = `${[
     ...formatReportLines(records),
     ...formatUpstreamSummaryLines(
       summarizeUpstreamRun({ subset, records, supportedFeatures }),
     ),
+    ...formatCoverageLines(coverage),
     formatRecordLine(summary),
   ].join('\n')}\n`;
+  const block = renderCoverageSummary({
+    coverage,
+    reportPath: TEST262_REPORT_FILE,
+  });
 
-  process.stdout.write(report);
+  process.stdout.write(`${block}\n`);
+  writeFailures(records);
 
-  await writeFile(
-    new URL(TEST262_REPORT_FILE, REPOSITORY_ROOT_URL),
-    report,
-    'utf8',
-  );
+  const stale = await synchronizeArtifacts({ report, block, check });
+
+  if (stale.length > 0) {
+    process.stderr.write(
+      `${stale.join('\n')}\n${stale.length} generated file(s) are stale; run npm run test262:upstream\n`,
+    );
+
+    return 1;
+  }
 
   return summary.failed > 0 ? 1 : 0;
 }
 
+/**
+ * @param {readonly string[]} argv
+ * @returns {boolean} Whether to check the generated files instead of writing.
+ */
+function parseOptions(argv) {
+  for (const argument of argv) {
+    if (argument !== '--check') {
+      throw new Error(`Unknown option: ${argument}`);
+    }
+  }
+
+  return argv.includes('--check');
+}
+
+/**
+ * Failing records go to stderr rather than into the compact stdout summary: a
+ * red run's log has to name what broke, and a green run's log stays short.
+ *
+ * @param {readonly import('./report.js').Test262TestRecord[]} records
+ * @returns {void}
+ */
+function writeFailures(records) {
+  const failures = records.filter((record) => record.status === 'failed');
+
+  if (failures.length > 0) {
+    process.stderr.write(`${formatReportLines(failures).join('\n')}\n`);
+  }
+}
+
+/**
+ * Writes — or, in `--check` mode, only compares — the two generated artifacts.
+ *
+ * The detailed report is written even when tests failed, because that is exactly
+ * when CI's uploaded artifact matters; `--check` writes nothing at all, so a
+ * contract can assert the committed files are already the real output.
+ *
+ * @param {{ report: string, block: string, check: boolean }} options
+ * @returns {Promise<string[]>} The stale files, in `--check` mode.
+ */
+async function synchronizeArtifacts(options) {
+  const { report, block, check } = options;
+  const readme = await readRepositoryFile(README_FILE);
+  const updated = replaceGeneratedBlock(readme, block);
+  /** @type {string[]} */
+  const stale = [];
+
+  for (const [path, contents] of [
+    [TEST262_REPORT_FILE, report],
+    [README_FILE, updated],
+  ]) {
+    const current = await readGeneratedFile(path);
+
+    if (current === contents) {
+      continue;
+    }
+
+    if (check) {
+      stale.push(path);
+      continue;
+    }
+
+    await writeFile(new URL(path, REPOSITORY_ROOT_URL), contents, 'utf8');
+  }
+
+  return stale;
+}
+
+/**
+ * @param {string} path Repository-relative.
+ * @returns {Promise<string | null>}
+ */
+async function readGeneratedFile(path) {
+  try {
+    return await readRepositoryFile(path);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Replaces the marked block, leaving every other byte of the document alone.
+ *
+ * @param {string} document
+ * @param {string} block
+ * @returns {string}
+ */
+export function replaceGeneratedBlock(document, block) {
+  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
+  const end = document.indexOf(COVERAGE_MARKER_END);
+
+  if (begin === -1 || end < begin) {
+    throw new Error(
+      `${README_FILE} must delimit the generated coverage block with ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
+    );
+  }
+
+  return `${document.slice(0, begin + COVERAGE_MARKER_BEGIN.length)}\n\n${block}\n\n${document.slice(end)}`;
+}
+
+/**
+ * The generated block's content, as `replaceGeneratedBlock` wrote it.
+ *
+ * @param {string} document
+ * @returns {string}
+ */
+export function readGeneratedBlock(document) {
+  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
+  const end = document.indexOf(COVERAGE_MARKER_END);
+
+  if (begin === -1 || end < begin) {
+    throw new Error(
+      `${README_FILE} has no generated coverage block between ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
+    );
+  }
+
+  return document.slice(begin + COVERAGE_MARKER_BEGIN.length, end).trim();
+}
+
 if (isDirectInvocation()) {
-  main().then(
+  main(process.argv.slice(2)).then(
     (code) => {
       process.exitCode = code;
     },

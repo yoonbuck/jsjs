@@ -26,6 +26,19 @@ import { parseTest262Metadata } from '../../tools/test262/metadata.js';
 import { runTest262File } from '../../tools/test262/runner.js';
 import { TEST262_REPORT_FILE } from '../../tools/ci/pipeline.js';
 import {
+  COVERAGE_MARKER_BEGIN,
+  COVERAGE_MARKER_END,
+  README_FILE,
+  readGeneratedBlock,
+} from '../../tools/test262/upstream-run.js';
+import {
+  collectTest262Inventory,
+  formatCount,
+  formatCoverageLines,
+  summarizeTest262Coverage,
+  renderCoverageSummary,
+} from '../../tools/test262/coverage.js';
+import {
   FEATURES_MANIFEST_FILE,
   featureNames,
   parseFeatureManifest,
@@ -54,9 +67,6 @@ const TAGGED_UPSTREAM_EXAMPLE = Object.freeze({
   file: 'test/built-ins/Reflect/object-prototype.js',
   feature: 'Reflect',
 });
-
-const REPORT_MARKER_BEGIN = '<!-- test262-upstream-report:begin -->';
-const REPORT_MARKER_END = '<!-- test262-upstream-report:end -->';
 
 const engine = { createRealm, evaluateScript };
 
@@ -113,12 +123,104 @@ function npmRun(script, hint) {
 }
 
 /**
- * Runs an npm script that is *expected* to fail and returns its combined
- * output, so a contract can assert on the failure itself instead of only on
- * the happy path.
+ * @typedef {{
+ *   committedReport: string,
+ *   committedReadme: string,
+ *   stdout: string,
+ *   report: string,
+ *   readme: string,
+ * }} UpstreamRun
+ */
+
+/** @type {UpstreamRun | undefined} */
+let upstreamRun;
+
+/**
+ * Runs the upstream suite once and shares the result.
+ *
+ * It is the most expensive command in the contract — the pinned subset plus a
+ * frontmatter pass over all fifty-odd thousand upstream files — and several
+ * assertions below are about different properties of one run, not about
+ * different runs. The committed bytes are captured *before* the command writes,
+ * because the run regenerates its own artifacts: comparing them afterwards
+ * would compare a file with itself and never catch a stale commit.
+ *
+ * @returns {Promise<UpstreamRun>}
+ */
+async function readUpstreamRun() {
+  if (upstreamRun === undefined) {
+    const committedReport = await readRepositoryFile(TEST262_REPORT_FILE);
+    const committedReadme = await readRepositoryFile(README_FILE);
+    const stdout = npmRun('test262:upstream');
+
+    upstreamRun = {
+      committedReport,
+      committedReadme,
+      stdout,
+      report: await readRepositoryFile(TEST262_REPORT_FILE),
+      readme: await readRepositoryFile(README_FILE),
+    };
+  }
+
+  return upstreamRun;
+}
+
+/**
+ * @param {readonly Record<string, any>[]} records
+ * @param {string} scope
+ * @returns {Record<string, any>}
+ */
+function coverageRecord(records, scope) {
+  const record = records.find(
+    (candidate) => candidate.type === 'coverage' && candidate.scope === scope,
+  );
+
+  if (record === undefined) {
+    throw new Error(`the report carries no coverage record for ${scope}`);
+  }
+
+  return record;
+}
+
+/**
+ * Matches a number as a whole token, so `575` is not found inside `53,575` and
+ * `112` is not found inside `1120` — while still finding a number that a JSON
+ * example follows with a comma, as in `"files":53575,"records"`. Only a comma
+ * that groups digits counts as part of a number.
+ *
+ * @param {string} rendering
+ * @returns {RegExp}
+ */
+function wholeNumberPattern(rendering) {
+  const escaped = rendering.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
+
+  return new RegExp(String.raw`(?<![\d.]|\d,)${escaped}(?![\d.]|,\d)`, 'u');
+}
+
+/**
+ * Every way a count from the report could be spelled in prose: as digits, and
+ * as the comma-grouped form the generated table uses.
+ *
+ * @param {number} value
+ * @returns {string[]}
+ */
+function numberRenderings(value) {
+  if (!Number.isInteger(value)) {
+    return [String(value)];
+  }
+
+  return [...new Set([String(value), formatCount(value)])];
+}
+
+/**
+ * Runs an npm script that is *expected* to fail and returns its output, so a
+ * contract can assert on the failure itself instead of only on the happy path.
+ * `stderr` is returned separately as well as combined: a command that prints a
+ * summary on stdout and its diagnosis on stderr would otherwise let an
+ * assertion about the diagnosis pass on the summary.
  *
  * @param {string} script
- * @returns {{ status: number | null, output: string }}
+ * @returns {{ status: number | null, output: string, stderr: string }}
  */
 function npmRunExpectingFailure(script) {
   const result = spawnSync('npm', ['run', '--silent', script], {
@@ -133,7 +235,11 @@ function npmRunExpectingFailure(script) {
     );
   }
 
-  return { status: result.status, output: `${result.stdout}${result.stderr}` };
+  return {
+    status: result.status,
+    output: `${result.stdout}${result.stderr}`,
+    stderr: result.stderr,
+  };
 }
 
 /**
@@ -303,8 +409,8 @@ export default [
         await readRepositoryFile(UPSTREAM_SUBSET_FILE),
       );
       const paths = upstreamSubsetPaths(subset);
-      const output = npmRun('test262:upstream');
-      const records = parseJsonLines(output);
+      const { report } = await readUpstreamRun();
+      const records = parseJsonLines(report);
       const tests = records.filter((record) => record.type === 'test');
       const summary = records[records.length - 1];
 
@@ -323,17 +429,61 @@ export default [
     },
   },
   {
-    name: 'the upstream run publishes the same JSON-lines report CI uploads as an artifact',
+    name: 'the upstream run publishes the JSON-lines report CI uploads as an artifact',
     run: async () => {
-      const output = npmRun('test262:upstream');
-      const file = await readRepositoryFile(TEST262_REPORT_FILE);
+      const { committedReport, report, stdout } = await readUpstreamRun();
 
-      assertSame(file, output, 'the artifact file must match stdout exactly');
       assertSame(
-        output,
-        npmRun('test262:upstream'),
+        committedReport,
+        report,
+        `${TEST262_REPORT_FILE} is stale; run npm run test262:upstream`,
+      );
+      assertSame(
+        stdout.includes(TEST262_REPORT_FILE),
+        true,
+        'the compact summary must point at the full report',
+      );
+
+      npmRun('test262:upstream');
+
+      assertSame(
+        await readRepositoryFile(TEST262_REPORT_FILE),
+        report,
         'two runs of the pinned subset must be byte-identical',
       );
+    },
+  },
+  {
+    name: 'npm run test262:upstream:check passes on the committed artifacts and fails on stale ones',
+    run: async () => {
+      await readUpstreamRun();
+      npmRun('test262:upstream:check');
+
+      const reportUrl = new URL(TEST262_REPORT_FILE, REPOSITORY_ROOT_URL);
+      const report = await readFile(reportUrl, 'utf8');
+
+      await writeFile(reportUrl, report.replace('{"type', '{"stale":1,"type'));
+
+      try {
+        const { status, stderr } = npmRunExpectingFailure(
+          'test262:upstream:check',
+        );
+
+        assertSame(
+          status === 0,
+          false,
+          'a stale report must fail npm run test262:upstream:check',
+        );
+        assertSame(
+          stderr.includes(
+            `${TEST262_REPORT_FILE}\n1 generated file(s) are stale`,
+          ),
+          true,
+          `the failure must name the stale file on stderr:\n${stderr}`,
+        );
+      } finally {
+        await writeFile(reportUrl, report);
+      }
     },
   },
   {
@@ -345,7 +495,7 @@ export default [
       const manifest = parseFeatureManifest(
         await readRepositoryFile(FEATURES_MANIFEST_FILE),
       );
-      const records = parseJsonLines(npmRun('test262:upstream'));
+      const records = parseJsonLines((await readUpstreamRun()).report);
       const expected = formatUpstreamSummaryLines(
         summarizeUpstreamRun({
           subset,
@@ -364,25 +514,141 @@ export default [
     },
   },
   {
-    name: 'the milestone report in README.md is the real output of the pinned subset',
+    name: 'the report measures the pinned subset against the whole upstream suite, not against itself',
     run: async () => {
-      const readme = await readRepositoryFile('README.md');
-      const begin = readme.indexOf(REPORT_MARKER_BEGIN);
-      const end = readme.indexOf(REPORT_MARKER_END);
-
-      assertSame(begin >= 0 && end > begin, true, 'README report markers');
-
-      const block = readme.slice(begin + REPORT_MARKER_BEGIN.length, end);
-      const fence = /```json\n([\s\S]*?)```/.exec(block);
+      const { checkoutPath } = await readTest262Pin();
+      const records = parseJsonLines((await readUpstreamRun()).report);
+      const tests = records.filter((record) => record.type === 'test');
+      const inventory = await collectTest262Inventory({
+        host: createNodeTest262Host({ root: checkoutPath }),
+      });
+      const expected = summarizeTest262Coverage({
+        inventory,
+        records: tests,
+        selected: upstreamSubsetPaths(
+          parseUpstreamSubset(await readRepositoryFile(UPSTREAM_SUBSET_FILE)),
+        ),
+      });
+      const reported = records
+        .filter(
+          (record) => record.type === 'inventory' || record.type === 'coverage',
+        )
+        .map((record) => JSON.stringify(record));
 
       assertSame(
-        fence !== null,
-        true,
-        'a JSON-lines block between the markers',
+        reported.join('\n'),
+        formatCoverageLines(expected).join('\n'),
+        'the published coverage must match an independent pass over the tree',
       );
       assertSame(
-        /** @type {RegExpExecArray} */ (fence)[1],
-        npmRun('test262:upstream'),
+        coverageRecord(records, 'records').total > tests.length,
+        true,
+        'the whole-suite denominator must be larger than the subset that ran',
+      );
+      assertSame(
+        coverageRecord(records, 'files').total,
+        inventory.totals.files,
+        'the file denominator is the whole pinned tree',
+      );
+    },
+  },
+  {
+    name: 'the coverage summary in README.md is the real output of the pinned subset',
+    run: async () => {
+      const { committedReadme, readme, report, stdout } =
+        await readUpstreamRun();
+
+      assertSame(
+        committedReadme,
+        readme,
+        `${README_FILE} is stale; run npm run test262:upstream`,
+      );
+
+      const block = readGeneratedBlock(readme);
+      const records = parseJsonLines(report);
+      const inventory = records.find((record) => record.type === 'inventory');
+      const expected = renderCoverageSummary({
+        coverage: {
+          files: {
+            .../** @type {any} */ (coverageRecord(records, 'files')),
+            malformed: inventory.malformed,
+          },
+          records: /** @type {any} */ (coverageRecord(records, 'records')),
+        },
+        reportPath: TEST262_REPORT_FILE,
+      });
+
+      assertSame(block, expected);
+      assertSame(stdout, `${block}\n`, 'stdout is the same generated summary');
+      assertSame(
+        readme.includes(COVERAGE_MARKER_BEGIN) &&
+          readme.includes(COVERAGE_MARKER_END),
+        true,
+        'README coverage markers',
+      );
+      assertSame(
+        readme.includes(report),
+        false,
+        'the detailed report belongs in the artifact, not inlined in README.md',
+      );
+      assertSame(
+        block.includes('"type":"test"'),
+        false,
+        'the generated block is a summary, not a dump of per-test records',
+      );
+    },
+  },
+  {
+    name: 'every live coverage number in README.md is inside the generated block, where the drift check can reach it',
+    run: async () => {
+      const { readme, report } = await readUpstreamRun();
+      const begin = readme.indexOf(COVERAGE_MARKER_BEGIN);
+      const end =
+        readme.indexOf(COVERAGE_MARKER_END) + COVERAGE_MARKER_END.length;
+      const outside = `${readme.slice(0, begin)}${readme.slice(end)}`;
+      /** @type {Set<number>} */
+      const live = new Set();
+
+      for (const record of parseJsonLines(report)) {
+        if (record.type !== 'inventory' && record.type !== 'coverage') {
+          continue;
+        }
+
+        for (const value of Object.values(record)) {
+          if (typeof value === 'number') {
+            live.add(value);
+          }
+        }
+      }
+
+      assertSame(
+        live.size > 0,
+        true,
+        'the report must publish the numbers this check is about',
+      );
+
+      const lines = outside.split('\n');
+      /** @type {string[]} */
+      const offenders = [];
+
+      for (const value of live) {
+        for (const rendering of numberRenderings(value)) {
+          const match = wholeNumberPattern(rendering).exec(outside);
+
+          if (match === null) {
+            continue;
+          }
+
+          const line = outside.slice(0, match.index).split('\n').length;
+
+          offenders.push(`${rendering} -> ${lines[line - 1].trim()}`);
+        }
+      }
+
+      assertSame(
+        offenders.join('\n'),
+        '',
+        `these counts belong to the upstream run but sit outside ${COVERAGE_MARKER_BEGIN}, where nothing regenerates them and no drift check would ever notice them going stale. Prose that illustrates the schema must use synthetic values and leave the real ones to the generated block.`,
       );
     },
   },
