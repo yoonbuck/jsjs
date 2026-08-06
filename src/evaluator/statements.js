@@ -16,7 +16,7 @@ import {
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
 import { putValue } from '../runtime/reference.js';
-import { enumerableKeysForIn } from '../runtime/object.js';
+import { enumerableKeysForIn, isEnumerableForIn } from '../runtime/object.js';
 import { evaluateExpression, evaluateExpressionValue } from './expressions.js';
 import { evaluateVariableDeclaration } from './declarations.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
@@ -339,6 +339,15 @@ function evaluateForStatement(node, context, labelSet) {
  * for each name in turn, reusing the same `applyLoopBodyResult`
  * break/continue/return/throw handling every other loop here uses.
  *
+ * The snapshot fixes the *order*, not the *membership*: 12.6.4 requires
+ * that a property deleted before enumeration reaches it is never visited,
+ * so each name is re-checked with `isEnumerableForIn` right before it
+ * would be assigned to the loop target, and a name that is no longer a
+ * live enumerable property is skipped without assigning it. Properties
+ * added during enumeration are the case the same paragraph leaves
+ * unguaranteed; they stay outside the snapshot, which is what keeps an
+ * enumeration that grows its own object finite.
+ *
  * @param {any} node
  * @param {EvaluationContext} context
  * @param {string[]} labelSet
@@ -351,12 +360,17 @@ function evaluateForInStatement(node, context, labelSet) {
     return createNormalCompletion(EMPTY);
   }
 
-  const keys = enumerableKeysForIn(toObject(context.realm, rightValue));
+  const object = toObject(context.realm, rightValue);
+  const keys = enumerableKeysForIn(object);
 
   /** @type {unknown} */
   let value = EMPTY;
 
   for (const key of keys) {
+    if (!isEnumerableForIn(object, key)) {
+      continue;
+    }
+
     assignForInTarget(node.left, key, context);
 
     const bodyResult = evaluateStatement(node.body, context);

@@ -173,6 +173,122 @@ const tests = [
       assertSame(result.value, realm.globalObject);
     },
   },
+  {
+    // ES5 11.2.3 step 7 passes GetBase(ref) — the *original* base value of the
+    // property reference — as the this value, and 10.4.3 leaves it alone for
+    // strict code. A method call on a primitive must therefore see the
+    // primitive itself, not the transient wrapper 11.2.1 boxed it into to
+    // resolve the property.
+    name: 'strict method call on a primitive receiver keeps the primitive as this',
+    run() {
+      assertNormal(
+        run(
+          '"use strict"; String.prototype.p = function () { return this === "x"; }; "x".p();',
+        ),
+        true,
+      );
+      assertNormal(
+        run(
+          '"use strict"; Number.prototype.p = function () { return typeof this; }; (5).p();',
+        ),
+        'number',
+      );
+      assertNormal(
+        run(
+          '"use strict"; Number.prototype.p = function () { return this === 5; }; (5).p();',
+        ),
+        true,
+      );
+      assertNormal(
+        run(
+          '"use strict"; Boolean.prototype.p = function () { return this === true; }; true.p();',
+        ),
+        true,
+      );
+      // A computed member call takes the same path.
+      assertNormal(
+        run(
+          '"use strict"; String.prototype.p = function () { return typeof this; }; "x"["p"]();',
+        ),
+        'string',
+      );
+      // An explicit `.call` receiver is unchanged: it never went through a
+      // property reference on the primitive in the first place.
+      assertNormal(
+        run(
+          '"use strict"; String.prototype.p = function () { return this; }; "x".p.call("y");',
+        ),
+        'y',
+      );
+      assertNormal(
+        run(
+          '"use strict"; String.prototype.p = function () { return this; }; ' +
+            'String.prototype.p.apply("z");',
+        ),
+        'z',
+      );
+    },
+  },
+  {
+    // The other half of 10.4.3: a *non-strict* function still boxes a
+    // primitive this value, so the observable receiver stays an object.
+    name: 'non-strict method call on a primitive receiver still boxes this',
+    run() {
+      assertNormal(
+        run(
+          'String.prototype.p = function () { return typeof this; }; "x".p();',
+        ),
+        'object',
+      );
+      assertNormal(
+        run(
+          'String.prototype.p = function () { return this.valueOf(); }; "x".p();',
+        ),
+        'x',
+      );
+      assertNormal(
+        run(
+          'Number.prototype.p = function () { return this instanceof Number; }; (5).p();',
+        ),
+        true,
+      );
+      assertNormal(
+        run(
+          'Boolean.prototype.p = function () { return this.valueOf(); }; true.p();',
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'method call on an ordinary object passes the object itself in both modes',
+    run() {
+      assertNormal(
+        run('var o = { m: function () { return this === o; } }; o.m();'),
+        true,
+      );
+      assertNormal(
+        run(
+          '"use strict"; var o = { m: function () { return this === o; } }; o.m();',
+        ),
+        true,
+      );
+      assertNormal(
+        run(
+          'var o = { m: function () { "use strict"; return this === o; } }; o["m"]();',
+        ),
+        true,
+      );
+      // A boxed primitive receiver is an object and stays that same object.
+      assertNormal(
+        run(
+          '"use strict"; String.prototype.p = function () { return this === boxed; }; ' +
+            'var boxed = new String("x"); boxed.p();',
+        ),
+        true,
+      );
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // arguments object mapping

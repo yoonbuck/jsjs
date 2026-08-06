@@ -1,5 +1,21 @@
 import { GuestErrorSignal } from './completion.js';
+import { isAccessorDescriptor, isDataDescriptor } from './descriptors.js';
+import { callAccessor } from './object.js';
 
+/**
+ * A Reference record (ECMA-262 8.7). `base` is the *resolution target* the
+ * engine reads and writes through: an environment record, an object, or
+ * `undefined`/`null` for an unresolvable reference.
+ *
+ * `thisValue` carries the reference's original base *value* — the spec's
+ * `GetBase(V)`. For an ordinary property reference that value is the same
+ * object as `base`; for a property reference on a primitive it is the
+ * primitive itself, while `base` holds the transient `ToObject` wrapper
+ * that resolves the lookup (11.2.1 step 6). Keeping both is what lets
+ * 8.7.1/8.7.2's *special* `[[Get]]`/`[[Put]]` — and 11.2.3's method-call
+ * `this` binding — hand the primitive to guest code instead of a wrapper
+ * that is discarded the moment the reference is consumed.
+ */
 export class Reference {
   /**
    * @param {object | undefined | null} base
@@ -102,6 +118,46 @@ function isGlobalPutTarget(globalObject) {
 }
 
 /**
+ * Implements ECMA-262 8.7 `HasPrimitiveBase`: the reference's base *value*
+ * is a String, Number, or Boolean primitive. `null` and `undefined` never
+ * reach here — `CheckObjectCoercible` rejects them while the property
+ * reference is being built (11.2.1 step 5) — and an environment-record
+ * reference carries no base value at all.
+ *
+ * @param {Reference} reference
+ * @returns {reference is Reference & { thisValue: string | number | boolean }}
+ */
+function hasPrimitiveBase(reference) {
+  const value = reference.thisValue;
+
+  return (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  );
+}
+
+/**
+ * @param {unknown} base
+ * @returns {base is {
+ *   canPut: (name: string | symbol) => boolean,
+ *   getOwnProperty: (name: string | symbol) => import('./descriptors.js').CompletePropertyDescriptor | undefined,
+ *   getProperty: (name: string | symbol) => import('./descriptors.js').PropertyDescriptorRecord | undefined,
+ * }}
+ */
+function isPrimitiveWrapperBase(base) {
+  return (
+    !!base &&
+    typeof base === 'object' &&
+    typeof (/** @type {any} */ (base).canPut) === 'function' &&
+    typeof (/** @type {any} */ (base).getOwnProperty) === 'function' &&
+    typeof (/** @type {any} */ (base).getProperty) === 'function'
+  );
+}
+
+/**
+ * Implements ECMA-262 8.7.1 `GetValue`.
+ *
  * @param {Reference} reference
  * @returns {unknown}
  */
@@ -124,11 +180,47 @@ export function getValue(reference) {
     );
   }
 
+  if (hasPrimitiveBase(reference) && isPrimitiveWrapperBase(reference.base)) {
+    return getPrimitiveBaseValue(reference, reference.base);
+  }
+
   if (isPropertyReferenceBase(reference.base)) {
     return reference.base.getReferencedValue(reference.referencedName);
   }
 
   throw new TypeError('Unsupported reference base');
+}
+
+/**
+ * The *special* `[[Get]]` of ECMA-262 8.7.1, used when the reference's
+ * base is a primitive. It is deliberately not the wrapper object's
+ * ordinary `[[Get]]`: an accessor found on the wrapper's prototype is
+ * called with the **primitive** as its `this` value, so a strict getter on
+ * `String.prototype` sees `"x"` rather than the transient wrapper that the
+ * lookup was resolved against and that is discarded immediately after.
+ * Data properties (including a String wrapper's `length` and its lazily
+ * synthesised index properties) are read straight off the descriptor.
+ *
+ * @param {Reference} reference
+ * @param {{
+ *   getProperty: (name: string | symbol) => import('./descriptors.js').PropertyDescriptorRecord | undefined,
+ * }} object The transient `ToObject` wrapper for the primitive base.
+ * @returns {unknown}
+ */
+function getPrimitiveBaseValue(reference, object) {
+  const descriptor = object.getProperty(reference.referencedName);
+
+  if (descriptor === undefined) {
+    return undefined;
+  }
+
+  if (isDataDescriptor(descriptor)) {
+    return descriptor.value;
+  }
+
+  return descriptor.get === undefined
+    ? undefined
+    : callAccessor(descriptor.get, reference.thisValue, []);
 }
 
 /**
@@ -138,6 +230,10 @@ export function getValue(reference) {
  * the `Throw` flag false. Strict references still throw a `ReferenceError`,
  * which is what keeps `x = 5` from silently declaring a global in strict
  * code.
+ *
+ * A property reference whose base is a primitive takes the *special*
+ * `[[Put]]` of the same section rather than the wrapper object's ordinary
+ * one — see `putPrimitiveBaseValue`.
  *
  * @param {Reference} reference
  * @param {unknown} value
@@ -161,6 +257,10 @@ export function putValue(reference, value) {
     return value;
   }
 
+  if (hasPrimitiveBase(reference) && isPrimitiveWrapperBase(reference.base)) {
+    return putPrimitiveBaseValue(reference, reference.base, value);
+  }
+
   if (isPropertyReferenceBase(reference.base)) {
     reference.base.setReferencedValue(
       reference.referencedName,
@@ -171,6 +271,89 @@ export function putValue(reference, value) {
   }
 
   throw new TypeError('Unsupported reference base');
+}
+
+/**
+ * The *special* `[[Put]]` of ECMA-262 8.7.2, used when the reference's
+ * base is a primitive. The wrapper `ToObject` produced is transient, so
+ * the algorithm refuses every write that would only land on it:
+ *
+ * - step 2: `[[CanPut]]` is false (a String wrapper's `length` and index
+ *   properties, or an inherited setter-less accessor) — throw in strict
+ *   code, otherwise return;
+ * - step 4: the wrapper has an own data property — throw in strict code,
+ *   otherwise return;
+ * - steps 5–6: an own or inherited **accessor** with a setter is called
+ *   with the *primitive* as its `this` value, for strict and non-strict
+ *   references alike, so a strict setter observes `"x"` rather than the
+ *   wrapper (a non-strict setter re-boxes it in 10.4.3, unchanged);
+ * - step 7: anything else would create an own property on the transient
+ *   object — throw in strict code, otherwise return.
+ *
+ * The non-strict paths are silent no-ops, which is what keeps
+ * `"x".missing = 1` legal and unobservable; the strict paths throw a guest
+ * `TypeError` raised as a `GuestErrorSignal`, exactly like every other
+ * strict property-assignment rejection, so the nearest realm-aware
+ * boundary turns it into a catchable guest throw in the usual order
+ * (after the right-hand side has been evaluated).
+ *
+ * @param {Reference} reference
+ * @param {{
+ *   canPut: (name: string | symbol) => boolean,
+ *   getOwnProperty: (name: string | symbol) => import('./descriptors.js').CompletePropertyDescriptor | undefined,
+ *   getProperty: (name: string | symbol) => import('./descriptors.js').PropertyDescriptorRecord | undefined,
+ * }} object The transient `ToObject` wrapper for the primitive base.
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function putPrimitiveBaseValue(reference, object, value) {
+  const name = reference.referencedName;
+
+  if (!object.canPut(name)) {
+    return rejectPrimitivePut(reference, value, 'Cannot assign to property');
+  }
+
+  if (isDataDescriptor(object.getOwnProperty(name))) {
+    return rejectPrimitivePut(
+      reference,
+      value,
+      'Cannot assign to a data property of a primitive value',
+    );
+  }
+
+  const descriptor = object.getProperty(name);
+
+  if (
+    descriptor !== undefined &&
+    isAccessorDescriptor(descriptor) &&
+    descriptor.set !== undefined
+  ) {
+    callAccessor(descriptor.set, reference.thisValue, [value]);
+    return value;
+  }
+
+  return rejectPrimitivePut(
+    reference,
+    value,
+    'Cannot create a property on a primitive value',
+  );
+}
+
+/**
+ * Rejects one of the special `[[Put]]` steps above: a guest `TypeError`
+ * for a strict reference, a silent no-op for a non-strict one.
+ *
+ * @param {Reference} reference
+ * @param {unknown} value
+ * @param {string} message
+ * @returns {unknown}
+ */
+function rejectPrimitivePut(reference, value, message) {
+  if (reference.strict) {
+    throw new GuestErrorSignal('TypeError', message);
+  }
+
+  return value;
 }
 
 /**
