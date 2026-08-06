@@ -39,7 +39,7 @@ export default [
     },
   },
   {
-    name: 'Date constructor clones dates, parses strings, and creates local calendar times',
+    name: 'Date constructor parses strings and creates local calendar times',
     run() {
       const options = {
         dateHost: {
@@ -48,11 +48,25 @@ export default [
         },
       };
 
-      assertSame(runDate('new Date(new Date(123))', options).timeValue, 123);
       assertSame(runDate('new Date("1970-01-01T00:00:00.000Z")', options).timeValue, 0);
       assertSame(runDate('new Date(1970, 0, 1, 0, 0, 0, 0)', options).timeValue, -7200000);
       assertSame(runDate('new Date(99, 0, 1)', options).timeValue, 915141600000);
       assertSame(runDate('new Date()', options).timeValue, 987654321);
+    },
+  },
+  {
+    name: 'Date constructor preserves an invalid component year',
+    run() {
+      assertSame(Number.isNaN(runDate('new Date(NaN, 0)').timeValue), true);
+      assertSame(Number.isNaN(runDate('new Date(undefined, 0)').timeValue), true);
+      assertSame(
+        Number.isNaN(/** @type {number} */ (run('Date.UTC(NaN, 0);'))),
+        true,
+      );
+      assertSame(
+        Number.isNaN(/** @type {number} */ (run('Date.UTC(undefined, 0);'))),
+        true,
+      );
     },
   },
   {
@@ -63,6 +77,20 @@ export default [
       assertSame(run('Date.parse("2000-02-29");'), 951782400000);
       assertSame(Number.isNaN(/** @type {number} */ (run('Date.parse("2001-02-29");'))), true);
       assertSame(Number.isNaN(/** @type {number} */ (run('Date.parse("not a date");'))), true);
+    },
+  },
+  {
+    name: 'Date.parse defaults incomplete date-only forms and unzoned date-times to UTC',
+    run() {
+      const options = {
+        dateHost: {
+          timezoneOffset: () => -120,
+        },
+      };
+
+      assertSame(run('Date.parse("1970");', options), 0);
+      assertSame(run('Date.parse("1970-02");', options), 2678400000);
+      assertSame(run('Date.parse("1970-01-01T00:00");', options), 0);
     },
   },
   {
@@ -89,6 +117,54 @@ export default [
       assertSame(run('Date.now();', options), 0);
       assertSame(run('typeof Date();', options), 'string');
       assertSame(run('Date();', options), 'Thu Jan 01 1970 02:00:00 GMT+0200 (UTC)');
+    },
+  },
+  {
+    name: 'Date constructor applies String-hint conversion to Date objects',
+    run() {
+      assertSame(
+        runDate(
+          '(function () { var value = new Date(0); value.toString = function () { return "1970-01-01T00:00:00.001Z"; }; value.valueOf = function () { return 2; }; return new Date(value); }())',
+        ).timeValue,
+        1,
+      );
+    },
+  },
+  {
+    name: 'Date host receives UTC milliseconds for Date call and ES5 local construction',
+    run() {
+      /** @type {number[]} */
+      const observed = [];
+      const options = {
+        dateHost: {
+          now: () => 7200000,
+          standardTimezoneOffset: 300,
+          timezoneOffset(/** @type {number} */ utcMilliseconds) {
+            observed.push(utcMilliseconds);
+            return utcMilliseconds === 18000000 ? 240 : 300;
+          },
+        },
+      };
+
+      assertSame(
+        runDate('new Date(1970, 0, 1, 0, 0, 0, 0)', options).timeValue,
+        14400000,
+      );
+      assertSame(run('Date();', options), 'Wed Dec 31 1969 21:00:00 GMT-0500 (UTC)');
+      assertSame(observed.join(','), '18000000,7200000');
+    },
+  },
+  {
+    name: 'Date.prototype is an invalid Date-branded object',
+    run() {
+      const realm = createRealm();
+      const datePrototype = /** @type {{ getClassName: () => string, timeValue: number }} */ (
+        realm.intrinsics.datePrototype
+      );
+
+      assertSame(datePrototype.getClassName(), 'Date');
+      assertSame(Number.isNaN(datePrototype.timeValue), true);
+      assertSame(run('Object.prototype.toString.call(Date.prototype);'), '[object Date]');
     },
   },
 ];

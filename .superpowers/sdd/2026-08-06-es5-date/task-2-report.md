@@ -75,3 +75,49 @@
   repository invariant identified them; the source now passes that invariant.
 - Confirmed the scope contains no public Date getters, setters, or formatting
   method family.
+
+## Fix round 1
+
+### Covered findings
+
+- `new Date(NaN, 0)`, `new Date(undefined, 0)`, and the equivalent `Date.UTC`
+  calls retain invalid years as `NaN`.
+- ISO date-only `YYYY` and `YYYY-MM` forms default omitted month/day fields to
+  one, and an unzoned date-time is interpreted as UTC.
+- Single-argument Date construction uses `ToPrimitive` with a String hint,
+  including overridden guest `toString` and `valueOf`.
+- `DateHost.timezoneOffset(utcMilliseconds)` now consistently receives UTC
+  milliseconds. `standardTimezoneOffset` is its constant standard-time value
+  in the same `getTimezoneOffset` minute convention, so local construction
+  evaluates the dynamic offset at `localTime + standardTimezoneOffset`, as
+  required by ES5 `UTC(t)`.
+- `%Date.prototype%` is an `EngineDate` with a `NaN` UTC value and Date brand.
+
+### TDD evidence
+
+1. Added focused behavior tests in `test/date-builtins.test.js`.
+2. RED command (with the production fix reversed, then restored):
+   `node test/run-node.js test/date-builtins.test.js`
+
+   Exit 1 with the five intended failures:
+   - invalid component years were mapped to 1900;
+   - incomplete ISO forms parsed as `NaN`;
+   - a Date object's overridden String conversion was bypassed;
+   - local construction used the wrong timezone-adapter instant;
+   - `Date.prototype` had no invalid Date value.
+3. Implemented only the Date runtime, Date builtin, and realm adapter changes
+   needed for those cases.
+4. GREEN command:
+   `node test/run-node.js test/date-builtins.test.js`
+
+   Output: all 10 named Date cases passed.
+
+### Verification
+
+| Command | Output |
+| --- | --- |
+| `node test/run-node.js test/date-builtins.test.js` | 10 passed |
+| `node test/run-node.js test/date-arithmetic.test.js` | 4 passed |
+| `node test/run-node.js test/node/repository-invariants.test.js` | 14 passed |
+| `npm run typecheck` | Exit 0, no diagnostics |
+| `npm run lint -- --quiet` | Exit 0, no diagnostics |

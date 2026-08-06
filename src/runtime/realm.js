@@ -56,6 +56,7 @@ import { createDateHost } from './date.js';
  *   clock?: () => number,
  *   timezoneOffset?: (utcMilliseconds: number) => number,
  *   timeZoneOffset?: (utcMilliseconds: number) => number,
+ *   standardTimezoneOffset?: number,
  * }} RealmOptions
  */
 
