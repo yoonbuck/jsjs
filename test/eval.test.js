@@ -149,6 +149,20 @@ const tests = [
     },
   },
   {
+    name: 'eval of a function declaration in with-body throws a guest SyntaxError',
+    run() {
+      // The early-error pass runs for `parseEval` too, so a `FunctionDeclaration`
+      // wedged into a `with` body reaches guest code as a catchable, realm-local
+      // SyntaxError rather than a host throw or a silently accepted program.
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'eval("with ({}) function f() {}");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
     name: 'eval("throw 1;") surfaces the guest throw with value 1',
     run() {
       const result = run('eval("throw 1;");');

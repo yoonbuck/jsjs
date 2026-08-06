@@ -131,7 +131,131 @@ function validateScriptProgram(program) {
     throw new TypeError('Expected parser to return a script Program node');
   }
 
+  checkStatementPositionFunctionDeclarations(/** @type {any} */ (program));
+
   return /** @type {any} */ (program);
+}
+
+/**
+ * The five statement forms whose ES5.1 grammar body is a single `Statement`
+ * and therefore cannot be a `FunctionDeclaration`.
+ *
+ * @type {Record<string, string>}
+ */
+const STATEMENT_BODY_PARENT_LABELS = Object.freeze({
+  WithStatement: 'with statement',
+  WhileStatement: 'while statement',
+  DoWhileStatement: 'do-while statement',
+  ForStatement: 'for statement',
+  ForInStatement: 'for-in statement',
+});
+
+/**
+ * Property keys that hold source-position metadata rather than child nodes;
+ * skipped while walking so the traversal only descends into the AST proper.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
+
+/**
+ * Rejects a `FunctionDeclaration` that sits in a single-`Statement` body
+ * position as a parse-time early error.
+ *
+ * ES5.1's iteration statements (§12.6) and `with` (§12.10) take a
+ * `Statement` for their body, and a `FunctionDeclaration` is a
+ * `SourceElement`, not a `Statement` (§12, §14) — see the note in
+ * `src/evaluator/declarations.js`. Acorn nonetheless parses a function
+ * declaration in those positions (it accepts the Annex B web-reality forms
+ * uniformly), so without this pass the evaluator would run
+ * `while (0) function f(){}` and, worse, spin forever on
+ * `for (;;) function f(){}`. Rejecting here — from `validateScriptProgram`,
+ * which both `parseScript` and `parseEval` funnel through — makes scripts,
+ * direct `eval`, and the dynamic `Function` constructor all refuse it as a
+ * `SyntaxError`, matching every real engine and the upstream `decl-fun.js` /
+ * `labelled-fn-stmt.js` tests (which are `phase: parse`).
+ *
+ * The rejection is deliberately narrow to the five body-`Statement` parents
+ * above. A function declaration stays accepted as an `if` branch
+ * (`if (1) function f(){}`, Annex B B.3.4), as a labelled statement at
+ * statement-list level (`l: function f(){}`, Annex B B.3.2), and inside a
+ * block (`{ function f(){} }`) — all of which JavaScriptCore also accepts.
+ * A labelled chain that ultimately wraps a function declaration
+ * (`with (o) a: b: function f(){}`) is rejected too, because the label
+ * chain does not turn a `SourceElement` into a `Statement` in body position.
+ *
+ * @param {any} node
+ * @returns {void}
+ */
+function checkStatementPositionFunctionDeclarations(node) {
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+
+  if (Array.isArray(node)) {
+    for (const element of node) {
+      checkStatementPositionFunctionDeclarations(element);
+    }
+    return;
+  }
+
+  if (typeof node.type !== 'string') {
+    return;
+  }
+
+  if (node.type in STATEMENT_BODY_PARENT_LABELS) {
+    const offending = unwrapLabeledFunctionDeclaration(node.body);
+
+    if (offending) {
+      throw statementPositionFunctionError(node.type, offending);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (!NODE_POSITION_KEYS.has(key)) {
+      checkStatementPositionFunctionDeclarations(node[key]);
+    }
+  }
+}
+
+/**
+ * Returns the `FunctionDeclaration` a body `Statement` resolves to after
+ * peeling any surrounding label chain, or `undefined` when the body is an
+ * ordinary statement. A labelled statement's body is itself a `Statement`,
+ * so `a: b: function f(){}` unwraps to the function declaration.
+ *
+ * @param {any} statement
+ * @returns {any}
+ */
+function unwrapLabeledFunctionDeclaration(statement) {
+  let current = statement;
+
+  while (current && current.type === 'LabeledStatement') {
+    current = current.body;
+  }
+
+  return current && current.type === 'FunctionDeclaration'
+    ? current
+    : undefined;
+}
+
+/**
+ * Builds the guest-facing `SyntaxError` for a rejected statement-position
+ * function declaration, carrying the offending node's position through
+ * `normalizeSyntaxError` so it reads like any other parse error.
+ *
+ * @param {string} parentType
+ * @param {any} node
+ * @returns {SyntaxError}
+ */
+function statementPositionFunctionError(parentType, node) {
+  const label = STATEMENT_BODY_PARENT_LABELS[parentType] ?? 'statement';
+
+  return normalizeSyntaxError({
+    message: `Function declarations cannot appear as the body of a ${label}`,
+    pos: typeof node.start === 'number' ? node.start : undefined,
+    loc: node.loc ? node.loc.start : undefined,
+  });
 }
 
 /**
