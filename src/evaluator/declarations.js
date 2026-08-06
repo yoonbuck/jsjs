@@ -495,12 +495,15 @@ function collectFunctionDeclarations(node, declarations) {
 export function evaluateVariableDeclaration(node, context) {
   for (const declarator of node.declarations) {
     if (declarator.init) {
-      const value = evaluateExpressionValue(declarator.init, context);
+      // ES5.1 §12.2.1: evaluate the Identifier to a Reference *before* the
+      // Initialiser, so a `with`-bound target captured here survives a
+      // property the initializer deletes and PutValue writes back through it.
       const reference = getIdentifierReference(
         context.env,
         declarator.id.name,
         context.strict,
       );
+      const value = evaluateExpressionValue(declarator.init, context);
       putValue(reference, value);
     }
   }

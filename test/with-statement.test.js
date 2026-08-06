@@ -317,6 +317,28 @@ const tests = [
       );
     },
   },
+  {
+    name: 'a var binding is resolved before its initializer runs (ES5.1 §12.2)',
+    run() {
+      // Inside `with (obj)` the reference for `test262id` binds to `obj`
+      // *before* the initializer runs (§12.2.1: evaluate the Identifier, then
+      // the Initialiser, then PutValue). The initializer deletes the property,
+      // but PutValue writes back through the already-captured reference, so it
+      // reappears on `obj` and the outer `var` is never touched. jsjs used to
+      // evaluate the initializer first, so the binding fell through to the
+      // global. JavaScriptCore agrees with the order asserted here.
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        'var obj = { test262id: 1 };' +
+          'with (obj) { var test262id = delete obj.test262id; }' +
+          '"" + obj.test262id + "," + (typeof test262id);',
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'true,undefined');
+    },
+  },
 ];
 
 export default tests;
