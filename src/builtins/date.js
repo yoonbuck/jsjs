@@ -19,7 +19,7 @@ import {
   yearFromTime,
   msFromTime,
 } from '../runtime/date.js';
-import { toNumber, toPrimitive, toString } from '../runtime/conversion.js';
+import { toInteger, toNumber, toPrimitive, toString } from '../runtime/conversion.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 
 /**
@@ -221,8 +221,8 @@ function installDateSetters(realm, datePrototype) {
   fieldSetter('setFullYear', 3, true, 0, true);
   fieldSetter('setUTCFullYear', 3, false, 0, true);
   set('setYear', 1, (date, args) => {
-    let year = toNumber(args[0]);
-    const fields = dateFields(date, realm, true, false);
+    let year = toInteger(args[0]);
+    const fields = dateFields(date, realm, true, true);
     if (fields === undefined) {
       return NaN;
     }
@@ -244,14 +244,15 @@ function installDateSetters(realm, datePrototype) {
  */
 function dateFields(date, realm, local, recoverInvalid) {
   let time = date.timeValue;
-  if (!Number.isFinite(time)) {
+  const recovering = !Number.isFinite(time);
+  if (recovering) {
     if (!recoverInvalid) {
       return undefined;
     }
     time = 0;
   }
 
-  if (local) {
+  if (local && !recovering) {
     time = localTimeValue(time, realm);
   }
   if (!Number.isFinite(time)) {

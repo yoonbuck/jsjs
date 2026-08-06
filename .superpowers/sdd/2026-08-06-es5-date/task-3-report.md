@@ -77,3 +77,51 @@ behavior changed for that correction.
   conversions, and clip all computed times.
 - Confirmed no host Date supplies expected test values.
 - No remaining concerns.
+
+## Fix round 1
+
+### Root cause and implementation
+
+- `dateFields` converted a recovered invalid local setter time through
+  `LocalTime(0)`. Recovery now takes calendar defaults directly from `+0`;
+  conversion to UTC remains in `setDateFields`.
+- Annex B `setYear` now recovers invalid dates and applies its two-digit range
+  after `ToInteger`.
+- Existing invalid-setter coverage now correctly treats `setYear` as a recovery
+  setter and uses the hand-derived west-of-UTC `setFullYear` result.
+
+### Tests added or corrected
+
+- `test/date-builtins.test.js`
+  - west-of-UTC invalid local `setFullYear` recovery;
+  - invalid `setYear` recovery;
+  - fractional `setYear(99.5)` and `setYear(-0.5)`;
+  - explicitly supplied `undefined` optional setter field;
+  - setter clipping beyond the `TimeClip` limit;
+  - a deterministic DST fall-back repeated-hour local `setHours` case.
+
+All values are literal, hand-derived milliseconds; no expected value uses host
+`Date`.
+
+### TDD evidence
+
+- **RED command:** `node test/run-node.js test/date-builtins.test.js`
+- **RED output:** the corrected existing recovery test failed with
+  `946684800000` instead of `946677600000`; the new west-of-UTC full-year test
+  failed with `978307200000` instead of `946692000000`; and invalid `setYear`
+  returned `NaN` instead of `946692000000`. These reproduce findings 1–3.
+- The new finding-4 coverage cases (explicit `undefined`, clipping, and
+  repeated-hour fall-back) passed against the pre-fix implementation because
+  those behaviors already worked; this was recorded rather than manufacturing
+  a RED failure.
+- **GREEN command:** `node test/run-node.js test/date-builtins.test.js`
+- **GREEN output:** 23/23 Date builtins cases passed.
+
+### Validation
+
+- `node test/run-node.js test/date-arithmetic.test.js` — 4/4 passed.
+- `node test/run-node.js test/node/repository-invariants.test.js` — 14/14
+  passed.
+- `npm run typecheck` — passed.
+- `npm run lint -- --quiet` — passed.
+- `npm test` — passed (exit 0).

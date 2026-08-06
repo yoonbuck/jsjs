@@ -322,10 +322,65 @@ export default [
 
       assertSame(
         run(
-          '(function () { var methods = ["setMilliseconds", "setUTCMilliseconds", "setSeconds", "setUTCSeconds", "setMinutes", "setUTCMinutes", "setHours", "setUTCHours", "setDate", "setUTCDate", "setMonth", "setUTCMonth", "setYear"]; var i, d, value, invalid = true; for (i = 0; i < methods.length; i += 1) { d = new Date(NaN); value = d[methods[i]](1); invalid = invalid && value !== value && d.getTime() !== d.getTime(); } d = new Date(NaN); var time = d.setTime(5); d = new Date(NaN); var localYear = d.setFullYear(2000); d = new Date(NaN); var utcYear = d.setUTCFullYear(2000); try { Date.prototype.setDate.call({}, 1); } catch (error) { return invalid + ":" + time + ":" + localYear + ":" + utcYear + ":" + error.name; } }())',
+          '(function () { var methods = ["setMilliseconds", "setUTCMilliseconds", "setSeconds", "setUTCSeconds", "setMinutes", "setUTCMinutes", "setHours", "setUTCHours", "setDate", "setUTCDate", "setMonth", "setUTCMonth"]; var i, d, value, invalid = true; for (i = 0; i < methods.length; i += 1) { d = new Date(NaN); value = d[methods[i]](1); invalid = invalid && value !== value && d.getTime() !== d.getTime(); } d = new Date(NaN); var time = d.setTime(5); d = new Date(NaN); var localYear = d.setFullYear(2000); d = new Date(NaN); var utcYear = d.setUTCFullYear(2000); try { Date.prototype.setDate.call({}, 1); } catch (error) { return invalid + ":" + time + ":" + localYear + ":" + utcYear + ":" + error.name; } }())',
           options,
         ),
-        'true:5:946684800000:946684800000:TypeError',
+        'true:5:946677600000:946684800000:TypeError',
+      );
+    },
+  },
+  {
+    name: 'Date local full-year recovery defaults invalid dates from UTC zero before local conversion',
+    run() {
+      const options = {
+        dateHost: {
+          standardTimezoneOffset: 120,
+          timezoneOffset: () => 120,
+        },
+      };
+
+      assertSame(
+        run('(new Date(NaN)).setFullYear(2000);', options),
+        946692000000,
+      );
+    },
+  },
+  {
+    name: 'Date setYear recovers invalid dates and applies its two-digit window after integer conversion',
+    run() {
+      const westernOptions = {
+        dateHost: {
+          standardTimezoneOffset: 120,
+          timezoneOffset: () => 120,
+        },
+      };
+      const utcOptions = {
+        dateHost: {
+          timezoneOffset: () => 0,
+        },
+      };
+
+      assertSame(
+        run('(new Date(NaN)).setYear(2000);', westernOptions),
+        946692000000,
+      );
+      assertSame(
+        run(
+          '(function () { var d = new Date(0); var first = d.setYear(99.5); d = new Date(0); return first + ":" + d.setYear(-0.5); }())',
+          utcOptions,
+        ),
+        '915148800000:-2208988800000',
+      );
+    },
+  },
+  {
+    name: 'Date setters convert supplied undefined optional fields and clip overflow',
+    run() {
+      assertSame(
+        run(
+          '(function () { var d = new Date(0); var optional = d.setUTCSeconds(1, undefined); d = new Date(0); var overflow = d.setUTCFullYear(275760, 8, 14); return (optional !== optional) + ":" + (overflow !== overflow); }())',
+        ),
+        'true:true',
       );
     },
   },
@@ -368,6 +423,29 @@ export default [
       assertSame(
         observed.join(','),
         `${springLocalTime + 240 * minute},${springLocalTime + 240 * minute},${springLocalTime + 300 * minute}`,
+      );
+    },
+  },
+  {
+    name: 'Date local setters select the standard-time occurrence of a repeated DST fall-back hour',
+    run() {
+      const minute = 60 * 1000;
+      const day = 24 * 60 * minute;
+      const fallLocalTime = 304 * day + 60 * minute + 30 * minute;
+      const options = {
+        dateHost: {
+          standardTimezoneOffset: 300,
+          timezoneOffset(/** @type {number} */ utcMilliseconds) {
+            return utcMilliseconds >= fallLocalTime + 300 * minute
+              ? 300
+              : 240;
+          },
+        },
+      };
+
+      assertSame(
+        run('new Date(1970, 10, 1, 0, 30).setHours(1, 30);', options),
+        fallLocalTime + 300 * minute,
       );
     },
   },
