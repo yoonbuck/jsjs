@@ -327,6 +327,16 @@ export class EngineDate extends EngineObject {
     super(prototype, 'Date');
     this.timeValue = timeValue;
   }
+
+  /**
+   * Date is the sole ES5 built-in whose no-hint conversion uses String order.
+   *
+   * @param {'string' | 'number' | 'default'} [hint='number']
+   * @returns {string | number | boolean | null | undefined}
+   */
+  defaultValue(hint = 'number') {
+    return super.defaultValue(hint === 'default' ? 'string' : hint);
+  }
 }
 
 /**

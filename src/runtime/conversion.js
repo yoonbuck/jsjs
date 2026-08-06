@@ -48,9 +48,7 @@ export function toPrimitive(value, preferredType = 'default') {
   }
 
   if (value instanceof EngineObject) {
-    return value.defaultValue(
-      preferredType === 'default' ? 'number' : preferredType,
-    );
+    return value.defaultValue(preferredType);
   }
 
   throw new TypeError('Unsupported object coercion');

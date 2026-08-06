@@ -81,16 +81,16 @@ const DATE_GROUPS = Object.freeze({
     'test/built-ins/Date/prototype/setUTCMonth/this-value-valid-date-month.js',
   ]),
   'date-construction-statics': Object.freeze([
+    'test/built-ins/Date/15.9.1.15-1.js',
     'test/built-ins/Date/S15.9.2.1_A2.js',
-    'test/built-ins/Date/TimeClip_negative_zero.js',
+    'test/built-ins/Date/S15.9.3.2_A3_T1.1.js',
     'test/built-ins/Date/UTC/overflow-make-day.js',
     'test/built-ins/Date/UTC/time-clip.js',
-    'test/built-ins/Date/construct_with_date.js',
   ]),
   'date-formatting-json': Object.freeze([
+    'test/built-ins/Date/prototype/S15.9.5_A42_T1.js',
     'test/built-ins/Date/prototype/toISOString/15.9.5.43-0-3.js',
     'test/built-ins/Date/prototype/toJSON/non-finite.js',
-    'test/built-ins/Date/prototype/toUTCString/day-names.js',
     'test/built-ins/Date/prototype/valueOf/S9.4_A3_T1.js',
   ]),
 });

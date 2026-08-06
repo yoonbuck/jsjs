@@ -48,7 +48,7 @@ export default [
     },
   },
   {
-    name: 'Date constructor clones dates, parses strings, and creates local calendar times',
+    name: 'Date constructor converts Date arguments with Date String-default semantics, parses strings, and creates local calendar times',
     run() {
       const options = {
         dateHost: {
@@ -57,13 +57,13 @@ export default [
         },
       };
 
-      assertSame(runDate('new Date(new Date(123))', options).timeValue, 123);
+      assertSame(runDate('new Date(new Date(0))', options).timeValue, 0);
       assertSame(
         run(
-          '(function () { var source = new Date(123); source.toString = function () { throw "toString"; }; source.valueOf = function () { throw "valueOf"; }; return new Date(source).getTime(); }())',
+          '(function () { var source = new Date(0); source.toString = function () { return "1970-01-01T00:00:00.001Z"; }; source.valueOf = function () { return 2; }; return new Date(source).getTime(); }())',
           options,
         ),
-        123,
+        1,
       );
       assertSame(
         runDate('new Date("1970-01-01T00:00:00.000Z")', options).timeValue,
@@ -214,24 +214,35 @@ export default [
     },
   },
   {
-    name: 'Date constructor clones Date internal values despite own conversion overrides',
+    name: 'Date constructor observes own Date conversion overrides',
     run() {
       assertSame(
         runDate(
           '(function () { var value = new Date(0); value.toString = function () { return "1970-01-01T00:00:00.001Z"; }; value.valueOf = function () { return 2; }; return new Date(value); }())',
         ).timeValue,
-        0,
+        1,
       );
     },
   },
   {
-    name: 'Date constructor clones Date internal values despite inherited conversion overrides',
+    name: 'Date constructor observes inherited Date conversion overrides',
     run() {
       assertSame(
         runDate(
           '(function () { Date.prototype.toString = function () { return "1970-01-01T00:00:00.001Z"; }; return new Date(new Date(0)); }())',
         ).timeValue,
-        0,
+        1,
+      );
+    },
+  },
+  {
+    name: 'Date constructor uses ordinary objects Number-default conversion order',
+    run() {
+      assertSame(
+        run(
+          '(function () { var observed = ""; var source = { valueOf: function () { observed += "valueOf"; return 123; }, toString: function () { observed += "toString"; return "1970-01-01T00:00:00.000Z"; } }; var date = new Date(source); return observed + "," + date.getTime(); }())',
+        ),
+        'valueOf,123',
       );
     },
   },

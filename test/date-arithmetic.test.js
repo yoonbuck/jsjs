@@ -80,7 +80,7 @@ export default [
     },
   },
   {
-    name: 'timeClip enforces the ES5 range limit, truncates toward zero, and normalizes negative zero',
+    name: 'timeClip enforces the ES5 range limit, truncates toward zero, and uses the chosen +0 normalization',
     run() {
       assertSame(timeClip(8640000000000000), 8640000000000000);
       assertSame(timeClip(-8640000000000000), -8640000000000000);

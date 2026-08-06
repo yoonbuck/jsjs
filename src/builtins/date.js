@@ -394,12 +394,7 @@ function dateValueFromArguments(realm, args) {
 
   if (args.length === 1) {
     const value = args[0];
-
-    if (value instanceof EngineDate) {
-      return value.timeValue;
-    }
-
-    const primitive = toPrimitive(value, 'string');
+    const primitive = toPrimitive(value);
     return typeof primitive === 'string'
       ? parseDateString(primitive, realm.dateHost)
       : timeClip(toNumber(primitive));
