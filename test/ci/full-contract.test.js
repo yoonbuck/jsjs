@@ -487,6 +487,38 @@ export default [
     },
   },
   {
+    name: 'npm run test262:select:check passes on the committed subset and fails when it drifts',
+    run: async () => {
+      npmRun('test262:select:check');
+
+      const subsetUrl = new URL(UPSTREAM_SUBSET_FILE, REPOSITORY_ROOT_URL);
+      const subset = await readFile(subsetUrl, 'utf8');
+      const drifted = JSON.parse(subset);
+      drifted.groups[0].paths.push('test/built-ins/zzz-select-drift-probe.js');
+
+      await writeFile(subsetUrl, `${JSON.stringify(drifted, null, 2)}\n`);
+
+      try {
+        const { status, stderr } = npmRunExpectingFailure(
+          'test262:select:check',
+        );
+
+        assertSame(
+          status === 0,
+          false,
+          'a drifted subset must fail npm run test262:select:check',
+        );
+        assertSame(
+          stderr.includes(`${UPSTREAM_SUBSET_FILE} is stale`),
+          true,
+          `the failure must name the stale subset on stderr:\n${stderr}`,
+        );
+      } finally {
+        await writeFile(subsetUrl, subset);
+      }
+    },
+  },
+  {
     name: 'the upstream report carries the deterministic per-group baseline summary',
     run: async () => {
       const subset = parseUpstreamSubset(

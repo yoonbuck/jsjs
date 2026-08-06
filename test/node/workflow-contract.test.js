@@ -382,6 +382,13 @@ export default [
       const commands = runCommands(job);
       const run = commands.indexOf('npm run test262:upstream');
       const drift = commands.indexOf(EXPECTED_DRIFT_COMMAND);
+      const select = commands.indexOf('npm run test262:select:check');
+
+      assertSame(
+        select >= 0 && select < run,
+        true,
+        `the ES5 selection drift check must run before the pinned subset:\n${commands.join('\n')}`,
+      );
 
       assertSame(
         drift > run && run >= 0,
