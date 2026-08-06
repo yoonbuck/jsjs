@@ -231,13 +231,9 @@ The implemented ES5 core built-in families are:
 | `Object`   | Call/construct coercion; `Object.prototype.constructor`, `toString`, `toLocaleString`, `valueOf`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable`; descriptor queries and definitions; `getPrototypeOf`, `create`, `getOwnPropertyNames`, `keys`; extensibility, sealing, and freezing APIs                               |
 | `Function` | Callable `Function.prototype`; `toString`, `apply`, `call`, `bind`; bound calls, construction, `instanceof`, and adjusted `length`. The dynamic `Function` constructor is installed but deliberately throws a guest `Error` because engine policy forbids runtime code generation.                                                  |
 | `Array`    | Call/construct overloads, sparse length construction, `Array.isArray`; `push`, `pop`, `shift`, `unshift`, `reverse`, `sort`, `splice`; `concat`, `join`, `slice`, `indexOf`, `lastIndexOf`; `every`, `some`, `forEach`, `map`, `filter`, `reduce`, `reduceRight`. Methods are generic where ES5 requires and preserve sparse holes. |
-
-The public boxed primitive families (`String`, `Number`, and `Boolean`) and the
-remaining standard library are not implemented yet. Internal primitive wrappers
-exist only to perform ES5 `ToObject` for `Object(value)`, primitive receivers,
-and non-strict function calls. The error constructors (`Error`, `TypeError`,
-`ReferenceError`, `SyntaxError`, `RangeError`) remain available on every realm's
-global object.
+| `Boolean`  | Call converts with `ToBoolean`, construct boxes; `Boolean.prototype` is itself a `false` wrapper; `constructor`, `toString`, `valueOf`. Both methods accept a boolean primitive or a `Boolean` wrapper and throw `TypeError` for anything else.                                                                                      |
+| `Number`   | Call converts with `ToNumber`, construct boxes; the five ES5 constants; `constructor`, `toString`, `toLocaleString`, `valueOf`, `toFixed`, `toExponential`, `toPrecision`.                                                                                                                                                         |
+| `String`   | Call converts with `ToString`, construct boxes with lazy index properties and a non-writable `length`; `fromCharCode`; all ES5 prototype methods, with string-pattern `match`/`search` and RegExp integration documented below.                                                                                                       |
 
 The remaining standard library — `RegExp`, `Math`, `Date`, `JSON`, the
 global `parseInt`/`parseFloat`/`isNaN`/`isFinite` functions, and the ES5 URI
