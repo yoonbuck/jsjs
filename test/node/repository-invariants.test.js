@@ -225,11 +225,17 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
   'number-builtins':
     'Task 7 — Number call/construct, constants, prototype, methods',
   'number-formatting': 'Task 7 — toFixed/toExponential/toPrecision formatting',
+  'regexp-builtins':
+    'ES5 RegExp milestone — RegExp call/construct semantics, RegExp.prototype identity, and the 15.10.7 own properties',
+  'regexp-exec':
+    'ES5 RegExp milestone — RegExp.prototype.exec/test result shape, lastIndex, and global matching',
   'string-builtins': 'Task 7 — String call/construct, fromCharCode, prototype',
   'string-methods':
     'Task 7 — String search/access/case/trim methods, Annex B substr',
   'string-pattern-methods':
     'Task 7 — match/replace/search/split with string patterns',
+  'string-regexp-methods':
+    'ES5 RegExp milestone — match/replace/search/split with RegExp arguments',
 });
 
 export default [
