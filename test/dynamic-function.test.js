@@ -238,6 +238,22 @@ const tests = [
     },
   },
   {
+    name: 'an invalid parameter list is rejected even when the body alone is valid',
+    run() {
+      // Isolates the parameter-only guard parse (15.3.2.1 step 10): with a body
+      // of `/**/` the body-only source parses and the woven source parses (the
+      // comment opened in P is closed inside the body), so *only* the
+      // parameter-only parse rejects `) { return 99; /*`. Deleting that guard
+      // would wrongly accept this input.
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'new Function(") { return 99; /*", "/**/");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
     name: 'a parameter list that is invalid on its own is a SyntaxError',
     run() {
       const realm = createRealm();

@@ -241,6 +241,27 @@ const tests = [
     },
   },
   {
+    name: 'return through with restores the environment before an enclosing finally runs',
+    run() {
+      // ES5.1 12.10: the `with` object environment must be discarded on the
+      // abrupt `return` completion, so the enclosing `finally` — which runs
+      // outside the `with` — no longer resolves `a` against the binding
+      // object. `typeof` yields "undefined" for the now-free identifier; a
+      // leaked environment would resolve it to `o.a` and yield "number".
+      assertSame(
+        run(
+          'var seen;' +
+            'var result = (function () {' +
+            '  var o = { a: 1 };' +
+            '  try { with (o) { return 7; } } finally { seen = typeof a; }' +
+            '})();' +
+            'result + ":" + seen;',
+        ),
+        '7:undefined',
+      );
+    },
+  },
+  {
     name: 'nested with statements resolve against the innermost object first',
     run() {
       assertSame(

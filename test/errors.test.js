@@ -470,6 +470,33 @@ const tests = [
       assertSame(instance.get('message'), 'boom');
     },
   },
+  {
+    name: 'EvalError global and prototype carry the native-error property descriptors',
+    run() {
+      const realm = createRealm();
+
+      // 15.1: the global binding is a writable, non-enumerable, configurable
+      // data property, exactly like every other native-error constructor.
+      const globalDescriptor = /** @type {any} */ (
+        realm.globalObject.getOwnProperty('EvalError')
+      );
+      assertSame(globalDescriptor !== undefined, true);
+      assertSame(globalDescriptor.writable, true);
+      assertSame(globalDescriptor.enumerable, false);
+      assertSame(globalDescriptor.configurable, true);
+
+      // 15.11.7.6: the constructor's `prototype` is a locked-down data
+      // property — non-writable, non-enumerable, non-configurable.
+      const ctor = /** @type {any} */ (realm.globalObject.get('EvalError'));
+      const prototypeDescriptor = /** @type {any} */ (
+        ctor.getOwnProperty('prototype')
+      );
+      assertSame(prototypeDescriptor !== undefined, true);
+      assertSame(prototypeDescriptor.writable, false);
+      assertSame(prototypeDescriptor.enumerable, false);
+      assertSame(prototypeDescriptor.configurable, false);
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // Error.prototype.toString (15.11.4.4)

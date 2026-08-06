@@ -270,6 +270,8 @@ const tests = [
     run() {
       assertSame(run('~1;'), -2);
       assertSame(run('~0;'), -1);
+      // ToInt32(-0) is +0, so ~-0 is -1 just like ~0.
+      assertSame(run('~-0;'), -1);
       assertSame(run('~-1;'), 0);
       // ToInt32 maps NaN/Infinity to 0, so ~ yields -1.
       assertSame(run('~NaN;'), -1);
