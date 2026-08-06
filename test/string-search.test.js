@@ -261,6 +261,17 @@ const tests = [
       assertSame(run('"\\u0000".localeCompare("\\u0001");'), -1);
       assertSame(run('"\\ud83d\\ude00".localeCompare("\\ud83d\\ude01");'), -1);
       assertSame(run('typeof "a".localeCompare("b");'), 'number');
+      // Code-unit ordering means canonically equivalent strings that differ
+      // in code units do not compare equal: ES5 15.5.4.9 only *recommends*
+      // that they do, and its ordering is implementation-defined. This
+      // engine chooses determinism over normalization, so the difference is
+      // asserted rather than left to chance.
+      assertSame(run('"\\u00e9".localeCompare("e\\u0301");'), 1);
+      assertSame(run('"e\\u0301".localeCompare("\\u00e9");'), -1);
+      assertSame(run('"\\u00e9" === "e\\u0301";'), false);
+      // U+FB01 (the fi ligature) is compatibility-equivalent to "fi" and is
+      // likewise ordered by code unit.
+      assertSame(run('"\\ufb01".localeCompare("fi");'), 1);
     },
   },
   {
@@ -485,13 +496,30 @@ const tests = [
 
       const first = createRealm();
       const second = createRealm();
+      // Exact results, not "something other than undefined": a borrowed
+      // method must compute the same answer as the local twin it is not.
+      const foreignCalls = {
+        indexOf: ['foreignMethod.call(" ab ", "b");', 2],
+        lastIndexOf: ['foreignMethod.call(" ab ", "b");', 2],
+        localeCompare: ['foreignMethod.call(" ab ", "b");', -1],
+        trim: ['foreignMethod.call(" ab ");', 'ab'],
+      };
 
       for (const name of Object.keys(methodLengths)) {
         const method = property(
           property(first.globalObject, 'String'),
           'prototype',
         ).get(name);
+        const local = property(
+          property(second.globalObject, 'String'),
+          'prototype',
+        ).get(name);
 
+        assertSame(
+          method === local,
+          false,
+          `${name} must be a distinct function object per realm`,
+        );
         second.globalObject.defineOwnProperty('foreignMethod', {
           value: method,
           writable: true,
@@ -506,10 +534,20 @@ const tests = [
           `${name} must not be shared across realms`,
         );
         assertSame(
-          evaluateScript(second, 'foreignMethod.call(" ab ", "b");').value !==
-            undefined,
-          true,
-          `${name} must still be callable from another realm`,
+          evaluateScript(
+            second,
+            'foreignMethod.name + ":" + foreignMethod.length;',
+          ).value,
+          `${name}:${methodLengths[/** @type {'trim'} */ (name)]}`,
+          `${name} identity metadata`,
+        );
+
+        const [source, expected] = foreignCalls[/** @type {'trim'} */ (name)];
+
+        assertSame(
+          evaluateScript(second, String(source)).value,
+          expected,
+          `${name} must still behave exactly the same from another realm`,
         );
       }
     },

@@ -13,6 +13,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { assertSame } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
+import { UNICODE_VERSION } from '../../src/builtins/unicode-case-data.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 
@@ -176,7 +177,74 @@ async function readIgnoreFile() {
   }
 }
 
+/**
+ * The files under `src/builtins/` and `src/runtime/` that sit *outside* the
+ * "String built-ins never call a host String method" invariant, each with the
+ * reason it is out of scope. Everything else in those two directories is in
+ * scope by default, so a String source added later — under any filename — is
+ * covered without anyone remembering to list it, and dropping a file out of
+ * the invariant means adding a line here in a review-visible way.
+ */
+const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
+  'src/builtins/number-format.js':
+    'Number formatting builds and slices its own host digit strings, which are engine-internal scratch, never guest String semantics',
+  'src/builtins/errors.js':
+    'derives an intrinsic key from a hard-coded error type name, not from guest data',
+  'src/runtime/conversion.js':
+    'ToNumber pre-dates this invariant and still trims/slices guest strings with host methods; tightening it is its own change',
+});
+
 export default [
+  {
+    // The generated case data records the Unicode version it was built from.
+    // If `package.json`'s pin moves without a regeneration (or the other way
+    // round), every case mapping in the engine silently belongs to a
+    // different Unicode release than the one the project claims. The portable
+    // suite asserts the module's own constant; only this node-only check can
+    // read the manifest, and it does so with `fs` rather than a JSON import
+    // so the portable suites keep no dependency on import assertions.
+    name: 'the generated Unicode case data matches the version pinned in package.json',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const pin = manifest.unicode;
+
+      assertSame(
+        typeof pin?.version,
+        'string',
+        'package.json must pin a Unicode version',
+      );
+      assertSame(
+        UNICODE_VERSION,
+        pin.version,
+        'src/builtins/unicode-case-data.js must be regenerated when the Unicode pin moves',
+      );
+      // The download URL carries the version too, so a half-updated pin is a
+      // failure rather than a silent fetch of the wrong release.
+      assertSame(
+        String(pin.baseUrl).includes(`/${pin.version}/`),
+        true,
+        `the Unicode baseUrl must name the pinned version: ${pin.baseUrl}`,
+      );
+      assertSame(
+        pin.generatedModule,
+        'src/builtins/unicode-case-data.js',
+        'the pin must name the module this check reads',
+      );
+
+      const generated = await readSource(pin.generatedModule);
+
+      assertSame(
+        generated.includes(pin.baseUrl),
+        true,
+        'the generated module header must record the pinned UCD base URL',
+      );
+      assertSame(
+        generated.includes(`export const UNICODE_VERSION = '${pin.version}'`),
+        true,
+        'the generated module must export the pinned Unicode version',
+      );
+    },
+  },
   {
     name: 'engine source never imports through node_modules',
     run: async () => {
@@ -371,25 +439,31 @@ export default [
     // `src/runtime/code-units.js`.
     name: 'the String built-ins never delegate to a host String.prototype method',
     run: async () => {
-      // Discovered rather than listed, so a String source file added later
-      // cannot quietly escape the invariant: everything that implements a
-      // String built-in or its data, plus the one file allowed to touch a
-      // host String primitive.
-      const named = [
-        'src/builtins/primitive-wrappers.js',
-        'src/builtins/unicode-case-data.js',
-        'src/runtime/code-units.js',
-      ];
-      const discovered = await listFiles('src/builtins/', (name) =>
-        /^string-.*\.js$/.test(name),
-      );
-      const files = [...named, ...discovered].sort();
+      // Scope by *directory*, not by filename: every `.js` file under
+      // `src/builtins/` and `src/runtime/` is checked unless it appears in
+      // the exemption table above with a reason. A String source added later
+      // therefore cannot escape the invariant by being named something else.
+      const candidates = [
+        ...(await listFiles('src/builtins/', (name) => name.endsWith('.js'))),
+        ...(await listFiles('src/runtime/', (name) => name.endsWith('.js'))),
+      ].sort();
+      const exempt = Object.keys(HOST_STRING_INVARIANT_EXEMPTIONS);
+      const stale = exempt.filter((file) => !candidates.includes(file));
+      const files = candidates.filter((file) => !exempt.includes(file));
 
       assertSame(
-        discovered.length > 0,
-        true,
-        'the String built-in sources must be discoverable',
+        stale.join('\n'),
+        '',
+        'an exemption names a file that no longer exists; delete the entry',
       );
+      assertSame(
+        files.includes('src/builtins/primitive-wrappers.js') &&
+          files.includes('src/builtins/string-pattern.js') &&
+          files.includes('src/runtime/code-units.js'),
+        true,
+        'the String built-in sources must be inside the invariant',
+      );
+      assertSame(files.length > 5, true, 'engine sources were found');
       const hostMethodCall =
         /\.(charAt|charCodeAt|codePointAt|concat|slice|substring|substr|indexOf|lastIndexOf|split|replace|search|match|trim|toLowerCase|toUpperCase|toLocaleLowerCase|toLocaleUpperCase|localeCompare|repeat|padStart|padEnd|startsWith|endsWith|includes|normalize)\s*\(/g;
       /** @type {string[]} */

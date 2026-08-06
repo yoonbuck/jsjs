@@ -13,47 +13,34 @@ import { stringIndexOf } from './string-search.js';
  * they are implemented here in full. `match` and `search` (15.5.4.10 and
  * 15.5.4.12) always build `new RegExp(pattern)` even from a string, and this
  * engine has no RegExp yet — no constructor, and regular expression literals
- * throw `UnsupportedNodeError`. The boundary drawn here is therefore:
+ * throw `UnsupportedNodeError`. RegExp integration is deferred to its own
+ * milestone, so the boundary drawn here is:
  *
  *   - a pattern object whose `[[Class]]` is `"RegExp"` is refused by all four
  *     methods, loudly, with an `UnsupportedOperationError` — never quietly
  *     `ToString`ed into some other search;
- *   - a *string* pattern for `match`/`search` is answered only when it
- *     contains no RegExp syntax character. Such a pattern is a sequence of
- *     `PatternCharacter`s, which matches itself literally, so the literal
- *     search below returns exactly what `new RegExp(pattern)` would. Any
- *     other pattern needs a real RegExp engine and is refused the same way.
+ *   - every other pattern is `ToString`ed and searched for *literally* by all
+ *     four methods alike, RegExp syntax characters included. `"abc".match(".")`
+ *     is therefore `null` here, where a complete ES5 implementation would
+ *     match `"a"`.
  *
- * Both refusals are engine-limitation errors rather than guest completions,
- * matching how the evaluator refuses a regular expression literal: a guest
- * `try`/`catch` cannot turn them into ordinary control flow and mistake them
- * for specified behaviour.
+ * That second point is a deliberate, documented deviation from ES5's implicit
+ * `new RegExp(string)` for `match`/`search`, and it is the whole of the
+ * deviation: it disappears when the RegExp milestone replaces the literal
+ * search with a real matcher. It is preferred over refusing syntax-bearing
+ * strings because a uniform, predictable rule across the four methods is
+ * easier for guest code to reason about than a partial one, and because the
+ * milestone's stated scope is string patterns.
+ *
+ * The RegExp-object refusal is an engine-limitation error rather than a guest
+ * completion, matching how the evaluator refuses a regular expression
+ * literal: a guest `try`/`catch` cannot turn it into ordinary control flow
+ * and mistake it for specified behaviour.
  *
  * As everywhere else in the String family, the searching itself is done on
  * code units read by index (`string-search.js`, `runtime/code-units.js`); no
  * host `String.prototype.match`/`replace`/`search`/`split` is involved.
  */
-
-/**
- * `SyntaxCharacter` (ES5 15.10.1) — everything a `PatternCharacter` may not
- * be. A string pattern free of these characters is a literal.
- */
-const REGEXP_SYNTAX_CHARACTERS = new Set([
-  '^',
-  '$',
-  '\\',
-  '.',
-  '*',
-  '+',
-  '?',
-  '(',
-  ')',
-  '[',
-  ']',
-  '{',
-  '}',
-  '|',
-]);
 
 /**
  * Refuses a real RegExp pattern. Only the `[[Class]]` is consulted, exactly
@@ -71,25 +58,6 @@ export function rejectRegExpPattern(pattern, methodName) {
       `String#${methodName} with a RegExp pattern`,
     );
   }
-}
-
-/**
- * Refuses a string pattern that only a real RegExp engine could answer.
- *
- * @param {string} pattern
- * @param {string} methodName
- * @returns {string}
- */
-export function requireLiteralPattern(pattern, methodName) {
-  for (let index = 0; index < pattern.length; index += 1) {
-    if (REGEXP_SYNTAX_CHARACTERS.has(pattern[index])) {
-      throw createUnsupportedOperationError(
-        `String#${methodName} with a RegExp pattern containing ${pattern[index]}`,
-      );
-    }
-  }
-
-  return pattern;
 }
 
 /**

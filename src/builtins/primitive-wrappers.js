@@ -25,7 +25,6 @@ import {
   matchLiteralPattern,
   rejectRegExpPattern,
   replaceFirst,
-  requireLiteralPattern,
   splitOnString,
 } from './string-pattern.js';
 import {
@@ -412,15 +411,13 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       length: 1,
       call(thisValue, args) {
         // ES5 15.5.4.10: the receiver first, then the pattern. A non-RegExp
-        // pattern becomes `new RegExp(ToString(pattern))`, and an omitted
-        // argument becomes `new RegExp(undefined)` -- the empty pattern,
-        // which matches the empty string at position 0.
+        // pattern becomes `new RegExp(ToString(pattern))`; until the RegExp
+        // milestone lands this engine searches for that string literally
+        // instead (see `string-pattern.js`), and an omitted argument becomes
+        // the empty pattern, which matches at position 0.
         const value = stringMethodReceiver(thisValue);
         rejectRegExpPattern(args[0], 'match');
-        const pattern = requireLiteralPattern(
-          args[0] === undefined ? '' : toString(args[0]),
-          'match',
-        );
+        const pattern = args[0] === undefined ? '' : toString(args[0]);
 
         return matchLiteralPattern(realm, value, pattern);
       },
@@ -437,10 +434,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // position parameter: the search always starts at 0.
         const value = stringMethodReceiver(thisValue);
         rejectRegExpPattern(args[0], 'search');
-        const pattern = requireLiteralPattern(
-          args[0] === undefined ? '' : toString(args[0]),
-          'search',
-        );
+        const pattern = args[0] === undefined ? '' : toString(args[0]);
 
         return stringIndexOf(value, pattern, 0);
       },
@@ -487,16 +481,19 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'split',
       length: 2,
       call(thisValue, args) {
-        // ES5 15.5.4.14: the limit (step 5) is converted before the
-        // separator (step 8), and an undefined separator yields the whole
-        // string rather than a search for "undefined".
+        // ES5 15.5.4.14: the limit (step 5) is converted before the separator
+        // is looked at at all (step 8), and an undefined separator yields the
+        // whole string rather than a search for "undefined" (step 10).
         const value = stringMethodReceiver(thisValue);
-        rejectRegExpPattern(args[0], 'split');
         const limit = args[1] === undefined ? 4294967295 : toUint32(args[1]);
-        // Step 6 returns before step 8, so a zero limit never converts the
-        // separator at all.
-        const separator =
-          limit === 0 || args[0] === undefined ? undefined : toString(args[0]);
+        // The RegExp refusal stands exactly where step 8's "[[Class]] is
+        // RegExp" test does, so it comes after the limit conversion.
+        rejectRegExpPattern(args[0], 'split');
+        // Step 8 also precedes the zero-limit return (step 9): the separator
+        // is converted even when the result is already known to be empty, so
+        // its side effects and errors are observable. Only an undefined
+        // separator is left alone, and its ToString has nothing to run.
+        const separator = args[0] === undefined ? undefined : toString(args[0]);
 
         return splitOnString(realm, value, separator, limit);
       },

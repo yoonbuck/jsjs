@@ -136,6 +136,17 @@ export function stringLastIndexOf(value, search, start) {
  * transitive by construction, and it cannot vary with a host locale, an ICU
  * build, or an environment variable.
  *
+ * One consequence is worth stating plainly: canonically equivalent strings
+ * that differ in code units compare *nonzero*. `"\u00e9"` (LATIN SMALL
+ * LETTER E WITH ACUTE) and `"e\u0301"` (e + COMBINING ACUTE ACCENT) are the
+ * same text under Unicode normalization, but this comparison orders them
+ * apart. ES5 15.5.4.9 only *recommends* that canonically equivalent strings
+ * compare equal (it is a "should", and the ordering itself is explicitly
+ * implementation-defined); honouring it would require normalization tables
+ * this engine does not carry and would make the ordering depend on a
+ * Unicode version at comparison time. Determinism is chosen instead, and
+ * the behaviour is asserted in `test/string-search.test.js`.
+ *
  * @param {string} left
  * @param {string} right
  * @returns {-1 | 0 | 1}

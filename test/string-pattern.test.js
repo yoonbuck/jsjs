@@ -319,6 +319,119 @@ const tests = [
     },
   },
   {
+    // ES5 15.5.4.14 converts the separator at step 8, which *precedes* the
+    // zero-limit return at step 9. A zero limit therefore still converts the
+    // separator, and still propagates whatever that conversion throws.
+    name: 'split converts its separator even when the limit is zero',
+    run() {
+      assertSame(
+        run(
+          'var log = ""; ' +
+            'var separator = { toString: function () { log += "s"; return ","; } }; ' +
+            'var parts = "a,b".split(separator, 0); ' +
+            'log + ":" + parts.length;',
+        ),
+        's:0',
+      );
+      // Step 5 (the limit) still comes before step 8 (the separator), even
+      // though neither can change the empty result.
+      assertSame(
+        run(
+          'var order = ""; ' +
+            'var separator = { toString: function () { order += "s"; return ","; } }; ' +
+            'var limit = { valueOf: function () { order += "l"; return 0; } }; ' +
+            '"a,b".split(separator, limit).length + ":" + order;',
+        ),
+        '0:ls',
+      );
+      // The separator conversion is a full ToString, so ToPrimitive's String
+      // hint applies: toString is consulted even when valueOf exists.
+      assertSame(
+        run(
+          'var log = ""; ' +
+            'var separator = { valueOf: function () { log += "v"; return ","; }, ' +
+            '  toString: function () { log += "s"; return ","; } }; ' +
+            '"a,b".split(separator, 0).length + ":" + log;',
+        ),
+        '0:s',
+      );
+      // An error thrown by that conversion escapes split unchanged: it is the
+      // guest's own error object, not a substitute.
+      assertSame(
+        run(
+          'var thrown = new Error("boom"); var caught; ' +
+            'var separator = { toString: function () { throw thrown; } }; ' +
+            'try { "a,b".split(separator, 0); } catch (error) { caught = error; } ' +
+            '(caught === thrown) + ":" + caught.message;',
+        ),
+        'true:boom',
+      );
+      assertSame(
+        run(
+          'var caught; ' +
+            'var separator = { toString: function () { throw new TypeError("no"); } }; ' +
+            'try { "a,b".split(separator, 0); } catch (error) { caught = error; } ' +
+            'caught.name;',
+        ),
+        'TypeError',
+      );
+      // An undefined separator has nothing observable to convert; ToString
+      // would be "undefined" and step 10 never looks at it anyway.
+      assertSame(run('"a,b".split(undefined, 0).length;'), 0);
+      assertSame(run('"a,b".split(undefined).length;'), 1);
+    },
+  },
+  {
+    // Step 5 converts the limit; the separator's [[Class]] is only examined
+    // at step 8. The engine's RegExp refusal stands where that step does, so
+    // a limit conversion that is observable or throws happens first.
+    name: 'split converts its limit before it refuses a RegExp separator',
+    run() {
+      const throwing = realmWithTaggedObject('RegExp').realm;
+
+      assertSame(
+        evaluateScript(
+          throwing,
+          'var thrown = new Error("boom"); var caught; ' +
+            'var limit = { valueOf: function () { throw thrown; } }; ' +
+            'try { "a,b".split(tagged, limit); } catch (error) { caught = error; } ' +
+            '(caught === thrown) + ":" + caught.message;',
+        ).value,
+        'true:boom',
+      );
+
+      const observed = realmWithTaggedObject('RegExp').realm;
+
+      evaluateScript(
+        observed,
+        'var log = ""; ' +
+          'var limit = { valueOf: function () { log += "l"; return 5; } };',
+      );
+
+      const refusal = assertThrows(
+        () => evaluateScript(observed, '"a,b".split(tagged, limit);'),
+        Error,
+      );
+
+      assertSame(refusal.name, 'UnsupportedOperationError');
+      assertSame(
+        /** @type {any} */ (refusal).operation.indexOf('RegExp') >= 0,
+        true,
+        refusal.message,
+      );
+      assertSame(evaluateScript(observed, 'log;').value, 'l');
+
+      // Step 8 precedes step 9, so a zero limit does not excuse the refusal.
+      const zeroLimit = realmWithTaggedObject('RegExp').realm;
+      const zeroError = assertThrows(
+        () => evaluateScript(zeroLimit, '"a,b".split(tagged, 0);'),
+        Error,
+      );
+
+      assertSame(zeroError.name, 'UnsupportedOperationError');
+    },
+  },
+  {
     name: 'split returns a real Array whose elements are own enumerable properties, and is generic',
     run() {
       assertSame(
@@ -357,10 +470,10 @@ const tests = [
     },
   },
   {
-    // ES5 15.5.4.10/15.5.4.12 build a RegExp even from a string pattern, so
-    // only patterns that contain no RegExp syntax characters can be answered
-    // without a RegExp engine. Those behave exactly like a literal search;
-    // anything else is refused loudly (see the RegExp-boundary case below).
+    // ES5 15.5.4.10/15.5.4.12 build a RegExp even from a string pattern.
+    // Until the RegExp milestone lands this engine searches for the string
+    // literally instead (see the literal-pattern case below), so the result
+    // still has `RegExp.prototype.exec`'s non-global shape.
     name: 'match returns an exec-shaped array for a literal pattern and null when there is no match',
     run() {
       assertSame(
@@ -613,32 +726,58 @@ const tests = [
     },
   },
   {
-    // Until the RegExp milestone, a *string* pattern for match/search is only
-    // answerable when it contains no RegExp syntax character: such a pattern
-    // matches itself literally, so the literal search gives exactly what
-    // `new RegExp(pattern)` would. Anything else needs a real RegExp engine.
-    name: 'match and search refuse a string pattern that would need real RegExp syntax',
+    // This milestone implements the pattern methods for *string* patterns and
+    // rejects only real RegExp objects (see the design's deferral of RegExp
+    // integration). So every non-RegExp pattern is ToString-ed and searched
+    // for literally, RegExp syntax characters included: `"."` finds a full
+    // stop, not "any character". That is a deliberate, documented deviation
+    // from ES5 15.5.4.10/15.5.4.12's implicit `new RegExp(string)` until the
+    // RegExp milestone lands, and it is uniform across all four methods.
+    name: 'match and search treat every string pattern as a literal, RegExp syntax characters included',
     run() {
-      for (const source of [
-        '"a.c".match(".");',
-        '"abc".search("a|b");',
-        '"abc".match("a*");',
-        '"abc".match("^a");',
-        '"abc".search("c$");',
-        '"abc".match("(a)");',
-        '"abc".match("[abc]");',
-        '"abc".match("a{1}");',
-        '"abc".search("\\\\d");',
-        '"abc".match("a+");',
-        '"abc".match("a?");',
-      ]) {
-        const error = assertThrows(() => run(source), Error);
+      assertSame(run('"a.c".match(".").index;'), 1);
+      assertSame(run('"a.c".match(".")[0];'), '.');
+      assertSame(run('"abc".match(".");'), null);
+      assertSame(run('"abc".search(".");'), -1);
+      assertSame(run('"a|b".search("|");'), 1);
+      assertSame(run('"abc".search("a|b");'), -1);
+      assertSame(run('"a|b".match("a|b").index;'), 0);
+      assertSame(run('"a*b".search("a*");'), 0);
+      assertSame(run('"abc".match("a*");'), null);
+      assertSame(run('"^abc".search("^a");'), 0);
+      assertSame(run('"abc".match("^a");'), null);
+      assertSame(run('"abc$".search("c$");'), 2);
+      assertSame(run('"(a)".match("(a)").index;'), 0);
+      assertSame(run('"abc".search("(a)");'), -1);
+      assertSame(run('"x[abc]y".match("[abc]").index;'), 1);
+      assertSame(run('"abc".search("[abc]");'), -1);
+      assertSame(run('"a{1}".match("a{1}").index;'), 0);
+      assertSame(run('"a{".search("a{");'), 0);
+      assertSame(run('"a}".search("}");'), 1);
+      assertSame(run('"a+b".search("+");'), 1);
+      assertSame(run('"a?b".search("?");'), 1);
+      // A backslash is text too: `"\\d"` finds a backslash followed by a `d`,
+      // not a digit.
+      assertSame(run('"a\\\\db".search("\\\\d");'), 1);
+      assertSame(run('"a1b".search("\\\\d");'), -1);
+      assertSame(run('"a\\\\b".match("\\\\").index;'), 1);
+      // The match array a syntax-character pattern produces has the same
+      // exec shape as any other literal match.
+      assertSame(
+        run(
+          'var m = "a.c".match("."); ' +
+            'm.length + ":" + m[0] + ":" + m.index + ":" + m.input;',
+        ),
+        '1:.:1:a.c',
+      );
+      // Non-string patterns are ToString-ed into the same literal search.
+      assertSame(
+        run('"a1.5b".search({ toString: function () { return "1.5"; } });'),
+        1,
+      );
 
-        assertSame(error.name, 'UnsupportedOperationError', source);
-      }
-
-      // The same characters are ordinary text for the string-pattern
-      // methods, which never build a RegExp at all.
+      // The string-pattern methods, which never built a RegExp in the first
+      // place, treat the same characters the same way.
       assertSame(run('"a.c".replace(".", "X");'), 'aXc');
       assertSame(run('"a.c".split(".").join("|");'), 'a|c');
       assertSame(run('"a|b".split("|").join(";");'), 'a;b');
@@ -674,13 +813,31 @@ const tests = [
 
       const first = createRealm();
       const second = createRealm();
+      // Exactly what each method must answer when it is borrowed from
+      // another realm: the call behaviour is asserted by value, never by the
+      // weaker "returned something other than undefined".
+      const foreignCalls = {
+        match: ['foreignMethod.call("abcabc", "b").index;', 1],
+        replace: ['foreignMethod.call("abc", "b", "x");', 'axc'],
+        search: ['foreignMethod.call("abc", "b");', 1],
+        split: ['foreignMethod.call("a,b,c", ",").length;', 3],
+      };
 
       for (const name of Object.keys(methodLengths)) {
         const method = property(
           property(first.globalObject, 'String'),
           'prototype',
         ).get(name);
+        const local = property(
+          property(second.globalObject, 'String'),
+          'prototype',
+        ).get(name);
 
+        assertSame(
+          method === local,
+          false,
+          `${name} must be a distinct function object per realm`,
+        );
         second.globalObject.defineOwnProperty('foreignMethod', {
           value: method,
           writable: true,
@@ -694,13 +851,23 @@ const tests = [
           false,
           `${name} must not be shared across realms`,
         );
+        // Same name and length, different identity: a borrowed method is a
+        // twin, not the same object.
         assertSame(
           evaluateScript(
             second,
-            'foreignMethod.call("abc", "b", "x") !== undefined;',
+            `foreignMethod.name + ":" + foreignMethod.length;`,
           ).value,
-          true,
-          `${name} must still be callable from another realm`,
+          `${name}:${methodLengths[/** @type {'match'} */ (name)]}`,
+          `${name} identity metadata`,
+        );
+
+        const [source, expected] = foreignCalls[/** @type {'match'} */ (name)];
+
+        assertSame(
+          evaluateScript(second, String(source)).value,
+          expected,
+          `${name} must still behave exactly the same from another realm`,
         );
       }
 

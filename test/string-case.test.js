@@ -362,13 +362,30 @@ const tests = [
 
       const first = createRealm();
       const second = createRealm();
+      // Exact results, not just a same-length string: a borrowed method must
+      // compute the same mapping as the local twin it is not.
+      const foreignResults = {
+        toLowerCase: 'ab',
+        toLocaleLowerCase: 'ab',
+        toUpperCase: 'AB',
+        toLocaleUpperCase: 'AB',
+      };
 
       for (const name of methods) {
         const method = property(
           property(first.globalObject, 'String'),
           'prototype',
         ).get(name);
+        const local = property(
+          property(second.globalObject, 'String'),
+          'prototype',
+        ).get(name);
 
+        assertSame(
+          method === local,
+          false,
+          `${name} must be a distinct function object per realm`,
+        );
         second.globalObject.defineOwnProperty('foreignMethod', {
           value: method,
           writable: true,
@@ -383,9 +400,17 @@ const tests = [
           `${name} must not be shared across realms`,
         );
         assertSame(
-          evaluateScript(second, 'foreignMethod.call("aB").length;').value,
-          2,
-          `${name} must still be callable from another realm`,
+          evaluateScript(
+            second,
+            'foreignMethod.name + ":" + foreignMethod.length;',
+          ).value,
+          `${name}:0`,
+          `${name} identity metadata`,
+        );
+        assertSame(
+          evaluateScript(second, 'foreignMethod.call("aB");').value,
+          foreignResults[/** @type {'toLowerCase'} */ (name)],
+          `${name} must still behave exactly the same from another realm`,
         );
       }
     },
