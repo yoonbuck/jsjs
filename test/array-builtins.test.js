@@ -178,6 +178,13 @@ const tests = [
         ),
         'TypeError',
       );
+      assertSame(
+        run(
+          'Object.prototype.toLocaleString = function () { "use strict"; return typeof this; }; ' +
+            '[5, "x", true].toLocaleString();',
+        ),
+        'number,string,boolean',
+      );
     },
   },
   {

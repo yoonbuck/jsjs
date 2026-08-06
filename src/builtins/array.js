@@ -355,6 +355,10 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
     realm.intrinsics.objectPrototype.get('toString'),
     'Object toString intrinsic is not callable',
   );
+  const objectToLocaleString = requireCallable(
+    realm.intrinsics.objectPrototype.get('toLocaleString'),
+    'Object toLocaleString intrinsic is not callable',
+  );
 
   defineNativeMethod(realm, arrayPrototype, 'toString', 0, (thisValue) => {
     const object = toObject(realm, thisValue);
@@ -387,21 +391,22 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
           continue;
         }
 
-        if (
+        const primitive =
           typeof element === 'string' ||
           typeof element === 'number' ||
-          typeof element === 'boolean'
-        ) {
-          result += toString(element);
-          continue;
-        }
-
+          typeof element === 'boolean';
         const elementObject = toObject(realm, element);
         const toLocaleString = requireCallable(
           elementObject.get('toLocaleString'),
           'Array element toLocaleString property is not callable',
         );
-        result += toString(toLocaleString.callFunction(elementObject, []));
+
+        if (primitive && toLocaleString === objectToLocaleString) {
+          result += toString(element);
+          continue;
+        }
+
+        result += toString(toLocaleString.callFunction(element, []));
       }
 
       return result;
