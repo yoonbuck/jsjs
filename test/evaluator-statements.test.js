@@ -26,7 +26,7 @@ const tests = [
         thisValue: realm.globalObject,
       };
 
-      for (const type of ['ForInStatement', 'NotANode']) {
+      for (const type of ['WithStatement', 'NotANode']) {
         const error = assertThrows(
           () => evaluate({ type, body: null }, context),
           Error,
@@ -368,21 +368,288 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects for-in and with statements explicitly',
+    name: 'evaluateScript rejects with statements explicitly',
     run() {
       const realm = createRealm();
-
-      const forIn = assertThrows(
-        () => evaluateScript(realm, 'for (var k in {}) {}'),
-        Error,
-      );
-      assertSame(/** @type {any} */ (forIn).nodeType, 'ForInStatement');
 
       const withStatement = assertThrows(
         () => evaluateScript(realm, 'with ({}) {}'),
         Error,
       );
       assertSame(/** @type {any} */ (withStatement).nodeType, 'WithStatement');
+    },
+  },
+  {
+    name: 'for-in enumerates own then inherited enumerable string keys once each, skipping non-enumerable shadowed names',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var keys = []; for (var k in { a: 1, b: 2 }) { keys.push(k); } keys.join(",");',
+        ).value,
+        'a,b',
+      );
+
+      // A name already visited earlier in the prototype chain is never
+      // revisited later, even though the parent's own copy is enumerable
+      // (ECMA-262 12.6.4 NOTE: shadowing checks own-property presence, not
+      // enumerability).
+      assertSame(
+        evaluateScript(
+          realm,
+          'var Base = function () {}; ' +
+            'Base.prototype.shared = "base"; ' +
+            'var child = new Base(); ' +
+            'child.shared = "own"; ' +
+            'var keys = []; for (var k in child) { keys.push(k); } keys.join(",");',
+        ).value,
+        'shared',
+      );
+
+      // `null`/`undefined` right-hand sides short-circuit to a no-op loop
+      // rather than throwing (12.6.4 step 2).
+      assertSame(
+        evaluateScript(
+          realm,
+          'var ran = false; for (var k in null) { ran = true; } ran;',
+        ).value,
+        false,
+      );
+      assertSame(
+        evaluateScript(
+          realm,
+          'var ran = false; for (var k in undefined) { ran = true; } ran;',
+        ).value,
+        false,
+      );
+    },
+  },
+  {
+    name: 'for-in supports an assignable left-hand side and break/continue/return propagation',
+    run() {
+      const realm = createRealm();
+
+      // Bare identifier (not a `var` declarator) as the loop target.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var k; var keys = []; for (k in { x: 1, y: 2 }) { keys.push(k); } keys.join(",");',
+        ).value,
+        'x,y',
+      );
+
+      // Member-expression left-hand side.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var bag = {}; for (bag.last in { p: 1, q: 2 }) {} bag.last;',
+        ).value,
+        'q',
+      );
+
+      // `break` stops enumeration early.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var keys = []; for (var k in { a: 1, b: 2, c: 3 }) { ' +
+            'if (k === "b") { break; } keys.push(k); } keys.join(",");',
+        ).value,
+        'a',
+      );
+
+      // `continue` skips the rest of the body for that key only.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var keys = []; for (var k in { a: 1, b: 2, c: 3 }) { ' +
+            'if (k === "b") { continue; } keys.push(k); } keys.join(",");',
+        ).value,
+        'a,c',
+      );
+
+      // `return` from inside a function body escapes the for-in loop.
+      assertSame(
+        evaluateScript(
+          realm,
+          'function first(obj) { for (var k in obj) { return k; } return null; } ' +
+            'first({ only: 1 });',
+        ).value,
+        'only',
+      );
+
+      // A thrown guest error escapes the loop as a `throw` completion
+      // (not a host exception — guest throws are values, per `api.js`).
+      const thrown = evaluateScript(
+        realm,
+        'for (var k in { a: 1 }) { throw new TypeError("boom"); }',
+      );
+      assertSame(thrown.type, 'throw');
+      assertSame(/** @type {any} */ (thrown.value).get('message'), 'boom');
+    },
+  },
+  {
+    // ECMA-262 12.6.4: "If a property that has not yet been visited during
+    // enumeration is deleted, then it will not be visited." The enumeration
+    // order is fixed up front, but each name's liveness is re-checked when
+    // the loop reaches it.
+    name: 'for-in skips properties deleted before enumeration reaches them',
+    run() {
+      const realm = createRealm();
+
+      // A later own property deleted from the body is never visited.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1, b: 2, c: 3 }; var keys = []; ' +
+            'for (var k in o) { keys.push(k); delete o.c; } keys.join(",");',
+        ).value,
+        'a,b',
+      );
+
+      // Deleting every remaining key stops the loop after the first name.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1, b: 2, c: 3 }; var keys = []; ' +
+            'for (var k in o) { keys.push(k); delete o.b; delete o.c; } keys.join(",");',
+        ).value,
+        'a',
+      );
+
+      // The loop variable is not assigned for a skipped name.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1, b: 2 }; var k = "untouched"; ' +
+            'for (k in o) { delete o.b; } k;',
+        ).value,
+        'a',
+      );
+
+      // An inherited property deleted from the prototype is skipped too.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var Base = function () {}; Base.prototype.inherited = 1; ' +
+            'var child = new Base(); child.own = 1; var keys = []; ' +
+            'for (var k in child) { keys.push(k); delete Base.prototype.inherited; } ' +
+            'keys.join(",");',
+        ).value,
+        'own',
+      );
+
+      // Deleting an own property that shadows an *enumerable* inherited one
+      // leaves the name live: the inherited property is what the body now
+      // sees, and the name is still visited exactly once.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var Base = function () {}; Base.prototype.shared = "base"; ' +
+            'var child = new Base(); child.first = 1; child.shared = "own"; ' +
+            'var keys = []; ' +
+            'for (var k in child) { keys.push(k + ":" + child[k]); ' +
+            'if (k === "first") { delete child.shared; } } keys.join(",");',
+        ).value,
+        'first:1,shared:base',
+      );
+
+      // Deleting an own property that shadows a *non-enumerable* inherited
+      // one removes the name from the enumeration instead. ES5 12.6.4 does
+      // not decide this case and real engines disagree (JavaScriptCore
+      // answers as below; V8 keeps the name, because its re-check is a bare
+      // `HasProperty`); this engine answers with the same shadowing walk it
+      // built the snapshot with.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var Base = function () {}; ' +
+            'Object.defineProperty(Base.prototype, "hidden", ' +
+            '{ value: "base", writable: true, enumerable: false, configurable: true }); ' +
+            'var child = new Base(); child.first = 1; child.hidden = "own"; ' +
+            'var keys = []; ' +
+            'for (var k in child) { keys.push(k); ' +
+            'if (k === "first") { delete child.hidden; } } keys.join(",");',
+        ).value,
+        'first',
+      );
+
+      // A name made non-enumerable before the loop reaches it is skipped for
+      // the same reason (12.6.4 step 6 asks for the next property "whose
+      // [[Enumerable]] attribute is true", not the one it was at loop entry).
+      // Implementation-defined in the same way as the case above.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1, b: 2 }; var keys = []; ' +
+            'for (var k in o) { keys.push(k); ' +
+            'Object.defineProperty(o, "b", { enumerable: false }); } keys.join(",");',
+        ).value,
+        'a',
+      );
+
+      // A property deleted and re-created before it is reached is live again.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1, b: 2 }; var keys = []; ' +
+            'for (var k in o) { keys.push(k); ' +
+            'if (k === "a") { delete o.b; o.b = 3; } } keys.join(",");',
+        ).value,
+        'a,b',
+      );
+
+      // Already-visited names are unaffected by a later delete.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1, b: 2 }; var keys = []; ' +
+            'for (var k in o) { delete o.a; keys.push(k); } keys.join(",");',
+        ).value,
+        'a,b',
+      );
+    },
+  },
+  {
+    // The other half of 12.6.4: properties added during enumeration "are not
+    // guaranteed to be visited"; this engine's snapshot never visits them,
+    // which is the stable choice that keeps enumeration finite.
+    name: 'for-in additions during enumeration stay outside the snapshot',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1 }; var keys = []; ' +
+            'for (var k in o) { keys.push(k); o.added = 2; } keys.join(",");',
+        ).value,
+        'a',
+      );
+
+      // Including a name added to the prototype mid-loop.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var Base = function () {}; var child = new Base(); child.own = 1; ' +
+            'var keys = []; ' +
+            'for (var k in child) { keys.push(k); Base.prototype.late = 1; } ' +
+            'keys.join(",");',
+        ).value,
+        'own',
+      );
+
+      // Re-adding a name that was already visited does not visit it twice.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = { a: 1, b: 2 }; var keys = []; ' +
+            'for (var k in o) { keys.push(k); if (k === "a") { delete o.a; o.a = 9; } } ' +
+            'keys.join(",");',
+        ).value,
+        'a,b',
+      );
     },
   },
 ];

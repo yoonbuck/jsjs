@@ -488,7 +488,10 @@ export default [
       assertSame(
         runFeatureProbe({
           engine,
-          feature: syntheticFeature('for (var k in {}) {}'),
+          // `with` is still an explicitly unsupported statement node (see
+          // `test/realms.test.js`); `for-in` was this synthetic probe's
+          // original example, but it is real engine behavior now.
+          feature: syntheticFeature('with ({}) {}'),
         }).outcome,
         'engine-error',
       );

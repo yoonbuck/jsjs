@@ -35,6 +35,15 @@ and Boolean wrappers only.
 implements string-search methods for string patterns and explicitly rejects
 guest RegExp objects until the RegExp milestone.
 
+Until then `match` and `search` deviate from ES5 15.5.4.10/15.5.4.12 in one
+documented way: those steps build `new RegExp(ToString(pattern))` from a
+string pattern, whereas this milestone searches for that string _literally_,
+RegExp syntax characters included (`"abc".match(".")` is `null` here). Every
+non-RegExp pattern is treated the same way by all four pattern methods, so the
+rule guest code sees is uniform; only a real `[[Class]]` of `"RegExp"` is
+refused, loudly, as an engine limitation. The deviation is removed when the
+RegExp milestone replaces the literal search with a real matcher.
+
 ## Testing and Parallelization
 
 Shared primitive-wrapper invariants land first. String, Number, and Boolean

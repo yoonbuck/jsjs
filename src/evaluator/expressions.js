@@ -15,6 +15,7 @@ import {
   checkObjectCoercible,
   toBoolean,
   toNumber,
+  toObject,
   toString,
 } from '../runtime/conversion.js';
 import {
@@ -36,7 +37,6 @@ import {
 } from '../runtime/operators.js';
 import {
   createUnsupportedNodeError,
-  createUnsupportedOperationError,
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
@@ -547,10 +547,21 @@ function evaluateNewExpression(node, context) {
 }
 
 /**
- * Supplies a call's `this` value from the callee reference: a property
- * reference passes its base object (method-call receiver binding), while an
- * environment-record reference passes `undefined`, which non-strict
- * functions then replace with the global object.
+ * Supplies a call's `this` value from the callee reference (ECMA-262
+ * 11.2.3 step 7, `GetBase(ref)`): a property reference passes the base
+ * value the reference was resolved against, while an environment-record
+ * reference passes `undefined`, which non-strict functions then replace
+ * with the global object.
+ *
+ * For a property reference on a primitive the base *value* is the
+ * primitive itself; `evaluateMemberExpression` keeps it in the record's
+ * `thisValue` while `base` holds the transient `ToObject` wrapper used to
+ * resolve the lookup. Passing the primitive is what makes a strict method
+ * see `this === "x"` rather than a wrapper it can never compare equal to;
+ * a non-strict callee re-boxes it in `resolveThisValue` (10.4.3), so
+ * non-strict receivers are unchanged. A reference carrying no base value —
+ * one built directly rather than by a member expression — falls back to
+ * the resolved object.
  *
  * @param {Reference | unknown} reference
  * @returns {unknown}
@@ -560,7 +571,9 @@ function referenceThisValue(reference) {
     reference instanceof Reference &&
     reference.base instanceof EngineObject
   ) {
-    return reference.base;
+    return reference.thisValue === undefined
+      ? reference.base
+      : reference.thisValue;
   }
 
   return undefined;
@@ -631,7 +644,7 @@ function evaluateMemberExpression(node, context) {
   checkObjectCoercible(baseValue);
 
   return new Reference(
-    toObjectBase(baseValue),
+    toObjectBase(context.realm, baseValue),
     toString(propertyKey),
     context.strict,
     baseValue,
@@ -641,22 +654,27 @@ function evaluateMemberExpression(node, context) {
 /**
  * Resolves the base of a property reference to an engine object.
  *
- * ES5 reaches a primitive's properties through `ToObject`, which builds a
- * `String`/`Number`/`Boolean` wrapper. No wrapper constructors exist in
- * this milestone, so a primitive base is rejected explicitly instead of
- * being silently treated as an object or leaking a host value.
+ * ES5 reaches a primitive's properties through `ToObject`, which boxes it
+ * against the realm's `String`/`Number`/`Boolean` wrapper prototype
+ * (ECMA-262 5.1 §11.2.1 step 6a). The property reference keeps the
+ * original primitive as its base *value* (see `evaluateMemberExpression`),
+ * so this wrapper only exists long enough to resolve the property lookup
+ * and is discarded afterward. Nothing guest code can reach ever sees it:
+ * `GetValue`/`PutValue` take 8.7.1/8.7.2's *special* `[[Get]]`/`[[Put]]`
+ * for a primitive base — accessors receive the primitive, and a write that
+ * would only create an own property on the wrapper is a strict `TypeError`
+ * or a non-strict no-op — and a method call receives the primitive too.
  *
+ * @param {import('../runtime/realm.js').Realm} realm
  * @param {unknown} baseValue
  * @returns {EngineObject}
  */
-function toObjectBase(baseValue) {
+function toObjectBase(realm, baseValue) {
   if (baseValue instanceof EngineObject) {
     return baseValue;
   }
 
-  throw createUnsupportedOperationError(
-    `ToObject on a ${typeof baseValue} value`,
-  );
+  return toObject(realm, baseValue);
 }
 
 /**

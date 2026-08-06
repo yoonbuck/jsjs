@@ -27,4 +27,13 @@ export default [
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    // The Unicode data generator downloads the pinned UCD files. It is a
+    // build-time tool, never part of the engine, so `fetch` is allowed here
+    // and nowhere else.
+    files: ['tools/unicode/*.js'],
+    languageOptions: {
+      globals: { ...globals, fetch: 'readonly' },
+    },
+  },
 ];

@@ -1,5 +1,5 @@
 import { EngineObject } from './object.js';
-import { EnginePrimitiveObject } from './primitive-object.js';
+import { createPrimitiveWrapper } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -31,7 +31,7 @@ export function toObject(realm, value) {
     typeof value === 'number' ||
     typeof value === 'boolean'
   ) {
-    return new EnginePrimitiveObject(realm.intrinsics.objectPrototype, value);
+    return createPrimitiveWrapper(realm, value);
   }
 
   throw new TypeError(`Cannot convert ${typeof value} to an object`);
@@ -244,4 +244,23 @@ export function toUint32(value) {
   // Normalize -0 to +0: the spec's ToUint32 result set is [0, 2^32), which
   // does not include -0.
   return int32bit === 0 ? 0 : int32bit;
+}
+
+/**
+ * ECMA-262 5.1 §9.7 ToUint16. Used by `String.fromCharCode` to reduce each
+ * argument to a 16-bit unsigned code-unit value.
+ *
+ * ToUint16 and ToUint32 differ only in their modulus, and `2^16` divides
+ * `2^32`, so reducing the ToUint32 result once more modulo `2^16` is exactly
+ * ToUint16's own `posInt modulo 2^16`: both the sign wrap and the
+ * NaN/infinity/-0 normalization already happened in `toUint32`, and the
+ * intermediate is a non-negative integer below `2^32` (exactly representable,
+ * so the second `%` is exact). `toUint32` performs the single ToNumber
+ * coercion, so a guest `valueOf`/`toString` still runs exactly once.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toUint16(value) {
+  return toUint32(value) % 2 ** 16;
 }

@@ -36,6 +36,14 @@ import nativeBuiltins from './native-builtins.test.js';
 import objectBuiltins from './object-builtins.test.js';
 import functionBuiltins from './function-builtins.test.js';
 import arrayBuiltins from './array-builtins.test.js';
+import primitiveWrappers from './primitive-wrappers.test.js';
+import booleanBuiltins from './boolean-builtins.test.js';
+import numberBuiltins from './number-builtins.test.js';
+import numberFormatting from './number-formatting.test.js';
+import stringBuiltins from './string-builtins.test.js';
+import stringSearch from './string-search.test.js';
+import stringCase from './string-case.test.js';
+import stringPattern from './string-pattern.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -114,5 +122,37 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/array-builtins.test.js',
     tests: arrayBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/primitive-wrappers.test.js',
+    tests: primitiveWrappers,
+  }),
+  Object.freeze({
+    file: 'test/boolean-builtins.test.js',
+    tests: booleanBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/number-builtins.test.js',
+    tests: numberBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/number-formatting.test.js',
+    tests: numberFormatting,
+  }),
+  Object.freeze({
+    file: 'test/string-builtins.test.js',
+    tests: stringBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/string-search.test.js',
+    tests: stringSearch,
+  }),
+  Object.freeze({
+    file: 'test/string-case.test.js',
+    tests: stringCase,
+  }),
+  Object.freeze({
+    file: 'test/string-pattern.test.js',
+    tests: stringPattern,
   }),
 ]);

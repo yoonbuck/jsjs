@@ -183,7 +183,11 @@ const tests = [
           'Object.prototype.toLocaleString = function () { "use strict"; return typeof this; }; ' +
             '[5, "x", true].toLocaleString();',
         ),
-        'number,string,boolean',
+        // Number.prototype.toLocaleString (ES5 15.7.4.3) shadows the
+        // overridden Object.prototype.toLocaleString for the Number
+        // element, so only the String and Boolean elements (which have no
+        // own toLocaleString) observe the override.
+        '5,string,boolean',
       );
     },
   },

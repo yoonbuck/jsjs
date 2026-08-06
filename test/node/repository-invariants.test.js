@@ -13,6 +13,11 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { assertSame } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
+import { UNICODE_VERSION } from '../../src/builtins/unicode-case-data.js';
+import {
+  UPSTREAM_SUBSET_FILE,
+  parseUpstreamSubset,
+} from '../../tools/test262/upstream.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 
@@ -56,6 +61,16 @@ function readSource(file) {
  */
 function importSpecifiers(source) {
   return [...source.matchAll(SPECIFIER_PATTERN)].map((match) => match[1]);
+}
+
+/**
+ * Quotes every RegExp metacharacter so a literal URL can be matched exactly.
+ *
+ * @param {string} literal
+ * @returns {string}
+ */
+function escapeForRegExp(literal) {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -176,7 +191,157 @@ async function readIgnoreFile() {
   }
 }
 
+/**
+ * The files under `src/builtins/` and `src/runtime/` that sit *outside* the
+ * "String built-ins never call a host String method" invariant, each with the
+ * reason it is out of scope. Everything else in those two directories is in
+ * scope by default, so a String source added later — under any filename — is
+ * covered without anyone remembering to list it, and dropping a file out of
+ * the invariant means adding a line here in a review-visible way.
+ */
+const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
+  'src/builtins/number-format.js':
+    'Number formatting builds and slices its own host digit strings, which are engine-internal scratch, never guest String semantics',
+  'src/builtins/errors.js':
+    'derives an intrinsic key from a hard-coded error type name, not from guest data',
+  'src/runtime/conversion.js':
+    'ToNumber pre-dates this invariant and still trims/slices guest strings with host methods; tightening it is its own change',
+});
+
+/**
+ * The Test262 upstream subset groups a milestone report depends on to say
+ * which parts of the language it covers. `parseUpstreamSubset` only requires
+ * *some* non-empty groups; it does not know any particular group's name is
+ * load-bearing. Without this list, deleting, renaming, or emptying one of
+ * these groups would still leave `tools/test262/upstream-subset.json`
+ * well-formed and `npm run test262:upstream` green — just quieter, and
+ * silently no longer measuring the family the README's milestone report
+ * claims it does. Each entry names the milestone that pinned the group, so a
+ * future milestone extends this list rather than guessing whether a group is
+ * load-bearing.
+ */
+const REQUIRED_TEST262_GROUPS = Object.freeze({
+  'boolean-builtins': 'Task 7 — Boolean call/construct, prototype, methods',
+  'number-builtins':
+    'Task 7 — Number call/construct, constants, prototype, methods',
+  'number-formatting': 'Task 7 — toFixed/toExponential/toPrecision formatting',
+  'string-builtins': 'Task 7 — String call/construct, fromCharCode, prototype',
+  'string-methods':
+    'Task 7 — String search/access/case/trim methods, Annex B substr',
+  'string-pattern-methods':
+    'Task 7 — match/replace/search/split with string patterns',
+});
+
 export default [
+  {
+    // The generated case data records the Unicode version it was built from.
+    // If `package.json`'s pin moves without a regeneration (or the other way
+    // round), every case mapping in the engine silently belongs to a
+    // different Unicode release than the one the project claims. The portable
+    // suite asserts the module's own constant; only this node-only check can
+    // read the manifest, and it does so with `fs` rather than a JSON import
+    // so the portable suites keep no dependency on import assertions.
+    name: 'the generated Unicode case data matches the version pinned in package.json',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const pin = manifest.unicode;
+
+      assertSame(
+        typeof pin?.version,
+        'string',
+        'package.json must pin a Unicode version',
+      );
+      assertSame(
+        UNICODE_VERSION,
+        pin.version,
+        'src/builtins/unicode-case-data.js must be regenerated when the Unicode pin moves',
+      );
+      // The download URL carries the version too, so a half-updated pin is a
+      // failure rather than a silent fetch of the wrong release.
+      assertSame(
+        String(pin.baseUrl).includes(`/${pin.version}/`),
+        true,
+        `the Unicode baseUrl must name the pinned version: ${pin.baseUrl}`,
+      );
+      assertSame(
+        pin.generatedModule,
+        'src/builtins/unicode-case-data.js',
+        'the pin must name the module this check reads',
+      );
+
+      const generated = await readSource(pin.generatedModule);
+
+      assertSame(
+        generated.includes(pin.baseUrl),
+        true,
+        'the generated module header must record the pinned UCD base URL',
+      );
+      assertSame(
+        generated.includes(`export const UNICODE_VERSION = '${pin.version}'`),
+        true,
+        'the generated module must export the pinned Unicode version',
+      );
+
+      // `npm run unicode:check` re-derives the tables from the UCD itself, so
+      // it needs the network and cannot be a CI job. This is the offline half
+      // of the same guarantee: every file the pin names must appear in the
+      // header under the pinned base URL, with a well-formed sha256 digest
+      // line, and the header must record *exactly* that set — no fewer, no
+      // stale extras. Adding, removing, renaming, or repointing a source file
+      // without regenerating therefore fails `npm run test:node`, with no
+      // download and no UCD copy vendored into the repository. This is a
+      // self-consistency check between the pin and the header shape, not a
+      // content check: without a local copy of the UCD to hash, it cannot
+      // confirm a recorded digest's *value* is the correct one for the file
+      // it names.
+      const files = pin.files;
+
+      assertSame(
+        typeof files === 'object' && files !== null,
+        true,
+        'package.json must pin the UCD file names',
+      );
+      assertSame(
+        Object.keys(files).length > 0,
+        true,
+        'package.json must pin at least one UCD file',
+      );
+
+      for (const fileName of Object.values(files)) {
+        const url = `${pin.baseUrl}${fileName}`;
+        const digest = new RegExp(
+          `${escapeForRegExp(url)}\\n \\* {5}sha256 [0-9a-f]{64}\\n`,
+        );
+
+        assertSame(
+          digest.test(generated),
+          true,
+          `${pin.generatedModule}'s header must record ${url} with its sha256 digest; rerun npm run unicode:generate`,
+        );
+      }
+
+      // The loop above only proves every *pinned* file is present; it does not
+      // by itself prove nothing *else* is. A stale entry left behind by a
+      // rename or a removed file — still digest-shaped, so it would satisfy
+      // the pattern above for whichever file happens to still match — would
+      // otherwise go unnoticed. Counting every digest-shaped header line and
+      // requiring the count equal exactly the number of pinned files closes
+      // that gap: it fails if the header carries more entries than the pin
+      // does, exactly as it already fails if it carries fewer.
+      const headerDigestLines =
+        generated.match(/\n \* {5}sha256 [0-9a-f]{64}\n/g) ?? [];
+
+      assertSame(
+        headerDigestLines.length,
+        Object.keys(files).length,
+        `${pin.generatedModule}'s header must record exactly the ${
+          Object.keys(files).length
+        } UCD file(s) package.json pins — found ${
+          headerDigestLines.length
+        } digest entries; rerun npm run unicode:generate`,
+      );
+    },
+  },
   {
     name: 'engine source never imports through node_modules',
     run: async () => {
@@ -270,6 +435,37 @@ export default [
     },
   },
   {
+    // `parseUpstreamSubset` proves the manifest is well-formed; it has no
+    // opinion on which named groups must exist. Without this check, deleting
+    // or emptying one of the groups a milestone report names would still pass
+    // schema validation and produce a green, merely smaller, `test262:upstream`
+    // run — exactly the gap a milestone report's own claims must not have.
+    name: 'every group a milestone report depends on still exists in the upstream subset',
+    run: async () => {
+      const subset = parseUpstreamSubset(
+        await readSource(UPSTREAM_SUBSET_FILE),
+      );
+      const groupsByName = new Map(
+        subset.groups.map((group) => [group.name, group]),
+      );
+
+      for (const [name, reason] of Object.entries(REQUIRED_TEST262_GROUPS)) {
+        const group = groupsByName.get(name);
+
+        assertSame(
+          group !== undefined,
+          true,
+          `${UPSTREAM_SUBSET_FILE} must keep a "${name}" group (${reason}); it was removed or renamed`,
+        );
+        assertSame(
+          (group?.paths.length ?? 0) > 0,
+          true,
+          `${UPSTREAM_SUBSET_FILE}'s "${name}" group must not be emptied (${reason})`,
+        );
+      }
+    },
+  },
+  {
     name: 'the vendored parser build matches the pinned dependency',
     run: async () => {
       const { problems } = await checkVendoredDependencies();
@@ -359,6 +555,77 @@ export default [
         'the full CI contract must not run inside npm test/test:node; it would rerun the whole pipeline recursively',
       );
       assertSame(files.length > 0, true, 'CI contract suites were found');
+    },
+  },
+  {
+    // The String built-ins must not implement guest semantics by calling the
+    // host methods they are reimplementing. Behavioural tests cannot catch
+    // this (host `String.prototype.charCodeAt`/`slice` return the *right*
+    // answers), so the boundary is enforced against the source text: the
+    // String family may read code units by index and length, and may use
+    // exactly one host primitive -- `String.fromCharCode`, isolated in
+    // `src/runtime/code-units.js`.
+    name: 'the String built-ins never delegate to a host String.prototype method',
+    run: async () => {
+      // Scope by *directory*, not by filename: every `.js` file under
+      // `src/builtins/` and `src/runtime/` is checked unless it appears in
+      // the exemption table above with a reason. A String source added later
+      // therefore cannot escape the invariant by being named something else.
+      const candidates = [
+        ...(await listFiles('src/builtins/', (name) => name.endsWith('.js'))),
+        ...(await listFiles('src/runtime/', (name) => name.endsWith('.js'))),
+      ].sort();
+      const exempt = Object.keys(HOST_STRING_INVARIANT_EXEMPTIONS);
+      const stale = exempt.filter((file) => !candidates.includes(file));
+      const files = candidates.filter((file) => !exempt.includes(file));
+
+      assertSame(
+        stale.join('\n'),
+        '',
+        'an exemption names a file that no longer exists; delete the entry',
+      );
+      assertSame(
+        files.includes('src/builtins/primitive-wrappers.js') &&
+          files.includes('src/builtins/string-pattern.js') &&
+          files.includes('src/runtime/code-units.js'),
+        true,
+        'the String built-in sources must be inside the invariant',
+      );
+      assertSame(files.length > 5, true, 'engine sources were found');
+      const hostMethodCall =
+        /\.(charAt|charCodeAt|codePointAt|concat|slice|substring|substr|indexOf|lastIndexOf|split|replace|search|match|trim|toLowerCase|toUpperCase|toLocaleLowerCase|toLocaleUpperCase|localeCompare|repeat|padStart|padEnd|startsWith|endsWith|includes|normalize)\s*\(/g;
+      /** @type {string[]} */
+      const offenders = [];
+      /** @type {string[]} */
+      const hostConstructors = [];
+
+      for (const file of files) {
+        const source = await readSource(file);
+        const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+
+        for (const match of code.matchAll(hostMethodCall)) {
+          offenders.push(`${file} calls .${match[1]}()`);
+        }
+
+        if (code.includes('String.prototype')) {
+          offenders.push(`${file} names String.prototype in code`);
+        }
+
+        hostConstructors.push(
+          ...(code.match(/String\.fromCharCode\s*\(/g) ?? []).map(() => file),
+        );
+      }
+
+      assertSame(
+        offenders.join('\n'),
+        '',
+        'the String built-ins must own their code-unit reads instead of calling host String methods',
+      );
+      assertSame(
+        hostConstructors.join(','),
+        'src/runtime/code-units.js',
+        'the number -> code-unit host primitive must stay isolated in src/runtime/code-units.js, used exactly once',
+      );
     },
   },
   {

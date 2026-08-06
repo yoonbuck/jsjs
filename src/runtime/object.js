@@ -420,9 +420,102 @@ export class EngineObject {
 }
 
 /**
+ * Computes the `ForInStatement` enumeration order (ECMA-262 12.6.4): every
+ * enumerable string-keyed own property across `object`'s prototype chain,
+ * each name visited at most once. A name already seen anywhere earlier in
+ * the chain is never revisited later even when it isn't enumerable there —
+ * that's exactly the spec's shadowing rule ("a property of a prototype is
+ * not enumerated if it is 'shadowed' because some previous object in the
+ * prototype chain has a property with the same name", regardless of that
+ * earlier property's own enumerability). Symbol keys are skipped outright:
+ * ES5 has no symbols, and later editions exclude them from `for-in` too.
+ * Order within one object follows `ownPropertyKeys()` (insertion order),
+ * matching `Object.keys`.
+ *
+ * @param {EngineObject} object
+ * @returns {string[]}
+ */
+export function enumerableKeysForIn(object) {
+  const seen = new Set();
+  /** @type {string[]} */
+  const result = [];
+
+  for (
+    let current = /** @type {EngineObject | null} */ (object);
+    current !== null;
+    current = current.getPrototype()
+  ) {
+    for (const key of current.ownPropertyKeys()) {
+      if (typeof key !== 'string' || seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+
+      const descriptor = current.getOwnProperty(key);
+      if (descriptor !== undefined && descriptor.enumerable === true) {
+        result.push(key);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Re-checks one enumerated name against the live object graph, which
+ * `evaluateForInStatement` does immediately before running the body for
+ * that name (ECMA-262 12.6.4: "If a property that has not yet been visited
+ * during enumeration is deleted, then it will not be visited").
+ *
+ * The check repeats exactly the lookup `enumerableKeysForIn` used to
+ * decide the name in the first place — walk the prototype chain, stop at
+ * the first object with an own property of that name, and answer with that
+ * property's enumerability — so the shadowing rule stays consistent
+ * between the snapshot and the re-check. Deleting an own property that
+ * shadowed an enumerable inherited one therefore leaves the name live (the
+ * inherited property is what the body now sees), while deleting one that
+ * shadowed a *non-enumerable* inherited property drops the name, and so
+ * does making the property non-enumerable mid-loop: 12.6.4 step 6 asks for
+ * the next property "whose [[Enumerable]] attribute is true" each time
+ * round, not for the attribute it had at loop entry.
+ *
+ * Those last two cases are where real engines disagree — JavaScriptCore
+ * answers as this does, V8 keeps such a name because its re-check is a
+ * bare `HasProperty` — which is the spec telling us it left the choice
+ * open: 12.6.4 fixes only the deletion rule and leaves "the mechanics and
+ * order of enumerating the properties" implementation-defined. Answering
+ * with the same walk the snapshot used is the self-consistent choice: a
+ * name whose first own occurrence is non-enumerable never enters the
+ * snapshot, so it should not survive in it either.
+ *
+ * @param {EngineObject} object
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isEnumerableForIn(object, key) {
+  for (
+    let current = /** @type {EngineObject | null} */ (object);
+    current !== null;
+    current = current.getPrototype()
+  ) {
+    const descriptor = current.getOwnProperty(key);
+
+    if (descriptor !== undefined) {
+      return descriptor.enumerable === true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Invokes a function value that the object model holds internally — an
- * accessor's getter/setter or a `toString`/`valueOf` method found during
- * `[[DefaultValue]]`.
+ * accessor's getter/setter, a `toString`/`valueOf` method found during
+ * `[[DefaultValue]]`, or an accessor reached through the special
+ * `[[Get]]`/`[[Put]]` that a Reference with a primitive base uses
+ * (ECMA-262 8.7.1/8.7.2), which supplies the primitive itself as
+ * `thisValue`.
  *
  * Two callable shapes reach this point: engine functions created by guest
  * code, which use the engine call protocol, and plain host callbacks,
@@ -435,7 +528,7 @@ export class EngineObject {
  * @param {unknown[]} args
  * @returns {unknown}
  */
-function callAccessor(accessor, thisValue, args) {
+export function callAccessor(accessor, thisValue, args) {
   if (typeof accessor === 'function') {
     return accessor.call(thisValue, ...args);
   }

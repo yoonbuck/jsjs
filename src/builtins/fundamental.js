@@ -1,5 +1,6 @@
 import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { EnginePrimitiveObject } from '../runtime/primitive-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 
 /**
@@ -7,16 +8,24 @@ import { GuestErrorSignal } from '../runtime/completion.js';
  *   objectPrototype: EngineObject,
  *   functionPrototype: EngineObject,
  *   arrayPrototype: EngineObject,
+ *   stringPrototype: EnginePrimitiveObject,
+ *   numberPrototype: EnginePrimitiveObject,
+ *   booleanPrototype: EnginePrimitiveObject,
  * }} FundamentalIntrinsics
  */
 
 /**
  * Builds the minimal, per-realm intrinsic graph this milestone needs: the
  * root `%Object.prototype%` (whose own `[[Prototype]]` is `null`) plus
- * `%Function.prototype%` and `%Array.prototype%`, ordinary objects
- * inheriting from `%Object.prototype%` that give the function and array
- * specializations a distinct per-realm prototype identity. None of them
- * carries its standard methods yet. Every call returns brand-new
+ * `%Function.prototype%`, `%Array.prototype%`, and the boxed-primitive
+ * wrapper prototypes `%String.prototype%`, `%Number.prototype%`, and
+ * `%Boolean.prototype%` — ordinary objects inheriting from
+ * `%Object.prototype%` that give each specialization a distinct per-realm
+ * prototype identity. None of them carries its standard methods yet (the
+ * wrapper prototypes are created here, ahead of their constructors, so
+ * `ToObject` and autoboxing can resolve `realm.intrinsics.stringPrototype`
+ * etc. before `builtins/primitive-wrappers.js` finishes wiring the
+ * constructors and methods onto them). Every call returns brand-new
  * `EngineObject` instances so realms never share intrinsic identity.
  *
  * @returns {FundamentalIntrinsics}
@@ -25,8 +34,18 @@ export function createFundamentalIntrinsics() {
   const objectPrototype = new EngineObject(null);
   const functionPrototype = new IntrinsicFunctionPrototype(objectPrototype);
   const arrayPrototype = new EngineArray(objectPrototype);
+  const stringPrototype = new EnginePrimitiveObject(objectPrototype, '');
+  const numberPrototype = new EnginePrimitiveObject(objectPrototype, 0);
+  const booleanPrototype = new EnginePrimitiveObject(objectPrototype, false);
 
-  return { objectPrototype, functionPrototype, arrayPrototype };
+  return {
+    objectPrototype,
+    functionPrototype,
+    arrayPrototype,
+    stringPrototype,
+    numberPrototype,
+    booleanPrototype,
+  };
 }
 
 class IntrinsicFunctionPrototype extends EngineObject {

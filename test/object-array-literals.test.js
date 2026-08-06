@@ -504,20 +504,15 @@ const tests = [
     },
   },
   {
-    name: 'member access on a primitive reports the missing ToObject operation explicitly',
+    name: 'member access on a primitive autoboxes through ToObject',
     run() {
-      const error = assertThrows(() => run('var n = 1; n.a;'), Error);
-      assertSame(error.name, 'UnsupportedOperationError');
-      assertSame(
-        /** @type {any} */ (error).operation,
-        'ToObject on a number value',
-      );
-
-      const stringError = assertThrows(
-        () => run('var s = "a"; s.length;'),
-        Error,
-      );
-      assertSame(stringError.name, 'UnsupportedOperationError');
+      // Property access on a primitive base reaches ES5's `ToObject`
+      // (11.2.1 step 6a), boxing the primitive against its realm wrapper
+      // prototype rather than being rejected as unsupported; see
+      // `test/primitive-wrappers.test.js` for coverage of the boxed
+      // wrapper's own prototype identity, class tag, and descriptors.
+      assertSame(run('var n = 1; n.a;'), undefined);
+      assertSame(run('var s = "a"; s.length;'), 1);
     },
   },
 ];

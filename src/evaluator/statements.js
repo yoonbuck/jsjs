@@ -9,10 +9,15 @@ import {
   ThrowSignal,
   GuestErrorSignal,
 } from '../runtime/completion.js';
-import { toBoolean } from '../runtime/conversion.js';
+import { toBoolean, toObject } from '../runtime/conversion.js';
 import { createUnsupportedNodeError } from '../runtime/errors.js';
-import { newDeclarativeEnvironment } from '../runtime/environment.js';
-import { evaluateExpressionValue } from './expressions.js';
+import {
+  getIdentifierReference,
+  newDeclarativeEnvironment,
+} from '../runtime/environment.js';
+import { putValue } from '../runtime/reference.js';
+import { enumerableKeysForIn, isEnumerableForIn } from '../runtime/object.js';
+import { evaluateExpression, evaluateExpressionValue } from './expressions.js';
 import { evaluateVariableDeclaration } from './declarations.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
 
@@ -36,6 +41,7 @@ export const STATEMENT_TYPES = new Set([
   'WhileStatement',
   'DoWhileStatement',
   'ForStatement',
+  'ForInStatement',
   'BreakStatement',
   'ContinueStatement',
   'ReturnStatement',
@@ -78,6 +84,8 @@ export function evaluateStatement(node, context, labelSet = []) {
       return evaluateDoWhileStatement(node, context, labelSet);
     case 'ForStatement':
       return evaluateForStatement(node, context, labelSet);
+    case 'ForInStatement':
+      return evaluateForInStatement(node, context, labelSet);
     case 'BreakStatement':
       return evaluateBreakStatement(node);
     case 'ContinueStatement':
@@ -318,6 +326,108 @@ function evaluateForStatement(node, context, labelSet) {
   }
 
   return createNormalCompletion(value);
+}
+
+/**
+ * Evaluates a `ForInStatement`, implementing ECMA-262 12.6.4 runtime
+ * semantics. `right` is evaluated once; a `null`/`undefined` result
+ * short-circuits to a no-op loop (12.6.4 step 2) rather than throwing,
+ * matching `for (var k in null) {}` doing nothing. Otherwise `right` is
+ * autoboxed via `ToObject` and the full enumeration order is computed
+ * upfront by `enumerableKeysForIn` (own-then-inherited enumerable
+ * string-keyed properties, each name visited once) before the body runs
+ * for each name in turn, reusing the same `applyLoopBodyResult`
+ * break/continue/return/throw handling every other loop here uses.
+ *
+ * The snapshot fixes the *order*, not the *membership*: 12.6.4 requires
+ * that a property deleted before enumeration reaches it is never visited,
+ * so each name is re-checked with `isEnumerableForIn` right before it
+ * would be assigned to the loop target, and a name that is no longer a
+ * live enumerable property is skipped without assigning it. Properties
+ * added during enumeration are the case the same paragraph leaves
+ * unguaranteed; they stay outside the snapshot, which is what keeps an
+ * enumeration that grows its own object finite.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @param {string[]} labelSet
+ * @returns {Completion}
+ */
+function evaluateForInStatement(node, context, labelSet) {
+  const rightValue = evaluateExpressionValue(node.right, context);
+
+  if (rightValue === null || rightValue === undefined) {
+    return createNormalCompletion(EMPTY);
+  }
+
+  const object = toObject(context.realm, rightValue);
+  const keys = enumerableKeysForIn(object);
+
+  /** @type {unknown} */
+  let value = EMPTY;
+
+  for (const key of keys) {
+    if (!isEnumerableForIn(object, key)) {
+      continue;
+    }
+
+    assignForInTarget(node.left, key, context);
+
+    const bodyResult = evaluateStatement(node.body, context);
+    const { value: nextValue, action } = applyLoopBodyResult(
+      bodyResult,
+      value,
+      labelSet,
+    );
+    value = nextValue;
+
+    if (action === 'break') {
+      return createNormalCompletion(value);
+    }
+
+    if (action === 'propagate') {
+      return { ...bodyResult, value };
+    }
+  }
+
+  return createNormalCompletion(value);
+}
+
+/**
+ * Binds one enumerated property name to a `ForInStatement`'s left-hand
+ * side, supporting both grammar forms the parser emits (ECMA-262 12.6.4
+ * step 6a "evaluate ... as if it were an AssignmentExpression"):
+ *
+ * - `VariableDeclaration` (`for (var k in obj)`): the single declarator's
+ *   name was already hoisted as a `var` binding (see `collectVarNames`'s
+ *   `ForInStatement` case), so this resolves that existing binding through
+ *   the environment chain and assigns it directly — no re-declaration.
+ * - Any other assignable expression (`Identifier` or `MemberExpression`,
+ *   e.g. `for (k in obj)` or `for (a[i] in obj)`): evaluated to a fresh
+ *   `Reference` every iteration, exactly like `AssignmentExpression`'s
+ *   left-hand side.
+ *
+ * @param {any} left
+ * @param {string} key
+ * @param {EvaluationContext} context
+ * @returns {void}
+ */
+function assignForInTarget(left, key, context) {
+  if (left.type === 'VariableDeclaration') {
+    const name = left.declarations[0].id.name;
+    const reference = getIdentifierReference(context.env, name, context.strict);
+    putValue(reference, key);
+    return;
+  }
+
+  if (left.type !== 'Identifier' && left.type !== 'MemberExpression') {
+    throw createUnsupportedNodeError(left);
+  }
+
+  const reference = /** @type {import('../runtime/reference.js').Reference} */ (
+    evaluateExpression(left, context)
+  );
+  putValue(reference, key);
 }
 
 /**

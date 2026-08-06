@@ -34,6 +34,15 @@ declare module 'node:fs/promises' {
   ): Promise<void>;
 }
 
+declare module 'node:crypto' {
+  export interface Hash {
+    update(data: string, encoding?: string): Hash;
+    digest(encoding: 'hex'): string;
+  }
+
+  export function createHash(algorithm: string): Hash;
+}
+
 declare module 'node:url' {
   export function pathToFileURL(path: string): URL;
   export function fileURLToPath(url: string | URL): string;
