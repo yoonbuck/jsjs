@@ -499,8 +499,27 @@ export function parseDateString(source, _host) {
     );
   }
 
+  const utcDisplay =
+    /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (-?\d{4,}) (\d{2}):(\d{2}):(\d{2}) GMT$/.exec(
+      source,
+    );
+
+  if (utcDisplay !== null) {
+    const [, dateText, monthName, yearText, hourText, minuteText, secondText] =
+      utcDisplay;
+    return parseDisplayDateFields(
+      yearText,
+      monthName,
+      dateText,
+      hourText,
+      minuteText,
+      secondText,
+      0,
+    );
+  }
+
   const display =
-    /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{2}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT([+-])(\d{2})(\d{2})(?: \(UTC\))?$/.exec(
+    /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{2}) (-?\d{4,}) (\d{2}):(\d{2}):(\d{2}) GMT([+-])(\d{2})(\d{2})(?: \(UTC\))?$/.exec(
       source,
     );
 
@@ -520,34 +539,58 @@ export function parseDateString(source, _host) {
     offsetHourText,
     offsetMinuteText,
   ] = display;
-  const month = monthNumber(monthName);
+  const offsetHour = Number(offsetHourText);
+  const offsetMinute = Number(offsetMinuteText);
+
+  if (offsetHour > 23 || offsetMinute > 59) {
+    return NaN;
+  }
+
+  const offset = (offsetHour * 60 + offsetMinute) * MS_PER_MINUTE;
+  return parseDisplayDateFields(
+    yearText,
+    monthName,
+    dateText,
+    hourText,
+    minuteText,
+    secondText,
+    signText === '+' ? offset : -offset,
+  );
+}
+
+/**
+ * @param {string} yearText
+ * @param {string} monthName
+ * @param {string} dateText
+ * @param {string} hourText
+ * @param {string} minuteText
+ * @param {string} secondText
+ * @param {number} offset
+ * @returns {number}
+ */
+function parseDisplayDateFields(
+  yearText,
+  monthName,
+  dateText,
+  hourText,
+  minuteText,
+  secondText,
+  offset,
+) {
   const year = Number(yearText);
+  const month = monthNumber(monthName);
   const date = Number(dateText);
   const hour = Number(hourText);
   const minute = Number(minuteText);
   const second = Number(secondText);
-  const offsetHour = Number(offsetHourText);
-  const offsetMinute = Number(offsetMinuteText);
 
-  if (
-    !validDateFields(year, month, date, hour, minute, second, 0) ||
-    offsetHour > 23 ||
-    offsetMinute > 59
-  ) {
+  if (!validDateFields(year, month, date, hour, minute, second, 0)) {
     return NaN;
   }
 
-  const localTime = dateFromComponents(
-    year,
-    month - 1,
-    date,
-    hour,
-    minute,
-    second,
-    0,
+  return timeClip(
+    dateFromComponents(year, month - 1, date, hour, minute, second, 0) - offset,
   );
-  const offset = (offsetHour * 60 + offsetMinute) * MS_PER_MINUTE;
-  return timeClip(localTime - (signText === '+' ? offset : -offset));
 }
 
 /**

@@ -83,3 +83,44 @@
 - Confirmed invalid strings and ISO failures follow their separate ES5 results,
   and `toGMTString` shares `toUTCString` identity.
 - No remaining concerns.
+
+## Fix round 1: emitted-string parsing round trips
+
+### Root cause
+
+- `parseDateString` recognized ISO input and only the engine's local
+  `toString` grammar. It had no branch for `toUTCString`'s comma-separated,
+  GMT-suffixed grammar, so parsing an emitted UTC string returned `NaN`.
+- The local display grammar accepted exactly four unsigned year digits, while
+  the formatter emits negative years with a sign and positive extended years
+  without one.
+
+### TDD cycle
+
+- **RED command:** `node test/run-node.js test/date-builtins.test.js`
+- **RED output:** `Date.parse round-trips emitted UTC and extended local display
+  strings` failed with `Expected NaN to be the same value as 0`.
+- **GREEN command:** `node test/run-node.js test/date-builtins.test.js`
+- **GREEN output:** all Date builtin cases passed, including
+  `Date.parse round-trips emitted UTC and extended local display strings`.
+- **GREEN change:** added an engine-owned UTC-display parser branch, widened
+  the local-display year grammar to formatter-emitted signed/extended years,
+  and shared display-field validation and UTC-offset application.
+
+### Tests added
+
+- Literal millisecond-zero UTC round trips at epoch (`0`) and a nontrivial
+  leap-day instant (`951827696000`).
+- Local `toString` round trips for formatter-emitted negative year `-0001`
+  and extended year `10000` with the deterministic zero-offset adapter.
+
+### Validation
+
+- `node test/run-node.js test/date-builtins.test.js` — passed.
+- `node test/run-node.js test/date-arithmetic.test.js` — passed.
+- `node test/run-node.js test/node/repository-invariants.test.js` — passed.
+- `npm run typecheck` — passed.
+- `npm run lint -- --quiet` — passed.
+- `npm run format` — passed.
+- `npm test` — passed.
+- `git diff --check` — passed.

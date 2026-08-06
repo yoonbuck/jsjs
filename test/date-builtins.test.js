@@ -129,6 +129,27 @@ export default [
     },
   },
   {
+    name: 'Date.parse round-trips emitted UTC and extended local display strings',
+    run() {
+      assertSame(run('Date.parse(new Date(0).toUTCString());'), 0);
+      assertSame(
+        run('Date.parse(new Date(951827696000).toUTCString());'),
+        951827696000,
+      );
+      assertSame(
+        run(
+          '(function () { var values = [-62198755200000, 253402300800000]; return values.every(function (value) { var date = new Date(value); return Date.parse(date.toString()) === value; }); }())',
+          {
+            dateHost: {
+              timezoneOffset: () => 0,
+            },
+          },
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'Date.UTC applies ES5 defaults, two-digit years, normalization, and clipping',
     run() {
       assertSame(
