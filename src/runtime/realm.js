@@ -170,7 +170,7 @@ export class Realm {
   }
 
   /**
-   * @param {'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'URIError' | 'Error'} typeName
+   * @param {'EvalError' | 'TypeError' | 'ReferenceError' | 'SyntaxError' | 'RangeError' | 'URIError' | 'Error'} typeName
    * @param {string} message
    * @returns {EngineObject}
    */

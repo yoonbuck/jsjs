@@ -1,5 +1,6 @@
 import { EngineObject } from '../runtime/object.js';
 import { toString } from '../runtime/conversion.js';
+import { requireObjectReceiver } from './shared.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -7,6 +8,7 @@ import { toString } from '../runtime/conversion.js';
  *
  * @typedef {{
  *   errorPrototype: EngineObject,
+ *   evalErrorPrototype: EngineObject,
  *   typeErrorPrototype: EngineObject,
  *   referenceErrorPrototype: EngineObject,
  *   syntaxErrorPrototype: EngineObject,
@@ -18,12 +20,17 @@ import { toString } from '../runtime/conversion.js';
 /**
  * The native error names this engine installs. ECMA-262 15.11.6 lists six
  * (`EvalError`, `RangeError`, `ReferenceError`, `SyntaxError`, `TypeError`,
- * `URIError`); these five are the ones some algorithm in this engine can
- * actually throw. `EvalError` is left out because ES5 itself says nothing in
- * the specification throws it — it exists only for compatibility — and this
- * engine has no `eval` to change that.
+ * `URIError`) and 15.11 requires the global object to expose all of them.
+ *
+ * Five of these name an error some algorithm in this engine actually throws.
+ * `EvalError` is different: ES5.1 defines the constructor and its prototype
+ * but nothing in the specification ever throws one — it survives only for
+ * backwards compatibility. It is still installed here so the constructor,
+ * its prototype chain, and `instanceof EvalError` all behave like every real
+ * engine and like the other five.
  */
 const ERROR_NAMES = /** @type {const} */ ([
+  'EvalError',
   'TypeError',
   'ReferenceError',
   'SyntaxError',
@@ -42,6 +49,7 @@ const ERROR_NAMES = /** @type {const} */ ([
  */
 const ERROR_PROTOTYPE_KEYS = Object.freeze({
   Error: 'errorPrototype',
+  EvalError: 'evalErrorPrototype',
   TypeError: 'typeErrorPrototype',
   ReferenceError: 'referenceErrorPrototype',
   SyntaxError: 'syntaxErrorPrototype',
@@ -142,6 +150,56 @@ function buildErrorConstructor(realm, name, errorPrototype) {
 }
 
 /**
+ * Installs `Error.prototype.toString` (ECMA-262 5.1 §15.11.4.4).
+ *
+ * The algorithm reads `name` and `message` off the `this` value through their
+ * ordinary `[[Get]]` (so inherited defaults and accessor properties are
+ * honoured), defaults a missing `name` to `"Error"` and a missing `message`
+ * to `""`, and then joins them: an empty half is dropped so a bare name or a
+ * bare message round-trips unchanged, and otherwise the result is
+ * `name + ": " + message`. A non-object receiver is rejected with a guest
+ * `TypeError` per step 2.
+ *
+ * The method is installed with the standard built-in attributes
+ * (`[[Writable]]: true`, `[[Enumerable]]: false`, `[[Configurable]]: true`).
+ *
+ * @param {Realm} realm
+ * @param {EngineObject} errorPrototype
+ * @returns {void}
+ */
+function installErrorPrototypeToString(realm, errorPrototype) {
+  errorPrototype.defineOwnProperty('toString', {
+    value: realm.createNativeFunction({
+      name: 'toString',
+      length: 0,
+      call(thisValue) {
+        const object = requireObjectReceiver(
+          thisValue,
+          'Error.prototype.toString called on a non-object',
+        );
+
+        const rawName = object.get('name');
+        const name = rawName === undefined ? 'Error' : toString(rawName);
+
+        const rawMessage = object.get('message');
+        const message = rawMessage === undefined ? '' : toString(rawMessage);
+
+        if (message === '') {
+          return name;
+        }
+        if (name === '') {
+          return message;
+        }
+        return `${name}: ${message}`;
+      },
+    }),
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+/**
  * Builds all six ES5 error constructors and their prototypes for one realm
  * (ECMA-262 15.11). The `%Error.prototype%` object carries `name: "Error"`
  * and `message: ""` as own non-enumerable data properties; each native error
@@ -155,6 +213,7 @@ function buildErrorConstructor(realm, name, errorPrototype) {
  * @param {Realm} realm
  * @returns {ErrorIntrinsics & {
  *   errorConstructor: import('./shared.js').NativeFunction,
+ *   evalErrorConstructor: import('./shared.js').NativeFunction,
  *   typeErrorConstructor: import('./shared.js').NativeFunction,
  *   referenceErrorConstructor: import('./shared.js').NativeFunction,
  *   syntaxErrorConstructor: import('./shared.js').NativeFunction,
@@ -174,6 +233,10 @@ export function createErrorIntrinsics(realm) {
     errorPrototype,
   );
 
+  // %Error.prototype% carries its own toString (15.11.4.4); every native
+  // error prototype inherits it rather than Object.prototype.toString.
+  installErrorPrototypeToString(realm, errorPrototype);
+
   // Each native error subtype: prototype inherits from %Error.prototype%,
   // constructor inherits from %Function.prototype% via the native factory.
   /** @type {Record<string, EngineObject>} */
@@ -191,6 +254,10 @@ export function createErrorIntrinsics(realm) {
   return {
     errorPrototype,
     errorConstructor,
+    evalErrorPrototype: nativePrototypes['EvalError'],
+    evalErrorConstructor: /** @type {import('./shared.js').NativeFunction} */ (
+      nativeConstructors['EvalError']
+    ),
     typeErrorPrototype: nativePrototypes['TypeError'],
     typeErrorConstructor: /** @type {import('./shared.js').NativeFunction} */ (
       nativeConstructors['TypeError']
@@ -228,6 +295,7 @@ export function installErrorConstructors(globalObject, errorIntrinsics) {
   /** @type {[string, import('./shared.js').NativeFunction][]} */
   const ctors = [
     ['Error', errorIntrinsics.errorConstructor],
+    ['EvalError', errorIntrinsics.evalErrorConstructor],
     ['TypeError', errorIntrinsics.typeErrorConstructor],
     ['ReferenceError', errorIntrinsics.referenceErrorConstructor],
     ['SyntaxError', errorIntrinsics.syntaxErrorConstructor],

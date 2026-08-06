@@ -240,9 +240,9 @@ The implemented ES5 core built-in families are:
 | `JSON`     | `JSON.parse` with the full JSON grammar and reviver traversal, and `JSON.stringify` with replacer functions, replacer property lists, `toJSON`, numeric and string `space` gaps, and cycle detection. Neither delegates to the host `JSON`. `JSON` is an ordinary object with `[[Class]]` `"JSON"`.                                                                                                                                          |
 | Globals    | `parseInt`, `parseFloat`, `isNaN`, `isFinite`; the URI functions `encodeURI`, `encodeURIComponent`, `decodeURI`, `decodeURIComponent`; and Annex B's `escape`/`unescape`. The URI functions throw a realm-local `URIError`.                                                                                                                                                                                                                  |
 
-The error constructors (`Error`, `TypeError`, `ReferenceError`, `SyntaxError`,
-`RangeError`, `URIError`) are all available on every realm's global object;
-`EvalError` is deliberately omitted because this engine has no `eval`.
+The error constructors (`Error`, `EvalError`, `TypeError`, `ReferenceError`,
+`SyntaxError`, `RangeError`, `URIError`) are all available on every realm's
+global object.
 
 #### Boxed primitives, autoboxing, realms, and descriptors
 
