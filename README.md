@@ -174,7 +174,8 @@ The manifest currently holds no features. The engine is ES5-only today, so no
 Test262 `features` tag is claimed as supported, and any test that declares one is
 skipped rather than run. The baseline upstream subset is intentionally untagged —
 none of its tests declare a `features` tag — so today's run skips nothing and the
-report says exactly that: `{"type":"features","supported":[],"tagged":[],"untagged":21555}`.
+report says exactly that: a `{"type":"features"}` line whose `supported` and
+`tagged` lists are both empty and whose `untagged` count is the whole run.
 The schema, the probe execution, and the upstream correspondence check are all
 exercised regardless, by a synthetic feature in
 `test/node/workflow-contract.test.js` and a known feature-tagged upstream test in
@@ -239,9 +240,10 @@ A file is a candidate only if it survives every filter:
   run is carved out one path (or prefix) at a time, each with a category and a
   written reason.
 
-That yields **11,328 of the 53,575 upstream files (21.144%)**, expanding to
-**21,555 of 102,906 `(file, variant)` records (20.946%)**, in 49 groups — and
-all 21,555 pass.
+That selects roughly a fifth of the upstream suite, and every selected record
+passes. The exact counts are not repeated here on purpose: they are live numbers,
+so they live in the generated [Coverage](#coverage) block where
+`npm run test262:upstream:check` keeps them honest, and nowhere else.
 
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
@@ -508,11 +510,14 @@ byte-identical.
 A conformance percentage means nothing without its denominator, so the upstream
 report states both. An `inventory` record carries the whole-suite totals, and one
 `coverage` record per denominator measures the run against them. For example,
-with synthetic counts:
+with synthetic counts — deliberately chosen not to collide with any number the
+real run publishes, so the contract check that keeps live counts inside the
+generated coverage block can tell an illustration apart from a published
+figure:
 
 ```json
-{"type":"inventory","files":100,"records":180,"malformed":2}
-{"type":"coverage","scope":"files","total":100,"selected":5,"attempted":4,"passed":3,"selectedPercent":5,"attemptedPercent":4,"passedPercent":3}
+{"type":"inventory","files":1000,"records":1800,"malformed":12}
+{"type":"coverage","scope":"files","total":1000,"selected":250,"attempted":200,"passed":150,"selectedPercent":25,"attemptedPercent":20,"passedPercent":15}
 ```
 
 The semantics are exact, and `tools/test262/coverage.js` is where they are

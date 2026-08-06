@@ -188,13 +188,22 @@ function coverageRecord(records, scope) {
  * example follows with a comma, as in `"files":53575,"records"`. Only a comma
  * that groups digits counts as part of a number.
  *
+ * A letter on either side disqualifies a match too, because a published count
+ * is never written flush against a word: without that guard a small live value
+ * collides with ordinary prose (a `malformed` count of 4 matches the `v4` in a
+ * sentence about version tags), and the check is only useful while every match
+ * it reports is really a number someone pasted.
+ *
  * @param {string} rendering
  * @returns {RegExp}
  */
 function wholeNumberPattern(rendering) {
   const escaped = rendering.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 
-  return new RegExp(String.raw`(?<![\d.]|\d,)${escaped}(?![\d.]|,\d)`, 'u');
+  return new RegExp(
+    String.raw`(?<![\d.]|\d,|\p{L})${escaped}(?![\d.]|,\d|\p{L})`,
+    'u',
+  );
 }
 
 /**
