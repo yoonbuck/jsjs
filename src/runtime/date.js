@@ -1,4 +1,5 @@
-import { toInteger } from './conversion.js';
+import { toInteger, toNumber } from './conversion.js';
+import { EngineObject } from './object.js';
 
 /** ECMA-262 5.1 §15.9.1 constants. */
 export const MS_PER_SECOND = 1000;
@@ -258,7 +259,12 @@ export function makeDay(year, month, date) {
  * @returns {number}
  */
 export function makeDate(dayValue, timeValue) {
-  if (!Number.isFinite(dayValue) || !Number.isFinite(timeValue)) {
+  if (
+    typeof dayValue !== 'number' ||
+    typeof timeValue !== 'number' ||
+    !Number.isFinite(dayValue) ||
+    !Number.isFinite(timeValue)
+  ) {
     return NaN;
   }
 
@@ -273,7 +279,11 @@ export function makeDate(dayValue, timeValue) {
  * @returns {number}
  */
 export function timeClip(time) {
-  if (!Number.isFinite(time) || Math.abs(time) > TIME_CLIP_LIMIT) {
+  if (
+    typeof time !== 'number' ||
+    !Number.isFinite(time) ||
+    Math.abs(time) > TIME_CLIP_LIMIT
+  ) {
     return NaN;
   }
 
@@ -302,3 +312,404 @@ function modulo(dividend, divisor) {
 function isLeapYear(year) {
   return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 }
+
+/**
+ * An engine Date object. Its only date-specific state is the clipped UTC
+ * millisecond value; public accessors and formatting live in later Date
+ * milestones.
+ */
+export class EngineDate extends EngineObject {
+  /**
+   * @param {EngineObject} prototype
+   * @param {number} timeValue
+   */
+  constructor(prototype, timeValue) {
+    super(prototype, 'Date');
+    this.timeValue = timeValue;
+  }
+}
+
+/**
+ * @typedef {{
+ *   now: () => number,
+ *   timezoneOffset: (utcMilliseconds: number) => number,
+ * }} DateHost
+ */
+
+/**
+ * Creates the only boundary between Date's algorithms and host-dependent
+ * clock/time-zone facilities. `timezoneOffset` uses the `getTimezoneOffset`
+ * convention: minutes to add to local time to obtain UTC.
+ *
+ * @param {Partial<DateHost> & { clock?: () => number, timeZoneOffset?: (utcMilliseconds: number) => number }} [adapter]
+ * @returns {DateHost}
+ */
+export function createDateHost(adapter = {}) {
+  const now = adapter.now ?? adapter.clock ?? (() => Date.now());
+  const timezoneOffset =
+    adapter.timezoneOffset ??
+    adapter.timeZoneOffset ??
+    ((utcMilliseconds) => new Date(utcMilliseconds).getTimezoneOffset());
+
+  if (typeof now !== 'function' || typeof timezoneOffset !== 'function') {
+    throw new TypeError('Date host adapters must be functions');
+  }
+
+  return { now, timezoneOffset };
+}
+
+/**
+ * Builds a UTC Date value from the constructor's calendar-field overload.
+ *
+ * @param {readonly unknown[]} args
+ * @param {DateHost} host
+ * @returns {number}
+ */
+export function dateFromLocalArguments(args, host) {
+  const year = toNumberValue(args[0]);
+  const month = toNumberValue(args[1]);
+  const date = args.length > 2 ? toNumberValue(args[2]) : 1;
+  const hour = args.length > 3 ? toNumberValue(args[3]) : 0;
+  const minute = args.length > 4 ? toNumberValue(args[4]) : 0;
+  const second = args.length > 5 ? toNumberValue(args[5]) : 0;
+  const millisecond = args.length > 6 ? toNumberValue(args[6]) : 0;
+  const localTime = dateFromComponents(
+    year,
+    month,
+    date,
+    hour,
+    minute,
+    second,
+    millisecond,
+  );
+
+  return timeClip(utcFromLocalTime(localTime, host));
+}
+
+/**
+ * Builds a UTC Date value for Date.UTC. Month is required by ES5; only the
+ * trailing fields receive defaults.
+ *
+ * @param {readonly unknown[]} args
+ * @returns {number}
+ */
+export function dateUTC(args) {
+  const year = toNumberValue(args[0]);
+  const month = toNumberValue(args[1]);
+  const date = args.length > 2 ? toNumberValue(args[2]) : 1;
+  const hour = args.length > 3 ? toNumberValue(args[3]) : 0;
+  const minute = args.length > 4 ? toNumberValue(args[4]) : 0;
+  const second = args.length > 5 ? toNumberValue(args[5]) : 0;
+  const millisecond = args.length > 6 ? toNumberValue(args[6]) : 0;
+
+  return timeClip(
+    dateFromComponents(year, month, date, hour, minute, second, millisecond),
+  );
+}
+
+/**
+ * Parses the ES5 ISO date-time grammar plus this engine's deterministic Date
+ * call form. Parsing is deliberately independent of host Date.parse.
+ *
+ * @param {string} source
+ * @param {DateHost} host
+ * @returns {number}
+ */
+export function parseDateString(source, host) {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?$/.exec(
+    source,
+  );
+
+  if (iso !== null) {
+    const [, yearText, monthText, dateText, hourText, minuteText, secondText, millisecondText, zone] =
+      iso;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const date = Number(dateText);
+    const hour = hourText === undefined ? 0 : Number(hourText);
+    const minute = minuteText === undefined ? 0 : Number(minuteText);
+    const second = secondText === undefined ? 0 : Number(secondText);
+    const millisecond =
+      millisecondText === undefined
+        ? 0
+        : millisecondsFromText(millisecondText);
+
+    if (!validDateFields(year, month, date, hour, minute, second, millisecond)) {
+      return NaN;
+    }
+
+    const localTime = dateFromComponents(
+      year,
+      month - 1,
+      date,
+      hour,
+      minute,
+      second,
+      millisecond,
+    );
+
+    if (zone === undefined) {
+      return timeClip(
+        hourText === undefined ? localTime : utcFromLocalTime(localTime, host),
+      );
+    }
+
+    if (zone === 'Z') {
+      return timeClip(localTime);
+    }
+
+    const sign = zone[0] === '+' ? 1 : -1;
+    const zoneHour = Number(zone[1] + zone[2]);
+    const zoneMinute = Number(
+      zone.length === 6 ? zone[4] + zone[5] : zone[3] + zone[4],
+    );
+
+    if (zoneHour > 23 || zoneMinute > 59) {
+      return NaN;
+    }
+
+    return timeClip(localTime - sign * (zoneHour * 60 + zoneMinute) * MS_PER_MINUTE);
+  }
+
+  const display = /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{2}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT([+-])(\d{2})(\d{2})(?: \(UTC\))?$/.exec(
+    source,
+  );
+
+  if (display === null) {
+    return NaN;
+  }
+
+  const [, monthName, dateText, yearText, hourText, minuteText, secondText, signText, offsetHourText, offsetMinuteText] =
+    display;
+  const month = monthNumber(monthName);
+  const year = Number(yearText);
+  const date = Number(dateText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const offsetHour = Number(offsetHourText);
+  const offsetMinute = Number(offsetMinuteText);
+
+  if (
+    !validDateFields(year, month, date, hour, minute, second, 0) ||
+    offsetHour > 23 ||
+    offsetMinute > 59
+  ) {
+    return NaN;
+  }
+
+  const localTime = dateFromComponents(
+    year,
+    month - 1,
+    date,
+    hour,
+    minute,
+    second,
+    0,
+  );
+  const offset = (offsetHour * 60 + offsetMinute) * MS_PER_MINUTE;
+  return timeClip(localTime - (signText === '+' ? offset : -offset));
+}
+
+/**
+ * Produces the deterministic string required when Date is called without
+ * `new`. The public formatting methods remain intentionally uninstalled.
+ *
+ * @param {number} utcMilliseconds
+ * @param {DateHost} host
+ * @returns {string}
+ */
+export function dateCallString(utcMilliseconds, host) {
+  const offset = host.timezoneOffset(utcMilliseconds);
+  const localTime = utcMilliseconds - offset * MS_PER_MINUTE;
+  const offsetMagnitude = Math.abs(offset);
+  const offsetHour = Math.floor(offsetMagnitude / 60);
+  const offsetMinute = offsetMagnitude % 60;
+
+  return `${WEEKDAY_NAMES[weekDay(localTime)]} ${MONTH_NAMES[monthFromTime(localTime)]} ${pad(
+    dateFromTime(localTime),
+  )} ${padYear(yearFromTime(localTime))} ${pad(hourFromTime(localTime))}:${pad(
+    minFromTime(localTime),
+  )}:${pad(secFromTime(localTime))} GMT${offset <= 0 ? '+' : '-'}${pad(
+    offsetHour,
+  )}${pad(offsetMinute)} (UTC)`;
+}
+
+/**
+ * @param {number} year
+ * @param {number} month
+ * @param {number} date
+ * @param {number} hour
+ * @param {number} minute
+ * @param {number} second
+ * @param {number} millisecond
+ * @returns {number}
+ */
+function dateFromComponents(
+  year,
+  month,
+  date,
+  hour,
+  minute,
+  second,
+  millisecond,
+) {
+  const normalizedYear = toInteger(year);
+  const calendarYear =
+    normalizedYear >= 0 && normalizedYear <= 99
+      ? normalizedYear + 1900
+      : normalizedYear;
+  return makeDate(
+    makeDay(calendarYear, month, date),
+    makeTime(hour, minute, second, millisecond),
+  );
+}
+
+/**
+ * @param {number} localTime
+ * @param {DateHost} host
+ * @returns {number}
+ */
+function utcFromLocalTime(localTime, host) {
+  if (!Number.isFinite(localTime)) {
+    return NaN;
+  }
+
+  const offset = host.timezoneOffset(localTime);
+  return Number.isFinite(offset) ? localTime + offset * MS_PER_MINUTE : NaN;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+function toNumberValue(value) {
+  return toNumber(value);
+}
+
+/**
+ * @param {number} year
+ * @param {number} month
+ * @param {number} date
+ * @param {number} hour
+ * @param {number} minute
+ * @param {number} second
+ * @param {number} millisecond
+ * @returns {boolean}
+ */
+function validDateFields(year, month, date, hour, minute, second, millisecond) {
+  if (
+    month < 1 ||
+    month > 12 ||
+    date < 1 ||
+    date > daysInYear(year) ||
+    hour > 24 ||
+    minute > 59 ||
+    second > 59 ||
+    millisecond > 999
+  ) {
+    return false;
+  }
+
+  if (hour === 24 && (minute !== 0 || second !== 0 || millisecond !== 0)) {
+    return false;
+  }
+
+  return date <= dateFromMonthLength(year, month);
+}
+
+/**
+ * @param {number} year
+ * @param {number} month
+ * @returns {number}
+ */
+function dateFromMonthLength(year, month) {
+  const starts = MONTH_STARTS[isLeapYear(year) ? 1 : 0];
+  return month === 12
+    ? daysInYear(year) - starts[month - 1]
+    : starts[month] - starts[month - 1];
+}
+
+/**
+ * @param {number} value
+ * @returns {string}
+ */
+function pad(value) {
+  return value < 10 ? `0${value}` : String(value);
+}
+
+/**
+ * @param {number} value
+ * @returns {string}
+ */
+function padYear(value) {
+  if (value >= 1000) {
+    return String(value);
+  }
+
+  if (value >= 100) {
+    return `0${value}`;
+  }
+
+  if (value >= 10) {
+    return `00${value}`;
+  }
+
+  return `000${value}`;
+}
+
+/**
+ * @param {string} text
+ * @returns {number}
+ */
+function millisecondsFromText(text) {
+  let value = 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    value = value * 10 + Number(text[index]);
+  }
+
+  for (let index = text.length; index < 3; index += 1) {
+    value *= 10;
+  }
+
+  return value;
+}
+
+/**
+ * @param {string} name
+ * @returns {number}
+ */
+function monthNumber(name) {
+  for (let index = 0; index < MONTH_NAMES.length; index += 1) {
+    if (MONTH_NAMES[index] === name) {
+      return index + 1;
+    }
+  }
+
+  return 0;
+}
+
+const WEEKDAY_NAMES = Object.freeze([
+  'Sun',
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+]);
+const MONTH_NAMES = Object.freeze([
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]);

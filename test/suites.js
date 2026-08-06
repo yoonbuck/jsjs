@@ -33,6 +33,7 @@ import inInstanceof from './in-instanceof.test.js';
 import strictMode from './strict-mode.test.js';
 import deleteOperator from './delete.test.js';
 import dateArithmetic from './date-arithmetic.test.js';
+import dateBuiltins from './date-builtins.test.js';
 import nativeBuiltins from './native-builtins.test.js';
 import objectBuiltins from './object-builtins.test.js';
 import functionBuiltins from './function-builtins.test.js';
@@ -120,6 +121,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/date-arithmetic.test.js',
     tests: dateArithmetic,
+  }),
+  Object.freeze({
+    file: 'test/date-builtins.test.js',
+    tests: dateBuiltins,
   }),
   Object.freeze({
     file: 'test/native-builtins.test.js',
