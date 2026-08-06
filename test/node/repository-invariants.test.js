@@ -15,6 +15,11 @@ import { assertSame } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
 import { UNICODE_VERSION } from '../../src/builtins/unicode-case-data.js';
 import {
+  ES5_SELECTION_FILE,
+  EXCLUSION_CATEGORIES,
+  parseEs5Selection,
+} from '../../tools/test262/es5-selection.js';
+import {
   UPSTREAM_SUBSET_FILE,
   parseUpstreamSubset,
 } from '../../tools/test262/upstream.js';
@@ -508,6 +513,55 @@ export default [
           `${UPSTREAM_SUBSET_FILE}'s "${name}" group must not be emptied (${reason})`,
         );
       }
+    },
+  },
+  {
+    // The coverage numbers the README publishes are generated into a marked
+    // block and drift-checked against a fresh run. The exclusion tally is not:
+    // it is prose a human wrote, describing how much of the upstream suite this
+    // selection sets aside and why. Prose that quotes a count rots the moment
+    // the policy changes, and a stale tally is worse than no tally, because it
+    // reads as measured. Bind it to the policy file instead.
+    name: 'the exclusion tally the README publishes matches the selection policy',
+    run: async () => {
+      const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
+      const readme = await readSource('README.md');
+      const counts = new Map(
+        EXCLUSION_CATEGORIES.map((category) => [category, 0]),
+      );
+
+      for (const exclusion of policy.exclusions) {
+        counts.set(
+          exclusion.category,
+          (counts.get(exclusion.category) ?? 0) + 1,
+        );
+      }
+
+      for (const [category, count] of counts) {
+        const row = new RegExp(
+          String.raw`^\|\s*\x60${category}\x60\s*\|\s*(\d+)\s*\|`,
+          'mu',
+        ).exec(readme);
+
+        assertSame(
+          row !== null,
+          true,
+          `README.md must keep a tally row for the ${category} exclusion category`,
+        );
+        assertSame(
+          Number(row?.[1]),
+          count,
+          `README.md says ${String(row?.[1])} ${category} exclusions; ${ES5_SELECTION_FILE} has ${count}`,
+        );
+      }
+
+      const total = policy.exclusions.length;
+
+      assertSame(
+        readme.includes(`The ${total} classified exclusions`),
+        true,
+        `README.md must report ${total} classified exclusions, the total in ${ES5_SELECTION_FILE}`,
+      );
     },
   },
   {
