@@ -779,6 +779,32 @@ function dateFromComponents(
 }
 
 /**
+ * Asks the host for a timezone offset at an instant that is only used to probe
+ * the zone, clamping it into the representable range first.
+ *
+ * Local-to-UTC conversion samples the zone at January 1 and July 1 of the local
+ * year to derive the standard offset. Near either end of the ES5 time range
+ * those sample points can fall outside the range even though the instant being
+ * converted is inside it. Hosts backed by a native `Date` report
+ * `NaN` for such instants, which would otherwise poison the conversion of a
+ * perfectly valid time value. These sample points only identify the zone, never
+ * the instant being converted, so clamping them is observationally inert.
+ *
+ * @param {number} probeTime
+ * @param {DateHost} host
+ * @returns {number}
+ */
+function probeTimezoneOffset(probeTime, host) {
+  if (!Number.isFinite(probeTime)) {
+    return NaN;
+  }
+
+  return host.timezoneOffset(
+    Math.min(Math.max(probeTime, -TIME_CLIP_LIMIT), TIME_CLIP_LIMIT),
+  );
+}
+
+/**
  * @param {number} localTime
  * @param {DateHost} host
  * @returns {number}
@@ -788,11 +814,12 @@ export function utcFromLocalTime(localTime, host) {
     return NaN;
   }
 
+  const localYear = yearFromTime(localTime);
   const standardTimezoneOffset =
     host.standardTimezoneOffset ??
     Math.max(
-      host.timezoneOffset(timeFromYear(yearFromTime(localTime))),
-      host.timezoneOffset(makeDate(makeDay(yearFromTime(localTime), 6, 1), 0)),
+      probeTimezoneOffset(timeFromYear(localYear), host),
+      probeTimezoneOffset(makeDate(makeDay(localYear, 6, 1), 0), host),
     );
   const utcMilliseconds = localTime + standardTimezoneOffset * MS_PER_MINUTE;
   const offset = host.timezoneOffset(utcMilliseconds);

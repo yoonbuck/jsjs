@@ -72,6 +72,17 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
 const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
+/**
+ * Representative fixtures for each ES5 Date family the engine completed.
+ *
+ * These began as the exact contents of hand-curated `date-*` subset groups,
+ * back when the pinned subset was a small curated selection. The subset is now
+ * derived from upstream directories, so `built-ins/Date` is selected wholesale
+ * and those curated group names no longer exist. The fixtures are still the
+ * independent expectation: whatever the derivation rules become, the subset has
+ * to keep covering every family listed here, so a selection change that quietly
+ * dropped Date coverage still fails this contract.
+ */
 const DATE_GROUPS = Object.freeze({
   'date-accessors-mutators': Object.freeze([
     'test/built-ins/Date/prototype/getUTCFullYear/this-value-valid-date.js',
@@ -382,6 +393,13 @@ export default [
       const commands = runCommands(job);
       const run = commands.indexOf('npm run test262:upstream');
       const drift = commands.indexOf(EXPECTED_DRIFT_COMMAND);
+      const select = commands.indexOf('npm run test262:select:check');
+
+      assertSame(
+        select >= 0 && select < run,
+        true,
+        `the ES5 selection drift check must run before the pinned subset:\n${commands.join('\n')}`,
+      );
 
       assertSame(
         drift > run && run >= 0,
@@ -511,11 +529,18 @@ export default [
       );
       assertSame(
         runFeatureProbe({
-          engine,
-          // `with` is still an explicitly unsupported statement node (see
-          // `test/realms.test.js`); `for-in` was this synthetic probe's
-          // original example, but it is real engine behavior now.
-          feature: syntheticFeature('with ({}) {}'),
+          // Every ES5 construct now evaluates, so an engine limitation can no
+          // longer be provoked from source (`with` used to be the example).
+          // Model one directly: an engine whose `evaluateScript` throws a host
+          // error that is not a SyntaxError must be reported as `engine-error`,
+          // never silently accepted as `completed`.
+          engine: {
+            createRealm,
+            evaluateScript() {
+              throw new Error('synthetic engine limitation');
+            },
+          },
+          feature: syntheticFeature('ENGINE_LIMITATION;'),
         }).outcome,
         'engine-error',
       );
@@ -648,19 +673,16 @@ export default [
       const subset = parseUpstreamSubset(
         await readRepositoryFile(UPSTREAM_SUBSET_FILE),
       );
-      const groups = new Map(subset.groups.map((group) => [group.name, group]));
+      const selected = new Set(upstreamSubsetPaths(subset));
 
       for (const [name, paths] of Object.entries(DATE_GROUPS)) {
-        const group = groups.get(name);
-
-        assertSame(group !== undefined, true, `missing Date group ${name}`);
-        assertSame(
-          /** @type {import('../../tools/test262/upstream.js').Test262UpstreamGroup} */ (
-            group
-          ).paths.join('\n'),
-          paths.join('\n'),
-          `${name} must keep its compact, representative Date fixtures`,
-        );
+        for (const path of paths) {
+          assertSame(
+            selected.has(path),
+            true,
+            `${name} coverage lost representative fixture ${path}`,
+          );
+        }
       }
     },
   },

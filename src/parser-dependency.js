@@ -15,4 +15,4 @@
  * again.
  */
 
-export { parse } from '../vendor/acorn/acorn.mjs';
+export { parse, Parser } from '../vendor/acorn/acorn.mjs';

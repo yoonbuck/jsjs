@@ -22,11 +22,12 @@ const tests = [
       const context = {
         realm,
         env: realm.globalEnvironment,
+        variableEnv: realm.globalEnvironment,
         strict: false,
         thisValue: realm.globalObject,
       };
 
-      for (const type of ['WithStatement', 'NotANode']) {
+      for (const type of ['ClassDeclaration', 'NotANode']) {
         const error = assertThrows(
           () => evaluate({ type, body: null }, context),
           Error,
@@ -43,6 +44,7 @@ const tests = [
       const context = {
         realm,
         env: realm.globalEnvironment,
+        variableEnv: realm.globalEnvironment,
         strict: false,
         thisValue: realm.globalObject,
       };
@@ -368,15 +370,19 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects with statements explicitly',
+    name: 'evaluateScript dispatches with statements instead of rejecting them',
     run() {
       const realm = createRealm();
 
-      const withStatement = assertThrows(
-        () => evaluateScript(realm, 'with ({}) {}'),
-        Error,
+      // `with` was previously an explicitly unsupported node; it now
+      // dispatches like any other statement and resolves names against its
+      // object environment.
+      const completion = evaluateScript(
+        realm,
+        'var o = { a: 3 }; var r; with (o) { r = a; } r;',
       );
-      assertSame(/** @type {any} */ (withStatement).nodeType, 'WithStatement');
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 3);
     },
   },
   {
@@ -650,6 +656,34 @@ const tests = [
         ).value,
         'a,b',
       );
+    },
+  },
+  {
+    name: 'debugger statements produce an empty (undefined) completion value',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(realm, 'debugger;');
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, undefined);
+    },
+  },
+  {
+    name: 'debugger statements thread completion values through like empty statements',
+    run() {
+      const realm = createRealm();
+      // `debugger;` has an empty completion value, so the block's completion
+      // value should remain the last *meaningful* value (1).
+      const completion = evaluateScript(realm, '{ 1; debugger; }');
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 1);
+    },
+  },
+  {
+    name: 'DebuggerStatement is a recognized statement node type',
+    run() {
+      assertSame(STATEMENT_TYPES.has('DebuggerStatement'), true);
     },
   },
 ];

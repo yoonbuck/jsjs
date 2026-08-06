@@ -1,6 +1,7 @@
 import {
   getIdentifierReference,
   newDeclarativeEnvironment,
+  GlobalEnvironmentRecord,
 } from '../runtime/environment.js';
 import { putValue } from '../runtime/reference.js';
 import { EMPTY, createNormalCompletion } from '../runtime/completion.js';
@@ -18,14 +19,33 @@ import { hasUseStrictDirective } from './directive.js';
  */
 
 /**
+ * The kind of environment record that can serve as an eval code's *variable
+ * environment*: the realm's global environment (indirect eval, or a direct
+ * eval at global scope) or a declarative environment (a strict eval's fresh
+ * scope, or a direct eval nested in a function). An object environment record
+ * — the `with` case — is never a *variable* environment, so it is deliberately
+ * excluded here and both binding helpers below can rely on `initializeBinding`.
+ *
+ * @typedef {import('../runtime/environment.js').DeclarativeEnvironmentRecord
+ *   | import('../runtime/environment.js').GlobalEnvironmentRecord} EvalVariableEnvironment
+ */
+
+/**
  * Performs (a deliberately ES5-only slice of) Global Declaration
- * Instantiation: walks the program body for every function and `var`
- * declaration reachable without crossing a function boundary and creates a
- * mutable, non-configurable global binding for each name. Function
- * declarations are instantiated first and bound to their function object;
- * `var` names are created afterwards and initialized to `undefined` only
- * when no binding of that name exists yet, so `var f;` never clobbers a
- * `function f() {}` of the same name (ECMA-262 10.5 steps 5 and 8).
+ * Instantiation (ECMA-262 10.5 with `configurableBindings = false`): walks the
+ * program body for every function and `var` declaration reachable without
+ * crossing a function boundary and creates a *non-configurable* global binding
+ * for each name. Function declarations are instantiated first and bound to
+ * their function object; `var` names are created afterwards and initialized to
+ * `undefined` only when no binding of that name exists yet, so `var f;` never
+ * clobbers a `function f() {}` of the same name (10.5 steps 5 and 8).
+ *
+ * The 10.5 global checks apply here just as they do to eval code (only the
+ * `configurableBindings` differs): declaring a new global name on a
+ * non-extensible global object throws a guest `TypeError`, a function
+ * declaration redefines a configurable colliding property and takes the value
+ * of a writable+enumerable non-configurable one, and any other
+ * non-configurable collision (e.g. `function undefined() {}`) throws.
  *
  * This must run before the program's statement list is evaluated so
  * identifier references and hoisted reads/calls see the binding even
@@ -50,9 +70,11 @@ export function globalDeclarationInstantiation(program, context) {
 
   for (const declaration of functionDeclarations) {
     const functionObject = instantiateFunctionObject(declaration, context);
-    const name = declaration.id.name;
-    globalEnvironment.createGlobalVarBinding(name, false);
-    globalEnvironment.setMutableBinding(name, functionObject, false);
+    globalEnvironment.createGlobalFunctionBinding(
+      declaration.id.name,
+      functionObject,
+      false,
+    );
   }
 
   for (const name of varNames) {
@@ -133,6 +155,105 @@ export function functionDeclarationInstantiation(
 }
 
 /**
+ * Performs Declaration Binding Instantiation for *eval code* (ECMA-262 10.5
+ * with `configurableBindings = true`). Function declarations are instantiated
+ * before `var` names, exactly as the global and per-call paths do, but every
+ * binding eval creates is *configurable/deletable*: `eval("var x = 1")`
+ * followed by `delete x` succeeds, where a script-level `var x` is
+ * non-deletable.
+ *
+ * The bindings are created in `variableEnv`, which is chosen by the caller in
+ * `src/evaluator/eval.js` per 10.4.2: the caller's variable environment for a
+ * direct eval (so the bindings outlive the eval call and are visible to the
+ * caller — including when the direct eval sits inside a `catch`, whose lexical
+ * scope is *not* the variable environment), the realm's global environment for
+ * an indirect eval, or a fresh declarative environment for strict eval (so
+ * nothing leaks). Hoisted function objects capture `variableEnv` as their
+ * `[[Scope]]` (ES5 §13 uses the running context's VariableEnvironment), so a
+ * function declared by a `catch`-nested eval closes over the enclosing
+ * function rather than the catch scope. No `arguments` object is created for
+ * eval code.
+ *
+ * @param {any} program
+ * @param {EvaluationContext} context
+ * @param {EvalVariableEnvironment} variableEnv
+ * @returns {void}
+ */
+export function evalDeclarationInstantiation(program, context, variableEnv) {
+  /** @type {Set<string>} */
+  const varNames = new Set();
+  /** @type {any[]} */
+  const functionDeclarations = [];
+
+  for (const statement of program.body) {
+    collectVarNames(statement, varNames);
+    collectFunctionDeclarations(statement, functionDeclarations);
+  }
+
+  for (const declaration of functionDeclarations) {
+    const functionObject = createFunctionObject(
+      declaration,
+      variableEnv,
+      context,
+    );
+    defineEvalFunctionBinding(variableEnv, declaration.id.name, functionObject);
+  }
+
+  for (const name of varNames) {
+    ensureEvalVarBinding(variableEnv, name);
+  }
+}
+
+/**
+ * Instantiates a hoisted function declaration into an eval code's variable
+ * environment as a configurable binding, then binds it to `functionObject`.
+ * The global environment applies the ES5.1 10.5 step 5 redefinition/TypeError
+ * rules (via `createGlobalFunctionBinding`); a declarative environment (a
+ * direct eval inside a function, or a strict eval's fresh scope) creates a
+ * deletable mutable binding.
+ *
+ * @param {EvalVariableEnvironment} variableEnv
+ * @param {string} name
+ * @param {EngineFunction} functionObject
+ * @returns {void}
+ */
+function defineEvalFunctionBinding(variableEnv, name, functionObject) {
+  if (variableEnv instanceof GlobalEnvironmentRecord) {
+    variableEnv.createGlobalFunctionBinding(name, functionObject, true);
+    return;
+  }
+
+  if (!variableEnv.hasBinding(name)) {
+    variableEnv.createMutableBinding(name, true);
+    variableEnv.initializeBinding(name, functionObject);
+    return;
+  }
+
+  variableEnv.setMutableBinding(name, functionObject, false);
+}
+
+/**
+ * Creates a configurable, `undefined`-initialized `var` binding for `name` in
+ * an eval code's variable environment, leaving any existing binding of the
+ * same name untouched (ECMA-262 10.5 step 8).
+ *
+ * @param {EvalVariableEnvironment} variableEnv
+ * @param {string} name
+ * @returns {void}
+ */
+function ensureEvalVarBinding(variableEnv, name) {
+  if (variableEnv instanceof GlobalEnvironmentRecord) {
+    variableEnv.createGlobalVarBinding(name, true);
+    return;
+  }
+
+  if (!variableEnv.hasBinding(name)) {
+    variableEnv.createMutableBinding(name, true);
+    variableEnv.initializeBinding(name, undefined);
+  }
+}
+
+/**
  * Creates the function object for a `FunctionDeclaration`, capturing
  * `context.env` as its `[[Scope]]`.
  *
@@ -200,6 +321,7 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
   const context = {
     realm: functionObject.realm,
     env,
+    variableEnv: env,
     strict: functionObject.strict,
     thisValue,
   };
@@ -276,6 +398,11 @@ function collectVarNames(node, names) {
     case 'LabeledStatement':
       collectVarNames(node.body, names);
       return;
+    case 'WithStatement':
+      // ECMA-262 5.1 §12.10: a `with` body shares the enclosing variable
+      // scope, so `var` declarations inside it hoist through unchanged.
+      collectVarNames(node.body, names);
+      return;
     default:
       return;
   }
@@ -344,6 +471,11 @@ function collectFunctionDeclarations(node, declarations) {
     case 'LabeledStatement':
       collectFunctionDeclarations(node.body, declarations);
       return;
+    case 'WithStatement':
+      // A `with` body shares the enclosing variable scope, so a function
+      // declaration inside it hoists like any other block-nested one.
+      collectFunctionDeclarations(node.body, declarations);
+      return;
     default:
       return;
   }
@@ -363,12 +495,15 @@ function collectFunctionDeclarations(node, declarations) {
 export function evaluateVariableDeclaration(node, context) {
   for (const declarator of node.declarations) {
     if (declarator.init) {
-      const value = evaluateExpressionValue(declarator.init, context);
+      // ES5.1 §12.2.1: evaluate the Identifier to a Reference *before* the
+      // Initialiser, so a `with`-bound target captured here survives a
+      // property the initializer deletes and PutValue writes back through it.
       const reference = getIdentifierReference(
         context.env,
         declarator.id.name,
         context.strict,
       );
+      const value = evaluateExpressionValue(declarator.init, context);
       putValue(reference, value);
     }
   }

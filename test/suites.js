@@ -22,15 +22,19 @@ import environments from './environments.test.js';
 import realms from './realms.test.js';
 import evaluatorExpressions from './evaluator-expressions.test.js';
 import evaluatorStatements from './evaluator-statements.test.js';
+import withStatements from './with-statement.test.js';
 import functions from './functions.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
 import test262Runner from './test262-runner.test.js';
+import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
 import switchLabels from './switch-labels.test.js';
 import updateAssignment from './update-assignment.test.js';
 import inInstanceof from './in-instanceof.test.js';
 import strictMode from './strict-mode.test.js';
+import evalCode from './eval.test.js';
+import dynamicFunction from './dynamic-function.test.js';
 import deleteOperator from './delete.test.js';
 import dateArithmetic from './date-arithmetic.test.js';
 import dateBuiltins from './date-builtins.test.js';
@@ -84,6 +88,10 @@ export const PORTABLE_SUITES = Object.freeze([
     file: 'test/evaluator-statements.test.js',
     tests: evaluatorStatements,
   }),
+  Object.freeze({
+    file: 'test/with-statement.test.js',
+    tests: withStatements,
+  }),
   Object.freeze({ file: 'test/functions.test.js', tests: functions }),
   Object.freeze({
     file: 'test/object-array-literals.test.js',
@@ -92,6 +100,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,
+  }),
+  Object.freeze({
+    file: 'test/es5-selection.test.js',
+    tests: es5Selection,
   }),
   Object.freeze({ file: 'test/errors.test.js', tests: errors }),
   Object.freeze({
@@ -113,6 +125,14 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/strict-mode.test.js',
     tests: strictMode,
+  }),
+  Object.freeze({
+    file: 'test/eval.test.js',
+    tests: evalCode,
+  }),
+  Object.freeze({
+    file: 'test/dynamic-function.test.js',
+    tests: dynamicFunction,
   }),
   Object.freeze({
     file: 'test/delete.test.js',

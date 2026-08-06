@@ -46,15 +46,21 @@ export function evaluateScript(realm, source, parserOptions = {}) {
   const context = {
     realm,
     env: realm.globalEnvironment,
+    variableEnv: realm.globalEnvironment,
     strict: hasUseStrictDirective(program.body),
     thisValue: realm.globalEnvironment.getThisBinding(),
   };
-  globalDeclarationInstantiation(program, context);
 
   /** @type {{ type: string, value: unknown }} */
   let completion;
 
   try {
+    // Global declaration instantiation runs inside the guest-error boundary:
+    // ES5.1 10.5 can raise a guest TypeError (e.g. declaring a `var` on a
+    // non-extensible global, or a function that collides with a
+    // non-configurable global property), which must surface as a `throw`
+    // completion rather than escaping as a host exception.
+    globalDeclarationInstantiation(program, context);
     completion = evaluateStatementList(program.body, context);
   } catch (error) {
     if (error instanceof ThrowSignal) {

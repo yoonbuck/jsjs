@@ -1,7 +1,23 @@
+/**
+ * The `Function` constructor (ECMA-262 15.3.1 / 15.3.2) and the
+ * `Function.prototype` methods (`toString`, `apply`, `call`, `bind`).
+ *
+ * The dynamic `Function` constructor compiles runtime source text into guest
+ * code, so — like `eval` — it must reach the engine's parser and function
+ * builder. Importing `src/evaluator/dynamic-function.js` here is therefore a
+ * deliberate, documented instance of the same "a builtin that *is* an
+ * evaluator feature may import the evaluator" exception that
+ * `src/builtins/global-eval.js` records. The chain `runtime/realm.js ->
+ * builtins/function.js -> evaluator/dynamic-function.js -> {parser.js,
+ * evaluator/*, runtime/*}` stays acyclic because nothing under
+ * `src/evaluator/` imports `runtime/realm.js` at runtime.
+ */
+
 import { EngineObject } from '../runtime/object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isConstructor } from '../runtime/descriptors.js';
 import { toInteger } from '../runtime/conversion.js';
+import { createDynamicFunction } from '../evaluator/dynamic-function.js';
 import {
   NativeFunction,
   createListFromArrayLike,
@@ -97,25 +113,18 @@ class BoundFunction extends NativeFunction {
 export function createFunctionIntrinsics(realm) {
   const { functionPrototype } = realm.intrinsics;
 
-  /**
-   * @returns {never}
-   */
-  function rejectDynamicFunction() {
-    throw new GuestErrorSignal(
-      'Error',
-      'Dynamic Function constructor is not supported',
-    );
-  }
-
   const functionConstructor = realm.createNativeFunction({
     name: 'Function',
     length: 1,
     prototype: functionPrototype,
-    call() {
-      return rejectDynamicFunction();
+    call(_thisValue, args, functionObject) {
+      // Calling and constructing `Function` are identical (15.3.1.1 defers to
+      // 15.3.2.1). Use the invoked constructor's *owning* realm so a
+      // cross-realm call still allocates in, and closes over, that realm.
+      return createDynamicFunction(functionObject.realm, args);
     },
-    construct() {
-      return rejectDynamicFunction();
+    construct(args, functionObject) {
+      return createDynamicFunction(functionObject.realm, args);
     },
   });
 

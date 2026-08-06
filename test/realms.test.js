@@ -96,18 +96,19 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects unsupported statement nodes explicitly',
+    name: 'evaluateScript supports the with statement through the public API',
     run() {
       const realm = createRealm();
 
-      // `with` is not implemented, so `WithStatement` is still an
-      // explicitly unsupported node.
-      const error = assertThrows(
-        () => evaluateScript(realm, 'with ({}) {}'),
-        Error,
+      // `with` was the last explicitly unsupported statement node; it now
+      // resolves identifiers against its object environment like a real
+      // engine, so the public API evaluates it end to end.
+      const completion = evaluateScript(
+        realm,
+        'var o = { a: 41 }; var r; with (o) { r = a; } r;',
       );
-      assertSame(/Unsupported AST node/.test(error.message), true);
-      assertSame(/** @type {any} */ (error).nodeType, 'WithStatement');
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 41);
     },
   },
   {
@@ -124,14 +125,15 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects unsupported expression statements explicitly',
+    name: 'evaluateScript evaluates bitwise NOT through the public API',
     run() {
       const realm = createRealm();
 
-      // `~` (bitwise NOT) is still unsupported; verify the engine reports it
-      // explicitly rather than silently passing or crashing.
-      const error = assertThrows(() => evaluateScript(realm, '~0;'), Error);
-      assertSame(/** @type {any} */ (error).name, 'UnsupportedOperatorError');
+      // `~` used to be an explicitly unsupported operator; it now evaluates
+      // like the binary bitwise operators (ToInt32 then complement).
+      const completion = evaluateScript(realm, '~0;');
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, -1);
     },
   },
   {

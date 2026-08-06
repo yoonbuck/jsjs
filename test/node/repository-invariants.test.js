@@ -15,6 +15,11 @@ import { assertSame } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
 import { UNICODE_VERSION } from '../../src/builtins/unicode-case-data.js';
 import {
+  ES5_SELECTION_FILE,
+  EXCLUSION_CATEGORIES,
+  parseEs5Selection,
+} from '../../tools/test262/es5-selection.js';
+import {
   UPSTREAM_SUBSET_FILE,
   parseUpstreamSubset,
 } from '../../tools/test262/upstream.js';
@@ -219,48 +224,62 @@ const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
  * load-bearing.
  */
 const REQUIRED_TEST262_GROUPS = Object.freeze({
-  'annexb-string-escapes':
-    'ES5 stateless built-ins Task 3 — Annex B escape/unescape',
-  'boolean-builtins': 'Task 7 — Boolean call/construct, prototype, methods',
-  'json-object':
-    'ES5 stateless built-ins Tasks 4-5 — the JSON object and its inventory',
-  'json-parse':
-    'ES5 stateless built-ins Task 4 — JSON grammar and reviver traversal',
-  'json-stringify':
-    'ES5 stateless built-ins Task 5 — serialization, replacer, gap, cycles',
-  'math-arithmetic':
-    'ES5 stateless built-ins Task 1 — Math abs/ceil/floor/max/min/pow/random/round/sqrt',
-  'math-object':
-    'ES5 stateless built-ins Task 1 — the Math object and its constants',
-  'math-transcendental':
-    'ES5 stateless built-ins Task 1 — Math acos/asin/atan/atan2/cos/exp/log/sin/tan',
-  'number-builtins':
-    'Task 7 — Number call/construct, constants, prototype, methods',
-  'number-formatting': 'Task 7 — toFixed/toExponential/toPrecision formatting',
-  'regexp-builtins':
-    'ES5 RegExp milestone — RegExp call/construct semantics, RegExp.prototype identity, and the 15.10.7 own properties',
-  'regexp-exec':
-    'ES5 RegExp milestone — RegExp.prototype.exec/test result shape, lastIndex, and global matching',
-  'regexp-matching':
-    'ES5 RegExp milestone — 15.10.2 matching semantics: RepeatMatcher, assertions, lookahead, backreferences, class escapes, and character ranges',
-  'regexp-pattern-grammar':
-    'ES5 RegExp milestone — 15.10.1 Pattern grammar early errors and the recursive-descent validator',
-  'numeric-predicate-globals':
-    'ES5 stateless built-ins Task 2 — isNaN and isFinite',
-  'parse-globals': 'ES5 stateless built-ins Task 2 — parseInt and parseFloat',
-  'string-builtins': 'Task 7 — String call/construct, fromCharCode, prototype',
-  'string-methods':
-    'Task 7 — String search/access/case/trim methods, Annex B substr',
-  'string-pattern-methods':
-    'Task 7 — match/replace/search/split with string patterns',
-  'string-regexp-methods':
-    'ES5 RegExp milestone — match/replace/search/split with RegExp arguments',
-  'uri-decoding':
-    'ES5 stateless built-ins Task 3 — decodeURI and decodeURIComponent',
-  'uri-encoding':
-    'ES5 stateless built-ins Task 3 — encodeURI and encodeURIComponent',
-  'uri-error':
-    'ES5 stateless built-ins Task 3 — the URIError constructor the URI globals throw',
+  'built-ins/Array':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/Array',
+  'built-ins/Boolean':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/Boolean',
+  'built-ins/Error':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/Error',
+  'built-ins/Function':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/Function',
+  'built-ins/JSON':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/JSON',
+  'built-ins/Math':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/Math',
+  'built-ins/NativeErrors':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/NativeErrors',
+  'built-ins/Number':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/Number',
+  'built-ins/Object':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/Object',
+  'built-ins/RegExp':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/RegExp',
+  'built-ins/String':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/String',
+  'built-ins/ThrowTypeError':
+    'ES5 completion milestone (Task 4) — the %ThrowTypeError% intrinsic (a Task 5 DEFECT cluster lives here)',
+  'built-ins/decodeURI':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/decodeURI',
+  'built-ins/decodeURIComponent':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/decodeURIComponent',
+  'built-ins/encodeURI':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/encodeURI',
+  'built-ins/encodeURIComponent':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/encodeURIComponent',
+  'built-ins/isFinite':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/isFinite',
+  'built-ins/isNaN':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/isNaN',
+  'built-ins/parseFloat':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/parseFloat',
+  'built-ins/parseInt':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/built-ins/parseInt',
+  'language/arguments-object':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/arguments-object',
+  'language/eval-code':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/eval-code',
+  'language/expressions':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/expressions',
+  'language/function-code':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/function-code',
+  'language/identifiers':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/identifiers (a Task 5 DEFECT cluster lives here)',
+  'language/literals':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/literals',
+  'language/statements':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/statements (Task 5 DEFECT clusters live here)',
+  'language/types':
+    'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/types',
 });
 
 export default [
@@ -494,6 +513,55 @@ export default [
           `${UPSTREAM_SUBSET_FILE}'s "${name}" group must not be emptied (${reason})`,
         );
       }
+    },
+  },
+  {
+    // The coverage numbers the README publishes are generated into a marked
+    // block and drift-checked against a fresh run. The exclusion tally is not:
+    // it is prose a human wrote, describing how much of the upstream suite this
+    // selection sets aside and why. Prose that quotes a count rots the moment
+    // the policy changes, and a stale tally is worse than no tally, because it
+    // reads as measured. Bind it to the policy file instead.
+    name: 'the exclusion tally the README publishes matches the selection policy',
+    run: async () => {
+      const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
+      const readme = await readSource('README.md');
+      const counts = new Map(
+        EXCLUSION_CATEGORIES.map((category) => [category, 0]),
+      );
+
+      for (const exclusion of policy.exclusions) {
+        counts.set(
+          exclusion.category,
+          (counts.get(exclusion.category) ?? 0) + 1,
+        );
+      }
+
+      for (const [category, count] of counts) {
+        const row = new RegExp(
+          String.raw`^\|\s*\x60${category}\x60\s*\|\s*(\d+)\s*\|`,
+          'mu',
+        ).exec(readme);
+
+        assertSame(
+          row !== null,
+          true,
+          `README.md must keep a tally row for the ${category} exclusion category`,
+        );
+        assertSame(
+          Number(row?.[1]),
+          count,
+          `README.md says ${String(row?.[1])} ${category} exclusions; ${ES5_SELECTION_FILE} has ${count}`,
+        );
+      }
+
+      const total = policy.exclusions.length;
+
+      assertSame(
+        readme.includes(`The ${total} classified exclusions`),
+        true,
+        `README.md must report ${total} classified exclusions, the total in ${ES5_SELECTION_FILE}`,
+      );
     },
   },
   {

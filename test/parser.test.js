@@ -106,6 +106,317 @@ const tests = [
       assertSame(error.columnNumber, 1);
     },
   },
+
+  // ---------------------------------------------------------------------------
+  // A `FunctionDeclaration` is a `SourceElement`, not a `Statement`
+  // (ES5.1 §12, §14), so it cannot be the single-statement body of an
+  // iteration statement (§12.6) or a `with` statement (§12.10). Acorn parses
+  // it there anyway; the early-error pass must reject it at parse time,
+  // matching JavaScriptCore and the upstream `decl-fun.js` /
+  // `labelled-fn-stmt.js` tests (`phase: parse`).
+  // ---------------------------------------------------------------------------
+  {
+    name: 'a function declaration is rejected as the body of each loop or with statement',
+    run() {
+      const rejected = [
+        'with (this) function f() {}',
+        'while (false) function f() {}',
+        'do function f() {} while (false);',
+        'for (;;) function f() {}',
+        'for (var k in this) function f() {}',
+      ];
+
+      for (const source of rejected) {
+        const error = /** @type {any} */ (
+          assertThrows(() => parseScript(source), SyntaxError)
+        );
+
+        assertSame(error.name, 'SyntaxError');
+      }
+    },
+  },
+  {
+    name: 'a labelled-function chain is rejected in those same body positions',
+    run() {
+      // A label chain does not turn a `SourceElement` into a `Statement`, so
+      // `with (o) a: b: function f() {}` is rejected just like the bare form.
+      const rejected = [
+        'with (this) a: b: function f() {}',
+        'while (false) label: function f() {}',
+        'do label: function f() {} while (false);',
+        'for (;;) label: function f() {}',
+        'for (var k in this) label: function f() {}',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'for (;;) function f() {} is a parse-time SyntaxError rather than an infinite loop',
+    run() {
+      // The evaluator would otherwise spin forever on the bodiless infinite
+      // `for`; rejecting at parse time makes it a plain SyntaxError.
+      const error = /** @type {any} */ (
+        assertThrows(() => parseScript('for (;;) function f() {}'), SyntaxError)
+      );
+
+      assertSame(error.name, 'SyntaxError');
+    },
+  },
+  {
+    name: 'the statement-position rejection also applies to strict scripts',
+    run() {
+      assertThrows(
+        () => parseScript('"use strict"; while (false) function f() {}'),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'Annex B function-declaration positions stay accepted in sloppy mode',
+    run() {
+      // ES5.1 Annex B / web reality keeps these accepted (JavaScriptCore too)
+      // in *sloppy* code: a bare function as an `if` branch (B.3.4) and a
+      // statement-list-level labelled function (B.3.2, including a label
+      // chain), plus a function inside a block. Guarding them here stops
+      // anyone from over-tightening the pass.
+      const accepted = [
+        'if (true) function f() {}',
+        'if (true) function f() {} else function g() {}',
+        'if (true) ; else function g() {}',
+        'label: function f() {}',
+        'a: b: function f() {}',
+        '{ function f() {} }',
+        'l: { function f() {} }',
+      ];
+
+      for (const source of accepted) {
+        const program = parseScript(source);
+
+        assertSame(program.type, 'Program');
+      }
+    },
+  },
+  {
+    name: 'a labelled function is rejected as an if branch even in sloppy mode',
+    run() {
+      // Annex B B.3.4 tolerates only a *bare* function as an `if` branch; a
+      // label chain there is a SyntaxError in sloppy code too (JavaScriptCore
+      // rejects `if (1) l: function f(){}`).
+      const rejected = [
+        'if (true) label: function f() {}',
+        'if (true) ; else label: function f() {}',
+        'if (true) a: b: function f() {}',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'strict mode forbids a function declaration as an if branch or a labelled body',
+    run() {
+      // In strict code Annex B disappears entirely (ES5.1 §12; the Annex B
+      // grammar is sloppy-only): a function declaration is neither a valid
+      // `if` branch nor the body of a labelled statement anywhere.
+      const rejected = [
+        '"use strict"; if (true) function f() {}',
+        '"use strict"; if (true) ; else function f() {}',
+        '"use strict"; label: function f() {}',
+        '"use strict"; if (true) label: function f() {}',
+        '"use strict"; a: b: function f() {}',
+        '"use strict"; { label: function f() {} }',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'the strict function-declaration rejection follows per-function strictness',
+    run() {
+      // Strictness is a property of the nearest function scope, not the whole
+      // program: a strict function inside a sloppy script forbids the Annex B
+      // forms, while a sloppy function keeps them (JavaScriptCore agrees).
+      const rejected = [
+        'function outer() { "use strict"; if (1) function f() {} }',
+        'function outer() { "use strict"; label: function f() {} }',
+        'var g = function () { "use strict"; if (1) function f() {} };',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+
+      const accepted = [
+        'function outer() { if (1) function f() {} }',
+        'function outer() { label: function f() {} }',
+        'var g = function () { if (1) function f() {} };',
+      ];
+
+      for (const source of accepted) {
+        const program = parseScript(source);
+
+        assertSame(program.type, 'Program');
+      }
+    },
+  },
+  {
+    name: 'the statement-position rejection carries the offending function position',
+    run() {
+      const error = /** @type {any} */ (
+        assertThrows(
+          () => parseScript('while (false) function f() {}'),
+          SyntaxError,
+        )
+      );
+
+      // The `function` keyword starts at 0-based index 14.
+      assertSame(error.pos, 14);
+      assertSame(error.lineNumber, 1);
+      assertSame(error.columnNumber, 15);
+      assertSame(error.loc.line, 1);
+      assertSame(error.loc.column, 14);
+    },
+  },
+  {
+    name: 'a deeply nested but valid program parses without exhausting the stack',
+    run() {
+      // Acorn parses a member chain iteratively, so it accepts far deeper
+      // input than a recursive AST walk survives. The statement-position
+      // check must not lower the depth the parser as a whole accepts, or
+      // valid programs start failing with a host RangeError instead of
+      // parsing.
+      const program = parseScript(
+        `if (false) { a${'.a'.repeat(DEEP_MEMBER_CHAIN_LENGTH)}; }`,
+      );
+
+      assertSame(program.type, 'Program');
+      assertSame(program.body[0].type, 'IfStatement');
+    },
+  },
+  {
+    name: 'a cyclic custom AST terminates instead of running away',
+    run() {
+      // `parseScript` accepts a custom `parse` hook, so the walk cannot
+      // assume the tree it is handed is acyclic. A cycle must not spin
+      // forever or overflow the stack.
+      const block = /** @type {any} */ ({
+        type: 'BlockStatement',
+        body: /** @type {any[]} */ ([]),
+      });
+      block.body.push(block);
+
+      const cyclic = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [block],
+      };
+
+      const program = parseScript('', { parse: () => cyclic });
+
+      assertSame(program.type, 'Program');
+    },
+  },
+  {
+    name: 'a statement-position function declaration is still rejected when deeply nested',
+    run() {
+      // The depth fix must not cost reach: the offending node here sits
+      // below thousands of enclosing blocks.
+      const depth = 2000;
+      const source = `${'{'.repeat(depth)}while (false) function f() {}${'}'.repeat(depth)}`;
+
+      assertThrows(() => parseScript(source), SyntaxError);
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // ES5.1 §7.6 / §7.6.1: a `ReservedWord` is matched against the
+  // *IdentifierName* only after its Unicode escape sequences are interpreted,
+  // so an identifier whose code points spell a reserved word is a parse-phase
+  // `SyntaxError` even when written with escapes. Acorn's `checkUnreserved`
+  // bails out of the reserved-word test for any escaped identifier when
+  // `ecmaVersion < 6`, letting `var \u0063lass = 1` through; the parser must
+  // reject it, matching JavaScriptCore and the upstream `val-*-via-escape`
+  // tests (`phase: parse`).
+  // ---------------------------------------------------------------------------
+  {
+    name: 'an ES5 future reserved word spelled with an escape is rejected as an identifier',
+    run() {
+      // Every ES5.1 §7.6.1.2 FutureReservedWord, one code point escaped. These
+      // are not keywords Acorn tokenizes, so only the escape path reaches them.
+      const rejected = [
+        'var \\u0063lass = 1;',
+        'var \\u0063onst = 1;',
+        'var \\u0065num = 1;',
+        'var \\u0065xport = 1;',
+        'var \\u0065xtends = 1;',
+        'var \\u0069mport = 1;',
+        'var \\u0073uper = 1;',
+      ];
+
+      for (const source of rejected) {
+        const error = /** @type {any} */ (
+          assertThrows(() => parseScript(source), SyntaxError)
+        );
+
+        assertSame(error.name, 'SyntaxError');
+      }
+    },
+  },
+  {
+    name: 'an escaped reserved word is rejected in reference and label positions too',
+    run() {
+      // §7.6 governs every Identifier, not just bindings: an identifier
+      // reference and a labelled statement's label are both Identifiers.
+      assertThrows(() => parseScript('void \\u0073uper;'), SyntaxError);
+      assertThrows(() => parseScript('\\u0065num: 1;'), SyntaxError);
+    },
+  },
+  {
+    name: 'a strict-only reserved word spelled with an escape is rejected only in strict code',
+    run() {
+      // `yield` is a FutureReservedWord solely in strict mode (§7.6.1.2), so
+      // the escaped label is a SyntaxError under a "use strict" prologue but
+      // stays a valid label in sloppy code.
+      assertThrows(
+        () => parseScript('"use strict";\nyi\\u0065ld: 1;'),
+        SyntaxError,
+      );
+
+      const program = parseScript('yi\\u0065ld: 1;');
+      assertSame(program.type, 'Program');
+    },
+  },
+  {
+    name: 'escapes stay legal where an IdentifierName is expected, and in ordinary names',
+    run() {
+      // Reserved words remain valid as property names (IdentifierName, not
+      // Identifier — §11.2.1, §11.1.5), and an escape that spells an ordinary
+      // identifier is always fine.
+      const accepted = [
+        'obj.cla\\u0073s;',
+        '({ cla\\u0073s: 1 });',
+        'var \\u0061bc = 1;',
+      ];
+
+      for (const source of accepted) {
+        const program = parseScript(source);
+
+        assertSame(program.type, 'Program');
+      }
+    },
+  },
 ];
+
+/**
+ * Long enough to overflow a recursive AST walk on every host we run on,
+ * while staying inside what Acorn itself accepts.
+ */
+const DEEP_MEMBER_CHAIN_LENGTH = 20000;
 
 export default tests;

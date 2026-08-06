@@ -188,13 +188,22 @@ function coverageRecord(records, scope) {
  * example follows with a comma, as in `"files":53575,"records"`. Only a comma
  * that groups digits counts as part of a number.
  *
+ * A letter on either side disqualifies a match too, because a published count
+ * is never written flush against a word: without that guard a small live value
+ * collides with ordinary prose (a `malformed` count of 4 matches the `v4` in a
+ * sentence about version tags), and the check is only useful while every match
+ * it reports is really a number someone pasted.
+ *
  * @param {string} rendering
  * @returns {RegExp}
  */
 function wholeNumberPattern(rendering) {
   const escaped = rendering.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 
-  return new RegExp(String.raw`(?<![\d.]|\d,)${escaped}(?![\d.]|,\d)`, 'u');
+  return new RegExp(
+    String.raw`(?<![\d.]|\d,|\p{L})${escaped}(?![\d.]|,\d|\p{L})`,
+    'u',
+  );
 }
 
 /**
@@ -483,6 +492,38 @@ export default [
         );
       } finally {
         await writeFile(reportUrl, report);
+      }
+    },
+  },
+  {
+    name: 'npm run test262:select:check passes on the committed subset and fails when it drifts',
+    run: async () => {
+      npmRun('test262:select:check');
+
+      const subsetUrl = new URL(UPSTREAM_SUBSET_FILE, REPOSITORY_ROOT_URL);
+      const subset = await readFile(subsetUrl, 'utf8');
+      const drifted = JSON.parse(subset);
+      drifted.groups[0].paths.push('test/built-ins/zzz-select-drift-probe.js');
+
+      await writeFile(subsetUrl, `${JSON.stringify(drifted, null, 2)}\n`);
+
+      try {
+        const { status, stderr } = npmRunExpectingFailure(
+          'test262:select:check',
+        );
+
+        assertSame(
+          status === 0,
+          false,
+          'a drifted subset must fail npm run test262:select:check',
+        );
+        assertSame(
+          stderr.includes(`${UPSTREAM_SUBSET_FILE} is stale`),
+          true,
+          `the failure must name the stale subset on stderr:\n${stderr}`,
+        );
+      } finally {
+        await writeFile(subsetUrl, subset);
       }
     },
   },

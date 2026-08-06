@@ -14,6 +14,7 @@ import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import {
   checkObjectCoercible,
   toBoolean,
+  toInt32,
   toNumber,
   toObject,
   toString,
@@ -41,6 +42,16 @@ import {
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { createFunctionObject } from './declarations.js';
+// Direct-eval interception (see isDirectEvalCall) calls into the eval
+// implementation. This closes a loop through the pre-existing intra-evaluator
+// cycle expressions <-> declarations <-> statements; performEval is a
+// call-time function reference, so the ES module live binding is resolved
+// before it is ever invoked. No cycle crosses the realm/builtins boundary:
+// eval.js does reach a builtin transitively (eval.js -> statements.js /
+// declarations.js -> this module -> builtins/regexp.js), but that edge is
+// acyclic because builtins/regexp.js imports only runtime modules and
+// nothing from the evaluator, and no module here reaches realm.js.
+import { performEval } from './eval.js';
 import { createRegExpFromPattern } from '../builtins/regexp.js';
 
 /**
@@ -216,6 +227,10 @@ function evaluateUnaryExpression(node, context) {
       return -toNumber(evaluateExpressionValue(node.argument, context));
     case '+':
       return toNumber(evaluateExpressionValue(node.argument, context));
+    case '~':
+      // ECMA-262 5.1 §11.4.8: ~ applies the bitwise complement to the
+      // operand's ToInt32 value, matching the binary bitwise operators.
+      return ~toInt32(evaluateExpressionValue(node.argument, context));
     default:
       throw createUnsupportedOperatorError('unary', node.operator);
   }
@@ -503,6 +518,14 @@ function evaluateUpdateExpression(node, context) {
  * then is the callee checked for callability — matching the specified
  * order, which is observable through argument side effects.
  *
+ * A *direct* call to eval (15.1.2.1.1) is detected only after that same
+ * order has run — callee reference, then arguments, then callability — and
+ * routes into `performEval` with the *caller's* execution context so the
+ * eval code shares this scope, `this`, and strictness. Every other call
+ * form (including a call to the built-in eval that is not a bareword
+ * `eval(...)`) goes through the ordinary call protocol, where the native
+ * `eval` function performs an indirect eval in the realm's global scope.
+ *
  * @param {any} node
  * @param {EvaluationContext} context
  * @returns {unknown}
@@ -523,9 +546,42 @@ function evaluateCallExpression(node, context) {
     );
   }
 
+  if (isDirectEvalCall(node.callee, calleeReference, callee, context)) {
+    return performEval(args[0], context);
+  }
+
   return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
     callee
   ).callFunction(thisValue, args);
+}
+
+/**
+ * Implements the direct-call determination of ECMA-262 15.1.2.1.1: a call is
+ * a *direct* call to eval iff all of the following hold —
+ *
+ * 1. the callee AST node is an `Identifier` named `eval` (so `(0, eval)(x)`,
+ *    `e = eval; e(x)`, `[eval][0](x)`, `eval.call(null, x)`, and `obj.eval(x)`
+ *    are all indirect);
+ * 2. evaluating it produced an environment-record `Reference` — not a
+ *    property reference and not an unresolvable reference; and
+ * 3. the resolved callee is *this realm's* own built-in `eval` function, so a
+ *    call to another realm's eval is indirect even when it is a bareword
+ *    `eval(...)`.
+ *
+ * @param {any} calleeNode
+ * @param {Reference | unknown} calleeReference
+ * @param {unknown} callee
+ * @param {EvaluationContext} context
+ * @returns {boolean}
+ */
+function isDirectEvalCall(calleeNode, calleeReference, callee, context) {
+  return (
+    calleeNode.type === 'Identifier' &&
+    calleeNode.name === 'eval' &&
+    calleeReference instanceof Reference &&
+    isEnvironmentRecord(calleeReference.base) &&
+    callee === context.realm.intrinsics.evalFunction
+  );
 }
 
 /**
@@ -598,6 +654,15 @@ function referenceThisValue(reference) {
     return reference.thisValue === undefined
       ? reference.base
       : reference.thisValue;
+  }
+
+  // ECMA-262 5.1 §11.2.3 step 7 / §10.3.1: when the callee resolves through an
+  // environment record, the `this` value comes from that record's
+  // ImplicitThisValue. Only a `with` object record (provideThis) yields a
+  // non-`undefined` value here; declarative and global records return
+  // `undefined`.
+  if (reference instanceof Reference && isEnvironmentRecord(reference.base)) {
+    return reference.base.implicitThisValue();
   }
 
   return undefined;

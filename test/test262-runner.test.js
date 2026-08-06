@@ -255,6 +255,57 @@ export default [
     },
   },
   {
+    name: 'metadata folds a single blank line in a folded block scalar to one newline',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        [
+          '/*---',
+          'description: >-',
+          '  para one',
+          '  still one',
+          '',
+          '  para two',
+          '---*/',
+        ].join('\n'),
+      );
+
+      assertSame(metadata.description, 'para one still one\npara two');
+    },
+  },
+  {
+    name: 'metadata folds consecutive blank lines in a folded block scalar to a newline each',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        ['/*---', 'description: >-', '  a b', '', '', '  c d', '---*/'].join(
+          '\n',
+        ),
+      );
+
+      assertSame(metadata.description, 'a b\n\nc d');
+    },
+  },
+  {
+    name: 'metadata keeps more-indented lines literal inside a folded block scalar',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        [
+          '/*---',
+          'description: >-',
+          '  line one',
+          '',
+          '      indented block',
+          '      more block',
+          '---*/',
+        ].join('\n'),
+      );
+
+      assertSame(
+        metadata.description,
+        'line one\n\n    indented block\n    more block',
+      );
+    },
+  },
+  {
     name: 'metadata rejects a source without a frontmatter block',
     run: () => {
       const error = assertThrows(
@@ -732,8 +783,37 @@ export default [
   {
     name: 'unsupported syntax is reported as an engine error, not a pass',
     run: async () => {
-      const { records } = await runMemorySuite({
-        'unsupported.js': fixture('uses an unsupported operator', '~0;'),
+      // Every ES5 construct now evaluates, so an engine limitation can no
+      // longer be provoked from source. Model one directly: an engine whose
+      // `evaluateScript` throws a host error (not a SyntaxError) for the test
+      // body must be classified as engine-error and failed, never silently
+      // passed. Harness includes still run through the real engine.
+      const limitedEngine = {
+        createRealm,
+        /**
+         * @param {any} realm
+         * @param {string} source
+         * @returns {any}
+         */
+        evaluateScript(realm, source) {
+          if (source.includes('ENGINE_LIMITATION')) {
+            throw new Error('synthetic engine limitation');
+          }
+          return evaluateScript(realm, source);
+        },
+      };
+
+      const { records } = await runTest262Suite({
+        engine: limitedEngine,
+        host: createMemoryHost({
+          'unsupported.js': fixture(
+            'hits an engine limitation',
+            'ENGINE_LIMITATION;',
+          ),
+        }),
+        paths: ['unsupported.js'],
+        supportedFeatures: [],
+        skipFeatures: [],
       });
 
       assertSame(records[0].reason, 'engine-error');

@@ -293,6 +293,10 @@ export function createCiJobs(test262) {
           cache: 'npm',
         }),
         runStep('Install dependencies', 'npm ci'),
+        runStep(
+          'Check the ES5 selection is current',
+          'npm run test262:select:check',
+        ),
         runStep('Run the pinned Test262 subset', 'npm run test262:upstream'),
         runStep(
           'Check the generated report is current',

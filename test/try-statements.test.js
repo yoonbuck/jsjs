@@ -71,6 +71,25 @@ const tests = [
     },
   },
   {
+    name: 'ES5 catch returns empty normal, break, and continue completions unchanged',
+    run() {
+      assertNormal(run('1; try { throw null; } catch (e) {}'), 1);
+      assertNormal(run('1; try { throw null; } catch (e) {} finally {}'), 1);
+      assertNormal(
+        run(
+          "for (var i = 0; i < 2; ++i) { if (i) { try { throw null; } catch (e) { break; } } 'prior'; }",
+        ),
+        'prior',
+      );
+      assertNormal(
+        run(
+          "for (var i = 0; i < 2; ++i) { if (i) { try { throw null; } catch (e) { continue; } } 'prior'; }",
+        ),
+        'prior',
+      );
+    },
+  },
+  {
     name: 'catch block is skipped when try does not throw',
     run() {
       assertNormal(run('var x = 0; try { x = 1; } catch (e) { x = 99; } x'), 1);

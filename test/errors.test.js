@@ -394,6 +394,254 @@ const tests = [
       assertGuestThrow(result, 'ReferenceError', realm);
     },
   },
+
+  // ---------------------------------------------------------------------------
+  // EvalError (15.11.6.1) — installed for completeness even though no engine
+  // algorithm throws it.
+  // ---------------------------------------------------------------------------
+  {
+    name: 'EvalError is installed as a callable global constructor',
+    run() {
+      const realm = createRealm();
+      assertSame(evaluateScript(realm, 'typeof EvalError;').value, 'function');
+      assertSame(evaluateScript(realm, 'EvalError.length;').value, 1);
+    },
+  },
+  {
+    name: 'EvalError inherits from Error.prototype and has correct name and message',
+    run() {
+      const realm = createRealm();
+      const result = evaluateScript(realm, 'new EvalError("boom");');
+      const e = /** @type {EngineObject} */ (result.value);
+      const ctor = /** @type {any} */ (realm.globalObject.get('EvalError'));
+      const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
+      const errorCtor = /** @type {any} */ (realm.globalObject.get('Error'));
+      const errorProto = /** @type {EngineObject} */ (
+        errorCtor.get('prototype')
+      );
+
+      assertSame(e.getPrototype(), proto);
+      assertSame(proto.getPrototype(), errorProto);
+      assertSame(proto.get('name'), 'EvalError');
+      assertSame(proto.get('message'), '');
+      assertSame(e.get('message'), 'boom');
+      assertSame(proto.get('constructor'), ctor);
+    },
+  },
+  {
+    name: 'EvalError instances and prototype expose the Error class tag',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(
+          realm,
+          'Object.prototype.toString.call(new EvalError());',
+        ).value,
+        '[object Error]',
+      );
+      assertSame(
+        evaluateScript(
+          realm,
+          'Object.prototype.toString.call(EvalError.prototype);',
+        ).value,
+        '[object Error]',
+      );
+    },
+  },
+  {
+    name: 'EvalError() called as a function behaves like construction',
+    run() {
+      const realm = createRealm();
+      const result = evaluateScript(
+        realm,
+        'var e = EvalError("x"); e instanceof EvalError && e instanceof Error;',
+      );
+      assertSame(result.value, true);
+    },
+  },
+  {
+    name: 'realm.createGuestError builds an EvalError instance',
+    run() {
+      const realm = createRealm();
+      const instance = realm.createGuestError('EvalError', 'boom');
+      const ctor = /** @type {any} */ (realm.globalObject.get('EvalError'));
+      const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
+      assertSame(instance.getPrototype(), proto);
+      assertSame(instance.get('message'), 'boom');
+    },
+  },
+  {
+    name: 'EvalError global and prototype carry the native-error property descriptors',
+    run() {
+      const realm = createRealm();
+
+      // 15.1: the global binding is a writable, non-enumerable, configurable
+      // data property, exactly like every other native-error constructor.
+      const globalDescriptor = /** @type {any} */ (
+        realm.globalObject.getOwnProperty('EvalError')
+      );
+      assertSame(globalDescriptor !== undefined, true);
+      assertSame(globalDescriptor.writable, true);
+      assertSame(globalDescriptor.enumerable, false);
+      assertSame(globalDescriptor.configurable, true);
+
+      // 15.11.7.6: the constructor's `prototype` is a locked-down data
+      // property — non-writable, non-enumerable, non-configurable.
+      const ctor = /** @type {any} */ (realm.globalObject.get('EvalError'));
+      const prototypeDescriptor = /** @type {any} */ (
+        ctor.getOwnProperty('prototype')
+      );
+      assertSame(prototypeDescriptor !== undefined, true);
+      assertSame(prototypeDescriptor.writable, false);
+      assertSame(prototypeDescriptor.enumerable, false);
+      assertSame(prototypeDescriptor.configurable, false);
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Error.prototype.toString (15.11.4.4)
+  // ---------------------------------------------------------------------------
+  {
+    name: 'Error.prototype.toString is an own, non-enumerable, length-0 method',
+    run() {
+      const realm = createRealm();
+      const errorCtor = /** @type {any} */ (realm.globalObject.get('Error'));
+      const proto = /** @type {EngineObject} */ (errorCtor.get('prototype'));
+
+      const descriptor = /** @type {any} */ (proto.getOwnProperty('toString'));
+      assertSame(descriptor !== undefined, true);
+      assertSame(descriptor.writable, true);
+      assertSame(descriptor.enumerable, false);
+      assertSame(descriptor.configurable, true);
+      assertSame(
+        evaluateScript(realm, 'Error.prototype.hasOwnProperty("toString");')
+          .value,
+        true,
+      );
+      assertSame(
+        evaluateScript(realm, 'Error.prototype.toString.length;').value,
+        0,
+      );
+      assertSame(
+        evaluateScript(realm, 'typeof Error.prototype.toString;').value,
+        'function',
+      );
+    },
+  },
+  {
+    name: 'Error.prototype.toString joins name and message per 15.11.4.4',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(realm, 'new Error("boom").toString();').value,
+        'Error: boom',
+      );
+      assertSame(
+        evaluateScript(realm, 'new TypeError("nope").toString();').value,
+        'TypeError: nope',
+      );
+      assertSame(
+        evaluateScript(realm, 'new RangeError("r").toString();').value,
+        'RangeError: r',
+      );
+    },
+  },
+  {
+    name: 'Error.prototype.toString defaults an undefined name to "Error" and an undefined message to ""',
+    run() {
+      const realm = createRealm();
+      // No message -> message is "" -> return name.
+      assertSame(
+        evaluateScript(realm, 'new Error().toString();').value,
+        'Error',
+      );
+      assertSame(
+        evaluateScript(realm, 'new Error("").toString();').value,
+        'Error',
+      );
+      // Undefined name defaults to "Error".
+      assertSame(
+        evaluateScript(
+          realm,
+          'Error.prototype.toString.call({ message: "m" });',
+        ).value,
+        'Error: m',
+      );
+      assertSame(
+        evaluateScript(realm, 'Error.prototype.toString.call({});').value,
+        'Error',
+      );
+    },
+  },
+  {
+    name: 'Error.prototype.toString returns the non-empty half when one of name/message is empty',
+    run() {
+      const realm = createRealm();
+      // Empty name -> return message.
+      assertSame(
+        evaluateScript(
+          realm,
+          'Error.prototype.toString.call({ name: "", message: "msg" });',
+        ).value,
+        'msg',
+      );
+      // Empty message -> return name.
+      assertSame(
+        evaluateScript(
+          realm,
+          'Error.prototype.toString.call({ name: "N", message: "" });',
+        ).value,
+        'N',
+      );
+      // Both empty -> "".
+      assertSame(
+        evaluateScript(
+          realm,
+          'Error.prototype.toString.call({ name: "", message: "" });',
+        ).value,
+        '',
+      );
+    },
+  },
+  {
+    name: 'Error.prototype.toString coerces name and message with ToString, reading name before message',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(
+          realm,
+          'Error.prototype.toString.call({ name: 24, message: 42 });',
+        ).value,
+        '24: 42',
+      );
+      assertSame(
+        evaluateScript(
+          realm,
+          'var log = []; ' +
+            'var o = { get name() { log.push("n"); return "G"; }, ' +
+            'get message() { log.push("m"); return "msg"; } }; ' +
+            'Error.prototype.toString.call(o) + "|" + log.join(",");',
+        ).value,
+        'G: msg|n,m',
+      );
+    },
+  },
+  {
+    name: 'Error.prototype.toString throws a guest TypeError when this is not an object',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        evaluateScript(realm, 'Error.prototype.toString.call(undefined);'),
+        'TypeError',
+        realm,
+      );
+      assertGuestThrow(
+        evaluateScript(realm, 'Error.prototype.toString.call(5);'),
+        'TypeError',
+        realm,
+      );
+    },
+  },
 ];
 
 export default tests;

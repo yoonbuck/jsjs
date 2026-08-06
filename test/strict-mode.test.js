@@ -452,6 +452,32 @@ const tests = [
       assertNormal(result, true);
     },
   },
+  {
+    name: '%ThrowTypeError% is non-extensible and frozen',
+    run() {
+      // ES5.1 §13.2.3: the unique [[ThrowTypeError]] function has
+      // [[Extensible]] = false and its sole own properties (`length`, `name`)
+      // are non-writable and non-configurable, so it is "frozen". Reach it
+      // through a strict arguments object's poisoned `callee` accessor, the
+      // same way the upstream ThrowTypeError/{extensible,frozen} tests do.
+      assertNormal(
+        run(
+          'var a = (function () { "use strict"; return arguments; })();' +
+            'var tte = Object.getOwnPropertyDescriptor(a, "callee").get;' +
+            'Object.isExtensible(tte);',
+        ),
+        false,
+      );
+      assertNormal(
+        run(
+          'var a = (function () { "use strict"; return arguments; })();' +
+            'var tte = Object.getOwnPropertyDescriptor(a, "callee").get;' +
+            'Object.isFrozen(tte);',
+        ),
+        true,
+      );
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // Strict assignment to a non-writable property

@@ -18,6 +18,7 @@ import {
   timeFromYear,
   timeClip,
   timeWithinDay,
+  utcFromLocalTime,
   weekDay,
   yearFromTime,
 } from '../src/runtime/date.js';
@@ -90,6 +91,28 @@ export default [
       assertSame(timeClip(123.987), 123);
       assertSame(Object.is(timeClip(-0.9), +0), true);
       assertSame(Number.isNaN(timeClip(Infinity)), true);
+    },
+  },
+  {
+    name: 'utcFromLocalTime keeps in-range instants finite when the host rejects out-of-range probes',
+    run() {
+      const OFFSET_MINUTES = 480;
+      const host = {
+        now: () => 0,
+        standardTimezoneOffset: undefined,
+        timezoneOffset: (/** @type {number} */ utcMilliseconds) =>
+          Number.isFinite(utcMilliseconds) &&
+          Math.abs(utcMilliseconds) <= 8.64e15
+            ? OFFSET_MINUTES
+            : NaN,
+      };
+      const localTime = makeDate(makeDay(1970, 0, -99999998), 0);
+
+      assertSame(Math.abs(localTime) <= 8.64e15, true);
+      assertSame(
+        utcFromLocalTime(localTime, host),
+        localTime + OFFSET_MINUTES * 60 * 1000,
+      );
     },
   },
 ];

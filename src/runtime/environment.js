@@ -1,6 +1,7 @@
 import { EngineObject } from './object.js';
 import { Reference, UnresolvableReference } from './reference.js';
 import { GuestErrorSignal } from './completion.js';
+import { isDataDescriptor } from './descriptors.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -26,6 +27,16 @@ export class DeclarativeEnvironmentRecord {
     this.outer = outer;
     /** @type {Map<PropertyKey, Binding>} */
     this._bindings = new Map();
+  }
+
+  /**
+   * ECMA-262 5.1 §10.2.1.1.6: a declarative environment never provides a
+   * `this` value to a call whose callee it resolves.
+   *
+   * @returns {undefined}
+   */
+  implicitThisValue() {
+    return undefined;
   }
 
   /**
@@ -195,8 +206,9 @@ export class ObjectEnvironmentRecord {
   /**
    * @param {EngineObject} bindingObject
    * @param {EnvironmentRecordLike | null} [outer=null]
+   * @param {boolean} [provideThis=false]
    */
-  constructor(bindingObject, outer = null) {
+  constructor(bindingObject, outer = null, provideThis = false) {
     if (!(bindingObject instanceof EngineObject)) {
       throw new TypeError(
         'ObjectEnvironmentRecord requires an EngineObject binding object',
@@ -205,6 +217,20 @@ export class ObjectEnvironmentRecord {
 
     this.outer = outer;
     this.bindingObject = bindingObject;
+    // ECMA-262 5.1 §10.2.1.2: the `with` statement sets this flag so the
+    // binding object becomes the `this` value of calls resolved through it
+    // (§10.2.1.2.6). The global object's object record leaves it false.
+    this.provideThis = provideThis;
+  }
+
+  /**
+   * ECMA-262 5.1 §10.2.1.2.6: return the binding object when `provideThis`
+   * is set (inside a `with`), otherwise `undefined`.
+   *
+   * @returns {EngineObject | undefined}
+   */
+  implicitThisValue() {
+    return this.provideThis ? this.bindingObject : undefined;
   }
 
   /**
@@ -363,22 +389,89 @@ export class GlobalEnvironmentRecord {
    * semantics. Skipping creation here would leave the first assignment to
    * fall through to `[[Put]]`, which always creates new own properties as
    * configurable, silently losing the intended non-configurable var
-   * semantics. If the global object is not extensible and does not already
-   * have an own property for `name`, the property is not created (matching
-   * `CreateGlobalVarBinding`'s extensibility check) and `name` still isn't
-   * bound afterward.
+   * semantics.
+   *
+   * When the name is not already an own property, creation goes through
+   * `CreateMutableBinding`, whose `[[DefineOwnProperty]]` runs with the Throw
+   * flag set (ECMA-262 10.2.1.2.2). On a non-extensible global object that
+   * raises a guest `TypeError`, which is the ES5.1 10.5 behavior for declaring
+   * a new global `var` (or function) when the global can no longer grow —
+   * this method no longer silently no-ops in that case.
    *
    * @param {PropertyKey} name
    * @param {boolean} deletable
    * @returns {void}
    */
   createGlobalVarBinding(name, deletable) {
-    const hasOwnProperty = this.objectRecord.hasOwnBinding(name);
-    const extensible = this.objectRecord.isExtensible();
-
-    if (!hasOwnProperty && extensible) {
+    if (!this.objectRecord.hasOwnBinding(name)) {
       this.objectRecord.createMutableBinding(name, deletable);
       this.objectRecord.setMutableBinding(name, undefined, false);
+    }
+
+    this.varNames.add(name);
+  }
+
+  /**
+   * Binds a hoisted global function declaration `name` to `value`, applying
+   * ECMA-262 (ES5.1) 10.5 steps 5.c–5.f for the global environment record.
+   *
+   * As with `createGlobalVarBinding`, existence and the redefinition decision
+   * are made against the global object's *own* property (the engine's
+   * deliberate own-property model, avoiding ES5.1's inherited-property quirk):
+   *
+   * - no own property: created like a global `var` (so a non-extensible
+   *   global raises a guest `TypeError`);
+   * - configurable own property: redefined to a writable, enumerable data
+   *   property (discarding any accessor), with `configurable` set from
+   *   `deletable`;
+   * - non-configurable own property that is a writable *and* enumerable data
+   *   property: only its value is updated;
+   * - any other non-configurable own property (an accessor, or a data
+   *   property that is not both writable and enumerable): a guest `TypeError`,
+   *   raised by `[[DefineOwnProperty]]` running with the Throw flag.
+   *
+   * @param {PropertyKey} name
+   * @param {unknown} value
+   * @param {boolean} deletable
+   * @returns {void}
+   */
+  createGlobalFunctionBinding(name, value, deletable) {
+    // A lexical global binding (future let/const) would take precedence; ES5
+    // never creates one, but keep the delegation correct if it ever does.
+    if (this.declarativeRecord.hasBinding(name)) {
+      this.declarativeRecord.setMutableBinding(name, value, false);
+      return;
+    }
+
+    const existing = this.globalObject.getOwnProperty(name);
+    const keepAttributesUpdateValue =
+      existing !== undefined &&
+      !existing.configurable &&
+      isDataDescriptor(existing) &&
+      existing.writable === true &&
+      existing.enumerable === true;
+
+    if (keepAttributesUpdateValue) {
+      // Non-configurable but writable+enumerable: leave the attributes, update
+      // the value only (10.5 step 5.e falls through to SetMutableBinding).
+      this.globalObject.defineOwnProperty(name, { value }, true);
+    } else {
+      // Fresh name, a configurable property (redefined), or an illegal target.
+      // `[[DefineOwnProperty]]` with the Throw flag turns an illegal target
+      // (a non-configurable accessor / non-writable / non-enumerable property,
+      // or a new property on a non-extensible global) into a guest TypeError,
+      // matching 10.5 step 5.e.iv and the CreateMutableBinding extensibility
+      // check.
+      this.globalObject.defineOwnProperty(
+        name,
+        {
+          value,
+          writable: true,
+          enumerable: true,
+          configurable: deletable,
+        },
+        true,
+      );
     }
 
     this.varNames.add(name);
@@ -440,6 +533,16 @@ export class GlobalEnvironmentRecord {
   getThisBinding() {
     return this.globalObject;
   }
+
+  /**
+   * ECMA-262 5.1 §10.2.3: the global environment never supplies an implicit
+   * `this` to calls it resolves; the caller falls back to `undefined`.
+   *
+   * @returns {undefined}
+   */
+  implicitThisValue() {
+    return undefined;
+  }
 }
 
 /**
@@ -457,10 +560,15 @@ export function newDeclarativeEnvironment(outer) {
 /**
  * @param {EngineObject} bindingObject
  * @param {EnvironmentRecordLike | null} outer
+ * @param {boolean} [provideThis=false]
  * @returns {ObjectEnvironmentRecord}
  */
-export function newObjectEnvironment(bindingObject, outer) {
-  return new ObjectEnvironmentRecord(bindingObject, outer);
+export function newObjectEnvironment(
+  bindingObject,
+  outer,
+  provideThis = false,
+) {
+  return new ObjectEnvironmentRecord(bindingObject, outer, provideThis);
 }
 
 /**

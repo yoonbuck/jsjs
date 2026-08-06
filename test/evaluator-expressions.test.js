@@ -266,11 +266,54 @@ const tests = [
     },
   },
   {
-    name: 'unsupported unary operators (bitwise not) throw explicitly',
+    name: 'unary ~ applies bitwise NOT after ToInt32 coercion',
     run() {
-      const bitwiseNot = assertThrows(() => run('~1;'), Error);
-      assertSame(bitwiseNot.name, 'UnsupportedOperatorError');
-      assertSame(/** @type {any} */ (bitwiseNot).operator, '~');
+      assertSame(run('~1;'), -2);
+      assertSame(run('~0;'), -1);
+      // ToInt32(-0) is +0, so ~-0 is -1 just like ~0.
+      assertSame(run('~-0;'), -1);
+      assertSame(run('~-1;'), 0);
+      // ToInt32 maps NaN/Infinity to 0, so ~ yields -1.
+      assertSame(run('~NaN;'), -1);
+      assertSame(run('~Infinity;'), -1);
+      assertSame(run('~-Infinity;'), -1);
+      // Strings and booleans coerce through ToNumber first.
+      assertSame(run('~"3";'), -4);
+      assertSame(run('~true;'), -2);
+      assertSame(run('~null;'), -1);
+      assertSame(run('~undefined;'), -1);
+    },
+  },
+  {
+    name: 'unary ~ wraps at the signed 32-bit boundary like the binary bitwise operators',
+    run() {
+      assertSame(run('~2147483647;'), -2147483648);
+      assertSame(run('~-2147483648;'), 2147483647);
+      // 2**32 wraps to 0 under ToInt32; 2**32 - 1 wraps to -1.
+      assertSame(run('~4294967296;'), -1);
+      assertSame(run('~4294967295;'), 0);
+      // Fractional parts are truncated toward zero by ToInt32.
+      assertSame(run('~~3.9;'), 3);
+      assertSame(run('~~-3.9;'), -3);
+    },
+  },
+  {
+    name: 'unary ~ coerces objects through ToPrimitive/valueOf exactly once',
+    run() {
+      assertSame(run('~{};'), -1);
+      assertSame(run('~[];'), -1);
+      assertSame(run('~[5];'), -6);
+      assertSame(
+        run('var o = { valueOf: function () { return 5; } }; ~o;'),
+        -6,
+      );
+      assertSame(
+        run(
+          'var calls = 0; var o = { valueOf: function () { calls++; return 2; } }; ' +
+            '~o; calls;',
+        ),
+        1,
+      );
     },
   },
   {
@@ -321,6 +364,7 @@ const tests = [
       const context = {
         realm,
         env: realm.globalEnvironment,
+        variableEnv: realm.globalEnvironment,
         strict: false,
         thisValue: realm.globalObject,
       };
