@@ -14,6 +14,7 @@ import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import {
   checkObjectCoercible,
   toBoolean,
+  toInt32,
   toNumber,
   toObject,
   toString,
@@ -226,6 +227,10 @@ function evaluateUnaryExpression(node, context) {
       return -toNumber(evaluateExpressionValue(node.argument, context));
     case '+':
       return toNumber(evaluateExpressionValue(node.argument, context));
+    case '~':
+      // ECMA-262 5.1 §11.4.8: ~ applies the bitwise complement to the
+      // operand's ToInt32 value, matching the binary bitwise operators.
+      return ~toInt32(evaluateExpressionValue(node.argument, context));
     default:
       throw createUnsupportedOperatorError('unary', node.operator);
   }

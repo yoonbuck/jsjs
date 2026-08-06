@@ -732,8 +732,37 @@ export default [
   {
     name: 'unsupported syntax is reported as an engine error, not a pass',
     run: async () => {
-      const { records } = await runMemorySuite({
-        'unsupported.js': fixture('uses an unsupported operator', '~0;'),
+      // Every ES5 construct now evaluates, so an engine limitation can no
+      // longer be provoked from source. Model one directly: an engine whose
+      // `evaluateScript` throws a host error (not a SyntaxError) for the test
+      // body must be classified as engine-error and failed, never silently
+      // passed. Harness includes still run through the real engine.
+      const limitedEngine = {
+        createRealm,
+        /**
+         * @param {any} realm
+         * @param {string} source
+         * @returns {any}
+         */
+        evaluateScript(realm, source) {
+          if (source.includes('ENGINE_LIMITATION')) {
+            throw new Error('synthetic engine limitation');
+          }
+          return evaluateScript(realm, source);
+        },
+      };
+
+      const { records } = await runTest262Suite({
+        engine: limitedEngine,
+        host: createMemoryHost({
+          'unsupported.js': fixture(
+            'hits an engine limitation',
+            'ENGINE_LIMITATION;',
+          ),
+        }),
+        paths: ['unsupported.js'],
+        supportedFeatures: [],
+        skipFeatures: [],
       });
 
       assertSame(records[0].reason, 'engine-error');

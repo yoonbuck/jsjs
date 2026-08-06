@@ -124,14 +124,15 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects unsupported expression statements explicitly',
+    name: 'evaluateScript evaluates bitwise NOT through the public API',
     run() {
       const realm = createRealm();
 
-      // `~` (bitwise NOT) is still unsupported; verify the engine reports it
-      // explicitly rather than silently passing or crashing.
-      const error = assertThrows(() => evaluateScript(realm, '~0;'), Error);
-      assertSame(/** @type {any} */ (error).name, 'UnsupportedOperatorError');
+      // `~` used to be an explicitly unsupported operator; it now evaluates
+      // like the binary bitwise operators (ToInt32 then complement).
+      const completion = evaluateScript(realm, '~0;');
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, -1);
     },
   },
   {
