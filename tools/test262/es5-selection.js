@@ -36,14 +36,13 @@ export const ES5_SELECTION_VERSION = 1;
  * The exclusion categories the policy may use, and nothing else. Two of them —
  * `post-es5-syntax` and `post-es5-builtin` — are produced by the structural
  * filters and by coarse prefix entries rather than a cited clause; the other
- * four must cite the ES5.1 clause or README deviation row that makes this
+ * three must cite the ES5.1 clause or README deviation row that makes this
  * engine's behaviour correct.
  */
 export const EXCLUSION_CATEGORIES = Object.freeze([
   'post-es5-semantics',
   'post-es5-builtin',
   'post-es5-syntax',
-  'date-pending',
   'host-dependent',
   'engine-deviation',
 ]);
