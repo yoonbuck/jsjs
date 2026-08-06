@@ -508,11 +508,17 @@ export function buildUpstreamSubset(options) {
  * indented JSON document with a trailing newline, so a regeneration is a
  * byte-for-byte diff.
  *
+ * The manifest is both regenerated (`test262:select:check` owns its bytes) and
+ * format-checked (it is a tracked `tools/**\/*.json`). `JSON.stringify(…, 2)`
+ * already matches Prettier everywhere except array wrapping: Prettier collapses
+ * a JSON array onto one line when its flat form fits the print width. Mirroring
+ * that for the `paths` arrays is what keeps those two contracts compatible.
+ *
  * @param {import('./upstream.js').Test262UpstreamSubset} subset
  * @returns {string}
  */
 export function serializeUpstreamSubset(subset) {
-  return `${JSON.stringify(
+  const json = JSON.stringify(
     {
       version: subset.version,
       repository: subset.repository,
@@ -525,7 +531,41 @@ export function serializeUpstreamSubset(subset) {
     },
     null,
     2,
-  )}\n`;
+  );
+
+  return `${inlineShortPathArrays(json)}\n`;
+}
+
+/**
+ * The column width Prettier wraps at; matching it keeps the regenerated manifest
+ * identical to what `prettier --check` expects.
+ */
+const PRINT_WIDTH = 80;
+
+/**
+ * Collapses each six-space-indented `"paths"` array whose one-line form fits the
+ * print width onto a single line, exactly as Prettier renders JSON arrays, and
+ * leaves the rest expanded one element per line as `JSON.stringify(…, 2)`
+ * already emits them. `paths` is the last key of its group object, so the
+ * inlined line ends at `]` with no trailing comma — the same shape Prettier
+ * measures.
+ *
+ * @param {string} json
+ * @returns {string}
+ */
+function inlineShortPathArrays(json) {
+  return json.replace(
+    / {6}"paths": \[\n(?: {8}"[^"\n]*",?\n)+ {6}\]/g,
+    (block) => {
+      const items = block
+        .split('\n')
+        .slice(1, -1)
+        .map((line) => line.trim().replace(/,$/, ''));
+      const inline = `      "paths": [${items.join(', ')}]`;
+
+      return inline.length <= PRINT_WIDTH ? inline : block;
+    },
+  );
 }
 
 /**

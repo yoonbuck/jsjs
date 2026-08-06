@@ -560,4 +560,49 @@ export default [
       );
     },
   },
+  {
+    // The committed manifest is both regenerated (test262:select:check owns its
+    // bytes) and format-checked (it is a tracked tools/**/*.json). Those two
+    // contracts only stay compatible if the generator emits exactly what
+    // Prettier would: a path array is inlined when its flat form fits the
+    // 80-column print width, and expanded one-per-line otherwise.
+    name: 'serializeUpstreamSubset inlines path arrays that fit the print width and expands the rest',
+    run: () => {
+      const repository = 'https://github.com/tc39/test262.git';
+      const revision = '0'.repeat(40);
+
+      const shortText = serializeUpstreamSubset(
+        buildUpstreamSubset({
+          repository,
+          revision,
+          paths: ['test/language/punctuators/S7.7_A1.js'],
+        }),
+      );
+      assertSame(
+        shortText.includes(
+          '      "paths": ["test/language/punctuators/S7.7_A1.js"]\n',
+        ),
+        true,
+      );
+      assertSame(shortText.includes('"paths": [\n'), false);
+
+      const longPaths = [
+        'test/built-ins/Array/prototype/reduce/15.4.4.21-9-c-ii-4-s.js',
+        'test/built-ins/Array/prototype/reduce/15.4.4.21-9-c-ii-4-y.js',
+      ];
+      const longText = serializeUpstreamSubset(
+        buildUpstreamSubset({ repository, revision, paths: longPaths }),
+      );
+      assertSame(longText.includes('"paths": [\n'), true);
+      for (const path of longPaths) {
+        assertSame(longText.includes(`\n        "${path}"`), true);
+      }
+
+      // Whatever the shape, no emitted line may exceed the print width, or the
+      // format check would rewrite the manifest the regenerator just wrote.
+      for (const line of longText.split('\n')) {
+        assertSame(line.length <= 80, true);
+      }
+    },
+  },
 ];

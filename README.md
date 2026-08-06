@@ -594,10 +594,10 @@ defined exactly under
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 1,435    | 1,435     | 1,435  | 2.678%  |
-| (file, variant) | 102,075     | 2,859    | 2,859     | 2,859  | 2.801%  |
+| Files           | 53,575      | 10,833   | 10,833    | 10,798 | 20.155% |
+| (file, variant) | 102,906     | 20,565   | 20,565    | 20,515 | 19.936% |
 
-430 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
+4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).
 
 <!-- test262-coverage:end -->
