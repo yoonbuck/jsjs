@@ -49,6 +49,7 @@ export const STATEMENT_TYPES = new Set([
   'TryStatement',
   'SwitchStatement',
   'LabeledStatement',
+  'DebuggerStatement',
 ]);
 
 /**
@@ -106,6 +107,10 @@ export function evaluateStatement(node, context, labelSet = []) {
       return evaluateSwitchStatement(node, context, labelSet);
     case 'LabeledStatement':
       return evaluateLabeledStatement(node, context, labelSet);
+    case 'DebuggerStatement':
+      // ECMA-262 5.1 12.15: with no attached debugger the production
+      // evaluates to a normal, empty completion — a pure no-op.
+      return createNormalCompletion(EMPTY);
     default:
       throw createUnsupportedNodeError(node);
   }

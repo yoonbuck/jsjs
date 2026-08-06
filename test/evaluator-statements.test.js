@@ -654,6 +654,34 @@ const tests = [
       );
     },
   },
+  {
+    name: 'debugger statements produce an empty (undefined) completion value',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(realm, 'debugger;');
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, undefined);
+    },
+  },
+  {
+    name: 'debugger statements thread completion values through like empty statements',
+    run() {
+      const realm = createRealm();
+      // `debugger;` has an empty completion value, so the block's completion
+      // value should remain the last *meaningful* value (1).
+      const completion = evaluateScript(realm, '{ 1; debugger; }');
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 1);
+    },
+  },
+  {
+    name: 'DebuggerStatement is a recognized statement node type',
+    run() {
+      assertSame(STATEMENT_TYPES.has('DebuggerStatement'), true);
+    },
+  },
 ];
 
 export default tests;
