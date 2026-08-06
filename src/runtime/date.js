@@ -287,7 +287,7 @@ export function timeClip(time) {
     return NaN;
   }
 
-  return toInteger(time);
+  return toInteger(time) + 0;
 }
 
 /**

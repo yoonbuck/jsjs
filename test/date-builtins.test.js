@@ -59,6 +59,13 @@ export default [
 
       assertSame(runDate('new Date(new Date(123))', options).timeValue, 123);
       assertSame(
+        run(
+          '(function () { var source = new Date(123); source.toString = function () { throw "toString"; }; source.valueOf = function () { throw "valueOf"; }; return new Date(source).getTime(); }())',
+          options,
+        ),
+        123,
+      );
+      assertSame(
         runDate('new Date("1970-01-01T00:00:00.000Z")', options).timeValue,
         0,
       );
@@ -207,24 +214,24 @@ export default [
     },
   },
   {
-    name: 'Date constructor applies String-hint conversion to Date objects',
+    name: 'Date constructor clones Date internal values despite own conversion overrides',
     run() {
       assertSame(
         runDate(
           '(function () { var value = new Date(0); value.toString = function () { return "1970-01-01T00:00:00.001Z"; }; value.valueOf = function () { return 2; }; return new Date(value); }())',
         ).timeValue,
-        1,
+        0,
       );
     },
   },
   {
-    name: 'Date constructor observes inherited Date conversion overrides',
+    name: 'Date constructor clones Date internal values despite inherited conversion overrides',
     run() {
       assertSame(
         runDate(
           '(function () { Date.prototype.toString = function () { return "1970-01-01T00:00:00.001Z"; }; return new Date(new Date(0)); }())',
         ).timeValue,
-        1,
+        0,
       );
     },
   },

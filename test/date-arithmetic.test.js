@@ -80,14 +80,14 @@ export default [
     },
   },
   {
-    name: 'timeClip enforces the ES5 range limit and truncates toward zero',
+    name: 'timeClip enforces the ES5 range limit, truncates toward zero, and normalizes negative zero',
     run() {
       assertSame(timeClip(8640000000000000), 8640000000000000);
       assertSame(timeClip(-8640000000000000), -8640000000000000);
       assertSame(Number.isNaN(timeClip(8640000000000001)), true);
       assertSame(Number.isNaN(timeClip(-8640000000000001)), true);
       assertSame(timeClip(123.987), 123);
-      assertSame(Object.is(timeClip(-0.9), -0), true);
+      assertSame(Object.is(timeClip(-0.9), +0), true);
       assertSame(Number.isNaN(timeClip(Infinity)), true);
     },
   },

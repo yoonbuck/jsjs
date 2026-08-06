@@ -49,24 +49,13 @@ import { isCallable } from '../runtime/descriptors.js';
  */
 export function createDateIntrinsics(realm) {
   const datePrototype = new EngineDate(realm.intrinsics.objectPrototype, NaN);
-  let defaultToString = realm.intrinsics.objectPrototype.get('toString');
-  let defaultValueOf = realm.intrinsics.objectPrototype.get('valueOf');
 
   /**
    * @param {readonly unknown[]} args
    * @returns {EngineDate}
    */
   function constructDate(args) {
-    return new EngineDate(
-      datePrototype,
-      dateValueFromArguments(
-        realm,
-        args,
-        datePrototype,
-        defaultToString,
-        defaultValueOf,
-      ),
-    );
+    return new EngineDate(datePrototype, dateValueFromArguments(realm, args));
   }
 
   const dateConstructor = realm.createNativeFunction({
@@ -97,8 +86,6 @@ export function createDateIntrinsics(realm) {
     timeClip(realm.dateHost.now()),
   );
   installDatePrototypeMethods(realm, datePrototype);
-  defaultToString = datePrototype.get('toString');
-  defaultValueOf = datePrototype.get('valueOf');
 
   return { datePrototype, dateConstructor };
 }
@@ -398,18 +385,9 @@ export function installDateConstructor(globalObject, intrinsics) {
 /**
  * @param {Realm} realm
  * @param {readonly unknown[]} args
- * @param {EngineDate} datePrototype
- * @param {unknown} defaultToString
- * @param {unknown} defaultValueOf
  * @returns {number}
  */
-function dateValueFromArguments(
-  realm,
-  args,
-  datePrototype,
-  defaultToString,
-  defaultValueOf,
-) {
+function dateValueFromArguments(realm, args) {
   if (args.length === 0) {
     return timeClip(realm.dateHost.now());
   }
@@ -417,10 +395,7 @@ function dateValueFromArguments(
   if (args.length === 1) {
     const value = args[0];
 
-    if (
-      value instanceof EngineDate &&
-      !hasDateConversionOverride(value, defaultToString, defaultValueOf)
-    ) {
+    if (value instanceof EngineDate) {
       return value.timeValue;
     }
 
@@ -431,41 +406,6 @@ function dateValueFromArguments(
   }
 
   return dateFromLocalArguments(args, realm.dateHost);
-}
-
-/**
- * A plain engine Date retains its internal-value clone path, while
- * user-installed conversion methods expose ES5 String-hint conversion.
- *
- * @param {unknown} value
- * @param {unknown} defaultToString
- * @param {unknown} defaultValueOf
- * @returns {boolean}
- */
-function hasDateConversionOverride(value, defaultToString, defaultValueOf) {
-  if (!(value instanceof EngineDate)) {
-    return false;
-  }
-
-  return (
-    hasModifiedConversionMethod(value, 'toString', defaultToString) ||
-    hasModifiedConversionMethod(value, 'valueOf', defaultValueOf)
-  );
-}
-
-/**
- * @param {EngineDate} value
- * @param {'toString' | 'valueOf'} name
- * @param {unknown} defaultMethod
- * @returns {boolean}
- */
-function hasModifiedConversionMethod(value, name, defaultMethod) {
-  const descriptor = value.getProperty(name);
-  return (
-    descriptor === undefined ||
-    !('value' in descriptor) ||
-    descriptor.value !== defaultMethod
-  );
 }
 
 /**

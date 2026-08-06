@@ -72,6 +72,29 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
 const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
+const DATE_GROUPS = Object.freeze({
+  'date-accessors-mutators': Object.freeze([
+    'test/built-ins/Date/prototype/getUTCFullYear/this-value-valid-date.js',
+    'test/built-ins/Date/prototype/getUTCMilliseconds/this-value-valid-date.js',
+    'test/built-ins/Date/prototype/setUTCHours/this-value-valid-date-ms.js',
+    'test/built-ins/Date/prototype/setUTCMilliseconds/this-value-valid-date.js',
+    'test/built-ins/Date/prototype/setUTCMonth/this-value-valid-date-month.js',
+  ]),
+  'date-construction-statics': Object.freeze([
+    'test/built-ins/Date/S15.9.2.1_A2.js',
+    'test/built-ins/Date/TimeClip_negative_zero.js',
+    'test/built-ins/Date/UTC/overflow-make-day.js',
+    'test/built-ins/Date/UTC/time-clip.js',
+    'test/built-ins/Date/construct_with_date.js',
+  ]),
+  'date-formatting-json': Object.freeze([
+    'test/built-ins/Date/prototype/toISOString/15.9.5.43-0-3.js',
+    'test/built-ins/Date/prototype/toJSON/non-finite.js',
+    'test/built-ins/Date/prototype/toUTCString/day-names.js',
+    'test/built-ins/Date/prototype/valueOf/S9.4_A3_T1.js',
+  ]),
+});
+
 /**
  * The drift check the Test262 job is supposed to run, spelled out rather than
  * imported for the same reason the command table above is: it is the
@@ -614,6 +637,28 @@ export default [
           path.startsWith('test/') && path.endsWith('.js'),
           true,
           `${path} must be an upstream-relative test path`,
+        );
+      }
+    },
+  },
+  {
+    name: 'the pinned upstream subset covers the completed ES5 Date families with representative fixtures',
+    run: async () => {
+      const subset = parseUpstreamSubset(
+        await readRepositoryFile(UPSTREAM_SUBSET_FILE),
+      );
+      const groups = new Map(subset.groups.map((group) => [group.name, group]));
+
+      for (const [name, paths] of Object.entries(DATE_GROUPS)) {
+        const group = groups.get(name);
+
+        assertSame(group !== undefined, true, `missing Date group ${name}`);
+        assertSame(
+          /** @type {import('../../tools/test262/upstream.js').Test262UpstreamGroup} */ (
+            group
+          ).paths.join('\n'),
+          paths.join('\n'),
+          `${name} must keep its compact, representative Date fixtures`,
         );
       }
     },
