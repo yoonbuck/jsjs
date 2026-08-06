@@ -374,6 +374,17 @@ export default [
     },
   },
   {
+    name: 'Date setYear propagates NaN, explicit undefined, and non-numeric input',
+    run() {
+      assertSame(
+        run(
+          '(function () { var d = new Date(0); var first = d.setYear(NaN); var firstTime = d.getTime(); d = new Date(0); var second = d.setYear(undefined); var secondTime = d.getTime(); d = new Date(0); var third = d.setYear("abc"); var thirdTime = d.getTime(); return [(first !== first) && (firstTime !== firstTime), (second !== second) && (secondTime !== secondTime), (third !== third) && (thirdTime !== thirdTime)].join(":"); }())',
+        ),
+        'true:true:true',
+      );
+    },
+  },
+  {
     name: 'Date setters convert supplied undefined optional fields and clip overflow',
     run() {
       assertSame(

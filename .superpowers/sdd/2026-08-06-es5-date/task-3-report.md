@@ -125,3 +125,50 @@ All values are literal, hand-derived milliseconds; no expected value uses host
 - `npm run typecheck` — passed.
 - `npm run lint -- --quiet` — passed.
 - `npm test` — passed (exit 0).
+
+## Fix round 2
+
+### Root cause and implementation
+
+- `Date.prototype.setYear` called `toInteger(args[0])` before checking finiteness.
+  In this runtime, `toInteger(NaN)` returns `0`, so `setYear(NaN)`,
+  `setYear(undefined)`, and `setYear("abc")` incorrectly became year `1900`.
+- The fix now follows the ES5-required order for Annex B `setYear`: `ToNumber`
+  first, propagate non-finite results into the stored time, and only then apply
+  `ToInteger` plus the two-digit `0..99 -> 1900..1999` window for finite input.
+- Fractional finite behavior remains intact: `setYear(99.5)` still becomes 1999
+  and `setYear(-0.5)` still truncates to `-0`, then stores year 0.
+
+### TDD evidence
+
+- **RED command:** `node test/run-node.js test/date-builtins.test.js`
+- **RED output:**
+  `{"name":"Date setYear propagates NaN, explicit undefined, and non-numeric input","status":"failed","error":{"name":"Error","message":"Expected \"false:false:false\" to be the same value as \"true:true:true\""}}`
+- **RED reason:** the new compact regression reproduced the bug against current
+  code: all three invalid/non-numeric inputs produced a valid time instead of
+  poisoning the Date.
+- **GREEN command:** `node test/run-node.js test/date-builtins.test.js`
+- **GREEN output:** `{"name":"Date setYear propagates NaN, explicit undefined, and non-numeric input","status":"passed"}`
+
+### Validation
+
+- `node test/run-node.js test/date-builtins.test.js` — passed, including:
+  `{"name":"Date setYear recovers invalid dates and applies its two-digit window after integer conversion","status":"passed"}`
+  and
+  `{"name":"Date setYear propagates NaN, explicit undefined, and non-numeric input","status":"passed"}`
+- `node test/run-node.js test/date-arithmetic.test.js` — passed, including:
+  `{"name":"timeClip enforces the ES5 range limit and truncates toward zero","status":"passed"}`
+- `node test/run-node.js test/node/repository-invariants.test.js` — passed,
+  including:
+  `{"name":"every checked-in source, tool, test, and documentation file is inside the Prettier check scope","status":"passed"}`
+- `npm run typecheck` — passed with exact output:
+  `> typecheck`
+  `> tsc -p jsconfig.json`
+- `npm run lint -- --quiet` — passed with exact output:
+  `> lint`
+  `> ESLINT_USE_FLAT_CONFIG=true eslint . --quiet`
+
+### Files
+
+- `src/builtins/date.js`
+- `test/date-builtins.test.js`

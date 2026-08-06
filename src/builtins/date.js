@@ -221,14 +221,17 @@ function installDateSetters(realm, datePrototype) {
   fieldSetter('setFullYear', 3, true, 0, true);
   fieldSetter('setUTCFullYear', 3, false, 0, true);
   set('setYear', 1, (date, args) => {
-    let year = toInteger(args[0]);
+    let year = toNumber(args[0]);
     const fields = dateFields(date, realm, true, true);
     if (fields === undefined) {
       return NaN;
     }
 
-    if (Number.isFinite(year) && year >= 0 && year <= 99) {
-      year += 1900;
+    if (Number.isFinite(year)) {
+      year = toInteger(year);
+      if (year >= 0 && year <= 99) {
+        year += 1900;
+      }
     }
     fields[0] = year;
     return setDateFields(date, fields, realm, true);
