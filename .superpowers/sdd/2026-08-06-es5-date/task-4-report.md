@@ -124,3 +124,52 @@
 - `npm run format` — passed.
 - `npm test` — passed.
 - `git diff --check` — passed.
+
+## Fix round 2: preserve actual years 0000-0099 in display parsing
+
+### Root cause
+
+- `parseDisplayDateFields` reused `dateFromComponents` without overriding its
+  default `adjustTwoDigitYear=true`.
+- That legacy adjustment is correct for constructor/`Date.UTC` component
+  overloads, but wrong for parsing engine-emitted display strings because
+  `toUTCString`/`toString` already contain the actual year text. Years
+  `0000..0099` were being silently remapped to `1900..1999`.
+
+### TDD cycle
+
+- **RED command:** `node test/run-node.js test/date-builtins.test.js`
+- **RED output:** `Date.parse preserves actual years 0000-0099 in emitted
+  display strings` failed with `Expected -2208988800000 to be the same value as
+  -62167219200000`.
+- **GREEN command:** `node test/run-node.js test/date-builtins.test.js`
+- **GREEN output:** all Date builtin cases passed, including
+  `Date.parse preserves actual years 0000-0099 in emitted display strings`.
+- **GREEN change:** scoped display parsing to call `dateFromComponents(...,
+  false)` so emitted UTC/local strings preserve actual years while constructor
+  and `Date.UTC` component overloads keep their legacy two-digit-year behavior.
+
+### Tests added
+
+- `toUTCString()` round-trip for actual year `0000` created with
+  `setUTCFullYear(0)` and checked against literal milliseconds
+  `-62167219200000`.
+- Zero-offset local `toString()` round-trip for actual year `0050` created with
+  `setFullYear(50)` and checked against literal milliseconds
+  `-60589296000000`.
+
+### Validation
+
+- `node test/run-node.js test/date-builtins.test.js` — passed.
+- `node test/run-node.js test/date-arithmetic.test.js` — passed.
+- `node test/run-node.js test/node/repository-invariants.test.js` — passed.
+- `npm run typecheck` — passed.
+- `npm run lint -- --quiet` — passed.
+- `git diff --check` — passed.
+
+### Self-review
+
+- Confirmed the parser change is scoped to display-string parsing only; the
+  constructor/`Date.UTC` legacy two-digit-year path still uses the default
+  adjustment.
+- No remaining concerns.

@@ -589,7 +589,8 @@ function parseDisplayDateFields(
   }
 
   return timeClip(
-    dateFromComponents(year, month - 1, date, hour, minute, second, 0) - offset,
+    dateFromComponents(year, month - 1, date, hour, minute, second, 0, false) -
+      offset,
   );
 }
 

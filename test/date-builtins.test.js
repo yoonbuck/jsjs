@@ -150,6 +150,28 @@ export default [
     },
   },
   {
+    name: 'Date.parse preserves actual years 0000-0099 in emitted display strings',
+    run() {
+      assertSame(
+        run(
+          '(function () { var d = new Date(0); d.setUTCFullYear(0); return Date.parse(d.toUTCString()); }())',
+        ),
+        -62167219200000,
+      );
+      assertSame(
+        run(
+          '(function () { var d = new Date(0); d.setFullYear(50); return Date.parse(d.toString()); }())',
+          {
+            dateHost: {
+              timezoneOffset: () => 0,
+            },
+          },
+        ),
+        -60589296000000,
+      );
+    },
+  },
+  {
     name: 'Date.UTC applies ES5 defaults, two-digit years, normalization, and clipping',
     run() {
       assertSame(
