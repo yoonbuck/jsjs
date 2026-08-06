@@ -44,6 +44,37 @@ import { GuestErrorSignal } from '../runtime/completion.js';
  * `ToString`. Both go through the engine's own `ToString` conversion (whose
  * output this module parses back into digits and an exponent), never
  * through a host `Number.prototype` formatting method.
+ *
+ * ## Deliberate ES5-errata deviations
+ *
+ * Three observable behaviors here follow the ES2015+/real-engine correction
+ * of a literal ES5.1 defect rather than the literal 5.1 text, because every
+ * shipping engine (and every later edition of the spec) has always behaved
+ * this way and a literal-ES5 reading would be an obscure, untested corner
+ * nobody relies on:
+ *
+ * 1. **`toExponential` zero-width.** Literal ES5 15.7.4.6 step 8.a resets
+ *    `f` to 0 when `x` is 0, before building `m`, so `(0).toExponential(5)`
+ *    would literally be `"0e+0"`. Every engine (and the ES2015+ successor
+ *    to that step) instead keeps the caller's requested digit count, so
+ *    `(0).toExponential(5)` is `"0.00000e+0"`. See the `value === 0` branch
+ *    of `numberToExponential` below.
+ * 2. **`toFixed` receiver-vs-argument order.** Literal ES5 15.7.4.5 coerces
+ *    and range-checks `fractionDigits` (steps 1-2) *before* validating the
+ *    receiver as a Number value (step 3), so a bad receiver with an
+ *    out-of-range digit count would literally throw `RangeError`. ES2015+
+ *    (and every engine) validates the receiver first instead — the same
+ *    order ES5 already used for `toExponential` and `toPrecision` — so
+ *    `Number.prototype.toFixed.call({}, 21)` throws `TypeError`. This
+ *    implementation follows the engine order: `createPrimitiveWrapperIntrinsics`
+ *    in `primitive-wrappers.js` validates the receiver via `thisNumberValue`
+ *    before coercing `fractionDigits`.
+ * 3. **`toPrecision(1)` in exponential notation.** Literal ES5 15.7.4.7 step
+ *    10.c always splits `m` into `a + "." + b` (steps 10.c.i-ii), even when
+ *    `b` is empty at `p = 1`, producing a trailing dot: `(123).toPrecision(1)`
+ *    would literally be `"1.e+2"`. ES2015+ added an explicit `p !== 1` guard
+ *    around that split (an errata fix), so every engine gives `"1e+2"`. See
+ *    the `p !== 1` check in `numberToPrecision` below.
  */
 
 /** The base of one limb in the big-integer representation. */
@@ -119,14 +150,14 @@ export function numberToFixed(x, f) {
 }
 
 /**
- * ECMA-262 5.1 §15.7.4.6 `Number.prototype.toExponential` steps 3-17, with
+ * ECMA-262 5.1 §15.7.4.6 `Number.prototype.toExponential` steps 3-14, with
  * `f` already coerced by `ToInteger`. NaN and the infinities return before
  * the range check, so `NaN.toExponential(-1)` is "NaN".
  *
  * @param {number} x The receiver's number value.
  * @param {number} f `ToInteger(fractionDigits)`.
  * @param {boolean} shortest Whether `fractionDigits` was undefined, which
- *   replaces `f` with the smallest round-tripping digit count (step 12b).
+ *   replaces `f` with the smallest round-tripping digit count (step 9.b).
  * @returns {string}
  */
 export function numberToExponential(x, f, shortest) {
@@ -158,8 +189,12 @@ export function numberToExponential(x, f, shortest) {
   let fractionCount = f;
 
   if (value === 0) {
-    // Step 11 keeps the requested width even in the shortest form, where f
-    // is the 0 that ToInteger(undefined) produced.
+    // Deliberate ES5-errata deviation (see the module JSDoc's "Deliberate
+    // ES5-errata deviations" §1): literal ES5 step 8.a resets f to 0 here,
+    // so `(0).toExponential(5)` would literally be "0e+0". Every engine
+    // instead keeps the caller's requested width, so this uses the f the
+    // caller asked for (0 itself when `shortest` is true, since
+    // ToInteger(undefined) is 0) rather than overwriting it.
     m = repeatZeros(f + 1);
     e = 0;
   } else {
@@ -234,6 +269,11 @@ export function numberToPrecision(x, p) {
     // value across this boundary: 9.9e-7 to one digit is 1e-6, which prints
     // as "0.000001" rather than "1e-6".
     if (p !== 1) {
+      // Deliberate ES5-errata deviation (see the module JSDoc's "Deliberate
+      // ES5-errata deviations" §3): literal ES5 step 10.c.i-ii always
+      // splits m into `a + "." + b`, so p=1 (b empty) would literally
+      // produce a trailing dot, e.g. "1.e+2". ES2015+ added this `p !== 1`
+      // guard as an errata fix, matching every engine's "1e+2".
       m = `${m.slice(0, 1)}.${m.slice(1)}`;
     }
 
@@ -366,6 +406,17 @@ function incrementDigits(digits) {
  *   `0.digits x 10^(exponent + 1)`.
  */
 function exactDecimal(value) {
+  if (!(value > 0) || !Number.isFinite(value)) {
+    // Every current caller (fixedPointDigits, roundToSignificantDigits)
+    // already filters out 0, negatives, NaN, and the infinities before
+    // reaching here, so this only guards a future caller: both scaling
+    // loops below never terminate for 0 (the `< 1` loop keeps doubling
+    // zero) or +Infinity (the `>= 2` loop never shrinks it below 2). This
+    // is an internal invariant, not a guest-observable error, so it uses a
+    // host exception rather than `GuestErrorSignal` and is not exported.
+    throw new RangeError('exactDecimal requires a finite value greater than 0');
+  }
+
   let significand = value;
   let binaryExponent = 0;
 
@@ -408,7 +459,7 @@ function exactDecimal(value) {
 /**
  * The shortest decimal digits that round-trip to `value`, recovered from
  * the engine's own `ToString` (ES5 9.8.1 chooses exactly the shortest `s`
- * with `10^(k-1) <= s < 10^k`, which is what §15.7.4.6 step 12b asks for).
+ * with `10^(k-1) <= s < 10^k`, which is what §15.7.4.6 step 9.b asks for).
  *
  * @param {number} value A finite value greater than 0.
  * @returns {{ digits: string, exponent: number }}
@@ -556,7 +607,7 @@ function stripTrailingZeros(text) {
 }
 
 /**
- * §15.7.4.6 steps 14-16 and §15.7.4.7 step 10c: an explicit sign, a zero
+ * §15.7.4.6 steps 11-13 and §15.7.4.7 step 10.c: an explicit sign, a zero
  * exponent spelled "+0", and no zero padding.
  *
  * @param {number} exponent

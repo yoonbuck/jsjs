@@ -8,6 +8,12 @@
  * `(930.9805).toFixed(3)`) are exactly the ones where the exact binary value
  * disagrees with the decimal literal that produced it, so a table of literal
  * strings is the only honest oracle.
+ *
+ * A handful of cases and one whole test (marked "review-added regression
+ * coverage" at the point of use) were added in Fix Round 1 to close review
+ * gaps: they exercise behavior the implementation already had, so they are
+ * regression coverage against future changes rather than TDD RED evidence
+ * that ever failed against this module.
  */
 
 import { assertSame } from './harness/assert.js';
@@ -57,7 +63,7 @@ function throwsName(source) {
  * Exact-value expectations for `toFixed`.
  *
  * `n` is the integer nearest to `x x 10^f`, ties resolved to the larger `n`
- * (15.7.4.5 step 8a), computed against the exact value of the double:
+ * (15.7.4.5 step 8), computed against the exact value of the double:
  *
  * - `1.005` is exactly 1.00499999999999989341858963598497211933...,
  *   so two fraction digits round *down* to "1.00".
@@ -82,6 +88,13 @@ const TO_FIXED_CASES = Object.freeze([
   ['(0).toFixed(0)', '0'],
   ['(0).toFixed(2)', '0.00'],
   ['(-0).toFixed(2)', '0.00'],
+  // Review-added regression coverage (Fix Round 1): a negative *finite*
+  // value that rounds to zero keeps its sign, unlike literal negative zero
+  // above. `-1e-9` takes the `value < 0` branch (sign = "-"), and its
+  // rounded fixedPointDigits is "0" for two fraction digits, so the result
+  // is "-0.00" -- distinct from `(-0).toFixed(2)`'s "0.00", where `-0 < 0`
+  // is false so the positive path is taken instead.
+  ['(-1e-9).toFixed(2)', '-0.00'],
   ['(0).toFixed(20)', '0.00000000000000000000'],
   ['(1).toFixed()', '1'],
   ['(1).toFixed(0)', '1'],
@@ -138,7 +151,7 @@ const TO_FIXED_CASES = Object.freeze([
  * Exact-value expectations for `toExponential`.
  *
  * With `fractionDigits` supplied, `n` has exactly `f + 1` digits and is the
- * nearest such value to `x`, ties to the larger (15.7.4.6 step 12a):
+ * nearest such value to `x`, ties to the larger (15.7.4.6 step 9.a):
  *
  * - `25` and `1.5` are exact ties at zero fraction digits -> "3e+1", "2e+0".
  * - `1.255` is exactly 1.25499999999999989341858963598497211933... -> "1.25e+0".
@@ -149,11 +162,16 @@ const TO_FIXED_CASES = Object.freeze([
  * - `Number.MIN_VALUE` is exactly 4.9406564584124654...e-324.
  *
  * With `fractionDigits` omitted, `f` is the smallest digit count that still
- * round-trips (15.7.4.6 step 12b), which is the same `n` and `k` ES5 9.8.1
+ * round-trips (15.7.4.6 step 9.b), which is the same `n` and `k` ES5 9.8.1
  * gives `ToString`.
  *
  * The exponent is never zero padded and always carries an explicit sign,
- * with `e+0` for a zero exponent (steps 14-16).
+ * with `e+0` for a zero exponent (steps 11-13).
+ *
+ * Zero deliberately keeps the caller's requested digit count instead of the
+ * literal ES5 step 8.a behavior (which would reset it to 0): `(0).toExponential(2)`
+ * is `"0.00e+0"`, not literal ES5's `"0e+0"`. See `number-format.js`'s module
+ * JSDoc, "Deliberate ES5-errata deviations" §1.
  *
  * @type {readonly (readonly [string, string])[]}
  */
@@ -222,6 +240,12 @@ const TO_EXPONENTIAL_CASES = Object.freeze([
  *
  * `precision` undefined (or absent) short-circuits to `ToString` before the
  * range check, and NaN/Infinity short-circuit before it as well (steps 2-8).
+ *
+ * `p = 1` in exponential notation deliberately omits the decimal point
+ * instead of the literal ES5 step 10.c.i-ii behavior (which would always
+ * split the single digit into `"1."`): `(123).toPrecision(1)` is `"1e+2"`,
+ * not literal ES5's `"1.e+2"`. See `number-format.js`'s module JSDoc,
+ * "Deliberate ES5-errata deviations" §3.
  *
  * @type {readonly (readonly [string, string])[]}
  */
@@ -467,6 +491,43 @@ const tests = [
           method,
         );
       }
+    },
+  },
+  {
+    // Review-added regression coverage (Fix Round 1): this codifies the
+    // deliberate ES5-errata deviation documented in `number-format.js`'s
+    // module JSDoc, "Deliberate ES5-errata deviations" §2. Literal ES5
+    // 15.7.4.5 coerces and range-checks `fractionDigits` (steps 1-2)
+    // *before* validating the receiver (step 3), so
+    // `Number.prototype.toFixed.call({}, 21)` would literally throw
+    // RangeError. This engine follows ES2015+ and every real engine
+    // instead, validating the receiver first, so it throws TypeError -- and
+    // never coerces the out-of-range argument at all.
+    name: 'Number.prototype.toFixed.call({}, 21) prioritizes the incompatible receiver over the out-of-range fractionDigits, and never coerces that argument',
+    run() {
+      assertSame(
+        throwsName('Number.prototype.toFixed.call({}, 21)'),
+        'TypeError',
+      );
+      assertSame(
+        throwsName('Number.prototype.toFixed.call({}, -1)'),
+        'TypeError',
+      );
+      // A valid receiver with the same out-of-range digits still throws
+      // RangeError, confirming the TypeError above comes from receiver
+      // validation order, not from some other cause.
+      assertSame(throwsName('(1).toFixed(21)'), 'RangeError');
+
+      assertSame(
+        run(
+          'var order = ""; var name; ' +
+            'try { Number.prototype.toFixed.call({}, ' +
+            '{ valueOf: function () { order += "argument"; return 21; } }); } ' +
+            'catch (error) { name = error.name; } ' +
+            'name + ":" + order;',
+        ),
+        'TypeError:',
+      );
     },
   },
   {

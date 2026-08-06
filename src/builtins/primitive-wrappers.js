@@ -145,9 +145,17 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'toFixed',
       length: 1,
       call(thisValue, args) {
-        // The receiver is validated before `fractionDigits` is coerced, so
-        // an incompatible receiver throws even when coercing the argument
-        // would itself throw.
+        // Deliberate ES5-errata deviation: literal ES5 15.7.4.5 coerces and
+        // range-checks `fractionDigits` (steps 1-2) *before* validating the
+        // receiver (step 3), so a bad receiver with an out-of-range digit
+        // count would literally throw RangeError. ES2015+ and every real
+        // engine validate the receiver first instead — the same order ES5
+        // already used for `toExponential`/`toPrecision` below — so
+        // `Number.prototype.toFixed.call({}, 21)` throws TypeError, and an
+        // incompatible receiver throws even when coercing the argument
+        // would itself throw (or itself be out of range). See
+        // `number-format.js`'s module JSDoc for the full errata-policy
+        // rationale.
         const number = thisNumberValue(thisValue);
 
         return numberToFixed(number, toInteger(args[0]));
