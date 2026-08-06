@@ -72,6 +72,16 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
 const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
+/**
+ * The drift check the Test262 job is supposed to run, spelled out rather than
+ * imported for the same reason the command table above is: it is the
+ * independent expectation. A path git does not track has no diff at all, so the
+ * tracked-ness check in front of `git diff` is the part that makes this
+ * meaningful.
+ */
+const EXPECTED_DRIFT_COMMAND =
+  'git ls-files --error-unmatch docs/test262-report.jsonl README.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl README.md';
+
 const engine = { createRealm, evaluateScript };
 
 /**
@@ -344,6 +354,25 @@ export default [
       assertSame(uploads[0].if, 'always()');
       assertSame(uploads[0].with.path, TEST262_REPORT_FILE);
       assertSame(uploads[0].with['if-no-files-found'], 'error');
+
+      const commands = runCommands(job);
+      const run = commands.indexOf('npm run test262:upstream');
+      const drift = commands.indexOf(EXPECTED_DRIFT_COMMAND);
+
+      assertSame(
+        drift > run && run >= 0,
+        true,
+        `the generated report and README must be checked for drift after the run:\n${commands.join('\n')}`,
+      );
+      assertSame(
+        job.steps.indexOf(uploads[0]) >
+          job.steps.findIndex(
+            (/** @type {any} */ step) =>
+              step.run === 'npm run test262:upstream',
+          ),
+        true,
+        'the upload publishes what the run just wrote',
+      );
     },
   },
   {
