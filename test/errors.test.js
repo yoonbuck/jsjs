@@ -50,6 +50,49 @@ function assertGuestThrow(completion, constructorName, realm) {
 
 const tests = [
   {
+    name: 'Error-family instances and prototypes expose the Error class tag',
+    run() {
+      const realm = createRealm();
+
+      for (const name of [
+        'Error',
+        'TypeError',
+        'ReferenceError',
+        'SyntaxError',
+        'RangeError',
+      ]) {
+        assertSame(
+          evaluateScript(
+            realm,
+            `Object.prototype.toString.call(new ${name}());`,
+          ).value,
+          '[object Error]',
+        );
+        assertSame(
+          evaluateScript(
+            realm,
+            `Object.prototype.toString.call(${name}.prototype);`,
+          ).value,
+          '[object Error]',
+        );
+      }
+    },
+  },
+  {
+    name: 'runtime-created guest errors expose the Error class tag',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(
+          realm,
+          'var value = 1; var tag; try { value(); } ' +
+            'catch (error) { tag = Object.prototype.toString.call(error); } tag;',
+        ).value,
+        '[object Error]',
+      );
+    },
+  },
+  {
     name: 'Error message uses guest ToString and preserves side effects',
     run() {
       const realm = createRealm();

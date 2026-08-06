@@ -32,7 +32,7 @@ export class NativeFunction extends EngineObject {
    * @param {NativeFunctionOptions} options
    */
   constructor(realm, { name, length, call, construct, prototype }) {
-    super(realm.intrinsics.functionPrototype);
+    super(realm.intrinsics.functionPrototype, 'Function');
 
     /** @type {Realm} */
     this.realm = realm;

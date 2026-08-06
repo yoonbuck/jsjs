@@ -1,6 +1,7 @@
-import { assertSame, assertThrows } from './harness/assert.js';
+import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
+import { EngineObject } from '../src/runtime/object.js';
 
 /**
  * @param {string} source
@@ -433,18 +434,16 @@ const tests = [
     },
   },
   {
-    name: 'a primitive this value reports the missing ToObject operation explicitly',
+    name: 'a primitive this value is boxed for a non-strict call',
     run() {
       const realm = createRealm();
       evaluateScript(realm, 'function f() { return this; }');
 
       const f = /** @type {any} */ (realm.globalObject.get('f'));
-      const error = assertThrows(() => f.callFunction(5, []), Error);
-      assertSame(error.name, 'UnsupportedOperationError');
-      assertSame(
-        /** @type {any} */ (error).operation,
-        'ToObject on a number this value',
-      );
+      const result = f.callFunction(5, []);
+      assertSame(result instanceof EngineObject, true);
+      assertSame(result.getClassName(), 'Number');
+      assertSame(result.primitiveValue, 5);
     },
   },
   {

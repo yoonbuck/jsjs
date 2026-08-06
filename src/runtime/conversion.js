@@ -1,4 +1,5 @@
 import { EngineObject } from './object.js';
+import { EnginePrimitiveObject } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -11,6 +12,29 @@ export function checkObjectCoercible(value) {
   }
 
   return value;
+}
+
+/**
+ * @param {import('./realm.js').Realm} realm
+ * @param {unknown} value
+ * @returns {EngineObject}
+ */
+export function toObject(realm, value) {
+  checkObjectCoercible(value);
+
+  if (value instanceof EngineObject) {
+    return value;
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return new EnginePrimitiveObject(realm.intrinsics.objectPrototype, value);
+  }
+
+  throw new TypeError(`Cannot convert ${typeof value} to an object`);
 }
 
 /**
@@ -112,6 +136,24 @@ export function toNumber(value) {
 
     return Number(source);
   }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toInteger(value) {
+  const number = toNumber(value);
+
+  if (Number.isNaN(number)) {
+    return 0;
+  }
+
+  if (number === 0 || !Number.isFinite(number)) {
+    return number;
+  }
+
+  return Math.sign(number) * Math.floor(Math.abs(number));
 }
 
 /**

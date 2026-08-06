@@ -17,8 +17,9 @@ import { GuestErrorSignal } from './completion.js';
 export class EngineObject {
   /**
    * @param {EngineObject | null} [prototype=null]
+   * @param {string} [className='Object']
    */
-  constructor(prototype = null) {
+  constructor(prototype = null, className = 'Object') {
     if (prototype !== null && !(prototype instanceof EngineObject)) {
       throw new TypeError(
         'EngineObject prototype must be an EngineObject or null',
@@ -26,9 +27,17 @@ export class EngineObject {
     }
 
     this._prototype = prototype;
+    this._className = className;
     this._extensible = true;
     /** @type {Map<PropertyKey, CompletePropertyDescriptor>} */
     this._properties = new Map();
+  }
+
+  /**
+   * @returns {string}
+   */
+  getClassName() {
+    return this._className;
   }
 
   /**
@@ -62,13 +71,15 @@ export class EngineObject {
 
   /**
    * @param {PropertyKey} name
-   * @returns {PropertyDescriptorRecord | undefined}
+   * @returns {CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
     const descriptor = this._properties.get(name);
     return descriptor === undefined
       ? undefined
-      : copyPropertyDescriptor(descriptor);
+      : /** @type {CompletePropertyDescriptor} */ (
+          copyPropertyDescriptor(descriptor)
+        );
   }
 
   /**
@@ -207,7 +218,7 @@ export class EngineObject {
    */
   defineOwnProperty(name, descriptor, throwOnError = false) {
     const candidate = validatePropertyDescriptor(descriptor);
-    const current = this._properties.get(name);
+    const current = this.getOwnProperty(name);
 
     if (current === undefined) {
       if (!this._extensible) {
@@ -344,7 +355,7 @@ export class EngineObject {
    * @returns {boolean}
    */
   delete(name, throwOnError = false) {
-    const descriptor = this._properties.get(name);
+    const descriptor = this.getOwnProperty(name);
 
     if (descriptor === undefined) {
       return true;

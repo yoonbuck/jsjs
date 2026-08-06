@@ -33,6 +33,9 @@ import inInstanceof from './in-instanceof.test.js';
 import strictMode from './strict-mode.test.js';
 import deleteOperator from './delete.test.js';
 import nativeBuiltins from './native-builtins.test.js';
+import objectBuiltins from './object-builtins.test.js';
+import functionBuiltins from './function-builtins.test.js';
+import arrayBuiltins from './array-builtins.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -99,5 +102,17 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/native-builtins.test.js',
     tests: nativeBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/object-builtins.test.js',
+    tests: objectBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/function-builtins.test.js',
+    tests: functionBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/array-builtins.test.js',
+    tests: arrayBuiltins,
   }),
 ]);

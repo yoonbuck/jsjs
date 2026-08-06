@@ -20,7 +20,7 @@ export class EngineArray extends EngineObject {
    * @param {EngineObject | null} [prototype=null]
    */
   constructor(prototype = null) {
-    super(prototype);
+    super(prototype, 'Array');
 
     super.defineOwnProperty('length', {
       value: 0,

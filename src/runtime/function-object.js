@@ -1,7 +1,7 @@
 import { EngineObject } from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
-import { createUnsupportedOperationError } from './errors.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
+import { toObject } from './conversion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -39,7 +39,7 @@ export class EngineFunction extends EngineObject {
    * @param {EngineFunctionOptions} options
    */
   constructor({ realm, parameterNames, scope, strict, execute }) {
-    super(realm.intrinsics.functionPrototype);
+    super(realm.intrinsics.functionPrototype, 'Function');
 
     /** @type {Realm} */
     this.realm = realm;
@@ -216,13 +216,9 @@ export class EngineFunction extends EngineObject {
    * Code": `null`/`undefined` become the realm's global object and objects
    * are used as-is.
    *
-   * A primitive `this` would be replaced by its `ToObject` wrapper, which
-   * needs `String`/`Number`/`Boolean` objects this milestone does not
-   * provide, so it is rejected explicitly. Guest code cannot reach that
-   * branch yet — property access on a primitive base already rejects for
-   * the same reason, and there is no `Function.prototype.call`/`apply` to
-   * pass an arbitrary `this` — but embedders calling `callFunction`
-   * directly can.
+   * Primitive values are boxed with realm-owned internal wrappers, preserving
+   * ES5 `ToObject` behavior without requiring public `String`, `Number`, or
+   * `Boolean` constructors.
    *
    * @param {unknown} thisValue
    * @returns {unknown}
@@ -240,9 +236,7 @@ export class EngineFunction extends EngineObject {
       return thisValue;
     }
 
-    throw createUnsupportedOperationError(
-      `ToObject on a ${typeof thisValue} this value`,
-    );
+    return toObject(this.realm, thisValue);
   }
 }
 
@@ -268,7 +262,7 @@ export class ArgumentsObject extends EngineObject {
    * @param {EnvironmentRecordLike} env
    */
   constructor(prototype, env) {
-    super(prototype);
+    super(prototype, 'Arguments');
 
     /** @type {EnvironmentRecordLike} */
     this._environment = env;
@@ -287,7 +281,7 @@ export class ArgumentsObject extends EngineObject {
 
   /**
    * @param {PropertyKey} name
-   * @returns {import('./descriptors.js').PropertyDescriptorRecord | undefined}
+   * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
     const descriptor = super.getOwnProperty(name);
