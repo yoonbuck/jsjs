@@ -41,6 +41,12 @@ import {
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { createFunctionObject } from './declarations.js';
+// Direct-eval interception (see isDirectEvalCall) calls into the eval
+// implementation. This closes a loop through the pre-existing intra-evaluator
+// cycle expressions <-> declarations <-> statements; performEval is a
+// call-time function reference, so the ES module live binding is resolved
+// before it is ever invoked. No cycle crosses the realm/builtins boundary
+// because eval.js reaches neither realm.js nor any builtin at runtime.
 import { performEval } from './eval.js';
 import { createRegExpFromPattern } from '../builtins/regexp.js';
 

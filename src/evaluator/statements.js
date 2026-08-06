@@ -621,6 +621,11 @@ function evaluateTryStatement(node, context) {
       catchEnv.createMutableBinding(paramName);
       catchEnv.initializeBinding(paramName, blockCompletion.value);
 
+      // The catch clause installs a fresh *lexical* environment for its
+      // parameter, but the VariableEnvironment is unchanged: the spread keeps
+      // `context.variableEnv`, so a direct `eval("var x")` in the catch body
+      // hoists `x` into the enclosing function (or global), not into this
+      // catch scope that disappears when the clause exits (ECMA-262 12.14).
       const catchContext = { ...context, env: catchEnv };
 
       blockCompletion = runToCompletion(

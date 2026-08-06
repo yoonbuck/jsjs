@@ -53,6 +53,7 @@ export function createEvalGlobalIntrinsics(realm) {
       return performEval(args[0], {
         realm: owningRealm,
         env: owningRealm.globalEnvironment,
+        variableEnv: owningRealm.globalEnvironment,
         strict: false,
         thisValue: owningRealm.globalObject,
       });

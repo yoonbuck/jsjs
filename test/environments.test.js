@@ -309,20 +309,76 @@ const tests = [
     },
   },
   {
-    name: 'createGlobalVarBinding is a no-op on a non-extensible global object without the own property',
+    name: 'createGlobalVarBinding on a non-extensible global without the own property throws a guest TypeError',
     run() {
       const globalObject = new EngineObject(null);
       globalObject.preventExtensions();
 
       const env = new GlobalEnvironmentRecord(globalObject);
 
-      env.createGlobalVarBinding('missingVar', true);
+      // ES5.1 10.5: CreateMutableBinding runs [[DefineOwnProperty]] with the
+      // Throw flag, so declaring a new global var on a non-extensible global
+      // is a guest TypeError rather than a silent no-op.
+      assertThrows(
+        () => env.createGlobalVarBinding('missingVar', true),
+        GuestErrorSignal,
+      );
 
       assertSame(globalObject.getOwnProperty('missingVar'), undefined);
-      // Reading the binding value should behave as an unresolvable
-      // reference in strict mode since no property was ever created.
+    },
+  },
+  {
+    name: 'createGlobalVarBinding on a non-extensible global still succeeds for an existing own property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      env.createGlobalVarBinding('present', true);
+      globalObject.preventExtensions();
+
+      // Re-declaring a name that is already an own property must not throw
+      // even though the global can no longer grow.
+      env.createGlobalVarBinding('present', true);
+      assertSame(env.getBindingValue('present', true), undefined);
+    },
+  },
+  {
+    name: 'createGlobalFunctionBinding redefines a configurable colliding property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('f', {
+        value: 7,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      });
+
+      env.createGlobalFunctionBinding('f', 'fn', false);
+
+      const descriptor = /** @type {any} */ (globalObject.getOwnProperty('f'));
+      assertSame(descriptor.value, 'fn');
+      assertSame(descriptor.writable, true);
+      assertSame(descriptor.enumerable, true);
+      assertSame(descriptor.configurable, false);
+    },
+  },
+  {
+    name: 'createGlobalFunctionBinding throws a guest TypeError over a non-configurable, non-writable property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('locked', {
+        value: 1,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      });
+
       assertThrows(
-        () => env.getBindingValue('missingVar', true),
+        () => env.createGlobalFunctionBinding('locked', 'fn', false),
         GuestErrorSignal,
       );
     },

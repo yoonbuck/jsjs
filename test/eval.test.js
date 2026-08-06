@@ -211,61 +211,210 @@ const tests = [
   },
 
   // ---------------------------------------------------------------------------
+  // Direct eval hoists into the VariableEnvironment, not the LexicalEnvironment
+  // (10.4.2 + 10.5): a catch clause installs a fresh lexical environment for
+  // its parameter, but a `var`/function declared by a direct eval in the catch
+  // body must land in the enclosing function (or global) variable environment
+  // and outlive the catch scope.
+  // ---------------------------------------------------------------------------
+  {
+    name: 'direct eval var inside a catch block hoists into the enclosing function scope',
+    run() {
+      assertNormal(
+        run(
+          'function f() { try { throw 0; } catch (e) { eval("var x = 1;"); } return typeof x; } f();',
+        ),
+        'number',
+      );
+    },
+  },
+  {
+    name: 'direct eval function declaration inside a catch block is callable after the catch exits',
+    run() {
+      assertNormal(
+        run(
+          'function f() { try { throw 0; } catch (e) { eval("function g(){ return 7; }"); } return typeof g === "function" ? g() : "no g"; } f();',
+        ),
+        7,
+      );
+    },
+  },
+  {
+    name: 'direct eval function declaration inside a catch block closes over the function scope, not the catch parameter',
+    run() {
+      // The hoisted function captures the VariableEnvironment as its [[Scope]],
+      // so `e` (a catch-only lexical binding) is not visible inside it.
+      assertNormal(
+        run(
+          'function f() { try { throw 42; } catch (e) { eval("function g(){ return typeof e; }"); } return g(); } f();',
+        ),
+        'undefined',
+      );
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Global declaration instantiation checks (ES5.1 10.5) for eval code
+  // (configurableBindings = true) and top-level script code
+  // (configurableBindings = false).
+  // ---------------------------------------------------------------------------
+  {
+    name: 'eval("var x;") on a non-extensible global throws a guest TypeError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'Object.preventExtensions(this); eval("var x;");'),
+        'TypeError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'top-level script var on a non-extensible global throws a guest TypeError',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        runIn(realm, 'Object.preventExtensions(this);').type,
+        'normal',
+      );
+      assertGuestThrow(runIn(realm, 'var x;'), 'TypeError', realm);
+    },
+  },
+  {
+    name: 'eval("function undefined(){}") throws a guest TypeError (non-configurable existing property)',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'eval("function undefined(){}");'),
+        'TypeError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'top-level script function undefined(){} throws a guest TypeError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'function undefined(){}'),
+        'TypeError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'eval("function f(){}") redefines an existing configurable, non-writable data property',
+    run() {
+      const realm = createRealm();
+      assertNormal(
+        runIn(
+          realm,
+          'Object.defineProperty(this, "f", { value: 7, writable: false, enumerable: true, configurable: true }); eval("function f(){}"); typeof f;',
+        ),
+        'function',
+      );
+      const descriptor = /** @type {any} */ (
+        realm.globalObject.getOwnProperty('f')
+      );
+      assertSame(descriptor.writable, true);
+      assertSame(descriptor.enumerable, true);
+      // eval code binds with configurableBindings = true.
+      assertSame(descriptor.configurable, true);
+    },
+  },
+  {
+    name: 'top-level script function f(){} redefines an existing configurable, non-writable data property',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        runIn(
+          realm,
+          'Object.defineProperty(this, "f", { value: 7, writable: false, enumerable: true, configurable: true });',
+        ).type,
+        'normal',
+      );
+      assertNormal(runIn(realm, 'function f(){} typeof f;'), 'function');
+      const descriptor = /** @type {any} */ (
+        realm.globalObject.getOwnProperty('f')
+      );
+      assertSame(descriptor.writable, true);
+      assertSame(descriptor.enumerable, true);
+      // Script code binds with configurableBindings = false.
+      assertSame(descriptor.configurable, false);
+    },
+  },
+
+  // ---------------------------------------------------------------------------
   // Indirect eval evaluates in the global environment (every indirect form)
   // ---------------------------------------------------------------------------
   {
-    name: 'indirect eval via (0, eval) does not see function-local scope',
+    name: 'indirect eval via (0, eval) reads and writes the global environment',
     run() {
+      const realm = createRealm();
       assertNormal(
-        run(
-          'var probe = 100; function f() { var probe = 1; return (0, eval)("probe"); } f();',
+        runIn(
+          realm,
+          'var probe = 100; function f() { var probe = 1; return (0, eval)("var w = probe; w"); } f();',
         ),
         100,
       );
+      assertSame(realm.globalObject.get('w'), 100);
     },
   },
   {
-    name: 'indirect eval via an aliased binding (e = eval; e(...)) is global',
+    name: 'indirect eval via an aliased binding (e = eval; e(...)) reads and writes the global environment',
     run() {
+      const realm = createRealm();
       assertNormal(
-        run(
-          'var probe = 100; function f() { var probe = 1; var e = eval; return e("probe"); } f();',
+        runIn(
+          realm,
+          'var probe = 100; function f() { var probe = 1; var e = eval; return e("var w = probe; w"); } f();',
         ),
         100,
       );
+      assertSame(realm.globalObject.get('w'), 100);
     },
   },
   {
-    name: 'indirect eval via [eval][0](...) is global',
+    name: 'indirect eval via [eval][0](...) reads and writes the global environment',
     run() {
+      const realm = createRealm();
       assertNormal(
-        run(
-          'var probe = 100; function f() { var probe = 1; return [eval][0]("probe"); } f();',
+        runIn(
+          realm,
+          'var probe = 100; function f() { var probe = 1; return [eval][0]("var w = probe; w"); } f();',
         ),
         100,
       );
+      assertSame(realm.globalObject.get('w'), 100);
     },
   },
   {
-    name: 'indirect eval via eval.call(null, ...) is global',
+    name: 'indirect eval via eval.call(null, ...) reads and writes the global environment',
     run() {
+      const realm = createRealm();
       assertNormal(
-        run(
-          'var probe = 100; function f() { var probe = 1; return eval.call(null, "probe"); } f();',
+        runIn(
+          realm,
+          'var probe = 100; function f() { var probe = 1; return eval.call(null, "var w = probe; w"); } f();',
         ),
         100,
       );
+      assertSame(realm.globalObject.get('w'), 100);
     },
   },
   {
-    name: 'indirect eval via obj.eval(...) is global',
+    name: 'indirect eval via obj.eval(...) reads and writes the global environment',
     run() {
+      const realm = createRealm();
       assertNormal(
-        run(
-          'var probe = 100; function f() { var probe = 1; var o = { eval: eval }; return o.eval("probe"); } f();',
+        runIn(
+          realm,
+          'var probe = 100; function f() { var probe = 1; var o = { eval: eval }; return o.eval("var w = probe; w"); } f();',
         ),
         100,
       );
+      assertSame(realm.globalObject.get('w'), 100);
     },
   },
   {
@@ -446,25 +595,46 @@ const tests = [
   },
 
   // ---------------------------------------------------------------------------
-  // Realm isolation: realm A's eval always evaluates against realm A
+  // Realm isolation: realm A's eval always evaluates against realm A, even when
+  // it is installed under realm B's own `eval` binding. This specifically
+  // guards the realm-identity half of the direct-eval predicate: name === 'eval'
+  // and an environment-record reference are both satisfied here, so only the
+  // `callee === thisRealm.evalFunction` check keeps it indirect.
   // ---------------------------------------------------------------------------
   {
-    name: 'realm B calling realm A eval evaluates and allocates in realm A',
+    name: "realm A eval bound to realm B's own eval identifier is still indirect and allocates in realm A",
     run() {
       const realmA = createRealm();
       const realmB = createRealm();
 
-      realmB.globalObject.defineOwnProperty('evalFromA', {
+      // Overwrite realm B's *exact* `eval` binding with realm A's eval
+      // function, so the call is `eval(...)` against an environment-record
+      // reference named 'eval' — a direct-eval shape in every respect except
+      // realm identity.
+      realmB.globalObject.defineOwnProperty('eval', {
         value: realmA.intrinsics.evalFunction,
         writable: true,
         enumerable: false,
         configurable: true,
       });
 
-      const result = runIn(realmB, 'evalFromA("var madeInA = 7; madeInA;");');
+      const result = runIn(realmB, 'eval("var madeInA = ({}); madeInA;");');
       assertSame(result.type, 'normal');
-      assertSame(result.value, 7);
-      assertSame(realmA.globalObject.get('madeInA'), 7);
+
+      // Indirect eval runs in realm A, so the object literal inherits realm A's
+      // Object.prototype. If the realm-identity predicate were deleted this
+      // would be treated as a direct eval running in realm B and the prototype
+      // would be realm B's — this assertion is what fails in that case.
+      if (!(result.value instanceof EngineObject)) {
+        throw new Error('Expected an EngineObject eval result');
+      }
+      const proto = /** @type {EngineObject} */ (result.value).getPrototype();
+      assertSame(proto, realmA.intrinsics.objectPrototype);
+      assertSame(proto === realmB.intrinsics.objectPrototype, false);
+
+      // The `var` binding was created in realm A's global environment, never
+      // realm B's.
+      assertSame(realmA.globalObject.get('madeInA'), result.value);
       assertSame(realmB.globalObject.getOwnProperty('madeInA'), undefined);
     },
   },

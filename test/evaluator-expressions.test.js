@@ -321,6 +321,7 @@ const tests = [
       const context = {
         realm,
         env: realm.globalEnvironment,
+        variableEnv: realm.globalEnvironment,
         strict: false,
         thisValue: realm.globalObject,
       };

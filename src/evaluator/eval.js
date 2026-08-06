@@ -6,9 +6,21 @@
  * place under `src/evaluator/` that a builtin (`src/builtins/global-eval.js`)
  * is permitted to import: the layering is `runtime/realm.js ->
  * builtins/global-eval.js -> evaluator/eval.js -> {parser.js, evaluator/*,
- * runtime/*}`, kept acyclic because nothing here imports `runtime/realm.js`
- * at runtime (the realm arrives inside the execution context; only its JSDoc
- * type is referenced).
+ * runtime/*}`. That `runtime -> builtins -> evaluator` chain stays acyclic:
+ * nothing this module reaches imports `runtime/realm.js` or
+ * `builtins/global-eval.js` at runtime (the realm arrives inside the execution
+ * context; only its JSDoc type is referenced), so no cycle crosses the
+ * realm/builtins boundary.
+ *
+ * Within `src/evaluator/`, this module joins the pre-existing import cycle
+ * `expressions.js <-> declarations.js <-> statements.js` (each already imports
+ * the others; it predates `eval`, see commit c1875bc). `evaluateCallExpression`
+ * now also imports `performEval` from here, and this module imports
+ * `statements.js`/`declarations.js`, so `expressions -> eval -> statements ->
+ * expressions` is another loop through that same intra-evaluator strongly
+ * connected component. It is safe for the same reason the existing loops are:
+ * every edge is a function reference used only at call time, never at module
+ * evaluation time, so ES module live bindings resolve before any of them runs.
  *
  * Direct and indirect eval share this one implementation and differ only in
  * the execution context handed to `performEval`:
@@ -23,18 +35,19 @@
  *   with `this` = the global object and `strict` = false, so caller
  *   strictness is not inherited (10.4.2 indirect case).
  *
- * This engine collapses ES5's separate LexicalEnvironment and
- * VariableEnvironment into the single `context.env`. That is sufficient for
- * every eval case: at eval entry the two are equal (10.4.2 sets them to the
- * same environment, and 10.4.2.1 replaces both with one fresh declarative
- * environment for strict eval). `performEval` therefore threads a single
- * explicit `variableEnv` local — equal to the lexical environment it also
- * evaluates the body in — into `evalDeclarationInstantiation`, rather than
- * adding a VariableEnvironment field to the context. The only place ES5 keeps
- * the two distinct is a direct eval nested in a `with`/`catch` block, which
- * this engine does not model yet (`with` is a later task; a `catch` clause
- * threads only a lexical env), so such an eval hoists its `var`s into the
- * lexical env — a pre-existing, documented limitation, not a regression.
+ * This engine threads ES5's two environments as separate context fields —
+ * `env` (LexicalEnvironment) and `variableEnv` (VariableEnvironment). They are
+ * equal on entering eval code in the ordinary case, but a direct eval nested
+ * in a `catch` clause (and, once Task 3 lands, a `with` statement) inherits a
+ * caller whose lexical scope is the catch/with scope while its variable scope
+ * is still the enclosing function or global. `performEval` therefore parses
+ * and evaluates the body against the caller's LexicalEnvironment but hoists the
+ * body's `var`s and function declarations into the caller's VariableEnvironment
+ * (10.4.2 direct case), so a `catch`-nested `eval("var x")` creates `x` in the
+ * enclosing function — where it is still visible after the clause exits —
+ * rather than in the vanishing catch scope. Strict eval instead runs in a
+ * single fresh declarative environment used as both, so nothing leaks
+ * (10.4.2.1).
  */
 
 import { parseEval } from '../parser.js';
@@ -90,27 +103,31 @@ export function performEval(x, callerContext) {
   // eval code opens with its own "use strict" directive (10.4.2.1).
   const strict = inheritedStrict || hasUseStrictDirective(program.body);
 
-  // 10.4.2.1: strict eval evaluates in a fresh declarative environment that
-  // is both its lexical and its variable environment, so its `var`s and
-  // function declarations do not leak to the surrounding scope.
+  // 10.4.2 / 10.4.2.1 environment set-up. Non-strict eval keeps the caller's
+  // LexicalEnvironment for identifier resolution but hoists declarations into
+  // the caller's VariableEnvironment (which differs from the lexical one when
+  // the direct eval sits inside a `catch`). Strict eval runs in one fresh
+  // declarative environment used as both, so its `var`s and functions never
+  // leak to the surrounding scope.
   const lexicalEnv = strict
     ? newDeclarativeEnvironment(callerContext.env)
     : callerContext.env;
+  const variableEnvBase = strict ? lexicalEnv : callerContext.variableEnv;
 
-  // The variable environment equals the lexical environment at eval entry
-  // (10.4.2 / 10.4.2.1). It is always a declarative or global environment
-  // record: eval's *variable* environment is never a `with` object
-  // environment record (and `with` is unimplemented today), so this narrowing
-  // is sound for every eval the engine can reach.
+  // The variable environment is always a declarative or global environment
+  // record: eval's *variable* environment is never a `with` object environment
+  // record (a `with` contributes only a lexical scope), so this narrowing is
+  // sound for every eval the engine can reach.
   const variableEnv =
     /** @type {import('./declarations.js').EvalVariableEnvironment} */ (
-      lexicalEnv
+      variableEnvBase
     );
 
   /** @type {EvaluationContext} */
   const evalContext = {
     realm,
     env: lexicalEnv,
+    variableEnv,
     strict,
     thisValue: callerContext.thisValue,
   };
