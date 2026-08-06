@@ -39,6 +39,10 @@ import {
   createURIGlobalIntrinsics,
   installURIGlobals,
 } from '../builtins/global-uri.js';
+import {
+  createEvalGlobalIntrinsics,
+  installEvalGlobal,
+} from '../builtins/global-eval.js';
 import { createJSONIntrinsics, installJSONObject } from '../builtins/json.js';
 import {
   createDateIntrinsics,
@@ -143,6 +147,10 @@ export class Realm {
     const uriGlobalIntrinsics = createURIGlobalIntrinsics(this);
     Object.assign(this.intrinsics, uriGlobalIntrinsics);
     installURIGlobals(this.globalObject, uriGlobalIntrinsics);
+
+    const evalGlobalIntrinsics = createEvalGlobalIntrinsics(this);
+    Object.assign(this.intrinsics, evalGlobalIntrinsics);
+    installEvalGlobal(this.globalObject, evalGlobalIntrinsics);
 
     const jsonIntrinsics = createJSONIntrinsics(this);
     Object.assign(this.intrinsics, jsonIntrinsics);
