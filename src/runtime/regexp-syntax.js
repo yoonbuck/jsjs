@@ -609,14 +609,26 @@ class PatternParser {
    * `DecimalEscape :: DecimalIntegerLiteral [lookahead not in DecimalDigit]`,
    * `DecimalIntegerLiteral :: "0" | NonZeroDigit DecimalDigits?`, called with
    * `pos` on the first digit. A leading `0` is always exactly one digit (the
-   * NUL escape); any other leading digit consumes the whole following run of
-   * digits as one decimal value.
+   * NUL escape), but the production's trailing `[lookahead not in
+   * DecimalDigit]` still applies to it: `\00`..`\09` are Annex B legacy octal
+   * escapes that the ES5 grammar deliberately excludes, so a `0` followed by
+   * another digit is a SyntaxError. The `NonZeroDigit DecimalDigits?`
+   * alternative consumes the whole following run of digits as one decimal
+   * value, which structurally satisfies its own lookahead constraint (there
+   * are no more digits left to look ahead at once the run ends).
    *
    * @returns {number}
    */
   parseDecimalEscapeValue() {
     if (this.peek() === '0') {
       this.pos += 1;
+
+      if (isDigit(this.peek())) {
+        throw new RegExpSyntaxError(
+          "A DecimalEscape of '0' must not be followed by another decimal digit",
+        );
+      }
+
       return 0;
     }
 

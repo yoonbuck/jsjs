@@ -206,8 +206,6 @@ const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
     'derives an intrinsic key from a hard-coded error type name, not from guest data',
   'src/runtime/conversion.js':
     'ToNumber pre-dates this invariant and still trims/slices guest strings with host methods; tightening it is its own change',
-  'src/runtime/regexp-object.js':
-    '`matchAt` delegates to `compiled.match`, the engine-owned CompiledPattern method regexp-compat.js defines — not a call to host String.prototype.match',
 });
 
 /**

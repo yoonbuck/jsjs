@@ -96,6 +96,20 @@ const tests = [
     run() {
       assertAccepted('\\0');
       assertAccepted('\\0(a)', 1);
+      assertAccepted('\\0a');
+    },
+  },
+  {
+    name: 'a NUL decimal escape followed by another decimal digit is a SyntaxError (DecimalEscape lookahead)',
+    run() {
+      // ES5.1 15.10.1 `DecimalEscape :: DecimalIntegerLiteral [lookahead not
+      // in DecimalDigit]`. `\00`..`\09` are Annex B legacy octal escapes,
+      // which the ES5 grammar deliberately excludes: no AtomEscape or
+      // ClassEscape alternative accepts a leading zero followed by a digit.
+      assertRejected('\\00');
+      assertRejected('\\01');
+      assertRejected('\\07');
+      assertRejected('\\09');
     },
   },
   {
@@ -104,6 +118,15 @@ const tests = [
       assertAccepted('[\\0]');
       assertRejected('[\\1]');
       assertRejected('[\\1](a)'); // still rejected even though a group follows elsewhere
+    },
+  },
+  {
+    name: 'a NUL decimal escape inside a character class followed by another decimal digit is a SyntaxError (DecimalEscape lookahead)',
+    run() {
+      assertRejected('[\\00]');
+      assertRejected('[\\01]');
+      assertRejected('[\\07]');
+      assertRejected('[\\09]');
     },
   },
   {

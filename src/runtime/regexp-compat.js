@@ -20,7 +20,7 @@ import { createUnsupportedOperationError } from './errors.js';
  * concern, so it is deliberately never passed to the host.
  *
  * Every host result is normalised and verified before it is handed back:
- * `match` recomputes `endIndex` from `index + result[0].length` rather than
+ * `matchAt` recomputes `endIndex` from `index + result[0].length` rather than
  * trusting `hostRegExp.lastIndex`, and it throws
  * `createUnsupportedOperationError` (an engine-limitation error, not a guest
  * completion) if the host ever disagrees with what a validated ES5 pattern
@@ -40,7 +40,7 @@ import { createUnsupportedOperationError } from './errors.js';
  *
  * @typedef {{
  *   capturingGroups: number,
- *   match: (input: string, index: number) => MatchResult | null,
+ *   matchAt: (input: string, index: number) => MatchResult | null,
  * }} CompiledPattern
  */
 
@@ -50,7 +50,7 @@ import { createUnsupportedOperationError } from './errors.js';
  * @param {new (pattern: string, flags: string) => {
  *   lastIndex: number,
  *   exec: (input: string) => (RegExpExecArrayLike | null),
- * }} [hostRegExpConstructor] Injected so the divergence guard in `match` is
+ * }} [hostRegExpConstructor] Injected so the divergence guard in `matchAt` is
  *   directly testable with a fake host compiler, without needing a real gap
  *   between the host's regex dialect and ES5 to exist. Omit it to compile
  *   against the real host `RegExp`.
@@ -81,7 +81,7 @@ export function compilePattern(source, flags, hostRegExpConstructor) {
 
   return {
     capturingGroups,
-    match(input, index) {
+    matchAt(input, index) {
       hostRegExp.lastIndex = index;
       const result = hostRegExp.exec(input);
 

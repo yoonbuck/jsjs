@@ -313,7 +313,7 @@ const tests = [
           this.lastIndex = 0;
         }
         exec() {
-          return Object.assign(['a'], { index: 5, length: 1 });
+          return { 0: 'a', index: 5, length: 1 };
         }
       }
 
@@ -323,7 +323,7 @@ const tests = [
         /** @type {any} */ (FakeHostRegExp),
       );
 
-      assertThrows(() => compiled.match('a', 0), Error);
+      assertThrows(() => compiled.matchAt('a', 0), Error);
     },
   },
 ];

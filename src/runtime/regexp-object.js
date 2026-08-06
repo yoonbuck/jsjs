@@ -75,7 +75,7 @@ export class EngineRegExp extends EngineObject {
   }
 
   /**
-   * Delegates to the compiled matcher's `[[Match]]`-shaped `match` (ES5
+   * Delegates to the compiled matcher's `[[Match]]`-shaped `matchAt` (ES5
    * 15.10.2.1): attempts a match starting exactly at `index` in `input`,
    * never scanning forward. Task 2's `exec`/`test` are the guest-visible
    * callers.
@@ -85,7 +85,7 @@ export class EngineRegExp extends EngineObject {
    * @returns {MatchResult | null}
    */
   matchAt(input, index) {
-    return this.compiled.match(input, index);
+    return this.compiled.matchAt(input, index);
   }
 }
 
