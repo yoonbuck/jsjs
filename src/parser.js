@@ -3,6 +3,7 @@
 // and how it keeps Node, browser, and `jsc` runs on the same source.
 import { Parser } from './parser-dependency.js';
 import { normalizeSyntaxError } from './runtime/errors.js';
+import { hasUseStrictDirective } from './evaluator/directive.js';
 
 const PARSER_OPTIONS = Object.freeze({
   ecmaVersion: 5,
@@ -36,6 +37,14 @@ const PARSER_OPTIONS = Object.freeze({
  * @returns {typeof Parser}
  */
 function withEscapedReservedWordCheck(Base) {
+  /**
+   * The base prototype, reached as `any` so calling its `checkUnreserved`
+   * type-checks: Acorn's `Parser` type declares neither that method nor the
+   * `reservedWords`/`strict`/`raiseRecoverable` internals this override uses.
+   * Calling through the prototype is equivalent to `super.checkUnreserved`.
+   */
+  const baseProto = /** @type {any} */ (Base).prototype;
+
   return class extends Base {
     /**
      * @param {any} node
@@ -57,7 +66,7 @@ function withEscapedReservedWordCheck(Base) {
         }
       }
 
-      return super.checkUnreserved(node);
+      baseProto.checkUnreserved.call(this, node);
     }
   };
 }
@@ -202,14 +211,22 @@ export function parseEval(source, strict = false) {
     throw error;
   }
 
-  return validateScriptProgram(program);
+  return validateScriptProgram(program, strict);
 }
 
 /**
+ * Validates the parsed program's shape and runs the parse-time early-error
+ * pass. `strict` is the strictness the program *inherits* from its context —
+ * always `false` for a script (whose strictness is decided solely by its own
+ * directive prologue), and the caller-supplied flag for a strict `eval` that
+ * inherits strictness with no directive of its own. The early-error pass folds
+ * the program's own `"use strict"` directive in on top of it.
+ *
  * @param {unknown} program
+ * @param {boolean} [strict=false]
  * @returns {any}
  */
-function validateScriptProgram(program) {
+function validateScriptProgram(program, strict = false) {
   if (
     !program ||
     typeof program !== 'object' ||
@@ -220,7 +237,10 @@ function validateScriptProgram(program) {
     throw new TypeError('Expected parser to return a script Program node');
   }
 
-  checkStatementPositionFunctionDeclarations(/** @type {any} */ (program));
+  checkStatementPositionFunctionDeclarations(
+    /** @type {any} */ (program),
+    strict,
+  );
 
   return /** @type {any} */ (program);
 }
@@ -252,30 +272,41 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
 const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
 
 /**
- * Rejects a `FunctionDeclaration` that sits in a single-`Statement` body
- * position as a parse-time early error.
+ * Rejects a `FunctionDeclaration` that sits in a statement position the ES5.1
+ * grammar (with Annex B) forbids, as a parse-time early error.
  *
- * ES5.1's iteration statements (§12.6) and `with` (§12.10) take a
- * `Statement` for their body, and a `FunctionDeclaration` is a
- * `SourceElement`, not a `Statement` (§12, §14) — see the note in
- * `src/evaluator/declarations.js`. Acorn nonetheless parses a function
- * declaration in those positions (it accepts the Annex B web-reality forms
- * uniformly), so without this pass the evaluator would run
- * `while (0) function f(){}` and, worse, spin forever on
- * `for (;;) function f(){}`. Rejecting here — from `validateScriptProgram`,
- * which both `parseScript` and `parseEval` funnel through — makes scripts,
- * direct `eval`, and the dynamic `Function` constructor all refuse it as a
- * `SyntaxError`, matching every real engine and the upstream `decl-fun.js` /
- * `labelled-fn-stmt.js` tests (which are `phase: parse`).
+ * A `FunctionDeclaration` is a `SourceElement`, not a `Statement` (§12, §14),
+ * so the single-`Statement` body of an iteration statement (§12.6), a `with`
+ * (§12.10), an `if` branch, or a labelled statement cannot be one. Acorn
+ * parses a function declaration in all of these positions anyway (it accepts
+ * the Annex B web-reality forms uniformly), so this pass — reached from
+ * `validateScriptProgram`, which both `parseScript` and `parseEval` funnel
+ * through — is what makes scripts, direct `eval`, and the dynamic `Function`
+ * constructor refuse them, matching JavaScriptCore and the `phase: parse`
+ * upstream tests. Without it the evaluator would also spin forever on
+ * `for (;;) function f(){}`.
  *
- * The rejection is deliberately narrow to the five body-`Statement` parents
- * above. A function declaration stays accepted as an `if` branch
- * (`if (1) function f(){}`, Annex B B.3.4), as a labelled statement at
- * statement-list level (`l: function f(){}`, Annex B B.3.2), and inside a
- * block (`{ function f(){} }`) — all of which JavaScriptCore also accepts.
- * A labelled chain that ultimately wraps a function declaration
- * (`with (o) a: b: function f(){}`) is rejected too, because the label
- * chain does not turn a `SourceElement` into a `Statement` in body position.
+ * The exact rule, which is strictness-sensitive:
+ *
+ * - Iteration and `with` bodies: never a function declaration, in any mode —
+ *   there is no Annex B tolerance for them. A surrounding label chain
+ *   (`with (o) a: b: function f(){}`) does not help.
+ * - `if` branch: Annex B B.3.4 tolerates a *bare* function declaration as a
+ *   branch (`if (1) function f(){}`), but only in sloppy code. A label chain
+ *   in a branch (`if (1) l: function f(){}`) is rejected in every mode, and in
+ *   strict code even the bare form is rejected.
+ * - Labelled statement body: Annex B B.3.2 tolerates a function declaration as
+ *   a statement-list-level labelled body (`l: function f(){}`) in sloppy code;
+ *   strict code forbids it. A labelled body that is itself an illegal position
+ *   is already rejected by the enclosing loop/`with`/`if` rule above.
+ *
+ * Strictness is a property of the nearest function scope, not of the whole
+ * program (§10.1.1): a strict function may nest in a sloppy script and vice
+ * versa. The walk therefore carries the strictness of each node's enclosing
+ * function (or program) scope, folding in each `FunctionDeclaration` /
+ * `FunctionExpression` body's — and the `Program`'s — own directive prologue
+ * on top of the inherited flag, plus the caller-supplied `rootStrict` that a
+ * strict `eval` inherits with no directive.
  *
  * The walk is an explicit worklist rather than recursion: Acorn parses a
  * member chain iteratively and so accepts input far deeper than a recursive
@@ -284,16 +315,19 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * makes a cyclic tree — which the `parse` hook could hand us — terminate.
  *
  * @param {any} root
+ * @param {boolean} rootStrict
  * @returns {void}
  */
-function checkStatementPositionFunctionDeclarations(root) {
-  /** @type {any[]} */
-  const pending = [root];
+function checkStatementPositionFunctionDeclarations(root, rootStrict) {
+  /** @type {{ node: any, strict: boolean }[]} */
+  const pending = [{ node: root, strict: rootStrict }];
   /** @type {WeakSet<object>} */
   const seen = new WeakSet();
 
   while (pending.length > 0) {
-    const node = pending.pop();
+    const item = /** @type {{ node: any, strict: boolean }} */ (pending.pop());
+    const node = item.node;
+    const strict = item.strict;
 
     if (!node || typeof node !== 'object') {
       continue;
@@ -307,7 +341,7 @@ function checkStatementPositionFunctionDeclarations(root) {
 
     if (Array.isArray(node)) {
       for (let index = node.length - 1; index >= 0; index -= 1) {
-        pushChild(pending, node[index]);
+        pushChild(pending, node[index], strict);
       }
       continue;
     }
@@ -316,55 +350,139 @@ function checkStatementPositionFunctionDeclarations(root) {
       continue;
     }
 
-    const parentLabel = STATEMENT_BODY_PARENT_LABELS.get(node.type);
+    checkFunctionDeclarationPosition(node, strict);
 
-    if (parentLabel !== undefined) {
-      const offending = unwrapLabeledFunctionDeclaration(node.body);
-
-      if (offending) {
-        throw statementPositionFunctionError(parentLabel, offending);
-      }
-    }
-
+    const childStrict = childScopeStrictness(node, strict);
     const keys = Object.keys(node);
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       if (!NODE_POSITION_KEYS.has(keys[index])) {
-        pushChild(pending, node[keys[index]]);
+        pushChild(pending, node[keys[index]], childStrict);
       }
     }
   }
 }
 
 /**
- * Queues one candidate child. Children are pushed in reverse so popping
- * visits them in source order, which makes the first offending declaration
- * in the program the one reported.
+ * The strictness that the children of `node` execute under. Strictness only
+ * ever widens inward: once a scope is strict every nested scope is, and a
+ * function or program body may additionally turn strict via its own directive
+ * prologue. Non-scope nodes just pass the inherited flag through.
  *
- * @param {any[]} pending
- * @param {unknown} value
+ * @param {any} node
+ * @param {boolean} strict
+ * @returns {boolean}
+ */
+function childScopeStrictness(node, strict) {
+  if (strict) {
+    return true;
+  }
+
+  if (
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'FunctionExpression'
+  ) {
+    const body = node.body;
+
+    return (
+      !!body && Array.isArray(body.body) && hasUseStrictDirective(body.body)
+    );
+  }
+
+  if (node.type === 'Program') {
+    return Array.isArray(node.body) && hasUseStrictDirective(node.body);
+  }
+
+  return false;
+}
+
+/**
+ * Applies the statement-position early error to `node` given the strictness of
+ * the scope it sits in, throwing on the first offending function declaration.
+ *
+ * @param {any} node
+ * @param {boolean} strict
  * @returns {void}
  */
-function pushChild(pending, value) {
-  if (value && typeof value === 'object') {
-    pending.push(value);
+function checkFunctionDeclarationPosition(node, strict) {
+  const parentLabel = STATEMENT_BODY_PARENT_LABELS.get(node.type);
+
+  if (parentLabel !== undefined) {
+    const offending = resolveBodyFunctionDeclaration(node.body);
+
+    if (offending) {
+      throw statementPositionFunctionError(
+        `the body of a ${parentLabel}`,
+        offending.fn,
+      );
+    }
+
+    return;
+  }
+
+  if (node.type === 'IfStatement') {
+    for (const branch of [node.consequent, node.alternate]) {
+      const offending = resolveBodyFunctionDeclaration(branch);
+
+      if (offending && (offending.labeled || strict)) {
+        throw statementPositionFunctionError(
+          'an if statement branch',
+          offending.fn,
+        );
+      }
+    }
+
+    return;
+  }
+
+  if (node.type === 'LabeledStatement' && strict) {
+    const offending = resolveBodyFunctionDeclaration(node);
+
+    if (offending) {
+      throw statementPositionFunctionError(
+        'the body of a labelled statement',
+        offending.fn,
+      );
+    }
   }
 }
 
 /**
- * Returns the `FunctionDeclaration` a body `Statement` resolves to after
- * peeling any surrounding label chain, or `undefined` when the body is an
- * ordinary statement. A labelled statement's body is itself a `Statement`,
- * so `a: b: function f(){}` unwraps to the function declaration.
+ * Queues one candidate child, carrying the strictness of the scope it belongs
+ * to. Children are pushed in reverse so popping visits them in source order,
+ * which makes the first offending declaration in the program the one reported.
  *
- * The visited set guards against a cyclic label chain, which a custom
- * `parse` hook could hand us.
+ * @param {{ node: any, strict: boolean }[]} pending
+ * @param {unknown} value
+ * @param {boolean} strict
+ * @returns {void}
+ */
+function pushChild(pending, value, strict) {
+  if (value && typeof value === 'object') {
+    pending.push({ node: value, strict });
+  }
+}
+
+/**
+ * Resolves the `FunctionDeclaration` a body `Statement` reduces to after
+ * peeling any surrounding label chain, reporting whether such a chain was
+ * present. A labelled statement's body is itself a `Statement`, so
+ * `a: b: function f(){}` reduces to the function declaration with
+ * `labeled: true`. Returns `undefined` when the body is an ordinary statement.
+ *
+ * The `labeled` flag is what distinguishes the `if`-branch cases: Annex B
+ * B.3.4 tolerates only the bare (`labeled: false`) form, so a labelled chain
+ * in a branch is rejected even in sloppy code.
+ *
+ * The visited set guards against a cyclic label chain, which a custom `parse`
+ * hook could hand us.
  *
  * @param {any} statement
- * @returns {any}
+ * @returns {{ fn: any, labeled: boolean } | undefined}
  */
-function unwrapLabeledFunctionDeclaration(statement) {
+function resolveBodyFunctionDeclaration(statement) {
   let current = statement;
+  let labeled = false;
   /** @type {WeakSet<object>} */
   const visited = new WeakSet();
 
@@ -374,11 +492,12 @@ function unwrapLabeledFunctionDeclaration(statement) {
     }
 
     visited.add(current);
+    labeled = true;
     current = current.body;
   }
 
   return current && current.type === 'FunctionDeclaration'
-    ? current
+    ? { fn: current, labeled }
     : undefined;
 }
 
@@ -387,13 +506,13 @@ function unwrapLabeledFunctionDeclaration(statement) {
  * function declaration, carrying the offending node's position through
  * `normalizeSyntaxError` so it reads like any other parse error.
  *
- * @param {string} label
+ * @param {string} context
  * @param {any} node
  * @returns {SyntaxError}
  */
-function statementPositionFunctionError(label, node) {
+function statementPositionFunctionError(context, node) {
   return normalizeSyntaxError({
-    message: `Function declarations cannot appear as the body of a ${label}`,
+    message: `Function declarations cannot appear as ${context}`,
     pos: typeof node.start === 'number' ? node.start : undefined,
     loc: node.loc ? node.loc.start : undefined,
   });

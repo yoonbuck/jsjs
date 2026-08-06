@@ -175,17 +175,87 @@ const tests = [
     },
   },
   {
-    name: 'Annex B function-declaration positions stay accepted',
+    name: 'Annex B function-declaration positions stay accepted in sloppy mode',
     run() {
-      // ES5.1 Annex B / web reality keeps these accepted (JavaScriptCore too):
-      // an `if` branch (B.3.4), a statement-list-level label (B.3.2), and a
-      // block. Guarding them here stops anyone from over-tightening the pass.
+      // ES5.1 Annex B / web reality keeps these accepted (JavaScriptCore too)
+      // in *sloppy* code: a bare function as an `if` branch (B.3.4) and a
+      // statement-list-level labelled function (B.3.2, including a label
+      // chain), plus a function inside a block. Guarding them here stops
+      // anyone from over-tightening the pass.
       const accepted = [
         'if (true) function f() {}',
         'if (true) function f() {} else function g() {}',
-        'if (true) label: function f() {}',
+        'if (true) ; else function g() {}',
         'label: function f() {}',
+        'a: b: function f() {}',
         '{ function f() {} }',
+        'l: { function f() {} }',
+      ];
+
+      for (const source of accepted) {
+        const program = parseScript(source);
+
+        assertSame(program.type, 'Program');
+      }
+    },
+  },
+  {
+    name: 'a labelled function is rejected as an if branch even in sloppy mode',
+    run() {
+      // Annex B B.3.4 tolerates only a *bare* function as an `if` branch; a
+      // label chain there is a SyntaxError in sloppy code too (JavaScriptCore
+      // rejects `if (1) l: function f(){}`).
+      const rejected = [
+        'if (true) label: function f() {}',
+        'if (true) ; else label: function f() {}',
+        'if (true) a: b: function f() {}',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'strict mode forbids a function declaration as an if branch or a labelled body',
+    run() {
+      // In strict code Annex B disappears entirely (ES5.1 §12; the Annex B
+      // grammar is sloppy-only): a function declaration is neither a valid
+      // `if` branch nor the body of a labelled statement anywhere.
+      const rejected = [
+        '"use strict"; if (true) function f() {}',
+        '"use strict"; if (true) ; else function f() {}',
+        '"use strict"; label: function f() {}',
+        '"use strict"; if (true) label: function f() {}',
+        '"use strict"; a: b: function f() {}',
+        '"use strict"; { label: function f() {} }',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'the strict function-declaration rejection follows per-function strictness',
+    run() {
+      // Strictness is a property of the nearest function scope, not the whole
+      // program: a strict function inside a sloppy script forbids the Annex B
+      // forms, while a sloppy function keeps them (JavaScriptCore agrees).
+      const rejected = [
+        'function outer() { "use strict"; if (1) function f() {} }',
+        'function outer() { "use strict"; label: function f() {} }',
+        'var g = function () { "use strict"; if (1) function f() {} };',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+
+      const accepted = [
+        'function outer() { if (1) function f() {} }',
+        'function outer() { label: function f() {} }',
+        'var g = function () { if (1) function f() {} };',
       ];
 
       for (const source of accepted) {
