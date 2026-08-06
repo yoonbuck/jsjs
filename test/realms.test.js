@@ -100,14 +100,27 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      // `for-in` is not implemented, so `ForInStatement` is still an
+      // `with` is not implemented, so `WithStatement` is still an
       // explicitly unsupported node.
       const error = assertThrows(
-        () => evaluateScript(realm, 'for (var k in {}) {}'),
+        () => evaluateScript(realm, 'with ({}) {}'),
         Error,
       );
       assertSame(/Unsupported AST node/.test(error.message), true);
-      assertSame(/** @type {any} */ (error).nodeType, 'ForInStatement');
+      assertSame(/** @type {any} */ (error).nodeType, 'WithStatement');
+    },
+  },
+  {
+    name: 'evaluateScript supports for-in enumeration',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        'var keys = []; for (var k in { a: 1, b: 2 }) { keys.push(k); } keys.join(",");',
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'a,b');
     },
   },
   {

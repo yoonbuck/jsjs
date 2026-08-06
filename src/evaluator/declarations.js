@@ -251,6 +251,12 @@ function collectVarNames(node, names) {
       }
       collectVarNames(node.body, names);
       return;
+    case 'ForInStatement':
+      if (node.left.type === 'VariableDeclaration') {
+        collectVarNames(node.left, names);
+      }
+      collectVarNames(node.body, names);
+      return;
     case 'TryStatement':
       collectVarNames(node.block, names);
       if (node.handler !== null) {
@@ -316,6 +322,7 @@ function collectFunctionDeclarations(node, declarations) {
     case 'WhileStatement':
     case 'DoWhileStatement':
     case 'ForStatement':
+    case 'ForInStatement':
       collectFunctionDeclarations(node.body, declarations);
       return;
     case 'TryStatement':

@@ -26,7 +26,7 @@ const tests = [
         thisValue: realm.globalObject,
       };
 
-      for (const type of ['ForInStatement', 'NotANode']) {
+      for (const type of ['WithStatement', 'NotANode']) {
         const error = assertThrows(
           () => evaluate({ type, body: null }, context),
           Error,
@@ -368,21 +368,125 @@ const tests = [
     },
   },
   {
-    name: 'evaluateScript rejects for-in and with statements explicitly',
+    name: 'evaluateScript rejects with statements explicitly',
     run() {
       const realm = createRealm();
-
-      const forIn = assertThrows(
-        () => evaluateScript(realm, 'for (var k in {}) {}'),
-        Error,
-      );
-      assertSame(/** @type {any} */ (forIn).nodeType, 'ForInStatement');
 
       const withStatement = assertThrows(
         () => evaluateScript(realm, 'with ({}) {}'),
         Error,
       );
       assertSame(/** @type {any} */ (withStatement).nodeType, 'WithStatement');
+    },
+  },
+  {
+    name: 'for-in enumerates own then inherited enumerable string keys once each, skipping non-enumerable shadowed names',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var keys = []; for (var k in { a: 1, b: 2 }) { keys.push(k); } keys.join(",");',
+        ).value,
+        'a,b',
+      );
+
+      // A name already visited earlier in the prototype chain is never
+      // revisited later, even though the parent's own copy is enumerable
+      // (ECMA-262 12.6.4 NOTE: shadowing checks own-property presence, not
+      // enumerability).
+      assertSame(
+        evaluateScript(
+          realm,
+          'var Base = function () {}; ' +
+            'Base.prototype.shared = "base"; ' +
+            'var child = new Base(); ' +
+            'child.shared = "own"; ' +
+            'var keys = []; for (var k in child) { keys.push(k); } keys.join(",");',
+        ).value,
+        'shared',
+      );
+
+      // `null`/`undefined` right-hand sides short-circuit to a no-op loop
+      // rather than throwing (12.6.4 step 2).
+      assertSame(
+        evaluateScript(
+          realm,
+          'var ran = false; for (var k in null) { ran = true; } ran;',
+        ).value,
+        false,
+      );
+      assertSame(
+        evaluateScript(
+          realm,
+          'var ran = false; for (var k in undefined) { ran = true; } ran;',
+        ).value,
+        false,
+      );
+    },
+  },
+  {
+    name: 'for-in supports an assignable left-hand side and break/continue/return propagation',
+    run() {
+      const realm = createRealm();
+
+      // Bare identifier (not a `var` declarator) as the loop target.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var k; var keys = []; for (k in { x: 1, y: 2 }) { keys.push(k); } keys.join(",");',
+        ).value,
+        'x,y',
+      );
+
+      // Member-expression left-hand side.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var bag = {}; for (bag.last in { p: 1, q: 2 }) {} bag.last;',
+        ).value,
+        'q',
+      );
+
+      // `break` stops enumeration early.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var keys = []; for (var k in { a: 1, b: 2, c: 3 }) { ' +
+            'if (k === "b") { break; } keys.push(k); } keys.join(",");',
+        ).value,
+        'a',
+      );
+
+      // `continue` skips the rest of the body for that key only.
+      assertSame(
+        evaluateScript(
+          realm,
+          'var keys = []; for (var k in { a: 1, b: 2, c: 3 }) { ' +
+            'if (k === "b") { continue; } keys.push(k); } keys.join(",");',
+        ).value,
+        'a,c',
+      );
+
+      // `return` from inside a function body escapes the for-in loop.
+      assertSame(
+        evaluateScript(
+          realm,
+          'function first(obj) { for (var k in obj) { return k; } return null; } ' +
+            'first({ only: 1 });',
+        ).value,
+        'only',
+      );
+
+      // A thrown guest error escapes the loop as a `throw` completion
+      // (not a host exception — guest throws are values, per `api.js`).
+      const thrown = evaluateScript(
+        realm,
+        'for (var k in { a: 1 }) { throw new TypeError("boom"); }',
+      );
+      assertSame(thrown.type, 'throw');
+      assertSame(/** @type {any} */ (thrown.value).get('message'), 'boom');
     },
   },
 ];

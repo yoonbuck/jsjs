@@ -420,6 +420,49 @@ export class EngineObject {
 }
 
 /**
+ * Computes the `ForInStatement` enumeration order (ECMA-262 12.6.4): every
+ * enumerable string-keyed own property across `object`'s prototype chain,
+ * each name visited at most once. A name already seen anywhere earlier in
+ * the chain is never revisited later even when it isn't enumerable there —
+ * that's exactly the spec's shadowing rule ("a property of a prototype is
+ * not enumerated if it is 'shadowed' because some previous object in the
+ * prototype chain has a property with the same name", regardless of that
+ * earlier property's own enumerability). Symbol keys are skipped outright:
+ * ES5 has no symbols, and later editions exclude them from `for-in` too.
+ * Order within one object follows `ownPropertyKeys()` (insertion order),
+ * matching `Object.keys`.
+ *
+ * @param {EngineObject} object
+ * @returns {string[]}
+ */
+export function enumerableKeysForIn(object) {
+  const seen = new Set();
+  /** @type {string[]} */
+  const result = [];
+
+  for (
+    let current = /** @type {EngineObject | null} */ (object);
+    current !== null;
+    current = current.getPrototype()
+  ) {
+    for (const key of current.ownPropertyKeys()) {
+      if (typeof key !== 'string' || seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+
+      const descriptor = current.getOwnProperty(key);
+      if (descriptor !== undefined && descriptor.enumerable === true) {
+        result.push(key);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Invokes a function value that the object model holds internally — an
  * accessor's getter/setter or a `toString`/`valueOf` method found during
  * `[[DefaultValue]]`.
