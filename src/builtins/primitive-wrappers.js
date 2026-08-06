@@ -20,10 +20,10 @@ import { toBoolean, toNumber, toString } from '../runtime/conversion.js';
  * Wires the `String`, `Number`, and `Boolean` constructors onto the
  * `%String.prototype%`/`%Number.prototype%`/`%Boolean.prototype%`
  * intrinsics `builtins/fundamental.js` already created, and installs the
- * two prototype methods this milestone's shared tests require directly
- * (`Boolean.prototype.toString`, `String.prototype.valueOf`). The full
- * `String`/`Number`/`Boolean` prototype method families are out of scope
- * here and land in their own milestone tasks.
+ * complete `Boolean.prototype` method family (`toString`, `valueOf`) plus
+ * the one `String.prototype` method (`valueOf`) this milestone's shared
+ * tests require directly. The full `String`/`Number` prototype method
+ * families are out of scope here and land in their own milestone tasks.
  *
  * @param {Realm} realm
  * @returns {PrimitiveWrapperIntrinsics}
@@ -70,6 +70,17 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       length: 0,
       call(thisValue) {
         return thisBooleanValue(thisValue) ? 'true' : 'false';
+      },
+    }),
+  );
+  defineMethod(
+    booleanPrototype,
+    'valueOf',
+    realm.createNativeFunction({
+      name: 'valueOf',
+      length: 0,
+      call(thisValue) {
+        return thisBooleanValue(thisValue);
       },
     }),
   );
