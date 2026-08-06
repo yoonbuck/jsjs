@@ -626,10 +626,7 @@ function evaluateWithStatement(node, context) {
   const withEnv = newObjectEnvironment(object, context.env, true);
   const withContext = { ...context, env: withEnv };
 
-  // ECMA-262 5.1 §12.10 returns the body completion; the engine follows the
-  // ES2015 §13.11.7 refinement (matching every real engine and the try
-  // statement above) of replacing an empty value with `undefined`.
-  return updateEmpty(evaluateStatement(node.body, withContext), undefined);
+  return evaluateStatement(node.body, withContext);
 }
 
 /**

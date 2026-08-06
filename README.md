@@ -248,12 +248,12 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 754 classified exclusions break down as:
+editions deliberately changed. The 772 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                                                                        |
 | -------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 633   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                    |
-| `post-es5-builtin`   | 66    | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.            |
+| `post-es5-semantics` | 638   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                    |
+| `post-es5-builtin`   | 79    | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.            |
 | `post-es5-syntax`    | 28    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                     |
 | `host-dependent`     | 14    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                |
 | `engine-deviation`   | 13    | This engine knowingly differs. Each entry names the row in "Intentional deviations" that documents the choice — a deviation that is not written down |
@@ -695,8 +695,8 @@ defined exactly under
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 11,328   | 11,328    | 11,328 | 21.144% |
-| (file, variant) | 102,906     | 21,555   | 21,555    | 21,555 | 20.946% |
+| Files           | 53,575      | 11,355   | 11,355    | 11,355 | 21.195% |
+| (file, variant) | 102,906     | 21,611   | 21,611    | 21,611 | 21.001% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).

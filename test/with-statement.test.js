@@ -160,14 +160,14 @@ const tests = [
     },
   },
   {
-    name: 'the with statement completion value is its body value with empty replaced by undefined',
+    name: 'the with statement completion is the body completion unchanged',
     run() {
       assertSame(run('with ({}) { 7; }'), 7);
       assertSame(run('with ({}) {}'), undefined);
-      // An empty with body replaces a prior meaningful value with undefined,
-      // matching real engines (ES2015 13.11.7 UpdateEmpty), as the engine's
-      // try statement already does.
-      assertSame(run('5; with ({}) {}'), undefined);
+      // ES5.1 12.10 returns the body completion unchanged, so the surrounding
+      // StatementList supplies its prior meaningful value to an empty body.
+      assertSame(run('1; with ({}) ;'), 1);
+      assertSame(run('5; with ({}) {}'), 5);
     },
   },
   {
@@ -181,22 +181,19 @@ const tests = [
     run() {
       // Regression for the upstream `with/cptn-abrupt-empty` behaviour: a
       // `break`/`continue` out of a `with` body carries the last meaningful
-      // value the loop produced, and an empty body value becomes undefined.
+      // value produced by the surrounding statement list.
       assertSame(
         run('1; do { 2; with ({}) { 3; break; } 4; } while (false);'),
         3,
       );
-      assertSame(
-        run('5; do { 6; with ({}) { break; } 7; } while (false);'),
-        undefined,
-      );
+      assertSame(run('5; do { 6; with ({}) { break; } 7; } while (false);'), 6);
       assertSame(
         run('8; do { 9; with ({}) { 10; continue; } 11; } while (false);'),
         10,
       );
       assertSame(
         run('12; do { 13; with ({}) { continue; } 14; } while (false);'),
-        undefined,
+        13,
       );
     },
   },

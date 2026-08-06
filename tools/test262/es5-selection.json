@@ -100,19 +100,99 @@
       "reason": "`RegExp.prototype.compile` is an ES2015 Annex B addition (ES2015 §B.2.5.1); ES5.1 §15.10 defines no such method."
     },
     {
-      "prefix": "test/annexB/built-ins/String",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 Annex B B.2.3 `String.prototype` HTML wrapper methods / `substr`; ES5.1 §15.5.4 defines no such methods."
+      "prefix": "test/annexB/built-ins/String/prototype/anchor",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
     },
     {
-      "prefix": "test/annexB/built-ins/escape",
-      "category": "post-es5-semantics",
-      "reason": "Annex B `escape`/`unescape` `length`/`name` descriptor: ES5.1 §15.1.2.4/§15.1.2.5 give a built-in function `length` {configurable:false} and no `name`; ES2015 made `length` configurable and added `name`."
+      "prefix": "test/annexB/built-ins/String/prototype/big",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
     },
     {
-      "prefix": "test/annexB/built-ins/unescape",
+      "prefix": "test/annexB/built-ins/String/prototype/blink",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/bold",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/fixed",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/fontcolor",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/fontsize",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/italics",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/link",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/small",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/strike",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/sub",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "path": "test/annexB/built-ins/String/prototype/substr/length.js",
       "category": "post-es5-semantics",
-      "reason": "Annex B `escape`/`unescape` `length`/`name` descriptor: ES5.1 §15.1.2.4/§15.1.2.5 give a built-in function `length` {configurable:false} and no `name`; ES2015 made `length` configurable and added `name`."
+      "reason": "ES5.1 §15.3.5.1 makes built-in function `length` non-configurable; ES2015 §19.2.4 changed it to configurable."
+    },
+    {
+      "path": "test/annexB/built-ins/String/prototype/substr/name.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3 defines no built-in function `name` own property; ES2015 §19.2.4 added it."
+    },
+    {
+      "prefix": "test/annexB/built-ins/String/prototype/sup",
+      "category": "post-es5-builtin",
+      "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
+    },
+    {
+      "path": "test/annexB/built-ins/escape/length.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3.5.1 makes built-in function `length` non-configurable; ES2015 §19.2.4 changed it to configurable."
+    },
+    {
+      "path": "test/annexB/built-ins/escape/name.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3 defines no built-in function `name` own property; ES2015 §19.2.4 added it."
+    },
+    {
+      "path": "test/annexB/built-ins/unescape/length.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3.5.1 makes built-in function `length` non-configurable; ES2015 §19.2.4 changed it to configurable."
+    },
+    {
+      "path": "test/annexB/built-ins/unescape/name.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3 defines no built-in function `name` own property; ES2015 §19.2.4 added it."
     },
     {
       "prefix": "test/annexB/language/eval-code",
@@ -3803,6 +3883,16 @@
       "path": "test/language/statements/while/let-array-with-newline.js",
       "category": "post-es5-syntax",
       "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+    },
+    {
+      "path": "test/language/statements/with/cptn-abrupt-empty.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015 §13.11.7 `WithStatement` UpdateEmpty semantics; ES5.1 §12.10 returns the body completion unchanged."
+    },
+    {
+      "path": "test/language/statements/with/cptn-nrml.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015 §13.11.7 `WithStatement` UpdateEmpty semantics; ES5.1 §12.10 returns the body completion unchanged."
     },
     {
       "path": "test/language/statements/with/let-array-with-newline.js",
