@@ -7,6 +7,7 @@ import {
   toString,
   toUint32,
 } from '../runtime/conversion.js';
+import { isCallable } from '../runtime/descriptors.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
 import { requireCallable } from './shared.js';
 
@@ -350,6 +351,62 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
  * @returns {void}
  */
 function installNonMutatingArrayMethods(realm, arrayPrototype) {
+  const objectToString = requireCallable(
+    realm.intrinsics.objectPrototype.get('toString'),
+    'Object toString intrinsic is not callable',
+  );
+
+  defineNativeMethod(realm, arrayPrototype, 'toString', 0, (thisValue) => {
+    const object = toObject(realm, thisValue);
+    const join = object.get('join');
+
+    if (isCallable(join)) {
+      return join.callFunction(object, []);
+    }
+
+    return objectToString.callFunction(object, []);
+  });
+  defineNativeMethod(
+    realm,
+    arrayPrototype,
+    'toLocaleString',
+    0,
+    (thisValue) => {
+      const object = toObject(realm, thisValue);
+      const length = arrayLikeLength(object);
+      let result = '';
+
+      for (let index = 0; index < length; index += 1) {
+        if (index > 0) {
+          result += ',';
+        }
+
+        const element = object.get(String(index));
+
+        if (element === null || element === undefined) {
+          continue;
+        }
+
+        if (
+          typeof element === 'string' ||
+          typeof element === 'number' ||
+          typeof element === 'boolean'
+        ) {
+          result += toString(element);
+          continue;
+        }
+
+        const elementObject = toObject(realm, element);
+        const toLocaleString = requireCallable(
+          elementObject.get('toLocaleString'),
+          'Array element toLocaleString property is not callable',
+        );
+        result += toString(toLocaleString.callFunction(elementObject, []));
+      }
+
+      return result;
+    },
+  );
   defineNativeMethod(realm, arrayPrototype, 'concat', 1, (thisValue, args) => {
     const result = new EngineArray(realm.intrinsics.arrayPrototype);
     let nextIndex = 0;

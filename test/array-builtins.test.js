@@ -127,6 +127,60 @@ const tests = [
     },
   },
   {
+    name: 'Array string coercion delegates to its comma-joined elements',
+    run() {
+      assertSame(run("[1, 2] + '';"), '1,2');
+      assertSame(run('1 + [2];'), '12');
+      assertSame(run('[1] == 1;'), true);
+    },
+  },
+  {
+    name: 'Array toString falls back to Object toString for a non-callable join',
+    run() {
+      assertSame(
+        run(
+          'var a = []; a.join = 1; ' +
+            'a.toString() + ":" + Array.prototype.toString.call({join: null});',
+        ),
+        '[object Array]:[object Object]',
+      );
+      assertSame(
+        run(
+          'var arrayToString = Array.prototype.toString; ' +
+            'Object.prototype.toString = function () { return "changed"; }; ' +
+            'var a = []; a.join = null; arrayToString.call(a);',
+        ),
+        '[object Array]',
+      );
+    },
+  },
+  {
+    name: 'Array toLocaleString converts each non-nullish element in order',
+    run() {
+      assertSame(
+        run('[1, "x", true, null, undefined].toLocaleString();'),
+        '1,x,true,,',
+      );
+      assertSame(
+        run(
+          'var order = ""; ' +
+            'var first = {toLocaleString: function () { order = order + "a"; return "A"; }}; ' +
+            'var last = {toLocaleString: function () { order = order + "b"; return "B"; }}; ' +
+            'var value = Array.prototype.toLocaleString.call({0: first, 2: last, length: 3}); ' +
+            'value + ":" + order;',
+        ),
+        'A,,B:ab',
+      );
+      assertSame(
+        run(
+          'var name; try { [{toLocaleString: 1}].toLocaleString(); } ' +
+            'catch (error) { name = error.name; } name;',
+        ),
+        'TypeError',
+      );
+    },
+  },
+  {
     name: 'Array push and pop are generic and preserve their specified return values',
     run() {
       assertSame(
