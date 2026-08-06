@@ -132,7 +132,6 @@ unsorted or duplicated path, or a path outside `test/`) and summarizes a finishe
 run per group. The groups carry no execution semantics — they exist so the
 coverage report can say which parts of the language the baseline covers.
 
-
 The local fixture tree in `test/fixtures/test262` stays separate and is run by
 `npm run test262:fixtures`. The two suites answer different questions: the
 fixtures exercise the _runner_ (metadata parsing, variants, negative
