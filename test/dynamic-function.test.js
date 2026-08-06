@@ -221,6 +221,44 @@ const tests = [
       );
     },
   },
+  {
+    name: 'a block comment cannot span the parameter/body boundary',
+    run() {
+      // ES5.1 15.3.2.1 steps 10 and 11 validate P and body *independently*, so
+      // neither fragment may borrow syntax from the other. Weaving them into
+      // one source and parsing only the result lets a block comment opened in
+      // P be closed in the body, swallowing the synthetic `) {` delimiter and
+      // turning two individually invalid fragments into one valid function.
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'new Function(") { return 99; /*", "*/");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'a parameter list that is invalid on its own is a SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'new Function("a /*", "*/, b) { return 1; } //");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'a body that is invalid on its own is a SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'new Function("a", "*/ return 1;");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // 15.3.2.1 step 11: Scope is the realm's Global Environment, never the
@@ -263,6 +301,28 @@ const tests = [
         run(
           'var f = new Function("\\"use strict\\"; return 1;");' +
             'var caught; try { f.caller; } catch (e) { caught = e.name; } caught;',
+        ),
+        'TypeError',
+      );
+      assertNormal(
+        run(
+          'var f = new Function("\\"use strict\\"; return 1;");' +
+            'var d = Object.getOwnPropertyDescriptor(f, "arguments");' +
+            'typeof d.get + "," + typeof d.set + "," + d.configurable;',
+        ),
+        'function,function,false',
+      );
+      assertNormal(
+        run(
+          'var f = new Function("\\"use strict\\"; return 1;");' +
+            'var caught; try { f.arguments; } catch (e) { caught = e.name; } caught;',
+        ),
+        'TypeError',
+      );
+      assertNormal(
+        run(
+          'var f = new Function("\\"use strict\\"; return 1;");' +
+            'var caught; try { f.arguments = 1; } catch (e) { caught = e.name; } caught;',
         ),
         'TypeError',
       );

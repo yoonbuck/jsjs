@@ -130,13 +130,46 @@ function coerceArguments(args) {
  * in `function.js` materializes), which is what keeps the body from escaping
  * its wrapper.
  *
+ * Steps 10 and 11 validate `P` and `body` as *independent* productions (a
+ * `FormalParameterList` and a `FunctionBody`), and that independence is load
+ * bearing rather than pedantry: parsing only the woven source lets a fragment
+ * borrow syntax from its neighbour across the synthetic `) {` delimiter. A
+ * block comment opened in `P` and closed in `body` swallows the delimiter, so
+ * a `P` of `") { return 99; /*"` paired with a `body` that opens with the
+ * matching comment terminator composes two individually invalid fragments into
+ * one valid declaration — a code-injection escape. Each fragment is therefore
+ * first parsed alone, paired with an empty counterpart, before the woven
+ * source is parsed.
+ *
+ * The guard parses only ever reject more than the woven parse would; the woven
+ * parse is still what enforces the cross-fragment early errors, because a
+ * `"use strict"` directive in `body` governs duplicate/`eval`/`arguments`
+ * parameter names declared in `P`.
+ *
  * @param {string} parameterText
  * @param {string} bodyText
  * @returns {any} The lone `FunctionDeclaration` node.
  */
 function parseDynamicFunction(parameterText, bodyText) {
-  const source = `function anonymous(${parameterText}\n) {\n${bodyText}\n}`;
+  // 15.3.2.1 step 10: P alone must be a FormalParameterList.
+  parseDynamicFunctionSource(`function anonymous(${parameterText}\n) {\n}`);
+  // 15.3.2.1 step 11: body alone must be a FunctionBody.
+  parseDynamicFunctionSource(`function anonymous(\n) {\n${bodyText}\n}`);
 
+  return parseDynamicFunctionSource(
+    `function anonymous(${parameterText}\n) {\n${bodyText}\n}`,
+  );
+}
+
+/**
+ * Parses one woven `function anonymous(...)` source and returns its lone
+ * `FunctionDeclaration`, converting any parse failure into a guest
+ * `SyntaxError`.
+ *
+ * @param {string} source
+ * @returns {any} The lone `FunctionDeclaration` node.
+ */
+function parseDynamicFunctionSource(source) {
   let program;
 
   try {
