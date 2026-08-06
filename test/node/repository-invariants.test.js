@@ -202,8 +202,6 @@ async function readIgnoreFile() {
 const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
   'src/builtins/number-format.js':
     'Number formatting builds and slices its own host digit strings, which are engine-internal scratch, never guest String semantics',
-  'src/builtins/errors.js':
-    'derives an intrinsic key from a hard-coded error type name, not from guest data',
   'src/runtime/conversion.js':
     'ToNumber pre-dates this invariant and still trims/slices guest strings with host methods; tightening it is its own change',
 });
@@ -221,7 +219,21 @@ const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
  * load-bearing.
  */
 const REQUIRED_TEST262_GROUPS = Object.freeze({
+  'annexb-string-escapes':
+    'ES5 stateless built-ins Task 3 — Annex B escape/unescape',
   'boolean-builtins': 'Task 7 — Boolean call/construct, prototype, methods',
+  'json-object':
+    'ES5 stateless built-ins Tasks 4-5 — the JSON object and its inventory',
+  'json-parse':
+    'ES5 stateless built-ins Task 4 — JSON grammar and reviver traversal',
+  'json-stringify':
+    'ES5 stateless built-ins Task 5 — serialization, replacer, gap, cycles',
+  'math-arithmetic':
+    'ES5 stateless built-ins Task 1 — Math abs/ceil/floor/max/min/pow/random/round/sqrt',
+  'math-object':
+    'ES5 stateless built-ins Task 1 — the Math object and its constants',
+  'math-transcendental':
+    'ES5 stateless built-ins Task 1 — Math acos/asin/atan/atan2/cos/exp/log/sin/tan',
   'number-builtins':
     'Task 7 — Number call/construct, constants, prototype, methods',
   'number-formatting': 'Task 7 — toFixed/toExponential/toPrecision formatting',
@@ -233,6 +245,9 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
     'ES5 RegExp milestone — 15.10.2 matching semantics: RepeatMatcher, assertions, lookahead, backreferences, class escapes, and character ranges',
   'regexp-pattern-grammar':
     'ES5 RegExp milestone — 15.10.1 Pattern grammar early errors and the recursive-descent validator',
+  'numeric-predicate-globals':
+    'ES5 stateless built-ins Task 2 — isNaN and isFinite',
+  'parse-globals': 'ES5 stateless built-ins Task 2 — parseInt and parseFloat',
   'string-builtins': 'Task 7 — String call/construct, fromCharCode, prototype',
   'string-methods':
     'Task 7 — String search/access/case/trim methods, Annex B substr',
@@ -240,6 +255,12 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
     'Task 7 — match/replace/search/split with string patterns',
   'string-regexp-methods':
     'ES5 RegExp milestone — match/replace/search/split with RegExp arguments',
+  'uri-decoding':
+    'ES5 stateless built-ins Task 3 — decodeURI and decodeURIComponent',
+  'uri-encoding':
+    'ES5 stateless built-ins Task 3 — encodeURI and encodeURIComponent',
+  'uri-error':
+    'ES5 stateless built-ins Task 3 — the URIError constructor the URI globals throw',
 });
 
 export default [

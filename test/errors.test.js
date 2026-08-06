@@ -60,6 +60,7 @@ const tests = [
         'ReferenceError',
         'SyntaxError',
         'RangeError',
+        'URIError',
       ]) {
         assertSame(
           evaluateScript(
@@ -295,6 +296,7 @@ const tests = [
         'ReferenceError',
         'SyntaxError',
         'RangeError',
+        'URIError',
       ]) {
         const ctor = /** @type {any} */ (realm.globalObject.get(name));
         const proto = /** @type {EngineObject} */ (ctor.get('prototype'));

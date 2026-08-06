@@ -107,10 +107,12 @@ const tests = [
     name: 'string toNumber accepts exactly the ES5 StringNumericLiteral grammar',
     run() {
       const whitespace =
-        '\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u180e\u2000\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+        '\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
 
       assertSame(toNumber(whitespace), 0);
       assertSame(toNumber(`${whitespace}+Infinity${whitespace}`), Infinity);
+      assertSame(toNumber('\u180e'), NaN);
+      assertSame(toNumber('\u180e1'), NaN);
       assertSame(toNumber('-Infinity'), -Infinity);
       assertSame(toNumber('+12.5e-1'), 1.25);
       assertSame(toNumber('.5'), 0.5);
