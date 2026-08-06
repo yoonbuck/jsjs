@@ -1,4 +1,4 @@
-import { assertSame, assertThrows } from './harness/assert.js';
+import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
@@ -383,52 +383,35 @@ const tests = [
   },
   {
     // Step 5 converts the limit; the separator's [[Class]] is only examined
-    // at step 8. The engine's RegExp refusal stands where that step does, so
-    // a limit conversion that is observable or throws happens first.
-    name: 'split converts its limit before it refuses a RegExp separator',
+    // at step 8. So a limit conversion that is observable or throws happens
+    // before the separator is even looked at -- and, now that a RegExp
+    // separator is fully supported, before it is dispatched to the
+    // RegExp-driven algorithm in `string-regexp.js`.
+    name: 'split converts its limit before it looks at a RegExp separator',
     run() {
-      const throwing = realmWithTaggedObject('RegExp').realm;
-
       assertSame(
-        evaluateScript(
-          throwing,
+        run(
           'var thrown = new Error("boom"); var caught; ' +
             'var limit = { valueOf: function () { throw thrown; } }; ' +
-            'try { "a,b".split(tagged, limit); } catch (error) { caught = error; } ' +
+            'try { "a,b".split(/,/, limit); } catch (error) { caught = error; } ' +
             '(caught === thrown) + ":" + caught.message;',
-        ).value,
+        ),
         'true:boom',
       );
 
-      const observed = realmWithTaggedObject('RegExp').realm;
-
-      evaluateScript(
-        observed,
-        'var log = ""; ' +
-          'var limit = { valueOf: function () { log += "l"; return 5; } };',
-      );
-
-      const refusal = assertThrows(
-        () => evaluateScript(observed, '"a,b".split(tagged, limit);'),
-        Error,
-      );
-
-      assertSame(refusal.name, 'UnsupportedOperationError');
       assertSame(
-        /** @type {any} */ (refusal).operation.indexOf('RegExp') >= 0,
-        true,
-        refusal.message,
-      );
-      assertSame(evaluateScript(observed, 'log;').value, 'l');
-
-      // Step 8 precedes step 9, so a zero limit does not excuse the refusal.
-      const zeroLimit = realmWithTaggedObject('RegExp').realm;
-      const zeroError = assertThrows(
-        () => evaluateScript(zeroLimit, '"a,b".split(tagged, 0);'),
-        Error,
+        run(
+          'var log = ""; ' +
+            'var limit = { valueOf: function () { log += "l"; return 5; } }; ' +
+            '"a,b".split(/,/, limit).join("|") + ":" + log;',
+        ),
+        'a|b:l',
       );
 
-      assertSame(zeroError.name, 'UnsupportedOperationError');
+      // Step 8 precedes step 9, so a zero limit still routes a RegExp
+      // separator to the RegExp-driven split, not a refusal or a fall back
+      // to the String-separator branch.
+      assertSame(run('"a,b".split(/,/, 0).length;'), 0);
     },
   },
   {
@@ -470,10 +453,10 @@ const tests = [
     },
   },
   {
-    // ES5 15.5.4.10/15.5.4.12 build a RegExp even from a string pattern.
-    // Until the RegExp milestone lands this engine searches for the string
-    // literally instead (see the literal-pattern case below), so the result
-    // still has `RegExp.prototype.exec`'s non-global shape.
+    // ES5 15.5.4.10 builds a RegExp even from a string pattern; "b" and
+    // "cab" have no regexp-special characters, so the result is the same
+    // exec-shaped array a purely literal search would have given, just
+    // arrived at through a real (if trivial) RegExp match.
     name: 'match returns an exec-shaped array for a literal pattern and null when there is no match',
     run() {
       assertSame(
@@ -635,43 +618,32 @@ const tests = [
     },
   },
   {
-    // The RegExp milestone has not landed: there is no RegExp constructor and
-    // regular expression literals throw. The pattern methods must therefore
-    // refuse a real RegExp object loudly rather than silently ToString-ing it
-    // into a literal search, which would answer the wrong question.
-    name: 'the pattern methods refuse an object whose class is RegExp instead of treating it as a literal',
+    // Now that RegExp literals evaluate and the four pattern methods route
+    // a RegExp-classed pattern to `string-regexp.js`'s RegExp-driven
+    // algorithms, this test replaces what used to check that such a pattern
+    // was refused loudly with `UnsupportedOperationError`, back when there
+    // was no RegExp constructor and regular expression literals threw.
+    name: 'a RegExp-classed object is no longer refused by any of the four pattern methods',
     run() {
-      for (const source of [
-        '"abc".match(tagged);',
-        '"abc".search(tagged);',
-        '"abc".replace(tagged, "x");',
-        '"abc".split(tagged);',
-        'String.prototype.match.call("abc", tagged);',
-        'String.prototype.split.call("abc", tagged, 5);',
-      ]) {
-        const { realm } = realmWithTaggedObject('RegExp');
-        const error = assertThrows(() => evaluateScript(realm, source), Error);
+      // Once refused with `UnsupportedOperationError`; now dispatched to the
+      // real RegExp-driven algorithm in `string-regexp.js`.
+      assertSame(run('"abc".match(/b/)[0];'), 'b');
+      assertSame(run('"abc".search(/b/);'), 1);
+      assertSame(run('"abc".replace(/b/, "x");'), 'axc');
+      assertSame(run('"abc".split(/b/).join("|");'), 'a|c');
+      assertSame(run('String.prototype.match.call("abc", /b/)[0];'), 'b');
+      assertSame(
+        run('String.prototype.split.call("abc", /b/, 5).join("|");'),
+        'a|c',
+      );
 
-        assertSame(error.name, 'UnsupportedOperationError', source);
-        assertSame(
-          /** @type {any} */ (error).operation.indexOf('RegExp') >= 0,
-          true,
-          `${source} -> ${error.message}`,
-        );
-      }
-
-      // The refusal is not catchable guest control flow: it is an engine
-      // limitation, so it escapes the script rather than becoming a guest
-      // error a program could mistake for a specified TypeError.
-      const { realm } = realmWithTaggedObject('RegExp');
-
-      assertThrows(
-        () =>
-          evaluateScript(
-            realm,
-            'var caught = "none"; try { "abc".match(tagged); } catch (error) { caught = "guest"; } caught;',
-          ),
-        Error,
+      // A guest `try`/`catch` around it observes ordinary success, not an
+      // escaping engine-limitation error.
+      assertSame(
+        run(
+          'var caught = "none"; try { "abc".match(/b/); } catch (error) { caught = "guest"; } caught;',
+        ),
+        'none',
       );
     },
   },
@@ -726,58 +698,74 @@ const tests = [
     },
   },
   {
-    // This milestone implements the pattern methods for *string* patterns and
-    // rejects only real RegExp objects (see the design's deferral of RegExp
-    // integration). So every non-RegExp pattern is ToString-ed and searched
-    // for literally, RegExp syntax characters included: `"."` finds a full
-    // stop, not "any character". That is a deliberate, documented deviation
-    // from ES5 15.5.4.10/15.5.4.12's implicit `new RegExp(string)` until the
-    // RegExp milestone lands, and it is uniform across all four methods.
-    name: 'match and search treat every string pattern as a literal, RegExp syntax characters included',
+    // `match` and `search` now build a real RegExp from a string pattern
+    // (ES5 15.5.4.10/15.5.4.12's implicit `new RegExp(string)`), so RegExp
+    // syntax characters are no longer literal: `"."` is "any character", not
+    // a full stop. `replace` and `search`'s String-pattern behaviour is
+    // unaffected (see the brief's ambiguity resolution): those two keep
+    // doing a literal substring search/replace no matter what the pattern
+    // looks like.
+    name: 'match and search build a real RegExp from a string pattern, RegExp syntax characters included',
     run() {
-      assertSame(run('"a.c".match(".").index;'), 1);
-      assertSame(run('"a.c".match(".")[0];'), '.');
-      assertSame(run('"abc".match(".");'), null);
-      assertSame(run('"abc".search(".");'), -1);
-      assertSame(run('"a|b".search("|");'), 1);
-      assertSame(run('"abc".search("a|b");'), -1);
+      assertSame(run('"a.c".match(".").index;'), 0);
+      assertSame(run('"a.c".match(".")[0];'), 'a');
+      assertSame(run('"abc".match(".");') !== null, true);
+      assertSame(run('"abc".search(".");'), 0);
+      // `"|"` is alternation between two empty branches, so it matches an
+      // empty string at index 0 no matter what follows.
+      assertSame(run('"a|b".search("|");'), 0);
+      assertSame(run('"abc".search("a|b");'), 0);
       assertSame(run('"a|b".match("a|b").index;'), 0);
+      assertSame(run('"a|b".match("a|b")[0];'), 'a');
       assertSame(run('"a*b".search("a*");'), 0);
-      assertSame(run('"abc".match("a*");'), null);
-      assertSame(run('"^abc".search("^a");'), 0);
-      assertSame(run('"abc".match("^a");'), null);
-      assertSame(run('"abc$".search("c$");'), 2);
-      assertSame(run('"(a)".match("(a)").index;'), 0);
-      assertSame(run('"abc".search("(a)");'), -1);
-      assertSame(run('"x[abc]y".match("[abc]").index;'), 1);
-      assertSame(run('"abc".search("[abc]");'), -1);
+      assertSame(run('"abc".match("a*")[0];'), 'a');
+      // `^` anchors to the absolute start of input (no multiline flag), so
+      // it only has a chance to match at index 0.
+      assertSame(run('"^abc".search("^a");'), -1);
+      assertSame(run('"abc".match("^a")[0];'), 'a');
+      assertSame(run('"abc$".search("c$");'), -1);
+      assertSame(run('"(a)".match("(a)").index;'), 1);
+      assertSame(run('"(a)".match("(a)")[0];'), 'a');
+      assertSame(run('"abc".search("(a)");'), 0);
+      assertSame(run('"x[abc]y".match("[abc]").index;'), 2);
+      assertSame(run('"x[abc]y".match("[abc]")[0];'), 'a');
+      assertSame(run('"abc".search("[abc]");'), 0);
       assertSame(run('"a{1}".match("a{1}").index;'), 0);
-      assertSame(run('"a{".search("a{");'), 0);
-      assertSame(run('"a}".search("}");'), 1);
-      assertSame(run('"a+b".search("+");'), 1);
-      assertSame(run('"a?b".search("?");'), 1);
-      // A backslash is text too: `"\\d"` finds a backslash followed by a `d`,
-      // not a digit.
-      assertSame(run('"a\\\\db".search("\\\\d");'), 1);
-      assertSame(run('"a1b".search("\\\\d");'), -1);
-      assertSame(run('"a\\\\b".match("\\\\").index;'), 1);
+      assertSame(run('"a{1}".match("a{1}")[0];'), 'a');
+      // A bare `{`, `}`, `+`, or `?` with nothing to repeat is a SyntaxError
+      // under strict ES5 grammar (no Annex B literal-brace fallback), so
+      // building the RegExp throws rather than returning a search result.
+      for (const source of [
+        '(function () { try { "a{".search("a{"); return "no-throw"; } catch (e) { return e instanceof SyntaxError; } })();',
+        '(function () { try { "a}".search("}"); return "no-throw"; } catch (e) { return e instanceof SyntaxError; } })();',
+        '(function () { try { "a+b".search("+"); return "no-throw"; } catch (e) { return e instanceof SyntaxError; } })();',
+        '(function () { try { "a?b".search("?"); return "no-throw"; } catch (e) { return e instanceof SyntaxError; } })();',
+        '(function () { try { "a\\\\b".match("\\\\"); return "no-throw"; } catch (e) { return e instanceof SyntaxError; } })();',
+      ]) {
+        assertSame(run(source), true, source);
+      }
+      // A backslash-d is a digit escape, so it finds an actual digit, not a
+      // literal backslash followed by a `d`.
+      assertSame(run('"a\\\\db".search("\\\\d");'), -1);
+      assertSame(run('"a1b".search("\\\\d");'), 1);
       // The match array a syntax-character pattern produces has the same
-      // exec shape as any other literal match.
+      // exec shape as any other match.
       assertSame(
         run(
           'var m = "a.c".match("."); ' +
             'm.length + ":" + m[0] + ":" + m.index + ":" + m.input;',
         ),
-        '1:.:1:a.c',
+        '1:a:0:a.c',
       );
-      // Non-string patterns are ToString-ed into the same literal search.
+      // Non-string patterns are ToString-ed into the same implicit RegExp.
       assertSame(
         run('"a1.5b".search({ toString: function () { return "1.5"; } });'),
         1,
       );
 
-      // The string-pattern methods, which never built a RegExp in the first
-      // place, treat the same characters the same way.
+      // `replace` and `split`, which never build a RegExp for a String
+      // pattern (per the brief), still treat the same characters as pure
+      // literal text.
       assertSame(run('"a.c".replace(".", "X");'), 'aXc');
       assertSame(run('"a.c".split(".").join("|");'), 'a|c');
       assertSame(run('"a|b".split("|").join(";");'), 'a;b');

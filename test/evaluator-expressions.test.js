@@ -343,11 +343,12 @@ const tests = [
     },
   },
   {
-    name: 'regex literals are not supported yet and throw explicitly',
+    name: 'regex literals evaluate to a RegExp object (a deliberate ES5.1 15.10.4.1 behavior, not the parse-time UnsupportedNodeError this used to be)',
     run() {
-      const error = assertThrows(() => run('/ab/i;'), Error);
-      assertSame(error.name, 'UnsupportedNodeError');
-      assertSame(/** @type {any} */ (error).nodeType, 'RegExpLiteral');
+      const value = /** @type {any} */ (run('/ab/i;'));
+      assertSame(value.getClassName(), 'RegExp');
+      assertSame(value.get('source'), 'ab');
+      assertSame(value.get('ignoreCase'), true);
     },
   },
   {

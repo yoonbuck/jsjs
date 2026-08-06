@@ -19,14 +19,20 @@ import {
   codeUnitsBetween,
 } from '../runtime/code-units.js';
 import { isCallable } from '../runtime/descriptors.js';
+import { EngineObject } from '../runtime/object.js';
 import { toLowerCaseString, toUpperCaseString } from './string-case.js';
 import {
   expandReplacement,
-  matchLiteralPattern,
-  rejectRegExpPattern,
   replaceFirst,
   splitOnString,
 } from './string-pattern.js';
+import {
+  matchWithRegExp,
+  replaceWithRegExp,
+  searchWithRegExp,
+  splitWithRegExp,
+} from './string-regexp.js';
+import { createRegExpFromPattern } from './regexp.js';
 import {
   compareCodeUnits,
   stringIndexOf,
@@ -42,7 +48,7 @@ import {
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
- * @typedef {import('../runtime/object.js').EngineObject} EngineObject
+ * @typedef {import('../runtime/regexp-object.js').EngineRegExp} EngineRegExp
  *
  * @typedef {{
  *   stringConstructor: import('./shared.js').NativeFunction,
@@ -64,8 +70,10 @@ import {
  * `substr`. String's search, case, and pattern methods (`indexOf`,
  * `lastIndexOf`, `localeCompare`, `trim`, the four case methods, and
  * `match`/`replace`/`search`/`split`) are installed here too, with their
- * algorithms living in `string-search.js`, `string-case.js`, and
- * `string-pattern.js`.
+ * algorithms living in `string-search.js`, `string-case.js`,
+ * `string-pattern.js` (the literal, string-separator halves of `replace`
+ * and `split`, plus the shared `expandReplacement`), and `string-regexp.js`
+ * (the RegExp-driven halves of all four pattern methods).
  *
  * None of these methods delegate to a host `String.prototype` method: code
  * units are read by index (`codeUnitsBetween`) and converted to and from
@@ -412,16 +420,15 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'match',
       length: 1,
       call(thisValue, args) {
-        // ES5 15.5.4.10: the receiver first, then the pattern. A non-RegExp
-        // pattern becomes `new RegExp(ToString(pattern))`; until the RegExp
-        // milestone lands this engine searches for that string literally
-        // instead (see `string-pattern.js`), and an omitted argument becomes
-        // the empty pattern, which matches at position 0.
+        // ES5 15.5.4.10: the receiver first, then the pattern. A pattern
+        // that is not already a RegExp object becomes `new
+        // RegExp(ToString(pattern))` (an omitted argument becomes the empty
+        // pattern, which matches at position 0); one that already is a
+        // RegExp object is used as-is, `global`/`lastIndex` included.
         const value = stringMethodReceiver(thisValue);
-        rejectRegExpPattern(args[0], 'match');
-        const pattern = args[0] === undefined ? '' : toString(args[0]);
+        const rx = toRegExp(realm, args[0]);
 
-        return matchLiteralPattern(realm, value, pattern);
+        return matchWithRegExp(realm, rx, value);
       },
     }),
   );
@@ -432,13 +439,13 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'search',
       length: 1,
       call(thisValue, args) {
-        // ES5 15.5.4.12, the same pattern treatment as `match`. There is no
-        // position parameter: the search always starts at 0.
+        // ES5 15.5.4.12, the same pattern treatment as `match`, but
+        // `lastIndex`/`global` are ignored entirely and there is no position
+        // argument: the search always starts at 0.
         const value = stringMethodReceiver(thisValue);
-        rejectRegExpPattern(args[0], 'search');
-        const pattern = args[0] === undefined ? '' : toString(args[0]);
+        const rx = toRegExp(realm, args[0]);
 
-        return stringIndexOf(value, pattern, 0);
+        return searchWithRegExp(rx, value);
       },
     }),
   );
@@ -449,16 +456,56 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'replace',
       length: 2,
       call(thisValue, args) {
-        // ES5 15.5.4.11's non-RegExp branch: the first occurrence of
-        // ToString(searchValue) only. ES5 leaves the point at which a
-        // non-callable replacement is converted implicit; ES2015 made it
-        // explicit (before the search, so it happens even when nothing
-        // matches) and that is what every engine does, so it is what this
-        // engine does too.
         const value = stringMethodReceiver(thisValue);
-        rejectRegExpPattern(args[0], 'replace');
-        const search = toString(args[0]);
+        const searchValue = args[0];
         const replaceValue = args[1];
+
+        if (isRegExpObject(searchValue)) {
+          // ES5 15.5.4.11's RegExp branch: the search is done exactly as in
+          // `match`, `lastIndex` update included.
+          const rx = /** @type {EngineRegExp} */ (searchValue);
+
+          if (isCallable(replaceValue)) {
+            return replaceWithRegExp(
+              realm,
+              rx,
+              value,
+              (matched, position, captures, whole) =>
+                toString(
+                  replaceValue.callFunction(undefined, [
+                    matched,
+                    ...captures,
+                    position,
+                    whole,
+                  ]),
+                ),
+            );
+          }
+
+          const replacement = toString(replaceValue);
+
+          return replaceWithRegExp(
+            realm,
+            rx,
+            value,
+            (matched, position, captures, whole) =>
+              expandReplacement(
+                replacement,
+                matched,
+                position,
+                whole,
+                captures,
+              ),
+          );
+        }
+
+        // ES5 15.5.4.11's non-RegExp branch: the first occurrence of
+        // ToString(searchValue) only -- a String searchValue is never
+        // turned into a RegExp. ES5 leaves the point at which a non-callable
+        // replacement is converted implicit; ES2015 made it explicit (before
+        // the search, so it happens even when nothing matches) and that is
+        // what every engine does, so it is what this engine does too.
+        const search = toString(searchValue);
 
         if (isCallable(replaceValue)) {
           return replaceFirst(value, search, (matched, position, whole) =>
@@ -471,7 +518,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         const replacement = toString(replaceValue);
 
         return replaceFirst(value, search, (matched, position, whole) =>
-          expandReplacement(replacement, matched, position, whole),
+          expandReplacement(replacement, matched, position, whole, []),
         );
       },
     }),
@@ -483,19 +530,24 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'split',
       length: 2,
       call(thisValue, args) {
-        // ES5 15.5.4.14: the limit (step 5) is converted before the separator
-        // is looked at at all (step 8), and an undefined separator yields the
-        // whole string rather than a search for "undefined" (step 10).
+        // ES5 15.5.4.14: the limit (step 5) is converted before the
+        // separator's [[Class]] is examined at all (step 8), and an
+        // undefined separator yields the whole string rather than a search
+        // for "undefined" (step 10).
         const value = stringMethodReceiver(thisValue);
         const limit = args[1] === undefined ? 4294967295 : toUint32(args[1]);
-        // The RegExp refusal stands exactly where step 8's "[[Class]] is
-        // RegExp" test does, so it comes after the limit conversion.
-        rejectRegExpPattern(args[0], 'split');
-        // Step 8 also precedes the zero-limit return (step 9): the separator
-        // is converted even when the result is already known to be empty, so
-        // its side effects and errors are observable. Only an undefined
-        // separator is left alone, and its ToString has nothing to run.
-        const separator = args[0] === undefined ? undefined : toString(args[0]);
+        const separatorArg = args[0];
+
+        if (isRegExpObject(separatorArg)) {
+          const rx = /** @type {EngineRegExp} */ (separatorArg);
+
+          return splitWithRegExp(realm, rx, value, limit);
+        }
+
+        // A String separator is never turned into a RegExp -- it stays a
+        // literal search, ES5 15.5.4.14 steps 9-14.
+        const separator =
+          separatorArg === undefined ? undefined : toString(separatorArg);
 
         return splitOnString(realm, value, separator, limit);
       },
@@ -687,6 +739,43 @@ function stringMethodReceiver(thisValue) {
   checkObjectCoercible(thisValue);
 
   return toString(thisValue);
+}
+
+/**
+ * ES5's implicit `new RegExp(pattern)`, the coercion `match` (15.5.4.10)
+ * and `search` (15.5.4.12) perform on a pattern that is not already a
+ * RegExp object: an already-RegExp `pattern` is used exactly as given, own
+ * `global`/`lastIndex` and all, while any other value (including `undefined`,
+ * which becomes the empty pattern rather than the string `"undefined"`) is
+ * `ToString`-ed and built into a brand-new, flagless RegExp.
+ *
+ * @param {Realm} realm
+ * @param {unknown} pattern
+ * @returns {EngineRegExp}
+ */
+function toRegExp(realm, pattern) {
+  if (isRegExpObject(pattern)) {
+    return /** @type {EngineRegExp} */ (pattern);
+  }
+
+  return createRegExpFromPattern(
+    realm,
+    pattern === undefined ? '' : toString(pattern),
+    '',
+  );
+}
+
+/**
+ * Only the `[[Class]]` is consulted, exactly as ES5 15.5.4.10-14 specify, so
+ * an ordinary object that merely carries `source`/`global`/`exec` properties
+ * is not a RegExp for this test: it is a plain object, and its pattern is
+ * `ToString(value)`.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isRegExpObject(value) {
+  return value instanceof EngineObject && value.getClassName() === 'RegExp';
 }
 
 /**

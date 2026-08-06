@@ -1,92 +1,36 @@
 import { EngineArray } from '../runtime/array-object.js';
-import { EngineObject } from '../runtime/object.js';
-import { codeUnitsBetween } from '../runtime/code-units.js';
-import { createUnsupportedOperationError } from '../runtime/errors.js';
+import { charCodeOfCodeUnit, codeUnitsBetween } from '../runtime/code-units.js';
 import { stringIndexOf } from './string-search.js';
 
 /**
- * The string-pattern half of ES5's `String.prototype` pattern methods:
+ * @typedef {import('../runtime/object.js').EngineObject} EngineObject
+ */
+
+/**
+ * The string-separator half of ES5's `String.prototype` pattern methods:
  * `match`, `replace`, `search`, and `split`.
  *
- * `replace` and `split` are fully specified for a *string* pattern (ES5
- * 15.5.4.11 and 15.5.4.14 search for `ToString(searchValue)` literally), so
- * they are implemented here in full. `match` and `search` (15.5.4.10 and
- * 15.5.4.12) always build `new RegExp(pattern)` even from a string, and this
- * engine has no RegExp yet — no constructor, and regular expression literals
- * throw `UnsupportedNodeError`. RegExp integration is deferred to its own
- * milestone, so the boundary drawn here is:
+ * `replace` and `split` are each fully specified with a *string* pattern —
+ * ES5 15.5.4.11's non-`RegExp` branch and 15.5.4.14 with a String
+ * `separator` both search for `ToString(searchValue)` literally, never
+ * building a `RegExp` from it — so that literal-search algorithm
+ * (`replaceFirst`, `splitOnString`) lives here in full, alongside
+ * `expandReplacement`, ES5 Table 22's replacement-token expansion shared by
+ * both the literal branch (with an empty `captures` array) and
+ * `string-regexp.js`'s RegExp-driven `replaceWithRegExp`.
  *
- *   - a pattern object whose `[[Class]]` is `"RegExp"` is refused by all four
- *     methods, loudly, with an `UnsupportedOperationError` — never quietly
- *     `ToString`ed into some other search;
- *   - every other pattern is `ToString`ed and searched for *literally* by all
- *     four methods alike, RegExp syntax characters included. `"abc".match(".")`
- *     is therefore `null` here, where a complete ES5 implementation would
- *     match `"a"`.
- *
- * That second point is a deliberate, documented deviation from ES5's implicit
- * `new RegExp(string)` for `match`/`search`, and it is the whole of the
- * deviation: it disappears when the RegExp milestone replaces the literal
- * search with a real matcher. It is preferred over refusing syntax-bearing
- * strings because a uniform, predictable rule across the four methods is
- * easier for guest code to reason about than a partial one, and because the
- * milestone's stated scope is string patterns.
- *
- * The RegExp-object refusal is an engine-limitation error rather than a guest
- * completion, matching how the evaluator refuses a regular expression
- * literal: a guest `try`/`catch` cannot turn it into ordinary control flow
- * and mistake it for specified behaviour.
+ * `match` and `search` have no such literal branch: ES5 15.5.4.10 and
+ * 15.5.4.12 always coerce their pattern into a `RegExp` first (`new
+ * RegExp(pattern)` when it is not one already), so their algorithms —
+ * `matchWithRegExp`, `searchWithRegExp` — live in `string-regexp.js` next to
+ * `replaceWithRegExp` and `splitWithRegExp`, the RegExp-driven half of
+ * `replace` and `split`. `builtins/primitive-wrappers.js` is what decides,
+ * per method, which half to call.
  *
  * As everywhere else in the String family, the searching itself is done on
  * code units read by index (`string-search.js`, `runtime/code-units.js`); no
  * host `String.prototype.match`/`replace`/`search`/`split` is involved.
  */
-
-/**
- * Refuses a real RegExp pattern. Only the `[[Class]]` is consulted, exactly
- * as ES5 15.5.4.10-14 specify, so an ordinary object that merely carries
- * `source`/`global`/`exec` properties is *not* refused: it is a plain object
- * and its pattern is `ToString(value)`.
- *
- * @param {unknown} pattern
- * @param {string} methodName
- * @returns {void}
- */
-export function rejectRegExpPattern(pattern, methodName) {
-  if (pattern instanceof EngineObject && pattern.getClassName() === 'RegExp') {
-    throw createUnsupportedOperationError(
-      `String#${methodName} with a RegExp pattern`,
-    );
-  }
-}
-
-/**
- * ES5 15.5.4.10 for a literal pattern: the result has the shape
- * `RegExp.prototype.exec` gives a non-global match (15.10.6.2 steps 15-19) —
- * element 0 is the matched substring, plus `index` and `input` — or `null`.
- *
- * @param {import('../runtime/realm.js').Realm} realm
- * @param {string} value
- * @param {string} pattern
- * @returns {EngineArray | null}
- */
-export function matchLiteralPattern(realm, value, pattern) {
-  const index = stringIndexOf(value, pattern, 0);
-
-  if (index < 0) {
-    return null;
-  }
-
-  const result = new EngineArray(
-    /** @type {any} */ (realm.intrinsics).arrayPrototype,
-  );
-
-  defineDataProperty(result, '0', pattern);
-  defineDataProperty(result, 'index', index);
-  defineDataProperty(result, 'input', value);
-
-  return result;
-}
 
 /**
  * ES5 15.5.4.11's non-RegExp branch. `matched` is the search string itself,
@@ -115,19 +59,37 @@ export function replaceFirst(value, search, replacer) {
 }
 
 /**
- * Expands the ES5 Table 22 replacement tokens for a *string* pattern: `$$`,
- * `$&`, `` $` ``, and `$'`. `$1`-`$99` are not expanded, because a string
- * pattern has no captures at all and Table 22 leaves that case
- * implementation-defined; the token text is kept, which is what shipping
- * engines do. Any other `$` sequence is literal text.
+ * Expands the ES5 Table 22 replacement tokens: `$$`, `$&`, `` $` ``, `$'`,
+ * and now `$1`-`$9`/`$01`-`$99`, shared by both pattern halves — the
+ * string-separator branch above calls this with an empty `captures`, and
+ * `string-regexp.js`'s `replaceWithRegExp` calls it with the match's actual
+ * captures.
+ *
+ * A one- or two-digit `$n`/`$nn` names a 1-based capture index. Shipping
+ * engines prefer the two-digit reading when it names a capture that exists
+ * (`nn` between 1 and `captures.length`), fall back to the one-digit reading
+ * on the same condition, and otherwise leave the `$` and its digits as
+ * literal text — Table 22 leaves a capture index above the group count
+ * implementation-defined, and that fallback is also what keeps the
+ * string-pattern branch's `captures.length === 0` case behaving exactly as
+ * it always has: `$1` stays literal text because no capture index is ever
+ * in range. A capture that did not participate in the match (`undefined`)
+ * expands to the empty string. Any other `$` sequence is literal text.
  *
  * @param {string} replacement
  * @param {string} matched
  * @param {number} position
  * @param {string} value
+ * @param {readonly (string | undefined)[]} captures
  * @returns {string}
  */
-export function expandReplacement(replacement, matched, position, value) {
+export function expandReplacement(
+  replacement,
+  matched,
+  position,
+  value,
+  captures,
+) {
   let result = '';
 
   for (let index = 0; index < replacement.length; index += 1) {
@@ -152,6 +114,27 @@ export function expandReplacement(replacement, matched, position, value) {
         position + matched.length,
         value.length,
       );
+    } else if (isAsciiDigit(next)) {
+      const oneDigitValue = digitValue(next);
+      const secondDigit = replacement[index + 2];
+      const twoDigitValue = isAsciiDigit(secondDigit)
+        ? oneDigitValue * 10 + digitValue(secondDigit)
+        : -1;
+
+      if (twoDigitValue >= 1 && twoDigitValue <= captures.length) {
+        result += captures[twoDigitValue - 1] ?? '';
+        // The shared `index += 1` below accounts for one digit; a
+        // two-digit capture index consumes a second.
+        index += 1;
+      } else if (oneDigitValue >= 1 && oneDigitValue <= captures.length) {
+        result += captures[oneDigitValue - 1] ?? '';
+      } else {
+        // Neither reading names a capture that exists: the `$` stands for
+        // itself and its digits are reconsidered as literal text on the
+        // following iterations.
+        result += unit;
+        continue;
+      }
     } else {
       // Not a token: the `$` stands for itself and the next code unit is
       // reconsidered from the top on the following iteration.
@@ -163,6 +146,22 @@ export function expandReplacement(replacement, matched, position, value) {
   }
 
   return result;
+}
+
+/**
+ * @param {string | undefined} unit
+ * @returns {boolean}
+ */
+function isAsciiDigit(unit) {
+  return unit !== undefined && unit >= '0' && unit <= '9';
+}
+
+/**
+ * @param {string} unit A single ASCII digit code unit.
+ * @returns {number}
+ */
+function digitValue(unit) {
+  return charCodeOfCodeUnit(unit) - charCodeOfCodeUnit('0');
 }
 
 /**
