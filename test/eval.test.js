@@ -163,6 +163,19 @@ const tests = [
     },
   },
   {
+    name: 'eval of deeply nested but valid source does not leak a host RangeError',
+    run() {
+      // A host RangeError from a runaway AST walk would escape the guest
+      // boundary entirely — not a guest throw completion, but a host crash
+      // through `evaluateScript`. Deep-but-valid source must simply run.
+      const chain = '.a'.repeat(20000);
+      const result = run(`eval("if (false) { a${chain}; } 7;");`);
+
+      assertSame(result.type, 'normal');
+      assertSame(result.value, 7);
+    },
+  },
+  {
     name: 'eval("throw 1;") surfaces the guest throw with value 1',
     run() {
       const result = run('eval("throw 1;");');

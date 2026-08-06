@@ -213,6 +213,62 @@ const tests = [
       assertSame(error.loc.column, 14);
     },
   },
+  {
+    name: 'a deeply nested but valid program parses without exhausting the stack',
+    run() {
+      // Acorn parses a member chain iteratively, so it accepts far deeper
+      // input than a recursive AST walk survives. The statement-position
+      // check must not lower the depth the parser as a whole accepts, or
+      // valid programs start failing with a host RangeError instead of
+      // parsing.
+      const program = parseScript(
+        `if (false) { a${'.a'.repeat(DEEP_MEMBER_CHAIN_LENGTH)}; }`,
+      );
+
+      assertSame(program.type, 'Program');
+      assertSame(program.body[0].type, 'IfStatement');
+    },
+  },
+  {
+    name: 'a cyclic custom AST terminates instead of running away',
+    run() {
+      // `parseScript` accepts a custom `parse` hook, so the walk cannot
+      // assume the tree it is handed is acyclic. A cycle must not spin
+      // forever or overflow the stack.
+      const block = /** @type {any} */ ({
+        type: 'BlockStatement',
+        body: /** @type {any[]} */ ([]),
+      });
+      block.body.push(block);
+
+      const cyclic = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [block],
+      };
+
+      const program = parseScript('', { parse: () => cyclic });
+
+      assertSame(program.type, 'Program');
+    },
+  },
+  {
+    name: 'a statement-position function declaration is still rejected when deeply nested',
+    run() {
+      // The depth fix must not cost reach: the offending node here sits
+      // below thousands of enclosing blocks.
+      const depth = 2000;
+      const source = `${'{'.repeat(depth)}while (false) function f() {}${'}'.repeat(depth)}`;
+
+      assertThrows(() => parseScript(source), SyntaxError);
+    },
+  },
 ];
+
+/**
+ * Long enough to overflow a recursive AST walk on every host we run on,
+ * while staying inside what Acorn itself accepts.
+ */
+const DEEP_MEMBER_CHAIN_LENGTH = 20000;
 
 export default tests;

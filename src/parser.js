@@ -140,15 +140,19 @@ function validateScriptProgram(program) {
  * The five statement forms whose ES5.1 grammar body is a single `Statement`
  * and therefore cannot be a `FunctionDeclaration`.
  *
- * @type {Record<string, string>}
+ * A `Map` rather than an object literal so a node whose `type` happens to
+ * name an `Object.prototype` member (`constructor`, `toString`) cannot be
+ * mistaken for one of these parents.
+ *
+ * @type {ReadonlyMap<string, string>}
  */
-const STATEMENT_BODY_PARENT_LABELS = Object.freeze({
-  WithStatement: 'with statement',
-  WhileStatement: 'while statement',
-  DoWhileStatement: 'do-while statement',
-  ForStatement: 'for statement',
-  ForInStatement: 'for-in statement',
-});
+const STATEMENT_BODY_PARENT_LABELS = new Map([
+  ['WithStatement', 'with statement'],
+  ['WhileStatement', 'while statement'],
+  ['DoWhileStatement', 'do-while statement'],
+  ['ForStatement', 'for statement'],
+  ['ForInStatement', 'for-in statement'],
+]);
 
 /**
  * Property keys that hold source-position metadata rather than child nodes;
@@ -184,37 +188,77 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * (`with (o) a: b: function f(){}`) is rejected too, because the label
  * chain does not turn a `SourceElement` into a `Statement` in body position.
  *
- * @param {any} node
+ * The walk is an explicit worklist rather than recursion: Acorn parses a
+ * member chain iteratively and so accepts input far deeper than a recursive
+ * walk survives, and a recursive walk here would turn valid deep programs
+ * into a host `RangeError` escaping through `eval`. The visited set also
+ * makes a cyclic tree — which the `parse` hook could hand us — terminate.
+ *
+ * @param {any} root
  * @returns {void}
  */
-function checkStatementPositionFunctionDeclarations(node) {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
+function checkStatementPositionFunctionDeclarations(root) {
+  /** @type {any[]} */
+  const pending = [root];
+  /** @type {WeakSet<object>} */
+  const seen = new WeakSet();
 
-  if (Array.isArray(node)) {
-    for (const element of node) {
-      checkStatementPositionFunctionDeclarations(element);
+  while (pending.length > 0) {
+    const node = pending.pop();
+
+    if (!node || typeof node !== 'object') {
+      continue;
     }
-    return;
-  }
 
-  if (typeof node.type !== 'string') {
-    return;
-  }
+    if (seen.has(node)) {
+      continue;
+    }
 
-  if (node.type in STATEMENT_BODY_PARENT_LABELS) {
-    const offending = unwrapLabeledFunctionDeclaration(node.body);
+    seen.add(node);
 
-    if (offending) {
-      throw statementPositionFunctionError(node.type, offending);
+    if (Array.isArray(node)) {
+      for (let index = node.length - 1; index >= 0; index -= 1) {
+        pushChild(pending, node[index]);
+      }
+      continue;
+    }
+
+    if (typeof node.type !== 'string') {
+      continue;
+    }
+
+    const parentLabel = STATEMENT_BODY_PARENT_LABELS.get(node.type);
+
+    if (parentLabel !== undefined) {
+      const offending = unwrapLabeledFunctionDeclaration(node.body);
+
+      if (offending) {
+        throw statementPositionFunctionError(parentLabel, offending);
+      }
+    }
+
+    const keys = Object.keys(node);
+
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      if (!NODE_POSITION_KEYS.has(keys[index])) {
+        pushChild(pending, node[keys[index]]);
+      }
     }
   }
+}
 
-  for (const key of Object.keys(node)) {
-    if (!NODE_POSITION_KEYS.has(key)) {
-      checkStatementPositionFunctionDeclarations(node[key]);
-    }
+/**
+ * Queues one candidate child. Children are pushed in reverse so popping
+ * visits them in source order, which makes the first offending declaration
+ * in the program the one reported.
+ *
+ * @param {any[]} pending
+ * @param {unknown} value
+ * @returns {void}
+ */
+function pushChild(pending, value) {
+  if (value && typeof value === 'object') {
+    pending.push(value);
   }
 }
 
@@ -224,13 +268,23 @@ function checkStatementPositionFunctionDeclarations(node) {
  * ordinary statement. A labelled statement's body is itself a `Statement`,
  * so `a: b: function f(){}` unwraps to the function declaration.
  *
+ * The visited set guards against a cyclic label chain, which a custom
+ * `parse` hook could hand us.
+ *
  * @param {any} statement
  * @returns {any}
  */
 function unwrapLabeledFunctionDeclaration(statement) {
   let current = statement;
+  /** @type {WeakSet<object>} */
+  const visited = new WeakSet();
 
   while (current && current.type === 'LabeledStatement') {
+    if (visited.has(current)) {
+      return undefined;
+    }
+
+    visited.add(current);
     current = current.body;
   }
 
@@ -244,13 +298,11 @@ function unwrapLabeledFunctionDeclaration(statement) {
  * function declaration, carrying the offending node's position through
  * `normalizeSyntaxError` so it reads like any other parse error.
  *
- * @param {string} parentType
+ * @param {string} label
  * @param {any} node
  * @returns {SyntaxError}
  */
-function statementPositionFunctionError(parentType, node) {
-  const label = STATEMENT_BODY_PARENT_LABELS[parentType] ?? 'statement';
-
+function statementPositionFunctionError(label, node) {
   return normalizeSyntaxError({
     message: `Function declarations cannot appear as the body of a ${label}`,
     pos: typeof node.start === 'number' ? node.start : undefined,
