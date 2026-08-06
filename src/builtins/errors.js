@@ -39,7 +39,7 @@ const ERROR_NAMES = /** @type {const} */ ([
  * @returns {EngineObject}
  */
 function buildNativeErrorPrototype(errorPrototype, name) {
-  const proto = new EngineObject(errorPrototype);
+  const proto = new EngineObject(errorPrototype, 'Error');
   proto.defineOwnProperty('name', {
     value: name,
     writable: true,
@@ -82,7 +82,7 @@ function buildErrorConstructor(realm, name, errorPrototype) {
    * @returns {EngineObject}
    */
   function createErrorInstance(args) {
-    const instance = new EngineObject(errorPrototype);
+    const instance = new EngineObject(errorPrototype, 'Error');
 
     if (args[0] !== undefined) {
       instance.defineOwnProperty('message', {
@@ -241,7 +241,7 @@ export function createGuestError(realm, typeName, message) {
       ? /** @type {EngineObject} */ (intrinsics[protoKey])
       : intrinsics.errorPrototype;
 
-  const instance = new EngineObject(proto);
+  const instance = new EngineObject(proto, 'Error');
 
   instance.defineOwnProperty('message', {
     value: message,
