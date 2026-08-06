@@ -32,6 +32,7 @@ import updateAssignment from './update-assignment.test.js';
 import inInstanceof from './in-instanceof.test.js';
 import strictMode from './strict-mode.test.js';
 import evalCode from './eval.test.js';
+import dynamicFunction from './dynamic-function.test.js';
 import deleteOperator from './delete.test.js';
 import dateArithmetic from './date-arithmetic.test.js';
 import dateBuiltins from './date-builtins.test.js';
@@ -118,6 +119,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/eval.test.js',
     tests: evalCode,
+  }),
+  Object.freeze({
+    file: 'test/dynamic-function.test.js',
+    tests: dynamicFunction,
   }),
   Object.freeze({
     file: 'test/delete.test.js',

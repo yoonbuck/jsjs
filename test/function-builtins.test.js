@@ -47,22 +47,11 @@ const tests = [
     },
   },
   {
-    name: 'dynamic Function construction throws an explicit guest policy error',
+    name: 'dynamic Function construction compiles and runs guest source',
     run() {
-      assertSame(
-        run(
-          'var result; try { Function("return 1"); } catch (error) { ' +
-            'result = error.name + ":" + error.message; } result;',
-        ),
-        'Error:Dynamic Function constructor is not supported',
-      );
-      assertSame(
-        run(
-          'var name; try { new Function("return 1"); } ' +
-            'catch (error) { name = error.name; } name;',
-        ),
-        'Error',
-      );
+      assertSame(run('Function("return 1;")();'), 1);
+      assertSame(run('new Function("a", "b", "return a + b;")(2, 3);'), 5);
+      assertSame(run('typeof new Function("return 1;");'), 'function');
     },
   },
   {
