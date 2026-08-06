@@ -1,8 +1,9 @@
 import { EngineObject } from '../runtime/object.js';
+import { EngineArray } from '../runtime/array-object.js';
 import { EngineRegExp } from '../runtime/regexp-object.js';
 import { compilePattern } from '../runtime/regexp-compat.js';
 import { parseFlags, RegExpSyntaxError } from '../runtime/regexp-syntax.js';
-import { toString } from '../runtime/conversion.js';
+import { toBoolean, toInteger, toString } from '../runtime/conversion.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 
 /**
@@ -70,6 +71,10 @@ export function createRegExpIntrinsics(realm) {
     configurable: true,
   });
 
+  installExecMethod(realm, regExpPrototype);
+  installTestMethod(realm, regExpPrototype);
+  installToStringMethod(realm, regExpPrototype);
+
   return { regExpConstructor };
 }
 
@@ -81,6 +86,226 @@ export function createRegExpIntrinsics(realm) {
 export function installRegExpConstructor(globalObject, intrinsics) {
   globalObject.defineOwnProperty('RegExp', {
     value: intrinsics.regExpConstructor,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+/**
+ * Implements ES5 15.10.6.2 `RegExp.prototype.exec(string)` as a standalone
+ * abstract operation rather than a property of `%RegExp.prototype%`,
+ * because two other call sites need the *algorithm* and not the
+ * (guest-overridable) `exec` property: 15.10.6.3 `RegExp.prototype.test`
+ * below, per its literal spec text "the result obtained by evaluating
+ * `RegExp.prototype.exec (String( string ))` as if that expression were the
+ * `MemberExpression` in ... a `new` expression", and Task 3's
+ * `String.prototype.match`/`replace`/`search`/`split`.
+ *
+ * Steps 4/6/9.a/11 read/write `lastIndex`/`global` through `R`'s own
+ * `[[Get]]`/`[[Put]]` (`EngineObject.get`/`put`), not the constructor's
+ * internal `flags` field, so a guest rewrite of `lastIndex` (or, in
+ * principle, an own `global` — though that property is non-configurable
+ * per 15.10.7.2) is honoured exactly as ES5 specifies. `[[Put]]` is called
+ * with `throwOnError = true`, so a guest-frozen `lastIndex` makes `exec`
+ * throw a guest `TypeError` instead of silently failing to update it.
+ *
+ * @param {Realm} realm
+ * @param {unknown} thisValue
+ * @param {unknown} string
+ * @returns {EngineArray | null}
+ */
+export function regExpExec(realm, thisValue, string) {
+  if (!isRegExpObject(thisValue)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'RegExp.prototype.exec called on a value that is not a RegExp object',
+    );
+  }
+
+  const R = /** @type {EngineRegExp} */ (thisValue);
+  // ToString(undefined) is the literal text "undefined": exec() with no
+  // argument therefore searches for that string, not an empty pattern.
+  const S = toString(string);
+  const length = S.length;
+
+  let i = toInteger(R.get('lastIndex'));
+  const global = toBoolean(R.get('global'));
+
+  if (!global) {
+    i = 0;
+  }
+
+  /** @type {import('../runtime/regexp-compat.js').MatchResult | null} */
+  let matchResult = null;
+
+  while (matchResult === null) {
+    if (i < 0 || i > length) {
+      R.put('lastIndex', 0, true);
+      return null;
+    }
+
+    matchResult = R.matchAt(S, i);
+
+    if (matchResult === null) {
+      i += 1;
+    }
+  }
+
+  const e = matchResult.endIndex;
+
+  if (global) {
+    R.put('lastIndex', e, true);
+  }
+
+  const n = R.capturingGroups;
+  const result = new EngineArray(realm.intrinsics.arrayPrototype);
+
+  // ES5 15.10.6.2 steps 14-20 define '0'..'n' before 'index'/'input', but
+  // this engine's own-property enumeration order is insertion order, and
+  // ES5 leaves own-property enumeration order implementation-defined
+  // (there is no `[[OwnPropertyKeys]]` ordering requirement until ES2015).
+  // Every shipping engine lists '0'..'n' before 'index'/'input' in
+  // `Object.keys`, so the elements are defined first to match that de
+  // facto convention rather than the spec's incidental step order.
+  defineResultProperty(result, '0', matchResult.matched);
+
+  for (let group = 1; group <= n; group += 1) {
+    defineResultProperty(
+      result,
+      String(group),
+      matchResult.captures[group - 1],
+    );
+  }
+
+  defineResultProperty(result, 'index', i);
+  defineResultProperty(result, 'input', S);
+
+  return result;
+}
+
+/**
+ * @param {EngineArray} result
+ * @param {string} name
+ * @param {unknown} value
+ * @returns {void}
+ */
+function defineResultProperty(result, name, value) {
+  result.defineOwnProperty(name, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * Installs `RegExp.prototype.exec` (ES5 15.10.6.2), `length` 1, with the
+ * standard method descriptor (`{ writable: true, enumerable: false,
+ * configurable: true }`) every other built-in method in this engine uses
+ * (`primitive-wrappers.js`, `array.js`).
+ *
+ * @param {Realm} realm
+ * @param {EngineRegExp} regExpPrototype
+ * @returns {void}
+ */
+function installExecMethod(realm, regExpPrototype) {
+  defineMethod(
+    regExpPrototype,
+    'exec',
+    realm.createNativeFunction({
+      name: 'exec',
+      length: 1,
+      call(thisValue, args) {
+        return regExpExec(realm, thisValue, args[0]);
+      },
+    }),
+  );
+}
+
+/**
+ * Implements ES5 15.10.6.3 `RegExp.prototype.test(string)`: "the result
+ * obtained by evaluating the `RegExp.prototype.exec` algorithm", not the
+ * (possibly guest-overwritten) `exec` property — `test` calls `regExpExec`
+ * directly so overwriting `RegExp.prototype.exec` from guest code cannot
+ * change what `test` does.
+ *
+ * @param {Realm} realm
+ * @param {EngineRegExp} regExpPrototype
+ * @returns {void}
+ */
+function installTestMethod(realm, regExpPrototype) {
+  defineMethod(
+    regExpPrototype,
+    'test',
+    realm.createNativeFunction({
+      name: 'test',
+      length: 1,
+      call(thisValue, args) {
+        return regExpExec(realm, thisValue, args[0]) !== null;
+      },
+    }),
+  );
+}
+
+/**
+ * Implements ES5 15.10.6.4 `RegExp.prototype.toString()`:
+ * `'/' + ToString(source) + '/'` plus a fixed `gim`-ordered flag suffix,
+ * regardless of the order flags were supplied in when the pattern was
+ * constructed (`new RegExp('a', 'mig').toString() === '/a/gim'`).
+ * `RegExp.prototype.toString()` (the empty pattern, no flags) is
+ * `'/(?:)/'`.
+ *
+ * @param {Realm} realm
+ * @param {EngineRegExp} regExpPrototype
+ * @returns {void}
+ */
+function installToStringMethod(realm, regExpPrototype) {
+  defineMethod(
+    regExpPrototype,
+    'toString',
+    realm.createNativeFunction({
+      name: 'toString',
+      length: 0,
+      call(thisValue) {
+        if (!isRegExpObject(thisValue)) {
+          throw new GuestErrorSignal(
+            'TypeError',
+            'RegExp.prototype.toString called on a value that is not a RegExp object',
+          );
+        }
+
+        const R = /** @type {EngineRegExp} */ (thisValue);
+        const source = toString(R.get('source'));
+        let flagsText = '';
+
+        if (toBoolean(R.get('global'))) {
+          flagsText += 'g';
+        }
+
+        if (toBoolean(R.get('ignoreCase'))) {
+          flagsText += 'i';
+        }
+
+        if (toBoolean(R.get('multiline'))) {
+          flagsText += 'm';
+        }
+
+        return '/' + source + '/' + flagsText;
+      },
+    }),
+  );
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {string} name
+ * @param {unknown} value
+ * @returns {void}
+ */
+function defineMethod(target, name, value) {
+  target.defineOwnProperty(name, {
+    value,
     writable: true,
     enumerable: false,
     configurable: true,

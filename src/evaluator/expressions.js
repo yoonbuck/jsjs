@@ -41,6 +41,7 @@ import {
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { createFunctionObject } from './declarations.js';
+import { createRegExpFromPattern } from '../builtins/regexp.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -109,7 +110,7 @@ export const EXPRESSION_TYPES = new Set([
 export function evaluateExpression(node, context) {
   switch (node.type) {
     case 'Literal':
-      return evaluateLiteral(node);
+      return evaluateLiteral(node, context);
     case 'Identifier':
       return getIdentifierReference(context.env, node.name, context.strict);
     case 'ThisExpression':
@@ -159,14 +160,37 @@ export function evaluateExpressionValue(node, context) {
 }
 
 /**
+ * ES5 15.10.4.1 makes each *evaluation* of a regular expression literal
+ * produce a distinct new `RegExp` object — the ES3-to-ES5 change from a
+ * single object shared across evaluations, so `function f() { return /a/; }
+ * f() !== f()` holds. `node.regex.pattern`/`node.regex.flags` are Acorn's
+ * ESTree extension carrying the literal's already-lexed pattern and flag
+ * text; the pattern is re-validated and (re)compiled by
+ * `createRegExpFromPattern` on every evaluation, exactly as a `new
+ * RegExp(pattern, flags)` call would.
+ *
+ * Acorn (`ecmaVersion: 5`) rejects flags outside `g`/`i`/`m` and any
+ * pattern its own regex dialect considers invalid, but its regex grammar is
+ * looser than ES5.1 15.10.1's `Pattern` production: it accepts some
+ * patterns ES5 rejects as early (parse-time) errors, e.g. a bare `]` or `{`
+ * with no matching quantifier meaning outside a character class. This
+ * engine cannot reject those at parse time without its own regex grammar
+ * living in the parser, so it is an intentional, documented deviation from
+ * ES5: such a literal parses successfully and only throws — a guest
+ * `SyntaxError`, via `createRegExpFromPattern`'s `RegExpSyntaxError`
+ * conversion — when it is *evaluated*, not when the script is parsed.
+ *
  * @param {any} node
+ * @param {EvaluationContext} context
  * @returns {unknown}
  */
-function evaluateLiteral(node) {
+function evaluateLiteral(node, context) {
   if (node.regex) {
-    // No guest RegExp object exists yet; reject explicitly instead of
-    // leaking the host RegExp instance Acorn attaches as `node.value`.
-    throw createUnsupportedNodeError({ type: 'RegExpLiteral' });
+    return createRegExpFromPattern(
+      context.realm,
+      node.regex.pattern,
+      node.regex.flags,
+    );
   }
 
   return node.value;
