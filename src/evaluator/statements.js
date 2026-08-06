@@ -673,7 +673,6 @@ function evaluateTryStatement(node, context) {
         () => evaluateStatementList(node.handler.body.body, catchContext),
         context.realm,
       );
-      blockCompletion = updateEmpty(blockCompletion, undefined);
     }
   }
 

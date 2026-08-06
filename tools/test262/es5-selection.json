@@ -3820,6 +3820,16 @@
       "reason": "Asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
+      "path": "test/language/statements/try/cptn-catch-empty-break.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015 §13.15.8 `TryStatement` UpdateEmpty semantics; ES5.1 §12.14 Catch step 9 returns the catch block completion unchanged."
+    },
+    {
+      "path": "test/language/statements/try/cptn-catch-empty-continue.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015 §13.15.8 `TryStatement` UpdateEmpty semantics; ES5.1 §12.14 Catch step 9 returns the catch block completion unchanged."
+    },
+    {
       "path": "test/language/statements/try/cptn-catch-finally-empty-break.js",
       "category": "post-es5-semantics",
       "reason": "Asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
@@ -3830,6 +3840,11 @@
       "reason": "Asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
+      "path": "test/language/statements/try/cptn-catch.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015 §13.15.8 `TryStatement` UpdateEmpty semantics; ES5.1 §12.14 Catch step 9 returns the catch block completion unchanged."
+    },
+    {
       "path": "test/language/statements/try/cptn-finally-empty-break.js",
       "category": "post-es5-semantics",
       "reason": "Asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
@@ -3838,6 +3853,11 @@
       "path": "test/language/statements/try/cptn-finally-empty-continue.js",
       "category": "post-es5-semantics",
       "reason": "Asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
+    },
+    {
+      "path": "test/language/statements/try/cptn-finally-from-catch.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015 §13.15.8 `TryStatement` UpdateEmpty semantics after a catch; ES5.1 §12.14 returns the unchanged catch completion when the finally block completes normally."
     },
     {
       "path": "test/language/statements/try/cptn-finally-skip-catch.js",
