@@ -5,6 +5,11 @@ import {
   dateCallString,
   dateFromLocalArguments,
   dateUTC,
+  formatISOString,
+  formatLocalDate,
+  formatLocalDateTime,
+  formatLocalTime,
+  formatUTCString,
   hourFromTime,
   makeDate,
   makeDay,
@@ -19,8 +24,15 @@ import {
   yearFromTime,
   msFromTime,
 } from '../runtime/date.js';
-import { toInteger, toNumber, toPrimitive, toString } from '../runtime/conversion.js';
+import {
+  toInteger,
+  toNumber,
+  toObject,
+  toPrimitive,
+  toString,
+} from '../runtime/conversion.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
+import { isCallable } from '../runtime/descriptors.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -37,8 +49,8 @@ import { GuestErrorSignal } from '../runtime/completion.js';
  */
 export function createDateIntrinsics(realm) {
   const datePrototype = new EngineDate(realm.intrinsics.objectPrototype, NaN);
-  const defaultToString = realm.intrinsics.objectPrototype.get('toString');
-  const defaultValueOf = realm.intrinsics.objectPrototype.get('valueOf');
+  let defaultToString = realm.intrinsics.objectPrototype.get('toString');
+  let defaultValueOf = realm.intrinsics.objectPrototype.get('valueOf');
 
   /**
    * @param {readonly unknown[]} args
@@ -85,6 +97,8 @@ export function createDateIntrinsics(realm) {
     timeClip(realm.dateHost.now()),
   );
   installDatePrototypeMethods(realm, datePrototype);
+  defaultToString = datePrototype.get('toString');
+  defaultValueOf = datePrototype.get('valueOf');
 
   return { datePrototype, dateConstructor };
 }
@@ -135,6 +149,72 @@ function installDatePrototypeMethods(realm, datePrototype) {
     const offset = realm.dateHost.timezoneOffset(date.timeValue);
     return Number.isFinite(offset) ? offset : NaN;
   });
+  defineMethod(realm, datePrototype, 'toString', 0, (thisValue) =>
+    formatLocalDateTime(requireDate(thisValue).timeValue, realm.dateHost),
+  );
+  defineMethod(realm, datePrototype, 'toDateString', 0, (thisValue) =>
+    formatLocalDate(requireDate(thisValue).timeValue, realm.dateHost),
+  );
+  defineMethod(realm, datePrototype, 'toTimeString', 0, (thisValue) =>
+    formatLocalTime(requireDate(thisValue).timeValue, realm.dateHost),
+  );
+  defineMethod(realm, datePrototype, 'toLocaleString', 0, (thisValue) =>
+    formatLocalDateTime(requireDate(thisValue).timeValue, realm.dateHost),
+  );
+  defineMethod(realm, datePrototype, 'toLocaleDateString', 0, (thisValue) =>
+    formatLocalDate(requireDate(thisValue).timeValue, realm.dateHost),
+  );
+  defineMethod(realm, datePrototype, 'toLocaleTimeString', 0, (thisValue) =>
+    formatLocalTime(requireDate(thisValue).timeValue, realm.dateHost),
+  );
+  const toUTCString = realm.createNativeFunction({
+    name: 'toUTCString',
+    length: 0,
+    call(thisValue) {
+      return formatUTCString(requireDate(thisValue).timeValue);
+    },
+  });
+  datePrototype.defineOwnProperty('toUTCString', {
+    value: toUTCString,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  datePrototype.defineOwnProperty('toGMTString', {
+    value: toUTCString,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  defineMethod(realm, datePrototype, 'toISOString', 0, (thisValue) => {
+    const timeValue = requireDate(thisValue).timeValue;
+    if (!Number.isFinite(timeValue)) {
+      throw new GuestErrorSignal('RangeError', 'Invalid time value');
+    }
+
+    return formatISOString(timeValue);
+  });
+  defineMethod(realm, datePrototype, 'toJSON', 1, (thisValue) => {
+    const object = toObject(realm, thisValue);
+    const primitive = toPrimitive(object, 'number');
+    if (typeof primitive === 'number' && !Number.isFinite(primitive)) {
+      return null;
+    }
+
+    const toISOString = object.get('toISOString');
+    if (!isCallable(toISOString)) {
+      throw new GuestErrorSignal('TypeError', 'toISOString is not callable');
+    }
+
+    return toISOString.callFunction(object, []);
+  });
+  defineMethod(
+    realm,
+    datePrototype,
+    'valueOf',
+    0,
+    (thisValue) => requireDate(thisValue).timeValue,
+  );
 
   defineMethod(realm, datePrototype, 'setTime', 1, (thisValue, args) => {
     const date = requireDate(thisValue);
@@ -339,11 +419,7 @@ function dateValueFromArguments(
 
     if (
       value instanceof EngineDate &&
-      !hasDateConversionOverride(
-        value,
-        defaultToString,
-        defaultValueOf,
-      )
+      !hasDateConversionOverride(value, defaultToString, defaultValueOf)
     ) {
       return value.timeValue;
     }
@@ -358,20 +434,15 @@ function dateValueFromArguments(
 }
 
 /**
- * Date's conversion methods are intentionally out of scope. A plain engine
- * Date therefore retains its internal-value clone path, while user-installed
- * methods expose the ES5 String-hint conversion observable to guest code.
+ * A plain engine Date retains its internal-value clone path, while
+ * user-installed conversion methods expose ES5 String-hint conversion.
  *
  * @param {unknown} value
  * @param {unknown} defaultToString
  * @param {unknown} defaultValueOf
  * @returns {boolean}
  */
-function hasDateConversionOverride(
-  value,
-  defaultToString,
-  defaultValueOf,
-) {
+function hasDateConversionOverride(value, defaultToString, defaultValueOf) {
   if (!(value instanceof EngineDate)) {
     return false;
   }

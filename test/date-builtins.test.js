@@ -23,7 +23,10 @@ function runDate(source, options) {
   assertSame(completion.type, 'normal');
 
   const result = realm.globalObject.get('result');
-  assertSame(typeof /** @type {{ timeValue?: unknown }} */ (result).timeValue, 'number');
+  assertSame(
+    typeof (/** @type {{ timeValue?: unknown }} */ (result).timeValue),
+    'number',
+  );
   return /** @type {{ timeValue: number }} */ (result);
 }
 
@@ -33,9 +36,15 @@ export default [
     run() {
       assertSame(run('typeof Date;'), 'function');
       assertSame(run('new Date(0) instanceof Date;'), true);
-      assertSame(run('Object.prototype.toString.call(new Date(0));'), '[object Date]');
+      assertSame(
+        run('Object.prototype.toString.call(new Date(0));'),
+        '[object Date]',
+      );
       assertSame(runDate('new Date(123.9)').timeValue, 123);
-      assertSame(Number.isNaN(runDate('new Date(8640000000000001)').timeValue), true);
+      assertSame(
+        Number.isNaN(runDate('new Date(8640000000000001)').timeValue),
+        true,
+      );
     },
   },
   {
@@ -49,9 +58,18 @@ export default [
       };
 
       assertSame(runDate('new Date(new Date(123))', options).timeValue, 123);
-      assertSame(runDate('new Date("1970-01-01T00:00:00.000Z")', options).timeValue, 0);
-      assertSame(runDate('new Date(1970, 0, 1, 0, 0, 0, 0)', options).timeValue, -7200000);
-      assertSame(runDate('new Date(99, 0, 1)', options).timeValue, 915141600000);
+      assertSame(
+        runDate('new Date("1970-01-01T00:00:00.000Z")', options).timeValue,
+        0,
+      );
+      assertSame(
+        runDate('new Date(1970, 0, 1, 0, 0, 0, 0)', options).timeValue,
+        -7200000,
+      );
+      assertSame(
+        runDate('new Date(99, 0, 1)', options).timeValue,
+        915141600000,
+      );
       assertSame(runDate('new Date()', options).timeValue, 987654321);
     },
   },
@@ -68,9 +86,7 @@ export default [
         true,
       );
       assertSame(
-        Number.isNaN(
-          /** @type {number} */ (run('Date.UTC(undefined, 0);')),
-        ),
+        Number.isNaN(/** @type {number} */ (run('Date.UTC(undefined, 0);'))),
         true,
       );
     },
@@ -81,8 +97,14 @@ export default [
       assertSame(run('Date.parse("1970-01-01T00:00:00.000Z");'), 0);
       assertSame(run('Date.parse("1970-01-01T00:00:00+01:30");'), -5400000);
       assertSame(run('Date.parse("2000-02-29");'), 951782400000);
-      assertSame(Number.isNaN(/** @type {number} */ (run('Date.parse("2001-02-29");'))), true);
-      assertSame(Number.isNaN(/** @type {number} */ (run('Date.parse("not a date");'))), true);
+      assertSame(
+        Number.isNaN(/** @type {number} */ (run('Date.parse("2001-02-29");'))),
+        true,
+      );
+      assertSame(
+        Number.isNaN(/** @type {number} */ (run('Date.parse("not a date");'))),
+        true,
+      );
     },
   },
   {
@@ -109,12 +131,18 @@ export default [
   {
     name: 'Date.UTC applies ES5 defaults, two-digit years, normalization, and clipping',
     run() {
-      assertSame(Number.isNaN(/** @type {number} */ (run('Date.UTC(1970);'))), true);
+      assertSame(
+        Number.isNaN(/** @type {number} */ (run('Date.UTC(1970);'))),
+        true,
+      );
       assertSame(run('Date.UTC(1970, 0);'), 0);
       assertSame(run('Date.UTC(99, 0, 1);'), 915148800000);
       assertSame(run('Date.UTC(1970, 12, 1);'), 31536000000);
       assertSame(run('Date.UTC(1970, 0, 1, 0, 0, 0, 1.9);'), 1);
-      assertSame(Number.isNaN(/** @type {number} */ (run('Date.UTC(275760, 8, 14);'))), true);
+      assertSame(
+        Number.isNaN(/** @type {number} */ (run('Date.UTC(275760, 8, 14);'))),
+        true,
+      );
     },
   },
   {
@@ -129,7 +157,10 @@ export default [
 
       assertSame(run('Date.now();', options), 0);
       assertSame(run('typeof Date();', options), 'string');
-      assertSame(run('Date();', options), 'Thu Jan 01 1970 02:00:00 GMT+0200 (UTC)');
+      assertSame(
+        run('Date();', options),
+        'Thu Jan 01 1970 02:00:00 GMT+0200 (UTC)',
+      );
     },
   },
   {
@@ -148,7 +179,7 @@ export default [
     run() {
       assertSame(
         runDate(
-          '(function () { Object.prototype.toString = function () { return "1970-01-01T00:00:00.001Z"; }; return new Date(new Date(0)); }())',
+          '(function () { Date.prototype.toString = function () { return "1970-01-01T00:00:00.001Z"; }; return new Date(new Date(0)); }())',
         ).timeValue,
         1,
       );
@@ -187,7 +218,8 @@ export default [
       const minute = 60 * 1000;
       const day = 24 * 60 * minute;
       const julyProbe = 181 * day;
-      const northernLocalTime = (31 + 28 + 7) * day + 2 * 60 * minute + 30 * minute;
+      const northernLocalTime =
+        (31 + 28 + 7) * day + 2 * 60 * minute + 30 * minute;
       const southernLocalTime =
         (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 3) * day +
         2 * 60 * minute +
@@ -242,7 +274,10 @@ export default [
           },
         };
 
-        assertSame(runDate(testCase.source, options).timeValue, testCase.expectedTime);
+        assertSame(
+          runDate(testCase.source, options).timeValue,
+          testCase.expectedTime,
+        );
         assertSame(observed.join(','), testCase.expectedProbes.join(','));
       }
     },
@@ -447,9 +482,7 @@ export default [
         dateHost: {
           standardTimezoneOffset: 300,
           timezoneOffset(/** @type {number} */ utcMilliseconds) {
-            return utcMilliseconds >= fallLocalTime + 300 * minute
-              ? 300
-              : 240;
+            return utcMilliseconds >= fallLocalTime + 300 * minute ? 300 : 240;
           },
         },
       };
@@ -457,6 +490,67 @@ export default [
       assertSame(
         run('new Date(1970, 10, 1, 0, 30).setHours(1, 30);', options),
         fallLocalTime + 300 * minute,
+      );
+    },
+  },
+  {
+    name: 'Date formatting methods render deterministic local and UTC strings',
+    run() {
+      const options = {
+        dateHost: {
+          now: () => 0,
+          timezoneOffset: () => -90,
+        },
+      };
+
+      assertSame(
+        run(
+          '(function () { var d = new Date(0); return [d.toString(), d.toDateString(), d.toTimeString(), d.toLocaleString(), d.toLocaleDateString(), d.toLocaleTimeString(), d.toUTCString(), d.valueOf(), Date()].join("|"); }())',
+          options,
+        ),
+        'Thu Jan 01 1970 01:30:00 GMT+0130 (UTC)|Thu Jan 01 1970|01:30:00 GMT+0130 (UTC)|Thu Jan 01 1970 01:30:00 GMT+0130 (UTC)|Thu Jan 01 1970|01:30:00 GMT+0130 (UTC)|Thu, 01 Jan 1970 00:00:00 GMT|0|Thu Jan 01 1970 01:30:00 GMT+0130 (UTC)',
+      );
+      assertSame(
+        run('new Date(0).toString() + "|" + new Date(0).toGMTString();', {
+          dateHost: {
+            timezoneOffset: () => 300,
+          },
+        }),
+        'Wed Dec 31 1969 19:00:00 GMT-0500 (UTC)|Thu, 01 Jan 1970 00:00:00 GMT',
+      );
+    },
+  },
+  {
+    name: 'Date formatters handle invalid values, ISO extended years, and UTC aliases',
+    run() {
+      assertSame(
+        run(
+          '(function () { var invalid = new Date(NaN); var error; try { invalid.toISOString(); } catch (caught) { error = caught.name; } return [invalid.toString(), invalid.toDateString(), invalid.toTimeString(), invalid.toLocaleString(), invalid.toLocaleDateString(), invalid.toLocaleTimeString(), invalid.toUTCString(), error, new Date(1).toISOString(), new Date(Date.UTC(-1, 0, 1)).toISOString(), new Date(Date.UTC(10000, 0, 1)).toISOString(), Date.prototype.toGMTString === Date.prototype.toUTCString, Object.getOwnPropertyDescriptor(Date.prototype, "toUTCString").writable, Object.getOwnPropertyDescriptor(Date.prototype, "toUTCString").enumerable, Object.getOwnPropertyDescriptor(Date.prototype, "toUTCString").configurable].join("|"); }())',
+        ),
+        'Invalid Date|Invalid Date|Invalid Date|Invalid Date|Invalid Date|Invalid Date|Invalid Date|RangeError|1970-01-01T00:00:00.001Z|-000001-01-01T00:00:00.000Z|+010000-01-01T00:00:00.000Z|true|true|false|true',
+      );
+      assertSame(
+        run(
+          '(function () { try { Date.prototype.toString.call({}); } catch (error) { return error.name; } }())',
+        ),
+        'TypeError',
+      );
+    },
+  },
+  {
+    name: 'Date toJSON is generic and checks its numeric primitive before toISOString',
+    run() {
+      assertSame(
+        run(
+          '(function () { var log = ""; var invalid = { valueOf: function () { log += "n"; return NaN; }, toISOString: function () { log += "x"; return "wrong"; } }; var valid = { valueOf: function () { log += "v"; return 1; }, toISOString: function () { log += "i"; return "custom"; } }; return [Date.prototype.toJSON.call(new Date(NaN)), Date.prototype.toJSON.call(invalid), Date.prototype.toJSON.call(valid), log].join("|"); }())',
+        ),
+        '||custom|nvi',
+      );
+      assertSame(
+        run(
+          '(function () { try { Date.prototype.toJSON.call(1); } catch (error) { return error.name; } }())',
+        ),
+        'TypeError',
       );
     },
   },

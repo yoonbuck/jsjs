@@ -362,10 +362,7 @@ export function createDateHost(adapter = {}) {
   const standardTimezoneOffset =
     adapter.standardTimezoneOffset ??
     adapter.standardTimeZoneOffset ??
-    Math.max(
-      timezoneOffset(0),
-      timezoneOffset(181 * MS_PER_DAY),
-    );
+    Math.max(timezoneOffset(0), timezoneOffset(181 * MS_PER_DAY));
 
   if (
     typeof now !== 'function' ||
@@ -436,13 +433,23 @@ export function dateUTC(args) {
  * @returns {number}
  */
 export function parseDateString(source, _host) {
-  const iso = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/.exec(
-    source,
-  );
+  const iso =
+    /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/.exec(
+      source,
+    );
 
   if (iso !== null) {
-    const [, yearText, monthText, dateText, hourText, minuteText, secondText, millisecondText, zone] =
-      iso;
+    const [
+      ,
+      yearText,
+      monthText,
+      dateText,
+      hourText,
+      minuteText,
+      secondText,
+      millisecondText,
+      zone,
+    ] = iso;
     const year = Number(yearText);
     const month = monthText === undefined ? 1 : Number(monthText);
     const date = dateText === undefined ? 1 : Number(dateText);
@@ -450,11 +457,11 @@ export function parseDateString(source, _host) {
     const minute = minuteText === undefined ? 0 : Number(minuteText);
     const second = secondText === undefined ? 0 : Number(secondText);
     const millisecond =
-      millisecondText === undefined
-        ? 0
-        : millisecondsFromText(millisecondText);
+      millisecondText === undefined ? 0 : millisecondsFromText(millisecondText);
 
-    if (!validDateFields(year, month, date, hour, minute, second, millisecond)) {
+    if (
+      !validDateFields(year, month, date, hour, minute, second, millisecond)
+    ) {
       return NaN;
     }
 
@@ -487,19 +494,32 @@ export function parseDateString(source, _host) {
       return NaN;
     }
 
-    return timeClip(localTime - sign * (zoneHour * 60 + zoneMinute) * MS_PER_MINUTE);
+    return timeClip(
+      localTime - sign * (zoneHour * 60 + zoneMinute) * MS_PER_MINUTE,
+    );
   }
 
-  const display = /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{2}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT([+-])(\d{2})(\d{2})(?: \(UTC\))?$/.exec(
-    source,
-  );
+  const display =
+    /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{2}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT([+-])(\d{2})(\d{2})(?: \(UTC\))?$/.exec(
+      source,
+    );
 
   if (display === null) {
     return NaN;
   }
 
-  const [, monthName, dateText, yearText, hourText, minuteText, secondText, signText, offsetHourText, offsetMinuteText] =
-    display;
+  const [
+    ,
+    monthName,
+    dateText,
+    yearText,
+    hourText,
+    minuteText,
+    secondText,
+    signText,
+    offsetHourText,
+    offsetMinuteText,
+  ] = display;
   const month = monthNumber(monthName);
   const year = Number(yearText);
   const date = Number(dateText);
@@ -531,27 +551,130 @@ export function parseDateString(source, _host) {
 }
 
 /**
- * Produces the deterministic string required when Date is called without
- * `new`. The public formatting methods remain intentionally uninstalled.
+ * Produces Date's deterministic local date-time display.
  *
  * @param {number} utcMilliseconds
  * @param {DateHost} host
  * @returns {string}
  */
 export function dateCallString(utcMilliseconds, host) {
-  const offset = host.timezoneOffset(utcMilliseconds);
-  const localTime = utcMilliseconds - offset * MS_PER_MINUTE;
-  const offsetMagnitude = Math.abs(offset);
-  const offsetHour = Math.floor(offsetMagnitude / 60);
-  const offsetMinute = offsetMagnitude % 60;
+  return formatLocalDateTime(utcMilliseconds, host);
+}
 
-  return `${WEEKDAY_NAMES[weekDay(localTime)]} ${MONTH_NAMES[monthFromTime(localTime)]} ${pad(
-    dateFromTime(localTime),
-  )} ${padYear(yearFromTime(localTime))} ${pad(hourFromTime(localTime))}:${pad(
-    minFromTime(localTime),
-  )}:${pad(secFromTime(localTime))} GMT${offset <= 0 ? '+' : '-'}${pad(
-    offsetHour,
-  )}${pad(offsetMinute)} (UTC)`;
+/**
+ * @param {number} utcMilliseconds
+ * @param {DateHost} host
+ * @returns {string}
+ */
+export function formatLocalDateTime(utcMilliseconds, host) {
+  const parts = localFormatParts(utcMilliseconds, host);
+  return parts === undefined
+    ? 'Invalid Date'
+    : `${formatDateParts(parts.time)} ${formatTimeParts(parts.time)} GMT${formatOffset(
+        parts.offset,
+      )} (UTC)`;
+}
+
+/**
+ * @param {number} utcMilliseconds
+ * @param {DateHost} host
+ * @returns {string}
+ */
+export function formatLocalDate(utcMilliseconds, host) {
+  const parts = localFormatParts(utcMilliseconds, host);
+  return parts === undefined ? 'Invalid Date' : formatDateParts(parts.time);
+}
+
+/**
+ * @param {number} utcMilliseconds
+ * @param {DateHost} host
+ * @returns {string}
+ */
+export function formatLocalTime(utcMilliseconds, host) {
+  const parts = localFormatParts(utcMilliseconds, host);
+  return parts === undefined
+    ? 'Invalid Date'
+    : `${formatTimeParts(parts.time)} GMT${formatOffset(parts.offset)} (UTC)`;
+}
+
+/**
+ * @param {number} utcMilliseconds
+ * @returns {string}
+ */
+export function formatUTCString(utcMilliseconds) {
+  if (!Number.isFinite(utcMilliseconds)) {
+    return 'Invalid Date';
+  }
+
+  return `${WEEKDAY_NAMES[weekDay(utcMilliseconds)]}, ${pad(
+    dateFromTime(utcMilliseconds),
+  )} ${MONTH_NAMES[monthFromTime(utcMilliseconds)]} ${formatYear(
+    yearFromTime(utcMilliseconds),
+  )} ${formatTimeParts(utcMilliseconds)} GMT`;
+}
+
+/**
+ * @param {number} utcMilliseconds
+ * @returns {string}
+ */
+export function formatISOString(utcMilliseconds) {
+  if (!Number.isFinite(utcMilliseconds)) {
+    return 'Invalid Date';
+  }
+
+  return `${formatISOYear(yearFromTime(utcMilliseconds))}-${pad(
+    monthFromTime(utcMilliseconds) + 1,
+  )}-${pad(dateFromTime(utcMilliseconds))}T${formatTimeParts(
+    utcMilliseconds,
+  )}.${pad(msFromTime(utcMilliseconds), 3)}Z`;
+}
+
+/**
+ * @param {number} utcMilliseconds
+ * @param {DateHost} host
+ * @returns {{ time: number, offset: number } | undefined}
+ */
+function localFormatParts(utcMilliseconds, host) {
+  if (!Number.isFinite(utcMilliseconds)) {
+    return undefined;
+  }
+
+  const offset = host.timezoneOffset(utcMilliseconds);
+  const time = utcMilliseconds - offset * MS_PER_MINUTE;
+  return Number.isFinite(offset) && Number.isFinite(time)
+    ? { time, offset }
+    : undefined;
+}
+
+/**
+ * @param {number} time
+ * @returns {string}
+ */
+function formatDateParts(time) {
+  return `${WEEKDAY_NAMES[weekDay(time)]} ${MONTH_NAMES[monthFromTime(time)]} ${pad(
+    dateFromTime(time),
+  )} ${formatYear(yearFromTime(time))}`;
+}
+
+/**
+ * @param {number} time
+ * @returns {string}
+ */
+function formatTimeParts(time) {
+  return `${pad(hourFromTime(time))}:${pad(minFromTime(time))}:${pad(
+    secFromTime(time),
+  )}`;
+}
+
+/**
+ * @param {number} offset
+ * @returns {string}
+ */
+function formatOffset(offset) {
+  const magnitude = Math.abs(offset);
+  return `${offset <= 0 ? '+' : '-'}${pad(
+    Math.floor(magnitude / 60),
+  )}${pad(magnitude % 60)}`;
 }
 
 /**
@@ -662,28 +785,32 @@ function dateFromMonthLength(year, month) {
  * @param {number} value
  * @returns {string}
  */
-function pad(value) {
-  return value < 10 ? `0${value}` : String(value);
+function pad(value, width = 2) {
+  let result = String(value);
+  while (result.length < width) {
+    result = `0${result}`;
+  }
+  return result;
 }
 
 /**
  * @param {number} value
  * @returns {string}
  */
-function padYear(value) {
-  if (value >= 1000) {
-    return String(value);
+function formatYear(value) {
+  return value < 0 ? `-${pad(-value, 4)}` : pad(value, 4);
+}
+
+/**
+ * @param {number} value
+ * @returns {string}
+ */
+function formatISOYear(value) {
+  if (value >= 0 && value <= 9999) {
+    return pad(value, 4);
   }
 
-  if (value >= 100) {
-    return `0${value}`;
-  }
-
-  if (value >= 10) {
-    return `00${value}`;
-  }
-
-  return `000${value}`;
+  return `${value < 0 ? '-' : '+'}${pad(Math.abs(value), 6)}`;
 }
 
 /**
