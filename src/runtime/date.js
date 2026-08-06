@@ -340,7 +340,11 @@ export class EngineDate extends EngineObject {
 /**
  * Creates the only boundary between Date's algorithms and host-dependent
  * clock/time-zone facilities. `timezoneOffset` uses the `getTimezoneOffset`
- * convention: minutes to add to local time to obtain UTC.
+ * convention: minutes to add to local time to obtain UTC. An explicitly
+ * injected `standardTimezoneOffset` must be that stable standard-time offset.
+ * When omitted, it is the greater offset from deterministic January and July
+ * UTC probes; daylight saving reduces this convention's offset in either
+ * hemisphere. Adapters that do not follow that convention must inject it.
  *
  * @param {Partial<DateHost> & {
  *   clock?: () => number,
@@ -356,7 +360,12 @@ export function createDateHost(adapter = {}) {
     adapter.timeZoneOffset ??
     ((utcMilliseconds) => new Date(utcMilliseconds).getTimezoneOffset());
   const standardTimezoneOffset =
-    adapter.standardTimezoneOffset ?? adapter.standardTimeZoneOffset ?? 0;
+    adapter.standardTimezoneOffset ??
+    adapter.standardTimeZoneOffset ??
+    Math.max(
+      timezoneOffset(0),
+      timezoneOffset(181 * MS_PER_DAY),
+    );
 
   if (
     typeof now !== 'function' ||

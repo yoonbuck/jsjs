@@ -182,6 +182,72 @@ export default [
     },
   },
   {
+    name: 'Date host derives standard offsets from deterministic northern and southern probes',
+    run() {
+      const minute = 60 * 1000;
+      const day = 24 * 60 * minute;
+      const julyProbe = 181 * day;
+      const northernLocalTime = (31 + 28 + 7) * day + 2 * 60 * minute + 30 * minute;
+      const southernLocalTime =
+        (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 3) * day +
+        2 * 60 * minute +
+        30 * minute;
+      /**
+       * @type {{
+       *   source: string,
+       *   localTime: number,
+       *   expectedTime: number,
+       *   expectedProbes: number[],
+       *   timezoneOffset: (observed: number[]) => (utcMilliseconds: number) => number,
+       * }[]}
+       */
+      const cases = [
+        {
+          source: 'new Date(1970, 2, 8, 2, 30)',
+          localTime: northernLocalTime,
+          expectedTime: northernLocalTime + 240 * minute,
+          expectedProbes: [0, julyProbe, northernLocalTime + 300 * minute],
+          timezoneOffset(observed) {
+            return (utcMilliseconds) => {
+              observed.push(utcMilliseconds);
+              return utcMilliseconds >= northernLocalTime + 300 * minute
+                ? 240
+                : 300;
+            };
+          },
+        },
+        {
+          source: 'new Date(1970, 9, 4, 2, 30)',
+          localTime: southernLocalTime,
+          expectedTime: southernLocalTime - 600 * minute,
+          expectedProbes: [0, julyProbe, southernLocalTime - 600 * minute],
+          timezoneOffset(observed) {
+            return (utcMilliseconds) => {
+              observed.push(utcMilliseconds);
+              return utcMilliseconds < julyProbe ||
+                utcMilliseconds >= southernLocalTime
+                ? -660
+                : -600;
+            };
+          },
+        },
+      ];
+
+      for (const testCase of cases) {
+        /** @type {number[]} */
+        const observed = [];
+        const options = {
+          dateHost: {
+            timezoneOffset: testCase.timezoneOffset(observed),
+          },
+        };
+
+        assertSame(runDate(testCase.source, options).timeValue, testCase.expectedTime);
+        assertSame(observed.join(','), testCase.expectedProbes.join(','));
+      }
+    },
+  },
+  {
     name: 'Date.prototype is an invalid Date-branded object',
     run() {
       const realm = createRealm();

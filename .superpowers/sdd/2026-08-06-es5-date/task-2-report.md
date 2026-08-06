@@ -140,3 +140,74 @@ passed GREEN.
 | `node test/run-node.js test/node/repository-invariants.test.js` | 14 passed |
 | `npm run typecheck` | Passed |
 | `npm run lint -- --quiet` | Passed |
+
+## Fix round 3
+
+### Scope and contract
+
+- Modified `src/runtime/date.js`, `test/date-builtins.test.js`, and this report only.
+- `standardTimezoneOffset` remains the explicit adapter contract: a stable
+  standard-time offset using the `getTimezoneOffset` convention. When omitted,
+  the host derives it as the greater of deterministic January and July UTC
+  adapter probes. This selects standard time for both positive northern-style
+  and negative southern-style offsets; adapters outside that convention must
+  inject the explicit value.
+
+### Genuine RED
+
+After adding the focused table-driven no-explicit-standard-offset regression
+test, with production still defaulting the offset to `0`, the exact command and
+output were. Test file: `test/date-builtins.test.js`.
+
+```text
+$ node test/run-node.js test/date-builtins.test.js
+{"name":"Date is a realm-local constructor that creates Date-branded objects with clipped UTC milliseconds","status":"passed"}
+{"name":"Date constructor clones dates, parses strings, and creates local calendar times","status":"passed"}
+{"name":"Date constructor preserves invalid component years","status":"passed"}
+{"name":"Date.parse implements ISO UTC, offset, date-only, and invalid input behavior without host parsing","status":"passed"}
+{"name":"Date.parse defaults incomplete date-only forms to UTC","status":"passed"}
+{"name":"Date.parse defaults unzoned date-times to UTC","status":"passed"}
+{"name":"Date.UTC applies ES5 defaults, two-digit years, normalization, and clipping","status":"passed"}
+{"name":"Date.now and Date called as a function use the injected clock and timezone adapter","status":"passed"}
+{"name":"Date constructor applies String-hint conversion to Date objects","status":"passed"}
+{"name":"Date constructor observes inherited Date conversion overrides","status":"passed"}
+{"name":"Date host receives UTC milliseconds for Date call and ES5 local construction","status":"passed"}
+{"name":"Date host derives standard offsets from deterministic northern and southern probes","status":"failed","error":{"name":"Error","message":"Expected 5729400000 to be the same value as 5725800000"}}
+{"name":"Date.prototype is an invalid Date-branded object","status":"passed"}
+```
+
+The northern positive-offset case demonstrates the wrong `localTime` probe and
+its wrong constructed UTC instant. The same compact table covers the southern
+negative-offset case once the test is green.
+
+### GREEN
+
+Implemented the minimal January/July maximum-offset derivation in
+`createDateHost`, then reran the exact focused command:
+
+```text
+$ node test/run-node.js test/date-builtins.test.js
+{"name":"Date is a realm-local constructor that creates Date-branded objects with clipped UTC milliseconds","status":"passed"}
+{"name":"Date constructor clones dates, parses strings, and creates local calendar times","status":"passed"}
+{"name":"Date constructor preserves invalid component years","status":"passed"}
+{"name":"Date.parse implements ISO UTC, offset, date-only, and invalid input behavior without host parsing","status":"passed"}
+{"name":"Date.parse defaults incomplete date-only forms to UTC","status":"passed"}
+{"name":"Date.parse defaults unzoned date-times to UTC","status":"passed"}
+{"name":"Date.UTC applies ES5 defaults, two-digit years, normalization, and clipping","status":"passed"}
+{"name":"Date.now and Date called as a function use the injected clock and timezone adapter","status":"passed"}
+{"name":"Date constructor applies String-hint conversion to Date objects","status":"passed"}
+{"name":"Date constructor observes inherited Date conversion overrides","status":"passed"}
+{"name":"Date host receives UTC milliseconds for Date call and ES5 local construction","status":"passed"}
+{"name":"Date host derives standard offsets from deterministic northern and southern probes","status":"passed"}
+{"name":"Date.prototype is an invalid Date-branded object","status":"passed"}
+```
+
+### Validation
+
+| Command | Result |
+| --- | --- |
+| `node test/run-node.js test/date-builtins.test.js` | 13 passed |
+| `node test/run-node.js test/date-arithmetic.test.js` | 4 passed |
+| `node test/run-node.js test/node/repository-invariants.test.js` | 14 passed |
+| `npm run typecheck` | Passed |
+| `npm run lint -- --quiet` | Passed |
