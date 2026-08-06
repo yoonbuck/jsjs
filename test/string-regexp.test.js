@@ -85,6 +85,20 @@ const tests = [
     },
   },
   {
+    // ES5 15.5.4.10 step 8.f.iii.2 bumps `lastIndex` only when
+    // `thisIndex === previousLastIndex`, not when the *match* is empty.
+    // For /\b/g on "ab", the boundary matches at indices 0 and 2, but
+    // index 2's match leaves `lastIndex` at 2, which equals the previous
+    // `lastIndex` (2, set after the index-0 match advanced past 0→1→2),
+    // so the loop bumps to 3 and finds a third boundary at "end of
+    // string" position 2 again — producing 3 results. ES2015 replaced
+    // this with AdvanceStringIndex-on-empty-match, which yields 2.
+    name: 'match with /\\b/g follows ES5 lastIndex bump semantics (differs from ES2015+ engines)',
+    run() {
+      assertSame(run('"ab".match(/\\b/g).length;'), 3);
+    },
+  },
+  {
     name: 'replace with a non-global RegExp replaces only the first match',
     run() {
       assertSame(run('"abcabc".replace(/b/, "X");'), 'aXcabc');
@@ -101,6 +115,10 @@ const tests = [
       // unit, matching the same bump `match` uses.
       assertSame(run('"aaa".replace(/(?:)/g, "-");'), '-a-a-a-');
       assertSame(run('"".replace(/(?:)/g, "-");'), '-');
+      // ES5 15.5.4.11 step 11.d uses the same lastIndex bump as match,
+      // so /\b/g on "ab" inserts at 3 positions, not 2 (see the match
+      // test above citing 15.5.4.10 step 8.f.iii.2).
+      assertSame(run('"ab".replace(/\\b/g, "-");'), '-ab--');
     },
   },
   {

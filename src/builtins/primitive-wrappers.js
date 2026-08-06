@@ -742,9 +742,8 @@ function stringMethodReceiver(thisValue) {
 }
 
 /**
- * ES5's implicit `new RegExp(pattern)`, the coercion `match` (15.5.4.10),
- * `search` (15.5.4.12), and `replace`/`split`'s RegExp branches
- * (15.5.4.11/15.5.4.14) all perform on a pattern that is not already a
+ * ES5's implicit `new RegExp(pattern)`, the coercion `match` (15.5.4.10)
+ * and `search` (15.5.4.12) perform on a pattern that is not already a
  * RegExp object: an already-RegExp `pattern` is used exactly as given, own
  * `global`/`lastIndex` and all, while any other value (including `undefined`,
  * which becomes the empty pattern rather than the string `"undefined"`) is

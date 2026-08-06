@@ -392,6 +392,10 @@ function buildRegExp(prototype, pattern, flags) {
   const patternSource = pattern === undefined ? '' : toString(pattern);
   const flagsText = flags === undefined ? '' : toString(flags);
 
+  // Note: ES5 15.10.4.1 checks Pattern (step 4) before flags (step 5), but
+  // here we validate flags first. This is unobservable: both throw SyntaxError,
+  // and both ToString coercions (on pattern and flags) already happened above
+  // in the correct order, so no side effect can detect which validation ran.
   let parsedFlags;
 
   try {

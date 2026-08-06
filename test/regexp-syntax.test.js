@@ -186,6 +186,15 @@ const tests = [
     },
   },
   {
+    name: 'modern group syntax (named groups, lookbehind, atomic) is rejected',
+    run() {
+      assertRejected('(?<n>a)');
+      assertRejected('(?<=a)');
+      assertRejected('(?<!a)');
+      assertRejected('(?>a)');
+    },
+  },
+  {
     name: 'an unbalanced ( is a SyntaxError',
     run() {
       assertRejected('(');

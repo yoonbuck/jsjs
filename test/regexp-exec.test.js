@@ -288,7 +288,7 @@ const tests = [
       assertSame(
         run(
           realm,
-          'var r = /a/; r.exec = function () { return "not the real exec"; }; r.test("a");',
+          'var r = /a/; RegExp.prototype.exec = function () { return "not the real exec"; }; r.test("a");',
         ),
         true,
       );

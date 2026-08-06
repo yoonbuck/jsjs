@@ -7,6 +7,7 @@ import {
   escapePatternSource,
 } from '../src/runtime/regexp-object.js';
 import { compilePattern } from '../src/runtime/regexp-compat.js';
+import { UnsupportedOperationError } from '../src/runtime/errors.js';
 
 /**
  * Assert that `completion` is a guest throw carrying a guest error whose
@@ -281,6 +282,12 @@ const tests = [
       assertSame(escapePatternSource('a\rb'), 'a\\rb');
       assertSame(escapePatternSource('a\u2028b'), 'a\\u2028b');
       assertSame(escapePatternSource('a\u2029b'), 'a\\u2029b');
+      // Backslash + line terminator: the line terminator must still be
+      // escaped so the result is a valid RegularExpressionBody (ES5 7.8.5).
+      assertSame(escapePatternSource('a\\\nb'), 'a\\nb');
+      assertSame(escapePatternSource('a\\\rb'), 'a\\rb');
+      assertSame(escapePatternSource('a\\\u2028b'), 'a\\u2028b');
+      assertSame(escapePatternSource('a\\\u2029b'), 'a\\u2029b');
       assertSame(escapePatternSource('abc'), 'abc');
     },
   },
@@ -323,7 +330,7 @@ const tests = [
         /** @type {any} */ (FakeHostRegExp),
       );
 
-      assertThrows(() => compiled.matchAt('a', 0), Error);
+      assertThrows(() => compiled.matchAt('a', 0), UnsupportedOperationError);
     },
   },
 ];

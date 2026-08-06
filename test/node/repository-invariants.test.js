@@ -229,6 +229,10 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
     'ES5 RegExp milestone — RegExp call/construct semantics, RegExp.prototype identity, and the 15.10.7 own properties',
   'regexp-exec':
     'ES5 RegExp milestone — RegExp.prototype.exec/test result shape, lastIndex, and global matching',
+  'regexp-matching':
+    'ES5 RegExp milestone — 15.10.2 matching semantics: RepeatMatcher, assertions, lookahead, backreferences, class escapes, and character ranges',
+  'regexp-pattern-grammar':
+    'ES5 RegExp milestone — 15.10.1 Pattern grammar early errors and the recursive-descent validator',
   'string-builtins': 'Task 7 — String call/construct, fromCharCode, prototype',
   'string-methods':
     'Task 7 — String search/access/case/trim methods, Annex B substr',
@@ -639,14 +643,17 @@ export default [
     // deliberately borrows a host primitive instead of reimplementing it:
     // `regexp-compat.js` compiles a validated ES5 pattern into a host regex
     // rather than shipping a hand-written backtracking matcher. That
-    // borrowing must stay isolated to that one file -- everywhere else, a
-    // reference to the host `RegExp` constructor would either bypass
-    // `regexp-syntax.js`'s grammar validation or silently reintroduce a
-    // second, divergent regex dialect.
+    // borrowing must stay isolated to that one file for guest-visible
+    // regular expression semantics -- everywhere else, a reference to the
+    // host `RegExp` constructor would either bypass `regexp-syntax.js`'s
+    // grammar validation or silently reintroduce a second, divergent regex
+    // dialect. (Engine-internal host regex literals, such as the numeric
+    // recognisers in `conversion.js`'s `ToNumber`, are not guest-visible
+    // and are outside this invariant's scope.)
     name: 'the host RegExp constructor must stay isolated in src/runtime/regexp-compat.js',
     run: async () => {
       const files = await listFiles('src/', (name) => name.endsWith('.js'));
-      const hostRegExpConstructorCall = /[^A-Za-z0-9_$]RegExp\s*\(/g;
+      const hostRegExpConstructorCall = /(?:^|[^A-Za-z0-9_$])RegExp\s*\(/g;
       /** @type {string[]} */
       const matches = [];
 

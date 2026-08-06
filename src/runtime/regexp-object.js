@@ -133,9 +133,19 @@ export function escapePatternSource(patternSource) {
     if (unit === '\\') {
       // An escape sequence: copy the backslash and whatever it escapes
       // through unchanged, so an already-escaped `/` is never re-escaped.
+      // Exception: a line terminator after the backslash must still be
+      // replaced with its short escape (`\n`, `\r`, `\u2028`, `\u2029`)
+      // so that `toString()` yields a valid `RegularExpressionLiteral`
+      // (whose body excludes `LineTerminator` per ES5 7.8.5).
       const next = patternSource[index + 1];
-      result += next === undefined ? unit : unit + next;
-      index += next === undefined ? 1 : 2;
+      if (next === undefined) {
+        result += unit;
+        index += 1;
+      } else {
+        const ltEscape = LINE_TERMINATOR_ESCAPES[next];
+        result += ltEscape !== undefined ? ltEscape : unit + next;
+        index += 2;
+      }
       continue;
     }
 
