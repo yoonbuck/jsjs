@@ -44,6 +44,8 @@ import stringBuiltins from './string-builtins.test.js';
 import stringSearch from './string-search.test.js';
 import stringCase from './string-case.test.js';
 import stringPattern from './string-pattern.test.js';
+import regexpSyntax from './regexp-syntax.test.js';
+import regexpBuiltins from './regexp-builtins.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -154,5 +156,13 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/string-pattern.test.js',
     tests: stringPattern,
+  }),
+  Object.freeze({
+    file: 'test/regexp-syntax.test.js',
+    tests: regexpSyntax,
+  }),
+  Object.freeze({
+    file: 'test/regexp-builtins.test.js',
+    tests: regexpBuiltins,
   }),
 ]);

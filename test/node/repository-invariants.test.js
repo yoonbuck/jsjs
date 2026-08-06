@@ -206,6 +206,8 @@ const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
     'derives an intrinsic key from a hard-coded error type name, not from guest data',
   'src/runtime/conversion.js':
     'ToNumber pre-dates this invariant and still trims/slices guest strings with host methods; tightening it is its own change',
+  'src/runtime/regexp-object.js':
+    '`matchAt` delegates to `compiled.match`, the engine-owned CompiledPattern method regexp-compat.js defines — not a call to host String.prototype.match',
 });
 
 /**
@@ -625,6 +627,41 @@ export default [
         hostConstructors.join(','),
         'src/runtime/code-units.js',
         'the number -> code-unit host primitive must stay isolated in src/runtime/code-units.js, used exactly once',
+      );
+    },
+  },
+  {
+    // Regular expressions are the second (and only other) place this engine
+    // deliberately borrows a host primitive instead of reimplementing it:
+    // `regexp-compat.js` compiles a validated ES5 pattern into a host regex
+    // rather than shipping a hand-written backtracking matcher. That
+    // borrowing must stay isolated to that one file -- everywhere else, a
+    // reference to the host `RegExp` constructor would either bypass
+    // `regexp-syntax.js`'s grammar validation or silently reintroduce a
+    // second, divergent regex dialect.
+    name: 'the host RegExp constructor must stay isolated in src/runtime/regexp-compat.js',
+    run: async () => {
+      const files = await listFiles('src/', (name) => name.endsWith('.js'));
+      const hostRegExpConstructorCall = /[^A-Za-z0-9_$]RegExp\s*\(/g;
+      /** @type {string[]} */
+      const matches = [];
+
+      for (const file of files) {
+        const source = await readSource(file);
+        const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+
+        if (hostRegExpConstructorCall.test(code)) {
+          matches.push(file);
+        }
+
+        hostRegExpConstructorCall.lastIndex = 0;
+      }
+
+      assertSame(files.length > 5, true, 'engine sources were found');
+      assertSame(
+        matches.join(','),
+        'src/runtime/regexp-compat.js',
+        'the host RegExp constructor must stay isolated in src/runtime/regexp-compat.js, used exactly once',
       );
     },
   },

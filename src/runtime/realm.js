@@ -26,6 +26,10 @@ import {
   createPrimitiveWrapperIntrinsics,
   installPrimitiveWrapperConstructors,
 } from '../builtins/primitive-wrappers.js';
+import {
+  createRegExpIntrinsics,
+  installRegExpConstructor,
+} from '../builtins/regexp.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -92,6 +96,10 @@ export class Realm {
       this.globalObject,
       primitiveWrapperIntrinsics,
     );
+
+    const regExpIntrinsics = createRegExpIntrinsics(this);
+    Object.assign(this.intrinsics, regExpIntrinsics);
+    installRegExpConstructor(this.globalObject, regExpIntrinsics);
   }
 
   /**
