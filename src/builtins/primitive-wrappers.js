@@ -11,6 +11,11 @@ import {
   toString,
 } from '../runtime/conversion.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
+import {
+  numberToExponential,
+  numberToFixed,
+  numberToPrecision,
+} from './number-format.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -28,12 +33,12 @@ import { GuestErrorSignal } from '../runtime/completion.js';
  * `%String.prototype%`/`%Number.prototype%`/`%Boolean.prototype%`
  * intrinsics `builtins/fundamental.js` already created, and installs the
  * complete `Boolean.prototype` and `Number.prototype` method families
- * (`toString`/`valueOf`/`toLocaleString`, plus the `Number` constructor's
- * ES5 constants) along with the one `String.prototype` method (`valueOf`)
- * this milestone's shared tests require directly. The full `String`
- * prototype method family (and `Number`'s `toFixed`/`toExponential`/
- * `toPrecision` formatting methods) are out of scope here and land in
- * their own milestone tasks.
+ * (`toString`/`valueOf`/`toLocaleString` and the `toFixed`/
+ * `toExponential`/`toPrecision` formatting methods, plus the `Number`
+ * constructor's ES5 constants) along with the one `String.prototype`
+ * method (`valueOf`) this milestone's shared tests require directly. The
+ * full `String` prototype method family is out of scope here and lands in
+ * its own milestone task.
  *
  * @param {Realm} realm
  * @returns {PrimitiveWrapperIntrinsics}
@@ -130,6 +135,60 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // algorithm, never to a (possibly guest-overridden) `this.toString`
         // property, matching ES5 15.7.4.3's non-generic contract.
         return numberToStringRadix(thisNumberValue(thisValue), 10);
+      },
+    }),
+  );
+  defineMethod(
+    numberPrototype,
+    'toFixed',
+    realm.createNativeFunction({
+      name: 'toFixed',
+      length: 1,
+      call(thisValue, args) {
+        // The receiver is validated before `fractionDigits` is coerced, so
+        // an incompatible receiver throws even when coercing the argument
+        // would itself throw.
+        const number = thisNumberValue(thisValue);
+
+        return numberToFixed(number, toInteger(args[0]));
+      },
+    }),
+  );
+  defineMethod(
+    numberPrototype,
+    'toExponential',
+    realm.createNativeFunction({
+      name: 'toExponential',
+      length: 1,
+      call(thisValue, args) {
+        const number = thisNumberValue(thisValue);
+        const fractionDigits = args[0];
+
+        return numberToExponential(
+          number,
+          toInteger(fractionDigits),
+          fractionDigits === undefined,
+        );
+      },
+    }),
+  );
+  defineMethod(
+    numberPrototype,
+    'toPrecision',
+    realm.createNativeFunction({
+      name: 'toPrecision',
+      length: 1,
+      call(thisValue, args) {
+        const number = thisNumberValue(thisValue);
+        const precision = args[0];
+
+        if (precision === undefined) {
+          // ES5 15.7.4.7 step 2 returns ToString(x) before `precision` is
+          // coerced or range checked, so `NaN.toPrecision()` is "NaN".
+          return numberToStringRadix(number, 10);
+        }
+
+        return numberToPrecision(number, toInteger(precision));
       },
     }),
   );

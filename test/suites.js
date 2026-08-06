@@ -39,6 +39,7 @@ import arrayBuiltins from './array-builtins.test.js';
 import primitiveWrappers from './primitive-wrappers.test.js';
 import booleanBuiltins from './boolean-builtins.test.js';
 import numberBuiltins from './number-builtins.test.js';
+import numberFormatting from './number-formatting.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -129,5 +130,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/number-builtins.test.js',
     tests: numberBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/number-formatting.test.js',
+    tests: numberFormatting,
   }),
 ]);
