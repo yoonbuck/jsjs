@@ -736,4 +736,20 @@ export default [
       );
     },
   },
+  {
+    name: 'calendar-field construction stays valid at the extreme negative end of the time range',
+    run() {
+      const options = {
+        timezoneOffset: (/** @type {number} */ utcMilliseconds) =>
+          Number.isFinite(utcMilliseconds) &&
+          Math.abs(utcMilliseconds) <= 8.64e15
+            ? 480
+            : NaN,
+      };
+      const date = runDate('new Date(1970, 0, -99999998)', options);
+
+      assertSame(date.timeValue, -8639999884800000);
+      assertSame(run('new Date(1970, 0, -100000000).getTime()', options), NaN);
+    },
+  },
 ];
