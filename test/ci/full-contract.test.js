@@ -33,6 +33,7 @@ import {
 } from '../../tools/test262/upstream-run.js';
 import {
   collectTest262Inventory,
+  formatCount,
   formatCoverageLines,
   summarizeTest262Coverage,
   renderCoverageSummary,
@@ -179,6 +180,36 @@ function coverageRecord(records, scope) {
   }
 
   return record;
+}
+
+/**
+ * Matches a number as a whole token, so `575` is not found inside `53,575` and
+ * `112` is not found inside `1120` — while still finding a number that a JSON
+ * example follows with a comma, as in `"files":53575,"records"`. Only a comma
+ * that groups digits counts as part of a number.
+ *
+ * @param {string} rendering
+ * @returns {RegExp}
+ */
+function wholeNumberPattern(rendering) {
+  const escaped = rendering.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
+
+  return new RegExp(String.raw`(?<![\d.]|\d,)${escaped}(?![\d.]|,\d)`, 'u');
+}
+
+/**
+ * Every way a count from the report could be spelled in prose: as digits, and
+ * as the comma-grouped form the generated table uses.
+ *
+ * @param {number} value
+ * @returns {string[]}
+ */
+function numberRenderings(value) {
+  if (!Number.isInteger(value)) {
+    return [String(value)];
+  }
+
+  return [...new Set([String(value), formatCount(value)])];
 }
 
 /**
@@ -564,6 +595,60 @@ export default [
         block.includes('"type":"test"'),
         false,
         'the generated block is a summary, not a dump of per-test records',
+      );
+    },
+  },
+  {
+    name: 'every live coverage number in README.md is inside the generated block, where the drift check can reach it',
+    run: async () => {
+      const { readme, report } = await readUpstreamRun();
+      const begin = readme.indexOf(COVERAGE_MARKER_BEGIN);
+      const end =
+        readme.indexOf(COVERAGE_MARKER_END) + COVERAGE_MARKER_END.length;
+      const outside = `${readme.slice(0, begin)}${readme.slice(end)}`;
+      /** @type {Set<number>} */
+      const live = new Set();
+
+      for (const record of parseJsonLines(report)) {
+        if (record.type !== 'inventory' && record.type !== 'coverage') {
+          continue;
+        }
+
+        for (const value of Object.values(record)) {
+          if (typeof value === 'number') {
+            live.add(value);
+          }
+        }
+      }
+
+      assertSame(
+        live.size > 0,
+        true,
+        'the report must publish the numbers this check is about',
+      );
+
+      const lines = outside.split('\n');
+      /** @type {string[]} */
+      const offenders = [];
+
+      for (const value of live) {
+        for (const rendering of numberRenderings(value)) {
+          const match = wholeNumberPattern(rendering).exec(outside);
+
+          if (match === null) {
+            continue;
+          }
+
+          const line = outside.slice(0, match.index).split('\n').length;
+
+          offenders.push(`${rendering} -> ${lines[line - 1].trim()}`);
+        }
+      }
+
+      assertSame(
+        offenders.join('\n'),
+        '',
+        `these counts belong to the upstream run but sit outside ${COVERAGE_MARKER_BEGIN}, where nothing regenerates them and no drift check would ever notice them going stale. Prose that illustrates the schema must use synthetic values and leave the real ones to the generated block.`,
       );
     },
   },
