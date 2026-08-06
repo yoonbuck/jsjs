@@ -293,11 +293,12 @@ byte-identical.
 
 A conformance percentage means nothing without its denominator, so the upstream
 report states both. An `inventory` record carries the whole-suite totals, and one
-`coverage` record per denominator measures the run against them:
+`coverage` record per denominator measures the run against them. For example,
+with synthetic counts:
 
 ```json
-{"type":"inventory","files":53575,"records":102075,"malformed":430}
-{"type":"coverage","scope":"files","total":53575,"selected":112,"attempted":112,"passed":112,"selectedPercent":0.209,"attemptedPercent":0.209,"passedPercent":0.209}
+{"type":"inventory","files":100,"records":180,"malformed":2}
+{"type":"coverage","scope":"files","total":100,"selected":5,"attempted":4,"passed":3,"selectedPercent":5,"attemptedPercent":4,"passedPercent":3}
 ```
 
 The semantics are exact, and `tools/test262/coverage.js` is where they are
