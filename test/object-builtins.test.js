@@ -44,12 +44,16 @@ const tests = [
     run() {
       assertSame(run('var o = {}; Object(o) === o;'), true);
       assertSame(run('var o = {}; new Object(o) === o;'), true);
-      assertSame(run('Object(1).toString();'), '[object Number]');
+      // Number.prototype.toString (ES5 15.7.4.2) and Boolean.prototype.toString
+      // (ES5 15.6.4.2) both shadow the inherited Object.prototype.toString
+      // class-tag method, so the boxing checks for Number and Boolean go
+      // through the generic method explicitly instead of `.toString()`.
+      assertSame(
+        run('Object.prototype.toString.call(Object(1));'),
+        '[object Number]',
+      );
+      assertSame(run('Object(1).toString();'), '1');
       assertSame(run('Object("x").toString();'), '[object String]');
-      // Boolean.prototype.toString (ES5 15.6.4.2) returns "true"/"false" and
-      // shadows the inherited Object.prototype.toString class-tag method, so
-      // the boxing check for Boolean goes through the generic method
-      // explicitly instead of `.toString()`.
       assertSame(
         run('Object.prototype.toString.call(Object(true));'),
         '[object Boolean]',

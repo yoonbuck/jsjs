@@ -38,6 +38,7 @@ import functionBuiltins from './function-builtins.test.js';
 import arrayBuiltins from './array-builtins.test.js';
 import primitiveWrappers from './primitive-wrappers.test.js';
 import booleanBuiltins from './boolean-builtins.test.js';
+import numberBuiltins from './number-builtins.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -124,5 +125,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/boolean-builtins.test.js',
     tests: booleanBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/number-builtins.test.js',
+    tests: numberBuiltins,
   }),
 ]);
