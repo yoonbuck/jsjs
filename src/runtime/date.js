@@ -595,7 +595,7 @@ function dateFromComponents(
  * @param {DateHost} host
  * @returns {number}
  */
-function utcFromLocalTime(localTime, host) {
+export function utcFromLocalTime(localTime, host) {
   if (!Number.isFinite(localTime)) {
     return NaN;
   }

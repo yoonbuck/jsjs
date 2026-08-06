@@ -264,4 +264,111 @@ export default [
       );
     },
   },
+  {
+    name: 'Date accessors derive local and UTC calendar fields through the timezone adapter',
+    run() {
+      const options = {
+        dateHost: {
+          timezoneOffset: () => -90,
+        },
+      };
+
+      assertSame(
+        run(
+          '(function () { var d = new Date(Date.UTC(2020, 1, 29, 23, 58, 57, 456)); return [d.getTime(), d.getFullYear(), d.getUTCFullYear(), d.getMonth(), d.getUTCMonth(), d.getDate(), d.getUTCDate(), d.getDay(), d.getUTCDay(), d.getHours(), d.getUTCHours(), d.getMinutes(), d.getUTCMinutes(), d.getSeconds(), d.getUTCSeconds(), d.getMilliseconds(), d.getUTCMilliseconds(), d.getTimezoneOffset(), d.getYear()].join(","); }())',
+          options,
+        ),
+        '1583020737456,2020,2020,2,1,1,29,0,6,1,23,28,58,57,57,456,456,-90,120',
+      );
+    },
+  },
+  {
+    name: 'Date accessors return NaN for invalid dates and reject incompatible receivers',
+    run() {
+      assertSame(
+        run(
+          '(function () { var d = new Date(NaN); var values = [d.getTime(), d.getFullYear(), d.getUTCFullYear(), d.getMonth(), d.getUTCMonth(), d.getDate(), d.getUTCDate(), d.getDay(), d.getUTCDay(), d.getHours(), d.getUTCHours(), d.getMinutes(), d.getUTCMinutes(), d.getSeconds(), d.getUTCSeconds(), d.getMilliseconds(), d.getUTCMilliseconds(), d.getTimezoneOffset(), d.getYear()]; try { Date.prototype.getTime.call({}); } catch (error) { return values.every(function (value) { return value !== value; }) + ":" + error.name; } }())',
+        ),
+        'true:TypeError',
+      );
+    },
+  },
+  {
+    name: 'Date setters update every local and UTC field with defaults and overflow normalization',
+    run() {
+      const options = {
+        dateHost: {
+          timezoneOffset: () => -120,
+        },
+      };
+
+      assertSame(
+        run(
+          '(function () { var d, values = []; d = new Date(0); values.push(d.setTime(1.9)); d = new Date(0); values.push(d.setMilliseconds(2)); d = new Date(0); values.push(d.setUTCMilliseconds(2)); d = new Date(0); values.push(d.setSeconds(3)); d = new Date(0); values.push(d.setUTCSeconds(4, 5)); d = new Date(0); values.push(d.setMinutes(6, 7, 8)); d = new Date(0); values.push(d.setUTCMinutes(8, 9, 10)); d = new Date(0); values.push(d.setHours(3, 4, 5, 6)); d = new Date(0); values.push(d.setUTCHours(3, 4, 5, 6)); d = new Date(0); values.push(d.setDate(2)); d = new Date(0); values.push(d.setUTCDate(2)); d = new Date(0); values.push(d.setMonth(1)); d = new Date(0); values.push(d.setUTCMonth(1)); d = new Date(0); values.push(d.setFullYear(1971)); d = new Date(0); values.push(d.setUTCFullYear(1971)); d = new Date(0); values.push(d.setYear(99)); d = new Date(Date.UTC(2020, 0, 31, 23, 59, 58, 900)); d.setUTCMonth(1); values.push([d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds()].join("/")); d = new Date(Date.UTC(2000, 5, 15, 12, 34, 56, 789)); d.setUTCMinutes(5); values.push([d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds()].join("/")); return values.join(","); }())',
+          options,
+        ),
+        '1,2,2,3000,4005,367008,489010,3845006,11045006,86400000,86400000,2678400000,2678400000,31536000000,31536000000,915148800000,2020/2/2/23/59/58/900,12/5/56/789',
+      );
+    },
+  },
+  {
+    name: 'Date setters propagate invalid dates except setTime and full-year recovery paths',
+    run() {
+      const options = {
+        dateHost: {
+          timezoneOffset: () => -120,
+        },
+      };
+
+      assertSame(
+        run(
+          '(function () { var methods = ["setMilliseconds", "setUTCMilliseconds", "setSeconds", "setUTCSeconds", "setMinutes", "setUTCMinutes", "setHours", "setUTCHours", "setDate", "setUTCDate", "setMonth", "setUTCMonth", "setYear"]; var i, d, value, invalid = true; for (i = 0; i < methods.length; i += 1) { d = new Date(NaN); value = d[methods[i]](1); invalid = invalid && value !== value && d.getTime() !== d.getTime(); } d = new Date(NaN); var time = d.setTime(5); d = new Date(NaN); var localYear = d.setFullYear(2000); d = new Date(NaN); var utcYear = d.setUTCFullYear(2000); try { Date.prototype.setDate.call({}, 1); } catch (error) { return invalid + ":" + time + ":" + localYear + ":" + utcYear + ":" + error.name; } }())',
+          options,
+        ),
+        'true:5:946684800000:946684800000:TypeError',
+      );
+    },
+  },
+  {
+    name: 'Date setters coerce supplied fields left-to-right and preserve omitted fields',
+    run() {
+      assertSame(
+        run(
+          '(function () { var log = ""; var d = new Date(Date.UTC(2000, 0, 1, 0, 0, 0, 0)); var first = { valueOf: function () { log += "a"; return 3; } }; var second = { valueOf: function () { log += "b"; return 4; } }; d.setUTCHours(first, second); return log + ":" + d.getUTCHours() + ":" + d.getUTCMinutes() + ":" + d.getUTCSeconds() + ":" + d.getUTCMilliseconds(); }())',
+        ),
+        'ab:3:4:0:0',
+      );
+    },
+  },
+  {
+    name: 'Date local setters use the adapter’s DST transition mapping',
+    run() {
+      const minute = 60 * 1000;
+      const day = 24 * 60 * minute;
+      const springLocalTime =
+        (31 + 28 + 7) * day + 2 * 60 * minute + 30 * minute;
+      /** @type {number[]} */
+      const observed = [];
+      const options = {
+        dateHost: {
+          standardTimezoneOffset: 300,
+          timezoneOffset(/** @type {number} */ utcMilliseconds) {
+            observed.push(utcMilliseconds);
+            return utcMilliseconds >= springLocalTime + 300 * minute
+              ? 240
+              : 300;
+          },
+        },
+      };
+
+      assertSame(
+        run('new Date(1970, 2, 8, 1, 30).setHours(2, 30);', options),
+        springLocalTime + 240 * minute,
+      );
+      assertSame(
+        observed.join(','),
+        `${springLocalTime + 240 * minute},${springLocalTime + 240 * minute},${springLocalTime + 300 * minute}`,
+      );
+    },
+  },
 ];

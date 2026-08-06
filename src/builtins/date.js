@@ -1,12 +1,26 @@
 import {
   EngineDate,
+  MS_PER_MINUTE,
+  dateFromTime,
   dateCallString,
   dateFromLocalArguments,
   dateUTC,
+  hourFromTime,
+  makeDate,
+  makeDay,
+  makeTime,
+  minFromTime,
+  monthFromTime,
   parseDateString,
+  secFromTime,
   timeClip,
+  utcFromLocalTime,
+  weekDay,
+  yearFromTime,
+  msFromTime,
 } from '../runtime/date.js';
 import { toNumber, toPrimitive, toString } from '../runtime/conversion.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -70,8 +84,217 @@ export function createDateIntrinsics(realm) {
   defineMethod(realm, dateConstructor, 'now', 0, () =>
     timeClip(realm.dateHost.now()),
   );
+  installDatePrototypeMethods(realm, datePrototype);
 
   return { datePrototype, dateConstructor };
+}
+
+/**
+ * @param {Realm} realm
+ * @param {EngineDate} datePrototype
+ * @returns {void}
+ */
+function installDatePrototypeMethods(realm, datePrototype) {
+  /** @type {(date: EngineDate) => number} */
+  const local = (date) => localTime(date, realm);
+  /** @type {(date: EngineDate) => number} */
+  const utc = (date) => date.timeValue;
+  /** @type {(name: string, field: (time: number) => number, useLocal?: boolean) => void} */
+  const accessor = (name, field, useLocal = true) => {
+    defineMethod(realm, datePrototype, name, 0, (thisValue) => {
+      const date = requireDate(thisValue);
+      const time = useLocal ? local(date) : utc(date);
+      return Number.isFinite(time) ? field(time) : NaN;
+    });
+  };
+
+  accessor('getTime', (time) => time, false);
+  accessor('getFullYear', yearFromTime);
+  accessor('getUTCFullYear', yearFromTime, false);
+  accessor('getMonth', monthFromTime);
+  accessor('getUTCMonth', monthFromTime, false);
+  accessor('getDate', dateFromTime);
+  accessor('getUTCDate', dateFromTime, false);
+  accessor('getDay', weekDay);
+  accessor('getUTCDay', weekDay, false);
+  accessor('getHours', hourFromTime);
+  accessor('getUTCHours', hourFromTime, false);
+  accessor('getMinutes', minFromTime);
+  accessor('getUTCMinutes', minFromTime, false);
+  accessor('getSeconds', secFromTime);
+  accessor('getUTCSeconds', secFromTime, false);
+  accessor('getMilliseconds', msFromTime);
+  accessor('getUTCMilliseconds', msFromTime, false);
+  accessor('getYear', (time) => yearFromTime(time) - 1900);
+  defineMethod(realm, datePrototype, 'getTimezoneOffset', 0, (thisValue) => {
+    const date = requireDate(thisValue);
+    if (!Number.isFinite(date.timeValue)) {
+      return NaN;
+    }
+
+    const offset = realm.dateHost.timezoneOffset(date.timeValue);
+    return Number.isFinite(offset) ? offset : NaN;
+  });
+
+  defineMethod(realm, datePrototype, 'setTime', 1, (thisValue, args) => {
+    const date = requireDate(thisValue);
+    date.timeValue = timeClip(toNumber(args[0]));
+    return date.timeValue;
+  });
+  installDateSetters(realm, datePrototype);
+}
+
+/**
+ * @param {unknown} thisValue
+ * @returns {EngineDate}
+ */
+function requireDate(thisValue) {
+  if (!(thisValue instanceof EngineDate)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Date method called on incompatible receiver',
+    );
+  }
+
+  return thisValue;
+}
+
+/**
+ * @param {EngineDate} date
+ * @param {Realm} realm
+ * @returns {number}
+ */
+function localTime(date, realm) {
+  if (!Number.isFinite(date.timeValue)) {
+    return NaN;
+  }
+
+  const offset = realm.dateHost.timezoneOffset(date.timeValue);
+  return Number.isFinite(offset)
+    ? date.timeValue - offset * MS_PER_MINUTE
+    : NaN;
+}
+
+/**
+ * @param {Realm} realm
+ * @param {EngineDate} datePrototype
+ * @returns {void}
+ */
+function installDateSetters(realm, datePrototype) {
+  /** @type {(name: string, length: number, callback: (date: EngineDate, args: readonly unknown[]) => number) => void} */
+  const set = (name, length, callback) => {
+    defineMethod(realm, datePrototype, name, length, (thisValue, args) =>
+      callback(requireDate(thisValue), args),
+    );
+  };
+  /** @type {(name: string, length: number, local: boolean, start: number, recover?: boolean) => void} */
+  const fieldSetter = (name, length, local, start, recover = false) => {
+    set(name, length, (date, args) => {
+      const values = [toNumber(args[0])];
+      for (let index = 1; index < length && index < args.length; index += 1) {
+        values.push(toNumber(args[index]));
+      }
+      const fields = dateFields(date, realm, local, recover);
+      if (fields === undefined) {
+        return NaN;
+      }
+
+      for (let index = 0; index < values.length; index += 1) {
+        fields[start + index] = values[index];
+      }
+      return setDateFields(date, fields, realm, local);
+    });
+  };
+
+  fieldSetter('setMilliseconds', 1, true, 6);
+  fieldSetter('setUTCMilliseconds', 1, false, 6);
+  fieldSetter('setSeconds', 2, true, 5);
+  fieldSetter('setUTCSeconds', 2, false, 5);
+  fieldSetter('setMinutes', 3, true, 4);
+  fieldSetter('setUTCMinutes', 3, false, 4);
+  fieldSetter('setHours', 4, true, 3);
+  fieldSetter('setUTCHours', 4, false, 3);
+  fieldSetter('setDate', 1, true, 2);
+  fieldSetter('setUTCDate', 1, false, 2);
+  fieldSetter('setMonth', 2, true, 1);
+  fieldSetter('setUTCMonth', 2, false, 1);
+  fieldSetter('setFullYear', 3, true, 0, true);
+  fieldSetter('setUTCFullYear', 3, false, 0, true);
+  set('setYear', 1, (date, args) => {
+    let year = toNumber(args[0]);
+    const fields = dateFields(date, realm, true, false);
+    if (fields === undefined) {
+      return NaN;
+    }
+
+    if (Number.isFinite(year) && year >= 0 && year <= 99) {
+      year += 1900;
+    }
+    fields[0] = year;
+    return setDateFields(date, fields, realm, true);
+  });
+}
+
+/**
+ * @param {EngineDate} date
+ * @param {Realm} realm
+ * @param {boolean} local
+ * @param {boolean} recoverInvalid
+ * @returns {number[] | undefined}
+ */
+function dateFields(date, realm, local, recoverInvalid) {
+  let time = date.timeValue;
+  if (!Number.isFinite(time)) {
+    if (!recoverInvalid) {
+      return undefined;
+    }
+    time = 0;
+  }
+
+  if (local) {
+    time = localTimeValue(time, realm);
+  }
+  if (!Number.isFinite(time)) {
+    return undefined;
+  }
+
+  return [
+    yearFromTime(time),
+    monthFromTime(time),
+    dateFromTime(time),
+    hourFromTime(time),
+    minFromTime(time),
+    secFromTime(time),
+    msFromTime(time),
+  ];
+}
+
+/**
+ * @param {number} time
+ * @param {Realm} realm
+ * @returns {number}
+ */
+function localTimeValue(time, realm) {
+  const offset = realm.dateHost.timezoneOffset(time);
+  return Number.isFinite(offset) ? time - offset * MS_PER_MINUTE : NaN;
+}
+
+/**
+ * @param {EngineDate} date
+ * @param {number[]} fields
+ * @param {Realm} realm
+ * @param {boolean} local
+ * @returns {number}
+ */
+function setDateFields(date, fields, realm, local) {
+  const dateTime = makeDate(
+    makeDay(fields[0], fields[1], fields[2]),
+    makeTime(fields[3], fields[4], fields[5], fields[6]),
+  );
+  date.timeValue = timeClip(
+    local ? utcFromLocalTime(dateTime, realm.dateHost) : dateTime,
+  );
+  return date.timeValue;
 }
 
 /**
