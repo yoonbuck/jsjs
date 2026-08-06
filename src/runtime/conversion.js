@@ -245,3 +245,29 @@ export function toUint32(value) {
   // does not include -0.
   return int32bit === 0 ? 0 : int32bit;
 }
+
+/**
+ * ECMA-262 5.1 §9.7 ToUint16. Used by `String.fromCharCode` to reduce each
+ * argument to a 16-bit unsigned code-unit value.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toUint16(value) {
+  const number = toNumber(value);
+
+  if (!Number.isFinite(number)) {
+    return +0;
+  }
+
+  const posInt = Math.sign(number) * Math.floor(Math.abs(number));
+  let int16bit = posInt % 2 ** 16;
+
+  if (int16bit < 0) {
+    int16bit += 2 ** 16;
+  }
+
+  // Normalize -0 to +0: the spec's ToUint16 result set is [0, 2^16), which
+  // does not include -0.
+  return int16bit === 0 ? 0 : int16bit;
+}

@@ -5,10 +5,12 @@ import {
   thisStringValue,
 } from '../runtime/primitive-object.js';
 import {
+  checkObjectCoercible,
   toBoolean,
   toInteger,
   toNumber,
   toString,
+  toUint16,
 } from '../runtime/conversion.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import {
@@ -35,10 +37,12 @@ import {
  * complete `Boolean.prototype` and `Number.prototype` method families
  * (`toString`/`valueOf`/`toLocaleString` and the `toFixed`/
  * `toExponential`/`toPrecision` formatting methods, plus the `Number`
- * constructor's ES5 constants) along with the one `String.prototype`
- * method (`valueOf`) this milestone's shared tests require directly. The
- * full `String` prototype method family is out of scope here and lands in
- * its own milestone task.
+ * constructor's ES5 constants) along with `String`'s fundamental method
+ * family: `String.fromCharCode` and `String.prototype`'s `toString`,
+ * `valueOf`, `charAt`, `charCodeAt`, `concat`, `slice`, `substring`, and
+ * `substr`. String's search/transformation/pattern methods (`indexOf`,
+ * `toLowerCase`, `match`, `replace`, etc.) are out of scope here and land
+ * in their own milestone task.
  *
  * @param {Realm} realm
  * @returns {PrimitiveWrapperIntrinsics}
@@ -80,6 +84,180 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       length: 0,
       call(thisValue) {
         return thisStringValue(thisValue);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'toString',
+    realm.createNativeFunction({
+      name: 'toString',
+      length: 0,
+      call(thisValue) {
+        return thisStringValue(thisValue);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'charAt',
+    realm.createNativeFunction({
+      name: 'charAt',
+      length: 1,
+      call(thisValue, args) {
+        // ES5 15.5.4.4 is generic: CheckObjectCoercible + ToString(this),
+        // not the strict "this string value" check toString/valueOf use.
+        const value = stringMethodReceiver(thisValue);
+        const position = toInteger(args[0]);
+
+        return position < 0 || position >= value.length ? '' : value[position];
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'charCodeAt',
+    realm.createNativeFunction({
+      name: 'charCodeAt',
+      length: 1,
+      call(thisValue, args) {
+        const value = stringMethodReceiver(thisValue);
+        const position = toInteger(args[0]);
+
+        return position < 0 || position >= value.length
+          ? NaN
+          : value.charCodeAt(position);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'concat',
+    realm.createNativeFunction({
+      name: 'concat',
+      length: 1,
+      call(thisValue, args) {
+        let value = stringMethodReceiver(thisValue);
+
+        for (const arg of args) {
+          value += toString(arg);
+        }
+
+        return value;
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'slice',
+    realm.createNativeFunction({
+      name: 'slice',
+      length: 2,
+      call(thisValue, args) {
+        // ES5 15.5.4.13: unlike substring, out-of-order start/end are never
+        // swapped -- `from > to` simply yields a zero-length (empty) result.
+        const value = stringMethodReceiver(thisValue);
+        const length = value.length;
+        const relativeStart = toInteger(args[0]);
+        const endArgument = args[1];
+        const relativeEnd =
+          endArgument === undefined ? length : toInteger(endArgument);
+
+        const from =
+          relativeStart < 0
+            ? Math.max(length + relativeStart, 0)
+            : Math.min(relativeStart, length);
+        const to =
+          relativeEnd < 0
+            ? Math.max(length + relativeEnd, 0)
+            : Math.min(relativeEnd, length);
+
+        return codeUnitsBetween(value, from, to);
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'substring',
+    realm.createNativeFunction({
+      name: 'substring',
+      length: 2,
+      call(thisValue, args) {
+        // ES5 15.5.4.15: both bounds clamp to [0, length] independently, and
+        // an out-of-order pair is swapped rather than yielding "".
+        const value = stringMethodReceiver(thisValue);
+        const length = value.length;
+        const startInteger = toInteger(args[0]);
+        const endArgument = args[1];
+        const endInteger =
+          endArgument === undefined ? length : toInteger(endArgument);
+
+        const finalStart = clampToLength(startInteger, length);
+        const finalEnd = clampToLength(endInteger, length);
+
+        return codeUnitsBetween(
+          value,
+          Math.min(finalStart, finalEnd),
+          Math.max(finalStart, finalEnd),
+        );
+      },
+    }),
+  );
+  defineMethod(
+    stringPrototype,
+    'substr',
+    realm.createNativeFunction({
+      name: 'substr',
+      length: 2,
+      call(thisValue, args) {
+        // Annex B.2.3: a negative start wraps relative to length (clamped to
+        // 0), and an omitted length argument defaults to +Infinity rather
+        // than going through ToInteger(undefined) (which would be 0).
+        const value = stringMethodReceiver(thisValue);
+        const length = value.length;
+        let start = toInteger(args[0]);
+        const lengthArgument = args[1];
+        const requestedLength =
+          lengthArgument === undefined ? Infinity : toInteger(lengthArgument);
+
+        if (start < 0) {
+          start = Math.max(length + start, 0);
+        }
+
+        const resultLength = Math.min(
+          Math.max(requestedLength, 0),
+          length - start,
+        );
+
+        return resultLength <= 0
+          ? ''
+          : codeUnitsBetween(value, start, start + resultLength);
+      },
+    }),
+  );
+  defineMethod(
+    stringConstructor,
+    'fromCharCode',
+    realm.createNativeFunction({
+      name: 'fromCharCode',
+      length: 1,
+      call(_thisValue, args) {
+        // ES5 15.5.3.2: each argument is reduced with ToUint16 left to
+        // right (so both the coercion order and any thrown error's identity
+        // match the arguments' original order), then mapped to its UTF-16
+        // code unit. `String.fromCharCode` is the only way to construct a
+        // single code unit from a number without host help; every other
+        // decision here (coercion, looping, error propagation) is
+        // engine-defined, matching the same "primitive string
+        // indexing/length" allowance `primitive-object.js` documents for
+        // reading code units.
+        let result = '';
+
+        for (const arg of args) {
+          result += String.fromCharCode(toUint16(arg));
+        }
+
+        return result;
       },
     }),
   );
@@ -224,6 +402,64 @@ export function createPrimitiveWrapperIntrinsics(realm) {
   );
 
   return { stringConstructor, numberConstructor, booleanConstructor };
+}
+
+/**
+ * ES5's generic `String.prototype` methods (`charAt`, `charCodeAt`,
+ * `concat`, `slice`, `substring`, `substr`) accept any receiver: each
+ * begins with `CheckObjectCoercible(this)` followed by `ToString(this)`,
+ * not the strict "this string value" check `toString`/`valueOf` use via
+ * `thisStringValue`. `checkObjectCoercible` throws a guest `TypeError` for
+ * `null`/`undefined`; every other receiver flows through the shared engine
+ * `toString` conversion, so a receiver's own `toString`/`valueOf` still run
+ * in the normal `ToPrimitive` order.
+ *
+ * @param {unknown} thisValue
+ * @returns {string}
+ */
+function stringMethodReceiver(thisValue) {
+  checkObjectCoercible(thisValue);
+
+  return toString(thisValue);
+}
+
+/**
+ * Clamps an already-`ToInteger`-converted index into `[0, length]`
+ * (ES5 15.5.4.15 steps 6-7's `min(max(value, 0), length)` shape), used by
+ * `substring` for both of its bounds.
+ *
+ * @param {number} value
+ * @param {number} length
+ * @returns {number}
+ */
+function clampToLength(value, length) {
+  return Math.min(Math.max(value, 0), length);
+}
+
+/**
+ * Reads the code units of `value` in the half-open range `[from, to)` one
+ * bracket-indexed code unit at a time -- never `String.prototype.slice`/
+ * `substring`/`substr` -- consistent with the "primitive string
+ * indexing/length" allowance `runtime/primitive-object.js` documents:
+ * engine strings are host primitive strings, so reading one code unit by
+ * index is representation glue, while the range/clamp/swap math that
+ * produces `from`/`to` at each call site is fully engine-defined. When
+ * `to <= from` (an empty, swapped, or fully out-of-range pair) the loop
+ * never executes and this returns `""`.
+ *
+ * @param {string} value
+ * @param {number} from
+ * @param {number} to
+ * @returns {string}
+ */
+function codeUnitsBetween(value, from, to) {
+  let result = '';
+
+  for (let index = from; index < to; index += 1) {
+    result += value[index];
+  }
+
+  return result;
 }
 
 /**
