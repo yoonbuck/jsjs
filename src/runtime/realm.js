@@ -102,7 +102,7 @@ export class Realm {
     // "caller"/"arguments" accessor pairs and every strict arguments object's
     // "caller"/"callee" accessors. Created after error intrinsics exist so
     // the thrown error can be a proper guest TypeError.
-    this.intrinsics.throwTypeErrorFunction = this.createNativeFunction({
+    const throwTypeErrorFunction = this.createNativeFunction({
       name: '',
       length: 0,
       call() {
@@ -112,6 +112,12 @@ export class Realm {
         );
       },
     });
+    // ES5.1 §13.2.3: the unique [[ThrowTypeError]] function has
+    // [[Extensible]] = false. Its `length` and `name` are already
+    // non-writable and non-configurable (createNativeFunction), so making it
+    // non-extensible also makes it "frozen" (Object.isFrozen === true).
+    throwTypeErrorFunction.preventExtensions();
+    this.intrinsics.throwTypeErrorFunction = throwTypeErrorFunction;
 
     const objectIntrinsics = createObjectIntrinsics(this);
     Object.assign(this.intrinsics, objectIntrinsics);
