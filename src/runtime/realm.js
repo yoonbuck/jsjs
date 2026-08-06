@@ -40,11 +40,25 @@ import {
   installURIGlobals,
 } from '../builtins/global-uri.js';
 import { createJSONIntrinsics, installJSONObject } from '../builtins/json.js';
+import {
+  createDateIntrinsics,
+  installDateConstructor,
+} from '../builtins/date.js';
 import { GuestErrorSignal } from './completion.js';
+import { createDateHost } from './date.js';
 
 /**
  * @typedef {import('../builtins/fundamental.js').FundamentalIntrinsics} FundamentalIntrinsics
  * @typedef {import('../builtins/errors.js').ErrorIntrinsics} ErrorIntrinsics
+ * @typedef {{
+ *   dateHost?: Partial<import('./date.js').DateHost>,
+ *   now?: () => number,
+ *   clock?: () => number,
+ *   standardTimezoneOffset?: number,
+ *   standardTimeZoneOffset?: number,
+ *   timezoneOffset?: (utcMilliseconds: number) => number,
+ *   timeZoneOffset?: (utcMilliseconds: number) => number,
+ * }} RealmOptions
  */
 
 /**
@@ -56,12 +70,19 @@ import { GuestErrorSignal } from './completion.js';
  * script (or future built-in installers) adds to it.
  */
 export class Realm {
-  constructor() {
+  /**
+   * @param {RealmOptions} [options]
+   */
+  constructor(options = {}) {
     /** @type {FundamentalIntrinsics & Partial<ErrorIntrinsics> & Record<string, unknown>} */
     this.intrinsics = /** @type {any} */ (createFundamentalIntrinsics());
     this.globalObject = new EngineObject(this.intrinsics.objectPrototype);
     defineGlobalValueProperties(this.globalObject);
     this.globalEnvironment = new GlobalEnvironmentRecord(this.globalObject);
+    this.dateHost = createDateHost({
+      ...options,
+      ...options.dateHost,
+    });
 
     // Error intrinsics are created once the realm's global object and
     // environment exist so the resulting constructors/prototypes can be
@@ -126,6 +147,10 @@ export class Realm {
     const jsonIntrinsics = createJSONIntrinsics(this);
     Object.assign(this.intrinsics, jsonIntrinsics);
     installJSONObject(this.globalObject, jsonIntrinsics);
+
+    const dateIntrinsics = createDateIntrinsics(this);
+    Object.assign(this.intrinsics, dateIntrinsics);
+    installDateConstructor(this.globalObject, dateIntrinsics);
   }
 
   /**
@@ -147,8 +172,9 @@ export class Realm {
 }
 
 /**
+ * @param {RealmOptions} [options]
  * @returns {Realm}
  */
-export function createRealm() {
-  return new Realm();
+export function createRealm(options = {}) {
+  return new Realm(options);
 }

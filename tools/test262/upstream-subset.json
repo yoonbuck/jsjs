@@ -84,6 +84,39 @@
       ]
     },
     {
+      "name": "date-accessors-mutators",
+      "summary": "UTC Date field accessors and overflowing UTC field setters",
+      "paths": [
+        "test/built-ins/Date/prototype/getUTCFullYear/this-value-valid-date.js",
+        "test/built-ins/Date/prototype/getUTCMilliseconds/this-value-valid-date.js",
+        "test/built-ins/Date/prototype/setUTCHours/this-value-valid-date-ms.js",
+        "test/built-ins/Date/prototype/setUTCMilliseconds/this-value-valid-date.js",
+        "test/built-ins/Date/prototype/setUTCMonth/this-value-valid-date-month.js"
+      ]
+    },
+    {
+      "name": "date-construction-statics",
+      "summary": "ES5 Date call and construction, clipping, parsing its display output, and UTC normalization",
+      "paths": [
+        "test/built-ins/Date/15.9.1.15-1.js",
+        "test/built-ins/Date/S15.9.2.1_A2.js",
+        "test/built-ins/Date/S15.9.3.2_A3_T1.1.js",
+        "test/built-ins/Date/UTC/fp-evaluation-order.js",
+        "test/built-ins/Date/UTC/overflow-make-day.js",
+        "test/built-ins/Date/UTC/time-clip.js"
+      ]
+    },
+    {
+      "name": "date-formatting-json",
+      "summary": "ES5 Date ISO and UTC formatting surface, JSON non-finite handling, and numeric value extraction",
+      "paths": [
+        "test/built-ins/Date/prototype/S15.9.5_A42_T1.js",
+        "test/built-ins/Date/prototype/toISOString/15.9.5.43-0-3.js",
+        "test/built-ins/Date/prototype/toJSON/non-finite.js",
+        "test/built-ins/Date/prototype/valueOf/S9.4_A3_T1.js"
+      ]
+    },
+    {
       "name": "delete",
       "summary": "delete operator: property removal and DontDelete semantics",
       "paths": [

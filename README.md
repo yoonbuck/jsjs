@@ -232,6 +232,7 @@ The implemented ES5 core built-in families are:
 | `Function` | Callable `Function.prototype`; `toString`, `apply`, `call`, `bind`; bound calls, construction, `instanceof`, and adjusted `length`. The dynamic `Function` constructor is installed but deliberately throws a guest `Error` because engine policy forbids runtime code generation.                                                                                                                                                           |
 | `Array`    | Call/construct overloads, sparse length construction, `Array.isArray`; `push`, `pop`, `shift`, `unshift`, `reverse`, `sort`, `splice`; `concat`, `join`, `slice`, `indexOf`, `lastIndexOf`; `every`, `some`, `forEach`, `map`, `filter`, `reduce`, `reduceRight`. Methods are generic where ES5 requires and preserve sparse holes.                                                                                                          |
 | `Boolean`  | Call converts with `ToBoolean`, construct boxes; `Boolean.prototype` is itself a `false` wrapper; `constructor`, `toString`, `valueOf`. Both methods accept a boolean primitive or a `Boolean` wrapper and throw `TypeError` for anything else.                                                                                                                                                                                              |
+| `Date`     | ES5 call/construct overloads; `Date.parse`, `Date.UTC`, `Date.now`; core ES5 local/UTC accessors and mutators; Annex B `getYear`, `setYear`, and `toGMTString`; `toString`, date/time, locale, UTC/GMT, ISO, `valueOf`, and `toJSON`. Clock and timezone access use deterministic realm host adapters; locale methods deliberately match their non-locale counterparts.                                                                      |
 | `Number`   | Call converts with `ToNumber`, construct boxes; the five ES5 constants; `constructor`, `toString`, `toLocaleString`, `valueOf`, `toFixed`, `toExponential`, `toPrecision`.                                                                                                                                                                                                                                                                   |
 | `String`   | Call converts with `ToString`, construct boxes with lazy index properties and a non-writable `length`; `fromCharCode`; all ES5 prototype methods, including `match`/`replace`/`search`/`split` dispatching through real `RegExp` values.                                                                                                                                                                                                     |
 | `RegExp`   | The ES5 15.10.1 `Pattern` grammar, validated strictly with no Annex B extensions; call coerces or copies a pattern, construct always allocates; the ES5 15.10.7 own properties `source`/`global`/`ignoreCase`/`multiline`/`lastIndex`; `exec`, `test`, `toString`; regular expression literals. `RegExp.prototype` is itself a RegExp object with source `(?:)` and all flags `false`, per ES5 15.10.6, not the ES2015 ordinary-object rule. |
@@ -239,10 +240,9 @@ The implemented ES5 core built-in families are:
 | `JSON`     | `JSON.parse` with the full JSON grammar and reviver traversal, and `JSON.stringify` with replacer functions, replacer property lists, `toJSON`, numeric and string `space` gaps, and cycle detection. Neither delegates to the host `JSON`. `JSON` is an ordinary object with `[[Class]]` `"JSON"`.                                                                                                                                          |
 | Globals    | `parseInt`, `parseFloat`, `isNaN`, `isFinite`; the URI functions `encodeURI`, `encodeURIComponent`, `decodeURI`, `decodeURIComponent`; and Annex B's `escape`/`unescape`. The URI functions throw a realm-local `URIError`.                                                                                                                                                                                                                  |
 
-The remaining standard library is `Date`. The error constructors (`Error`,
-`TypeError`, `ReferenceError`, `SyntaxError`, `RangeError`, `URIError`) are all
-available on every realm's global object; `EvalError` is deliberately omitted
-because this engine has no `eval`.
+The error constructors (`Error`, `TypeError`, `ReferenceError`, `SyntaxError`,
+`RangeError`, `URIError`) are all available on every realm's global object;
+`EvalError` is deliberately omitted because this engine has no `eval`.
 
 #### Boxed primitives, autoboxing, realms, and descriptors
 
@@ -593,8 +593,8 @@ defined exactly under
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 1,420    | 1,420     | 1,420  | 2.65%   |
-| (file, variant) | 102,075     | 2,829    | 2,829     | 2,829  | 2.771%  |
+| Files           | 53,575      | 1,435    | 1,435     | 1,435  | 2.678%  |
+| (file, variant) | 102,075     | 2,859    | 2,859     | 2,859  | 2.801%  |
 
 430 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).
