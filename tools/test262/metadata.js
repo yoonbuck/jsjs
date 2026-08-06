@@ -311,13 +311,52 @@ function readBlockScalar(key, indicator, block) {
     return dedented.join('\n');
   }
 
-  if (dedented.some((line) => line.trim() === '')) {
-    throw new Test262MetadataError(
-      `Blank lines inside a folded block scalar are not supported: ${key}`,
-    );
+  return foldBlockScalarLines(dedented);
+}
+
+/**
+ * Folds the dedented lines of a YAML folded block scalar (`>`), following the
+ * YAML 1.2 line-folding rules: consecutive non-empty lines join with a single
+ * space, a run of k blank lines folds to k newline characters, and
+ * "more-indented" lines (those that keep leading whitespace after the block
+ * indent is removed) are emitted literally with the surrounding line breaks
+ * preserved rather than folded. Trailing blank lines have already been stripped
+ * by the caller, so no trailing newline is produced.
+ *
+ * @param {readonly string[]} lines
+ * @returns {string}
+ */
+function foldBlockScalarLines(lines) {
+  let result = '';
+  let started = false;
+  let previousMoreIndented = false;
+  let pendingBlanks = 0;
+
+  for (const rawLine of lines) {
+    if (rawLine.trim() === '') {
+      pendingBlanks += 1;
+      continue;
+    }
+
+    const line = rawLine.replace(/\s+$/, '');
+    const moreIndented = /^\s/.test(line);
+
+    if (!started) {
+      result += line;
+    } else if (moreIndented || previousMoreIndented) {
+      result += '\n'.repeat(pendingBlanks + 1) + line;
+    } else if (pendingBlanks > 0) {
+      result += '\n'.repeat(pendingBlanks) + line;
+    } else {
+      result += ` ${line}`;
+    }
+
+    started = true;
+    previousMoreIndented = moreIndented;
+    pendingBlanks = 0;
   }
 
-  return dedented.map((line) => line.trim()).join(' ');
+  return result;
 }
 
 /**

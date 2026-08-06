@@ -255,6 +255,57 @@ export default [
     },
   },
   {
+    name: 'metadata folds a single blank line in a folded block scalar to one newline',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        [
+          '/*---',
+          'description: >-',
+          '  para one',
+          '  still one',
+          '',
+          '  para two',
+          '---*/',
+        ].join('\n'),
+      );
+
+      assertSame(metadata.description, 'para one still one\npara two');
+    },
+  },
+  {
+    name: 'metadata folds consecutive blank lines in a folded block scalar to a newline each',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        ['/*---', 'description: >-', '  a b', '', '', '  c d', '---*/'].join(
+          '\n',
+        ),
+      );
+
+      assertSame(metadata.description, 'a b\n\nc d');
+    },
+  },
+  {
+    name: 'metadata keeps more-indented lines literal inside a folded block scalar',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        [
+          '/*---',
+          'description: >-',
+          '  line one',
+          '',
+          '      indented block',
+          '      more block',
+          '---*/',
+        ].join('\n'),
+      );
+
+      assertSame(
+        metadata.description,
+        'line one\n\n    indented block\n    more block',
+      );
+    },
+  },
+  {
     name: 'metadata rejects a source without a frontmatter block',
     run: () => {
       const error = assertThrows(
