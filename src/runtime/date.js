@@ -333,17 +333,13 @@ export class EngineDate extends EngineObject {
  * @typedef {{
  *   now: () => number,
  *   timezoneOffset: (utcMilliseconds: number) => number,
- *   standardTimezoneOffset: number,
  * }} DateHost
  */
 
 /**
  * Creates the only boundary between Date's algorithms and host-dependent
- * clock/time-zone facilities. `timezoneOffset` accepts UTC milliseconds and
- * uses the `getTimezoneOffset` convention: minutes to add to local time to
- * obtain UTC. `standardTimezoneOffset` is the constant standard-time offset
- * in that same convention; it lets local construction evaluate daylight
- * saving at the ES5-required UTC instant.
+ * clock/time-zone facilities. `timezoneOffset` uses the `getTimezoneOffset`
+ * convention: minutes to add to local time to obtain UTC.
  *
  * @param {Partial<DateHost> & { clock?: () => number, timeZoneOffset?: (utcMilliseconds: number) => number }} [adapter]
  * @returns {DateHost}
@@ -359,14 +355,7 @@ export function createDateHost(adapter = {}) {
     throw new TypeError('Date host adapters must be functions');
   }
 
-  const standardTimezoneOffset =
-    adapter.standardTimezoneOffset ?? timezoneOffset(0);
-
-  if (!Number.isFinite(standardTimezoneOffset)) {
-    throw new TypeError('Date host standard timezone offset must be finite');
-  }
-
-  return { now, timezoneOffset, standardTimezoneOffset };
+  return { now, timezoneOffset };
 }
 
 /**
@@ -423,10 +412,11 @@ export function dateUTC(args) {
  * call form. Parsing is deliberately independent of host Date.parse.
  *
  * @param {string} source
+ * @param {DateHost} host
  * @returns {number}
  */
-export function parseDateString(source) {
-  const iso = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/.exec(
+export function parseDateString(source, host) {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?$/.exec(
     source,
   );
 
@@ -434,8 +424,8 @@ export function parseDateString(source) {
     const [, yearText, monthText, dateText, hourText, minuteText, secondText, millisecondText, zone] =
       iso;
     const year = Number(yearText);
-    const month = monthText === undefined ? 1 : Number(monthText);
-    const date = dateText === undefined ? 1 : Number(dateText);
+    const month = Number(monthText);
+    const date = Number(dateText);
     const hour = hourText === undefined ? 0 : Number(hourText);
     const minute = minuteText === undefined ? 0 : Number(minuteText);
     const second = secondText === undefined ? 0 : Number(secondText);
@@ -459,7 +449,9 @@ export function parseDateString(source) {
     );
 
     if (zone === undefined) {
-      return timeClip(localTime);
+      return timeClip(
+        hourText === undefined ? localTime : utcFromLocalTime(localTime, host),
+      );
     }
 
     if (zone === 'Z') {
@@ -562,10 +554,6 @@ function dateFromComponents(
   second,
   millisecond,
 ) {
-  if (!Number.isFinite(year)) {
-    return NaN;
-  }
-
   const normalizedYear = toInteger(year);
   const calendarYear =
     normalizedYear >= 0 && normalizedYear <= 99
@@ -587,9 +575,7 @@ function utcFromLocalTime(localTime, host) {
     return NaN;
   }
 
-  const daylightSavingProbe =
-    localTime + host.standardTimezoneOffset * MS_PER_MINUTE;
-  const offset = host.timezoneOffset(daylightSavingProbe);
+  const offset = host.timezoneOffset(localTime);
   return Number.isFinite(offset) ? localTime + offset * MS_PER_MINUTE : NaN;
 }
 

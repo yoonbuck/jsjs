@@ -7,8 +7,7 @@ import {
   timeClip,
 } from '../runtime/date.js';
 import { toNumber, toPrimitive, toString } from '../runtime/conversion.js';
-
-/** @typedef {import('../runtime/object.js').EngineObject} EngineObject */
+import { EngineObject } from '../runtime/object.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -24,7 +23,7 @@ import { toNumber, toPrimitive, toString } from '../runtime/conversion.js';
  * @returns {DateIntrinsics}
  */
 export function createDateIntrinsics(realm) {
-  const datePrototype = new EngineDate(realm.intrinsics.objectPrototype, NaN);
+  const datePrototype = new EngineObject(realm.intrinsics.objectPrototype, 'Date');
 
   /**
    * @param {readonly unknown[]} args
@@ -53,7 +52,7 @@ export function createDateIntrinsics(realm) {
     configurable: true,
   });
   defineMethod(realm, dateConstructor, 'parse', 1, (_thisValue, args) =>
-    parseDateString(toString(args[0])),
+    parseDateString(toString(args[0]), realm.dateHost),
   );
   defineMethod(realm, dateConstructor, 'UTC', 7, (_thisValue, args) =>
     dateUTC(args),
@@ -92,9 +91,13 @@ function dateValueFromArguments(realm, args) {
   if (args.length === 1) {
     const value = args[0];
 
-    const primitive = toPrimitive(value, 'string');
+    if (value instanceof EngineDate) {
+      return value.timeValue;
+    }
+
+    const primitive = toPrimitive(value);
     return typeof primitive === 'string'
-      ? parseDateString(primitive)
+      ? parseDateString(primitive, realm.dateHost)
       : timeClip(toNumber(primitive));
   }
 
