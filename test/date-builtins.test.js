@@ -157,6 +157,28 @@ export default [
     },
   },
   {
+    name: 'Date.parse round-trips signed six-digit ISO years emitted by toISOString',
+    run() {
+      assertSame(
+        run(
+          '(function () { var negative = new Date(Date.UTC(-1, 0, 1)); var positive = new Date(Date.UTC(10000, 0, 1)); return Date.parse(negative.toISOString()) === negative.getTime() && Date.parse(positive.toISOString()) === positive.getTime(); }())',
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'Date.parse rejects the prohibited negative-zero expanded year',
+    run() {
+      assertSame(
+        Number.isNaN(
+          /** @type {number} */ (run('Date.parse("-000000-03-31T00:45Z");')),
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'Date.parse preserves actual years 0000-0099 in emitted display strings',
     run() {
       assertSame(
@@ -209,7 +231,7 @@ export default [
       assertSame(run('typeof Date();', options), 'string');
       assertSame(
         run('Date();', options),
-        'Thu Jan 01 1970 02:00:00 GMT+0200 (UTC)',
+        'Thu Jan 01 1970 02:00:00 GMT+0200 (Local)',
       );
     },
   },
@@ -268,7 +290,7 @@ export default [
       );
       assertSame(
         run('Date();', options),
-        'Wed Dec 31 1969 21:00:00 GMT-0500 (UTC)',
+        'Wed Dec 31 1969 21:00:00 GMT-0500 (Local)',
       );
       assertSame(observed.join(','), '18000000,7200000');
     },
@@ -503,6 +525,61 @@ export default [
     },
   },
   {
+    name: 'Date local setters invalidate their value when adapter conversion is non-finite',
+    run() {
+      const options = {
+        dateHost: {
+          standardTimezoneOffset: 0,
+          timezoneOffset: () => NaN,
+        },
+      };
+
+      assertSame(
+        run(
+          '(function () { var methods = ["setMilliseconds", "setSeconds", "setMinutes", "setHours", "setDate", "setMonth", "setFullYear", "setYear"]; var allInvalid = true; var d, result, index; for (index = 0; index < methods.length; index += 1) { d = new Date(0); result = d[methods[index]](1); allInvalid = allInvalid && result !== result && d.getTime() !== d.getTime(); } return allInvalid; }())',
+          options,
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'Date local conversion preserves clipped boundary instants after out-of-range DST probes',
+    run() {
+      const cases = [
+        {
+          source: 'new Date(275760, 8, 13).getTime();',
+          time: 8640000000000000,
+          standardTimezoneOffset: 60,
+          probe: 8640000003600000,
+        },
+        {
+          source: 'new Date(-271821, 3, 20).getTime();',
+          time: -8640000000000000,
+          standardTimezoneOffset: -60,
+          probe: -8640000003600000,
+        },
+      ];
+
+      for (const testCase of cases) {
+        /** @type {number[]} */
+        const observed = [];
+        const options = {
+          dateHost: {
+            standardTimezoneOffset: testCase.standardTimezoneOffset,
+            timezoneOffset(/** @type {number} */ utcMilliseconds) {
+              observed.push(utcMilliseconds);
+              return utcMilliseconds === testCase.probe ? 0 : NaN;
+            },
+          },
+        };
+
+        assertSame(run(testCase.source, options), testCase.time);
+        assertSame(observed.join(','), String(testCase.probe));
+      }
+    },
+  },
+  {
     name: 'Date local setters use the adapter’s DST transition mapping',
     run() {
       const minute = 60 * 1000;
@@ -569,7 +646,7 @@ export default [
           '(function () { var d = new Date(0); return [d.toString(), d.toDateString(), d.toTimeString(), d.toLocaleString(), d.toLocaleDateString(), d.toLocaleTimeString(), d.toUTCString(), d.valueOf(), Date()].join("|"); }())',
           options,
         ),
-        'Thu Jan 01 1970 01:30:00 GMT+0130 (UTC)|Thu Jan 01 1970|01:30:00 GMT+0130 (UTC)|Thu Jan 01 1970 01:30:00 GMT+0130 (UTC)|Thu Jan 01 1970|01:30:00 GMT+0130 (UTC)|Thu, 01 Jan 1970 00:00:00 GMT|0|Thu Jan 01 1970 01:30:00 GMT+0130 (UTC)',
+        'Thu Jan 01 1970 01:30:00 GMT+0130 (Local)|Thu Jan 01 1970|01:30:00 GMT+0130 (Local)|Thu Jan 01 1970 01:30:00 GMT+0130 (Local)|Thu Jan 01 1970|01:30:00 GMT+0130 (Local)|Thu, 01 Jan 1970 00:00:00 GMT|0|Thu Jan 01 1970 01:30:00 GMT+0130 (Local)',
       );
       assertSame(
         run('new Date(0).toString() + "|" + new Date(0).toGMTString();', {
@@ -577,7 +654,26 @@ export default [
             timezoneOffset: () => 300,
           },
         }),
-        'Wed Dec 31 1969 19:00:00 GMT-0500 (UTC)|Thu, 01 Jan 1970 00:00:00 GMT',
+        'Wed Dec 31 1969 19:00:00 GMT-0500 (Local)|Thu, 01 Jan 1970 00:00:00 GMT',
+      );
+    },
+  },
+  {
+    name: 'Date formatting truncates fractional adapter offsets to minute fields that parse back',
+    run() {
+      const options = {
+        dateHost: {
+          standardTimezoneOffset: 0,
+          timezoneOffset: () => -90.5,
+        },
+      };
+
+      assertSame(
+        run(
+          '(function () { var date = new Date(0); return date.toString() + "|" + Date.parse(date.toString()); }())',
+          options,
+        ),
+        'Thu Jan 01 1970 01:30:00 GMT+0130 (Local)|0',
       );
     },
   },

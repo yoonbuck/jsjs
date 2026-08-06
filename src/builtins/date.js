@@ -77,7 +77,7 @@ export function createDateIntrinsics(realm) {
     configurable: true,
   });
   defineMethod(realm, dateConstructor, 'parse', 1, (_thisValue, args) =>
-    parseDateString(toString(args[0]), realm.dateHost),
+    parseDateString(toString(args[0])),
   );
   defineMethod(realm, dateConstructor, 'UTC', 7, (_thisValue, args) =>
     dateUTC(args),
@@ -263,7 +263,8 @@ function installDateSetters(realm, datePrototype) {
       }
       const fields = dateFields(date, realm, local, recover);
       if (fields === undefined) {
-        return NaN;
+        date.timeValue = NaN;
+        return date.timeValue;
       }
 
       for (let index = 0; index < values.length; index += 1) {
@@ -291,7 +292,8 @@ function installDateSetters(realm, datePrototype) {
     let year = toNumber(args[0]);
     const fields = dateFields(date, realm, true, true);
     if (fields === undefined) {
-      return NaN;
+      date.timeValue = NaN;
+      return date.timeValue;
     }
 
     if (Number.isFinite(year)) {
@@ -396,7 +398,7 @@ function dateValueFromArguments(realm, args) {
     const value = args[0];
     const primitive = toPrimitive(value);
     return typeof primitive === 'string'
-      ? parseDateString(primitive, realm.dateHost)
+      ? parseDateString(primitive)
       : timeClip(toNumber(primitive));
   }
 

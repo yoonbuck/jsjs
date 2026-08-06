@@ -25,7 +25,7 @@ export function day(time) {
 }
 
 /**
- * ECMA-262 5.1 §15.9.1.3 TimeWithinDay(t).
+ * ECMA-262 5.1 §15.9.1.2 TimeWithinDay(t).
  *
  * @param {number} time
  * @returns {number}
@@ -45,7 +45,7 @@ export function hourFromTime(time) {
 }
 
 /**
- * ECMA-262 5.1 §15.9.1.11 MinFromTime(t).
+ * ECMA-262 5.1 §15.9.1.10 MinFromTime(t).
  *
  * @param {number} time
  * @returns {number}
@@ -55,7 +55,7 @@ export function minFromTime(time) {
 }
 
 /**
- * ECMA-262 5.1 §15.9.1.12 SecFromTime(t).
+ * ECMA-262 5.1 §15.9.1.10 SecFromTime(t).
  *
  * @param {number} time
  * @returns {number}
@@ -65,7 +65,7 @@ export function secFromTime(time) {
 }
 
 /**
- * ECMA-262 5.1 §15.9.1.13 msFromTime(t).
+ * ECMA-262 5.1 §15.9.1.10 msFromTime(t).
  *
  * @param {number} time
  * @returns {number}
@@ -331,10 +331,10 @@ export class EngineDate extends EngineObject {
   /**
    * Date is the sole ES5 built-in whose no-hint conversion uses String order.
    *
-   * @param {'string' | 'number' | 'default'} [hint='number']
+   * @param {'string' | 'number' | 'default'} [hint='default']
    * @returns {string | number | boolean | null | undefined}
    */
-  defaultValue(hint = 'number') {
+  defaultValue(hint = 'default') {
     return super.defaultValue(hint === 'default' ? 'string' : hint);
   }
 }
@@ -439,12 +439,11 @@ export function dateUTC(args) {
  * call form. Parsing is deliberately independent of host Date.parse.
  *
  * @param {string} source
- * @param {DateHost} _host
  * @returns {number}
  */
-export function parseDateString(source, _host) {
+export function parseDateString(source) {
   const iso =
-    /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/.exec(
+    /^([+-]\d{6}|\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/.exec(
       source,
     );
 
@@ -460,6 +459,10 @@ export function parseDateString(source, _host) {
       millisecondText,
       zone,
     ] = iso;
+    if (yearText === '-000000') {
+      return NaN;
+    }
+
     const year = Number(yearText);
     const month = monthText === undefined ? 1 : Number(monthText);
     const date = dateText === undefined ? 1 : Number(dateText);
@@ -529,7 +532,7 @@ export function parseDateString(source, _host) {
   }
 
   const display =
-    /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{2}) (-?\d{4,}) (\d{2}):(\d{2}):(\d{2}) GMT([+-])(\d{2})(\d{2})(?: \(UTC\))?$/.exec(
+    /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{2}) (-?\d{4,}) (\d{2}):(\d{2}):(\d{2}) GMT([+-])(\d{2})(\d{2})(?: \(Local\))?$/.exec(
       source,
     );
 
@@ -626,7 +629,7 @@ export function formatLocalDateTime(utcMilliseconds, host) {
     ? 'Invalid Date'
     : `${formatDateParts(parts.time)} ${formatTimeParts(parts.time)} GMT${formatOffset(
         parts.offset,
-      )} (UTC)`;
+      )} (Local)`;
 }
 
 /**
@@ -648,7 +651,7 @@ export function formatLocalTime(utcMilliseconds, host) {
   const parts = localFormatParts(utcMilliseconds, host);
   return parts === undefined
     ? 'Invalid Date'
-    : `${formatTimeParts(parts.time)} GMT${formatOffset(parts.offset)} (UTC)`;
+    : `${formatTimeParts(parts.time)} GMT${formatOffset(parts.offset)} (Local)`;
 }
 
 /**
@@ -672,10 +675,6 @@ export function formatUTCString(utcMilliseconds) {
  * @returns {string}
  */
 export function formatISOString(utcMilliseconds) {
-  if (!Number.isFinite(utcMilliseconds)) {
-    return 'Invalid Date';
-  }
-
   return `${formatISOYear(yearFromTime(utcMilliseconds))}-${pad(
     monthFromTime(utcMilliseconds) + 1,
   )}-${pad(dateFromTime(utcMilliseconds))}T${formatTimeParts(
@@ -693,11 +692,23 @@ function localFormatParts(utcMilliseconds, host) {
     return undefined;
   }
 
-  const offset = host.timezoneOffset(utcMilliseconds);
+  const offset = normalizeTimezoneOffset(host.timezoneOffset(utcMilliseconds));
   const time = utcMilliseconds - offset * MS_PER_MINUTE;
   return Number.isFinite(offset) && Number.isFinite(time)
     ? { time, offset }
     : undefined;
+}
+
+/**
+ * Date host offsets use the integer-minute getTimezoneOffset convention.
+ * Fractional injected values truncate toward zero so local fields and GMT text
+ * use the same offset.
+ *
+ * @param {number} offset
+ * @returns {number}
+ */
+function normalizeTimezoneOffset(offset) {
+  return Number.isFinite(offset) ? toInteger(offset) : NaN;
 }
 
 /**
@@ -777,9 +788,8 @@ export function utcFromLocalTime(localTime, host) {
     return NaN;
   }
 
-  const utcMilliseconds = timeClip(
-    localTime + host.standardTimezoneOffset * MS_PER_MINUTE,
-  );
+  const utcMilliseconds =
+    localTime + host.standardTimezoneOffset * MS_PER_MINUTE;
   const offset = host.timezoneOffset(utcMilliseconds);
   return Number.isFinite(offset) ? localTime + offset * MS_PER_MINUTE : NaN;
 }
