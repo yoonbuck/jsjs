@@ -4,6 +4,7 @@ import {
   toNumber,
   toPrimitive,
   toString,
+  toUint16,
 } from '../src/runtime/conversion.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
@@ -266,6 +267,116 @@ const tests = [
     run() {
       assertSame(abstractRelationalComparison(NaN, 1), undefined);
       assertSame(abstractRelationalComparison('20', '3'), true);
+    },
+  },
+  {
+    // ToUint16 is exercised directly here rather than only through
+    // `String.fromCharCode`: the host `String.fromCharCode` that maps a
+    // number to a code unit re-applies its own ToUint16, so a guest-level
+    // `String.fromCharCode(-1)` assertion stays green even when this
+    // conversion is broken. These assertions are the real coverage.
+    name: 'toUint16 wraps modulo 2^16 after ToInteger, normalizing -0, NaN, and infinities to +0',
+    run() {
+      assertSame(toUint16(0), 0);
+      assertSame(toUint16(-0), 0);
+      assertSame(Object.is(toUint16(-0), -0), false);
+      assertSame(toUint16(1), 1);
+      assertSame(toUint16(65535), 65535);
+      assertSame(toUint16(65536), 0);
+      assertSame(toUint16(65537), 1);
+      assertSame(toUint16(-1), 65535);
+      assertSame(toUint16(-2), 65534);
+      assertSame(toUint16(-65535), 1);
+      assertSame(toUint16(-65536), 0);
+      assertSame(toUint16(-65537), 65535);
+      assertSame(toUint16(65.9), 65);
+      assertSame(toUint16(-65.9), 65471);
+      assertSame(toUint16(0.5), 0);
+      assertSame(toUint16(-0.5), 0);
+      assertSame(toUint16(NaN), 0);
+      assertSame(toUint16(Infinity), 0);
+      assertSame(toUint16(-Infinity), 0);
+      assertSame(toUint16(4294967295), 65535);
+      assertSame(toUint16(4294967296), 0);
+      assertSame(toUint16(4294967301), 5);
+      assertSame(toUint16(123456789.9), 52501);
+      assertSame(toUint16(1099511640121), 12345);
+      assertSame(toUint16(12345678901234), 12274);
+      assertSame(toUint16(-12345678901234), 53262);
+      assertSame(toUint16(9007199254740992), 0);
+      assertSame(toUint16(1e21), 0);
+      assertSame(toUint16(-1e21), 0);
+    },
+  },
+  {
+    name: 'toUint16 applies ToNumber exactly once, with the number hint, and propagates a coercion error by identity',
+    run() {
+      assertSame(toUint16('66'), 66);
+      assertSame(toUint16(' 0x10 '), 16);
+      assertSame(toUint16('abc'), 0);
+      assertSame(toUint16(''), 0);
+      assertSame(toUint16(true), 1);
+      assertSame(toUint16(false), 0);
+      assertSame(toUint16(null), 0);
+      assertSame(toUint16(undefined), 0);
+
+      /** @type {string[]} */
+      const trace = [];
+      const object = new EngineObject();
+      object.defineOwnProperty(
+        'valueOf',
+        {
+          value() {
+            trace.push('valueOf');
+            return -1;
+          },
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        },
+        true,
+      );
+      object.defineOwnProperty(
+        'toString',
+        {
+          value() {
+            trace.push('toString');
+            return '5';
+          },
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        },
+        true,
+      );
+
+      assertSame(toUint16(object), 65535);
+      assertSame(JSON.stringify(trace), '["valueOf"]');
+
+      const thrown = new Error('boom');
+      const bad = new EngineObject();
+      bad.defineOwnProperty(
+        'valueOf',
+        {
+          value() {
+            throw thrown;
+          },
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        },
+        true,
+      );
+
+      let caught;
+
+      try {
+        toUint16(bad);
+      } catch (error) {
+        caught = error;
+      }
+
+      assertSame(caught, thrown);
     },
   },
 ];

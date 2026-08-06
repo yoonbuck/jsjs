@@ -362,6 +362,56 @@ export default [
     },
   },
   {
+    // The String built-ins must not implement guest semantics by calling the
+    // host methods they are reimplementing. Behavioural tests cannot catch
+    // this (host `String.prototype.charCodeAt`/`slice` return the *right*
+    // answers), so the boundary is enforced against the source text: the
+    // String family may read code units by index and length, and may use
+    // exactly one host primitive -- `String.fromCharCode`, isolated in
+    // `src/runtime/code-units.js`.
+    name: 'the String built-ins never delegate to a host String.prototype method',
+    run: async () => {
+      const files = [
+        'src/builtins/primitive-wrappers.js',
+        'src/runtime/code-units.js',
+      ];
+      const hostMethodCall =
+        /\.(charAt|charCodeAt|codePointAt|concat|slice|substring|substr|indexOf|lastIndexOf|split|replace|search|match|trim|toLowerCase|toUpperCase|toLocaleLowerCase|toLocaleUpperCase|localeCompare|repeat|padStart|padEnd|startsWith|endsWith|includes|normalize)\s*\(/g;
+      /** @type {string[]} */
+      const offenders = [];
+      /** @type {string[]} */
+      const hostConstructors = [];
+
+      for (const file of files) {
+        const source = await readSource(file);
+        const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+
+        for (const match of code.matchAll(hostMethodCall)) {
+          offenders.push(`${file} calls .${match[1]}()`);
+        }
+
+        if (code.includes('String.prototype')) {
+          offenders.push(`${file} names String.prototype in code`);
+        }
+
+        hostConstructors.push(
+          ...(code.match(/String\.fromCharCode\s*\(/g) ?? []).map(() => file),
+        );
+      }
+
+      assertSame(
+        offenders.join('\n'),
+        '',
+        'the String built-ins must own their code-unit reads instead of calling host String methods',
+      );
+      assertSame(
+        hostConstructors.join(','),
+        'src/runtime/code-units.js',
+        'the number -> code-unit host primitive must stay isolated in src/runtime/code-units.js, used exactly once',
+      );
+    },
+  },
+  {
     name: 'every engine source file is inside the Prettier check scope',
     run: async () => {
       const scope = await readFormatScope();

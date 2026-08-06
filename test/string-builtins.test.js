@@ -1,6 +1,10 @@
-import { assertSame } from './harness/assert.js';
+import { assertSame, assertThrows } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
+import {
+  charCodeOfCodeUnit,
+  codeUnitFromCharCode,
+} from '../src/runtime/code-units.js';
 
 /**
  * @param {string} source
@@ -10,7 +14,94 @@ function run(source) {
   return evaluateScript(createRealm(), source).value;
 }
 
+/**
+ * Reads an own/inherited property off an engine object without asserting a
+ * type the test does not care about (the harness has no engine-object type
+ * import).
+ *
+ * @param {unknown} target
+ * @param {string} key
+ * @returns {any}
+ */
+function property(target, key) {
+  return /** @type {{ get: (key: string) => unknown }} */ (target).get(key);
+}
+
 const tests = [
+  {
+    // `charCodeOfCodeUnit` is the engine's own code-unit -> number operation:
+    // it must never reach for host `String.prototype.charCodeAt`, so it is
+    // pinned here directly, both against hand-written literals and by an
+    // exhaustive round trip through the one permitted host primitive
+    // (`codeUnitFromCharCode`, number -> one code unit). An off-by-one or a
+    // truncated search range fails this immediately.
+    name: 'the engine code-unit reverse lookup maps every UTF-16 code unit back to its number',
+    run() {
+      assertSame(charCodeOfCodeUnit('\u0000'), 0);
+      assertSame(charCodeOfCodeUnit('\u0001'), 1);
+      assertSame(charCodeOfCodeUnit('0'), 48);
+      assertSame(charCodeOfCodeUnit('A'), 65);
+      assertSame(charCodeOfCodeUnit('a'), 97);
+      assertSame(charCodeOfCodeUnit('\u007f'), 127);
+      assertSame(charCodeOfCodeUnit('\u0080'), 128);
+      assertSame(charCodeOfCodeUnit('\u00ff'), 255);
+      assertSame(charCodeOfCodeUnit('\u0100'), 256);
+      assertSame(charCodeOfCodeUnit('\u20ac'), 8364);
+      assertSame(charCodeOfCodeUnit('\ud800'), 55296);
+      assertSame(charCodeOfCodeUnit('\udbff'), 56319);
+      assertSame(charCodeOfCodeUnit('\udc00'), 56320);
+      assertSame(charCodeOfCodeUnit('\udfff'), 57343);
+      assertSame(charCodeOfCodeUnit('\ufffd'), 65533);
+      assertSame(charCodeOfCodeUnit('\ufffe'), 65534);
+      assertSame(charCodeOfCodeUnit('\uffff'), 65535);
+
+      let mismatches = 0;
+      let lastMismatch = -1;
+
+      for (let code = 0; code < 65536; code += 1) {
+        if (charCodeOfCodeUnit(codeUnitFromCharCode(code)) !== code) {
+          mismatches += 1;
+          lastMismatch = code;
+        }
+      }
+
+      assertSame(mismatches, 0, `last mismatching code unit: ${lastMismatch}`);
+      assertSame(codeUnitFromCharCode(65).length, 1);
+      assertSame(codeUnitFromCharCode(0).length, 1);
+      assertSame(codeUnitFromCharCode(65), 'A');
+      assertSame(codeUnitFromCharCode(0), '\u0000');
+      assertSame(codeUnitFromCharCode(65535), '\uffff');
+      assertSame(codeUnitFromCharCode(55296), '\ud800');
+    },
+  },
+  {
+    // The host `String.fromCharCode` behind `codeUnitFromCharCode` re-applies
+    // its own ToUint16, so an unreduced argument would still come back
+    // spec-correct and nothing would notice that the engine's ToUint16 had
+    // been skipped. This range guard is what makes that a hard failure: it
+    // forces `String.fromCharCode` to do its own ToUint16 before the host
+    // primitive is reached.
+    name: 'the code-unit primitives reject inputs their callers were supposed to reduce',
+    run() {
+      assertThrows(() => codeUnitFromCharCode(-1), RangeError);
+      assertThrows(() => codeUnitFromCharCode(65536), RangeError);
+      assertThrows(() => codeUnitFromCharCode(65.5), RangeError);
+      assertThrows(() => codeUnitFromCharCode(NaN), RangeError);
+      assertThrows(() => codeUnitFromCharCode(Infinity), RangeError);
+      assertThrows(() => codeUnitFromCharCode(-Infinity), RangeError);
+      assertThrows(() => codeUnitFromCharCode(-0), RangeError);
+      assertSame(codeUnitFromCharCode(0), '\u0000');
+      assertSame(codeUnitFromCharCode(65535), '\uffff');
+
+      assertThrows(() => charCodeOfCodeUnit(''), RangeError);
+      assertThrows(() => charCodeOfCodeUnit('ab'), RangeError);
+      assertThrows(
+        () => charCodeOfCodeUnit(/** @type {any} */ (65)),
+        RangeError,
+      );
+      assertSame(charCodeOfCodeUnit('a'), 97);
+    },
+  },
   {
     name: 'String called as a function converts its argument with ToString and never boxes, distinguishing omitted from undefined',
     run() {
@@ -116,21 +207,23 @@ const tests = [
     name: 'String.fromCharCode reduces each argument with ToUint16: negative, out-of-range, fractional, NaN, and infinite values wrap or clamp to a 16-bit unsigned code unit',
     run() {
       assertSame(run('String.fromCharCode(65);'), 'A');
-      assertSame(run('String.fromCharCode(-1);'), String.fromCharCode(65535));
-      assertSame(run('String.fromCharCode(65536);'), String.fromCharCode(0));
-      assertSame(run('String.fromCharCode(65537);'), String.fromCharCode(1));
+      assertSame(run('String.fromCharCode(-1);'), '\uffff');
+      assertSame(run('String.fromCharCode(65536);'), '\u0000');
+      assertSame(run('String.fromCharCode(65537);'), '\u0001');
       assertSame(run('String.fromCharCode(65.9);'), 'A');
-      assertSame(run('String.fromCharCode(NaN);'), String.fromCharCode(0));
-      assertSame(run('String.fromCharCode(Infinity);'), String.fromCharCode(0));
-      assertSame(
-        run('String.fromCharCode(-Infinity);'),
-        String.fromCharCode(0),
-      );
-      assertSame(
-        /** @type {string} */ (run('String.fromCharCode(0);')).charCodeAt(0),
-        0,
-      );
-      assertSame(run('String.fromCharCode(-65536);'), String.fromCharCode(0));
+      assertSame(run('String.fromCharCode(-65.9);'), '\uffbf');
+      assertSame(run('String.fromCharCode(NaN);'), '\u0000');
+      assertSame(run('String.fromCharCode(Infinity);'), '\u0000');
+      assertSame(run('String.fromCharCode(-Infinity);'), '\u0000');
+      assertSame(run('String.fromCharCode(4294967301);'), '\u0005');
+      assertSame(run('String.fromCharCode(0);'), '\u0000');
+      assertSame(run('String.fromCharCode(0).length;'), 1);
+      assertSame(run('String.fromCharCode(-65536);'), '\u0000');
+      assertSame(run('String.fromCharCode(65, 66, 67);'), 'ABC');
+      assertSame(run('String.fromCharCode("66");'), 'B');
+      assertSame(run('String.fromCharCode(true);'), '\u0001');
+      assertSame(run('String.fromCharCode(null);'), '\u0000');
+      assertSame(run('String.fromCharCode(undefined);'), '\u0000');
     },
   },
   {
@@ -176,8 +269,11 @@ const tests = [
     run() {
       assertSame(run('String.fromCharCode(0).charCodeAt(0);'), 0);
       assertSame(run('String.fromCharCode(0).length;'), 1);
+      assertSame(run('String.fromCharCode(0xd800);'), '\ud800');
       assertSame(run('String.fromCharCode(0xd800).charCodeAt(0);'), 0xd800);
+      assertSame(run('String.fromCharCode(0xdc00);'), '\udc00');
       assertSame(run('String.fromCharCode(0xdc00).charCodeAt(0);'), 0xdc00);
+      assertSame(run('String.fromCharCode(0xd800, 0xdc00);'), '\ud800\udc00');
       assertSame(run('String.fromCharCode(0xd800, 0xdc00).length;'), 2);
       assertSame(
         run('String.fromCharCode(0xd800, 0xdc00).charCodeAt(0);'),
@@ -186,6 +282,10 @@ const tests = [
       assertSame(
         run('String.fromCharCode(0xd800, 0xdc00).charCodeAt(1);'),
         0xdc00,
+      );
+      assertSame(
+        run('"\\ud800\\udc00" === String.fromCharCode(55296, 56320);'),
+        true,
       );
     },
   },
@@ -339,6 +439,40 @@ const tests = [
             'catch (error) { name = error.name; } name;',
         ),
         'TypeError',
+      );
+    },
+  },
+  {
+    // Every expectation here is a hand-derived code-unit number for a source
+    // literal written as an escape, so the assertions hold independently of
+    // how the engine reads a code unit -- and fail if that read is off by
+    // one, saturates, or truncates above the ASCII/BMP range.
+    name: 'String.prototype.charCodeAt returns exact code-unit numbers across the whole 16-bit range, not code points',
+    run() {
+      assertSame(run('"\\u0000".charCodeAt(0);'), 0);
+      assertSame(run('"\\u0001".charCodeAt(0);'), 1);
+      assertSame(run('"0".charCodeAt(0);'), 48);
+      assertSame(run('"A".charCodeAt(0);'), 65);
+      assertSame(run('"\\u007f".charCodeAt(0);'), 127);
+      assertSame(run('"\\u0080".charCodeAt(0);'), 128);
+      assertSame(run('"\\u00ff".charCodeAt(0);'), 255);
+      assertSame(run('"\\u0100".charCodeAt(0);'), 256);
+      assertSame(run('"\\u20ac".charCodeAt(0);'), 8364);
+      assertSame(run('"\\ud800".charCodeAt(0);'), 55296);
+      assertSame(run('"\\udbff".charCodeAt(0);'), 56319);
+      assertSame(run('"\\udc00".charCodeAt(0);'), 56320);
+      assertSame(run('"\\udfff".charCodeAt(0);'), 57343);
+      assertSame(run('"\\ufffd".charCodeAt(0);'), 65533);
+      assertSame(run('"\\uffff".charCodeAt(0);'), 65535);
+      assertSame(run('"\\ud800\\udc00".length;'), 2);
+      assertSame(run('"\\ud800\\udc00".charCodeAt(0);'), 55296);
+      assertSame(run('"\\ud800\\udc00".charCodeAt(1);'), 56320);
+      assertSame(
+        run(
+          'var s = "a\\u0000\\uffff\\ud83d\\ude00z"; var out = ""; ' +
+            'for (var i = 0; i < s.length; i++) { out += s.charCodeAt(i) + ","; } out;',
+        ),
+        '97,0,65535,55357,56832,122,',
       );
     },
   },
@@ -540,6 +674,169 @@ const tests = [
 
         assertSame(completion.value, 'true:abcdef');
       }
+    },
+  },
+  {
+    name: 'the generic String.prototype methods accept a boxed String receiver, including a foreign-realm one',
+    run() {
+      assertSame(run('new String("abcdef").charAt(1);'), 'b');
+      assertSame(run('new String("abcdef").charCodeAt(1);'), 98);
+      assertSame(run('new String("abcdef").concat("gh");'), 'abcdefgh');
+      assertSame(run('new String("abcdef").slice(1, 3);'), 'bc');
+      assertSame(run('new String("abcdef").substring(3, 1);'), 'bc');
+      assertSame(run('new String("abcdef").substr(1, 2);'), 'bc');
+      assertSame(run('new String("abcdef").length;'), 6);
+      assertSame(
+        run('String.prototype.charAt.call(new String("xyz"), 2);'),
+        'z',
+      );
+      assertSame(
+        run('String.prototype.charCodeAt.call(new String("xyz"), 2);'),
+        122,
+      );
+      assertSame(
+        run('String.prototype.slice.call(new String("xyz"), -2);'),
+        'yz',
+      );
+      assertSame(
+        run('String.prototype.substring.call(new String("xyz"), 1);'),
+        'yz',
+      );
+      assertSame(
+        run('String.prototype.substr.call(new String("xyz"), -1);'),
+        'z',
+      );
+      assertSame(
+        run('String.prototype.concat.call(new String("xy"), "z");'),
+        'xyz',
+      );
+      assertSame(run('new String("\\uffff").charCodeAt(0);'), 65535);
+
+      const first = createRealm();
+      const second = createRealm();
+
+      evaluateScript(first, 'var boxed = new String("hi\\uffff");');
+
+      const boxed = first.globalObject.get('boxed');
+
+      second.globalObject.defineOwnProperty('foreign', {
+        value: boxed,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      // A foreign wrapper is not a "this string value" for the strict
+      // methods only by class, but the generic methods just ToString it.
+      assertSame(
+        evaluateScript(second, 'String.prototype.charAt.call(foreign, 0);')
+          .value,
+        'h',
+      );
+      assertSame(
+        evaluateScript(second, 'String.prototype.charCodeAt.call(foreign, 2);')
+          .value,
+        65535,
+      );
+      assertSame(
+        evaluateScript(second, 'String.prototype.slice.call(foreign, 0, 2);')
+          .value,
+        'hi',
+      );
+    },
+  },
+  {
+    name: 'slice, substring, and substr split surrogate pairs by code unit rather than by code point',
+    run() {
+      assertSame(run('"\\ud83d\\ude00".length;'), 2);
+      assertSame(run('"\\ud83d\\ude00".slice(0, 1);'), '\ud83d');
+      assertSame(run('"\\ud83d\\ude00".slice(1);'), '\ude00');
+      assertSame(run('"\\ud83d\\ude00".slice(0, 1).length;'), 1);
+      assertSame(run('"\\ud83d\\ude00".slice(0, 1).charCodeAt(0);'), 55357);
+      assertSame(run('"\\ud83d\\ude00".slice(1).charCodeAt(0);'), 56832);
+      assertSame(run('"\\ud83d\\ude00".substring(0, 1);'), '\ud83d');
+      assertSame(run('"\\ud83d\\ude00".substring(1, 2);'), '\ude00');
+      assertSame(run('"\\ud83d\\ude00".substr(0, 1);'), '\ud83d');
+      assertSame(run('"\\ud83d\\ude00".substr(1, 1);'), '\ude00');
+      assertSame(run('"a\\ud83d\\ude00b".slice(1, 3);'), '\ud83d\ude00');
+      assertSame(run('"a\\ud83d\\ude00b".slice(2, 4);'), '\ude00b');
+      assertSame(run('"a\\ud83d\\ude00b".charAt(1);'), '\ud83d');
+      assertSame(run('"a\\ud83d\\ude00b".charAt(1).length;'), 1);
+      assertSame(run('"a\\ud83d\\ude00b".concat("\\ud83d").length;'), 5);
+      assertSame(
+        run('"a\\ud83d\\ude00b".slice(1, 3) === "\\ud83d\\ude00";'),
+        true,
+      );
+    },
+  },
+  {
+    name: 'the new String methods and fromCharCode are realm-local function objects',
+    run() {
+      const first = createRealm();
+      const second = createRealm();
+
+      for (const name of [
+        'charAt',
+        'charCodeAt',
+        'concat',
+        'slice',
+        'substring',
+        'substr',
+        'toString',
+        'valueOf',
+      ]) {
+        const method = property(
+          property(first.globalObject, 'String'),
+          'prototype',
+        ).get(name);
+
+        second.globalObject.defineOwnProperty('foreignMethod', {
+          value: method,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+
+        assertSame(
+          evaluateScript(second, `foreignMethod === String.prototype.${name};`)
+            .value,
+          false,
+          `${name} must not be shared across realms`,
+        );
+        assertSame(
+          evaluateScript(second, 'foreignMethod.call("abc", 1);').value !==
+            undefined,
+          true,
+          `${name} must still be callable from another realm`,
+        );
+      }
+
+      const fromCharCode = property(
+        property(first.globalObject, 'String'),
+        'fromCharCode',
+      );
+
+      second.globalObject.defineOwnProperty('foreignFromCharCode', {
+        value: fromCharCode,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(
+        evaluateScript(second, 'foreignFromCharCode === String.fromCharCode;')
+          .value,
+        false,
+      );
+      assertSame(
+        evaluateScript(second, 'foreignFromCharCode(65, 66);').value,
+        'AB',
+      );
+      assertSame(
+        evaluateScript(second, 'foreignFromCharCode instanceof Function;')
+          .value,
+        false,
+      );
     },
   },
   {

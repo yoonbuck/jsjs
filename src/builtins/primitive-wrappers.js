@@ -12,6 +12,10 @@ import {
   toString,
   toUint16,
 } from '../runtime/conversion.js';
+import {
+  charCodeOfCodeUnit,
+  codeUnitFromCharCode,
+} from '../runtime/code-units.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import {
   numberToExponential,
@@ -43,6 +47,16 @@ import {
  * `substr`. String's search/transformation/pattern methods (`indexOf`,
  * `toLowerCase`, `match`, `replace`, etc.) are out of scope here and land
  * in their own milestone task.
+ *
+ * None of these methods delegate to a host `String.prototype` method: code
+ * units are read by index (`codeUnitsBetween`) and converted to and from
+ * numbers by the engine's own `runtime/code-units.js`. The single host
+ * String built-in the family uses is `String.fromCharCode` inside
+ * `codeUnitFromCharCode`, and it supplies only the number-to-one-code-unit
+ * mapping — the `ToUint16` reduction, the variadic loop, the coercion
+ * order, and the error propagation of `String.fromCharCode` are all
+ * implemented here. `test/node/repository-invariants.test.js` fails if
+ * either boundary erodes.
  *
  * @param {Realm} realm
  * @returns {PrimitiveWrapperIntrinsics}
@@ -121,12 +135,17 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'charCodeAt',
       length: 1,
       call(thisValue, args) {
+        // ES5 15.5.4.5, generic like charAt. The code unit at `position` is
+        // read by index and turned into its numeric value by the engine's
+        // own `charCodeOfCodeUnit` -- never by host
+        // `String.prototype.charCodeAt`, which would be delegating exactly
+        // the semantics this method exists to define.
         const value = stringMethodReceiver(thisValue);
         const position = toInteger(args[0]);
 
         return position < 0 || position >= value.length
           ? NaN
-          : value.charCodeAt(position);
+          : charCodeOfCodeUnit(value[position]);
       },
     }),
   );
@@ -213,6 +232,20 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // Annex B.2.3: a negative start wraps relative to length (clamped to
         // 0), and an omitted length argument defaults to +Infinity rather
         // than going through ToInteger(undefined) (which would be 0).
+        //
+        // Deliberate ES5-errata deviation: literal Annex B.2.3 step 1 is
+        // `Call ToString, giving it the this value as its argument` with no
+        // CheckObjectCoercible, so `String.prototype.substr.call(null, 0)`
+        // would literally produce `"null"` (and `.call(undefined, 0)`
+        // `"undefined"`) instead of throwing. Every shipping engine, and the
+        // normative-optional B.2.3 of ES2015+, begins with
+        // `RequireObjectCoercible(this value)` instead, so both throw
+        // `TypeError` — and that is also the order ES5 proper already uses
+        // for the neighbouring generic methods (`charAt`, `charCodeAt`,
+        // `concat`, `slice`, `substring`). This implementation follows the
+        // engine behaviour via `stringMethodReceiver`. See
+        // `number-format.js`'s module JSDoc for the full errata-policy
+        // rationale.
         const value = stringMethodReceiver(thisValue);
         const length = value.length;
         let start = toInteger(args[0]);
@@ -242,19 +275,19 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'fromCharCode',
       length: 1,
       call(_thisValue, args) {
-        // ES5 15.5.3.2: each argument is reduced with ToUint16 left to
-        // right (so both the coercion order and any thrown error's identity
-        // match the arguments' original order), then mapped to its UTF-16
-        // code unit. `String.fromCharCode` is the only way to construct a
-        // single code unit from a number without host help; every other
-        // decision here (coercion, looping, error propagation) is
-        // engine-defined, matching the same "primitive string
-        // indexing/length" allowance `primitive-object.js` documents for
-        // reading code units.
+        // ES5 15.5.3.2: each argument is reduced with the engine's own
+        // ToUint16 left to right (so both the coercion order and any thrown
+        // error's identity match the arguments' original order), then mapped
+        // to its UTF-16 code unit. Only that last step -- one already-
+        // reduced number to one code unit -- uses the host, via
+        // `codeUnitFromCharCode` in `runtime/code-units.js`, which is the
+        // single host String built-in this family touches; the ToUint16
+        // reduction happens here first and is covered directly by
+        // `test/abstract-operations.test.js`.
         let result = '';
 
         for (const arg of args) {
-          result += String.fromCharCode(toUint16(arg));
+          result += codeUnitFromCharCode(toUint16(arg));
         }
 
         return result;
