@@ -69,6 +69,7 @@ export default [
     name: 'make helpers truncate fields and normalize month overflow before clipping',
     run() {
       assertSame(makeTime(1.9, 2.9, 3.9, 4.9), 3723004);
+      assertSame(makeTime(80063993375, 29, 1, -288230376151711740), 29312);
       assertSame(Number.isNaN(makeTime(Infinity, 0, 0, 0)), true);
       assertSame(makeDay(1970, 0, 1), 0);
       assertSame(makeDay(1970, 12, 1), 365);

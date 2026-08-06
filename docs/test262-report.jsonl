@@ -140,6 +140,8 @@
 {"type":"test","file":"test/built-ins/Date/S15.9.2.1_A2.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/S15.9.3.2_A3_T1.1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/S15.9.3.2_A3_T1.1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Date/UTC/fp-evaluation-order.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Date/UTC/fp-evaluation-order.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/UTC/overflow-make-day.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/UTC/overflow-make-day.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/UTC/time-clip.js","variant":"non-strict","status":"passed"}
@@ -2859,7 +2861,7 @@
 {"type":"baseline","group":"array-builtins","files":21,"records":42,"passed":42,"failed":0,"skipped":0}
 {"type":"baseline","group":"boolean-builtins","files":21,"records":42,"passed":42,"failed":0,"skipped":0}
 {"type":"baseline","group":"date-accessors-mutators","files":5,"records":10,"passed":10,"failed":0,"skipped":0}
-{"type":"baseline","group":"date-construction-statics","files":5,"records":10,"passed":10,"failed":0,"skipped":0}
+{"type":"baseline","group":"date-construction-statics","files":6,"records":12,"passed":12,"failed":0,"skipped":0}
 {"type":"baseline","group":"date-formatting-json","files":4,"records":8,"passed":8,"failed":0,"skipped":0}
 {"type":"baseline","group":"delete","files":4,"records":5,"passed":5,"failed":0,"skipped":0}
 {"type":"baseline","group":"expressions","files":4,"records":8,"passed":8,"failed":0,"skipped":0}
@@ -2894,8 +2896,8 @@
 {"type":"baseline","group":"uri-decoding","files":105,"records":210,"passed":210,"failed":0,"skipped":0}
 {"type":"baseline","group":"uri-encoding","files":56,"records":112,"passed":112,"failed":0,"skipped":0}
 {"type":"baseline","group":"uri-error","files":9,"records":18,"passed":18,"failed":0,"skipped":0}
-{"type":"features","supported":[],"tagged":[],"untagged":2857}
+{"type":"features","supported":[],"tagged":[],"untagged":2859}
 {"type":"inventory","files":53575,"records":102075,"malformed":430}
-{"type":"coverage","scope":"files","total":53575,"selected":1434,"attempted":1434,"passed":1434,"selectedPercent":2.677,"attemptedPercent":2.677,"passedPercent":2.677}
-{"type":"coverage","scope":"records","total":102075,"selected":2857,"attempted":2857,"passed":2857,"selectedPercent":2.799,"attemptedPercent":2.799,"passedPercent":2.799}
-{"type":"summary","total":2857,"passed":2857,"failed":0,"skipped":0}
+{"type":"coverage","scope":"files","total":53575,"selected":1435,"attempted":1435,"passed":1435,"selectedPercent":2.678,"attemptedPercent":2.678,"passedPercent":2.678}
+{"type":"coverage","scope":"records","total":102075,"selected":2859,"attempted":2859,"passed":2859,"selectedPercent":2.801,"attemptedPercent":2.801,"passedPercent":2.801}
+{"type":"summary","total":2859,"passed":2859,"failed":0,"skipped":0}

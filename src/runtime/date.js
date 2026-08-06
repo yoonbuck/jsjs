@@ -218,7 +218,7 @@ export function makeTime(hour, min, sec, ms) {
   const s = toInteger(sec);
   const milli = toInteger(ms);
 
-  return ((h * 60 + m) * 60 + s) * MS_PER_SECOND + milli;
+  return h * MS_PER_HOUR + m * MS_PER_MINUTE + s * MS_PER_SECOND + milli;
 }
 
 /**
@@ -342,7 +342,7 @@ export class EngineDate extends EngineObject {
 /**
  * @typedef {{
  *   now: () => number,
- *   standardTimezoneOffset: number,
+ *   standardTimezoneOffset?: number,
  *   timezoneOffset: (utcMilliseconds: number) => number,
  * }} DateHost
  */
@@ -352,9 +352,10 @@ export class EngineDate extends EngineObject {
  * clock/time-zone facilities. `timezoneOffset` uses the `getTimezoneOffset`
  * convention: minutes to add to local time to obtain UTC. An explicitly
  * injected `standardTimezoneOffset` must be that stable standard-time offset.
- * When omitted, it is the greater offset from deterministic January and July
- * UTC probes; daylight saving reduces this convention's offset in either
- * hemisphere. Adapters that do not follow that convention must inject it.
+ * When omitted, local-to-UTC conversion derives it from January and July UTC
+ * probes in the target local year; daylight saving reduces this convention's
+ * offset in either hemisphere. Adapters that do not follow that convention
+ * must inject it.
  *
  * @param {Partial<DateHost> & {
  *   clock?: () => number,
@@ -370,14 +371,13 @@ export function createDateHost(adapter = {}) {
     adapter.timeZoneOffset ??
     ((utcMilliseconds) => new Date(utcMilliseconds).getTimezoneOffset());
   const standardTimezoneOffset =
-    adapter.standardTimezoneOffset ??
-    adapter.standardTimeZoneOffset ??
-    Math.max(timezoneOffset(0), timezoneOffset(181 * MS_PER_DAY));
+    adapter.standardTimezoneOffset ?? adapter.standardTimeZoneOffset;
 
   if (
     typeof now !== 'function' ||
     typeof timezoneOffset !== 'function' ||
-    !Number.isFinite(standardTimezoneOffset)
+    (standardTimezoneOffset !== undefined &&
+      !Number.isFinite(standardTimezoneOffset))
   ) {
     throw new TypeError('Date host adapters must be functions');
   }
@@ -788,8 +788,13 @@ export function utcFromLocalTime(localTime, host) {
     return NaN;
   }
 
-  const utcMilliseconds =
-    localTime + host.standardTimezoneOffset * MS_PER_MINUTE;
+  const standardTimezoneOffset =
+    host.standardTimezoneOffset ??
+    Math.max(
+      host.timezoneOffset(timeFromYear(yearFromTime(localTime))),
+      host.timezoneOffset(makeDate(makeDay(yearFromTime(localTime), 6, 1), 0)),
+    );
+  const utcMilliseconds = localTime + standardTimezoneOffset * MS_PER_MINUTE;
   const offset = host.timezoneOffset(utcMilliseconds);
   return Number.isFinite(offset) ? localTime + offset * MS_PER_MINUTE : NaN;
 }

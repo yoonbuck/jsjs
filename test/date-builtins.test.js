@@ -366,6 +366,31 @@ export default [
     },
   },
   {
+    name: 'Date host derives the standard offset from the target year for Pacific/Apia local round-trips',
+    run() {
+      const transition = 1428141600000;
+      const options = {
+        dateHost: {
+          timezoneOffset(/** @type {number} */ utcMilliseconds) {
+            if (utcMilliseconds < 1420070400000) {
+              return 660;
+            }
+
+            return utcMilliseconds < transition ? -840 : -780;
+          },
+        },
+      };
+
+      assertSame(
+        run(
+          '(function () { var date = new Date(2015, 3, 4, 11, 39); return date.getTime() + "," + date.getFullYear() + "," + date.getMonth() + "," + date.getDate() + "," + date.getHours() + "," + date.getMinutes(); }())',
+          options,
+        ),
+        '1428097140000,2015,3,4,11,39',
+      );
+    },
+  },
+  {
     name: 'Date.prototype is an invalid Date-branded object',
     run() {
       const realm = createRealm();

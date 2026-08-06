@@ -101,6 +101,7 @@
         "test/built-ins/Date/15.9.1.15-1.js",
         "test/built-ins/Date/S15.9.2.1_A2.js",
         "test/built-ins/Date/S15.9.3.2_A3_T1.1.js",
+        "test/built-ins/Date/UTC/fp-evaluation-order.js",
         "test/built-ins/Date/UTC/overflow-make-day.js",
         "test/built-ins/Date/UTC/time-clip.js"
       ]
