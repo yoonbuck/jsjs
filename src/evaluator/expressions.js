@@ -15,6 +15,7 @@ import {
   checkObjectCoercible,
   toBoolean,
   toNumber,
+  toObject,
   toString,
 } from '../runtime/conversion.js';
 import {
@@ -36,7 +37,6 @@ import {
 } from '../runtime/operators.js';
 import {
   createUnsupportedNodeError,
-  createUnsupportedOperationError,
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
@@ -631,7 +631,7 @@ function evaluateMemberExpression(node, context) {
   checkObjectCoercible(baseValue);
 
   return new Reference(
-    toObjectBase(baseValue),
+    toObjectBase(context.realm, baseValue),
     toString(propertyKey),
     context.strict,
     baseValue,
@@ -641,22 +641,24 @@ function evaluateMemberExpression(node, context) {
 /**
  * Resolves the base of a property reference to an engine object.
  *
- * ES5 reaches a primitive's properties through `ToObject`, which builds a
- * `String`/`Number`/`Boolean` wrapper. No wrapper constructors exist in
- * this milestone, so a primitive base is rejected explicitly instead of
- * being silently treated as an object or leaking a host value.
+ * ES5 reaches a primitive's properties through `ToObject`, which boxes it
+ * against the realm's `String`/`Number`/`Boolean` wrapper prototype
+ * (ECMA-262 5.1 §11.2.1 step 6a). The property reference keeps the
+ * original primitive as its `this` value (see `evaluateMemberExpression`),
+ * so this wrapper only exists long enough to resolve the property lookup
+ * and is discarded afterward — assigning an own property through a
+ * primitive base is consequently never observable.
  *
+ * @param {import('../runtime/realm.js').Realm} realm
  * @param {unknown} baseValue
  * @returns {EngineObject}
  */
-function toObjectBase(baseValue) {
+function toObjectBase(realm, baseValue) {
   if (baseValue instanceof EngineObject) {
     return baseValue;
   }
 
-  throw createUnsupportedOperationError(
-    `ToObject on a ${typeof baseValue} value`,
-  );
+  return toObject(realm, baseValue);
 }
 
 /**

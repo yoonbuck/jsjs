@@ -22,6 +22,10 @@ import {
   createArrayIntrinsics,
   installArrayConstructor,
 } from '../builtins/array.js';
+import {
+  createPrimitiveWrapperIntrinsics,
+  installPrimitiveWrapperConstructors,
+} from '../builtins/primitive-wrappers.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -81,6 +85,13 @@ export class Realm {
     const arrayIntrinsics = createArrayIntrinsics(this);
     Object.assign(this.intrinsics, arrayIntrinsics);
     installArrayConstructor(this.globalObject, arrayIntrinsics);
+
+    const primitiveWrapperIntrinsics = createPrimitiveWrapperIntrinsics(this);
+    Object.assign(this.intrinsics, primitiveWrapperIntrinsics);
+    installPrimitiveWrapperConstructors(
+      this.globalObject,
+      primitiveWrapperIntrinsics,
+    );
   }
 
   /**

@@ -182,7 +182,10 @@ const tests = [
         configurable: true,
       });
 
-      assertSame(evaluateScript(second, 'foreign instanceof String;').value, false);
+      assertSame(
+        evaluateScript(second, 'foreign instanceof String;').value,
+        false,
+      );
       assertSame(
         evaluateScript(second, 'String.prototype.valueOf.call(foreign);').value,
         'x',
@@ -207,7 +210,8 @@ const tests = [
         GuestErrorSignal,
       );
       assertThrows(
-        () => thisBooleanValue(new EngineObject(realm.intrinsics.objectPrototype)),
+        () =>
+          thisBooleanValue(new EngineObject(realm.intrinsics.objectPrototype)),
         GuestErrorSignal,
       );
       assertThrows(() => thisNumberValue(undefined), GuestErrorSignal);

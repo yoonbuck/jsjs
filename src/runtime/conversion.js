@@ -1,5 +1,5 @@
 import { EngineObject } from './object.js';
-import { EnginePrimitiveObject } from './primitive-object.js';
+import { createPrimitiveWrapper } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -31,7 +31,7 @@ export function toObject(realm, value) {
     typeof value === 'number' ||
     typeof value === 'boolean'
   ) {
-    return new EnginePrimitiveObject(realm.intrinsics.objectPrototype, value);
+    return createPrimitiveWrapper(realm, value);
   }
 
   throw new TypeError(`Cannot convert ${typeof value} to an object`);
