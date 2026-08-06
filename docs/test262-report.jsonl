@@ -14043,14 +14043,14 @@
 {"type":"test","file":"test/built-ins/String/prototype/valueOf/string-object.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/String/prototype/valueOf/string-primitive.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/String/prototype/valueOf/string-primitive.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/ThrowTypeError/extensible.js","variant":"non-strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: Expected SameValue(«true», «false») to be true"}
-{"type":"test","file":"test/built-ins/ThrowTypeError/extensible.js","variant":"strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: Expected SameValue(«true», «false») to be true"}
+{"type":"test","file":"test/built-ins/ThrowTypeError/extensible.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/ThrowTypeError/extensible.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/ThrowTypeError/forbidden-arguments.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/ThrowTypeError/forbidden-arguments.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/ThrowTypeError/forbidden-caller.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/ThrowTypeError/forbidden-caller.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/ThrowTypeError/frozen.js","variant":"non-strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: Expected SameValue(«false», «true») to be true"}
-{"type":"test","file":"test/built-ins/ThrowTypeError/frozen.js","variant":"strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: Expected SameValue(«false», «true») to be true"}
+{"type":"test","file":"test/built-ins/ThrowTypeError/frozen.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/ThrowTypeError/frozen.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/ThrowTypeError/is-function.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/ThrowTypeError/is-function.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/ThrowTypeError/length.js","variant":"non-strict","status":"passed"}
@@ -18690,23 +18690,23 @@
 {"type":"test","file":"test/language/identifiers/start-underscore.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/start-unicode-ltr.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/start-unicode-ltr.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/identifiers/val-class-via-escape-hex4.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/identifiers/val-class-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-class-via-escape-hex4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/identifiers/val-const-via-escape-hex4.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/identifiers/val-const-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-const-via-escape-hex4.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-dollar-sign-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-dollar-sign-via-escape-hex4.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-dollar-sign.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-dollar-sign.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/identifiers/val-enum-via-escape-hex4.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/identifiers/val-enum-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-enum-via-escape-hex4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/identifiers/val-export-via-escape-hex4.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/identifiers/val-export-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-export-via-escape-hex4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/identifiers/val-extends-via-escape-hex4.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/identifiers/val-extends-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-extends-via-escape-hex4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/identifiers/val-import-via-escape-hex4.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/identifiers/val-import-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-import-via-escape-hex4.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/identifiers/val-super-via-escape-hex4.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/identifiers/val-super-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-super-via-escape-hex4.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-underscore-via-escape-hex4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/identifiers/val-underscore-via-escape-hex4.js","variant":"strict","status":"passed"}
@@ -19237,10 +19237,10 @@
 {"type":"test","file":"test/language/statements/do-while/S12.6.1_A8.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/do-while/S12.6.1_A9.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/do-while/S12.6.1_A9.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/do-while/decl-fun.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/do-while/decl-fun.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/do-while/labelled-fn-stmt.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/do-while/labelled-fn-stmt.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/do-while/decl-fun.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/decl-fun.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/labelled-fn-stmt.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/do-while/labelled-fn-stmt.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/empty/S12.3_A1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/empty/cptn-value.js","variant":"non-strict","status":"passed"}
@@ -19279,8 +19279,8 @@
 {"type":"test","file":"test/language/statements/for-in/S12.6.4_A7_T1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/S12.6.4_A7_T2.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/S12.6.4_A7_T2.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/for-in/decl-fun.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for-in/decl-fun.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/for-in/decl-fun.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for-in/decl-fun.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/head-expr-expr.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/head-expr-expr.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/head-lhs-cover.js","variant":"non-strict","status":"passed"}
@@ -19294,10 +19294,10 @@
 {"type":"test","file":"test/language/statements/for-in/head-var-expr.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/head-var-expr.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/identifier-let-allowed-as-lefthandside-expression-not-strict.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-lhs.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-lhs.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-var.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-var.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-lhs.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-lhs.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-var.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for-in/labelled-fn-stmt-var.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/let-block-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/let-identifier-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for-in/order-after-define-property.js","variant":"non-strict","status":"passed"}
@@ -19397,8 +19397,8 @@
 {"type":"test","file":"test/language/statements/for/S12.6.3_A5.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/S12.6.3_A6.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/S12.6.3_A6.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/for/decl-fun.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for/decl-fun.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/for/decl-fun.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for/decl-fun.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/head-init-expr-check-empty-inc-empty-syntax.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/head-init-expr-check-empty-inc-empty-syntax.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/head-init-var-check-empty-inc-empty-syntax.js","variant":"non-strict","status":"passed"}
@@ -19406,10 +19406,10 @@
 {"type":"test","file":"test/language/statements/for/head-lhs-let.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/head-var-bound-names-in-stmt.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/head-var-bound-names-in-stmt.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-expr.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-expr.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-var.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-var.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-expr.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-expr.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-var.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/for/labelled-fn-stmt-var.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/let-block-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/let-identifier-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/for/scope-body-var-none.js","variant":"non-strict","status":"passed"}
@@ -19750,20 +19750,20 @@
 {"type":"test","file":"test/language/statements/if/cptn-empty-statement.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/if/empty-statement.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/if/empty-statement.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/if/if-decl-else-decl-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/if-decl-else-stmt-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/if-decl-no-else-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/if-fun-else-fun-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/if-fun-else-stmt-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/if-fun-no-else-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/if-stmt-else-decl-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/if-stmt-else-fun-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-first.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-first.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-lone.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-lone.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-second.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-second.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/if/if-decl-else-decl-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/if-decl-else-stmt-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/if-decl-no-else-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/if-fun-else-fun-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/if-fun-else-stmt-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/if-fun-no-else-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/if-stmt-else-decl-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/if-stmt-else-fun-strict.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-first.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-first.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-lone.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-lone.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-second.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/if/labelled-fn-stmt-second.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/if/let-block-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/if/let-identifier-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/S12.12_A1_T1.js","variant":"non-strict","status":"passed"}
@@ -19772,7 +19772,7 @@
 {"type":"test","file":"test/language/statements/labeled/cptn-break.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/cptn-nrml.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/cptn-nrml.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/labeled/decl-fun-strict.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/labeled/decl-fun-strict.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/let-block-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/let-identifier-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/value-await-non-module-escaped.js","variant":"non-strict","status":"passed"}
@@ -19781,7 +19781,7 @@
 {"type":"test","file":"test/language/statements/labeled/value-await-non-module.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/value-yield-non-strict-escaped.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/value-yield-non-strict.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/labeled/value-yield-strict-escaped.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/labeled/value-yield-strict-escaped.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/labeled/value-yield-strict.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/let/syntax/escaped-let.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/let/syntax/identifier-let-allowed-as-lefthandside-expression-strict.js","variant":"strict","status":"passed"}
@@ -20058,7 +20058,7 @@
 {"type":"test","file":"test/language/statements/variable/arguments-strict-list-repeated.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/variable/arguments-strict-single-init.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/variable/arguments-strict-single.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/variable/binding-resolution.js","variant":"non-strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: Expected SameValue(«undefined», «true») to be true"}
+{"type":"test","file":"test/language/statements/variable/binding-resolution.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/variable/cptn-value.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/variable/cptn-value.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/variable/eval-non-strict.js","variant":"non-strict","status":"passed"}
@@ -20105,10 +20105,10 @@
 {"type":"test","file":"test/language/statements/while/S12.6.2_A8.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/S12.6.2_A9.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/S12.6.2_A9.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/language/statements/while/decl-fun.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/while/decl-fun.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/while/labelled-fn-stmt.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/while/labelled-fn-stmt.js","variant":"strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/while/decl-fun.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/decl-fun.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/labelled-fn-stmt.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/while/labelled-fn-stmt.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/let-block-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/while/let-identifier-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/with/12.10-0-1.js","variant":"non-strict","status":"passed"}
@@ -20253,8 +20253,8 @@
 {"type":"test","file":"test/language/statements/with/S12.10_A5_T6.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/with/cptn-abrupt-empty.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/with/cptn-nrml.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/language/statements/with/decl-fun.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
-{"type":"test","file":"test/language/statements/with/labelled-fn-stmt.js","variant":"non-strict","status":"failed","reason":"wrong-error-phase","message":"expected a parse-phase error, got a runtime-phase error"}
+{"type":"test","file":"test/language/statements/with/decl-fun.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/language/statements/with/labelled-fn-stmt.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/with/labelled-fn-stmt.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/language/statements/with/let-block-with-newline.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/language/statements/with/let-identifier-with-newline.js","variant":"non-strict","status":"passed"}
@@ -20578,7 +20578,7 @@
 {"type":"baseline","group":"built-ins/Object","files":2737,"records":5464,"passed":5464,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/RegExp","files":505,"records":1010,"passed":1010,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/String","files":757,"records":1511,"passed":1511,"failed":0,"skipped":0}
-{"type":"baseline","group":"built-ins/ThrowTypeError","files":11,"records":22,"passed":18,"failed":4,"skipped":0}
+{"type":"baseline","group":"built-ins/ThrowTypeError","files":11,"records":22,"passed":22,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/decodeURI","files":52,"records":104,"passed":104,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/decodeURIComponent","files":53,"records":106,"passed":106,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/encodeURI","files":28,"records":56,"passed":56,"failed":0,"skipped":0}
@@ -20601,18 +20601,18 @@
 {"type":"baseline","group":"language/future-reserved-words","files":40,"records":62,"passed":62,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/global-code","files":8,"records":12,"passed":12,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/identifier-resolution","files":12,"records":18,"passed":18,"failed":0,"skipped":0}
-{"type":"baseline","group":"language/identifiers","files":35,"records":69,"passed":62,"failed":7,"skipped":0}
+{"type":"baseline","group":"language/identifiers","files":35,"records":69,"passed":69,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/line-terminators","files":24,"records":48,"passed":48,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/literals","files":156,"records":290,"passed":290,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/punctuators","files":1,"records":2,"passed":2,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/reserved-words","files":14,"records":28,"passed":28,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/source-text","files":1,"records":2,"passed":2,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/statementList","files":32,"records":64,"passed":64,"failed":0,"skipped":0}
-{"type":"baseline","group":"language/statements","files":716,"records":1095,"passed":1056,"failed":39,"skipped":0}
+{"type":"baseline","group":"language/statements","files":716,"records":1095,"passed":1095,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/types","files":98,"records":181,"passed":181,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/white-space","files":60,"records":120,"passed":120,"failed":0,"skipped":0}
 {"type":"features","supported":[],"tagged":[],"untagged":20565}
 {"type":"inventory","files":53575,"records":102906,"malformed":4}
-{"type":"coverage","scope":"files","total":53575,"selected":10833,"attempted":10833,"passed":10798,"selectedPercent":20.22,"attemptedPercent":20.22,"passedPercent":20.155}
-{"type":"coverage","scope":"records","total":102906,"selected":20565,"attempted":20565,"passed":20515,"selectedPercent":19.984,"attemptedPercent":19.984,"passedPercent":19.936}
-{"type":"summary","total":20565,"passed":20515,"failed":50,"skipped":0}
+{"type":"coverage","scope":"files","total":53575,"selected":10833,"attempted":10833,"passed":10833,"selectedPercent":20.22,"attemptedPercent":20.22,"passedPercent":20.22}
+{"type":"coverage","scope":"records","total":102906,"selected":20565,"attempted":20565,"passed":20565,"selectedPercent":19.984,"attemptedPercent":19.984,"passedPercent":19.984}
+{"type":"summary","total":20565,"passed":20565,"failed":0,"skipped":0}
