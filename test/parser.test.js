@@ -263,6 +263,84 @@ const tests = [
       assertThrows(() => parseScript(source), SyntaxError);
     },
   },
+
+  // ---------------------------------------------------------------------------
+  // ES5.1 §7.6 / §7.6.1: a `ReservedWord` is matched against the
+  // *IdentifierName* only after its Unicode escape sequences are interpreted,
+  // so an identifier whose code points spell a reserved word is a parse-phase
+  // `SyntaxError` even when written with escapes. Acorn's `checkUnreserved`
+  // bails out of the reserved-word test for any escaped identifier when
+  // `ecmaVersion < 6`, letting `var \u0063lass = 1` through; the parser must
+  // reject it, matching JavaScriptCore and the upstream `val-*-via-escape`
+  // tests (`phase: parse`).
+  // ---------------------------------------------------------------------------
+  {
+    name: 'an ES5 future reserved word spelled with an escape is rejected as an identifier',
+    run() {
+      // Every ES5.1 §7.6.1.2 FutureReservedWord, one code point escaped. These
+      // are not keywords Acorn tokenizes, so only the escape path reaches them.
+      const rejected = [
+        'var \\u0063lass = 1;',
+        'var \\u0063onst = 1;',
+        'var \\u0065num = 1;',
+        'var \\u0065xport = 1;',
+        'var \\u0065xtends = 1;',
+        'var \\u0069mport = 1;',
+        'var \\u0073uper = 1;',
+      ];
+
+      for (const source of rejected) {
+        const error = /** @type {any} */ (
+          assertThrows(() => parseScript(source), SyntaxError)
+        );
+
+        assertSame(error.name, 'SyntaxError');
+      }
+    },
+  },
+  {
+    name: 'an escaped reserved word is rejected in reference and label positions too',
+    run() {
+      // §7.6 governs every Identifier, not just bindings: an identifier
+      // reference and a labelled statement's label are both Identifiers.
+      assertThrows(() => parseScript('void \\u0073uper;'), SyntaxError);
+      assertThrows(() => parseScript('\\u0065num: 1;'), SyntaxError);
+    },
+  },
+  {
+    name: 'a strict-only reserved word spelled with an escape is rejected only in strict code',
+    run() {
+      // `yield` is a FutureReservedWord solely in strict mode (§7.6.1.2), so
+      // the escaped label is a SyntaxError under a "use strict" prologue but
+      // stays a valid label in sloppy code.
+      assertThrows(
+        () => parseScript('"use strict";\nyi\\u0065ld: 1;'),
+        SyntaxError,
+      );
+
+      const program = parseScript('yi\\u0065ld: 1;');
+      assertSame(program.type, 'Program');
+    },
+  },
+  {
+    name: 'escapes stay legal where an IdentifierName is expected, and in ordinary names',
+    run() {
+      // Reserved words remain valid as property names (IdentifierName, not
+      // Identifier — §11.2.1, §11.1.5), and an escape that spells an ordinary
+      // identifier is always fine.
+      const accepted = [
+        'obj.cla\\u0073s;',
+        '({ cla\\u0073s: 1 });',
+        'var \\u0061bc = 1;',
+      ];
+
+      for (const source of accepted) {
+        const program = parseScript(source);
+
+        assertSame(program.type, 'Program');
+      }
+    },
+  },
 ];
 
 /**

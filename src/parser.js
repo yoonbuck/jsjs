@@ -1,7 +1,7 @@
 // The parser dependency is reached through `./parser-dependency.js`, the one
 // engine module that names it: see that file for why the vendored build exists
 // and how it keeps Node, browser, and `jsc` runs on the same source.
-import { parse as acornParse, Parser } from './parser-dependency.js';
+import { Parser } from './parser-dependency.js';
 import { normalizeSyntaxError } from './runtime/errors.js';
 
 const PARSER_OPTIONS = Object.freeze({
@@ -10,6 +10,90 @@ const PARSER_OPTIONS = Object.freeze({
   locations: true,
   ranges: true,
 });
+
+/**
+ * An Acorn plugin that restores the ES5.1 §7.6 / §7.6.1 rule Acorn drops for
+ * scripts parsed as `ecmaVersion < 6`: a `ReservedWord` is matched against the
+ * *IdentifierName* only after its Unicode escape sequences are interpreted, so
+ * an identifier whose code points spell a reserved word is never a valid
+ * `Identifier`. Acorn's `checkUnreserved` returns early — before its
+ * reserved-word test — for any identifier whose source contains a backslash
+ * when `ecmaVersion < 6` (a deliberate ES3-era liberty), so it accepts
+ * `var \u0063lass = 1` and a strict-mode escaped `yield` label. Both are
+ * parse-phase `SyntaxError`s in every real engine and in the upstream
+ * `val-*-via-escape` / `value-yield-strict-escaped` tests.
+ *
+ * The override re-applies the reserved-word test to the already-unescaped
+ * `name`, but only when the raw source span differs from that name — i.e. only
+ * when the identifier actually carried an escape — and then defers to the base
+ * method so every non-escaped case, keyword, and binding restriction is handled
+ * exactly as before. Acorn only calls `checkUnreserved` for `Identifier`
+ * positions (bindings, references, labels) and skips it for the `IdentifierName`
+ * positions (`obj.class`, `{ class: 1 }`) that parse a liberal identifier, so
+ * reserved words stay legal as property names.
+ *
+ * @param {typeof Parser} Base
+ * @returns {typeof Parser}
+ */
+function withEscapedReservedWordCheck(Base) {
+  return class extends Base {
+    /**
+     * @param {any} node
+     * @returns {void}
+     */
+    checkUnreserved(node) {
+      const self = /** @type {any} */ (this);
+
+      if (self.input.slice(node.start, node.end) !== node.name) {
+        const reserved = self.strict
+          ? self.reservedWordsStrict
+          : self.reservedWords;
+
+        if (reserved.test(node.name)) {
+          self.raiseRecoverable(
+            node.start,
+            `The keyword '${node.name}' is reserved`,
+          );
+        }
+      }
+
+      return super.checkUnreserved(node);
+    }
+  };
+}
+
+/**
+ * The ordinary script parser, an Acorn subclass carrying the escaped
+ * reserved-word early error. Constructed lazily and memoized so the plugin
+ * subclass is built once.
+ *
+ * @type {typeof Parser | undefined}
+ */
+let scriptParser;
+
+/**
+ * @returns {typeof Parser}
+ */
+function getScriptParser() {
+  if (scriptParser === undefined) {
+    scriptParser = Parser.extend(withEscapedReservedWordCheck);
+  }
+
+  return scriptParser;
+}
+
+/**
+ * Parses with the memoized script parser. A named wrapper rather than a
+ * detached `getScriptParser().parse` reference because Acorn's static `parse`
+ * reads `this` (`new this(...)`), so it must stay a method call.
+ *
+ * @param {string} source
+ * @param {any} options
+ * @returns {any}
+ */
+function parseWithScriptParser(source, options) {
+  return getScriptParser().parse(source, options);
+}
 
 /**
  * A parser subclass that begins parsing already in strict mode (ECMA-262
@@ -23,6 +107,10 @@ const PARSER_OPTIONS = Object.freeze({
  * eval requires. Prepending a synthetic `"use strict";` to the source would
  * shift positions and is deliberately avoided.
  *
+ * It also carries the escaped reserved-word early error, so a strict eval
+ * rejects an escaped strict FutureReservedWord (`\u0079ield`) exactly as a
+ * script does.
+ *
  * Constructed lazily and memoized so the plugin subclass is built once.
  *
  * @type {typeof Parser | undefined}
@@ -35,6 +123,7 @@ let strictParser;
 function getStrictParser() {
   if (strictParser === undefined) {
     strictParser = Parser.extend(
+      withEscapedReservedWordCheck,
       (Base) =>
         class extends Base {
           /**
@@ -59,7 +148,7 @@ function getStrictParser() {
  * @returns {any}
  */
 export function parseScript(source, options = {}) {
-  const { parse = acornParse, ...parserOptions } = options;
+  const { parse = parseWithScriptParser, ...parserOptions } = options;
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
@@ -99,7 +188,7 @@ export function parseScript(source, options = {}) {
  * @returns {any}
  */
 export function parseEval(source, strict = false) {
-  const parser = strict ? getStrictParser() : Parser;
+  const parser = strict ? getStrictParser() : getScriptParser();
 
   let program;
 
