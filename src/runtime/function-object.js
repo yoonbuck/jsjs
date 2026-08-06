@@ -281,7 +281,7 @@ export class ArgumentsObject extends EngineObject {
 
   /**
    * @param {PropertyKey} name
-   * @returns {import('./descriptors.js').PropertyDescriptorRecord | undefined}
+   * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
     const descriptor = super.getOwnProperty(name);

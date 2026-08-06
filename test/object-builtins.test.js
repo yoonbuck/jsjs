@@ -2,6 +2,7 @@ import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { toObject } from '../src/runtime/conversion.js';
 
 /**
  * @param {string} source
@@ -50,6 +51,49 @@ const tests = [
         run('var text = Object("ab"); text.length + ":" + text[1];'),
         '2:b',
       );
+    },
+  },
+  {
+    name: 'boxed strings preserve indexed descriptors and own-key order',
+    run() {
+      const realm = createRealm();
+      const boxed = toObject(realm, 'ab');
+      const first =
+        /** @type {import('../src/runtime/descriptors.js').CompletePropertyDescriptor} */ (
+          boxed.getOwnProperty('0')
+        );
+
+      assertSame(first.value, 'a');
+      assertSame(first.writable, false);
+      assertSame(first.enumerable, true);
+      assertSame(first.configurable, false);
+      assertSame(boxed.hasProperty('1'), true);
+      assertSame(boxed.hasProperty('2'), false);
+      assertSame(boxed.hasProperty('01'), false);
+      assertSame(boxed.delete('0'), false);
+      assertSame(boxed.defineOwnProperty('0', { value: 'a' }), true);
+      assertSame(boxed.defineOwnProperty('0', { value: 'z' }), false);
+      boxed.defineOwnProperty('extra', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(
+        JSON.stringify(boxed.ownPropertyKeys()),
+        '["0","1","length","extra"]',
+      );
+    },
+  },
+  {
+    name: 'large boxed strings do not materialize per-character descriptors',
+    run() {
+      const realm = createRealm();
+      const boxed = toObject(realm, 'x'.repeat(100000));
+
+      assertSame(boxed._properties.size, 1);
+      assertSame(boxed.get('99999'), 'x');
+      assertSame(boxed._properties.size, 1);
     },
   },
   {
