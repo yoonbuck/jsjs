@@ -77,7 +77,7 @@ function readRepositoryFile(path) {
 /**
  * @returns {Promise<{ repository: string, revision: string, checkoutPath: string }>}
  */
-async function readTest262Pin() {
+export async function readTest262Pin() {
   const manifest = JSON.parse(await readRepositoryFile('package.json'));
   const pin = manifest.test262;
 
@@ -113,7 +113,7 @@ function checkoutHint(pin) {
  * @param {{ repository: string, revision: string, checkoutPath: string }} pin
  * @returns {Promise<void>}
  */
-async function assertPinnedCheckout(pin) {
+export async function assertPinnedCheckout(pin) {
   /** @type {string} */
   let head;
 

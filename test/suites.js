@@ -26,6 +26,7 @@ import withStatements from './with-statement.test.js';
 import functions from './functions.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
 import test262Runner from './test262-runner.test.js';
+import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
 import switchLabels from './switch-labels.test.js';
@@ -99,6 +100,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,
+  }),
+  Object.freeze({
+    file: 'test/es5-selection.test.js',
+    tests: es5Selection,
   }),
   Object.freeze({ file: 'test/errors.test.js', tests: errors }),
   Object.freeze({

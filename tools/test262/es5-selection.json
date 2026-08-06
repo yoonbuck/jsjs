@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "excludedDirectories": ["test/intl402", "test/staging"],
+  "builtins": [
+    "Array",
+    "Boolean",
+    "Error",
+    "Function",
+    "Infinity",
+    "JSON",
+    "Math",
+    "NaN",
+    "NativeErrors",
+    "Number",
+    "Object",
+    "RegExp",
+    "String",
+    "ThrowTypeError",
+    "decodeURI",
+    "decodeURIComponent",
+    "encodeURI",
+    "encodeURIComponent",
+    "eval",
+    "global",
+    "isFinite",
+    "isNaN",
+    "parseFloat",
+    "parseInt",
+    "undefined"
+  ],
+  "excludedLanguageDirectories": [
+    "block-scope",
+    "computed-property-names",
+    "destructuring",
+    "export",
+    "import",
+    "module-code",
+    "rest-parameters"
+  ],
+  "exclusions": []
+}
