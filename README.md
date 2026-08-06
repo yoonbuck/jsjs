@@ -26,6 +26,8 @@ through `prepare`.
 | `npm run test:jsc`                  | Every portable suite in the `jsc` shell                                                                                                                                      |
 | `npm run test262:fixtures`          | Test262 runner over `test/fixtures/test262`, forcing the fixture-only `fixture-subset` feature (JSON lines on stdout)                                                        |
 | `npm run test262:fixtures:manifest` | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                |
+| `npm run test262:select`            | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                    |
+| `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                                                                 |
 | `npm run test262:upstream`          | The pinned upstream subset from a real `tc39/test262` checkout (compact coverage summary on stdout; regenerates `docs/test262-report.jsonl` and the README's coverage block) |
 | `npm run test262:upstream:check`    | The same run, writing nothing: fails if either generated artifact is stale                                                                                                   |
 | `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                                      |
@@ -123,14 +125,17 @@ either file is stale.
 
 `tools/test262/upstream-subset.json` is the checked-in selection: a schema
 version, the repository and revision it was curated against, and named groups of
-upstream-relative test paths. The paths are explicit rather than a glob because a
-glob would change meaning every time the pin moves, so a green run would say
-nothing about which tests actually ran; every path was verified to pass with this
-engine, so a new failure is a real regression rather than a newly matched test.
-`tools/test262/upstream.js` parses it (rejecting an abbreviated revision, an
-unsorted or duplicated path, or a path outside `test/`) and summarizes a finished
-run per group. The groups carry no execution semantics — they exist so the
-coverage report can say which parts of the language the baseline covers.
+upstream-relative test paths. It is generated rather than hand-written —
+`npm run test262:select` derives it from the ES5 selection policy described
+below — but it stays checked in, and the paths stay explicit rather than a glob,
+because a glob would change meaning every time the pin moves, so a green run
+would say nothing about which tests actually ran; every path in it passed on the
+run that produced it, so a new failure is a real regression rather than a newly
+matched test. `tools/test262/upstream.js` parses it (rejecting an abbreviated
+revision, an unsorted or duplicated path, or a path outside `test/`) and
+summarizes a finished run per group. The groups carry no execution semantics —
+they exist so the coverage report can say which parts of the language the
+baseline covers.
 
 The local fixture tree in `test/fixtures/test262` stays separate and is run by
 `npm run test262:fixtures`. The two suites answer different questions: the
@@ -169,7 +174,7 @@ The manifest currently holds no features. The engine is ES5-only today, so no
 Test262 `features` tag is claimed as supported, and any test that declares one is
 skipped rather than run. The baseline upstream subset is intentionally untagged —
 none of its tests declare a `features` tag — so today's run skips nothing and the
-report says exactly that: `{"type":"features","supported":[],"tagged":[],"untagged":125}`.
+report says exactly that: `{"type":"features","supported":[],"tagged":[],"untagged":21555}`.
 The schema, the probe execution, and the upstream correspondence check are all
 exercised regardless, by a synthetic feature in
 `test/node/workflow-contract.test.js` and a known feature-tagged upstream test in
@@ -200,6 +205,67 @@ parse a manifest, expand a selection, or format a record; the manifest exists
 only because browsers and `jsc` cannot list directories, and Node reads the same
 one so all three hosts select the same tests.
 
+### How the ES5 selection is derived
+
+`tools/test262/es5-selection.json` is the policy that decides which upstream
+tests are in scope; `tools/test262/es5-selection.js` implements it as pure,
+host-free code so the decisions can be tested without a checkout, and
+`npm run test262:select` applies it to the pinned tree and writes
+`upstream-subset.json`. The policy is data, not prose: `npm run
+test262:select:check` re-derives the manifest without writing and fails if the
+committed one has drifted, so the selection can never quietly diverge from the
+rules that justify it.
+
+A file is a candidate only if it survives every filter:
+
+- **Path policy.** `test/intl402` and `test/staging` are excluded wholesale —
+  one is a different specification, the other is explicitly not normative.
+  Under `test/language`, seven directories name syntax ES5.1 does not have at
+  all (`block-scope`, `computed-property-names`, `destructuring`, `export`,
+  `import`, `module-code`, `rest-parameters`). Under `test/built-ins`, an
+  allow-list of 26 constructors and namespace objects names exactly the ES5.1
+  standard library, so a post-ES5 global like `Proxy` or `Symbol` is out of
+  scope by construction rather than by 500 individual entries.
+- **Metadata.** A test that declares any `features:` tag is out, because this
+  engine claims no feature tags (see the manifest section above), as is anything
+  flagged `module`.
+- **An `ecmaVersion: 5` parse filter.** Every remaining file — and every harness
+  file it `includes` — is parsed at ES5 with the vendored acorn. A file that
+  will not parse as ES5 is testing syntax this engine is not required to accept,
+  so it is excluded structurally rather than by name. This is what keeps the
+  policy honest as the pin moves: new upstream tests written in modern syntax
+  drop out automatically instead of appearing as failures.
+- **Classified exclusions.** What survives all of the above but still must not
+  run is carved out one path (or prefix) at a time, each with a category and a
+  written reason.
+
+That yields **11,328 of the 53,575 upstream files (21.144%)**, expanding to
+**21,555 of 102,906 `(file, variant)` records (20.946%)**, in 49 groups — and
+all 21,555 pass.
+
+The large excluded remainder is not a list of things this engine gets wrong. The
+upstream suite tracks the _current_ specification, and most of it tests language
+and library features introduced after ES5.1, or ES5.1 behaviour that later
+editions deliberately changed. The 754 classified exclusions break down as:
+
+| Category             | Count | What it means                                                                                                                                        |
+| -------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `post-es5-semantics` | 633   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                    |
+| `post-es5-builtin`   | 66    | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.            |
+| `post-es5-syntax`    | 28    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                     |
+| `host-dependent`     | 14    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                |
+| `engine-deviation`   | 13    | This engine knowingly differs. Each entry names the row in "Intentional deviations" that documents the choice — a deviation that is not written down |
+|                      |       | is indistinguishable from a bug.                                                                                                                     |
+
+The distinction that matters is between the first four categories and the last.
+The first four say _the test is not about ES5.1_; only `engine-deviation` says
+_this engine does not do what ES5.1 asks_, and there are 13 such entries, every
+one of them documented above. Two categories — `post-es5-syntax` and
+`post-es5-builtin` — come from structural filters and coarse prefixes, so they
+carry a reason but not a clause; the other three must name the ES5.1 clause or
+the README row that makes this engine's behaviour correct, and the parser
+rejects an entry that does not.
+
 ### Supported subset
 
 Fixtures deliberately stay inside what the engine implements today: `var`,
@@ -207,10 +273,11 @@ function declarations and expressions, object and array literals (including
 getter/setter syntax), member access and calls, `new`, arithmetic, comparison,
 logical and conditional operators, simple `=` assignment, all compound
 assignment operators (`+= -= *= /= %= <<= >>= >>>= &= ^= |=`), prefix and
-postfix `++`/`--`, bitwise operators (`& | ^ << >> >>>`), `in`, `instanceof`,
-`delete`, `if`/`while`/`do`/`for`/`for-in`/`return`/`throw`,
-`try`/`catch`/`finally`, `switch`, labelled statements with
-`break`/`continue`, and the `NaN`, `Infinity`, `undefined` globals.
+postfix `++`/`--`, bitwise operators (`& | ^ ~ << >> >>>`), the unary operators
+`typeof`, `void`, `!`, `+` and `-`, `in`, `instanceof`, `delete`,
+`if`/`while`/`do`/`for`/`for-in`/`return`/`throw`, `try`/`catch`/`finally`,
+`switch`, `with`, `debugger`, labelled statements with `break`/`continue`, and
+the `NaN`, `Infinity`, `undefined` globals.
 
 `for-in` enumerates own-then-inherited enumerable string-keyed properties in
 insertion order, each name at most once and never a name shadowed earlier in
@@ -226,19 +293,19 @@ cases are outside what 12.6.4 decides and real engines disagree about them
 
 The implemented ES5 core built-in families are:
 
-| Family     | Supported APIs                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Object`   | Call/construct coercion; `Object.prototype.constructor`, `toString`, `toLocaleString`, `valueOf`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable`; descriptor queries and definitions; `getPrototypeOf`, `create`, `getOwnPropertyNames`, `keys`; extensibility, sealing, and freezing APIs                                                                                                                                        |
-| `Function` | Callable `Function.prototype`; `toString`, `apply`, `call`, `bind`; bound calls, construction, `instanceof`, and adjusted `length`. The dynamic `Function` constructor parses its arguments as a parameter list and function body, returning a new function that is strict only when its body opens with a `"use strict"` directive and that closes over the realm's global scope rather than the caller's.                                  |
-| `Array`    | Call/construct overloads, sparse length construction, `Array.isArray`; `push`, `pop`, `shift`, `unshift`, `reverse`, `sort`, `splice`; `concat`, `join`, `slice`, `indexOf`, `lastIndexOf`; `every`, `some`, `forEach`, `map`, `filter`, `reduce`, `reduceRight`. Methods are generic where ES5 requires and preserve sparse holes.                                                                                                          |
-| `Boolean`  | Call converts with `ToBoolean`, construct boxes; `Boolean.prototype` is itself a `false` wrapper; `constructor`, `toString`, `valueOf`. Both methods accept a boolean primitive or a `Boolean` wrapper and throw `TypeError` for anything else.                                                                                                                                                                                              |
-| `Date`     | ES5 call/construct overloads; `Date.parse`, `Date.UTC`, `Date.now`; core ES5 local/UTC accessors and mutators; Annex B `getYear`, `setYear`, and `toGMTString`; `toString`, date/time, locale, UTC/GMT, ISO, `valueOf`, and `toJSON`. Clock and timezone access use deterministic realm host adapters; locale methods deliberately match their non-locale counterparts.                                                                      |
-| `Number`   | Call converts with `ToNumber`, construct boxes; the five ES5 constants; `constructor`, `toString`, `toLocaleString`, `valueOf`, `toFixed`, `toExponential`, `toPrecision`.                                                                                                                                                                                                                                                                   |
-| `String`   | Call converts with `ToString`, construct boxes with lazy index properties and a non-writable `length`; `fromCharCode`; all ES5 prototype methods, including `match`/`replace`/`search`/`split` dispatching through real `RegExp` values.                                                                                                                                                                                                     |
-| `RegExp`   | The ES5 15.10.1 `Pattern` grammar, validated strictly with no Annex B extensions; call coerces or copies a pattern, construct always allocates; the ES5 15.10.7 own properties `source`/`global`/`ignoreCase`/`multiline`/`lastIndex`; `exec`, `test`, `toString`; regular expression literals. `RegExp.prototype` is itself a RegExp object with source `(?:)` and all flags `false`, per ES5 15.10.6, not the ES2015 ordinary-object rule. |
-| `Math`     | The eight constants (`E`, `LN10`, `LN2`, `LOG10E`, `LOG2E`, `PI`, `SQRT1_2`, `SQRT2`) and all eighteen ES5 functions: `abs`, `acos`, `asin`, `atan`, `atan2`, `ceil`, `cos`, `exp`, `floor`, `log`, `max`, `min`, `pow`, `random`, `round`, `sin`, `sqrt`, `tan`. `Math` is an ordinary object with `[[Class]]` `"Math"` and no `[[Call]]`/`[[Construct]]`.                                                                                  |
-| `JSON`     | `JSON.parse` with the full JSON grammar and reviver traversal, and `JSON.stringify` with replacer functions, replacer property lists, `toJSON`, numeric and string `space` gaps, and cycle detection. Neither delegates to the host `JSON`. `JSON` is an ordinary object with `[[Class]]` `"JSON"`.                                                                                                                                          |
-| Globals    | `parseInt`, `parseFloat`, `isNaN`, `isFinite`; the URI functions `encodeURI`, `encodeURIComponent`, `decodeURI`, `decodeURIComponent`; and Annex B's `escape`/`unescape`. The URI functions throw a realm-local `URIError`.                                                                                                                                                                                                                  |
+| Family     | Supported APIs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Object`   | Call/construct coercion; `Object.prototype.constructor`, `toString`, `toLocaleString`, `valueOf`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable`; descriptor queries and definitions; `getPrototypeOf`, `create`, `getOwnPropertyNames`, `keys`; extensibility, sealing, and freezing APIs                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `Function` | Callable `Function.prototype`; `toString`, `apply`, `call`, `bind`; bound calls, construction, `instanceof`, and adjusted `length`. The dynamic `Function` constructor parses its arguments as a parameter list and function body, returning a new function that is strict only when its body opens with a `"use strict"` directive and that closes over the realm's global scope rather than the caller's.                                                                                                                                                                                                                                                                                                                                          |
+| `Array`    | Call/construct overloads, sparse length construction, `Array.isArray`; `push`, `pop`, `shift`, `unshift`, `reverse`, `sort`, `splice`; `concat`, `join`, `slice`, `indexOf`, `lastIndexOf`; `every`, `some`, `forEach`, `map`, `filter`, `reduce`, `reduceRight`. Methods are generic where ES5 requires and preserve sparse holes.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `Boolean`  | Call converts with `ToBoolean`, construct boxes; `Boolean.prototype` is itself a `false` wrapper; `constructor`, `toString`, `valueOf`. Both methods accept a boolean primitive or a `Boolean` wrapper and throw `TypeError` for anything else.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `Date`     | ES5 call/construct overloads; `Date.parse`, `Date.UTC`, `Date.now`; core ES5 local/UTC accessors and mutators; Annex B `getYear`, `setYear`, and `toGMTString`; `toString`, date/time, locale, UTC/GMT, ISO, `valueOf`, and `toJSON`. Clock and timezone access use deterministic realm host adapters; locale methods deliberately match their non-locale counterparts.                                                                                                                                                                                                                                                                                                                                                                              |
+| `Number`   | Call converts with `ToNumber`, construct boxes; the five ES5 constants; `constructor`, `toString`, `toLocaleString`, `valueOf`, `toFixed`, `toExponential`, `toPrecision`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `String`   | Call converts with `ToString`, construct boxes with lazy index properties and a non-writable `length`; `fromCharCode`; all ES5 prototype methods, including `match`/`replace`/`search`/`split` dispatching through real `RegExp` values.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `RegExp`   | The ES5 15.10.1 `Pattern` grammar, validated strictly with no Annex B extensions; call coerces or copies a pattern, construct always allocates; the ES5 15.10.7 own properties `source`/`global`/`ignoreCase`/`multiline`/`lastIndex`; `exec`, `test`, `toString`; regular expression literals. `RegExp.prototype` is itself a RegExp object with source `(?:)` and all flags `false`, per ES5 15.10.6, not the ES2015 ordinary-object rule.                                                                                                                                                                                                                                                                                                         |
+| `Math`     | The eight constants (`E`, `LN10`, `LN2`, `LOG10E`, `LOG2E`, `PI`, `SQRT1_2`, `SQRT2`) and all eighteen ES5 functions: `abs`, `acos`, `asin`, `atan`, `atan2`, `ceil`, `cos`, `exp`, `floor`, `log`, `max`, `min`, `pow`, `random`, `round`, `sin`, `sqrt`, `tan`. `Math` is an ordinary object with `[[Class]]` `"Math"` and no `[[Call]]`/`[[Construct]]`.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `JSON`     | `JSON.parse` with the full JSON grammar and reviver traversal, and `JSON.stringify` with replacer functions, replacer property lists, `toJSON`, numeric and string `space` gaps, and cycle detection. Neither delegates to the host `JSON`. `JSON` is an ordinary object with `[[Class]]` `"JSON"`.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Globals    | `eval`, `parseInt`, `parseFloat`, `isNaN`, `isFinite`; the URI functions `encodeURI`, `encodeURIComponent`, `decodeURI`, `decodeURIComponent`; and Annex B's `escape`/`unescape`. The URI functions throw a realm-local `URIError`. A **direct** `eval` call runs in the caller's variable and lexical environment and inherits its strictness, so it reads the caller's locals and its `var` declarations land in the caller's scope; strict eval code gets its own variable environment instead, so those declarations do not leak. Any other reference to `eval` is an **indirect** call and runs in the realm's global scope regardless of where it was called from. A malformed program raises the realm's own `SyntaxError`, never the host's. |
 
 The error constructors (`Error`, `EvalError`, `TypeError`, `ReferenceError`,
 `SyntaxError`, `RangeError`, `URIError`) are all available on every realm's
@@ -357,12 +424,30 @@ properties of strict functions and their `arguments` objects are poison-pill
 accessors. The static restrictions ES5 puts on strict code — duplicate
 parameter names, duplicate data properties in an object literal, binding or
 assigning `eval`/`arguments`, octal literals, `delete` of an unqualified
-identifier, and `with` — are rejected by the parser before any of that runs.
+identifier, the nine future reserved words ES5 7.6.1.2 reserves only for strict
+code (`implements`, `interface`, `let`, `package`, `private`, `protected`,
+`public`, `static`, `yield`), and `with` — are rejected by the parser before any
+of that runs. A reserved word spelled with a unicode escape is rejected the same
+way: ES5 7.6 defines an `Identifier` as an `IdentifierName` that is not a
+reserved word _after_ escapes are resolved, so `var \u0063lass` is a
+`SyntaxError`, while the same escape stays legal where the grammar asks for an
+`IdentifierName` rather than an `Identifier` — a property or member name.
 
-The rules with nothing to apply to here are the ones belonging to features the
-engine does not implement at all: there is no `eval` (and no dynamic `Function`
-constructor, which is installed but always throws), and `with` is refused in
-strict and non-strict code alike.
+`eval` is implemented, in both its direct and indirect forms, and so is the
+dynamic `Function` constructor; the two differ in the scope the new code sees,
+which the `Globals` and `Function` rows of the built-in table above describe.
+`with` is implemented for non-strict code and is the `SyntaxError` above in
+strict code.
+
+Function declarations are restricted by position rather than by strictness
+alone. ES5 only admits a `FunctionDeclaration` in a statement list, so a bare
+declaration as the body of `while`, `do`/`while`, `for`, `for`-`in`, or `with`
+is a `SyntaxError` in strict and non-strict code alike. Annex B's tolerated
+forms — a declaration as the body of an `if` or its `else`, and a labelled
+declaration at statement-list level — are accepted in non-strict code and
+rejected in strict code, matching what web engines do. Strictness is decided per
+function scope, not per program, so a non-strict `if (1) function f(){}` after a
+strict function body is still accepted.
 
 Assignment to an undeclared identifier in **non-strict** code follows ES5 8.7.2
 step 3: it creates (or updates) a property on the realm's global object with
