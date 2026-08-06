@@ -60,6 +60,16 @@ function importSpecifiers(source) {
 }
 
 /**
+ * Quotes every RegExp metacharacter so a literal URL can be matched exactly.
+ *
+ * @param {string} literal
+ * @returns {string}
+ */
+function escapeForRegExp(literal) {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * @param {string} directory
  * @returns {Promise<Map<string, string>>}
  */
@@ -243,6 +253,39 @@ export default [
         true,
         'the generated module must export the pinned Unicode version',
       );
+
+      // `npm run unicode:check` re-derives the tables from the UCD itself, so
+      // it needs the network and cannot be a CI job. This is the offline half
+      // of the same guarantee: every file the pin names must appear in the
+      // header under the pinned base URL, with the sha256 the generator
+      // recorded for it. Adding, renaming, or repointing a source file
+      // without regenerating therefore fails `npm run test:node`, with no
+      // download and no UCD copy vendored into the repository.
+      const files = pin.files;
+
+      assertSame(
+        typeof files === 'object' && files !== null,
+        true,
+        'package.json must pin the UCD file names',
+      );
+      assertSame(
+        Object.keys(files).length > 0,
+        true,
+        'package.json must pin at least one UCD file',
+      );
+
+      for (const fileName of Object.values(files)) {
+        const url = `${pin.baseUrl}${fileName}`;
+        const digest = new RegExp(
+          `${escapeForRegExp(url)}\\n \\* {5}sha256 [0-9a-f]{64}\\n`,
+        );
+
+        assertSame(
+          digest.test(generated),
+          true,
+          `${pin.generatedModule}'s header must record ${url} with its sha256 digest; rerun npm run unicode:generate`,
+        );
+      }
     },
   },
   {

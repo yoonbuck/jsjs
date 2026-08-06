@@ -61,9 +61,11 @@ import {
  * constructor's ES5 constants) along with `String`'s fundamental method
  * family: `String.fromCharCode` and `String.prototype`'s `toString`,
  * `valueOf`, `charAt`, `charCodeAt`, `concat`, `slice`, `substring`, and
- * `substr`. String's search/transformation/pattern methods (`indexOf`,
- * `toLowerCase`, `match`, `replace`, etc.) are out of scope here and land
- * in their own milestone task.
+ * `substr`. String's search, case, and pattern methods (`indexOf`,
+ * `lastIndexOf`, `localeCompare`, `trim`, the four case methods, and
+ * `match`/`replace`/`search`/`split`) are installed here too, with their
+ * algorithms living in `string-search.js`, `string-case.js`, and
+ * `string-pattern.js`.
  *
  * None of these methods delegate to a host `String.prototype` method: code
  * units are read by index (`codeUnitsBetween`) and converted to and from
