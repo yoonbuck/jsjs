@@ -758,10 +758,15 @@ const tests = [
       // call is contained too, and equally through each way a body can be
       // compiled — parsed with the program, or built at depth by `eval` and
       // `Function`, which hoist their own source at the depth they run at.
-      // Chosen so the boundary is load-bearing: with the statement guard
-      // removed this shape overflows the host outright, so the case cannot
-      // pass merely because the host happened to survive it.
-      const nest = 3000;
+      //
+      // Sized against the budget rather than against the host. Reaching for a
+      // shape big enough to exhaust a *host* made the outcome the host's to
+      // decide: on `jsc` the shape survived unaided, and under `eval` the
+      // parser rejected the body before evaluation, so the case passed with
+      // no boundary at all. Kept under `SMALL`, the budget is the only thing
+      // that can stop this, on every host — with the guard removed all three
+      // shapes simply return.
+      const nest = 200;
       const body = '{'.repeat(nest) + ' var q = 1; ' + '}'.repeat(nest);
       const ladder =
         'function f(n) { if (n <= 0) { return g(); } return f(n - 1); }';
@@ -775,31 +780,22 @@ const tests = [
       };
 
       for (const [how, prelude] of Object.entries(shapes)) {
-        // A host `RangeError` here would escape `run` and fail the test as
-        // the uncatchable defect it is, which is the whole point.
-        const outcome = run(
-          `${prelude} var out = "not thrown";
-           try { f(300); out = "returned"; }
-           catch (e) {
-             out = (e instanceof RangeError || e instanceof SyntaxError)
-               ? "guest " + e.name : "unexpected " + e.name;
-           }
-           out;`,
+        // A host `RangeError` would escape `run` rather than reach this
+        // `catch`, and fail the case as the uncatchable defect it is.
+        assertSame(
+          run(
+            `${prelude} var out = "not thrown";
+             try { f(100); out = "returned"; }
+             catch (e) {
+               out = (e instanceof RangeError) ? "guest " + e.name
+                 : "unexpected " + e.name;
+             }
+             out;`,
+            SMALL,
+          ),
+          'guest RangeError',
+          `${how}: the budget stopped it, and the guest caught it`,
         );
-
-        // Which limit it meets first — the budget, or the parser's own depth
-        // when `eval` compiles at depth — is the host's business and moves
-        // with how warm the host has made each. That the guest can see and
-        // catch the result either way is not.
-        if (
-          !['returned', 'guest RangeError', 'guest SyntaxError'].includes(
-            String(outcome),
-          )
-        ) {
-          throw new Error(
-            `${how}: expected a guest-visible outcome, got ${String(outcome)}`,
-          );
-        }
       }
     },
   },
