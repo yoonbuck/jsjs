@@ -192,6 +192,35 @@ const tests = [
     },
   },
   {
+    name: 'Array toLocaleString short-circuits primitives with inherited Object toLocaleString',
+    run() {
+      // Divergence 1: replaced inherited toString is never invoked because
+      // the engine renders the primitive via ToString directly.
+      assertSame(
+        run(
+          'Boolean.prototype.toString = function () { return typeof this; }; ' +
+            '[true, false].toLocaleString();',
+        ),
+        'true,false',
+      );
+    },
+  },
+  {
+    name: 'Array toLocaleString passes raw primitive this in strict mode',
+    run() {
+      // Divergence 2: the engine passes the raw primitive as this rather
+      // than a boxed wrapper, observable only from strict-mode guest code.
+      assertSame(
+        run(
+          '"use strict"; ' +
+            'Number.prototype.toLocaleString = function () { return typeof this; }; ' +
+            '[1,2].toLocaleString();',
+        ),
+        'number,number',
+      );
+    },
+  },
+  {
     name: 'Array push and pop are generic and preserve their specified return values',
     run() {
       assertSame(

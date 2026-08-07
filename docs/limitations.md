@@ -156,19 +156,30 @@ ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly
 
 ### Array.prototype.toLocaleString primitive short-circuit
 
-ES5.1 §15.4.4.3 requires boxing each non-null, non-undefined element to an
-object and calling its `toLocaleString` unconditionally. When an element is a
-primitive whose `toLocaleString` resolves to the inherited
-`Object.prototype.toLocaleString`, this engine renders the element via
-`ToString(element)` directly, skipping the box-then-dispatch. The divergence
-appears only when an element's inherited `toString` has been replaced: ES5.1
-invokes it with the boxed wrapper as `this`, while this engine never invokes
-it.
+ES5 15.4.4.3 requires boxing each non-null, non-undefined element with
+`ToObject` and calling its `toLocaleString` on that wrapper. This engine has
+two independent, ES2015-aligned divergences from that algorithm:
+
+1. **Short-circuit.** When an element is a primitive whose `toLocaleString`
+   resolves to the inherited `Object.prototype.toLocaleString`, the engine
+   renders it with `ToString(element)` directly, never dispatching. Observable
+   when the element's inherited `toString` has been replaced: ES5 15.4.4.3
+   invokes it with the boxed wrapper as `this`, while this engine skips it
+   entirely.
+
+2. **Dispatch receiver.** On the general path the engine passes the raw
+   primitive as `this` (`toLocaleString.callFunction(element, [])`) rather
+   than the boxed wrapper. In sloppy mode the callee re-boxes `this`
+   automatically, so the divergence is only observable from strict-mode guest
+   code, where `this` retains its primitive type.
 
 **Backing code:** `src/builtins/array.js` (`toLocaleString`).
-**Verification:**
+**Verification (short-circuit):**
 `evaluateScript(realm, 'Boolean.prototype.toString = function () { return typeof this; }; [true, false].toLocaleString()')`
 → `'true,false'`, where ES5 15.4.4.3 gives `'object,object'`.
+**Verification (dispatch receiver):**
+`evaluateScript(realm, '"use strict"; Number.prototype.toLocaleString = function () { return typeof this; }; [1,2].toLocaleString()')`
+→ `'number,number'`, where ES5 15.4.4.3 gives `'object,object'`.
 
 ### localeCompare
 
