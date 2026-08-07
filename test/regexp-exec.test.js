@@ -1,4 +1,4 @@
-import { assertSame } from './harness/assert.js';
+import { assertSame, assertThrows } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 
@@ -338,21 +338,35 @@ const tests = [
     },
   },
   {
-    name: 'a pattern the ES5 grammar rejects but the host parser accepts throws a guest SyntaxError when the literal is evaluated',
+    name: 'a pattern the ES5 grammar rejects but the host parser accepts is an early error at the literal',
     run() {
+      // Acorn accepts `/]/` and `/{/` because the host grammar is Annex
+      // B-permissive, so the ES5.1 §7.8.5 requirement that the failed
+      // `new RegExp(Pattern, Flags)` "be treated as an early error" is met by
+      // this engine's own parse-time pass. `evaluateScript` therefore rejects
+      // the whole script before running any of it, rather than producing a
+      // throw completion when the literal expression is reached.
       const realm = createRealm();
-      const bracket = evaluateScript(realm, '/]/;');
-      assertSame(bracket.type, 'throw');
-      const isSyntaxError = /** @type {any} */ (
-        evaluateScript(
-          realm,
-          '(function () { try { return /]/; } catch (e) { return e instanceof SyntaxError; } })();',
-        )
-      ).value;
-      assertSame(isSyntaxError, true);
 
-      const brace = evaluateScript(realm, '/{/;');
-      assertSame(brace.type, 'throw');
+      assertThrows(() => evaluateScript(realm, '/]/;'), SyntaxError);
+      assertThrows(() => evaluateScript(realm, '/{/;'), SyntaxError);
+      assertThrows(
+        () => evaluateScript(realm, 'function unused() { return /]/; }'),
+        SyntaxError,
+      );
+
+      // Reached through `eval`, the same early error becomes a *guest*
+      // SyntaxError the running program can catch.
+      assertSame(
+        /** @type {any} */ (
+          evaluateScript(
+            realm,
+            '(function () { try { eval("/]/;"); return "no throw"; }' +
+              ' catch (e) { return e instanceof SyntaxError; } })();',
+          )
+        ).value,
+        true,
+      );
     },
   },
 ];

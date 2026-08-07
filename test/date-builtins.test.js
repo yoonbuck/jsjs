@@ -752,4 +752,56 @@ export default [
       assertSame(run('new Date(1970, 0, -100000000).getTime()', options), NaN);
     },
   },
+  {
+    name: 'the default Date host adapter reads the host clock and the host time zone',
+    run() {
+      // ES5.1 §15.9.1.7 makes the local time zone adjustment
+      // implementation-dependent, and §15.9.4.4 `Date.now` is by definition
+      // the current wall clock, so a realm created with no adapter has to
+      // borrow both from whatever host the engine is running on. This is the
+      // single non-deterministic host boundary in the engine, and these
+      // assertions are what pin it: they fail if the default ever silently
+      // becomes a fixed epoch or a hardcoded UTC zone, which would make
+      // `new Date()` and `getHours()` lie about the machine they run on.
+      const before = Date.now();
+      const observed = Number(run('Date.now()'));
+      const after = Date.now();
+
+      assertSame(observed >= before && observed <= after, true);
+
+      // `getTimezoneOffset` is the guest-visible face of the same boundary,
+      // and it must agree with the host's own answer for that instant.
+      for (const utcMilliseconds of [0, 1700000000000, -1000000000000]) {
+        assertSame(
+          run('new Date(' + utcMilliseconds + ').getTimezoneOffset()'),
+          new Date(utcMilliseconds).getTimezoneOffset(),
+        );
+      }
+    },
+  },
+  {
+    name: 'an injected Date host adapter makes Date behavior deterministic and host-independent',
+    run() {
+      // The portability escape hatch: an embedder that needs reproducible
+      // output injects the adapter and no host clock or zone database can
+      // reach guest code any more. Everything below is fixed by the adapter
+      // alone, so it is identical on every host and in every time zone.
+      const options = {
+        dateHost: { now: () => 1234567890123, timezoneOffset: () => 0 },
+      };
+
+      assertSame(run('Date.now()', options), 1234567890123);
+      assertSame(run('new Date().getTime()', options), 1234567890123);
+      assertSame(run('new Date(0).getTimezoneOffset()', options), 0);
+      assertSame(run('new Date(0).getHours()', options), 0);
+      assertSame(
+        run('new Date(0).toString()', options),
+        'Thu Jan 01 1970 00:00:00 GMT+0000 (Local)',
+      );
+      assertSame(
+        run('new Date(2020, 0, 1).getTime()', options),
+        Date.UTC(2020, 0, 1),
+      );
+    },
+  },
 ];

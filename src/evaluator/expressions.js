@@ -180,16 +180,18 @@ export function evaluateExpressionValue(node, context) {
  * `createRegExpFromPattern` on every evaluation, exactly as a `new
  * RegExp(pattern, flags)` call would.
  *
- * Acorn (`ecmaVersion: 5`) rejects flags outside `g`/`i`/`m` and any
- * pattern its own regex dialect considers invalid, but its regex grammar is
- * looser than ES5.1 15.10.1's `Pattern` production: it accepts some
- * patterns ES5 rejects as early (parse-time) errors, e.g. a bare `]` or `{`
- * with no matching quantifier meaning outside a character class. This
- * engine cannot reject those at parse time without its own regex grammar
- * living in the parser, so it is an intentional, documented deviation from
- * ES5: such a literal parses successfully and only throws — a guest
- * `SyntaxError`, via `createRegExpFromPattern`'s `RegExpSyntaxError`
- * conversion — when it is *evaluated*, not when the script is parsed.
+ * Acorn (`ecmaVersion: 5`) rejects flags outside `g`/`i`/`m` and any pattern
+ * its own regex dialect considers invalid, but its regex grammar is looser
+ * than ES5.1 15.10.1's `Pattern` production: it accepts some patterns ES5
+ * rejects, e.g. a bare `]` or `{` outside a character class. ES5.1 7.8.5
+ * requires those to be *early* errors, so `checkRegularExpressionLiteral` in
+ * `src/parser.js` re-validates every literal against 15.10.1 during parsing
+ * and such a script never reaches evaluation at all.
+ *
+ * That makes the re-validation here redundant for the pattern text, and it is
+ * kept anyway because this path still has to *construct* a fresh object per
+ * 15.10.4.1 on every evaluation, and `createRegExpFromPattern` is the one
+ * place that does it.
  *
  * @param {any} node
  * @param {EvaluationContext} context

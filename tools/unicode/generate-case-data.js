@@ -28,6 +28,18 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
+const IDENTIFIER_PART_CATEGORIES = new Set([
+  'Lu',
+  'Ll',
+  'Lt',
+  'Lm',
+  'Lo',
+  'Nl',
+  'Mn',
+  'Mc',
+  'Nd',
+  'Pc',
+]);
 
 /**
  * @typedef {{
@@ -38,6 +50,7 @@ const REPOSITORY_ROOT = new URL('../../', import.meta.url);
  *   cased: number[][],
  *   caseIgnorable: number[][],
  *   spaceSeparator: number[][],
+ *   identifierPart: number[][],
  *   digests: Record<string, string>,
  * }} CaseData
  *
@@ -166,8 +179,24 @@ function deriveTables(unicodeData, specialCasing, derivedCoreProperties) {
   const simpleUppercase = new Map();
   /** @type {number[][]} */
   const spaceSeparator = [];
+  /** @type {number[][]} */
+  const identifierPart = [];
   /** @type {number | undefined} */
   let rangeStart;
+
+  /**
+   * @param {number[][]} ranges
+   * @param {number} start
+   * @param {number} end
+   * @returns {void}
+   */
+  function pushBmpRange(ranges, start, end) {
+    if (start >= 0x10000) {
+      return;
+    }
+
+    ranges.push([start, Math.min(end, 0xffff)]);
+  }
 
   for (const line of unicodeData.split('\n')) {
     if (line.length === 0) {
@@ -194,12 +223,23 @@ function deriveTables(unicodeData, specialCasing, derivedCoreProperties) {
         spaceSeparator.push([rangeStart, codePoint]);
       }
 
+      if (
+        IDENTIFIER_PART_CATEGORIES.has(category) &&
+        rangeStart !== undefined
+      ) {
+        pushBmpRange(identifierPart, rangeStart, codePoint);
+      }
+
       rangeStart = undefined;
       continue;
     }
 
     if (category === 'Zs') {
       spaceSeparator.push([codePoint, codePoint]);
+    }
+
+    if (IDENTIFIER_PART_CATEGORIES.has(category)) {
+      pushBmpRange(identifierPart, codePoint, codePoint);
     }
 
     if (lower.length > 0) {
@@ -279,6 +319,11 @@ function deriveTables(unicodeData, specialCasing, derivedCoreProperties) {
     cased: coalesce(cased),
     caseIgnorable: coalesce(caseIgnorable),
     spaceSeparator: coalesce(spaceSeparator),
+    identifierPart: coalesce([
+      ...identifierPart,
+      [0x200c, 0x200c],
+      [0x200d, 0x200d],
+    ]),
     digests: {
       unicodeData: sha256(unicodeData),
       specialCasing: sha256(specialCasing),
@@ -433,6 +478,11 @@ function renderModule(data, pin) {
       'General category Zs (UnicodeData.txt field 2), as `start end` ranges.\n * This is the "other category Zs" clause of ES5 7.2\'s WhiteSpace\n * production, used by String.prototype.trim.',
       encodeRecords(data.spaceSeparator),
     ],
+    [
+      'IDENTIFIER_PART_RANGES',
+      'BMP code points in ES5 7.6 IdentifierPart Unicode categories\n * (UnicodeData.txt field 2), plus ZWNJ and ZWJ, as `start end` ranges.',
+      encodeRecords(data.identifierPart),
+    ],
   ];
 
   const header = `/**
@@ -553,6 +603,9 @@ export const caseIgnorableRanges = decode(CASE_IGNORABLE_RANGES);
 
 /** Flat \`start, end\` pairs. */
 export const spaceSeparatorRanges = decode(SPACE_SEPARATOR_RANGES);
+
+/** Flat \`start, end\` pairs. */
+export const identifierPartRanges = decode(IDENTIFIER_PART_RANGES);
 `;
 
   return `${header}\n${body}\n${footer}`;
@@ -571,6 +624,7 @@ function fingerprint(data) {
     cased: encodeRecords(data.cased),
     caseIgnorable: encodeRecords(data.caseIgnorable),
     spaceSeparator: encodeRecords(data.spaceSeparator),
+    identifierPart: encodeRecords(data.identifierPart),
   };
 }
 
@@ -653,6 +707,7 @@ async function main() {
     cased: encodeRecords(group(module.casedRanges, 2)),
     caseIgnorable: encodeRecords(group(module.caseIgnorableRanges, 2)),
     spaceSeparator: encodeRecords(group(module.spaceSeparatorRanges, 2)),
+    identifierPart: encodeRecords(group(module.identifierPartRanges, 2)),
   };
   /** @type {string[]} */
   const problems = [];
