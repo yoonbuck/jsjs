@@ -1327,15 +1327,6 @@ export default [
       /** @type {string[]} */
       const queue = [];
 
-      for (const specifier of [
-        ...importSpecifiers(nodeRunner),
-        ...importSpecifiers(portableRegistry),
-      ]) {
-        if (specifier.startsWith('./') || specifier.startsWith('../')) {
-          queue.push(specifier);
-        }
-      }
-
       // Resolve relative specifiers from their respective base paths.
       /** @param {string} base @param {string} specifier */
       function resolve(base, specifier) {
@@ -1348,24 +1339,18 @@ export default [
         return parts.join('/');
       }
 
-      // Seed with node runner imports resolved from test/
-      for (const specifier of importSpecifiers(nodeRunner)) {
-        if (specifier.startsWith('./') || specifier.startsWith('../')) {
-          const resolved = resolve('test/run-node.js', specifier);
-          if (!seen.has(resolved)) {
-            seen.add(resolved);
-            queue.push(resolved);
-          }
-        }
-      }
-
-      // Seed with portable registry imports resolved from test/
-      for (const specifier of importSpecifiers(portableRegistry)) {
-        if (specifier.startsWith('./') || specifier.startsWith('../')) {
-          const resolved = resolve('test/suites.js', specifier);
-          if (!seen.has(resolved)) {
-            seen.add(resolved);
-            queue.push(resolved);
+      // Seed with imports from both entry points, resolved to repo-relative paths.
+      for (const [basePath, source] of [
+        ['test/run-node.js', nodeRunner],
+        ['test/suites.js', portableRegistry],
+      ]) {
+        for (const specifier of importSpecifiers(source)) {
+          if (specifier.startsWith('./') || specifier.startsWith('../')) {
+            const resolved = resolve(basePath, specifier);
+            if (!seen.has(resolved)) {
+              seen.add(resolved);
+              queue.push(resolved);
+            }
           }
         }
       }
