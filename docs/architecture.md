@@ -117,6 +117,66 @@ and 11.2.3 method-call `this` binding).
 - `GuestErrorSignal` — carries a type name and message for deferred guest-error
   construction, used where `realm` is not in scope.
 
+### Recursion boundary (`src/runtime/stack-guard.js`)
+
+Guest code runs on the host stack, so the engine keeps a budget of its own
+rather than inheriting the host's: `StackGuard` counts the engine frames a
+realm currently has on the stack and raises a `GuestErrorSignal` for a
+`RangeError` (`Maximum call stack size exceeded`) when the next one would
+exceed `DEFAULT_MAX_STACK_DEPTH`, or the `maxStackDepth` a realm was created
+with. The count is per realm because a realm is the engine's unit of isolation
+and there is no cross-realm call path.
+
+The unit is an engine frame rather than a guest call because a guest call is
+not a fixed amount of host stack: the evaluator walks expressions and
+statements recursively, so `f()` nested twenty levels deep in an expression
+costs far more host stack than a bare `f()`. Counting activations alone leaves
+that difference unmeasured, and the host overflows first. Four kinds of work
+therefore enter the guard:
+
+- every activation — `EngineFunction#callFunction` (which
+  `EngineFunction#constructFunction` routes through) and
+  `NativeFunction#callFunction`/`#constructFunction` — so recursion through a
+  built-in callback, an accessor, a coercion, `eval`, or a dynamic `Function`
+  is counted in the same units as a direct call;
+- every node `evaluateExpression` and `evaluateStatement` walk into, which is
+  what makes one budget safe for every shape of source;
+- `JSON.parse`, its reviver walk, and `JSON.stringify`, whose recursion follows
+  the shape of runtime _data_ rather than of source;
+- `validatePattern` (`src/runtime/regexp-syntax.js`), whose recursive descent
+  follows the shape of a guest-supplied pattern string. The guard reaches it
+  duck-typed, threaded through `compilePattern`, so `regexp-syntax.js` stays a
+  pure syntax module with no dependency on the runtime.
+
+Every `enter` is paired with an `exit` in a `finally`, so the count is exact
+whether a frame returns or throws and no signal boundary has to repair it.
+
+Recursion whose depth guest code controls but which is _not_ a stack budget
+question is made iterative instead of counted, so that ordinary operations on
+long chains keep working: `EngineObject#getProperty` walks the prototype chain
+in a loop, and `BoundFunction#hasInstance` unwraps a bound chain in a loop.
+The hoisting walks (`collectVarNames` and `collectFunctionDeclarations` in
+`src/evaluator/declarations.js`, shared by all three declaration-instantiation
+passes) keep an explicit stack for a different reason: they run before
+evaluation begins, so the guard cannot count them, and the parser accepts
+programs that outgrow a recursive walk of the result. They also push children
+one at a time rather than spreading a statement list into a variadic call,
+which would swap the depth limit for a host argument-count one.
+
+The guard cannot cover the recursion spent _before_ evaluation — the parser's
+own descent and the declaration-instantiation walks that precede a script — so
+`src/parser.js` reports running out of stack there as what it is at that stage:
+a failure to parse. `asParseFailure` converts a stack overflow raised out of
+the parser into `SyntaxError: Not enough stack space to parse input`, the same
+error Acorn raises for the same condition around `parseTopLevel` (Acorn reads
+the first token before installing that conversion, so a leading regular
+expression literal reached the host limit without it). The conversion is
+confined to the `parse` call, which runs no engine code.
+
+Those two are the whole of the engine's stack containment. Anywhere else a host
+`RangeError` is never caught and relabeled, so an engine defect that overflows
+the host stack still escapes as the host error it is.
+
 ### Conversion (`src/runtime/conversion.js`)
 
 The ES5 abstract operations: `ToPrimitive`, `ToBoolean`, `ToNumber`, `ToInteger`,
@@ -220,8 +280,12 @@ export { createRealm, evaluateScript, parseScript, Realm } from './api.js';
 ### `createRealm(options?): Realm`
 
 Creates a fresh realm with a complete ES5 intrinsic graph and global object.
-`options` accepts host adapter overrides for date/time:
+`options` accepts the realm's recursion budget and host adapter overrides for
+date/time:
 
+- `maxStackDepth` — the number of engine frames guest code may have on the
+  stack before the next one raises a guest `RangeError` (default 500, see
+  `src/runtime/stack-guard.js`)
 - `dateHost` — a partial `DateHost` object (`now`, `timezoneOffset`,
   `standardTimezoneOffset`)
 - `now` / `clock` — shorthand for `dateHost.now`
@@ -266,6 +330,7 @@ Instances expose:
 - `realm.globalEnvironment` — the `GlobalEnvironmentRecord`
 - `realm.intrinsics` — the intrinsic graph (prototypes, constructors)
 - `realm.dateHost` — the resolved `DateHost` adapter
+- `realm.stackGuard` — the realm's recursion budget (`StackGuard`)
 - `realm.createNativeFunction(options)` — create a native function in this realm
 - `realm.createGuestError(typeName, message)` — create a guest error object
 

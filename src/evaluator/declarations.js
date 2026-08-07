@@ -332,86 +332,123 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
 }
 
 /**
- * Recursively collects `var`-declared names from `node`, descending into
- * every ES5 statement form that shares its enclosing variable scope
- * (blocks, `if` branches, loop bodies, and a `for` loop's own
- * initializer). Any other node type — including statement forms the
- * evaluator does not support yet, and function boundaries — is left alone:
- * it is not a var-hoisting container, so no names are collected and no
- * descent happens. A `FunctionDeclaration` therefore stops the walk, which
- * is exactly the function-boundary behavior var hoisting requires.
+ * Pushes every child of `node` that shares its enclosing variable scope onto
+ * `pending`, and returns `node` itself if it is one of the two declaration
+ * forms the hoisting passes collect.
+ *
+ * The set of containers is what ES5 var hoisting descends through: blocks,
+ * `if` branches, loop bodies, a `for` loop's own initializer, `try` blocks and
+ * their handler and finalizer, `switch` cases, labelled bodies, and a `with`
+ * body (§12.10 — a `with` body shares the enclosing variable scope, so `var`
+ * declarations inside it hoist through unchanged). Any other node type —
+ * including statement forms the evaluator does not support yet, and function
+ * boundaries — contributes nothing and is not descended into, which is exactly
+ * the function-boundary behavior var hoisting requires.
+ *
+ * @param {any} node
+ * @param {any[]} pending
+ * @returns {any} `node` when it declares something, otherwise `null`.
+ */
+function pushHoistingChildren(node, pending) {
+  switch (node.type) {
+    case 'VariableDeclaration':
+    case 'FunctionDeclaration':
+      // A `FunctionDeclaration` stops the walk: its body is a new variable
+      // scope, and its own name is what hoists out of it.
+      return node;
+    case 'BlockStatement':
+      // Pushed one at a time on purpose. Spreading an array into a variadic
+      // call passes it as *arguments*, which hosts cap far lower than array
+      // length (V8 at about 120,000), so a wide statement list would trade
+      // this walk's depth problem for a width one.
+      for (const statement of node.body) {
+        pending.push(statement);
+      }
+      return null;
+    case 'IfStatement':
+      pending.push(node.consequent);
+      if (node.alternate) {
+        pending.push(node.alternate);
+      }
+      return null;
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+    case 'LabeledStatement':
+    case 'WithStatement':
+      pending.push(node.body);
+      return null;
+    case 'ForStatement':
+      if (node.init && node.init.type === 'VariableDeclaration') {
+        pending.push(node.init);
+      }
+      pending.push(node.body);
+      return null;
+    case 'ForInStatement':
+      if (node.left.type === 'VariableDeclaration') {
+        pending.push(node.left);
+      }
+      pending.push(node.body);
+      return null;
+    case 'TryStatement':
+      pending.push(node.block);
+      if (node.handler !== null) {
+        pending.push(node.handler.body);
+      }
+      if (node.finalizer !== null) {
+        pending.push(node.finalizer);
+      }
+      return null;
+    case 'SwitchStatement':
+      for (const switchCase of node.cases) {
+        for (const statement of switchCase.consequent) {
+          pending.push(statement);
+        }
+      }
+      return null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Collects `var`-declared names from `node`, descending into every ES5
+ * statement form that shares its enclosing variable scope.
+ *
+ * The walk keeps its own stack rather than using the host's. Hoisting runs
+ * before evaluation begins, so `StackGuard` cannot count it, and the parser
+ * accepts source nested more deeply than a recursive walk of it survives — a
+ * program the parser had just accepted would overflow the host stack on the
+ * way to being evaluated, and the embedder would see a host `RangeError` for a
+ * perfectly well-formed script. An explicit stack costs no host frames, so
+ * depth stops being a question at all.
+ *
+ * Order does not matter here: the result is a set of names.
  *
  * @param {any} node
  * @param {Set<string>} names
  * @returns {void}
  */
 function collectVarNames(node, names) {
-  switch (node.type) {
-    case 'VariableDeclaration':
-      for (const declarator of node.declarations) {
+  /** @type {any[]} */
+  const pending = [node];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    const declaration = pushHoistingChildren(current, pending);
+
+    if (declaration !== null && declaration.type === 'VariableDeclaration') {
+      for (const declarator of declaration.declarations) {
         names.add(declarator.id.name);
       }
-      return;
-    case 'BlockStatement':
-      for (const statement of node.body) {
-        collectVarNames(statement, names);
-      }
-      return;
-    case 'IfStatement':
-      collectVarNames(node.consequent, names);
-      if (node.alternate) {
-        collectVarNames(node.alternate, names);
-      }
-      return;
-    case 'WhileStatement':
-    case 'DoWhileStatement':
-      collectVarNames(node.body, names);
-      return;
-    case 'ForStatement':
-      if (node.init && node.init.type === 'VariableDeclaration') {
-        collectVarNames(node.init, names);
-      }
-      collectVarNames(node.body, names);
-      return;
-    case 'ForInStatement':
-      if (node.left.type === 'VariableDeclaration') {
-        collectVarNames(node.left, names);
-      }
-      collectVarNames(node.body, names);
-      return;
-    case 'TryStatement':
-      collectVarNames(node.block, names);
-      if (node.handler !== null) {
-        collectVarNames(node.handler.body, names);
-      }
-      if (node.finalizer !== null) {
-        collectVarNames(node.finalizer, names);
-      }
-      return;
-    case 'SwitchStatement':
-      for (const switchCase of node.cases) {
-        for (const statement of switchCase.consequent) {
-          collectVarNames(statement, names);
-        }
-      }
-      return;
-    case 'LabeledStatement':
-      collectVarNames(node.body, names);
-      return;
-    case 'WithStatement':
-      // ECMA-262 5.1 §12.10: a `with` body shares the enclosing variable
-      // scope, so `var` declarations inside it hoist through unchanged.
-      collectVarNames(node.body, names);
-      return;
-    default:
-      return;
+    }
   }
 }
 
 /**
- * Recursively collects `FunctionDeclaration` nodes that hoist into the
- * enclosing variable scope, using the same scope-sharing statement forms
- * `collectVarNames` walks and stopping at nested function boundaries.
+ * Collects `FunctionDeclaration` nodes that hoist into the enclosing variable
+ * scope, using the same scope-sharing statement forms `collectVarNames` walks
+ * and stopping at nested function boundaries. Iterative for the same reason
+ * `collectVarNames` is.
  *
  * ES5's grammar only allows function declarations as source elements
  * (directly in a program or function body), but the parser accepts the
@@ -426,58 +463,49 @@ function collectVarNames(node, names) {
  * block-scoped binding for the declaration, which arrives with block
  * scoping in a later task.
  *
+ * Unlike the `var` walk, order *is* observable: two declarations of the same
+ * name bind the later one, so the collected list has to stay in source order.
+ * Children are therefore pushed and then reversed, so the explicit stack pops
+ * them left to right.
+ *
  * @param {any} node
  * @param {any[]} declarations
  * @returns {void}
  */
 function collectFunctionDeclarations(node, declarations) {
-  switch (node.type) {
-    case 'FunctionDeclaration':
-      declarations.push(node);
-      return;
-    case 'BlockStatement':
-      for (const statement of node.body) {
-        collectFunctionDeclarations(statement, declarations);
-      }
-      return;
-    case 'IfStatement':
-      collectFunctionDeclarations(node.consequent, declarations);
-      if (node.alternate) {
-        collectFunctionDeclarations(node.alternate, declarations);
-      }
-      return;
-    case 'WhileStatement':
-    case 'DoWhileStatement':
-    case 'ForStatement':
-    case 'ForInStatement':
-      collectFunctionDeclarations(node.body, declarations);
-      return;
-    case 'TryStatement':
-      collectFunctionDeclarations(node.block, declarations);
-      if (node.handler !== null) {
-        collectFunctionDeclarations(node.handler.body, declarations);
-      }
-      if (node.finalizer !== null) {
-        collectFunctionDeclarations(node.finalizer, declarations);
-      }
-      return;
-    case 'SwitchStatement':
-      for (const switchCase of node.cases) {
-        for (const statement of switchCase.consequent) {
-          collectFunctionDeclarations(statement, declarations);
-        }
-      }
-      return;
-    case 'LabeledStatement':
-      collectFunctionDeclarations(node.body, declarations);
-      return;
-    case 'WithStatement':
-      // A `with` body shares the enclosing variable scope, so a function
-      // declaration inside it hoists like any other block-nested one.
-      collectFunctionDeclarations(node.body, declarations);
-      return;
-    default:
-      return;
+  /** @type {any[]} */
+  const pending = [node];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    const mark = pending.length;
+    const declaration = pushHoistingChildren(current, pending);
+
+    if (declaration !== null && declaration.type === 'FunctionDeclaration') {
+      declarations.push(declaration);
+    }
+
+    reverseFrom(pending, mark);
+  }
+}
+
+/**
+ * Reverses `items` in place from `start` to its end, so children pushed in
+ * source order pop in source order.
+ *
+ * @param {any[]} items
+ * @param {number} start
+ * @returns {void}
+ */
+function reverseFrom(items, start) {
+  for (
+    let low = start, high = items.length - 1;
+    low < high;
+    low += 1, high -= 1
+  ) {
+    const swap = items[low];
+    items[low] = items[high];
+    items[high] = swap;
   }
 }
 

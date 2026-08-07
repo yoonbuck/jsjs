@@ -76,6 +76,8 @@ the embedding API are documented in [docs/architecture.md](docs/architecture.md)
 
 The engine has a small number of intentional deviations from the ES5.1 text
 (mostly following ES2015+ errata every engine ships) and one known limitation
-(guest recursion depth). The full tables, spec citations, observable examples,
+(guest recursion depth: bounded by an engine-owned budget of 500 engine
+frames, raising a catchable guest `RangeError`, rather than by the host's
+stack). The full tables, spec citations, observable examples,
 and backing code references are in
 [docs/limitations.md](docs/limitations.md).

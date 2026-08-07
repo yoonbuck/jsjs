@@ -449,6 +449,28 @@ function parseJSONArray(realm, state) {
  * @returns {unknown}
  */
 function parseJSONValue(realm, state) {
+  // Objects and arrays nest, so this parser's host recursion follows the shape
+  // of the *text* a guest passes in rather than the shape of its source. It
+  // enters the realm's stack budget for the same reason the evaluator does:
+  // otherwise `JSON.parse` is a way to reach a host overflow with a guest
+  // string. See `src/runtime/stack-guard.js`.
+  const guard = realm.stackGuard;
+
+  guard.enter();
+
+  try {
+    return parseJSONValueBody(realm, state);
+  } finally {
+    guard.exit();
+  }
+}
+
+/**
+ * @param {Realm} realm
+ * @param {ParserState} state
+ * @returns {unknown}
+ */
+function parseJSONValueBody(realm, state) {
   skipWhiteSpace(state);
 
   const code = codeAt(state.text, state.index);
@@ -516,12 +538,37 @@ function parseJSONText(realm, text) {
  * reviver that mutates the structure cannot make the walk revisit or skip a
  * key.
  *
+ * @param {Realm} realm
  * @param {EngineObject} holder
  * @param {string} name
  * @param {import('../runtime/descriptors.js').CallableLike} reviver
  * @returns {unknown}
  */
-function walk(holder, name, reviver) {
+function walk(realm, holder, name, reviver) {
+  // The traversal descends with the revived structure, so — like the parser
+  // that built it — its host recursion is bounded by runtime data. Each level
+  // takes a frame of the realm's stack budget. The reviver call at the end of
+  // this function does too, but only for as long as it runs, so it cannot
+  // account for the traversal itself.
+  const guard = realm.stackGuard;
+
+  guard.enter();
+
+  try {
+    return walkBody(realm, holder, name, reviver);
+  } finally {
+    guard.exit();
+  }
+}
+
+/**
+ * @param {Realm} realm
+ * @param {EngineObject} holder
+ * @param {string} name
+ * @param {import('../runtime/descriptors.js').CallableLike} reviver
+ * @returns {unknown}
+ */
+function walkBody(realm, holder, name, reviver) {
   const value = holder.get(name);
 
   if (value instanceof EngineObject) {
@@ -531,7 +578,7 @@ function walk(holder, name, reviver) {
         : enumerableOwnNames(value);
 
     for (const key of keys) {
-      const revived = walk(value, key, reviver);
+      const revived = walk(realm, value, key, reviver);
 
       if (revived === undefined) {
         value.delete(key, false);
@@ -606,7 +653,7 @@ function jsonParse(realm, textArgument, reviver) {
     configurable: true,
   });
 
-  return walk(root, '', reviver);
+  return walk(realm, root, '', reviver);
 }
 
 /**
@@ -679,6 +726,29 @@ function quote(value) {
  * @returns {string | undefined}
  */
 function serializeProperty(realm, state, key, holder) {
+  // Objects and arrays nest, so serialisation recurses with the shape of the
+  // runtime value, not of any source. Without a frame of the realm's stack
+  // budget per level, a deep enough guest structure would reach a host
+  // overflow through `JSON.stringify`.
+  const guard = realm.stackGuard;
+
+  guard.enter();
+
+  try {
+    return serializePropertyBody(realm, state, key, holder);
+  } finally {
+    guard.exit();
+  }
+}
+
+/**
+ * @param {Realm} realm
+ * @param {SerializerState} state
+ * @param {string} key
+ * @param {EngineObject} holder
+ * @returns {string | undefined}
+ */
+function serializePropertyBody(realm, state, key, holder) {
   let value = holder.get(key);
 
   if (value instanceof EngineObject) {

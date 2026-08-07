@@ -74,7 +74,18 @@ export class NativeFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = []) {
-    return runNativeBody(this.realm, () => this._call(thisValue, args, this));
+    // Built-ins enter the realm's stack budget exactly like guest functions
+    // do, so a recursion that threads through `[].map`, a getter, or a
+    // coercion is measured by the host frames it really spends.
+    const guard = this.realm.stackGuard;
+
+    guard.enter();
+
+    try {
+      return runNativeBody(this.realm, () => this._call(thisValue, args, this));
+    } finally {
+      guard.exit();
+    }
   }
 
   /**
@@ -93,7 +104,18 @@ export class NativeFunction extends EngineObject {
       );
     }
 
-    const result = runNativeBody(this.realm, () => construct(args, this));
+    const guard = this.realm.stackGuard;
+
+    guard.enter();
+
+    /** @type {unknown} */
+    let result;
+
+    try {
+      result = runNativeBody(this.realm, () => construct(args, this));
+    } finally {
+      guard.exit();
+    }
 
     if (!(result instanceof EngineObject)) {
       throw new TypeError('Native constructor must return an object');

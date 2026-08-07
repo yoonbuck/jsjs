@@ -83,18 +83,30 @@ export class EngineObject {
   }
 
   /**
+   * Walks the prototype chain iteratively rather than recursively: guest code
+   * can lengthen a chain at runtime (`o = Object.create(o)` in a loop), so a
+   * frame per link would let an ordinary property read exhaust the host stack.
+   * Chain length is not recursion, and it does not spend the realm's stack
+   * budget (`src/runtime/stack-guard.js`).
+   *
    * @param {PropertyKey} name
    * @returns {PropertyDescriptorRecord | undefined}
    */
   getProperty(name) {
-    const own = this.getOwnProperty(name);
-    if (own !== undefined) {
-      return own;
+    /** @type {EngineObject | null} */
+    let current = this;
+
+    while (current !== null) {
+      const own = current.getOwnProperty(name);
+
+      if (own !== undefined) {
+        return own;
+      }
+
+      current = current._prototype;
     }
 
-    return this._prototype === null
-      ? undefined
-      : this._prototype.getProperty(name);
+    return undefined;
   }
 
   /**

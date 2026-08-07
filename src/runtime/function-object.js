@@ -113,6 +113,13 @@ export class EngineFunction extends EngineObject {
    */
   callFunction(thisValue, args = []) {
     let completion;
+    const guard = this.realm.stackGuard;
+
+    // One guest activation, one frame in the realm's stack budget. The guard
+    // raises its `RangeError` signal *before* the body builds an activation
+    // environment, so the caller's boundary converts it into a catchable guest
+    // error with a frame's worth of host stack to spare.
+    guard.enter();
 
     try {
       completion = this._execute(this, this.resolveThisValue(thisValue), args);
@@ -131,6 +138,8 @@ export class EngineFunction extends EngineObject {
       }
 
       throw error;
+    } finally {
+      guard.exit();
     }
 
     if (completion.type === 'return') {

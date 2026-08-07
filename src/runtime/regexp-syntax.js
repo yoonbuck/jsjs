@@ -26,6 +26,9 @@ import { identifierPartRanges } from '../builtins/unicode-case-data.js';
  */
 
 /**
+ * @typedef {{ enter: () => void, exit: () => void }} StackGuardLike A realm's
+ *   `StackGuard` (`src/runtime/stack-guard.js`), structurally typed so this
+ *   module stays a pure syntax module with no runtime dependency.
  * @typedef {{ capturingGroups: number }} PatternInfo
  * @typedef {{ global: boolean, ignoreCase: boolean, multiline: boolean }} FlagSet
  */
@@ -93,10 +96,14 @@ export function parseFlags(flags) {
  * or later editions, which ES5 does not).
  *
  * @param {string} source
+ * @param {StackGuardLike} [stackGuard] The realm's stack budget, so that a
+ *   deeply nested pattern — which is guest *data*, and which this parser walks
+ *   recursively on the host stack — is contained the same way deep guest
+ *   recursion is. Omitted by callers that supply the pattern themselves.
  * @returns {PatternInfo}
  */
-export function validatePattern(source) {
-  const parser = new PatternParser(source);
+export function validatePattern(source, stackGuard) {
+  const parser = new PatternParser(source, stackGuard);
 
   parser.parseDisjunction();
 
@@ -219,10 +226,13 @@ function isIdentifierPart(unit) {
 class PatternParser {
   /**
    * @param {string} source
+   * @param {StackGuardLike} [stackGuard]
    */
-  constructor(source) {
+  constructor(source, stackGuard) {
     /** @type {string} */
     this.source = source;
+    /** @type {StackGuardLike | undefined} */
+    this.stackGuard = stackGuard;
     /** @type {number} */
     this.pos = 0;
     /** @type {number} */
@@ -262,9 +272,31 @@ class PatternParser {
   /**
    * `Disjunction :: Alternative | Alternative "|" Disjunction`
    *
+   * A group re-enters this method, so this is where the pattern's nesting
+   * turns into host frames, and where those frames are charged to the realm's
+   * stack budget.
+   *
    * @returns {void}
    */
   parseDisjunction() {
+    if (this.stackGuard === undefined) {
+      this.parseDisjunctionBody();
+      return;
+    }
+
+    this.stackGuard.enter();
+
+    try {
+      this.parseDisjunctionBody();
+    } finally {
+      this.stackGuard.exit();
+    }
+  }
+
+  /**
+   * @returns {void}
+   */
+  parseDisjunctionBody() {
     this.parseAlternative();
 
     while (this.peek() === '|') {

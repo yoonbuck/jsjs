@@ -54,10 +54,18 @@ import { createUnsupportedOperationError } from './errors.js';
  *   directly testable with a fake host compiler, without needing a real gap
  *   between the host's regex dialect and ES5 to exist. Omit it to compile
  *   against the real host `RegExp`.
+ * @param {import('./regexp-syntax.js').StackGuardLike} [stackGuard] The
+ *   realm's stack budget, charged for the pattern's nesting while it is
+ *   validated. See `validatePattern`.
  * @returns {CompiledPattern}
  */
-export function compilePattern(source, flags, hostRegExpConstructor) {
-  const { capturingGroups } = validatePattern(source);
+export function compilePattern(
+  source,
+  flags,
+  hostRegExpConstructor,
+  stackGuard,
+) {
+  const { capturingGroups } = validatePattern(source, stackGuard);
   const hostFlags =
     'y' + (flags.ignoreCase ? 'i' : '') + (flags.multiline ? 'm' : '');
 

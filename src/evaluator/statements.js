@@ -57,66 +57,78 @@ export const STATEMENT_TYPES = new Set([
 /**
  * Evaluates a single statement node to a completion record.
  *
+ * Every node walked into is one frame of the realm's stack budget, for the
+ * same reason expression nodes are: the evaluator recurses on the host stack
+ * in step with the statement tree.
+ *
  * @param {any} node
  * @param {EvaluationContext} context
  * @param {string[]} [labelSet]
  * @returns {Completion}
  */
 export function evaluateStatement(node, context, labelSet = []) {
-  switch (node.type) {
-    case 'ExpressionStatement':
-      return createNormalCompletion(
-        evaluateExpressionValue(node.expression, context),
-      );
-    case 'EmptyStatement':
-      return createNormalCompletion(EMPTY);
-    case 'BlockStatement':
-      return evaluateStatementList(node.body, context);
-    case 'VariableDeclaration':
-      return evaluateVariableDeclaration(node, context);
-    case 'FunctionDeclaration':
-      // Declaration instantiation already created and bound the function
-      // object before the statement list ran, so reaching the declaration
-      // in source order produces no value (ECMA-262 13).
-      return createNormalCompletion(EMPTY);
-    case 'IfStatement':
-      return evaluateIfStatement(node, context);
-    case 'WhileStatement':
-      return evaluateWhileStatement(node, context, labelSet);
-    case 'DoWhileStatement':
-      return evaluateDoWhileStatement(node, context, labelSet);
-    case 'ForStatement':
-      return evaluateForStatement(node, context, labelSet);
-    case 'ForInStatement':
-      return evaluateForInStatement(node, context, labelSet);
-    case 'BreakStatement':
-      return evaluateBreakStatement(node);
-    case 'ContinueStatement':
-      return evaluateContinueStatement(node);
-    case 'ThrowStatement':
-      return createThrowCompletion(
-        evaluateExpressionValue(node.argument, context),
-      );
-    case 'TryStatement':
-      return evaluateTryStatement(node, context);
-    case 'ReturnStatement':
-      return createReturnCompletion(
-        node.argument === null || node.argument === undefined
-          ? undefined
-          : evaluateExpressionValue(node.argument, context),
-      );
-    case 'SwitchStatement':
-      return evaluateSwitchStatement(node, context, labelSet);
-    case 'LabeledStatement':
-      return evaluateLabeledStatement(node, context, labelSet);
-    case 'DebuggerStatement':
-      // ECMA-262 5.1 12.15: with no attached debugger the production
-      // evaluates to a normal, empty completion — a pure no-op.
-      return createNormalCompletion(EMPTY);
-    case 'WithStatement':
-      return evaluateWithStatement(node, context);
-    default:
-      throw createUnsupportedNodeError(node);
+  const guard = context.realm.stackGuard;
+
+  guard.enter();
+
+  try {
+    switch (node.type) {
+      case 'ExpressionStatement':
+        return createNormalCompletion(
+          evaluateExpressionValue(node.expression, context),
+        );
+      case 'EmptyStatement':
+        return createNormalCompletion(EMPTY);
+      case 'BlockStatement':
+        return evaluateStatementList(node.body, context);
+      case 'VariableDeclaration':
+        return evaluateVariableDeclaration(node, context);
+      case 'FunctionDeclaration':
+        // Declaration instantiation already created and bound the function
+        // object before the statement list ran, so reaching the declaration
+        // in source order produces no value (ECMA-262 13).
+        return createNormalCompletion(EMPTY);
+      case 'IfStatement':
+        return evaluateIfStatement(node, context);
+      case 'WhileStatement':
+        return evaluateWhileStatement(node, context, labelSet);
+      case 'DoWhileStatement':
+        return evaluateDoWhileStatement(node, context, labelSet);
+      case 'ForStatement':
+        return evaluateForStatement(node, context, labelSet);
+      case 'ForInStatement':
+        return evaluateForInStatement(node, context, labelSet);
+      case 'BreakStatement':
+        return evaluateBreakStatement(node);
+      case 'ContinueStatement':
+        return evaluateContinueStatement(node);
+      case 'ThrowStatement':
+        return createThrowCompletion(
+          evaluateExpressionValue(node.argument, context),
+        );
+      case 'TryStatement':
+        return evaluateTryStatement(node, context);
+      case 'ReturnStatement':
+        return createReturnCompletion(
+          node.argument === null || node.argument === undefined
+            ? undefined
+            : evaluateExpressionValue(node.argument, context),
+        );
+      case 'SwitchStatement':
+        return evaluateSwitchStatement(node, context, labelSet);
+      case 'LabeledStatement':
+        return evaluateLabeledStatement(node, context, labelSet);
+      case 'DebuggerStatement':
+        // ECMA-262 5.1 12.15: with no attached debugger the production
+        // evaluates to a normal, empty completion — a pure no-op.
+        return createNormalCompletion(EMPTY);
+      case 'WithStatement':
+        return evaluateWithStatement(node, context);
+      default:
+        throw createUnsupportedNodeError(node);
+    }
+  } finally {
+    guard.exit();
   }
 }
 
