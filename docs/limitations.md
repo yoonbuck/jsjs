@@ -330,12 +330,16 @@ conversion — its defects stay its own.
 The **hoisting passes** that follow a successful parse
 (`globalDeclarationInstantiation`, `functionDeclarationInstantiation`, and
 `evalDeclarationInstantiation`, all through `collectVarNames` and
-`collectFunctionDeclarations`) keep an explicit stack instead of the host's, so
-depth is not a question for them at all. It has to be: the parser accepts
-source nested more deeply than a recursive walk of the result survives, so a
-program the parser had just accepted would otherwise overflow on the way to
-being evaluated — and the embedder would get a host `RangeError` for a
-perfectly well-formed script.
+`collectFunctionDeclarations`) keep an explicit stack instead of the host's,
+and push their children one at a time rather than spreading them as call
+arguments. Between them those two make the walk's cost independent of the
+program's shape: neither its depth nor the width of any statement list can
+reach a host limit. Both matter, because the parser accepts programs that
+outgrow either — nested more deeply than a recursive walk of the result
+survives, or with a statement list longer than the roughly 120,000 arguments a
+host allows in one call — and in both cases a program the parser had just
+accepted would overflow on the way to being evaluated, handing the embedder a
+host `RangeError` for a perfectly well-formed script.
 
 Outside the parser's own conversion, a host stack overflow is never
 reinterpreted: if one happens it escapes `evaluateScript` as the host

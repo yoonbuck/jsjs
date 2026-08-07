@@ -357,7 +357,13 @@ function pushHoistingChildren(node, pending) {
       // scope, and its own name is what hoists out of it.
       return node;
     case 'BlockStatement':
-      pending.push(...node.body);
+      // Pushed one at a time on purpose. Spreading an array into a variadic
+      // call passes it as *arguments*, which hosts cap far lower than array
+      // length (V8 at about 120,000), so a wide statement list would trade
+      // this walk's depth problem for a width one.
+      for (const statement of node.body) {
+        pending.push(statement);
+      }
       return null;
     case 'IfStatement':
       pending.push(node.consequent);
@@ -394,7 +400,9 @@ function pushHoistingChildren(node, pending) {
       return null;
     case 'SwitchStatement':
       for (const switchCase of node.cases) {
-        pending.push(...switchCase.consequent);
+        for (const statement of switchCase.consequent) {
+          pending.push(statement);
+        }
       }
       return null;
     default:

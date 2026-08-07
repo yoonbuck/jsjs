@@ -692,6 +692,61 @@ const tests = [
     },
   },
   {
+    name: 'hoisting walks a program with a very wide statement list too',
+    run() {
+      // Depth is not the only way a walk can outgrow the host. Handing an
+      // array to a variadic call spreads it as *arguments*, and V8 caps those
+      // at around 120,000 — an argument-count limit, not a stack-depth one,
+      // which a depth-only contract cannot see. Getting the walk off the host
+      // stack has to mean getting it off host limits generally, or the failure
+      // has merely moved from deep programs to wide ones.
+      const wide = (/** @type {number} */ width) => {
+        /** @type {any[]} */
+        const body = [];
+
+        for (let index = 0; index < width; index += 1) {
+          body.push({
+            type: 'VariableDeclaration',
+            kind: 'var',
+            declarations: [
+              {
+                type: 'VariableDeclarator',
+                id: { type: 'Identifier', name: `q${index}` },
+                init: null,
+              },
+            ],
+          });
+        }
+
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [{ type: 'BlockStatement', body }],
+        };
+      };
+
+      // Twice V8's argument cap, so this cannot pass by sitting under it.
+      const realm = createRealm();
+      evaluateScript(realm, '', { parse: () => wide(250000) });
+
+      assertSame(
+        evaluateScript(realm, 'this.q249999 === undefined').value,
+        true,
+        'every declaration in the list was still hoisted',
+      );
+
+      // And the same width reached the way guest code reaches it.
+      assertSame(
+        run(
+          'var s = "{"; for (var i = 0; i < 200000; i++) { s += "var v" + i + ";"; }' +
+            ' s += "}"; try { eval(s); "hoisted" } catch (e) { "guest " + e.name }',
+        ),
+        'hoisted',
+        'through a guest eval',
+      );
+    },
+  },
+  {
     name: 'a host defect inside a native body still escapes as a host error',
     run() {
       const realm = createRealm(SMALL);

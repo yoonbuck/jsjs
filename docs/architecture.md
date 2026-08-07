@@ -159,7 +159,9 @@ The hoisting walks (`collectVarNames` and `collectFunctionDeclarations` in
 `src/evaluator/declarations.js`, shared by all three declaration-instantiation
 passes) keep an explicit stack for a different reason: they run before
 evaluation begins, so the guard cannot count them, and the parser accepts
-source nested more deeply than a recursive walk of the result survives.
+programs that outgrow a recursive walk of the result. They also push children
+one at a time rather than spreading a statement list into a variadic call,
+which would swap the depth limit for a host argument-count one.
 
 The guard cannot cover the recursion spent _before_ evaluation — the parser's
 own descent and the declaration-instantiation walks that precede a script — so
