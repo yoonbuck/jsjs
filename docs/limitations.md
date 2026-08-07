@@ -157,12 +157,13 @@ ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly
 ### Array.prototype.toLocaleString primitive short-circuit
 
 ES5.1 §15.4.4.3 requires boxing each non-null, non-undefined element to an
-object and calling its `toLocaleString` unconditionally. When an element is a primitive whose
-`toLocaleString` resolves to the inherited `Object.prototype.toLocaleString`,
-this engine renders the element via `ToString(element)` directly, skipping the
-box-then-dispatch. The divergence appears only when an element's inherited
-`toString` has been replaced: ES5.1 invokes it with the boxed wrapper as
-`this`, while this engine never invokes it.
+object and calling its `toLocaleString` unconditionally. When an element is a
+primitive whose `toLocaleString` resolves to the inherited
+`Object.prototype.toLocaleString`, this engine renders the element via
+`ToString(element)` directly, skipping the box-then-dispatch. The divergence
+appears only when an element's inherited `toString` has been replaced: ES5.1
+invokes it with the boxed wrapper as `this`, while this engine never invokes
+it.
 
 **Backing code:** `src/builtins/array.js` (`toLocaleString`).
 **Verification:**
