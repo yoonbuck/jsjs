@@ -1,10 +1,12 @@
 /**
  * Tests for the stale-exclusion check logic.
  *
- * This is a Node-only suite because the exclusion check reads the ES5 selection
- * policy from disk. It exercises the integration path: the real policy file, a
- * real checkout, and the real engine, confirming that the runner correctly
- * identifies passing and failing tests.
+ * This suite lives behind the CI-contract entry point (`test/run-ci-contract.js`)
+ * because it requires an upstream Test262 checkout at `vendor/test262`. The same
+ * guarantee is enforced in CI by `npm run test262:exclusions:check` in the
+ * `test262-upstream` job. It exercises the integration path: the real policy
+ * file, a real checkout, and the real engine, confirming that the runner
+ * correctly identifies passing and failing tests.
  */
 
 import { readFile } from 'node:fs/promises';

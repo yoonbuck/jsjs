@@ -102,6 +102,10 @@ runner — `test/node/repository-invariants.test.js` fails if it ever is — bec
 running the whole pipeline inside one of its own jobs would be recursive and
 would depend on a browser install and an upstream checkout.
 
+`test/ci/exclusions-check.test.js` verifies the stale-exclusion checker against
+a real upstream Test262 checkout. It does not invoke CI commands, but it lives
+here because it cannot pass without `vendor/test262`.
+
 Nothing in the full contract is conditional. A missing browser or a missing
 upstream checkout fails with the exact command needed to fix it, because a skip
 that looks like a pass is how a contract quietly stops being one.

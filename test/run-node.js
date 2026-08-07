@@ -19,7 +19,6 @@ import { runTests } from './harness/runner.js';
 import { PORTABLE_SUITES } from './suites.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
 import workflowContract from './node/workflow-contract.test.js';
-import exclusionsCheck from './node/exclusions-check.test.js';
 
 /**
  * @typedef {import('./suites.js').TestSuite} TestSuite
@@ -34,10 +33,6 @@ const NODE_ONLY_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/node/workflow-contract.test.js',
     tests: workflowContract,
-  }),
-  Object.freeze({
-    file: 'test/node/exclusions-check.test.js',
-    tests: exclusionsCheck,
   }),
 ]);
 
