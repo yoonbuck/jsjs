@@ -345,14 +345,15 @@ function formatScopeLine(name, values) {
 }
 
 /**
- * Renders the compact Markdown summary the README carries, in place of the
- * per-test records that now live in the detailed report.
+ * Renders the compact Markdown summary the coverage document carries, in place
+ * of the per-test records that now live in the detailed report.
  *
- * @param {{ coverage: Test262Coverage, reportPath: string }} options
+ * @param {{ coverage: Test262Coverage, reportPath: string, reportLinkPath?: string }} options
  * @returns {string}
  */
 export function renderCoverageSummary(options) {
   const { coverage, reportPath } = options;
+  const reportLinkPath = options.reportLinkPath ?? reportPath;
 
   return [
     ...renderTable([
@@ -371,7 +372,7 @@ export function renderCoverageSummary(options) {
     `${formatCount(coverage.files.malformed)} of the ${formatCount(
       coverage.files.total,
     )} files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.`,
-    `Full per-test records: [${reportPath}](${reportPath}).`,
+    `Full per-test records: [${reportPath}](${reportLinkPath}).`,
   ].join('\n');
 }
 

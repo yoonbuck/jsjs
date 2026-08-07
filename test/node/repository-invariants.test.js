@@ -618,10 +618,10 @@ export default [
     // selection sets aside and why. Prose that quotes a count rots the moment
     // the policy changes, and a stale tally is worse than no tally, because it
     // reads as measured. Bind it to the policy file instead.
-    name: 'the exclusion tally the README publishes matches the selection policy',
+    name: 'the exclusion tally in docs/conformance.md matches the selection policy',
     run: async () => {
       const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
-      const readme = await readSource('README.md');
+      const conformance = await readSource('docs/conformance.md');
       const counts = new Map(
         EXCLUSION_CATEGORIES.map((category) => [category, 0]),
       );
@@ -637,26 +637,26 @@ export default [
         const row = new RegExp(
           String.raw`^\|\s*\x60${category}\x60\s*\|\s*(\d+)\s*\|`,
           'mu',
-        ).exec(readme);
+        ).exec(conformance);
 
         assertSame(
           row !== null,
           true,
-          `README.md must keep a tally row for the ${category} exclusion category`,
+          `docs/conformance.md must keep a tally row for the ${category} exclusion category`,
         );
         assertSame(
           Number(row?.[1]),
           count,
-          `README.md says ${String(row?.[1])} ${category} exclusions; ${ES5_SELECTION_FILE} has ${count}`,
+          `docs/conformance.md says ${String(row?.[1])} ${category} exclusions; ${ES5_SELECTION_FILE} has ${count}`,
         );
       }
 
       const total = policy.exclusions.length;
 
       assertSame(
-        readme.includes(`The ${total} classified exclusions`),
+        conformance.includes(`The ${total} classified exclusions`),
         true,
-        `README.md must report ${total} classified exclusions, the total in ${ES5_SELECTION_FILE}`,
+        `docs/conformance.md must report ${total} classified exclusions, the total in ${ES5_SELECTION_FILE}`,
       );
     },
   },

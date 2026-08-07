@@ -22,8 +22,8 @@
  *   the whole-suite inventory and coverage, and the summary. CI uploads this
  *   file even when the run fails, which is when the per-test records are worth
  *   reading.
- * - The coverage block in `README.md` — a compact table, because a README that
- *   inlines two hundred JSON lines is a report nobody reads.
+ * - The coverage block in `docs/conformance.md` — a compact table, because a
+ *   document that inlines two hundred JSON lines is a report nobody reads.
  *
  * Stdout is the compact summary rather than the whole report: it is what a CI
  * log should show at a glance, and any failing records go to stderr next to it.
@@ -37,7 +37,7 @@ import { createRealm, evaluateScript } from '../../src/index.js';
 import { createNodeTest262Host } from './adapters/node.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
-import { TEST262_REPORT_FILE } from '../ci/pipeline.js';
+import { TEST262_REPORT_FILE, COVERAGE_DOCUMENT_FILE } from '../ci/pipeline.js';
 import {
   FEATURES_MANIFEST_FILE,
   featureNames,
@@ -59,12 +59,40 @@ import {
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
-/** The file whose generated block carries the compact coverage summary. */
+/** Re-exported for consumers that import from this module. */
+export { COVERAGE_DOCUMENT_FILE };
+
+/**
+ * @deprecated Use COVERAGE_DOCUMENT_FILE. Kept for migration compatibility.
+ */
 export const README_FILE = 'README.md';
 
-/** Markers delimiting the generated block in `README.md`. */
+/** Markers delimiting the generated block in the coverage document. */
 export const COVERAGE_MARKER_BEGIN = '<!-- test262-coverage:begin -->';
 export const COVERAGE_MARKER_END = '<!-- test262-coverage:end -->';
+
+/**
+ * Computes a relative path from one repository-relative file to another, for
+ * use as a Markdown link target. Only handles the common case where both paths
+ * use forward slashes (repository-relative POSIX paths).
+ *
+ * @param {string} from Repository-relative path of the document.
+ * @param {string} to Repository-relative path of the target.
+ * @returns {string}
+ */
+function relativePath(from, to) {
+  const fromDir = from.slice(0, from.lastIndexOf('/'));
+  const toDir = to.slice(0, to.lastIndexOf('/'));
+  const toFile = to.slice(to.lastIndexOf('/') + 1);
+
+  if (fromDir === toDir) {
+    return toFile;
+  }
+
+  // Fall back to the full path when the directories differ in a way that a
+  // simple same-directory check cannot resolve.
+  return to;
+}
 
 /**
  * @param {string} path Repository-relative.
@@ -187,6 +215,7 @@ export async function main(argv = []) {
   const block = renderCoverageSummary({
     coverage,
     reportPath: TEST262_REPORT_FILE,
+    reportLinkPath: relativePath(COVERAGE_DOCUMENT_FILE, TEST262_REPORT_FILE),
   });
 
   process.stdout.write(`${block}\n`);
@@ -246,14 +275,14 @@ function writeFailures(records) {
  */
 async function synchronizeArtifacts(options) {
   const { report, block, check } = options;
-  const readme = await readRepositoryFile(README_FILE);
-  const updated = replaceGeneratedBlock(readme, block);
+  const coverageDoc = await readRepositoryFile(COVERAGE_DOCUMENT_FILE);
+  const updated = replaceGeneratedBlock(coverageDoc, block);
   /** @type {string[]} */
   const stale = [];
 
   for (const [path, contents] of [
     [TEST262_REPORT_FILE, report],
-    [README_FILE, updated],
+    [COVERAGE_DOCUMENT_FILE, updated],
   ]) {
     const current = await readGeneratedFile(path);
 
@@ -297,7 +326,7 @@ export function replaceGeneratedBlock(document, block) {
 
   if (begin === -1 || end < begin) {
     throw new Error(
-      `${README_FILE} must delimit the generated coverage block with ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
+      `${COVERAGE_DOCUMENT_FILE} must delimit the generated coverage block with ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
     );
   }
 
@@ -316,7 +345,7 @@ export function readGeneratedBlock(document) {
 
   if (begin === -1 || end < begin) {
     throw new Error(
-      `${README_FILE} has no generated coverage block between ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
+      `${COVERAGE_DOCUMENT_FILE} has no generated coverage block between ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
     );
   }
 

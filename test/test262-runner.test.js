@@ -34,6 +34,13 @@ import {
   renderCoverageSummary,
   summarizeTest262Coverage,
 } from '../tools/test262/coverage.js';
+import {
+  COVERAGE_DOCUMENT_FILE,
+  COVERAGE_MARKER_BEGIN,
+  COVERAGE_MARKER_END,
+  replaceGeneratedBlock,
+  readGeneratedBlock,
+} from '../tools/test262/upstream-run.js';
 import { createFixtureTest262Host } from './harness/test262-host.js';
 
 /**
@@ -1366,6 +1373,35 @@ export default [
           'Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).',
         ].join('\n'),
       );
+    },
+  },
+  {
+    name: 'the coverage document target is docs/conformance.md',
+    run: () => {
+      assertSame(
+        COVERAGE_DOCUMENT_FILE,
+        'docs/conformance.md',
+        'the renderer must target docs/conformance.md, not README.md',
+      );
+    },
+  },
+  {
+    name: 'replaceGeneratedBlock preserves content outside the markers in the coverage document',
+    run: () => {
+      const doc = `# Conformance\n\n${COVERAGE_MARKER_BEGIN}\nold\n${COVERAGE_MARKER_END}\n\nTrailing.\n`;
+      const updated = replaceGeneratedBlock(doc, 'new block');
+
+      assertSame(updated.includes('new block'), true, 'block was inserted');
+      assertSame(updated.includes('old'), false, 'old block was removed');
+      assertSame(updated.includes('Trailing.'), true, 'trailing content kept');
+    },
+  },
+  {
+    name: 'readGeneratedBlock extracts the content between the coverage markers',
+    run: () => {
+      const block = 'generated table here';
+      const doc = `before\n${COVERAGE_MARKER_BEGIN}\n\n${block}\n\n${COVERAGE_MARKER_END}\nafter`;
+      assertSame(readGeneratedBlock(doc), block);
     },
   },
 ];

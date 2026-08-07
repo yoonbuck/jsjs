@@ -28,6 +28,7 @@ import { TEST262_REPORT_FILE } from '../../tools/ci/pipeline.js';
 import {
   COVERAGE_MARKER_BEGIN,
   COVERAGE_MARKER_END,
+  COVERAGE_DOCUMENT_FILE,
   README_FILE,
   readGeneratedBlock,
 } from '../../tools/test262/upstream-run.js';
@@ -125,10 +126,10 @@ function npmRun(script, hint) {
 /**
  * @typedef {{
  *   committedReport: string,
- *   committedReadme: string,
+ *   committedCoverageDoc: string,
  *   stdout: string,
  *   report: string,
- *   readme: string,
+ *   coverageDoc: string,
  * }} UpstreamRun
  */
 
@@ -150,15 +151,17 @@ let upstreamRun;
 async function readUpstreamRun() {
   if (upstreamRun === undefined) {
     const committedReport = await readRepositoryFile(TEST262_REPORT_FILE);
-    const committedReadme = await readRepositoryFile(README_FILE);
+    const committedCoverageDoc = await readRepositoryFile(
+      COVERAGE_DOCUMENT_FILE,
+    );
     const stdout = npmRun('test262:upstream');
 
     upstreamRun = {
       committedReport,
-      committedReadme,
+      committedCoverageDoc,
       stdout,
       report: await readRepositoryFile(TEST262_REPORT_FILE),
-      readme: await readRepositoryFile(README_FILE),
+      coverageDoc: await readRepositoryFile(COVERAGE_DOCUMENT_FILE),
     };
   }
 
@@ -594,18 +597,18 @@ export default [
     },
   },
   {
-    name: 'the coverage summary in README.md is the real output of the pinned subset',
+    name: 'the coverage summary in docs/conformance.md is the real output of the pinned subset',
     run: async () => {
-      const { committedReadme, readme, report, stdout } =
+      const { committedCoverageDoc, coverageDoc, report, stdout } =
         await readUpstreamRun();
 
       assertSame(
-        committedReadme,
-        readme,
-        `${README_FILE} is stale; run npm run test262:upstream`,
+        committedCoverageDoc,
+        coverageDoc,
+        `${COVERAGE_DOCUMENT_FILE} is stale; run npm run test262:upstream`,
       );
 
-      const block = readGeneratedBlock(readme);
+      const block = readGeneratedBlock(coverageDoc);
       const records = parseJsonLines(report);
       const inventory = records.find((record) => record.type === 'inventory');
       const expected = renderCoverageSummary({
@@ -617,20 +620,21 @@ export default [
           records: /** @type {any} */ (coverageRecord(records, 'records')),
         },
         reportPath: TEST262_REPORT_FILE,
+        reportLinkPath: 'test262-report.jsonl',
       });
 
       assertSame(block, expected);
       assertSame(stdout, `${block}\n`, 'stdout is the same generated summary');
       assertSame(
-        readme.includes(COVERAGE_MARKER_BEGIN) &&
-          readme.includes(COVERAGE_MARKER_END),
+        coverageDoc.includes(COVERAGE_MARKER_BEGIN) &&
+          coverageDoc.includes(COVERAGE_MARKER_END),
         true,
-        'README coverage markers',
+        'coverage document markers',
       );
       assertSame(
-        readme.includes(report),
+        coverageDoc.includes(report),
         false,
-        'the detailed report belongs in the artifact, not inlined in README.md',
+        'the detailed report belongs in the artifact, not inlined in the coverage document',
       );
       assertSame(
         block.includes('"type":"test"'),
@@ -640,13 +644,13 @@ export default [
     },
   },
   {
-    name: 'every live coverage number in README.md is inside the generated block, where the drift check can reach it',
+    name: 'every live coverage number in docs/conformance.md is inside the generated block, where the drift check can reach it',
     run: async () => {
-      const { readme, report } = await readUpstreamRun();
-      const begin = readme.indexOf(COVERAGE_MARKER_BEGIN);
+      const { coverageDoc, report } = await readUpstreamRun();
+      const begin = coverageDoc.indexOf(COVERAGE_MARKER_BEGIN);
       const end =
-        readme.indexOf(COVERAGE_MARKER_END) + COVERAGE_MARKER_END.length;
-      const outside = `${readme.slice(0, begin)}${readme.slice(end)}`;
+        coverageDoc.indexOf(COVERAGE_MARKER_END) + COVERAGE_MARKER_END.length;
+      const outside = `${coverageDoc.slice(0, begin)}${coverageDoc.slice(end)}`;
       /** @type {Set<number>} */
       const live = new Set();
 

@@ -74,10 +74,17 @@ export const NODE_VERSION = '20';
 export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
 
 /**
- * The command that fails CI when the committed report or the README's generated
- * coverage block no longer matches what the run just produced. It follows the
- * run in the same job, so it compares a freshly written tree against the commit
- * rather than re-running a suite that has already run.
+ * The file whose generated block carries the compact coverage summary.
+ * Imported from upstream-run.js would create a circular dependency with
+ * pipeline.js, so this is the authoritative definition shared by both.
+ */
+export const COVERAGE_DOCUMENT_FILE = 'docs/conformance.md';
+
+/**
+ * The command that fails CI when the committed report or the coverage
+ * document's generated block no longer matches what the run just produced. It
+ * follows the run in the same job, so it compares a freshly written tree
+ * against the commit rather than re-running a suite that has already run.
  *
  * `git diff` alone would not be enough: it compares the working tree against the
  * index and says nothing at all about a path git does not track, so a report
@@ -85,8 +92,8 @@ export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
  * permanently clean. `ls-files --error-unmatch` fails on exactly that case.
  */
 export const TEST262_REPORT_DRIFT_COMMAND = [
-  `git ls-files --error-unmatch ${TEST262_REPORT_FILE} README.md > /dev/null`,
-  `git diff --exit-code -- ${TEST262_REPORT_FILE} README.md`,
+  `git ls-files --error-unmatch ${TEST262_REPORT_FILE} ${COVERAGE_DOCUMENT_FILE} > /dev/null`,
+  `git diff --exit-code -- ${TEST262_REPORT_FILE} ${COVERAGE_DOCUMENT_FILE}`,
 ].join(' && ');
 
 /**
