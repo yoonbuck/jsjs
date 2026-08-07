@@ -685,7 +685,10 @@ const tests = [
         'a program this deep exhausts the budget while being evaluated',
       );
       assertSame(
-        evaluateScript(realm, 'this.q === undefined').value,
+        // `this.q === undefined` would hold whether or not hoisting ran, since
+        // reading a missing property yields `undefined` too. `in` is what
+        // distinguishes a hoisted binding from an absent one.
+        evaluateScript(realm, '"q" in this').value,
         true,
         'and hoisting still reached the declaration it was walking towards',
       );
@@ -730,7 +733,7 @@ const tests = [
       evaluateScript(realm, '', { parse: () => wide(250000) });
 
       assertSame(
-        evaluateScript(realm, 'this.q249999 === undefined').value,
+        evaluateScript(realm, '"q249999" in this').value,
         true,
         'every declaration in the list was still hoisted',
       );
