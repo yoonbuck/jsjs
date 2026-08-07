@@ -378,6 +378,31 @@ async function fileExists(repoRelativePath) {
   }
 }
 
+/**
+ * Extracts the set of GitHub-style heading anchor slugs from a Markdown source.
+ * GitHub's algorithm: lower-case, strip everything that is not a letter, digit,
+ * space, or hyphen, then replace spaces with hyphens.
+ *
+ * @param {string} source Markdown text.
+ * @returns {Set<string>}
+ */
+function markdownHeadingAnchors(source) {
+  const HEADING = /^#{1,6}\s+(.+)$/gm;
+  /** @type {Set<string>} */
+  const anchors = new Set();
+
+  for (const match of source.matchAll(HEADING)) {
+    const slug = match[1]
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N} -]/gu, '')
+      .replace(/ /g, '-');
+    anchors.add(slug);
+  }
+
+  return anchors;
+}
+
 export default [
   {
     // The generated case data records the Unicode version it was built from.
@@ -1005,6 +1030,68 @@ export default [
         unknown.join('\n'),
         '',
         'current documentation references npm scripts that do not exist in package.json',
+      );
+    },
+  },
+  {
+    // Every engine-deviation exclusion must reference a heading anchor in
+    // docs/limitations.md, so the reason text never drifts from a real section.
+    name: 'every engine-deviation exclusion references a heading that exists in docs/limitations.md',
+    run: async () => {
+      const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
+      const limSource = await readSource('docs/limitations.md');
+      const anchors = markdownHeadingAnchors(limSource);
+      /** @type {string[]} */
+      const broken = [];
+
+      for (const exclusion of policy.exclusions) {
+        if (exclusion.category !== 'engine-deviation') continue;
+
+        // Extract the anchor reference from the reason text.
+        // Reasons should contain a Markdown-style anchor reference like:
+        //   [Annex B pattern syntax is rejected](docs/limitations.md#annex-b-pattern-syntax-is-rejected)
+        // or at minimum name the heading.
+        const anchorMatch = /docs\/limitations\.md#([\w-]+)/.exec(
+          exclusion.reason,
+        );
+
+        if (!anchorMatch) {
+          broken.push(
+            `exclusion for ${exclusion.path ?? exclusion.prefix} does not reference docs/limitations.md#<anchor>`,
+          );
+          continue;
+        }
+
+        const anchor = anchorMatch[1];
+        if (!anchors.has(anchor)) {
+          broken.push(
+            `exclusion for ${exclusion.path ?? exclusion.prefix} references #${anchor} which does not exist in docs/limitations.md`,
+          );
+        }
+      }
+
+      assertSame(
+        broken.join('\n'),
+        '',
+        'engine-deviation exclusion reasons must reference real headings in docs/limitations.md',
+      );
+    },
+  },
+  {
+    // README must not hold authoritative deviation or limitation tables; those
+    // belong in docs/limitations.md after the documentation reorganization.
+    name: 'README does not contain authoritative deviation or limitation tables',
+    run: async () => {
+      const readme = await readSource('README.md');
+      assertSame(
+        /^#{1,6}\s+Intentional deviations/m.test(readme),
+        false,
+        'README must not contain an "Intentional deviations" heading; move it to docs/limitations.md',
+      );
+      assertSame(
+        /^#{1,6}\s+Known limitations/m.test(readme),
+        false,
+        'README must not contain a "Known limitations" heading; move it to docs/limitations.md',
       );
     },
   },
