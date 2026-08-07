@@ -312,24 +312,35 @@ reached 767; `JSON.stringify` on the same structure stops at 493. The tradeoff
 is deliberate: measuring a recursion in the host frames it really spends is
 what makes a single budget safe for every shape on every host.
 
-One recursion is bounded differently, because it is spent before evaluation
-begins: the depth of the _source text_ itself. The parser and the
-declaration-instantiation passes that precede a script
-(`globalDeclarationInstantiation`, `functionDeclarationInstantiation`, and
-`evalDeclarationInstantiation`) all walk the AST recursively, and no budget can
-count frames that are spent deciding what the budget will run. Running out of
-stack there is instead reported as a failure to parse — a `SyntaxError` reading
-`Not enough stack space to parse input`, which is what Acorn itself raises for
-the same condition. So a script nested some thousands of levels deep is
-rejected the way any unparsable script is: the embedder gets a host
-`SyntaxError`, and guest code that reached the parser through `eval` or
-`Function` gets a catchable guest `SyntaxError`. The depth at which that
-happens is the host's, not the engine's, so it is one of the few places where
-hosts still differ.
+One recursion is spent before evaluation begins, where no budget can count it:
+the depth of the _source text_ itself. Two things walk it, and they are handled
+differently.
 
-Outside that one conversion, a host stack overflow is never reinterpreted: if
-one happens it escapes `evaluateScript` as the host `RangeError` it is, because
-relabeling host exceptions would hide engine defects behind a guest error.
+The **parser** recurses, and running out of stack there is reported as what it
+is at that stage — a failure to parse, raising `SyntaxError: Not enough stack
+space to parse input`, which is what Acorn itself raises for the same
+condition. So a script nested some thousands of levels deep is rejected the way
+any unparsable script is: the embedder gets a host `SyntaxError`, and guest
+code that reached the parser through `eval` or `Function` gets a catchable
+guest `SyntaxError`. The depth at which that happens is the host's, not the
+engine's, so it is one of the few places where hosts still differ. An embedder
+that injects its own parser through `options.parse` is excluded from the
+conversion — its defects stay its own.
+
+The **hoisting passes** that follow a successful parse
+(`globalDeclarationInstantiation`, `functionDeclarationInstantiation`, and
+`evalDeclarationInstantiation`, all through `collectVarNames` and
+`collectFunctionDeclarations`) keep an explicit stack instead of the host's, so
+depth is not a question for them at all. It has to be: the parser accepts
+source nested more deeply than a recursive walk of the result survives, so a
+program the parser had just accepted would otherwise overflow on the way to
+being evaluated — and the embedder would get a host `RangeError` for a
+perfectly well-formed script.
+
+Outside the parser's own conversion, a host stack overflow is never
+reinterpreted: if one happens it escapes `evaluateScript` as the host
+`RangeError` it is, because relabeling host exceptions would hide engine
+defects behind a guest error.
 
 **Backing code:** `src/runtime/stack-guard.js`, entered from
 `EngineFunction#callFunction` (`src/runtime/function-object.js`),
@@ -337,5 +348,8 @@ relabeling host exceptions would hide engine defects behind a guest error.
 `evaluateExpression` (`src/evaluator/expressions.js`), `evaluateStatement`
 (`src/evaluator/statements.js`), `src/builtins/json.js`, and `validatePattern`
 (`src/runtime/regexp-syntax.js`); the parse-time conversion is `asParseFailure`
-in `src/parser.js`.
+in `src/parser.js`; the iterative walks are `EngineObject#getProperty`
+(`src/runtime/object.js`), `BoundFunction#hasInstance`
+(`src/builtins/function.js`), and `collectVarNames` /
+`collectFunctionDeclarations` (`src/evaluator/declarations.js`).
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.

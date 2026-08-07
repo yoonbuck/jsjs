@@ -171,7 +171,11 @@ export function parseScript(source, options = {}) {
       ...PARSER_OPTIONS,
     });
   } catch (error) {
-    throw asParseFailure(error);
+    // Only the engine's own parser gets the stack-overflow conversion below.
+    // An embedder that injected its own `parse` owns whatever that throws;
+    // relabelling its overflow as a parse failure would hide its defect the
+    // same way relabelling a host error inside the engine would hide ours.
+    throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
   return validateScriptProgram(program);
@@ -200,7 +204,7 @@ export function parseEval(source, strict = false) {
   try {
     program = parser.parse(source, PARSER_OPTIONS);
   } catch (error) {
-    throw asParseFailure(error);
+    throw asParseFailure(error, true);
   }
 
   return validateScriptProgram(program, strict);
@@ -525,15 +529,18 @@ function statementPositionFunctionError(context, node) {
  * `Function` raise a catchable guest `SyntaxError`, and a script handed
  * straight to the embedder fails like any other unparsable script.
  *
- * The conversion is confined to the `parse` call, which runs no engine code
- * beyond the parser, so a `RangeError` from an engine defect is never
- * relabelled by it.
+ * The conversion is confined to a call into the engine's own parser. No guest
+ * code and no evaluator code runs there — only Acorn and the reserved-word
+ * plugin above it — so a `RangeError` raised by an engine defect cannot reach
+ * this and be relabelled. `ownParser` is what enforces that: an embedder's
+ * injected `parse` hook is excluded, because its defects are its own.
  *
  * @param {unknown} error
+ * @param {boolean} ownParser Whether the engine's own parser produced `error`.
  * @returns {unknown} The error to throw.
  */
-function asParseFailure(error) {
-  if (isStackOverflow(error)) {
+function asParseFailure(error, ownParser) {
+  if (ownParser && isStackOverflow(error)) {
     return new SyntaxError('Not enough stack space to parse input');
   }
 

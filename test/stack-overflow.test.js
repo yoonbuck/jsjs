@@ -630,6 +630,68 @@ const tests = [
     },
   },
   {
+    name: 'hoisting walks a program iteratively, at any depth the parser admits',
+    run() {
+      // Parsing and hoisting both happen before the budget can count anything.
+      // The parser reports running out of stack as a failure to parse, but the
+      // hoisting walks that follow it must not run out at all: a program the
+      // parser has already accepted would otherwise overflow on the way to
+      // being evaluated, and the embedder would get a host RangeError for a
+      // script that is perfectly well formed.
+      //
+      // The depth at which the parser gives up moves with how warm the host
+      // has made it, so the source form cannot pin this. Handing the engine a
+      // program directly does: `evaluateScript` forwards parser options, so a
+      // `parse` hook returning a synthetic AST reaches the hoisting walks with
+      // the parser out of the way.
+      const nest = (/** @type {number} */ depth) => {
+        /** @type {any} */
+        let statement = {
+          type: 'VariableDeclaration',
+          kind: 'var',
+          declarations: [
+            {
+              type: 'VariableDeclarator',
+              id: { type: 'Identifier', name: 'q' },
+              init: null,
+            },
+          ],
+        };
+
+        for (let level = 0; level < depth; level += 1) {
+          statement = {
+            type: 'IfStatement',
+            test: { type: 'Literal', value: 1 },
+            consequent: statement,
+            alternate: null,
+          };
+        }
+
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [statement],
+        };
+      };
+
+      // Two orders of magnitude past any host's stack, so this cannot pass by
+      // the host happening to have room.
+      const program = nest(1000000);
+      const realm = createRealm();
+
+      assertSame(
+        evaluateScript(realm, '', { parse: () => program }).type,
+        'throw',
+        'a program this deep exhausts the budget while being evaluated',
+      );
+      assertSame(
+        evaluateScript(realm, 'this.q === undefined').value,
+        true,
+        'and hoisting still reached the declaration it was walking towards',
+      );
+    },
+  },
+  {
     name: 'a host defect inside a native body still escapes as a host error',
     run() {
       const realm = createRealm(SMALL);

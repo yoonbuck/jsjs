@@ -155,6 +155,11 @@ Recursion whose depth guest code controls but which is _not_ a stack budget
 question is made iterative instead of counted, so that ordinary operations on
 long chains keep working: `EngineObject#getProperty` walks the prototype chain
 in a loop, and `BoundFunction#hasInstance` unwraps a bound chain in a loop.
+The hoisting walks (`collectVarNames` and `collectFunctionDeclarations` in
+`src/evaluator/declarations.js`, shared by all three declaration-instantiation
+passes) keep an explicit stack for a different reason: they run before
+evaluation begins, so the guard cannot count them, and the parser accepts
+source nested more deeply than a recursive walk of the result survives.
 
 The guard cannot cover the recursion spent _before_ evaluation — the parser's
 own descent and the declaration-instantiation walks that precede a script — so
