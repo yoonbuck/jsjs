@@ -114,46 +114,60 @@ export const EXPRESSION_TYPES = new Set([
  * evaluates directly to its dereferenced runtime value. Callers that always
  * want a value should use `evaluateExpressionValue` instead.
  *
+ * Every node walked into is one frame of the realm's stack budget
+ * (`src/runtime/stack-guard.js`): the evaluator recurses on the host stack in
+ * step with the expression tree, so a call nested deep inside an expression
+ * costs more host stack than a bare one, and the budget only bounds the host
+ * stack if it sees that.
+ *
  * @param {any} node
  * @param {EvaluationContext} context
  * @returns {Reference | unknown}
  */
 export function evaluateExpression(node, context) {
-  switch (node.type) {
-    case 'Literal':
-      return evaluateLiteral(node, context);
-    case 'Identifier':
-      return getIdentifierReference(context.env, node.name, context.strict);
-    case 'ThisExpression':
-      return context.thisValue;
-    case 'UnaryExpression':
-      return evaluateUnaryExpression(node, context);
-    case 'BinaryExpression':
-      return evaluateBinaryExpression(node, context);
-    case 'LogicalExpression':
-      return evaluateLogicalExpression(node, context);
-    case 'ConditionalExpression':
-      return evaluateConditionalExpression(node, context);
-    case 'AssignmentExpression':
-      return evaluateAssignmentExpression(node, context);
-    case 'UpdateExpression':
-      return evaluateUpdateExpression(node, context);
-    case 'CallExpression':
-      return evaluateCallExpression(node, context);
-    case 'MemberExpression':
-      return evaluateMemberExpression(node, context);
-    case 'FunctionExpression':
-      return evaluateFunctionExpression(node, context);
-    case 'ObjectExpression':
-      return evaluateObjectExpression(node, context);
-    case 'ArrayExpression':
-      return evaluateArrayExpression(node, context);
-    case 'NewExpression':
-      return evaluateNewExpression(node, context);
-    case 'SequenceExpression':
-      return evaluateSequenceExpression(node, context);
-    default:
-      throw createUnsupportedNodeError(node);
+  const guard = context.realm.stackGuard;
+
+  guard.enter();
+
+  try {
+    switch (node.type) {
+      case 'Literal':
+        return evaluateLiteral(node, context);
+      case 'Identifier':
+        return getIdentifierReference(context.env, node.name, context.strict);
+      case 'ThisExpression':
+        return context.thisValue;
+      case 'UnaryExpression':
+        return evaluateUnaryExpression(node, context);
+      case 'BinaryExpression':
+        return evaluateBinaryExpression(node, context);
+      case 'LogicalExpression':
+        return evaluateLogicalExpression(node, context);
+      case 'ConditionalExpression':
+        return evaluateConditionalExpression(node, context);
+      case 'AssignmentExpression':
+        return evaluateAssignmentExpression(node, context);
+      case 'UpdateExpression':
+        return evaluateUpdateExpression(node, context);
+      case 'CallExpression':
+        return evaluateCallExpression(node, context);
+      case 'MemberExpression':
+        return evaluateMemberExpression(node, context);
+      case 'FunctionExpression':
+        return evaluateFunctionExpression(node, context);
+      case 'ObjectExpression':
+        return evaluateObjectExpression(node, context);
+      case 'ArrayExpression':
+        return evaluateArrayExpression(node, context);
+      case 'NewExpression':
+        return evaluateNewExpression(node, context);
+      case 'SequenceExpression':
+        return evaluateSequenceExpression(node, context);
+      default:
+        throw createUnsupportedNodeError(node);
+    }
+  } finally {
+    guard.exit();
   }
 }
 

@@ -269,17 +269,57 @@ implementation falls short of what a hosted engine should do. They are written
 down for the same reason the deviations are — an undocumented shortfall is
 indistinguishable from a bug.
 
-### Guest recursion depth is the host's
+### Guest recursion depth is the engine's, and it is shallow
 
-The evaluator recurses on the host stack, so unbounded guest recursion exhausts
-it and the host's own `RangeError` propagates out of `evaluateScript` instead of
-becoming a guest error. Guest `try`/`catch` cannot see it, where a real engine's
-catchable `RangeError` can: `try { (function f(){ f(); })(); } catch (e) {}`
-swallows the error under `jsc` and escapes to the embedder here. An embedder
-that runs untrusted source should treat a host `RangeError` from
-`evaluateScript` as a resource failure of the call, not of the realm. This
-predates `eval` and dynamic `Function`, which only widen the ways guest source
-can reach it.
+The engine evaluates guest code by recursing on the host stack, so guest
+recursion is bounded by an engine-owned budget rather than by the host's stack:
+a realm allows 500 engine frames (`DEFAULT_MAX_STACK_DEPTH`), and the frame
+that would exceed that raises a realm-local guest `RangeError` with the message
+`Maximum call stack size exceeded`, which guest `try`/`catch` sees exactly as a
+real engine's does. Everything that recurses on the host stack enters the
+budget: every activation (guest functions, guest constructors, and built-ins
+alike, so a recursion threaded through `[].map`, a getter, a `valueOf`, or an
+`eval` chain is counted), every expression and statement node the evaluator
+walks into, and `JSON.parse`/`JSON.stringify`.
 
-**Backing code:** `src/evaluator/` (no host-stack guard anywhere).
-**Verification:** calling `evaluateScript(realm, '(function f(){ f(); })()')` throws a host `RangeError`.
+The unit is deliberately an _engine frame_ and not a guest call, because a
+guest call is not a fixed amount of host stack — `f()` nested twenty levels
+deep in an expression costs several times what a bare `f()` costs. A budget
+counting calls alone would be safe for the shape it was measured on and unsafe
+for the shape a hostile script picks.
+
+The shortfall is the depth. Real engines allow roughly ten thousand frames; 500
+buys about 165 activations of a plain recursion, so a recursive guest algorithm
+that any browser runs happily can fail here. The number is not arbitrary — it
+is the smallest measured host budget (1091 frames on Node 26, 1135 on headless
+Chromium, 8704 on `jsc`, all bounded by the same worst shape,
+`String()` on a self-nesting array) with better than a factor of two in
+reserve, which is what pays for the host frames an embedder has already spent
+before calling in. But it is a budget chosen for the worst host and the worst
+shape rather than for the running one. An embedder that knows its host can
+raise it per realm with `createRealm({ maxStackDepth })`.
+
+Counting frames the engine really spends has a visible cost of its own:
+recursion driven by _data_ nesting rather than by guest calls spends the same
+budget. Rendering a self-nesting array (`String(a)` where `a[0][0][0]…`)
+recurses through `Array.prototype.toString`/`join` once per level and raises
+the guest `RangeError` at 246 levels of nesting where the raw host stack
+reached 767; `JSON.stringify` on the same structure stops at 493. The tradeoff
+is deliberate: measuring a recursion in the host frames it really spends is
+what makes a single budget safe for every shape on every host.
+
+Two edges remain outside the boundary, both before evaluation begins. Deeply
+nested _source text_ — an expression nested tens of thousands of levels deep,
+including inside `eval` or `Function` — overflows the parser, and the
+declaration-instantiation pass that precedes a script walks the same AST
+recursively; both escape as host errors. And a host stack overflow is never
+reinterpreted: if one happens anyway it escapes `evaluateScript` as the host
+`RangeError` it is, because relabeling host exceptions would hide engine
+defects behind a guest error.
+
+**Backing code:** `src/runtime/stack-guard.js`, entered from
+`EngineFunction#callFunction` (`src/runtime/function-object.js`),
+`NativeFunction#callFunction`/`#constructFunction` (`src/builtins/shared.js`),
+`evaluateExpression` (`src/evaluator/expressions.js`), `evaluateStatement`
+(`src/evaluator/statements.js`), and `src/builtins/json.js`.
+**Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.

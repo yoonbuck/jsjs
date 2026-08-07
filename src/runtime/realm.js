@@ -49,12 +49,14 @@ import {
   installDateConstructor,
 } from '../builtins/date.js';
 import { GuestErrorSignal } from './completion.js';
+import { StackGuard } from './stack-guard.js';
 import { createDateHost } from './date.js';
 
 /**
  * @typedef {import('../builtins/fundamental.js').FundamentalIntrinsics} FundamentalIntrinsics
  * @typedef {import('../builtins/errors.js').ErrorIntrinsics} ErrorIntrinsics
  * @typedef {{
+ *   maxStackDepth?: number,
  *   dateHost?: Partial<import('./date.js').DateHost>,
  *   now?: () => number,
  *   clock?: () => number,
@@ -83,6 +85,10 @@ export class Realm {
     this.globalObject = new EngineObject(this.intrinsics.objectPrototype);
     defineGlobalValueProperties(this.globalObject);
     this.globalEnvironment = new GlobalEnvironmentRecord(this.globalObject);
+    // The recursion boundary is built before any guest work can happen: every
+    // activation and every evaluator frame in this realm consults it, so it
+    // must outlive the intrinsic graph installed below.
+    this.stackGuard = new StackGuard(options.maxStackDepth);
     this.dateHost = createDateHost({
       ...options,
       ...options.dateHost,
