@@ -125,7 +125,7 @@ Test262 pins.
 1–21, throwing `RangeError` outside them — the ES5.1 ranges, not the wider
 ES2018+ `toFixed` 0–100 range.
 
-**Backing code:** `src/builtins/primitive-wrappers.js`.
+**Backing code:** `src/builtins/number-format.js`.
 **Verification:** `evaluateScript(realm, 'try { (1).toFixed(21) } catch(e) { e.constructor.name }')` → `"RangeError"`.
 
 ### toString with a radix other than 10
