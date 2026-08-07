@@ -490,6 +490,18 @@ const tests = [
       assertSame(Object.is(run('[17].indexOf(17, -0);'), -0), false);
       assertSame(run('[17].lastIndexOf(17, -0);'), 0);
       assertSame(Object.is(run('[17].lastIndexOf(17, -0);'), -0), false);
+
+      // Deliberate ES2015-aligned deviation from ES5.1's literal −0 return:
+      // ES5.1 §15.4.4.14/§15.4.4.15 compute the start index with ToInteger
+      // (§9.4), and ToInteger(-0) is -0, so the spec says indexOf/lastIndexOf
+      // return that -0 index unchanged (observable as 1/result === -Infinity).
+      // ES2015 §22.1.3.12/§22.1.3.14 normalise the returned index to +0.
+      // This engine follows the ES2015 result because the selected upstream
+      // test indexOf-never-returns-negative-zero.js requires it.
+      assertSame(run('1/[true].indexOf(true, -0);'), Infinity);
+      assertSame(run('[true].indexOf(true, -0);'), 0);
+      assertSame(run('[0, true].lastIndexOf(true, -0);'), -1);
+      assertSame(run('1/[true, 0].lastIndexOf(true, -0);'), Infinity);
     },
   },
   {

@@ -148,6 +148,21 @@ version, which in practice is uniform across all target hosts.
 
 **Backing code:** `src/runtime/regexp-compat.js`.
 
+### indexOf/lastIndexOf normalise a −0 start index to +0
+
+ES5.1 §15.4.4.14 step 6 says "If n ≥ 0, then let k be n"; with
+`n = ToInteger(-0) = -0` (§9.4 step 2) that yields `k = -0`, which step
+8.b.iii returns as the found index when the element is at position 0
+(observable as `1/result === -Infinity`). ES2015 §22.1.3.12 step 6.a
+("If n is -0, let k be +0") was added precisely to fix this. This engine
+follows the ES2015 result: the selected upstream test
+`indexOf-never-returns-negative-zero.js` (in `test/staging/sm/Array/`) requires it,
+and returning −0 as an array index is of no value to guest code. The same
+normalisation applies to `lastIndexOf` (ES2015 §22.1.3.14 step 5.a).
+
+**Backing code:** `src/builtins/array.js` (`indexOf`, `lastIndexOf`).
+**Verification:** `evaluateScript(realm, '1/[true].indexOf(true, -0)')` → `Infinity` (not `-Infinity`).
+
 ### toExponential on zero
 
 Literal ES5 15.7.4.6 step 8.a resets `f` to 0, making
@@ -293,9 +308,13 @@ used. Two machines in different time zones will print different
 `new Date(0).toString()` values. Math's permitted approximation variation and
 `Math.random` are additional host-varying outputs.
 
-This is the engine's only injectable host boundary. It is confined to
+This is one of the engine's injectable host boundaries (the other is the
+`maxStackDepth` recursion budget in `src/runtime/stack-guard.js`). It is confined to
 `createDateHost` in `src/runtime/date.js`, which supplies only two functions —
-`now()` and `timezoneOffset(utcMilliseconds)`. Everything else about dates is
+`now()` and `timezoneOffset(utcMilliseconds)` — and an optional
+`standardTimezoneOffset` number (the stable standard-time offset, used to
+derive DaylightSavingTA without probing; when omitted the engine derives it
+from January/July UTC probes). Everything else about dates is
 computed by the engine: `parseDateString` implements 15.9.1.15 directly rather
 than calling the host's `Date.parse`, and all calendar arithmetic, formatting,
 and range clamping is engine code. An embedder that needs reproducible Date

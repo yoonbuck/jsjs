@@ -303,6 +303,10 @@ export function createCiJobs(test262) {
         ),
         runStep('Run the pinned Test262 subset', 'npm run test262:upstream'),
         runStep(
+          'Check for stale exclusions',
+          'npm run test262:exclusions:check',
+        ),
+        runStep(
           'Check the generated report is current',
           TEST262_REPORT_DRIFT_COMMAND,
         ),

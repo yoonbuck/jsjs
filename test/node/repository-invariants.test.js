@@ -1308,4 +1308,83 @@ export default [
       );
     },
   },
+  {
+    name: 'npm run test:node does not transitively depend on an upstream Test262 checkout',
+    run: async () => {
+      // The node runner must never import modules that require a real Test262
+      // checkout. If it does, `npm run test:node` cannot pass on a machine
+      // without vendor/test262 — breaking the machine-independence invariant.
+      const CHECKOUT_DEPENDENT_MODULES = [
+        'tools/test262/upstream-run.js',
+        'tools/test262/exclusions-check.js',
+      ];
+
+      const nodeRunner = await readSource('test/run-node.js');
+      const portableRegistry = await readSource('test/suites.js');
+
+      // Collect all specifiers reachable from the two runner sources.
+      const seen = new Set();
+      /** @type {string[]} */
+      const queue = [];
+
+      // Resolve relative specifiers from their respective base paths.
+      /** @param {string} base @param {string} specifier */
+      function resolve(base, specifier) {
+        const parts = base.split('/');
+        parts.pop();
+        for (const seg of specifier.split('/')) {
+          if (seg === '..') parts.pop();
+          else if (seg !== '.') parts.push(seg);
+        }
+        return parts.join('/');
+      }
+
+      // Seed with imports from both entry points, resolved to repo-relative paths.
+      for (const [basePath, source] of [
+        ['test/run-node.js', nodeRunner],
+        ['test/suites.js', portableRegistry],
+      ]) {
+        for (const specifier of importSpecifiers(source)) {
+          if (specifier.startsWith('./') || specifier.startsWith('../')) {
+            const resolved = resolve(basePath, specifier);
+            if (!seen.has(resolved)) {
+              seen.add(resolved);
+              queue.push(resolved);
+            }
+          }
+        }
+      }
+
+      // Walk transitive imports (breadth-first, only local files)
+      while (queue.length > 0) {
+        const file = /** @type {string} */ (queue.shift());
+        if (!file.endsWith('.js')) continue;
+        let source;
+        try {
+          source = await readSource(file);
+        } catch {
+          continue; // file may not exist (e.g. node: builtins)
+        }
+        for (const specifier of importSpecifiers(source)) {
+          if (specifier.startsWith('./') || specifier.startsWith('../')) {
+            const resolved = resolve(file, specifier);
+            if (!seen.has(resolved)) {
+              seen.add(resolved);
+              queue.push(resolved);
+            }
+          }
+        }
+      }
+
+      const violations = CHECKOUT_DEPENDENT_MODULES.filter((mod) =>
+        seen.has(mod),
+      );
+
+      assertSame(
+        violations.join(', '),
+        '',
+        `test:node transitively imports checkout-dependent modules: ${violations.join(', ')}`,
+      );
+    },
+  },
 ];

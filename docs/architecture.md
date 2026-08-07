@@ -254,8 +254,8 @@ The engine has five host boundaries:
    used to derive DaylightSavingTA without probing; when omitted the engine
    derives it from January/July UTC probes). `createDateHost()` fills defaults
    from the host (`Date.now`, `new Date(t).getTimezoneOffset()`). Embedders
-   override these through `RealmOptions`; this is the engine's only injectable
-   host boundary.
+   override these through `RealmOptions`; this is one of the engine's
+   injectable host boundaries (the other is `maxStackDepth`).
 
 4. **`Math.random`** — forwarded to the host's `Math.random`; its result is
    nondeterministic and is not configurable through `RealmOptions`.
