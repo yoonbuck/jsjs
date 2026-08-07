@@ -175,7 +175,7 @@ Each built-in family is a module under `src/builtins/` that exports a
 
 ## Host adapters
 
-The engine has two host boundaries:
+The engine has four host boundaries:
 
 1. **Parser** — `src/parser-dependency.js` imports Acorn from the vendored build.
    The parser is the only place the engine reaches outside `src/`.
