@@ -49,6 +49,16 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                                             |
 | `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                  |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
+| `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
+| `npm run format`                    | Prettier `--check` over the entire repository                                                                                                            |
+| `npm run lint`                      | ESLint (flat config) over the repository                                                                                                                 |
+| `npm run vendor:sync`               | Refresh `vendor/` from the dependency versions pinned in `package.json`                                                                                  |
+| `npm run vendor:check`              | Verify `vendor/` matches the pinned versions (fails if stale)                                                                                            |
+| `npm run unicode:generate`          | Regenerate `src/builtins/unicode-case-data.js` from the Unicode Character Database                                                                       |
+| `npm run unicode:check`             | Verify `src/builtins/unicode-case-data.js` is up to date (fails if stale)                                                                                |
+| `npm run ci:generate`               | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                                                        |
+| `npm run ci:check`                  | Verify the committed CI workflow matches the pipeline definition (fails if stale)                                                                        |
+| `npm run prepare`                   | Runs automatically on `npm install`; equivalent to `vendor:sync`                                                                                         |
 
 ## Suite organization
 

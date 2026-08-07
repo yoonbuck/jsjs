@@ -218,7 +218,7 @@ const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
  * load-bearing. Without this list, deleting, renaming, or emptying one of
  * these groups would still leave `tools/test262/upstream-subset.json`
  * well-formed and `npm run test262:upstream` green — just quieter, and
- * silently no longer measuring the family the README's milestone report
+ * silently no longer measuring the family the docs/conformance.md milestone report
  * claims it does. Each entry names the milestone that pinned the group, so a
  * future milestone extends this list rather than guessing whether a group is
  * load-bearing.
@@ -635,7 +635,7 @@ export default [
     },
   },
   {
-    // The coverage numbers the README publishes are generated into a marked
+    // The coverage numbers docs/conformance.md publishes are generated into a marked
     // block and drift-checked against a fresh run. The exclusion tally is not:
     // it is prose a human wrote, describing how much of the upstream suite this
     // selection sets aside and why. Prose that quotes a count rots the moment
@@ -1227,6 +1227,55 @@ export default [
         violations.join('\n'),
         '',
         `portable suites must not import Node builtins (directly or transitively):\n${violations.join('\n')}`,
+      );
+    },
+  },
+  {
+    // Every script defined in package.json must appear in docs/testing.md's
+    // command documentation, so the "full command list" claim in README is true.
+    name: 'every package.json script is documented in docs/testing.md',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const scripts = Object.keys(manifest.scripts ?? {});
+      const testingDoc = await readSource('docs/testing.md');
+      /** @type {string[]} */
+      const missing = [];
+
+      for (const script of scripts) {
+        // Match as `npm run <script>` or `npm test` for the "test" script
+        const command = script === 'test' ? 'npm test' : `npm run ${script}`;
+        if (!testingDoc.includes(command)) {
+          missing.push(script);
+        }
+      }
+
+      assertSame(
+        missing.join('\n'),
+        '',
+        `package.json scripts missing from docs/testing.md: ${missing.join(', ')}`,
+      );
+    },
+  },
+  {
+    // README must contain an install command and an embedding example that
+    // calls createRealm and evaluateScript, as required by the design spec.
+    name: 'README contains install command and embedding example',
+    run: async () => {
+      const readme = await readSource('README.md');
+      assertSame(
+        readme.includes('npm install'),
+        true,
+        'README must contain an install command (npm install)',
+      );
+      assertSame(
+        readme.includes('createRealm'),
+        true,
+        'README must contain an embedding example that calls createRealm',
+      );
+      assertSame(
+        readme.includes('evaluateScript'),
+        true,
+        'README must contain an embedding example that calls evaluateScript',
       );
     },
   },

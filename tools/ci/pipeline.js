@@ -67,10 +67,11 @@ export const NODE_VERSION = '20';
 
 /**
  * Where the upstream Test262 run writes its JSON-lines report. The file is
- * committed — it is the project's detailed conformance report, kept out of the
- * README so the README can stay a summary — and CI uploads this exact path as an
- * artifact, including on failure, which is when the per-test records matter
- * most. The constant is shared rather than spelled twice.
+ * committed — it is the project's detailed conformance report, kept out of
+ * docs/conformance.md so the conformance document can stay a summary — and CI
+ * uploads this exact path as an artifact, including on failure, which is when
+ * the per-test records matter most. The constant is shared rather than spelled
+ * twice.
  */
 export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
 

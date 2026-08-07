@@ -16,6 +16,31 @@ resolution, browsers would need an import map, and the `jsc` shell supports
 neither. `vendor/` is generated rather than committed; `npm install` populates it
 through `prepare`.
 
+## Setup
+
+```sh
+npm install
+```
+
+This populates `vendor/` through the `prepare` script. For browser and JSC
+prerequisites (Playwright, `jsc` on PATH), see
+[docs/testing.md](docs/testing.md).
+
+## Usage
+
+```js
+import { createRealm, evaluateScript } from './src/index.js';
+
+const realm = createRealm();
+const result = evaluateScript(realm, '1 + 2');
+console.log(result); // { type: 'normal', value: 3 }
+```
+
+`createRealm()` returns an initialized ES5.1 realm with all built-in objects.
+`evaluateScript(realm, source)` parses and evaluates a script, returning
+`{ type: 'normal' | 'throw', value }`. See
+[docs/architecture.md](docs/architecture.md) for the full embedding API.
+
 ## Commands
 
 | Command                | What it does                                                   |

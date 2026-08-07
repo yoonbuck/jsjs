@@ -154,7 +154,18 @@ ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly
 
 **Backing code:** `src/builtins/primitive-wrappers.js` (`toLocaleString`).
 
-### localeCompare
+### Array.prototype.toLocaleString primitive short-circuit
+
+ES5.1 §15.4.4.3 requires boxing each element to an object and calling its
+`toLocaleString` unconditionally. When an element is a primitive whose
+`toLocaleString` resolves to the inherited `Object.prototype.toLocaleString`,
+this engine renders the element via `ToString(element)` directly, skipping the
+box-then-dispatch. The observable difference: ES5.1's literal algorithm calls
+`Object.prototype.toLocaleString` on a boxed wrapper, which returns
+`"[object Boolean]"` (or similar); this engine returns `"true"`.
+
+**Backing code:** `src/builtins/array.js` (`toLocaleString`).
+**Verification:** `evaluateScript(realm, '[true,false].toLocaleString()')` → `'true,false'`.
 
 ES5 15.5.4.9's ordering is implementation-defined and only _recommends_ that
 canonically equivalent strings compare equal. This uses plain code-unit
