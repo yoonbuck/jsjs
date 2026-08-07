@@ -29,7 +29,85 @@ function readRepositoryFile(path) {
   return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
 }
 
+/**
+ * @param {Promise<unknown>} promise
+ * @returns {Promise<Error>}
+ */
+async function rejectionFrom(promise) {
+  try {
+    await promise;
+  } catch (error) {
+    if (error instanceof Error) {
+      return error;
+    }
+
+    throw new Error(`Expected an Error rejection, got ${typeof error}`);
+  }
+
+  throw new Error('Expected promise to reject');
+}
+
 export default [
+  {
+    name: 'checkExclusions rejects a missing pinned checkout with setup commands',
+    run: async () => {
+      const pin = await readTest262Pin();
+      const missingCheckout = 'vendor/missing-test262-checkout';
+      const error = await rejectionFrom(
+        checkExclusions({
+          pin: { ...pin, checkoutPath: missingCheckout },
+          supportedFeatures: [],
+        }),
+      );
+
+      assertSame(
+        error.message.includes(
+          `${missingCheckout} is not a git checkout.\nCheck the pinned upstream tree out first:`,
+        ),
+        true,
+      );
+      assertSame(
+        error.message.includes(
+          `git clone --filter=blob:none ${pin.repository} ${missingCheckout}`,
+        ),
+        true,
+      );
+      assertSame(
+        error.message.includes(
+          `git -C ${missingCheckout} checkout ${pin.revision}`,
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'checkExclusions rejects a policy path missing from the pinned checkout',
+    run: async () => {
+      const pin = await readTest262Pin();
+      const selectionText = await readRepositoryFile(
+        'test/fixtures/test262-exclusions/missing-path.json',
+      );
+      const error = await rejectionFrom(
+        checkExclusions({
+          pin,
+          selectionText,
+          supportedFeatures: [],
+        }),
+      );
+
+      assertSame(
+        error.message.includes(
+          'test/built-ins/Array/missing-exclusion-fixture.js',
+        ),
+        true,
+      );
+      assertSame(error.message.includes(pin.checkoutPath), true);
+      assertSame(
+        error.message.includes('Update tools/test262/es5-selection.json'),
+        true,
+      );
+    },
+  },
   {
     name: 'checkExclusions reports no stale exclusions in the committed policy',
     run: async () => {
@@ -39,7 +117,7 @@ export default [
       );
 
       const results = await checkExclusions({
-        checkoutPath: pin.checkoutPath,
+        pin,
         supportedFeatures,
       });
 
@@ -61,7 +139,7 @@ export default [
       );
 
       const results = await checkExclusions({
-        checkoutPath: pin.checkoutPath,
+        pin,
         supportedFeatures,
       });
 

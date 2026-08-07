@@ -47,7 +47,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:upstream:check`    | The same run, writing nothing: fails if either generated artifact is stale                                                                               |
 | `npm run test262:select`            | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                |
 | `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                                             |
-| `npm run test262:exclusions:check`  | Runs excluded tests and fails if any now pass (stale exclusion detection)                                                                                |
+| `npm run test262:exclusions:check`  | Runs every per-file exclusion; fails on stale exclusions, missing policy paths, or a missing/wrong pinned checkout                                       |
 | `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                  |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
@@ -103,8 +103,9 @@ running the whole pipeline inside one of its own jobs would be recursive and
 would depend on a browser install and an upstream checkout.
 
 `test/ci/exclusions-check.test.js` verifies the stale-exclusion checker against
-a real upstream Test262 checkout. It does not invoke CI commands, but it lives
-here because it cannot pass without `vendor/test262`.
+a real upstream Test262 checkout, including its hard failures for a missing
+checkout or a per-file policy path absent from that checkout. It does not invoke
+CI commands, but it lives here because it cannot pass without `vendor/test262`.
 
 Nothing in the full contract is conditional. A missing browser or a missing
 upstream checkout fails with the exact command needed to fix it, because a skip
@@ -263,7 +264,9 @@ which runs under all three runners.
 
 This error from `tools/test262/upstream-run.js` means the upstream Test262
 checkout is missing. The upstream commands (`npm run test262:upstream`,
-`npm run test262:upstream:check`) require it. Fix it with:
+`npm run test262:upstream:check`, `npm run test262:select`,
+`npm run test262:select:check`, and `npm run test262:exclusions:check`) require
+it. Fix it with:
 
 ```sh
 git clone --filter=blob:none https://github.com/tc39/test262.git vendor/test262

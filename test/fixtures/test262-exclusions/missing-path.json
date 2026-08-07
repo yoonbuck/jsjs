@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "excludedDirectories": [],
+  "builtins": ["Array"],
+  "excludedLanguageDirectories": [],
+  "exclusions": [
+    {
+      "path": "test/built-ins/Array/missing-exclusion-fixture.js",
+      "category": "post-es5-semantics",
+      "reason": "Fixture path that must be rejected when it is absent"
+    }
+  ]
+}

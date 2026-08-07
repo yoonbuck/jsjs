@@ -5,10 +5,11 @@
  * reports any that now **pass** — meaning the exclusion is stale and should be
  * removed.
  *
- * **Scope:** only per-file `path` exclusions whose file exists in the pinned
- * checkout are checked. `prefix` entries and whole excluded directories are out
- * of scope — a prefix legitimately covers files that do not exist yet, and
- * directory exclusions are structural policy, not per-file verdicts.
+ * **Scope:** every per-file `path` exclusion must exist in the pinned checkout
+ * and is checked. A missing path is a policy error, never a skip. `prefix`
+ * entries and whole excluded directories are out of scope — a prefix
+ * legitimately covers files that do not exist yet, and directory exclusions are
+ * structural policy, not per-file verdicts.
  *
  * **Unverifiable tests:** if a test cannot be run (e.g. it carries the `module`
  * flag), it is reported as unverifiable rather than silently skipped.
@@ -55,17 +56,21 @@ function readRepositoryFile(path) {
  * Checks all per-file exclusions for staleness.
  *
  * @param {{
- *   checkoutPath: string,
+ *   pin: { repository: string, revision: string, checkoutPath: string },
+ *   selectionText?: string,
  *   supportedFeatures: readonly string[],
  * }} options
  * @returns {Promise<ExclusionCheckResult[]>}
  */
 export async function checkExclusions(options) {
-  const { checkoutPath, supportedFeatures } = options;
+  const { pin, supportedFeatures } = options;
+
+  await assertPinnedCheckout(pin);
+
   const policy = parseEs5Selection(
-    await readRepositoryFile(ES5_SELECTION_FILE),
+    options.selectionText ?? (await readRepositoryFile(ES5_SELECTION_FILE)),
   );
-  const host = createNodeTest262Host({ root: checkoutPath });
+  const host = createNodeTest262Host({ root: pin.checkoutPath });
   const engine = { createRealm, evaluateScript };
 
   /** @type {ExclusionCheckResult[]} */
@@ -74,14 +79,15 @@ export async function checkExclusions(options) {
   for (const exclusion of policy.exclusions) {
     if (!exclusion.path) continue;
 
-    // Check if the file exists
     /** @type {string} */
     let source;
     try {
       source = await host.readTest(exclusion.path);
-    } catch {
-      // File does not exist in the pinned checkout — skip silently
-      continue;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `${ES5_SELECTION_FILE} excludes ${exclusion.path}, but it cannot be read from the pinned Test262 checkout at ${pin.checkoutPath}: ${detail}\nUpdate ${ES5_SELECTION_FILE} to correct or remove the path.`,
+      );
     }
 
     // Check if the test has unsupported flags (unverifiable)
@@ -154,14 +160,13 @@ export async function checkExclusions(options) {
  */
 export async function main(_argv = []) {
   const pin = await readTest262Pin();
-  await assertPinnedCheckout(pin);
 
   const supportedFeatures = featureNames(
     parseFeatureManifest(await readRepositoryFile(FEATURES_MANIFEST_FILE)),
   );
 
   const results = await checkExclusions({
-    checkoutPath: pin.checkoutPath,
+    pin,
     supportedFeatures,
   });
 
