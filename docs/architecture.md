@@ -147,6 +147,11 @@ therefore enter the guard:
 Every `enter` is paired with an `exit` in a `finally`, so the count is exact
 whether a frame returns or throws and no signal boundary has to repair it.
 
+Recursion whose depth guest code controls but which is _not_ a stack budget
+question is made iterative instead of counted, so that ordinary operations on
+long chains keep working: `EngineObject#getProperty` walks the prototype chain
+in a loop, and `BoundFunction#hasInstance` unwraps a bound chain in a loop.
+
 The guard is the _only_ stack containment in the engine: a host `RangeError` is
 never caught and relabeled, so an engine defect that overflows the host stack
 still escapes as the host error it is.

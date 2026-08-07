@@ -308,14 +308,20 @@ reached 767; `JSON.stringify` on the same structure stops at 493. The tradeoff
 is deliberate: measuring a recursion in the host frames it really spends is
 what makes a single budget safe for every shape on every host.
 
-Two edges remain outside the boundary, both before evaluation begins. Deeply
-nested _source text_ — an expression nested tens of thousands of levels deep,
-including inside `eval` or `Function` — overflows the parser, and the
-declaration-instantiation pass that precedes a script walks the same AST
-recursively; both escape as host errors. And a host stack overflow is never
-reinterpreted: if one happens anyway it escapes `evaluateScript` as the host
-`RangeError` it is, because relabeling host exceptions would hide engine
-defects behind a guest error.
+One recursion stays outside the boundary, because it is spent before
+evaluation begins: the depth of the _source text_ itself. The parser and the
+declaration-instantiation pass that precedes a script both walk the AST
+recursively, so a script nested some thousands of levels deep fails during
+parsing or instantiation. That failure reaches the embedder as a host error,
+which is the same way an ordinary `SyntaxError` from `evaluateScript` already
+reaches it. Guest code cannot get at that window: it can only reach the parser
+through `eval` and `Function`, which run inside the budget and on the host
+stack the budget has already reserved, so what a guest sees is a catchable
+guest error.
+
+And a host stack overflow is never reinterpreted: if one happens anyway it
+escapes `evaluateScript` as the host `RangeError` it is, because relabeling
+host exceptions would hide engine defects behind a guest error.
 
 **Backing code:** `src/runtime/stack-guard.js`, entered from
 `EngineFunction#callFunction` (`src/runtime/function-object.js`),

@@ -89,13 +89,27 @@ class BoundFunction extends NativeFunction {
   }
 
   /**
+   * ES5.1 15.3.4.5.3: a bound function's `[[HasInstance]]` is its target's.
+   *
+   * The bound chain is unwrapped iteratively rather than by delegating one
+   * frame at a time, because guest code can lengthen it at runtime
+   * (`g = g.bind(null)` in a loop) and a frame per link would let `instanceof`
+   * exhaust the host stack. Every link in a chain is itself a bound function,
+   * so walking to the first target that is not one is exactly what repeated
+   * delegation would have done.
+   *
    * @param {unknown} value
    * @returns {boolean}
    */
   hasInstance(value) {
-    const target = /** @type {any} */ (this.boundTargetFunction);
+    /** @type {any} */
+    let target = this.boundTargetFunction;
 
-    if (typeof target.hasInstance !== 'function') {
+    while (target instanceof BoundFunction) {
+      target = target.boundTargetFunction;
+    }
+
+    if (typeof target?.hasInstance !== 'function') {
       throw new GuestErrorSignal(
         'TypeError',
         'Bound target does not support instanceof',

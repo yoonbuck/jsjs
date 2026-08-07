@@ -463,6 +463,63 @@ const tests = [
     },
   },
   {
+    name: 'a prototype chain built at runtime is walked without host recursion',
+    run() {
+      // Property lookup follows the prototype chain, and guest code can make
+      // that chain as long as it likes at runtime. Walking it recursively put
+      // a host frame on the stack per link, so a long enough chain reached a
+      // host overflow through an ordinary property read. The walk is iterative
+      // instead: chain length is not recursion and does not spend the budget.
+      assertSame(
+        run(
+          'var o = {}; for (var i = 0; i < 50000; i++) { o = Object.create(o); }' +
+            ' o.missing === undefined && ("missing" in o) === false',
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'a bound-function chain built at runtime is unwrapped without host recursion',
+    run() {
+      // `instanceof` on a bound function delegates to its target's
+      // [[HasInstance]] (ES5.1 15.3.4.5.3), and guest code can bind a function
+      // to itself as many times as it likes at runtime. Delegating recursively
+      // spent a host frame per link; the chain is unwrapped iteratively.
+      assertSame(
+        run(
+          'function F() {} var g = F;' +
+            ' for (var i = 0; i < 20000; i++) { g = g.bind(null); }' +
+            ' var instance = new F(); instance instanceof g',
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'deeply nested source reached through eval is contained as a guest error',
+    run() {
+      // Source nesting is the one recursion the guard cannot count, because it
+      // is spent before evaluation begins — in the parser, and in the
+      // declaration-instantiation walk. Guest code can only reach those
+      // through `eval` and `Function`, which already run inside the budget, so
+      // what a guest sees is a catchable error either way. Which error it is
+      // depends on how much host stack the host has left, so this pins the
+      // containment rather than the name.
+      const source =
+        'var s = "var x = 1;";' +
+        ' for (var i = 0; i < 4000; i++) { s = "{" + s + "}"; }' +
+        ' try { eval(s); "not thrown" } catch (e) { e instanceof Error }';
+
+      assertSame(run(source), true, 'eval');
+      assertSame(
+        run(source.replace('eval(s)', 'Function(s)()')),
+        true,
+        'Function',
+      );
+    },
+  },
+  {
     name: 'a host defect inside a native body still escapes as a host error',
     run() {
       const realm = createRealm(SMALL);
