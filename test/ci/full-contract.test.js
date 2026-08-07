@@ -749,4 +749,57 @@ export default [
       );
     },
   },
+  {
+    // After the documentation reorganization the coverage markers must live in
+    // docs/conformance.md, not README.md.  The precise check is the marker
+    // strings themselves: if the markers are absent from README, nothing in the
+    // drift-check pipeline will silently regenerate them there.  This test
+    // fails until Task 3 moves the generated block to docs/conformance.md.
+    name: 'README.md must not contain the generated coverage markers after documentation reorganization',
+    run: async () => {
+      const readme = await readRepositoryFile(README_FILE);
+
+      assertSame(
+        readme.includes(COVERAGE_MARKER_BEGIN),
+        false,
+        `${README_FILE} must not contain ${COVERAGE_MARKER_BEGIN}; the generated coverage block belongs in docs/conformance.md`,
+      );
+      assertSame(
+        readme.includes(COVERAGE_MARKER_END),
+        false,
+        `${README_FILE} must not contain ${COVERAGE_MARKER_END}; the generated coverage block belongs in docs/conformance.md`,
+      );
+    },
+  },
+  {
+    // The generated coverage block must be delimited by the standard markers
+    // in docs/conformance.md so that the drift-check tool can locate and
+    // regenerate it.  This test fails until Task 3 creates docs/conformance.md
+    // with the markers in place.
+    name: 'docs/conformance.md must contain the generated coverage markers',
+    run: async () => {
+      let conformance;
+      try {
+        conformance = await readRepositoryFile('docs/conformance.md');
+      } catch {
+        assertSame(
+          'docs/conformance.md',
+          'exists',
+          'docs/conformance.md must exist and contain the generated coverage markers',
+        );
+        return;
+      }
+
+      assertSame(
+        conformance.includes(COVERAGE_MARKER_BEGIN),
+        true,
+        `docs/conformance.md must contain ${COVERAGE_MARKER_BEGIN}`,
+      );
+      assertSame(
+        conformance.includes(COVERAGE_MARKER_END),
+        true,
+        `docs/conformance.md must contain ${COVERAGE_MARKER_END}`,
+      );
+    },
+  },
 ];

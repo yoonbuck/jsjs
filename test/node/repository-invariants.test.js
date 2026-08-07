@@ -282,6 +282,102 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
     'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/types',
 });
 
+/** Reference documents that must exist under docs/ after reorganization. */
+const REFERENCE_DOCS = Object.freeze([
+  'docs/architecture.md',
+  'docs/testing.md',
+  'docs/conformance.md',
+  'docs/limitations.md',
+]);
+
+/**
+ * Returns the repository-relative file paths of the current-documentation
+ * Markdown files: README.md plus any *.md files directly under docs/ that are
+ * not inside the historical docs/superpowers/ subtree.
+ *
+ * @returns {Promise<string[]>}
+ */
+async function currentDocumentationFiles() {
+  /** @type {string[]} */
+  const files = ['README.md'];
+
+  let entries;
+  try {
+    entries = await readdir(new URL('docs/', REPOSITORY_ROOT), {
+      withFileTypes: true,
+    });
+  } catch {
+    return files;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() && entry.name.endsWith('.md')) {
+      files.push(`docs/${entry.name}`);
+    }
+  }
+
+  return files.sort();
+}
+
+/**
+ * Extracts the repository-relative path of every local file referenced by a
+ * Markdown link in `source`.  Anchor-only links and http(s) URLs are skipped.
+ * The returned paths are resolved relative to `sourceFile`.
+ *
+ * @param {string} source Markdown source text.
+ * @param {string} sourceFile Repository-relative path of the containing file.
+ * @returns {string[]}
+ */
+function markdownLinkTargets(source, sourceFile) {
+  const LINK_PATTERN = /\]\(([^)]+)\)/g;
+  const sourceUrl = new URL(sourceFile, REPOSITORY_ROOT);
+  /** @type {Set<string>} */
+  const targets = new Set();
+
+  for (const match of source.matchAll(LINK_PATTERN)) {
+    const raw = match[1].trim();
+    if (raw.startsWith('http://') || raw.startsWith('https://')) continue;
+    if (raw.startsWith('#')) continue;
+    const filePart = raw.split('#')[0];
+    if (!filePart) continue;
+    if (filePart.includes(' ')) continue;
+
+    const resolved = new URL(filePart, sourceUrl);
+    const rootPath = REPOSITORY_ROOT.pathname;
+    if (resolved.pathname.startsWith(rootPath)) {
+      targets.add(resolved.pathname.slice(rootPath.length));
+    }
+  }
+
+  return [...targets];
+}
+
+/**
+ * Extracts the script names from every `npm run <script>` occurrence in
+ * `source`, de-duplicated and in order of first appearance.
+ *
+ * @param {string} source
+ * @returns {string[]}
+ */
+function extractNpmRunCommands(source) {
+  const COMMAND_PATTERN = /\bnpm run ([\w:]+)/g;
+  const seen = new Set([...source.matchAll(COMMAND_PATTERN)].map((m) => m[1]));
+  return [...seen];
+}
+
+/**
+ * @param {string} repoRelativePath
+ * @returns {Promise<boolean>}
+ */
+async function fileExists(repoRelativePath) {
+  try {
+    await readFile(new URL(repoRelativePath, REPOSITORY_ROOT), 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default [
   {
     // The generated case data records the Unicode version it was built from.
@@ -829,6 +925,86 @@ export default [
         [...exclusions].sort().join(','),
         [...allowed].sort().join(','),
         'the ignore file and the documented exclusions must stay in step',
+      );
+    },
+  },
+  {
+    // The reorganization plan creates four authoritative reference files.
+    // This test fails until Tasks 2–4 create those files.
+    name: 'the four reference documentation files exist under docs/',
+    run: async () => {
+      for (const doc of REFERENCE_DOCS) {
+        assertSame(
+          await fileExists(doc),
+          true,
+          `${doc} must exist; run the documentation reorganization tasks`,
+        );
+      }
+    },
+  },
+  {
+    // Every relative link that appears in a current-documentation Markdown
+    // file must point to an existing file in the repository.  External http(s)
+    // URLs and same-page anchors are out of scope.  Historical files under
+    // docs/superpowers/ are project records, not current documentation, so
+    // they are excluded from both the source scan and the target allowlist.
+    name: 'every local Markdown link in current documentation resolves to an existing file',
+    run: async () => {
+      const docFiles = await currentDocumentationFiles();
+      /** @type {string[]} */
+      const broken = [];
+
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+
+        for (const target of markdownLinkTargets(source, docFile)) {
+          if (!(await fileExists(target))) {
+            broken.push(`${docFile} -> ${target}`);
+          }
+        }
+      }
+
+      assertSame(
+        broken.join('\n'),
+        '',
+        'broken local links in current documentation',
+      );
+      assertSame(
+        docFiles.length > 0,
+        true,
+        'current documentation files were found',
+      );
+    },
+  },
+  {
+    // Every `npm run <script>` command that appears in a current-documentation
+    // Markdown file must name a script that exists in package.json.  Stale
+    // command references in README or the reference docs would send readers to
+    // a command that no longer works.  Historical files under docs/superpowers/
+    // are excluded — they may reference commands from earlier iterations of the
+    // project.
+    name: 'every npm run command in current documentation refers to an existing script',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const scripts = new Set(Object.keys(manifest.scripts ?? {}));
+      const docFiles = await currentDocumentationFiles();
+      /** @type {string[]} */
+      const unknown = [];
+
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+
+        for (const command of extractNpmRunCommands(source)) {
+          if (!scripts.has(command)) {
+            unknown.push(`${docFile}: npm run ${command}`);
+          }
+        }
+      }
+
+      assertSame(
+        unknown.join('\n'),
+        '',
+        'current documentation references npm scripts that do not exist in package.json',
       );
     },
   },
