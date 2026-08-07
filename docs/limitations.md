@@ -287,20 +287,21 @@ transcendentals across hosts must not use these functions.
 deliberately leaves to the implementation: 15.9.4.4 defines `Date.now` as the
 current wall-clock time, and 15.9.1.7's `LocalTZA`/`DaylightSavingTA` are
 "implementation-dependent". A realm created with no adapter therefore takes both
-from the host — `Date.now()` and `new Date(t).getTimezoneOffset()` — which makes
-these the engine's only non-deterministic, machine-dependent results. Two
-machines in different time zones will print different `new Date(0).toString()`
-values.
+from the host — `Date.now()` and `new Date(t).getTimezoneOffset()` — so these
+results are non-deterministic or machine-dependent when the default adapter is
+used. Two machines in different time zones will print different
+`new Date(0).toString()` values. Math's permitted approximation variation and
+`Math.random` are additional host-varying outputs.
 
-The boundary is narrow and injectable. It is confined to `createDateHost` in
-`src/runtime/date.js`, which supplies only two functions — `now()` and
-`timezoneOffset(utcMilliseconds)`. Everything else about dates is computed by
-the engine: `parseDateString` implements 15.9.1.15 directly rather than calling
-the host's `Date.parse`, and all calendar arithmetic, formatting, and range
-clamping is engine code. An embedder that needs reproducible output passes
-`{ dateHost: { now, timezoneOffset } }` to `createRealm`, after which no host
-clock or zone database is observable from guest code at all; that is how the
-engine's own test suite stays deterministic.
+This is the engine's only injectable host boundary. It is confined to
+`createDateHost` in `src/runtime/date.js`, which supplies only two functions —
+`now()` and `timezoneOffset(utcMilliseconds)`. Everything else about dates is
+computed by the engine: `parseDateString` implements 15.9.1.15 directly rather
+than calling the host's `Date.parse`, and all calendar arithmetic, formatting,
+and range clamping is engine code. An embedder that needs reproducible Date
+output passes `{ dateHost: { now, timezoneOffset } }` to `createRealm`, after
+which no host clock or zone database is observable from guest code at all; that
+is how the engine's own Date tests stay deterministic.
 
 **Backing code:** `src/runtime/date.js` (`createDateHost`).
 **Verification:** `evaluateScript(createRealm({ dateHost: { now: () => 1234567890123, timezoneOffset: () => 0 } }), 'new Date(0).toString()')` → `"Thu Jan 01 1970 00:00:00 GMT+0000 (Local)"` on every host and in every time zone.
@@ -328,8 +329,8 @@ against the ES5.1 grammar first.
 ### Math.random
 
 15.8.2.14 requires an implementation-dependent pseudo-random value in `[0, 1)`;
-this forwards to the host's `Math.random`, so it is the one built-in whose
-result no realm can reproduce.
+this forwards to the host's `Math.random`, so its result is nondeterministic and
+cannot be replaced through realm options.
 
 **Backing code:** `src/builtins/math.js` (`random`).
 

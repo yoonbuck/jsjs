@@ -780,7 +780,7 @@ export default [
     },
   },
   {
-    name: 'an injected Date host adapter makes a realm fully deterministic and host-independent',
+    name: 'an injected Date host adapter makes Date behavior deterministic and host-independent',
     run() {
       // The portability escape hatch: an embedder that needs reproducible
       // output injects the adapter and no host clock or zone database can
