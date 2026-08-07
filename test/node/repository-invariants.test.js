@@ -301,14 +301,9 @@ async function currentDocumentationFiles() {
   /** @type {string[]} */
   const files = ['README.md'];
 
-  let entries;
-  try {
-    entries = await readdir(new URL('docs/', REPOSITORY_ROOT), {
-      withFileTypes: true,
-    });
-  } catch {
-    return files;
-  }
+  const entries = await readdir(new URL('docs/', REPOSITORY_ROOT), {
+    withFileTypes: true,
+  });
 
   for (const entry of entries) {
     if (!entry.isDirectory() && entry.name.endsWith('.md')) {
@@ -360,8 +355,11 @@ function markdownLinkTargets(source, sourceFile) {
  * @returns {string[]}
  */
 function extractNpmRunCommands(source) {
+  const normalized = source.replace(/\s+/g, ' ');
   const COMMAND_PATTERN = /\bnpm run ([\w:]+)/g;
-  const seen = new Set([...source.matchAll(COMMAND_PATTERN)].map((m) => m[1]));
+  const seen = new Set(
+    [...normalized.matchAll(COMMAND_PATTERN)].map((m) => m[1]),
+  );
   return [...seen];
 }
 
@@ -994,10 +992,19 @@ export default [
         '',
         'broken local links in current documentation',
       );
+
+      const EXPECTED_DOC_FILES = [
+        'README.md',
+        'docs/architecture.md',
+        'docs/conformance.md',
+        'docs/limitations.md',
+        'docs/testing.md',
+      ];
+      const missing = EXPECTED_DOC_FILES.filter((f) => !docFiles.includes(f));
       assertSame(
-        docFiles.length > 0,
-        true,
-        'current documentation files were found',
+        missing.join('\n'),
+        '',
+        'expected documentation files are present in the scanned set',
       );
     },
   },
@@ -1030,6 +1037,18 @@ export default [
         unknown.join('\n'),
         '',
         'current documentation references npm scripts that do not exist in package.json',
+      );
+
+      // Guard: at least some npm run commands were actually extracted.
+      const allCommands = [];
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+        allCommands.push(...extractNpmRunCommands(source));
+      }
+      assertSame(
+        allCommands.length > 0,
+        true,
+        'at least one npm run command was extracted from documentation',
       );
     },
   },
@@ -1208,6 +1227,35 @@ export default [
         violations.join('\n'),
         '',
         `portable suites must not import Node builtins (directly or transitively):\n${violations.join('\n')}`,
+      );
+    },
+  },
+  {
+    // Every inline-code span in current documentation that names a repository
+    // source path (src/**, test/**, tools/**) must reference a file that exists.
+    // This catches stale or mistyped module names in prose.
+    name: 'every inline source path in current documentation names an existing file',
+    run: async () => {
+      const docFiles = await currentDocumentationFiles();
+      const SOURCE_PATH_PATTERN =
+        /`((?:src|test|tools)\/[^\s`*?]+\.(?:js|mjs|cjs|json))`/g;
+      /** @type {string[]} */
+      const broken = [];
+
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+        for (const match of source.matchAll(SOURCE_PATH_PATTERN)) {
+          const path = match[1];
+          if (!(await fileExists(path))) {
+            broken.push(`${docFile}: \`${path}\``);
+          }
+        }
+      }
+
+      assertSame(
+        broken.join('\n'),
+        '',
+        'inline source paths in documentation that do not exist in the repository',
       );
     },
   },
