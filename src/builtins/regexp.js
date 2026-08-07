@@ -141,6 +141,10 @@ export function regExpExec(realm, thisValue, string) {
 
   while (matchResult === null) {
     if (i < 0 || i > length) {
+      // ES5 15.10.6.2 step 9.a.i unconditionally resets `lastIndex` to 0 on
+      // total match failure; this reset is not gated on `global` — the
+      // `global` check only guards the *success* path's `lastIndex` update
+      // to the match end position (step 11, below).
       R.put('lastIndex', 0, true);
       return null;
     }

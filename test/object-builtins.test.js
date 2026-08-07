@@ -146,6 +146,53 @@ const tests = [
     },
   },
   {
+    // ES5.1 15.2.4.5/15.2.4.7 both compute P = ToString(V) *before*
+    // O = ToObject(this): an unbound call's `this` is undefined, and
+    // ToObject(undefined) throws TypeError, but a throwing ToString(V)
+    // must be observed first.
+    name: 'hasOwnProperty and propertyIsEnumerable coerce their argument before their receiver',
+    run() {
+      const realm = createRealm();
+      const hasOwnProperty = /** @type {EngineObject} */ (
+        realm.intrinsics.objectPrototype.get('hasOwnProperty')
+      );
+      const propertyIsEnumerable = /** @type {EngineObject} */ (
+        realm.intrinsics.objectPrototype.get('propertyIsEnumerable')
+      );
+      realm.globalObject.defineOwnProperty('hasOwnProperty', {
+        value: hasOwnProperty,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      realm.globalObject.defineOwnProperty('propertyIsEnumerable', {
+        value: propertyIsEnumerable,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name; try { ' +
+            'hasOwnProperty({ toString: function () { undeclaredName; } }); ' +
+            '} catch (error) { name = error.name; } name;',
+        ).value,
+        'ReferenceError',
+      );
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name; try { ' +
+            'propertyIsEnumerable({ toString: function () { undeclaredName; } }); ' +
+            '} catch (error) { name = error.name; } name;',
+        ).value,
+        'ReferenceError',
+      );
+    },
+  },
+  {
     name: 'Object prototype toLocaleString delegates and incompatible calls throw guest TypeErrors',
     run() {
       assertSame(

@@ -482,6 +482,14 @@ const tests = [
         run('Array.prototype.indexOf.call({0: "x", length: 1}, "x");'),
         0,
       );
+      // ES5.1 15.4.4.14 step 5 computes `k` via ToInteger, which leaves -0
+      // unchanged (9.4 step 2), and the loop's found index (step 8's `k`)
+      // is always a non-negative mathematical integer starting from that
+      // `k`; indexOf/lastIndexOf must never surface a found index as -0.
+      assertSame(run('[17].indexOf(17, -0);'), 0);
+      assertSame(Object.is(run('[17].indexOf(17, -0);'), -0), false);
+      assertSame(run('[17].lastIndexOf(17, -0);'), 0);
+      assertSame(Object.is(run('[17].lastIndexOf(17, -0);'), -0), false);
     },
   },
   {
