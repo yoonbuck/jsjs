@@ -190,14 +190,13 @@ upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
 editions deliberately changed. The 776 classified exclusions break down as:
 
-| Category             | Count | What it means                                                                                                                                        |
-| -------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 642   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                    |
-| `post-es5-builtin`   | 79    | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.            |
-| `post-es5-syntax`    | 28    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                     |
-| `host-dependent`     | 14    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                |
-| `engine-deviation`   | 13    | This engine knowingly differs. Each entry names the row in "Intentional deviations" that documents the choice — a deviation that is not written down |
-|                      |       | is indistinguishable from a bug.                                                                                                                     |
+| Category             | Count | What it means                                                                                                                                                                         |
+| -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `post-es5-semantics` | 642   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                     |
+| `post-es5-builtin`   | 79    | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                             |
+| `post-es5-syntax`    | 28    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                      |
+| `host-dependent`     | 14    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                 |
+| `engine-deviation`   | 13    | This engine knowingly differs. Each entry names the row in "Intentional deviations" that documents the choice — a deviation that is not written down is indistinguishable from a bug. |
 
 The distinction that matters is between the first four categories and the last.
 The first four say _the test is not about ES5.1_; only `engine-deviation` says
