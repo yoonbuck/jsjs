@@ -303,6 +303,14 @@ embedder has already spent before calling in. But it is a budget chosen for the 
 shape rather than for the running one. An embedder that knows its host can
 raise it per realm with `createRealm({ maxStackDepth })`.
 
+Raising it is the one way to give the original defect back. The budget contains
+guest recursion only while it is lower than the host's real limit, so a value
+above what the running host survives means the host stack runs out first and the
+embedder gets the uncatchable host `RangeError` again — on Node 26, a budget of
+5000 does exactly that. The default is safe everywhere measured; anything larger
+is the embedder's measurement to make, on the host and the shapes they actually
+run.
+
 Counting frames the engine really spends has a visible cost of its own:
 recursion driven by _data_ nesting rather than by guest calls spends the same
 budget. Rendering a self-nesting array (`String(a)` where `a[0][0][0]…`)

@@ -747,6 +747,60 @@ const tests = [
     },
   },
   {
+    name: 'a deeply nested body reached at depth stays catchable, however it was compiled',
+    run() {
+      // The two recursions compose: guest calls spend host stack, and so does
+      // the nesting inside the body those calls arrive at. Either alone is
+      // contained; the contract is that reaching a deep body *from* a deep
+      // call is contained too, and equally through each way a body can be
+      // compiled — parsed with the program, or built at depth by `eval` and
+      // `Function`, which hoist their own source at the depth they run at.
+      // Chosen so the boundary is load-bearing: with the statement guard
+      // removed this shape overflows the host outright, so the case cannot
+      // pass merely because the host happened to survive it.
+      const nest = 3000;
+      const body = '{'.repeat(nest) + ' var q = 1; ' + '}'.repeat(nest);
+      const ladder =
+        'function f(n) { if (n <= 0) { return g(); } return f(n - 1); }';
+
+      const shapes = {
+        parsed: `function g() { ${body} return 1; } ${ladder}`,
+        eval: `var src = ${JSON.stringify(body)};
+          function g() { return eval('(function () {' + src + ' return 1; })()'); } ${ladder}`,
+        Function: `var src = ${JSON.stringify(body)};
+          function g() { return Function(src + ' return 1;')(); } ${ladder}`,
+      };
+
+      for (const [how, prelude] of Object.entries(shapes)) {
+        // A host `RangeError` here would escape `run` and fail the test as
+        // the uncatchable defect it is, which is the whole point.
+        const outcome = run(
+          `${prelude} var out = "not thrown";
+           try { f(300); out = "returned"; }
+           catch (e) {
+             out = (e instanceof RangeError || e instanceof SyntaxError)
+               ? "guest " + e.name : "unexpected " + e.name;
+           }
+           out;`,
+        );
+
+        // Which limit it meets first — the budget, or the parser's own depth
+        // when `eval` compiles at depth — is the host's business and moves
+        // with how warm the host has made each. That the guest can see and
+        // catch the result either way is not.
+        if (
+          !['returned', 'guest RangeError', 'guest SyntaxError'].includes(
+            String(outcome),
+          )
+        ) {
+          throw new Error(
+            `${how}: expected a guest-visible outcome, got ${String(outcome)}`,
+          );
+        }
+      }
+    },
+  },
+  {
     name: 'a host defect inside a native body still escapes as a host error',
     run() {
       const realm = createRealm(SMALL);
