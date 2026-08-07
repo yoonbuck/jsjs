@@ -160,12 +160,16 @@ ES5.1 §15.4.4.3 requires boxing each element to an object and calling its
 `toLocaleString` unconditionally. When an element is a primitive whose
 `toLocaleString` resolves to the inherited `Object.prototype.toLocaleString`,
 this engine renders the element via `ToString(element)` directly, skipping the
-box-then-dispatch. The observable difference: ES5.1's literal algorithm calls
-`Object.prototype.toLocaleString` on a boxed wrapper, which returns
-`"[object Boolean]"` (or similar); this engine returns `"true"`.
+box-then-dispatch. The divergence appears only when an element's inherited
+`toString` has been replaced: ES5.1 invokes it with the boxed wrapper as
+`this`, while this engine never invokes it.
 
 **Backing code:** `src/builtins/array.js` (`toLocaleString`).
-**Verification:** `evaluateScript(realm, '[true,false].toLocaleString()')` → `'true,false'`.
+**Verification:**
+`evaluateScript(realm, 'Boolean.prototype.toString = function () { return typeof this; }; [true, false].toLocaleString()')`
+→ `'true,false'`, where ES5 15.4.4.3 gives `'object,object'`.
+
+### localeCompare
 
 ES5 15.5.4.9's ordering is implementation-defined and only _recommends_ that
 canonically equivalent strings compare equal. This uses plain code-unit
