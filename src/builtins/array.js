@@ -355,10 +355,6 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
     realm.intrinsics.objectPrototype.get('toString'),
     'Object toString intrinsic is not callable',
   );
-  const objectToLocaleString = requireCallable(
-    realm.intrinsics.objectPrototype.get('toLocaleString'),
-    'Object toLocaleString intrinsic is not callable',
-  );
 
   defineNativeMethod(realm, arrayPrototype, 'toString', 0, (thisValue) => {
     const object = toObject(realm, thisValue);
@@ -391,22 +387,20 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
           continue;
         }
 
-        const primitive =
-          typeof element === 'string' ||
-          typeof element === 'number' ||
-          typeof element === 'boolean';
+        // ES5 15.4.4.3 steps 8.a-8.d (and 10.d.i-10.d.iv for the tail):
+        // every non-nullish element is boxed with ToObject exactly once,
+        // "toLocaleString" is read off that wrapper, and the call receives
+        // the *wrapper* as its this value. Boxing once and reusing it is
+        // what makes an inherited Object.prototype.toLocaleString observable
+        // on a primitive element, and what makes a strict callee — which
+        // never re-boxes this — still see an object.
         const elementObject = toObject(realm, element);
         const toLocaleString = requireCallable(
           elementObject.get('toLocaleString'),
           'Array element toLocaleString property is not callable',
         );
 
-        if (primitive && toLocaleString === objectToLocaleString) {
-          result += toString(element);
-          continue;
-        }
-
-        result += toString(toLocaleString.callFunction(element, []));
+        result += toString(toLocaleString.callFunction(elementObject, []));
       }
 
       return result;

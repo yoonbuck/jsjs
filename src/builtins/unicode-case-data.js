@@ -255,6 +255,69 @@ const SPACE_SEPARATOR_RANGES = [
   '20 20;a0 a0;1680 1680;2000 200a;202f 202f;205f 205f;3000 3000',
 ].join('');
 
+/**
+ * BMP code points in ES5 7.6 IdentifierPart Unicode categories
+ * (UnicodeData.txt field 2), plus ZWNJ and ZWJ, as `start end` ranges.
+ */
+const IDENTIFIER_PART_RANGES = [
+  '30 39;41 5a;5f 5f;61 7a;aa aa;b5 b5;ba ba;c0 d6;d8 f6;f8 2c1;2c6 2d1;2',
+  'e0 2e4;2ec 2ec;2ee 2ee;300 374;376 377;37a 37d;37f 37f;386 386;388 38a',
+  ';38c 38c;38e 3a1;3a3 3f5;3f7 481;483 487;48a 52f;531 556;559 559;560 5',
+  '88;591 5bd;5bf 5bf;5c1 5c2;5c4 5c5;5c7 5c7;5d0 5ea;5ef 5f2;610 61a;620',
+  ' 669;66e 6d3;6d5 6dc;6df 6e8;6ea 6fc;6ff 6ff;710 74a;74d 7b1;7c0 7f5;7',
+  'fa 7fa;7fd 7fd;800 82d;840 85b;860 86a;870 887;889 88e;897 8e1;8e3 963',
+  ';966 96f;971 983;985 98c;98f 990;993 9a8;9aa 9b0;9b2 9b2;9b6 9b9;9bc 9',
+  'c4;9c7 9c8;9cb 9ce;9d7 9d7;9dc 9dd;9df 9e3;9e6 9f1;9fc 9fc;9fe 9fe;a01',
+  ' a03;a05 a0a;a0f a10;a13 a28;a2a a30;a32 a33;a35 a36;a38 a39;a3c a3c;a',
+  '3e a42;a47 a48;a4b a4d;a51 a51;a59 a5c;a5e a5e;a66 a75;a81 a83;a85 a8d',
+  ';a8f a91;a93 aa8;aaa ab0;ab2 ab3;ab5 ab9;abc ac5;ac7 ac9;acb acd;ad0 a',
+  'd0;ae0 ae3;ae6 aef;af9 aff;b01 b03;b05 b0c;b0f b10;b13 b28;b2a b30;b32',
+  ' b33;b35 b39;b3c b44;b47 b48;b4b b4d;b55 b57;b5c b5d;b5f b63;b66 b6f;b',
+  '71 b71;b82 b83;b85 b8a;b8e b90;b92 b95;b99 b9a;b9c b9c;b9e b9f;ba3 ba4',
+  ';ba8 baa;bae bb9;bbe bc2;bc6 bc8;bca bcd;bd0 bd0;bd7 bd7;be6 bef;c00 c',
+  '0c;c0e c10;c12 c28;c2a c39;c3c c44;c46 c48;c4a c4d;c55 c56;c58 c5a;c5d',
+  ' c5d;c60 c63;c66 c6f;c80 c83;c85 c8c;c8e c90;c92 ca8;caa cb3;cb5 cb9;c',
+  'bc cc4;cc6 cc8;cca ccd;cd5 cd6;cdd cde;ce0 ce3;ce6 cef;cf1 cf3;d00 d0c',
+  ';d0e d10;d12 d44;d46 d48;d4a d4e;d54 d57;d5f d63;d66 d6f;d7a d7f;d81 d',
+  '83;d85 d96;d9a db1;db3 dbb;dbd dbd;dc0 dc6;dca dca;dcf dd4;dd6 dd6;dd8',
+  ' ddf;de6 def;df2 df3;e01 e3a;e40 e4e;e50 e59;e81 e82;e84 e84;e86 e8a;e',
+  '8c ea3;ea5 ea5;ea7 ebd;ec0 ec4;ec6 ec6;ec8 ece;ed0 ed9;edc edf;f00 f00',
+  ';f18 f19;f20 f29;f35 f35;f37 f37;f39 f39;f3e f47;f49 f6c;f71 f84;f86 f',
+  '97;f99 fbc;fc6 fc6;1000 1049;1050 109d;10a0 10c5;10c7 10c7;10cd 10cd;1',
+  '0d0 10fa;10fc 1248;124a 124d;1250 1256;1258 1258;125a 125d;1260 1288;1',
+  '28a 128d;1290 12b0;12b2 12b5;12b8 12be;12c0 12c0;12c2 12c5;12c8 12d6;1',
+  '2d8 1310;1312 1315;1318 135a;135d 135f;1380 138f;13a0 13f5;13f8 13fd;1',
+  '401 166c;166f 167f;1681 169a;16a0 16ea;16ee 16f8;1700 1715;171f 1734;1',
+  '740 1753;1760 176c;176e 1770;1772 1773;1780 17d3;17d7 17d7;17dc 17dd;1',
+  '7e0 17e9;180b 180d;180f 1819;1820 1878;1880 18aa;18b0 18f5;1900 191e;1',
+  '920 192b;1930 193b;1946 196d;1970 1974;1980 19ab;19b0 19c9;19d0 19d9;1',
+  'a00 1a1b;1a20 1a5e;1a60 1a7c;1a7f 1a89;1a90 1a99;1aa7 1aa7;1ab0 1abd;1',
+  'abf 1ace;1b00 1b4c;1b50 1b59;1b6b 1b73;1b80 1bf3;1c00 1c37;1c40 1c49;1',
+  'c4d 1c7d;1c80 1c8a;1c90 1cba;1cbd 1cbf;1cd0 1cd2;1cd4 1cfa;1d00 1f15;1',
+  'f18 1f1d;1f20 1f45;1f48 1f4d;1f50 1f57;1f59 1f59;1f5b 1f5b;1f5d 1f5d;1',
+  'f5f 1f7d;1f80 1fb4;1fb6 1fbc;1fbe 1fbe;1fc2 1fc4;1fc6 1fcc;1fd0 1fd3;1',
+  'fd6 1fdb;1fe0 1fec;1ff2 1ff4;1ff6 1ffc;200c 200d;203f 2040;2054 2054;2',
+  '071 2071;207f 207f;2090 209c;20d0 20dc;20e1 20e1;20e5 20f0;2102 2102;2',
+  '107 2107;210a 2113;2115 2115;2119 211d;2124 2124;2126 2126;2128 2128;2',
+  '12a 212d;212f 2139;213c 213f;2145 2149;214e 214e;2160 2188;2c00 2ce4;2',
+  'ceb 2cf3;2d00 2d25;2d27 2d27;2d2d 2d2d;2d30 2d67;2d6f 2d6f;2d7f 2d96;2',
+  'da0 2da6;2da8 2dae;2db0 2db6;2db8 2dbe;2dc0 2dc6;2dc8 2dce;2dd0 2dd6;2',
+  'dd8 2dde;2de0 2dff;2e2f 2e2f;3005 3007;3021 302f;3031 3035;3038 303c;3',
+  '041 3096;3099 309a;309d 309f;30a1 30fa;30fc 30ff;3105 312f;3131 318e;3',
+  '1a0 31bf;31f0 31ff;3400 4dbf;4e00 a48c;a4d0 a4fd;a500 a60c;a610 a62b;a',
+  '640 a66f;a674 a67d;a67f a6f1;a717 a71f;a722 a788;a78b a7cd;a7d0 a7d1;a',
+  '7d3 a7d3;a7d5 a7dc;a7f2 a827;a82c a82c;a840 a873;a880 a8c5;a8d0 a8d9;a',
+  '8e0 a8f7;a8fb a8fb;a8fd a92d;a930 a953;a960 a97c;a980 a9c0;a9cf a9d9;a',
+  '9e0 a9fe;aa00 aa36;aa40 aa4d;aa50 aa59;aa60 aa76;aa7a aac2;aadb aadd;a',
+  'ae0 aaef;aaf2 aaf6;ab01 ab06;ab09 ab0e;ab11 ab16;ab20 ab26;ab28 ab2e;a',
+  'b30 ab5a;ab5c ab69;ab70 abea;abec abed;abf0 abf9;ac00 d7a3;d7b0 d7c6;d',
+  '7cb d7fb;f900 fa6d;fa70 fad9;fb00 fb06;fb13 fb17;fb1d fb28;fb2a fb36;f',
+  'b38 fb3c;fb3e fb3e;fb40 fb41;fb43 fb44;fb46 fbb1;fbd3 fd3d;fd50 fd8f;f',
+  'd92 fdc7;fdf0 fdfb;fe00 fe0f;fe20 fe2f;fe33 fe34;fe4d fe4f;fe70 fe74;f',
+  'e76 fefc;ff10 ff19;ff21 ff3a;ff3f ff3f;ff41 ff5a;ff66 ffbe;ffc2 ffc7;f',
+  'fca ffcf;ffd2 ffd7;ffda ffdc',
+].join('');
+
 /** @type {Record<string, number>} */
 const HEX_DIGITS = {
   0: 0,
@@ -340,3 +403,6 @@ export const caseIgnorableRanges = decode(CASE_IGNORABLE_RANGES);
 
 /** Flat `start, end` pairs. */
 export const spaceSeparatorRanges = decode(SPACE_SEPARATOR_RANGES);
+
+/** Flat `start, end` pairs. */
+export const identifierPartRanges = decode(IDENTIFIER_PART_RANGES);

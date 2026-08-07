@@ -1,5 +1,7 @@
 import { assertSame, assertThrows } from './harness/assert.js';
 import { parseScript } from '../src/parser.js';
+import { createRealm } from '../src/runtime/realm.js';
+import { evaluateScript } from '../src/api.js';
 
 const tests = [
   {
@@ -409,6 +411,130 @@ const tests = [
 
         assertSame(program.type, 'Program');
       }
+    },
+  },
+  {
+    name: 'a RegularExpressionLiteral the ES5 pattern grammar rejects is an early error',
+    run() {
+      // ES5.1 §7.8.5: the [[Value]] of a RegularExpressionLiteral is the
+      // result of `new RegExp(Pattern, Flags)`, and "if the call to new
+      // RegExp would generate an error ... the error must be treated as an
+      // early error". Acorn parses the literal against the *host's* Annex
+      // B-permissive grammar, so this pass is what makes the error early.
+      const rejected = [
+        '/]/;',
+        '/{/;',
+        '/\\a/;',
+        '/\\01/;',
+        '/(a)\\2/;',
+        'var r = /[b-a]/;',
+        'if (false) { /]/; }',
+        'function never() { return /]/; }',
+        '/a/gg;',
+        '/a/x;',
+      ];
+
+      for (const source of rejected) {
+        const error = /** @type {any} */ (
+          assertThrows(() => parseScript(source), SyntaxError)
+        );
+
+        assertSame(error.name, 'SyntaxError', source);
+      }
+    },
+  },
+  {
+    name: 'a valid RegularExpressionLiteral still parses',
+    run() {
+      const accepted = [
+        '/a/;',
+        '/a/gim;',
+        '/\\$/;',
+        '/[a-z]/i;',
+        '/(a)\\1/;',
+        '/(?:a|b)+/;',
+        '({}).x = /a/;',
+      ];
+
+      for (const source of accepted) {
+        assertSame(parseScript(source).type, 'Program', source);
+      }
+    },
+  },
+  {
+    name: 'an invalid RegularExpressionLiteral aborts eval before any statement runs',
+    run() {
+      // The early error must precede execution: nothing in the eval body may
+      // have run by the time the guest SyntaxError is thrown.
+      const realm = createRealm();
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var log = "A";' +
+            'try { eval("log += \'B\'; /]/;") } catch (e) { log += ":" + e.constructor.name }' +
+            'log;',
+        ).value,
+        'A:SyntaxError',
+      );
+    },
+  },
+  {
+    name: 'an invalid RegularExpressionLiteral rejects a dynamic Function at construction',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name = "none";' +
+            'try { new Function("return /]/;") } catch (e) { name = e.constructor.name }' +
+            'name;',
+        ).value,
+        'SyntaxError',
+      );
+    },
+  },
+  {
+    name: 'an invalid RegularExpressionLiteral in unreachable code is still an early error',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name = "none";' +
+            'try { eval("if (false) { /]/; }") } catch (e) { name = e.constructor.name }' +
+            'name;',
+        ).value,
+        'SyntaxError',
+      );
+    },
+  },
+  {
+    name: 'IdentifierName follows the vendored parser, which differs from ES5.1 7.6',
+    run() {
+      // Documented deviation:
+      // docs/limitations.md#identifiername-is-the-vendored-parsers-grammar-not-es51-76.
+      // U+2E2F VERTICAL TILDE is category Lm, so ES5.1 7.6 makes it a
+      // UnicodeLetter and `_\u2E2F` a valid Identifier. Acorn lexes identifiers
+      // with the modern ID_Continue property, which excludes it as
+      // Pattern_Syntax, so the engine is stricter than ES5.1 here. This is the
+      // only direction of the divergence where the engine rejects conforming
+      // ES5.1 source, so it is the one worth pinning.
+      assertThrows(() => parseScript('var _\u2E2F;'), SyntaxError);
+
+      // The engine contradicts itself about this code point, which is what
+      // makes it a deviation rather than a design choice: the RegExp validator
+      // uses the pinned ES5.1 table, where U+2E2F *is* an IdentifierPart, so
+      // `\\\u2E2F` is rejected as an identity escape by the very same parse.
+      assertThrows(() => parseScript('/\\\u2E2F/;'), SyntaxError);
+
+      // The other direction: U+00B7 is Other_ID_Continue, which ES5.1 has no
+      // category for. The parser accepts it in an identifier while the RegExp
+      // validator treats it as a non-IdentifierPart and allows `\\\u00B7`.
+      parseScript('var a\u00B7b;');
+      parseScript('/\\\u00B7/;');
     },
   },
 ];

@@ -234,25 +234,104 @@ const tests = [
     },
   },
   {
-    name: 'IdentityEscape rejects any approximated IdentifierPart',
+    name: 'IdentityEscape rejects ES5 IdentifierPart code units but accepts non-identifier punctuation',
     run() {
       assertRejected('\\a');
+      assertRejected('\\1');
       assertRejected('\\e');
+      assertRejected('\\_');
       assertRejected('\\p{L}');
       assertRejected('\\u{61}');
       assertRejected('\\k<x>');
       assertRejected('\\8');
       assertRejected('\\9');
       assertRejected('\\q');
+      assertRejected('\\\u00e9');
+      assertRejected('\\\u0410');
+      assertRejected('\\\u3042');
+      assertRejected('\\\u0301');
+      assertRejected('\\\u0660');
+      assertRejected('\\\uff3f');
+      assertRejected('\\\u200c');
+      assertRejected('\\\u200d');
+      assertRejected('\\\u2160');
+
+      assertAccepted('\\\u2014');
+      assertAccepted('\\\u00a1');
+      assertAccepted('\\\u00ab');
+      assertAccepted('\\\u00d7');
+      assertAccepted('\\\u20ac');
+      assertAccepted('\\\ud800');
     },
   },
   {
-    name: 'IdentityEscape accepts non-identifier ASCII punctuation',
+    name: 'IdentityEscape accepts non-identifier ASCII syntax punctuation',
     run() {
-      assertAccepted('\\-');
-      assertAccepted('\\/');
-      assertAccepted('\\$');
+      assertAccepted('\\.');
+      assertAccepted('\\*');
+      assertAccepted('\\+');
+      assertAccepted('\\?');
+      assertAccepted('\\(');
+      assertAccepted('\\)');
       assertAccepted('\\[');
+      assertAccepted('\\]');
+      assertAccepted('\\{');
+      assertAccepted('\\}');
+      assertAccepted('\\|');
+      assertAccepted('\\^');
+      assertAccepted('\\/');
+      assertAccepted('\\-');
+      assertAccepted('\\$');
+    },
+  },
+  {
+    name: 'the documented `\\$` carve-out is exactly one code point wide',
+    run() {
+      // Documented deviation: docs/limitations.md#-is-accepted-as-an-identity-escape.
+      // ES5.1 7.6 lists `$` as an IdentifierStart, so 15.10.1's
+      // `IdentityEscape :: SourceCharacter but not IdentifierPart` literally
+      // forbids `\$`. Every shipping engine accepts it and Test262 depends on
+      // it, so the engine carves out this one code point -- and only this one.
+      assertAccepted('\\$');
+      assertAccepted('[\\$]');
+
+      // The neighbours that ES5.1 really does mean to exclude must still throw,
+      // which is what keeps the carve-out from silently widening.
+      assertRejected('\\_');
+      assertRejected('[\\_]');
+      assertRejected('\\a');
+      assertRejected('\\A');
+      assertRejected('\\\u00aa');
+
+      // `\0` is not an identity escape at all: 15.10.2.11
+      // `DecimalEscape :: 0 [lookahead not in DecimalDigit]` makes it NUL, so
+      // it stays accepted while `\1` (a backreference with no group) does not.
+      assertAccepted('\\0');
+      assertRejected('\\1');
+    },
+  },
+  {
+    name: 'ClassEscape uses the same IdentifierPart boundary for identity escapes',
+    run() {
+      assertRejected('[\\a]');
+      assertRejected('[\\_]');
+      assertRejected('[\\\u00e9]');
+      assertRejected('[\\\u0410]');
+      assertRejected('[\\\u3042]');
+      assertRejected('[\\\u0301]');
+      assertRejected('[\\\u0660]');
+      assertRejected('[\\\uff3f]');
+      assertRejected('[\\\u200c]');
+      assertRejected('[\\\u200d]');
+      assertRejected('[\\\u2160]');
+
+      assertAccepted('[\\\u2014]');
+      assertAccepted('[\\\u00a1]');
+      assertAccepted('[\\\u00ab]');
+      assertAccepted('[\\\u00d7]');
+      assertAccepted('[\\\u20ac]');
+      assertAccepted('[\\$]');
+      assertAccepted('[\\\ud800]');
     },
   },
   {

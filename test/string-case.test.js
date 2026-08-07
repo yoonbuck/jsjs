@@ -1,7 +1,10 @@
 import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
-import { UNICODE_VERSION } from '../src/builtins/unicode-case-data.js';
+import {
+  UNICODE_VERSION,
+  identifierPartRanges,
+} from '../src/builtins/unicode-case-data.js';
 
 /**
  * @param {string} source
@@ -33,6 +36,24 @@ const tests = [
     name: 'the case tables are generated from the Unicode version package.json pins',
     run() {
       assertSame(UNICODE_VERSION, '16.0.0');
+    },
+  },
+  {
+    name: 'the IdentifierPart ranges are sorted, non-overlapping, and BMP-only',
+    run() {
+      assertSame(identifierPartRanges.length % 2, 0);
+
+      let previousEnd = -1;
+      for (let index = 0; index < identifierPartRanges.length; index += 2) {
+        const start = identifierPartRanges[index];
+        const end = identifierPartRanges[index + 1];
+
+        assertSame(start <= end, true, `range ${index / 2} is ordered`);
+        assertSame(start > previousEnd, true, `range ${index / 2} is sorted`);
+        assertSame(end < 0x10000, true, `range ${index / 2} is BMP-only`);
+
+        previousEnd = end;
+      }
     },
   },
   {

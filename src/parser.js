@@ -4,6 +4,11 @@
 import { Parser } from './parser-dependency.js';
 import { normalizeSyntaxError } from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
+import {
+  parseFlags,
+  RegExpSyntaxError,
+  validatePattern,
+} from './runtime/regexp-syntax.js';
 
 const PARSER_OPTIONS = Object.freeze({
   ecmaVersion: 5,
@@ -347,6 +352,7 @@ function checkStatementPositionFunctionDeclarations(root, rootStrict) {
     }
 
     checkFunctionDeclarationPosition(node, strict);
+    checkRegularExpressionLiteral(node);
 
     const childStrict = childScopeStrictness(node, strict);
     const keys = Object.keys(node);
@@ -566,6 +572,64 @@ function isStackOverflow(error) {
     (/\bstack\b.*\b(exceeded|overflow)\b/i.test(error.message) ||
       /\btoo much recursion\b/i.test(error.message))
   );
+}
+
+/**
+ * Rejects a `RegularExpressionLiteral` whose pattern or flags fall outside the
+ * ES5.1 §15.10.1 grammar, as a parse-time early error.
+ *
+ * ES5.1 §7.8.5 defines a literal's [[Value]] as the result of
+ * `new RegExp(Pattern, Flags)` and then requires that "if the call to new
+ * RegExp would generate an error ... the error must be treated as an early
+ * error (Clause 16)". Acorn validates the literal against the *host's*
+ * grammar, which is Annex B-permissive and post-ES5, so a pattern like `/]/`,
+ * `/\a/`, or `/\01/` parses successfully there and would otherwise only be
+ * rejected when the literal expression was evaluated — too late, and never at
+ * all for a literal in unreachable code.
+ *
+ * Running it here, in the pass both `parseScript` and `parseEval` funnel
+ * through, is what makes scripts, direct and indirect `eval`, and the dynamic
+ * `Function` constructor all refuse such a literal before any of the program
+ * runs. `src/evaluator/eval.js` and `src/evaluator/dynamic-function.js`
+ * convert the host `SyntaxError` this raises into a realm-local guest one, the
+ * same way they already do for an outright parse failure.
+ *
+ * `node.regex` is Acorn's own record of the literal's raw pattern and flag
+ * text, which is exactly what §7.8.5 hands to `new RegExp`.
+ *
+ * @param {any} node
+ * @returns {void}
+ */
+function checkRegularExpressionLiteral(node) {
+  if (node.type !== 'Literal' || !node.regex) {
+    return;
+  }
+
+  try {
+    parseFlags(node.regex.flags);
+    validatePattern(node.regex.pattern);
+  } catch (error) {
+    // This validator is a recursive descent over guest text, and it runs
+    // after Acorn's own has already accepted the literal. Which of the two
+    // runs out of host stack first is a race between two host-dependent
+    // thresholds, so without this the embedder inherits a raw `RangeError`
+    // for a pattern that is merely too deep — the same seam `asParseFailure`
+    // closes for the parser proper, reached one pass later. Depth met while
+    // parsing is a failure to parse.
+    if (isStackOverflow(error)) {
+      throw new SyntaxError('Not enough stack space to parse input');
+    }
+
+    if (!(error instanceof RegExpSyntaxError)) {
+      throw error;
+    }
+
+    throw normalizeSyntaxError({
+      message: error.message,
+      pos: typeof node.start === 'number' ? node.start : undefined,
+      loc: node.loc ? node.loc.start : undefined,
+    });
+  }
 }
 
 /**

@@ -6,49 +6,120 @@ backed by a rationale) and _known limitations_ (shortfalls the implementation
 has not yet addressed). Both are written down so an undocumented divergence is
 always treatable as a bug.
 
-Every `engine-deviation` exclusion in
-[`tools/test262/es5-selection.json`](../tools/test262/es5-selection.json)
-names one of the deviation headings below. See
+"Deviation" here is measured against ES5.1 itself, not against what shipping
+engines happen to do, and the two are not the same thing: several entries below
+describe places where this engine follows ES5.1 exactly and therefore differs
+from every browser. Any `engine-deviation` exclusion in
+[`tools/test262/es5-selection.json`](../tools/test262/es5-selection.json) must
+name one of the headings below; only two exclusions still do, because every
+other one filed under it turned out to be ES5.1-mandated behaviour. See
 [docs/conformance.md](conformance.md) for the exclusion categories and counts.
 
 ## Intentional deviations
 
-### Annex B pattern syntax is rejected
+### Annex B pattern syntax is rejected (a deviation from browsers, not from ES5.1)
 
-The engine implements the ES5.1 15.10.1 `Pattern` grammar strictly, with no
-Annex B extensions, so patterns web engines accept via Annex B (`/]/`, `/{/`,
-`/\a/`, octal `/\01/`, an out-of-range backreference) throw a guest
-`SyntaxError` instead of matching literally or loosely. Because `match` and
-`search` build `new RegExp(ToString(pattern))` per ES5, this reaches string
-patterns too: `"a{b".match("{")` throws where an Annex B engine matches `"{"`
-literally.
+The engine implements the ES5.1 15.10.1 `Pattern` grammar strictly, so patterns
+every browser accepts — `/]/`, `/{/`, `/\a/`, legacy octal `/\01/`, an
+out-of-range backreference like `/\2/`, a quantified assertion like `/(?=x)*/`,
+a multi-character class bound like `/[\d-a]/` — throw a guest `SyntaxError`
+instead of matching literally or loosely. Because `match` and `search` build
+`new RegExp(ToString(pattern))` per ES5, this reaches string patterns too:
+`"a{b".match("{")` throws where a browser matches `"{"` literally.
+
+This is listed as a deviation because of how visible it is in practice, but it
+is worth being precise about what it deviates from. **ES5.1's Annex B contains
+no RegExp extensions at all** — it adds only octal literals, octal string
+escapes, `escape`/`unescape`, `String.prototype.substr`, and the legacy `Date`
+methods, all of which this engine does implement. The RegExp leniency arrived in
+ES2015's Annex B B.1.4. Every rejection listed above is therefore something
+ES5.1's _normative_ grammar requires: `PatternCharacter` excludes `]` and `{`,
+`Term` has no quantified-assertion production, 15.10.2.9 throws for an
+out-of-range backreference, and 15.10.2.15 `CharacterRange` throws unless both
+bounds are exactly one character.
+
+So this engine is ES5.1-conforming here and browsers are ES2015-Annex-B
+conforming; the two specifications genuinely disagree. That is why the Test262
+tests covering it are classified `post-es5-semantics` rather than
+`engine-deviation`.
 
 **Backing code:** `src/runtime/regexp-syntax.js` (the strict ES5.1 grammar
 validator).
 **Verification:** `evaluateScript(realm, 'try { "a{b".match("{"); "ok" } catch(e) { e.constructor.name }')` → `"SyntaxError"`.
 
-### IdentifierPart approximation in the validator
+### `\$` is accepted as an identity escape
 
-The 15.10.1 validator has no Unicode character database, so `IdentifierPart`
-(used by `IdentityEscape`) is approximated: every code unit ≥ 0x80 outside a
-fixed whitespace/line-terminator set is treated as `IdentifierPart`. This means
-escaped non-ASCII punctuation and symbols (e.g. `\—` U+2014, `\¡`) are rejected
-as invalid identity escapes, where the spec's exact `IdentifierPart` would
-accept them. The approximation is documented in `regexp-syntax.js`'s module
-header.
+Read literally, ES5.1 15.10.1's `IdentityEscape :: SourceCharacter but not
+IdentifierPart` forbids `\$`, because 7.6 lists `$` as an `IdentifierStart` and
+therefore an `IdentifierPart`. The engine carves `$` out of the `IdentifierPart`
+test used by `IdentityEscape` and accepts `/\$/`.
 
-**Backing code:** `src/runtime/regexp-syntax.js`, module-level comment.
+This is a deliberate divergence from the letter of the grammar: escaping `$` is
+the only way to match a literal dollar sign that is not at the end of a pattern,
+every shipping engine accepts it, and Test262 itself relies on it. The carve-out
+is exactly one code point wide — `\_` still throws, since `_` is an
+`IdentifierPart` the spec really does mean to exclude. Every other code point is
+decided by the exact Unicode `IdentifierPart` table described below, not by an
+approximation.
 
-### RegExp literals are validated at evaluation time
+**Backing code:** `src/runtime/regexp-syntax.js` (`isIdentifierPart`).
+**Verification:** `evaluateScript(realm, '/\\$/.test("$")')` → `true`, and
+`evaluateScript(realm, 'try { new RegExp("\\\\_"); "ok" } catch (e) { e.constructor.name }')` → `"SyntaxError"`.
 
-Acorn parses a literal's pattern against the _host's_ grammar, which is
-Annex B-permissive, so a pattern that Annex B accepts but ES5.1 does not parses
-successfully. This engine's own validator only runs when the literal is
-evaluated, so such a pattern throws a guest `SyntaxError` at the point the
-literal expression executes, not when the program is parsed.
+### `IdentifierName` is the vendored parser's grammar, not ES5.1 7.6
 
-**Backing code:** `src/evaluator/expressions.js` (the `Literal` handler for
-RegExp nodes calls `src/runtime/regexp-syntax.js`).
+ES5.1 7.6 defines `IdentifierStart`/`IdentifierPart` by Unicode _general
+category_ (`UnicodeLetter` is Lu, Ll, Lt, Lm, Lo, Nl; plus `UnicodeCombiningMark`,
+`UnicodeDigit`, `UnicodeConnectorPunctuation`, `<ZWNJ>`, `<ZWJ>`). Identifier
+lexing is done by the vendored Acorn parser, which instead uses the modern
+`ID_Start`/`ID_Continue` derived properties, from its own bundled Unicode tables.
+The two sets are close but not equal, so a small set of identifiers is
+mis-lexed:
+
+- **Accepted where ES5.1 rejects (53 BMP code points).** Two causes. The
+  `Other_ID_Start`/`Other_ID_Continue` compatibility additions are not in any
+  ES5.1 category — `·` U+00B7, `·` U+0387, the Ethiopic digits U+1369–U+1371,
+  U+19DA, `℘` U+2118, `℮` U+212E, U+309B, U+309C, `・` U+30FB, U+FF65. The rest
+  are code points assigned after the Unicode release this repository pins, since
+  Acorn's tables track a newer one (U+088F, U+0C5C, U+0CDC, U+1ACF–U+1AEB,
+  U+A7CE, U+A7CF, U+A7D2, U+A7D4, U+A7F1).
+- **Rejected where ES5.1 accepts (1 BMP code point).** `ⸯ` U+2E2F VERTICAL TILDE
+  is category Lm, so ES5.1 7.6 makes it a `UnicodeLetter` and therefore a valid
+  `IdentifierStart`, but it carries `Pattern_Syntax` and is excluded from
+  `ID_Continue`, so `var _\u2E2F` is a `SyntaxError` here.
+
+This is the one place where the engine is stricter than ES5.1 rather than
+merely different, and it is why two Test262 files remain classified
+`engine-deviation`. It is also the engine's only _internal_ Unicode-version
+split: `src/runtime/regexp-syntax.js` answers `IdentifierPart` from the pinned
+tables described above, while the parser answers it from Acorn's, so the same
+question can get two answers depending on which asks. Fixing it means replacing
+the vendored parser's identifier lexer, which is deliberately out of scope for
+a change that is otherwise confined to engine code.
+
+**Backing code:** `vendor/acorn/` (identifier lexing), reached through
+`src/parser.js`.
+**Verification:** `evaluateScript(realm, 'var _\u2E2F; "ok"')` throws a `SyntaxError`, where ES5.1 7.6 makes `_\u2E2F` a valid identifier.
+
+### Unicode data is pinned to one version
+
+`IdentifierPart` (used by `IdentityEscape`) and the `String.prototype.toUpperCase`/
+`toLowerCase` mappings are answered from tables generated from a **pinned** Unicode
+release — the version recorded under `unicode.version` in
+[`package.json`](../package.json) — rather than from the host's Unicode database.
+`tools/unicode/generate-case-data.js` derives them from the UCD and
+`npm run unicode:check` re-derives and diffs them.
+
+Pinning is what makes these answers portable: hosts ship different ICU versions
+(a current Node may be a whole Unicode release ahead of a shipping Safari), so
+delegating would make the same program accept a regexp on one host and throw on
+another. The deviation is that the engine's answers are frozen at the pinned
+release and do not track newer Unicode assignments until the tables are
+regenerated. ES5.1 itself only requires Unicode 3.0 or later, so any pinned
+modern release is conforming.
+
+**Backing code:** `src/builtins/unicode-case-data.js` (generated),
+`tools/unicode/generate-case-data.js` (generator).
 
 ### Zero-width global match/replace count
 
@@ -154,36 +225,6 @@ ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly
 
 **Backing code:** `src/builtins/primitive-wrappers.js` (`toLocaleString`).
 
-### Array.prototype.toLocaleString element dispatch
-
-ES5 15.4.4.3 requires boxing each non-null, non-undefined element with
-`ToObject` and calling its `toLocaleString` on that wrapper. This engine
-diverges from that algorithm in two independent ways: its short-circuit
-matches neither ES5 nor ES2015, while its general dispatch receiver follows
-ES2015.
-
-1. **Short-circuit (neither ES5 nor ES2015).** When an element is a primitive
-   whose `toLocaleString` resolves to the inherited
-   `Object.prototype.toLocaleString`, the engine renders it with
-   `ToString(element)` directly, never dispatching. ES5 dispatches with a boxed
-   wrapper, while ES2015 dispatches with the raw primitive; this engine does
-   neither and skips the call entirely.
-
-2. **Dispatch receiver (ES2015-aligned).** On the general path the engine
-   passes the raw primitive as `this`
-   (`toLocaleString.callFunction(element, [])`) rather than the boxed wrapper.
-   In sloppy mode the callee re-boxes `this` automatically, so the divergence
-   is only observable from strict-mode guest code, where `this` retains its
-   primitive type.
-
-**Backing code:** `src/builtins/array.js` (`toLocaleString`).
-**Verification (short-circuit):**
-`evaluateScript(realm, 'Boolean.prototype.toString = function () { return typeof this; }; [true, false].toLocaleString()')`
-→ `'true,false'`, where ES5 15.4.4.3 gives `'object,object'`.
-**Verification (dispatch receiver):**
-`evaluateScript(realm, '"use strict"; Number.prototype.toLocaleString = function () { return typeof this; }; [1,2].toLocaleString()')`
-→ `'number,number'`, where ES5 15.4.4.3 gives `'object,object'`.
-
 ### localeCompare
 
 ES5 15.5.4.9's ordering is implementation-defined and only _recommends_ that
@@ -231,13 +272,65 @@ the exactly-specified cases (`NaN`, the infinities, signed zero, domain errors,
 `pow`'s full table) are engine behaviour while the last-ulp digits are the
 host's.
 
+This last-ulp divergence is real, not theoretical: measured across the three
+target hosts, V8 (Node and Chromium) and JavaScriptCore disagree in the final
+digit on `tan(1)`, `asin(0.5)`, `acos(0.5)`, `atan(0.5)`, `tan(1e30)`, and
+`pow(3, 100)`. The spec permits this, so guest code that needs bit-identical
+transcendentals across hosts must not use these functions.
+
 **Backing code:** `src/builtins/math.js`.
+
+### The clock and the local time zone come from the host
+
+`Date.now`, `new Date()`, and every local-time accessor
+(`getFullYear`, `getHours`, `toString`, ...) have to answer questions ES5.1
+deliberately leaves to the implementation: 15.9.4.4 defines `Date.now` as the
+current wall-clock time, and 15.9.1.7's `LocalTZA`/`DaylightSavingTA` are
+"implementation-dependent". A realm created with no adapter therefore takes both
+from the host — `Date.now()` and `new Date(t).getTimezoneOffset()` — so these
+results are non-deterministic or machine-dependent when the default adapter is
+used. Two machines in different time zones will print different
+`new Date(0).toString()` values. Math's permitted approximation variation and
+`Math.random` are additional host-varying outputs.
+
+This is the engine's only injectable host boundary. It is confined to
+`createDateHost` in `src/runtime/date.js`, which supplies only two functions —
+`now()` and `timezoneOffset(utcMilliseconds)`. Everything else about dates is
+computed by the engine: `parseDateString` implements 15.9.1.15 directly rather
+than calling the host's `Date.parse`, and all calendar arithmetic, formatting,
+and range clamping is engine code. An embedder that needs reproducible Date
+output passes `{ dateHost: { now, timezoneOffset } }` to `createRealm`, after
+which no host clock or zone database is observable from guest code at all; that
+is how the engine's own Date tests stay deterministic.
+
+**Backing code:** `src/runtime/date.js` (`createDateHost`).
+**Verification:** `evaluateScript(createRealm({ dateHost: { now: () => 1234567890123, timezoneOffset: () => 0 } }), 'new Date(0).toString()')` → `"Thu Jan 01 1970 00:00:00 GMT+0000 (Local)"` on every host and in every time zone.
+
+### Number-to-string and string-to-number use the host's algorithms
+
+After the engine has itself validated the ES5.1 grammar and handled every
+sign, radix, whitespace, `Infinity`, and empty-input rule, the two numeric
+conversions bottom out in the host: `ToString(number)` for radix 10 forwards to
+the host's `String(number)`, and `ToNumber(string)`/`parseInt`'s digit
+accumulation forward to the host's `Number(...)`.
+
+This is portable because both are _exactly_ specified — 9.8.1 pins the
+shortest-round-trip decimal representation, and 9.3.1 pins the mathematical
+value — so a conforming host has exactly one correct answer and no room to
+differ. That was confirmed by measurement: all `String(number)` and
+`Number(string)` probes produced byte-identical results on Node, Chromium, and
+JavaScriptCore. Post-ES5 input forms that a host would accept (`0b11`, `0o7`,
+numeric separators) never reach the host, because the engine rejects them
+against the ES5.1 grammar first.
+
+**Backing code:** `src/runtime/conversion.js`.
+**Verification:** `evaluateScript(realm, 'Number("0b11") + "," + Number("0o7") + "," + Number("1_0")')` → `"NaN,NaN,NaN"`.
 
 ### Math.random
 
 15.8.2.14 requires an implementation-dependent pseudo-random value in `[0, 1)`;
-this forwards to the host's `Math.random`, so it is the one built-in whose
-result no realm can reproduce.
+this forwards to the host's `Math.random`, so its result is nondeterministic and
+cannot be replaced through realm options.
 
 **Backing code:** `src/builtins/math.js` (`random`).
 
@@ -334,6 +427,15 @@ guest `SyntaxError`. The depth at which that happens is the host's, not the
 engine's, so it is one of the few places where hosts still differ. An embedder
 that injects its own parser through `options.parse` is excluded from the
 conversion — its defects stay its own.
+
+The same conversion covers the **early-error pass** that runs just after, where
+`checkRegularExpressionLiteral` re-validates every regular expression literal
+against the ES5.1 grammar with a second recursive descent over the same guest
+text. That walk runs after Acorn has already accepted the literal, so which of
+the two validators exhausts first is a race between two host-dependent
+thresholds; when the engine's loses — around 2000 nested groups on Node 26 —
+depth reached there is reported as the same failure to parse, rather than as a
+host `RangeError` for a pattern that is merely too deep.
 
 The **hoisting passes** that follow a successful parse
 (`globalDeclarationInstantiation`, `functionDeclarationInstantiation`, and

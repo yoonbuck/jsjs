@@ -804,6 +804,68 @@ const tests = [
     },
   },
   {
+    name: 'a regular expression literal too deep to validate fails to parse, on any host',
+    run() {
+      // The engine re-validates every literal pattern against the ES5.1
+      // grammar as a parse-time early error, with its own recursive descent
+      // over guest text. That walk runs after Acorn has already accepted the
+      // literal, so whichever of the two validators exhausts first is a race
+      // between two host-dependent thresholds — and when the engine's loses,
+      // the embedder inherits a raw host `RangeError` for a script that is
+      // merely too deep. Depth reached while parsing is a failure to parse,
+      // wherever in parsing it is reached.
+      const shapes = {
+        groups: (/** @type {number} */ n) =>
+          '('.repeat(n) + 'a' + ')'.repeat(n),
+        alternation: (/** @type {number} */ n) =>
+          '(a|'.repeat(n) + 'b' + ')'.repeat(n),
+        starred: (/** @type {number} */ n) =>
+          '(?:'.repeat(n) + 'a' + ')*'.repeat(n),
+        lookahead: (/** @type {number} */ n) =>
+          '(?='.repeat(n) + 'a' + ')'.repeat(n),
+      };
+
+      for (const [how, pattern] of Object.entries(shapes)) {
+        for (const depth of [1000, 2000, 3000, 5000, 8000]) {
+          const literal = `/${pattern(depth)}/`;
+
+          // Straight to the embedder: a failure to parse, never a `RangeError`.
+          try {
+            evaluateScript(createRealm(), `var r = ${literal};`);
+          } catch (error) {
+            if (!(error instanceof SyntaxError)) {
+              throw new Error(
+                `${how} at ${depth}: expected a SyntaxError, got ` +
+                  `${error instanceof Error ? error.name : String(error)}`,
+              );
+            }
+          }
+
+          // And through `eval`, where it has to be the guest's to catch. Which
+          // error it is depends on which limit the depth meets first — the
+          // validator's stack while parsing, or the budget while the literal
+          // is evaluated — and both are the guest's to handle. A host escape
+          // would not reach this `catch` at all; it would leave `run`.
+          const outcome = run(
+            `try { eval(${JSON.stringify(`var r = ${literal};`)}); "parsed" }` +
+              ' catch (e) { (e instanceof SyntaxError || e instanceof RangeError)' +
+              ' ? "guest " + e.name : "unexpected " + e.name }',
+          );
+
+          if (
+            !['parsed', 'guest SyntaxError', 'guest RangeError'].includes(
+              String(outcome),
+            )
+          ) {
+            throw new Error(
+              `${how} at ${depth}: through eval, got ${String(outcome)}`,
+            );
+          }
+        }
+      }
+    },
+  },
+  {
     name: 'a host defect inside a native body still escapes as a host error',
     run() {
       const realm = createRealm(SMALL);

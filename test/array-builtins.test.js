@@ -186,37 +186,58 @@ const tests = [
         // Number.prototype.toLocaleString (ES5 15.7.4.3) shadows the
         // overridden Object.prototype.toLocaleString for the Number
         // element, so only the String and Boolean elements (which have no
-        // own toLocaleString) observe the override.
-        '5,string,boolean',
+        // own toLocaleString) observe the override — and they observe it
+        // with the boxed wrapper 15.4.4.3 step 10.d.i creates as `this`.
+        '5,object,object',
       );
     },
   },
   {
-    name: 'Array toLocaleString short-circuits primitives with inherited Object toLocaleString',
+    name: 'Array toLocaleString dispatches through the boxed element wrapper',
     run() {
-      // Divergence 1: replaced inherited toString is never invoked because
-      // the engine renders the primitive via ToString directly.
+      // ES5 15.4.4.3 steps 8.a-8.d and 10.d.i-10.d.iv box every non-nullish
+      // element with ToObject and then [[Get]] "toLocaleString" off the
+      // wrapper, so an inherited Object.prototype.toLocaleString is really
+      // invoked and reaches a replaced Boolean.prototype.toString.
       assertSame(
         run(
           'Boolean.prototype.toString = function () { return typeof this; }; ' +
             '[true, false].toLocaleString();',
         ),
-        'true,false',
+        'object,object',
       );
     },
   },
   {
-    name: 'Array toLocaleString passes raw primitive this in strict mode',
+    name: 'Array toLocaleString passes the boxed wrapper as this in strict mode',
     run() {
-      // Divergence 2: the engine passes the raw primitive as this rather
-      // than a boxed wrapper, observable only from strict-mode guest code.
+      // The receiver 15.4.4.3 step 10.d.iv passes is `elementObj`, not the
+      // raw primitive, so a strict callee — which never re-boxes `this` —
+      // still observes an object.
       assertSame(
         run(
           '"use strict"; ' +
             'Number.prototype.toLocaleString = function () { return typeof this; }; ' +
             '[1,2].toLocaleString();',
         ),
-        'number,number',
+        'object,object',
+      );
+    },
+  },
+  {
+    name: 'Array toLocaleString boxes a primitive element once and reuses that wrapper',
+    run() {
+      // 15.4.4.3 calls ToObject once per element (step 10.d.i) and uses that
+      // same `elementObj` both for the [[Get]] and as the call receiver, so
+      // the receiver a strict callee sees is a wrapper for the element's own
+      // value rather than a fresh box of something else.
+      assertSame(
+        run(
+          '"use strict"; ' +
+            'String.prototype.toLocaleString = function () { return typeof this + ":" + this.valueOf(); }; ' +
+            '["a"].toLocaleString();',
+        ),
+        'object:a',
       );
     },
   },
