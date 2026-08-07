@@ -437,6 +437,33 @@ const tests = [
     },
   },
   {
+    name: 'nesting alone charges the budget, with no expression in sight',
+    run() {
+      // `{ if (true) ` also evaluates a test expression each time round, so it
+      // cannot tell the statement guard apart from the expression one. Bare
+      // blocks evaluate nothing at all: if only expressions were counted, the
+      // wrapped body would reach exactly the same depth as the plain one.
+      const depth = (/** @type {string} */ body) =>
+        /** @type {number} */ (
+          run(
+            'var depth = 0;' +
+              ` function f() { depth = depth + 1; ${body} }` +
+              ' try { f(); } catch (e) {} depth',
+            SMALL,
+          )
+        );
+
+      const plain = depth('return f();');
+      const wrapped = depth(`${'{'.repeat(20)} return f(); ${'}'.repeat(20)}`);
+
+      assertSame(
+        wrapped < plain,
+        true,
+        `expected bare blocks to cost budget, got ${plain} plain then ${wrapped} wrapped`,
+      );
+    },
+  },
+  {
     name: 'JSON.stringify on deeply nested runtime data is contained',
     run() {
       assertSame(
@@ -516,6 +543,89 @@ const tests = [
         run(source.replace('eval(s)', 'Function(s)()')),
         true,
         'Function',
+      );
+    },
+  },
+  {
+    name: 'a deeply nested RegExp pattern is contained, not left to the host stack',
+    run() {
+      // The pattern validator is recursive descent over the *pattern string*,
+      // which is guest data: nesting it deeply spent host frames with nothing
+      // counting them, and escaped as an uncatchable host RangeError from
+      // every entry point into the parser.
+      const build =
+        'var p = new Array(20001).join("(") + "a" + new Array(20001).join(")");';
+
+      assertSame(
+        run(
+          `${build} try { new RegExp(p); "not thrown" } catch (e) { e.name }`,
+        ),
+        'RangeError',
+        'new RegExp',
+      );
+      assertSame(
+        run(`${build} try { RegExp(p); "not thrown" } catch (e) { e.name }`),
+        'RangeError',
+        'RegExp as a function',
+      );
+      assertSame(
+        run(
+          `${build} try { "a".replace(new RegExp(p), "x"); "not thrown" }` +
+            ' catch (e) { e.name }',
+        ),
+        'RangeError',
+        'String.prototype.replace',
+      );
+      assertSame(
+        run(
+          'var p = new Array(20001).join("(?:") + "a" + new Array(20001).join(")");' +
+            ' try { new RegExp(p); "not thrown" } catch (e) { e.name }',
+        ),
+        'RangeError',
+        'non-capturing groups',
+      );
+    },
+  },
+  {
+    name: 'a deeply nested regular expression *literal* is contained too',
+    run() {
+      // A literal's pattern never reaches our validator: Acorn checks it while
+      // tokenizing. Acorn converts its own parse recursion into a SyntaxError,
+      // but the very first token is read by `nextToken()` *outside* that
+      // conversion, so a leading regex literal escaped as a host RangeError.
+      const build =
+        'var p = new Array(20001).join("(") + "a" + new Array(20001).join(")");';
+
+      assertSame(
+        run(
+          `${build} try { eval("/" + p + "/"); "not thrown" } catch (e) { e.name }`,
+        ),
+        'SyntaxError',
+        'eval of a leading regex literal',
+      );
+      assertSame(
+        run(
+          `${build} try { Function("return /" + p + "/"); "not thrown" }` +
+            ' catch (e) { e.name }',
+        ),
+        'SyntaxError',
+        'dynamic Function whose body holds one',
+      );
+
+      // The same source given straight to the embedder is a parse failure, and
+      // parse failures leave `evaluateScript` as host errors by design. It must
+      // still be the *syntax* error, not a stack overflow leaking through.
+      const pattern = `${'('.repeat(20000)}a${')'.repeat(20000)}`;
+      let hostError;
+      try {
+        evaluateScript(createRealm(), `/${pattern}/`);
+      } catch (error) {
+        hostError = error;
+      }
+      assertSame(
+        hostError instanceof SyntaxError,
+        true,
+        'a top-level script reports a syntax error, not a host RangeError',
       );
     },
   },

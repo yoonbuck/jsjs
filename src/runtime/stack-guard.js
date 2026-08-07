@@ -23,14 +23,15 @@ import { GuestErrorSignal } from './completion.js';
  * stack-hungriest shapes — a call nested twenty levels deep in an expression,
  * a recursion threaded through `eval`, a built-in callback, a `valueOf`, a
  * `sort` comparator, an accessor, `String()` on a self-nesting array,
- * `JSON.parse`/`JSON.stringify` on data nested to the same degree — the
- * largest budget that still trips before the host stack does is:
+ * `JSON.parse`/`JSON.stringify` on data nested to the same degree, a regular
+ * expression whose pattern nests to the same degree — the largest budget that
+ * still trips before the host stack does is:
  *
- * | host          | worst shape            | largest safe budget |
- * | ------------- | ---------------------- | ------------------- |
- * | Node 26       | `String(nested array)` |                1091 |
- * | Chromium (V8) | `String(nested array)` |                1135 |
- * | `jsc`         | `String(nested array)` |                8704 |
+ * | host          | worst shape             | largest safe budget |
+ * | ------------- | ----------------------- | ------------------- |
+ * | Node 26       | `String(nested array)`  |                1091 |
+ * | Chromium (V8) | `String(nested array)`  |                1086 |
+ * | `jsc`         | deeply alternated regex |                6143 |
  *
  * 500 keeps better than a factor of two in reserve against the smallest of
  * those, which is what pays for the host frames an *embedder* has already
@@ -56,7 +57,9 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
  * - every expression and statement the evaluator walks into, so a call buried
  *   in a deeply nested expression costs what it really costs;
  * - `JSON.parse` and `JSON.stringify`, whose recursion follows the shape of
- *   runtime *data* rather than of source.
+ *   runtime *data* rather than of source, and the regular-expression pattern
+ *   parser, whose recursion follows the shape of a guest-supplied pattern
+ *   string.
  *
  * Exceeding the budget raises a `GuestErrorSignal` for a `RangeError`, which
  * the nearest realm-aware boundary (`callFunction`, `evaluateTryStatement`'s

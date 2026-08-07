@@ -131,7 +131,7 @@ The unit is an engine frame rather than a guest call because a guest call is
 not a fixed amount of host stack: the evaluator walks expressions and
 statements recursively, so `f()` nested twenty levels deep in an expression
 costs far more host stack than a bare `f()`. Counting activations alone leaves
-that difference unmeasured, and the host overflows first. Three kinds of work
+that difference unmeasured, and the host overflows first. Four kinds of work
 therefore enter the guard:
 
 - every activation — `EngineFunction#callFunction` (which
@@ -142,7 +142,11 @@ therefore enter the guard:
 - every node `evaluateExpression` and `evaluateStatement` walk into, which is
   what makes one budget safe for every shape of source;
 - `JSON.parse`, its reviver walk, and `JSON.stringify`, whose recursion follows
-  the shape of runtime _data_ rather than of source.
+  the shape of runtime _data_ rather than of source;
+- `validatePattern` (`src/runtime/regexp-syntax.js`), whose recursive descent
+  follows the shape of a guest-supplied pattern string. The guard reaches it
+  duck-typed, threaded through `compilePattern`, so `regexp-syntax.js` stays a
+  pure syntax module with no dependency on the runtime.
 
 Every `enter` is paired with an `exit` in a `finally`, so the count is exact
 whether a frame returns or throws and no signal boundary has to repair it.
@@ -152,9 +156,19 @@ question is made iterative instead of counted, so that ordinary operations on
 long chains keep working: `EngineObject#getProperty` walks the prototype chain
 in a loop, and `BoundFunction#hasInstance` unwraps a bound chain in a loop.
 
-The guard is the _only_ stack containment in the engine: a host `RangeError` is
-never caught and relabeled, so an engine defect that overflows the host stack
-still escapes as the host error it is.
+The guard cannot cover the recursion spent _before_ evaluation — the parser's
+own descent and the declaration-instantiation walks that precede a script — so
+`src/parser.js` reports running out of stack there as what it is at that stage:
+a failure to parse. `asParseFailure` converts a stack overflow raised out of
+the parser into `SyntaxError: Not enough stack space to parse input`, the same
+error Acorn raises for the same condition around `parseTopLevel` (Acorn reads
+the first token before installing that conversion, so a leading regular
+expression literal reached the host limit without it). The conversion is
+confined to the `parse` call, which runs no engine code.
+
+Those two are the whole of the engine's stack containment. Anywhere else a host
+`RangeError` is never caught and relabeled, so an engine defect that overflows
+the host stack still escapes as the host error it is.
 
 ### Conversion (`src/runtime/conversion.js`)
 

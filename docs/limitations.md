@@ -280,7 +280,11 @@ real engine's does. Everything that recurses on the host stack enters the
 budget: every activation (guest functions, guest constructors, and built-ins
 alike, so a recursion threaded through `[].map`, a getter, a `valueOf`, or an
 `eval` chain is counted), every expression and statement node the evaluator
-walks into, and `JSON.parse`/`JSON.stringify`.
+walks into, `JSON.parse`/`JSON.stringify`, and the regular-expression pattern
+parser. The last two matter because their recursion follows the shape of
+runtime _data_ — a parsed JSON document, a pattern string — rather than the
+shape of source, so guest code can drive them arbitrarily deep without a
+single extra call.
 
 The unit is deliberately an _engine frame_ and not a guest call, because a
 guest call is not a fixed amount of host stack — `f()` nested twenty levels
@@ -291,11 +295,11 @@ for the shape a hostile script picks.
 The shortfall is the depth. Real engines allow roughly ten thousand frames; 500
 buys about 165 activations of a plain recursion, so a recursive guest algorithm
 that any browser runs happily can fail here. The number is not arbitrary — it
-is the smallest measured host budget (1091 frames on Node 26, 1135 on headless
-Chromium, 8704 on `jsc`, all bounded by the same worst shape,
-`String()` on a self-nesting array) with better than a factor of two in
-reserve, which is what pays for the host frames an embedder has already spent
-before calling in. But it is a budget chosen for the worst host and the worst
+is the smallest measured host budget (1091 frames on Node 26, 1086 on headless
+Chromium — both bounded by `String()` on a self-nesting array — and 6143 on
+`jsc`, bounded there by a deeply alternated regular expression) with better
+than a factor of two in reserve, which is what pays for the host frames an
+embedder has already spent before calling in. But it is a budget chosen for the worst host and the worst
 shape rather than for the running one. An embedder that knows its host can
 raise it per realm with `createRealm({ maxStackDepth })`.
 
@@ -308,24 +312,30 @@ reached 767; `JSON.stringify` on the same structure stops at 493. The tradeoff
 is deliberate: measuring a recursion in the host frames it really spends is
 what makes a single budget safe for every shape on every host.
 
-One recursion stays outside the boundary, because it is spent before
-evaluation begins: the depth of the _source text_ itself. The parser and the
-declaration-instantiation pass that precedes a script both walk the AST
-recursively, so a script nested some thousands of levels deep fails during
-parsing or instantiation. That failure reaches the embedder as a host error,
-which is the same way an ordinary `SyntaxError` from `evaluateScript` already
-reaches it. Guest code cannot get at that window: it can only reach the parser
-through `eval` and `Function`, which run inside the budget and on the host
-stack the budget has already reserved, so what a guest sees is a catchable
-guest error.
+One recursion is bounded differently, because it is spent before evaluation
+begins: the depth of the _source text_ itself. The parser and the
+declaration-instantiation passes that precede a script
+(`globalDeclarationInstantiation`, `functionDeclarationInstantiation`, and
+`evalDeclarationInstantiation`) all walk the AST recursively, and no budget can
+count frames that are spent deciding what the budget will run. Running out of
+stack there is instead reported as a failure to parse — a `SyntaxError` reading
+`Not enough stack space to parse input`, which is what Acorn itself raises for
+the same condition. So a script nested some thousands of levels deep is
+rejected the way any unparsable script is: the embedder gets a host
+`SyntaxError`, and guest code that reached the parser through `eval` or
+`Function` gets a catchable guest `SyntaxError`. The depth at which that
+happens is the host's, not the engine's, so it is one of the few places where
+hosts still differ.
 
-And a host stack overflow is never reinterpreted: if one happens anyway it
-escapes `evaluateScript` as the host `RangeError` it is, because relabeling
-host exceptions would hide engine defects behind a guest error.
+Outside that one conversion, a host stack overflow is never reinterpreted: if
+one happens it escapes `evaluateScript` as the host `RangeError` it is, because
+relabeling host exceptions would hide engine defects behind a guest error.
 
 **Backing code:** `src/runtime/stack-guard.js`, entered from
 `EngineFunction#callFunction` (`src/runtime/function-object.js`),
 `NativeFunction#callFunction`/`#constructFunction` (`src/builtins/shared.js`),
 `evaluateExpression` (`src/evaluator/expressions.js`), `evaluateStatement`
-(`src/evaluator/statements.js`), and `src/builtins/json.js`.
+(`src/evaluator/statements.js`), `src/builtins/json.js`, and `validatePattern`
+(`src/runtime/regexp-syntax.js`); the parse-time conversion is `asParseFailure`
+in `src/parser.js`.
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.

@@ -171,11 +171,7 @@ export function parseScript(source, options = {}) {
       ...PARSER_OPTIONS,
     });
   } catch (error) {
-    if (isSyntaxErrorLike(error)) {
-      throw normalizeSyntaxError(error);
-    }
-
-    throw error;
+    throw asParseFailure(error);
   }
 
   return validateScriptProgram(program);
@@ -204,11 +200,7 @@ export function parseEval(source, strict = false) {
   try {
     program = parser.parse(source, PARSER_OPTIONS);
   } catch (error) {
-    if (isSyntaxErrorLike(error)) {
-      throw normalizeSyntaxError(error);
-    }
-
-    throw error;
+    throw asParseFailure(error);
   }
 
   return validateScriptProgram(program, strict);
@@ -516,6 +508,57 @@ function statementPositionFunctionError(context, node) {
     pos: typeof node.start === 'number' ? node.start : undefined,
     loc: node.loc ? node.loc.start : undefined,
   });
+}
+
+/**
+ * Turns whatever the parser threw into the host `SyntaxError` the rest of the
+ * engine expects from a failed parse, and leaves anything else alone.
+ *
+ * Running out of host stack counts as a parse failure. Acorn already says so
+ * itself — it wraps `parseTopLevel` and re-raises an overflow as `Not enough
+ * stack space to parse input` — but it reads the *first* token before that
+ * wrapper is installed, so source whose opening token alone is too deep to
+ * tokenize (a regular-expression literal, whose pattern Acorn validates with
+ * its own recursive descent while tokenizing) still escaped as a host
+ * `RangeError`. Applying Acorn's own test to the whole call closes that seam,
+ * so depth is reported the same way wherever it is reached: `eval` and
+ * `Function` raise a catchable guest `SyntaxError`, and a script handed
+ * straight to the embedder fails like any other unparsable script.
+ *
+ * The conversion is confined to the `parse` call, which runs no engine code
+ * beyond the parser, so a `RangeError` from an engine defect is never
+ * relabelled by it.
+ *
+ * @param {unknown} error
+ * @returns {unknown} The error to throw.
+ */
+function asParseFailure(error) {
+  if (isStackOverflow(error)) {
+    return new SyntaxError('Not enough stack space to parse input');
+  }
+
+  if (isSyntaxErrorLike(error)) {
+    return normalizeSyntaxError(error);
+  }
+
+  return error;
+}
+
+/**
+ * Matches the message every engine we support uses for an exhausted stack:
+ * `Maximum call stack size exceeded` (V8, JavaScriptCore), `too much
+ * recursion` (SpiderMonkey). This is the same test Acorn applies in its own
+ * `catchStackOverflow`, kept identical on purpose so the two agree.
+ *
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+function isStackOverflow(error) {
+  return (
+    error instanceof RangeError &&
+    (/\bstack\b.*\b(exceeded|overflow)\b/i.test(error.message) ||
+      /\btoo much recursion\b/i.test(error.message))
+  );
 }
 
 /**
