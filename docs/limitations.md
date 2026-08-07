@@ -157,21 +157,24 @@ ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly
 ### Array.prototype.toLocaleString element dispatch
 
 ES5 15.4.4.3 requires boxing each non-null, non-undefined element with
-`ToObject` and calling its `toLocaleString` on that wrapper. This engine has
-two independent, ES2015-aligned divergences from that algorithm:
+`ToObject` and calling its `toLocaleString` on that wrapper. This engine
+diverges from that algorithm in two independent ways: its short-circuit
+matches neither ES5 nor ES2015, while its general dispatch receiver follows
+ES2015.
 
-1. **Short-circuit.** When an element is a primitive whose `toLocaleString`
-   resolves to the inherited `Object.prototype.toLocaleString`, the engine
-   renders it with `ToString(element)` directly, never dispatching. Observable
-   when the element's inherited `toString` has been replaced: ES5 15.4.4.3
-   invokes it with the boxed wrapper as `this`, while this engine skips it
-   entirely.
+1. **Short-circuit (neither ES5 nor ES2015).** When an element is a primitive
+   whose `toLocaleString` resolves to the inherited
+   `Object.prototype.toLocaleString`, the engine renders it with
+   `ToString(element)` directly, never dispatching. ES5 dispatches with a boxed
+   wrapper, while ES2015 dispatches with the raw primitive; this engine does
+   neither and skips the call entirely.
 
-2. **Dispatch receiver.** On the general path the engine passes the raw
-   primitive as `this` (`toLocaleString.callFunction(element, [])`) rather
-   than the boxed wrapper. In sloppy mode the callee re-boxes `this`
-   automatically, so the divergence is only observable from strict-mode guest
-   code, where `this` retains its primitive type.
+2. **Dispatch receiver (ES2015-aligned).** On the general path the engine
+   passes the raw primitive as `this`
+   (`toLocaleString.callFunction(element, [])`) rather than the boxed wrapper.
+   In sloppy mode the callee re-boxes `this` automatically, so the divergence
+   is only observable from strict-mode guest code, where `this` retains its
+   primitive type.
 
 **Backing code:** `src/builtins/array.js` (`toLocaleString`).
 **Verification (short-circuit):**
