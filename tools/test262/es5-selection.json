@@ -61,38 +61,38 @@
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-decimal-escape-class-range.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 \u00a715.10.2.19 `ClassEscape :: DecimalEscape` evaluates the escape and throws a SyntaxError unless the result is a single character, so `/[\\d][\\12-\\14]{1,}/`'s `\\12` (a backreference with no 12th group) is a mandatory ES5.1 SyntaxError. ES2015 Annex B B.1.4 added `ClassAtomNoDashInRange :: \\ ClassEscape` leniency that reinterprets it as a legacy octal; ES5.1 has no Annex B RegExp grammar at all."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-decimal-escape-not-capturing.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 \u00a715.10.2.9 states \"If n=0 or n>NCapturingParens then throw a SyntaxError exception\", so `/\\b(\\w+) \\2\\b/` with one capturing group is a mandatory ES5.1 SyntaxError. ES2015 Annex B B.1.4 reinterprets the out-of-range escape as a legacy octal instead; ES5.1 has no Annex B RegExp grammar at all."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-leading-escape-BMP.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 \u00a715.10.1 `IdentityEscape :: SourceCharacter but not IdentifierPart` and \u00a715.10.2.9's backreference range check make `/\\<cu>/` a mandatory SyntaxError for every IdentifierPart and every out-of-range digit the test sweeps. ES2015 Annex B B.1.4 narrows the exclusion to `UnicodeIDContinue` and adds legacy octal escapes; ES5.1 has no Annex B RegExp grammar at all."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-leading-escape.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 makes both assertions mandatory SyntaxErrors: `/\\1/` by \u00a715.10.2.9's \"If n=0 or n>NCapturingParens then throw a SyntaxError exception\", and `/\\a/` by \u00a715.10.1's `IdentityEscape :: SourceCharacter but not IdentifierPart`. ES2015 Annex B B.1.4 added the leniency that lets both parse; ES5.1 has no Annex B RegExp grammar at all."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-trailing-escape-BMP.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "Identical to the leading-escape BMP sweep with a leading literal character: ES5.1 \u00a715.10.1 `IdentityEscape :: SourceCharacter but not IdentifierPart` and \u00a715.10.2.9's backreference range check make each rejected case a mandatory ES5.1 SyntaxError. ES2015 Annex B B.1.4 added the leniency; ES5.1 has no Annex B RegExp grammar at all."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-trailing-escape.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "Identical to `RegExp-leading-escape.js` with a leading literal character: `/a\\1/` is \u00a715.10.2.9 and `/a\\a/` is \u00a715.10.1 `IdentityEscape`, both mandatory ES5.1 SyntaxErrors. ES2015 Annex B B.1.4 added the leniency; ES5.1 has no Annex B RegExp grammar at all."
     },
     {
       "path": "test/annexB/built-ins/RegExp/incomplete_hex_unicode_escape.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 \u00a715.10.1 requires `HexEscapeSequence :: x HexDigit HexDigit` and `UnicodeEscapeSequence :: u HexDigit HexDigit HexDigit HexDigit`, and `IdentityEscape` cannot rescue `/\\x/` or `/\\u/` because `x` and `u` are IdentifierPart, so no ES5.1 parse exists. ES2015 Annex B B.1.4 lets an incomplete escape fall back to an identity escape; ES5.1 has no Annex B RegExp grammar at all."
     },
     {
       "prefix": "test/annexB/built-ins/RegExp/prototype/compile",
@@ -211,8 +211,8 @@
     },
     {
       "prefix": "test/annexB/language/literals/regexp",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "category": "post-es5-semantics",
+      "reason": "Every file here is rejected by a rule ES5.1's normative grammar mandates: `PatternCharacter` excludes `]` and `{` (\u00a715.10.1), `Term :: Assertion | Atom | Atom Quantifier` has no quantified-assertion production, `ControlLetter` is `a`-`z`/`A`-`Z` only, `IdentityEscape` excludes every `IdentifierPart`, \u00a715.10.2.9 throws for an out-of-range backreference, and \u00a715.10.2.15 `CharacterRange` throws unless both bounds are exactly one character. ES2015 Annex B B.1.4 introduced the RegExp leniency these tests assert; ES5.1 has no Annex B RegExp grammar at all, so implementing \u00a715.10.1 strictly is ES5.1-conforming."
     },
     {
       "prefix": "test/built-ins/Array/from",
@@ -851,13 +851,13 @@
     },
     {
       "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#arrayprototypetolocalestring-element-dispatch: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.4.4.3 steps 8.a-8.d (and 10.d.i-10.d.iv for the tail) box each element with `ToObject` and invokes `toLocaleString` on that wrapper, so a strict override observes an object `this` (\"object,object\"); ES2015 §22.1.3.26 dropped the boxing and invokes on the raw primitive (\"boolean,boolean\"), which the test pins via `es6id: 22.1.3.26`. This engine implements the ES5.1 algorithm, so the expectation is unreachable by any ES5.1-compliant engine."
     },
     {
       "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#arrayprototypetolocalestring-element-dispatch: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.4.4.3 steps 8.a-8.d (and 10.d.i-10.d.iv for the tail) box each element with `ToObject` and invokes `toLocaleString` on that wrapper, so a strict override observes an object `this` (\"object,object\"); ES2015 §22.1.3.26 dropped the boxing and invokes on the raw primitive (\"boolean,boolean\"), which the test pins via `es6id: 22.1.3.26`. This engine implements the ES5.1 algorithm, so the expectation is unreachable by any ES5.1-compliant engine."
     },
     {
       "path": "test/built-ins/Array/prototype/toString/length.js",
@@ -3056,8 +3056,8 @@
     },
     {
       "path": "test/built-ins/String/prototype/split/separator-regexp.js",
-      "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected — Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected (here a `\\k` identity escape in the separator pattern)."
+      "category": "post-es5-semantics",
+      "reason": "The failing line is `\"x\".split(/\\k<x>/)`. ES5.1 \u00a715.10.1's `IdentityEscape :: SourceCharacter but not IdentifierPart` rejects `\\k` because `k` is an IdentifierPart, so this is a mandatory ES5.1 SyntaxError. `\\k<name>` is an ES2018 named backreference, and ES2018 Annex B only reinterprets it as an identity escape when the pattern has no named groups; ES5.1 has neither construct."
     },
     {
       "prefix": "test/built-ins/String/prototype/startsWith",
@@ -3241,8 +3241,8 @@
     },
     {
       "path": "test/harness/detachArrayBuffer.js",
-      "category": "host-dependent",
-      "reason": "Requires the Test262 `$262` host object (`$262.evalScript`/`$262.detachArrayBuffer`); this engine defines no ES5.1 `$262` host facility."
+      "category": "post-es5-builtin",
+      "reason": "The failure is `ArrayBuffer is not defined` from `var ab = new ArrayBuffer(1);`, which runs before any `$262` reference is reached. `ArrayBuffer` is an ES2015 \u00a724.1 built-in that ES5.1 does not define, so this is a post-ES5 built-in rather than a host-environment dependency."
     },
     {
       "path": "test/harness/nans.js",
@@ -3472,12 +3472,12 @@
     {
       "path": "test/language/literals/regexp/S7.8.5_A1.4_T2.js",
       "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#identifiername-is-the-vendored-parsers-grammar-not-es51-76: the sweep fails at U+2E2F, where the engine is stricter than ES5.1. The test tolerates a rejected `/\\<cu>/` only when `eval(\"var _<cu>\")` also fails, and U+2E2F is category Lm, so ES5.1 \u00a77.6 makes `_\\u2E2F` a valid Identifier while the vendored Acorn lexer rejects it as Pattern_Syntax. It additionally fails at U+200C/U+200D for a post-ES5 reason: \u00a77.6 lists both as `IdentifierPart` so \u00a715.10.1's `IdentityEscape` must reject them, while the test encodes ES2015+'s `UnicodeIDContinue` rule that accepts them."
     },
     {
       "path": "test/language/literals/regexp/S7.8.5_A2.4_T2.js",
       "category": "engine-deviation",
-      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#identifiername-is-the-vendored-parsers-grammar-not-es51-76: same two causes as `S7.8.5_A1.4_T2.js` with a leading literal character \u2014 U+2E2F, where the vendored Acorn lexer rejects an identifier ES5.1 \u00a77.6 allows, plus U+200C/U+200D, where rejecting the identity escape is ES5.1-mandated and the test encodes the later `UnicodeIDContinue` rule."
     },
     {
       "path": "test/language/statementList/eval-block-let-declaration.js",

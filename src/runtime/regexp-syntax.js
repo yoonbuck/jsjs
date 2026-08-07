@@ -1,4 +1,5 @@
 import { charCodeOfCodeUnit, codeUnitsBetween } from './code-units.js';
+import { identifierPartRanges } from '../builtins/unicode-case-data.js';
 
 /**
  * A host-free, character-by-character recursive-descent validator for the
@@ -12,18 +13,16 @@ import { charCodeOfCodeUnit, codeUnitsBetween } from './code-units.js';
  * lookbehind, Unicode property escapes, the `u`/`y`/`s` grammar extensions,
  * Annex B octal escapes, …) is rejected here and never reaches the host.
  *
- * `IdentifierPart` approximation: ES5 7.6 defines `IdentifierPart` as
- * `IdentifierStart` (`UnicodeLetter | $ | _`) plus `UnicodeCombiningMark`,
- * `UnicodeDigit`, `UnicodeConnectorPunctuation`, `<ZWNJ>`, and `<ZWJ>`. This
- * module has no Unicode character database, so it approximates the set as:
- * ASCII letters, ASCII digits, `_`, `\u200C` (ZWNJ), `\u200D` (ZWJ), and any
- * code unit `>= 0x80` that is not one of a fixed list of Unicode space/line
- * separators. `$` is deliberately *excluded* from this approximation even
- * though 7.6 counts it as `IdentifierStart`: every shipping engine accepts
- * `\$` as an identity escape (it is one of the ES2015+ `u`-mode
- * `SyntaxCharacter`s, `^ $ \ . * + ? ( ) [ ] { } |`, which remain legal
- * identity escapes here too), and rejecting it would make the ordinary,
- * extremely common "escape a literal dollar sign" pattern a SyntaxError.
+ * `IdentifierPart`: ES5 7.6 defines `IdentifierPart` as `IdentifierStart`
+ * (`UnicodeLetter | $ | _`) plus `UnicodeCombiningMark`, `UnicodeDigit`,
+ * `UnicodeConnectorPunctuation`, `<ZWNJ>`, and `<ZWJ>`. The Unicode portions
+ * are checked with a generated BMP code-point table because this validator
+ * scans ES5 SourceCharacters as UTF-16 code units. `$` is deliberately
+ * *excluded* from the check even though 7.6 counts it as `IdentifierStart`:
+ * every shipping engine accepts `\$` as an identity escape (it is one of the
+ * ES2015+ `u`-mode `SyntaxCharacter`s, `^ $ \ . * + ? ( ) [ ] { } |`), and
+ * rejecting the ordinary "escape a literal dollar sign" pattern would break
+ * ubiquitous real-world code and the pinned Test262 selection.
  */
 
 /**
@@ -48,13 +47,6 @@ export class RegExpSyntaxError extends Error {
     this.name = 'RegExpSyntaxError';
   }
 }
-
-/** Unicode code points >= 0x80 the `IdentifierPart` approximation excludes. */
-const UNICODE_SPACE_OR_LINE_TERMINATOR_CODES = new Set([
-  0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
-  0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
-  0xfeff,
-]);
 
 /**
  * @param {string} flags
@@ -172,28 +164,35 @@ function isCharacterClassEscapeLetter(unit) {
 }
 
 /**
- * Approximates ES5 7.6 `IdentifierPart`, documented at the top of this
- * module.
- *
  * @param {string} unit A single code unit.
  * @returns {boolean}
  */
 function isIdentifierPart(unit) {
-  if (isAsciiLetter(unit) || isDigit(unit) || unit === '_') {
-    return true;
-  }
-
-  if (unit === '\u200c' || unit === '\u200d') {
-    return true;
-  }
-
   const code = charCodeOfCodeUnit(unit);
+  let low = 0;
+  let high = identifierPartRanges.length / 2 - 1;
 
-  if (code < 0x80) {
+  // ES5 7.6 includes `$` in IdentifierPart, but `\$` is intentionally accepted
+  // for compatibility with shipping engines and real-world patterns.
+  if (code === 0x24) {
     return false;
   }
 
-  return !UNICODE_SPACE_OR_LINE_TERMINATOR_CODES.has(code);
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const start = identifierPartRanges[middle * 2];
+    const end = identifierPartRanges[middle * 2 + 1];
+
+    if (code < start) {
+      high = middle - 1;
+    } else if (code > end) {
+      low = middle + 1;
+    } else {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
