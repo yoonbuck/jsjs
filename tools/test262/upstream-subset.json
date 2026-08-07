@@ -11794,7 +11794,6 @@
         "test/staging/sm/RegExp/empty-lookahead.js",
         "test/staging/sm/RegExp/escape.js",
         "test/staging/sm/RegExp/exec-lastIndex-ToInteger.js",
-        "test/staging/sm/RegExp/exec.js",
         "test/staging/sm/RegExp/instance-property-storage-introspection.js",
         "test/staging/sm/RegExp/regress-576828.js",
         "test/staging/sm/RegExp/regress-613820-1.js",

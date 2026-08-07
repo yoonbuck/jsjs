@@ -4199,6 +4199,11 @@
       "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/RegExp/exec.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts that a non-global regexp's failed `exec` call leaves an out-of-range `lastIndex` untouched (e.g. `lastIndex = -17` stays `-17` after a failed match). ES5.1 §15.10.6.2 step 9.a.i unconditionally resets `lastIndex` to 0 on total match failure -- the algorithm's `Repeat` loop performs `[[Put]](\"lastIndex\", 0, true)` and returns `null` whenever the search index runs out of range, with no `global` guard on that step; only the *success* path's `lastIndex` update (step 11, \"If global is true ... [[Put]] ... e\") is conditioned on `global`. This test's own embedded copy of the ES5.1 algorithm (in its header comment) confirms step 9.a.i is unconditional, yet its assertions expect the reset to be skipped for non-global regexps -- a SpiderMonkey-specific behavior (bugzilla.mozilla.org/show_bug.cgi?id=646490) that predates and diverges from the ES5.1-mandated algorithm this engine implements."
+    },
+    {
       "path": "test/staging/sm/RegExp/getter-name.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."

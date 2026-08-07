@@ -21872,8 +21872,6 @@
 {"type":"test","file":"test/staging/sm/RegExp/escape.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/staging/sm/RegExp/exec-lastIndex-ToInteger.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/staging/sm/RegExp/exec-lastIndex-ToInteger.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/staging/sm/RegExp/exec.js","variant":"non-strict","status":"passed"}
-{"type":"test","file":"test/staging/sm/RegExp/exec.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/staging/sm/RegExp/instance-property-storage-introspection.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/staging/sm/RegExp/instance-property-storage-introspection.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/staging/sm/RegExp/regress-576828.js","variant":"non-strict","status":"passed"}
@@ -22257,9 +22255,9 @@
 {"type":"baseline","group":"language/statements","files":710,"records":1085,"passed":1085,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/types","files":98,"records":181,"passed":181,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/white-space","files":60,"records":120,"passed":120,"failed":0,"skipped":0}
-{"type":"baseline","group":"staging/sm","files":317,"records":571,"passed":571,"failed":0,"skipped":0}
-{"type":"features","supported":[],"tagged":[],"untagged":22209}
+{"type":"baseline","group":"staging/sm","files":316,"records":569,"passed":569,"failed":0,"skipped":0}
+{"type":"features","supported":[],"tagged":[],"untagged":22207}
 {"type":"inventory","files":53575,"records":102906,"malformed":4}
-{"type":"coverage","scope":"files","total":53575,"selected":11687,"attempted":11687,"passed":11687,"selectedPercent":21.814,"attemptedPercent":21.814,"passedPercent":21.814}
-{"type":"coverage","scope":"records","total":102906,"selected":22209,"attempted":22209,"passed":22209,"selectedPercent":21.582,"attemptedPercent":21.582,"passedPercent":21.582}
-{"type":"summary","total":22209,"passed":22209,"failed":0,"skipped":0}
+{"type":"coverage","scope":"files","total":53575,"selected":11686,"attempted":11686,"passed":11686,"selectedPercent":21.812,"attemptedPercent":21.812,"passedPercent":21.812}
+{"type":"coverage","scope":"records","total":102906,"selected":22207,"attempted":22207,"passed":22207,"selectedPercent":21.58,"attemptedPercent":21.58,"passedPercent":21.58}
+{"type":"summary","total":22207,"passed":22207,"failed":0,"skipped":0}
