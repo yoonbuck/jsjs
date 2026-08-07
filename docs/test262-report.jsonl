@@ -1719,6 +1719,8 @@
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-5-7.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-5-8.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-5-8.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-5-9.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-5-9.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-6-1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-6-1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-7-1.js","variant":"non-strict","status":"passed"}
@@ -1886,6 +1888,8 @@
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/15.4.4.14-9-b-iii-2.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/call-with-boolean.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/call-with-boolean.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/indexOf/fromindex-zero-conversion.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/indexOf/fromindex-zero-conversion.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/length-zero-returns-minus-one.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/length-zero-returns-minus-one.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/indexOf/prop-desc.js","variant":"non-strict","status":"passed"}
@@ -2110,6 +2114,8 @@
 {"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-7.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-8.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-8.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-9.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-9.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-6-1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-6-1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-6-2.js","variant":"non-strict","status":"passed"}
@@ -7408,6 +7414,8 @@
 {"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-295.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-296.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-296.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-297.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-297.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-298.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-298.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/create/15.2.3.5-4-3.js","variant":"non-strict","status":"passed"}
@@ -10836,6 +10844,8 @@
 {"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-59.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-590.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-590.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-591.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-591.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-592.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-592.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/defineProperty/15.2.3.6-4-593.js","variant":"non-strict","status":"passed"}
@@ -11734,6 +11744,8 @@
 {"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-2-4.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-3-1.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-3-1.js","variant":"strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-1.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-1.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-2.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-2.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-36.js","variant":"non-strict","status":"passed"}
@@ -22207,7 +22219,7 @@
 {"type":"test","file":"test/staging/sm/types/8.12.5-01.js","variant":"non-strict","status":"passed"}
 {"type":"baseline","group":"annexB/built-ins","files":47,"records":94,"passed":94,"failed":0,"skipped":0}
 {"type":"baseline","group":"annexB/language","files":13,"records":22,"passed":22,"failed":0,"skipped":0}
-{"type":"baseline","group":"built-ins/Array","files":2156,"records":4285,"passed":4285,"failed":0,"skipped":0}
+{"type":"baseline","group":"built-ins/Array","files":2159,"records":4291,"passed":4291,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Boolean","files":31,"records":62,"passed":62,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Date","files":334,"records":668,"passed":668,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Error","files":31,"records":62,"passed":62,"failed":0,"skipped":0}
@@ -22218,7 +22230,7 @@
 {"type":"baseline","group":"built-ins/NaN","files":6,"records":10,"passed":10,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/NativeErrors","files":56,"records":112,"passed":112,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Number","files":226,"records":452,"passed":452,"failed":0,"skipped":0}
-{"type":"baseline","group":"built-ins/Object","files":2849,"records":5688,"passed":5688,"failed":0,"skipped":0}
+{"type":"baseline","group":"built-ins/Object","files":2852,"records":5694,"passed":5694,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/RegExp","files":505,"records":1010,"passed":1010,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/String","files":757,"records":1511,"passed":1511,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/ThrowTypeError","files":11,"records":22,"passed":22,"failed":0,"skipped":0}
@@ -22256,8 +22268,8 @@
 {"type":"baseline","group":"language/types","files":98,"records":181,"passed":181,"failed":0,"skipped":0}
 {"type":"baseline","group":"language/white-space","files":60,"records":120,"passed":120,"failed":0,"skipped":0}
 {"type":"baseline","group":"staging/sm","files":316,"records":569,"passed":569,"failed":0,"skipped":0}
-{"type":"features","supported":[],"tagged":[],"untagged":22207}
+{"type":"features","supported":[],"tagged":[],"untagged":22219}
 {"type":"inventory","files":53575,"records":102906,"malformed":4}
-{"type":"coverage","scope":"files","total":53575,"selected":11686,"attempted":11686,"passed":11686,"selectedPercent":21.812,"attemptedPercent":21.812,"passedPercent":21.812}
-{"type":"coverage","scope":"records","total":102906,"selected":22207,"attempted":22207,"passed":22207,"selectedPercent":21.58,"attemptedPercent":21.58,"passedPercent":21.58}
-{"type":"summary","total":22207,"passed":22207,"failed":0,"skipped":0}
+{"type":"coverage","scope":"files","total":53575,"selected":11692,"attempted":11692,"passed":11692,"selectedPercent":21.824,"attemptedPercent":21.824,"passedPercent":21.824}
+{"type":"coverage","scope":"records","total":102906,"selected":22219,"attempted":22219,"passed":22219,"selectedPercent":21.592,"attemptedPercent":21.592,"passedPercent":21.592}
+{"type":"summary","total":22219,"passed":22219,"failed":0,"skipped":0}
