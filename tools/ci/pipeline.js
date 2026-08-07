@@ -30,6 +30,7 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { COVERAGE_DOCUMENT_FILE } from '../test262/coverage.js';
 
 /**
  * @typedef {{
@@ -66,18 +67,21 @@ export const NODE_VERSION = '20';
 
 /**
  * Where the upstream Test262 run writes its JSON-lines report. The file is
- * committed — it is the project's detailed conformance report, kept out of the
- * README so the README can stay a summary — and CI uploads this exact path as an
- * artifact, including on failure, which is when the per-test records matter
- * most. The constant is shared rather than spelled twice.
+ * committed — it is the project's detailed conformance report, kept out of
+ * docs/conformance.md so the conformance document can stay a summary — and CI
+ * uploads this exact path as an artifact, including on failure, which is when
+ * the per-test records matter most. The constant is shared rather than spelled
+ * twice.
  */
 export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
 
+export { COVERAGE_DOCUMENT_FILE };
+
 /**
- * The command that fails CI when the committed report or the README's generated
- * coverage block no longer matches what the run just produced. It follows the
- * run in the same job, so it compares a freshly written tree against the commit
- * rather than re-running a suite that has already run.
+ * The command that fails CI when the committed report or the coverage
+ * document's generated block no longer matches what the run just produced. It
+ * follows the run in the same job, so it compares a freshly written tree
+ * against the commit rather than re-running a suite that has already run.
  *
  * `git diff` alone would not be enough: it compares the working tree against the
  * index and says nothing at all about a path git does not track, so a report
@@ -85,8 +89,8 @@ export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
  * permanently clean. `ls-files --error-unmatch` fails on exactly that case.
  */
 export const TEST262_REPORT_DRIFT_COMMAND = [
-  `git ls-files --error-unmatch ${TEST262_REPORT_FILE} README.md > /dev/null`,
-  `git diff --exit-code -- ${TEST262_REPORT_FILE} README.md`,
+  `git ls-files --error-unmatch ${TEST262_REPORT_FILE} ${COVERAGE_DOCUMENT_FILE} > /dev/null`,
+  `git diff --exit-code -- ${TEST262_REPORT_FILE} ${COVERAGE_DOCUMENT_FILE}`,
 ].join(' && ');
 
 /**

@@ -22,8 +22,8 @@
  *   the whole-suite inventory and coverage, and the summary. CI uploads this
  *   file even when the run fails, which is when the per-test records are worth
  *   reading.
- * - The coverage block in `README.md` — a compact table, because a README that
- *   inlines two hundred JSON lines is a report nobody reads.
+ * - The coverage block in `docs/conformance.md` — a compact table, because a
+ *   document that inlines two hundred JSON lines is a report nobody reads.
  *
  * Stdout is the compact summary rather than the whole report: it is what a CI
  * log should show at a glance, and any failing records go to stderr next to it.
@@ -44,9 +44,14 @@ import {
   parseFeatureManifest,
 } from './features.js';
 import {
+  COVERAGE_DOCUMENT_FILE,
+  COVERAGE_MARKER_BEGIN,
+  COVERAGE_MARKER_END,
   collectTest262Inventory,
   formatCoverageLines,
+  readGeneratedBlock,
   renderCoverageSummary,
+  replaceGeneratedBlock,
   summarizeTest262Coverage,
 } from './coverage.js';
 import {
@@ -59,12 +64,40 @@ import {
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
-/** The file whose generated block carries the compact coverage summary. */
+/** Re-exported for consumers that import from this module. */
+export {
+  COVERAGE_DOCUMENT_FILE,
+  COVERAGE_MARKER_BEGIN,
+  COVERAGE_MARKER_END,
+  replaceGeneratedBlock,
+  readGeneratedBlock,
+};
+
+/** The README file path, used by CI contracts that assert it no longer carries coverage markers. */
 export const README_FILE = 'README.md';
 
-/** Markers delimiting the generated block in `README.md`. */
-export const COVERAGE_MARKER_BEGIN = '<!-- test262-coverage:begin -->';
-export const COVERAGE_MARKER_END = '<!-- test262-coverage:end -->';
+/**
+ * Computes a relative path from one repository-relative file to another, for
+ * use as a Markdown link target. Only handles the common case where both paths
+ * use forward slashes (repository-relative POSIX paths).
+ *
+ * @param {string} from Repository-relative path of the document.
+ * @param {string} to Repository-relative path of the target.
+ * @returns {string}
+ */
+function relativePath(from, to) {
+  const fromDir = from.slice(0, from.lastIndexOf('/'));
+  const toDir = to.slice(0, to.lastIndexOf('/'));
+  const toFile = to.slice(to.lastIndexOf('/') + 1);
+
+  if (fromDir === toDir) {
+    return toFile;
+  }
+
+  // Fall back to the full path when the directories differ in a way that a
+  // simple same-directory check cannot resolve.
+  return to;
+}
 
 /**
  * @param {string} path Repository-relative.
@@ -187,6 +220,7 @@ export async function main(argv = []) {
   const block = renderCoverageSummary({
     coverage,
     reportPath: TEST262_REPORT_FILE,
+    reportLinkPath: relativePath(COVERAGE_DOCUMENT_FILE, TEST262_REPORT_FILE),
   });
 
   process.stdout.write(`${block}\n`);
@@ -246,14 +280,14 @@ function writeFailures(records) {
  */
 async function synchronizeArtifacts(options) {
   const { report, block, check } = options;
-  const readme = await readRepositoryFile(README_FILE);
-  const updated = replaceGeneratedBlock(readme, block);
+  const coverageDoc = await readRepositoryFile(COVERAGE_DOCUMENT_FILE);
+  const updated = replaceGeneratedBlock(coverageDoc, block);
   /** @type {string[]} */
   const stale = [];
 
   for (const [path, contents] of [
     [TEST262_REPORT_FILE, report],
-    [README_FILE, updated],
+    [COVERAGE_DOCUMENT_FILE, updated],
   ]) {
     const current = await readGeneratedFile(path);
 
@@ -282,45 +316,6 @@ async function readGeneratedFile(path) {
   } catch {
     return null;
   }
-}
-
-/**
- * Replaces the marked block, leaving every other byte of the document alone.
- *
- * @param {string} document
- * @param {string} block
- * @returns {string}
- */
-export function replaceGeneratedBlock(document, block) {
-  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
-  const end = document.indexOf(COVERAGE_MARKER_END);
-
-  if (begin === -1 || end < begin) {
-    throw new Error(
-      `${README_FILE} must delimit the generated coverage block with ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
-    );
-  }
-
-  return `${document.slice(0, begin + COVERAGE_MARKER_BEGIN.length)}\n\n${block}\n\n${document.slice(end)}`;
-}
-
-/**
- * The generated block's content, as `replaceGeneratedBlock` wrote it.
- *
- * @param {string} document
- * @returns {string}
- */
-export function readGeneratedBlock(document) {
-  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
-  const end = document.indexOf(COVERAGE_MARKER_END);
-
-  if (begin === -1 || end < begin) {
-    throw new Error(
-      `${README_FILE} has no generated coverage block between ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
-    );
-  }
-
-  return document.slice(begin + COVERAGE_MARKER_BEGIN.length, end).trim();
 }
 
 if (isDirectInvocation()) {

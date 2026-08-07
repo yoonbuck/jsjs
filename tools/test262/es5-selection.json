@@ -62,37 +62,37 @@
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-decimal-escape-class-range.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-decimal-escape-not-capturing.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-leading-escape-BMP.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-leading-escape.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-trailing-escape-BMP.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/annexB/built-ins/RegExp/RegExp-trailing-escape.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/annexB/built-ins/RegExp/incomplete_hex_unicode_escape.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "prefix": "test/annexB/built-ins/RegExp/prototype/compile",
@@ -212,7 +212,7 @@
     {
       "prefix": "test/annexB/language/literals/regexp",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "prefix": "test/built-ins/Array/from",
@@ -852,12 +852,12 @@
     {
       "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\" (`toLocaleString` row): the engine's `toLocaleString` returns exactly `toString()`'s result with no locale/separator/`Intl` dependency, so `Array.prototype.toLocaleString` renders a primitive element via `ToString` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch (which yields \"object,object\", as JSC does); the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
+      "reason": "docs/limitations.md#arrayprototypetolocalestring-element-dispatch: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
     },
     {
       "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\" (`toLocaleString` row): the engine's `toLocaleString` returns exactly `toString()`'s result with no locale/separator/`Intl` dependency, so `Array.prototype.toLocaleString` renders a primitive element via `ToString` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch (which yields \"object,object\", as JSC does); the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
+      "reason": "docs/limitations.md#arrayprototypetolocalestring-element-dispatch: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
     },
     {
       "path": "test/built-ins/Array/prototype/toString/length.js",
@@ -3057,7 +3057,7 @@
     {
       "path": "test/built-ins/String/prototype/split/separator-regexp.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected. (here a `\\k` identity escape in the separator pattern)."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected — Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected (here a `\\k` identity escape in the separator pattern)."
     },
     {
       "prefix": "test/built-ins/String/prototype/startsWith",
@@ -3472,12 +3472,12 @@
     {
       "path": "test/language/literals/regexp/S7.8.5_A1.4_T2.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/language/literals/regexp/S7.8.5_A2.4_T2.js",
       "category": "engine-deviation",
-      "reason": "README \"Intentional deviations\": Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
+      "reason": "docs/limitations.md#annex-b-pattern-syntax-is-rejected: Annex B RegExp pattern extensions (legacy octal/identity escapes, non-standard class ranges, etc.) are rejected."
     },
     {
       "path": "test/language/statementList/eval-block-let-declaration.js",

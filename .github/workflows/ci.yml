@@ -189,7 +189,7 @@ jobs:
       - name: Run the pinned Test262 subset
         run: npm run test262:upstream
       - name: Check the generated report is current
-        run: git ls-files --error-unmatch docs/test262-report.jsonl README.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl README.md
+        run: git ls-files --error-unmatch docs/test262-report.jsonl docs/conformance.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl docs/conformance.md
       - name: Publish the Test262 report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

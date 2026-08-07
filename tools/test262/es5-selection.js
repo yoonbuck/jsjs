@@ -33,11 +33,15 @@ export const ES5_SELECTION_FILE = 'tools/test262/es5-selection.json';
 export const ES5_SELECTION_VERSION = 1;
 
 /**
- * The exclusion categories the policy may use, and nothing else. Two of them —
- * `post-es5-syntax` and `post-es5-builtin` — are produced by the structural
- * filters and by coarse prefix entries rather than a cited clause; the other
- * three must cite the ES5.1 clause or README deviation row that makes this
- * engine's behaviour correct.
+ * The exclusion categories the policy may use, and nothing else. Every
+ * exclusion regardless of category must carry a non-empty `reason` (enforced
+ * by `parseEs5Selection`). Two categories — `post-es5-syntax` and
+ * `post-es5-builtin` — come from structural filters and coarse prefixes, so
+ * their reasons need not cite a clause; the other three are expected to name
+ * the ES5.1 clause or `docs/limitations.md` heading that justifies them —
+ * this is enforced by human review. Only `engine-deviation` is also
+ * machine-checked: `test/node/repository-invariants.test.js` verifies that
+ * its reason references an anchor that exists in `docs/limitations.md`.
  */
 export const EXCLUSION_CATEGORIES = Object.freeze([
   'post-es5-semantics',

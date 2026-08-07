@@ -218,7 +218,7 @@ const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
  * load-bearing. Without this list, deleting, renaming, or emptying one of
  * these groups would still leave `tools/test262/upstream-subset.json`
  * well-formed and `npm run test262:upstream` green — just quieter, and
- * silently no longer measuring the family the README's milestone report
+ * silently no longer measuring the family the docs/conformance.md milestone report
  * claims it does. Each entry names the milestone that pinned the group, so a
  * future milestone extends this list rather than guessing whether a group is
  * load-bearing.
@@ -281,6 +281,125 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
   'language/types':
     'ES5 completion milestone (Task 4) — broad ES5.1 selection over test/language/types',
 });
+
+/** Reference documents that must exist under docs/ after reorganization. */
+const REFERENCE_DOCS = Object.freeze([
+  'docs/architecture.md',
+  'docs/testing.md',
+  'docs/conformance.md',
+  'docs/limitations.md',
+]);
+
+/**
+ * Returns the repository-relative file paths of the current-documentation
+ * Markdown files: README.md plus any *.md files directly under docs/ that are
+ * not inside the historical docs/superpowers/ subtree.
+ *
+ * @returns {Promise<string[]>}
+ */
+async function currentDocumentationFiles() {
+  /** @type {string[]} */
+  const files = ['README.md'];
+
+  const entries = await readdir(new URL('docs/', REPOSITORY_ROOT), {
+    withFileTypes: true,
+  });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() && entry.name.endsWith('.md')) {
+      files.push(`docs/${entry.name}`);
+    }
+  }
+
+  return files.sort();
+}
+
+/**
+ * Extracts the repository-relative path of every local file referenced by a
+ * Markdown link in `source`.  Anchor-only links and http(s) URLs are skipped.
+ * The returned paths are resolved relative to `sourceFile`.
+ *
+ * @param {string} source Markdown source text.
+ * @param {string} sourceFile Repository-relative path of the containing file.
+ * @returns {string[]}
+ */
+function markdownLinkTargets(source, sourceFile) {
+  const LINK_PATTERN = /\]\(([^)]+)\)/g;
+  const sourceUrl = new URL(sourceFile, REPOSITORY_ROOT);
+  /** @type {Set<string>} */
+  const targets = new Set();
+
+  for (const match of source.matchAll(LINK_PATTERN)) {
+    const raw = match[1].trim();
+    if (raw.startsWith('http://') || raw.startsWith('https://')) continue;
+    if (raw.startsWith('#')) continue;
+    const filePart = raw.split('#')[0];
+    if (!filePart) continue;
+    if (filePart.includes(' ')) continue;
+
+    const resolved = new URL(filePart, sourceUrl);
+    const rootPath = REPOSITORY_ROOT.pathname;
+    if (resolved.pathname.startsWith(rootPath)) {
+      targets.add(resolved.pathname.slice(rootPath.length));
+    }
+  }
+
+  return [...targets];
+}
+
+/**
+ * Extracts the script names from every `npm run <script>` occurrence in
+ * `source`, de-duplicated and in order of first appearance.
+ *
+ * @param {string} source
+ * @returns {string[]}
+ */
+function extractNpmRunCommands(source) {
+  const normalized = source.replace(/\s+/g, ' ');
+  const COMMAND_PATTERN = /\bnpm run ([\w:]+)/g;
+  const seen = new Set(
+    [...normalized.matchAll(COMMAND_PATTERN)].map((m) => m[1]),
+  );
+  return [...seen];
+}
+
+/**
+ * @param {string} repoRelativePath
+ * @returns {Promise<boolean>}
+ */
+async function fileExists(repoRelativePath) {
+  try {
+    await readFile(new URL(repoRelativePath, REPOSITORY_ROOT), 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extracts the set of GitHub-style heading anchor slugs from a Markdown source.
+ * GitHub's algorithm: lower-case, strip everything that is not a letter, digit,
+ * space, or hyphen, then replace spaces with hyphens.
+ *
+ * @param {string} source Markdown text.
+ * @returns {Set<string>}
+ */
+function markdownHeadingAnchors(source) {
+  const HEADING = /^#{1,6}\s+(.+)$/gm;
+  /** @type {Set<string>} */
+  const anchors = new Set();
+
+  for (const match of source.matchAll(HEADING)) {
+    const slug = match[1]
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N} -]/gu, '')
+      .replace(/ /g, '-');
+    anchors.add(slug);
+  }
+
+  return anchors;
+}
 
 export default [
   {
@@ -516,16 +635,16 @@ export default [
     },
   },
   {
-    // The coverage numbers the README publishes are generated into a marked
+    // The coverage numbers docs/conformance.md publishes are generated into a marked
     // block and drift-checked against a fresh run. The exclusion tally is not:
     // it is prose a human wrote, describing how much of the upstream suite this
     // selection sets aside and why. Prose that quotes a count rots the moment
     // the policy changes, and a stale tally is worse than no tally, because it
     // reads as measured. Bind it to the policy file instead.
-    name: 'the exclusion tally the README publishes matches the selection policy',
+    name: 'the exclusion tally in docs/conformance.md matches the selection policy',
     run: async () => {
       const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
-      const readme = await readSource('README.md');
+      const conformance = await readSource('docs/conformance.md');
       const counts = new Map(
         EXCLUSION_CATEGORIES.map((category) => [category, 0]),
       );
@@ -541,26 +660,26 @@ export default [
         const row = new RegExp(
           String.raw`^\|\s*\x60${category}\x60\s*\|\s*(\d+)\s*\|`,
           'mu',
-        ).exec(readme);
+        ).exec(conformance);
 
         assertSame(
           row !== null,
           true,
-          `README.md must keep a tally row for the ${category} exclusion category`,
+          `docs/conformance.md must keep a tally row for the ${category} exclusion category`,
         );
         assertSame(
           Number(row?.[1]),
           count,
-          `README.md says ${String(row?.[1])} ${category} exclusions; ${ES5_SELECTION_FILE} has ${count}`,
+          `docs/conformance.md says ${String(row?.[1])} ${category} exclusions; ${ES5_SELECTION_FILE} has ${count}`,
         );
       }
 
       const total = policy.exclusions.length;
 
       assertSame(
-        readme.includes(`The ${total} classified exclusions`),
+        conformance.includes(`The ${total} classified exclusions`),
         true,
-        `README.md must report ${total} classified exclusions, the total in ${ES5_SELECTION_FILE}`,
+        `docs/conformance.md must report ${total} classified exclusions, the total in ${ES5_SELECTION_FILE}`,
       );
     },
   },
@@ -829,6 +948,363 @@ export default [
         [...exclusions].sort().join(','),
         [...allowed].sort().join(','),
         'the ignore file and the documented exclusions must stay in step',
+      );
+    },
+  },
+  {
+    // The reorganization plan creates four authoritative reference files.
+    // This test fails until Tasks 2–4 create those files.
+    name: 'the four reference documentation files exist under docs/',
+    run: async () => {
+      for (const doc of REFERENCE_DOCS) {
+        assertSame(
+          await fileExists(doc),
+          true,
+          `${doc} must exist; run the documentation reorganization tasks`,
+        );
+      }
+    },
+  },
+  {
+    // Every relative link that appears in a current-documentation Markdown
+    // file must point to an existing file in the repository.  External http(s)
+    // URLs and same-page anchors are out of scope.  Historical files under
+    // docs/superpowers/ are project records, not current documentation, so
+    // they are excluded from both the source scan and the target allowlist.
+    name: 'every local Markdown link in current documentation resolves to an existing file',
+    run: async () => {
+      const docFiles = await currentDocumentationFiles();
+      /** @type {string[]} */
+      const broken = [];
+
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+
+        for (const target of markdownLinkTargets(source, docFile)) {
+          if (!(await fileExists(target))) {
+            broken.push(`${docFile} -> ${target}`);
+          }
+        }
+      }
+
+      assertSame(
+        broken.join('\n'),
+        '',
+        'broken local links in current documentation',
+      );
+
+      const EXPECTED_DOC_FILES = [
+        'README.md',
+        'docs/architecture.md',
+        'docs/conformance.md',
+        'docs/limitations.md',
+        'docs/testing.md',
+      ];
+      const missing = EXPECTED_DOC_FILES.filter((f) => !docFiles.includes(f));
+      assertSame(
+        missing.join('\n'),
+        '',
+        'expected documentation files are present in the scanned set',
+      );
+    },
+  },
+  {
+    // Every `npm run <script>` command that appears in a current-documentation
+    // Markdown file must name a script that exists in package.json.  Stale
+    // command references in README or the reference docs would send readers to
+    // a command that no longer works.  Historical files under docs/superpowers/
+    // are excluded — they may reference commands from earlier iterations of the
+    // project.
+    name: 'every npm run command in current documentation refers to an existing script',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const scripts = new Set(Object.keys(manifest.scripts ?? {}));
+      const docFiles = await currentDocumentationFiles();
+      /** @type {string[]} */
+      const unknown = [];
+
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+
+        for (const command of extractNpmRunCommands(source)) {
+          if (!scripts.has(command)) {
+            unknown.push(`${docFile}: npm run ${command}`);
+          }
+        }
+      }
+
+      assertSame(
+        unknown.join('\n'),
+        '',
+        'current documentation references npm scripts that do not exist in package.json',
+      );
+
+      // Guard: at least some npm run commands were actually extracted.
+      const allCommands = [];
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+        allCommands.push(...extractNpmRunCommands(source));
+      }
+      assertSame(
+        allCommands.length > 0,
+        true,
+        'at least one npm run command was extracted from documentation',
+      );
+    },
+  },
+  {
+    // Every engine-deviation exclusion must reference a heading anchor in
+    // docs/limitations.md, so the reason text never drifts from a real section.
+    name: 'every engine-deviation exclusion references a heading that exists in docs/limitations.md',
+    run: async () => {
+      const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
+      const limSource = await readSource('docs/limitations.md');
+      const anchors = markdownHeadingAnchors(limSource);
+      /** @type {string[]} */
+      const broken = [];
+
+      for (const exclusion of policy.exclusions) {
+        if (exclusion.category !== 'engine-deviation') continue;
+
+        // Extract the anchor reference from the reason text.
+        // Reasons should contain a Markdown-style anchor reference like:
+        //   [Annex B pattern syntax is rejected](docs/limitations.md#annex-b-pattern-syntax-is-rejected)
+        // or at minimum name the heading.
+        const anchorMatch = /docs\/limitations\.md#([\w-]+)/.exec(
+          exclusion.reason,
+        );
+
+        if (!anchorMatch) {
+          broken.push(
+            `exclusion for ${exclusion.path ?? exclusion.prefix} does not reference docs/limitations.md#<anchor>`,
+          );
+          continue;
+        }
+
+        const anchor = anchorMatch[1];
+        if (!anchors.has(anchor)) {
+          broken.push(
+            `exclusion for ${exclusion.path ?? exclusion.prefix} references #${anchor} which does not exist in docs/limitations.md`,
+          );
+        }
+      }
+
+      assertSame(
+        broken.join('\n'),
+        '',
+        'engine-deviation exclusion reasons must reference real headings in docs/limitations.md',
+      );
+    },
+  },
+  {
+    // README must not hold authoritative deviation or limitation tables; those
+    // belong in docs/limitations.md after the documentation reorganization.
+    name: 'README does not contain authoritative deviation or limitation tables',
+    run: async () => {
+      const readme = await readSource('README.md');
+      assertSame(
+        /^#{1,6}\s+Intentional deviations/m.test(readme),
+        false,
+        'README must not contain an "Intentional deviations" heading; move it to docs/limitations.md',
+      );
+      assertSame(
+        /^#{1,6}\s+Known limitations/m.test(readme),
+        false,
+        'README must not contain a "Known limitations" heading; move it to docs/limitations.md',
+      );
+    },
+  },
+  {
+    name: 'portable suites do not import Node builtins',
+    run: async () => {
+      const suitesSource = await readSource('test/suites.js');
+      const suiteSpecifiers = importSpecifiers(suitesSource).filter((s) =>
+        s.startsWith('./'),
+      );
+      const suiteFiles = suiteSpecifiers.map(
+        (s) => `test/${s.replace(/^\.\//, '')}`,
+      );
+
+      const NODE_BUILTIN_PREFIXES = ['node:'];
+      const BARE_BUILTINS = new Set([
+        'assert',
+        'buffer',
+        'child_process',
+        'cluster',
+        'crypto',
+        'dgram',
+        'dns',
+        'events',
+        'fs',
+        'http',
+        'http2',
+        'https',
+        'net',
+        'os',
+        'path',
+        'perf_hooks',
+        'querystring',
+        'readline',
+        'repl',
+        'stream',
+        'string_decoder',
+        'tls',
+        'tty',
+        'url',
+        'util',
+        'v8',
+        'vm',
+        'worker_threads',
+        'zlib',
+      ]);
+
+      /**
+       * @param {string} specifier
+       * @returns {boolean}
+       */
+      function isNodeBuiltin(specifier) {
+        if (NODE_BUILTIN_PREFIXES.some((p) => specifier.startsWith(p))) {
+          return true;
+        }
+        return BARE_BUILTINS.has(specifier);
+      }
+
+      /** Matches static `from '…'` and `import '…'` specifiers, not dynamic `import('…')`. */
+      const STATIC_SPECIFIER =
+        /\b(?:from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"])/g;
+
+      /**
+       * @param {string} source
+       * @returns {string[]}
+       */
+      function staticImportSpecifiers(source) {
+        return [...source.matchAll(STATIC_SPECIFIER)].map(
+          (match) => match[1] ?? match[2],
+        );
+      }
+
+      /** @type {string[]} */
+      const violations = [];
+      /** @type {Set<string>} */
+      const visited = new Set();
+
+      /**
+       * @param {string} file Repository-relative path.
+       * @returns {Promise<void>}
+       */
+      async function walk(file) {
+        if (visited.has(file)) return;
+        visited.add(file);
+
+        /** @type {string} */
+        let source;
+        try {
+          source = await readSource(file);
+        } catch {
+          return;
+        }
+
+        const specifiers = staticImportSpecifiers(source);
+        for (const specifier of specifiers) {
+          if (isNodeBuiltin(specifier)) {
+            violations.push(`${file} imports ${specifier}`);
+            continue;
+          }
+          if (specifier.startsWith('.')) {
+            const base = new URL(file, 'file:///repo/');
+            const target = new URL(specifier, base);
+            const resolved = target.pathname.slice('/repo/'.length);
+            await walk(resolved);
+          }
+        }
+      }
+
+      for (const suiteFile of suiteFiles) {
+        await walk(suiteFile);
+      }
+
+      assertSame(
+        violations.join('\n'),
+        '',
+        `portable suites must not import Node builtins (directly or transitively):\n${violations.join('\n')}`,
+      );
+    },
+  },
+  {
+    // Every script defined in package.json must appear in docs/testing.md's
+    // command documentation, so the "full command list" claim in README is true.
+    name: 'every package.json script is documented in docs/testing.md',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const scripts = Object.keys(manifest.scripts ?? {});
+      const testingDoc = await readSource('docs/testing.md');
+      /** @type {string[]} */
+      const missing = [];
+
+      for (const script of scripts) {
+        // Match the backtick-delimited span `npm run <script>` (or `npm test`)
+        const command = script === 'test' ? 'npm test' : `npm run ${script}`;
+        if (!testingDoc.includes(`\`${command}\``)) {
+          missing.push(script);
+        }
+      }
+
+      assertSame(
+        missing.join('\n'),
+        '',
+        `package.json scripts missing from docs/testing.md: ${missing.join(', ')}`,
+      );
+    },
+  },
+  {
+    // README must contain an install command and an embedding example that
+    // calls createRealm and evaluateScript, as required by the design spec.
+    name: 'README contains install command and embedding example',
+    run: async () => {
+      const readme = await readSource('README.md');
+      assertSame(
+        /```[^\n]*\nnpm install\n```/.test(readme),
+        true,
+        'README must contain an install command (npm install) inside a fenced code block',
+      );
+      assertSame(
+        readme.includes('createRealm'),
+        true,
+        'README must contain an embedding example that calls createRealm',
+      );
+      assertSame(
+        readme.includes('evaluateScript'),
+        true,
+        'README must contain an embedding example that calls evaluateScript',
+      );
+    },
+  },
+  {
+    // Every inline-code span in current documentation that names a repository
+    // source path (src/**, test/**, tools/**) must reference a file that exists.
+    // This catches stale or mistyped module names in prose.
+    name: 'every inline source path in current documentation names an existing file',
+    run: async () => {
+      const docFiles = await currentDocumentationFiles();
+      const SOURCE_PATH_PATTERN =
+        /`((?:src|test|tools)\/[^\s`*?]+\.(?:js|mjs|cjs|json))`/g;
+      /** @type {string[]} */
+      const broken = [];
+
+      for (const docFile of docFiles) {
+        const source = await readSource(docFile);
+        for (const match of source.matchAll(SOURCE_PATH_PATTERN)) {
+          const path = match[1];
+          if (!(await fileExists(path))) {
+            broken.push(`${docFile}: \`${path}\``);
+          }
+        }
+      }
+
+      assertSame(
+        broken.join('\n'),
+        '',
+        'inline source paths in documentation that do not exist in the repository',
       );
     },
   },
