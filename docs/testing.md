@@ -35,20 +35,20 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 
 ## Commands
 
-| Command                             | What it does                                                                                                                             |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                          | The Node suites, then the Test262 fixture suite through the CLI                                                                          |
-| `npm run test:node`                 | Every portable suite plus the Node-only suites in `test/node/`                                                                           |
-| `npm run test:browser`              | Every portable suite in the headless Chromium shell via Playwright                                                                       |
-| `npm run test:jsc`                  | Every portable suite in the `jsc` shell                                                                                                  |
-| `npm run test262:fixtures`          | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                 |
-| `npm run test262:fixtures:manifest` | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                            |
-| `npm run test262:upstream`          | The pinned upstream subset from a real `tc39/test262` checkout (regenerates `docs/test262-report.jsonl` and the README's coverage block) |
-| `npm run test262:upstream:check`    | The same run, writing nothing: fails if either generated artifact is stale                                                               |
-| `npm run test262:select`            | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                |
-| `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                             |
-| `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                  |
-| `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                              |
+| Command                             | What it does                                                                                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                          | The Node suites, then the Test262 fixture suite through the CLI                                                                                          |
+| `npm run test:node`                 | Every portable suite plus the Node-only suites in `test/node/`                                                                                           |
+| `npm run test:browser`              | Every portable suite in the headless Chromium shell via Playwright                                                                                       |
+| `npm run test:jsc`                  | Every portable suite in the `jsc` shell                                                                                                                  |
+| `npm run test262:fixtures`          | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                 |
+| `npm run test262:fixtures:manifest` | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                            |
+| `npm run test262:upstream`          | The pinned upstream subset from a real `tc39/test262` checkout (regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`) |
+| `npm run test262:upstream:check`    | The same run, writing nothing: fails if either generated artifact is stale                                                                               |
+| `npm run test262:select`            | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                |
+| `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                                             |
+| `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                  |
+| `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 
 ## Suite organization
 
@@ -59,16 +59,16 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 default work from it. `test/node/repository-invariants.test.js` fails if a suite
 file exists that no runner registers.
 
-The registry currently lists 43 portable suites covering: foundation, parser,
+The registry currently lists 46 portable suites covering: foundation, parser,
 runtime records, objects, abstract operations, environments, realms, evaluator
 expressions and statements, `with` statements, functions, object/array literals,
 Test262 runner, ES5 selection, errors, try statements, switch/labels,
 update/assignment, `in`/`instanceof`, strict mode, `eval`, dynamic `Function`,
 `delete`, date arithmetic, date built-ins, native built-ins, object built-ins,
 function built-ins, array built-ins, primitive wrappers, boolean/number/string
-built-ins, number formatting, string search/case/pattern, regexp
-syntax/built-ins/exec, string-regexp, math built-ins, numeric globals, URI
-globals, JSON parse, and JSON stringify.
+built-ins, number formatting, string built-ins, string search/case/pattern,
+regexp syntax/built-ins/exec, string-regexp, math built-ins, numeric globals,
+URI globals, JSON parse, and JSON stringify.
 
 ### Node-only suites (`test/node/`)
 
