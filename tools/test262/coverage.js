@@ -36,6 +36,56 @@ import {
 import { sortTestPaths } from './selection.js';
 
 /**
+ * The file whose generated block carries the compact coverage summary.
+ * Defined here — not in `tools/ci/pipeline.js` — so portable suites can
+ * import the constant without pulling in Node builtins.
+ */
+export const COVERAGE_DOCUMENT_FILE = 'docs/conformance.md';
+
+/** Markers delimiting the generated block in the coverage document. */
+export const COVERAGE_MARKER_BEGIN = '<!-- test262-coverage:begin -->';
+export const COVERAGE_MARKER_END = '<!-- test262-coverage:end -->';
+
+/**
+ * Replaces the marked block, leaving every other byte of the document alone.
+ *
+ * @param {string} document
+ * @param {string} block
+ * @returns {string}
+ */
+export function replaceGeneratedBlock(document, block) {
+  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
+  const end = document.indexOf(COVERAGE_MARKER_END);
+
+  if (begin === -1 || end < begin) {
+    throw new Error(
+      `${COVERAGE_DOCUMENT_FILE} must delimit the generated coverage block with ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
+    );
+  }
+
+  return `${document.slice(0, begin + COVERAGE_MARKER_BEGIN.length)}\n\n${block}\n\n${document.slice(end)}`;
+}
+
+/**
+ * The generated block's content, as `replaceGeneratedBlock` wrote it.
+ *
+ * @param {string} document
+ * @returns {string}
+ */
+export function readGeneratedBlock(document) {
+  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
+  const end = document.indexOf(COVERAGE_MARKER_END);
+
+  if (begin === -1 || end < begin) {
+    throw new Error(
+      `${COVERAGE_DOCUMENT_FILE} has no generated coverage block between ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
+    );
+  }
+
+  return document.slice(begin + COVERAGE_MARKER_BEGIN.length, end).trim();
+}
+
+/**
  * Upstream marks support files a test imports — never runs on their own — with
  * this suffix. Counting them as tests would inflate the denominator with files
  * no engine is expected to pass.

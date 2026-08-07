@@ -30,6 +30,7 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { COVERAGE_DOCUMENT_FILE } from '../test262/coverage.js';
 
 /**
  * @typedef {{
@@ -73,12 +74,7 @@ export const NODE_VERSION = '20';
  */
 export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
 
-/**
- * The file whose generated block carries the compact coverage summary.
- * Imported from upstream-run.js would create a circular dependency with
- * pipeline.js, so this is the authoritative definition shared by both.
- */
-export const COVERAGE_DOCUMENT_FILE = 'docs/conformance.md';
+export { COVERAGE_DOCUMENT_FILE };
 
 /**
  * The command that fails CI when the committed report or the coverage

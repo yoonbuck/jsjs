@@ -27,20 +27,18 @@ import {
   formatReportLines,
 } from '../tools/test262/report.js';
 import {
+  COVERAGE_DOCUMENT_FILE,
+  COVERAGE_MARKER_BEGIN,
+  COVERAGE_MARKER_END,
   Test262CoverageError,
   collectTest262Inventory,
   formatCoverageLines,
   isTest262TestPath,
+  readGeneratedBlock,
   renderCoverageSummary,
+  replaceGeneratedBlock,
   summarizeTest262Coverage,
 } from '../tools/test262/coverage.js';
-import {
-  COVERAGE_DOCUMENT_FILE,
-  COVERAGE_MARKER_BEGIN,
-  COVERAGE_MARKER_END,
-  replaceGeneratedBlock,
-  readGeneratedBlock,
-} from '../tools/test262/upstream-run.js';
 import { createFixtureTest262Host } from './harness/test262-host.js';
 
 /**

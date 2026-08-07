@@ -37,16 +37,21 @@ import { createRealm, evaluateScript } from '../../src/index.js';
 import { createNodeTest262Host } from './adapters/node.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
-import { TEST262_REPORT_FILE, COVERAGE_DOCUMENT_FILE } from '../ci/pipeline.js';
+import { TEST262_REPORT_FILE } from '../ci/pipeline.js';
 import {
   FEATURES_MANIFEST_FILE,
   featureNames,
   parseFeatureManifest,
 } from './features.js';
 import {
+  COVERAGE_DOCUMENT_FILE,
+  COVERAGE_MARKER_BEGIN,
+  COVERAGE_MARKER_END,
   collectTest262Inventory,
   formatCoverageLines,
+  readGeneratedBlock,
   renderCoverageSummary,
+  replaceGeneratedBlock,
   summarizeTest262Coverage,
 } from './coverage.js';
 import {
@@ -60,16 +65,16 @@ import {
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
 /** Re-exported for consumers that import from this module. */
-export { COVERAGE_DOCUMENT_FILE };
+export {
+  COVERAGE_DOCUMENT_FILE,
+  COVERAGE_MARKER_BEGIN,
+  COVERAGE_MARKER_END,
+  replaceGeneratedBlock,
+  readGeneratedBlock,
+};
 
-/**
- * @deprecated Use COVERAGE_DOCUMENT_FILE. Kept for migration compatibility.
- */
+/** The README file path, used by CI contracts that assert it no longer carries coverage markers. */
 export const README_FILE = 'README.md';
-
-/** Markers delimiting the generated block in the coverage document. */
-export const COVERAGE_MARKER_BEGIN = '<!-- test262-coverage:begin -->';
-export const COVERAGE_MARKER_END = '<!-- test262-coverage:end -->';
 
 /**
  * Computes a relative path from one repository-relative file to another, for
@@ -311,45 +316,6 @@ async function readGeneratedFile(path) {
   } catch {
     return null;
   }
-}
-
-/**
- * Replaces the marked block, leaving every other byte of the document alone.
- *
- * @param {string} document
- * @param {string} block
- * @returns {string}
- */
-export function replaceGeneratedBlock(document, block) {
-  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
-  const end = document.indexOf(COVERAGE_MARKER_END);
-
-  if (begin === -1 || end < begin) {
-    throw new Error(
-      `${COVERAGE_DOCUMENT_FILE} must delimit the generated coverage block with ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
-    );
-  }
-
-  return `${document.slice(0, begin + COVERAGE_MARKER_BEGIN.length)}\n\n${block}\n\n${document.slice(end)}`;
-}
-
-/**
- * The generated block's content, as `replaceGeneratedBlock` wrote it.
- *
- * @param {string} document
- * @returns {string}
- */
-export function readGeneratedBlock(document) {
-  const begin = document.indexOf(COVERAGE_MARKER_BEGIN);
-  const end = document.indexOf(COVERAGE_MARKER_END);
-
-  if (begin === -1 || end < begin) {
-    throw new Error(
-      `${COVERAGE_DOCUMENT_FILE} has no generated coverage block between ${COVERAGE_MARKER_BEGIN} and ${COVERAGE_MARKER_END}`,
-    );
-  }
-
-  return document.slice(begin + COVERAGE_MARKER_BEGIN.length, end).trim();
 }
 
 if (isDirectInvocation()) {

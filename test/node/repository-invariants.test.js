@@ -1095,4 +1095,120 @@ export default [
       );
     },
   },
+  {
+    name: 'portable suites do not import Node builtins',
+    run: async () => {
+      const suitesSource = await readSource('test/suites.js');
+      const suiteSpecifiers = importSpecifiers(suitesSource).filter((s) =>
+        s.startsWith('./'),
+      );
+      const suiteFiles = suiteSpecifiers.map(
+        (s) => `test/${s.replace(/^\.\//, '')}`,
+      );
+
+      const NODE_BUILTIN_PREFIXES = ['node:'];
+      const BARE_BUILTINS = new Set([
+        'assert',
+        'buffer',
+        'child_process',
+        'cluster',
+        'crypto',
+        'dgram',
+        'dns',
+        'events',
+        'fs',
+        'http',
+        'http2',
+        'https',
+        'net',
+        'os',
+        'path',
+        'perf_hooks',
+        'querystring',
+        'readline',
+        'repl',
+        'stream',
+        'string_decoder',
+        'tls',
+        'tty',
+        'url',
+        'util',
+        'v8',
+        'vm',
+        'worker_threads',
+        'zlib',
+      ]);
+
+      /**
+       * @param {string} specifier
+       * @returns {boolean}
+       */
+      function isNodeBuiltin(specifier) {
+        if (NODE_BUILTIN_PREFIXES.some((p) => specifier.startsWith(p))) {
+          return true;
+        }
+        return BARE_BUILTINS.has(specifier);
+      }
+
+      /** Matches static `from '…'` and `import '…'` specifiers, not dynamic `import('…')`. */
+      const STATIC_SPECIFIER =
+        /\b(?:from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"])/g;
+
+      /**
+       * @param {string} source
+       * @returns {string[]}
+       */
+      function staticImportSpecifiers(source) {
+        return [...source.matchAll(STATIC_SPECIFIER)].map(
+          (match) => match[1] ?? match[2],
+        );
+      }
+
+      /** @type {string[]} */
+      const violations = [];
+      /** @type {Set<string>} */
+      const visited = new Set();
+
+      /**
+       * @param {string} file Repository-relative path.
+       * @returns {Promise<void>}
+       */
+      async function walk(file) {
+        if (visited.has(file)) return;
+        visited.add(file);
+
+        /** @type {string} */
+        let source;
+        try {
+          source = await readSource(file);
+        } catch {
+          return;
+        }
+
+        const specifiers = staticImportSpecifiers(source);
+        for (const specifier of specifiers) {
+          if (isNodeBuiltin(specifier)) {
+            violations.push(`${file} imports ${specifier}`);
+            continue;
+          }
+          if (specifier.startsWith('.')) {
+            const base = new URL(file, 'file:///repo/');
+            const target = new URL(specifier, base);
+            const resolved = target.pathname.slice('/repo/'.length);
+            await walk(resolved);
+          }
+        }
+      }
+
+      for (const suiteFile of suiteFiles) {
+        await walk(suiteFile);
+      }
+
+      assertSame(
+        violations.join('\n'),
+        '',
+        `portable suites must not import Node builtins (directly or transitively):\n${violations.join('\n')}`,
+      );
+    },
+  },
 ];
