@@ -13,6 +13,7 @@
     "test262:upstream:check": "node tools/test262/upstream-run.js --check",
     "test262:select": "node tools/test262/upstream-select.js",
     "test262:select:check": "node tools/test262/upstream-select.js --check",
+    "test262:exclusions:check": "node tools/test262/exclusions-check.js",
     "test262:jsc": "npm run vendor:sync && jsc -m tools/test262/adapters/jsc-run.js",
     "vendor:sync": "node tools/vendor/sync.js",
     "vendor:check": "node tools/vendor/sync.js --check",

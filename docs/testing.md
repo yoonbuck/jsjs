@@ -47,6 +47,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:upstream:check`    | The same run, writing nothing: fails if either generated artifact is stale                                                                               |
 | `npm run test262:select`            | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                |
 | `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                                             |
+| `npm run test262:exclusions:check`  | Runs excluded tests and fails if any now pass (stale exclusion detection)                                                                                |
 | `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                  |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |

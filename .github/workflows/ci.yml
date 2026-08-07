@@ -188,6 +188,8 @@ jobs:
         run: npm run test262:select:check
       - name: Run the pinned Test262 subset
         run: npm run test262:upstream
+      - name: Check for stale exclusions
+        run: npm run test262:exclusions:check
       - name: Check the generated report is current
         run: git ls-files --error-unmatch docs/test262-report.jsonl docs/conformance.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl docs/conformance.md
       - name: Publish the Test262 report
