@@ -852,12 +852,12 @@
     {
       "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js",
       "category": "engine-deviation",
-      "reason": "docs/limitations.md#arrayprototypetolocalestring-primitive-short-circuit: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
+      "reason": "docs/limitations.md#arrayprototypetolocalestring-element-dispatch: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
     },
     {
       "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js",
       "category": "engine-deviation",
-      "reason": "docs/limitations.md#arrayprototypetolocalestring-primitive-short-circuit: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
+      "reason": "docs/limitations.md#arrayprototypetolocalestring-element-dispatch: when an Array element is a primitive whose `toLocaleString` is inherited `Object.prototype.toLocaleString`, the engine renders via `ToString(element)` (\"true,false\") rather than ES5.1 §15.4.4.3's box-then-dispatch; the test's ES2015 \"boolean,boolean\" is unreachable by any ES5.1-compliant engine."
     },
     {
       "path": "test/built-ins/Array/prototype/toString/length.js",

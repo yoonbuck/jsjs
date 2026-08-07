@@ -154,7 +154,7 @@ ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly
 
 **Backing code:** `src/builtins/primitive-wrappers.js` (`toLocaleString`).
 
-### Array.prototype.toLocaleString primitive short-circuit
+### Array.prototype.toLocaleString element dispatch
 
 ES5 15.4.4.3 requires boxing each non-null, non-undefined element with
 `ToObject` and calling its `toLocaleString` on that wrapper. This engine has
