@@ -1242,9 +1242,9 @@ export default [
       const missing = [];
 
       for (const script of scripts) {
-        // Match as `npm run <script>` or `npm test` for the "test" script
+        // Match the backtick-delimited span `npm run <script>` (or `npm test`)
         const command = script === 'test' ? 'npm test' : `npm run ${script}`;
-        if (!testingDoc.includes(command)) {
+        if (!testingDoc.includes(`\`${command}\``)) {
           missing.push(script);
         }
       }
@@ -1263,9 +1263,9 @@ export default [
     run: async () => {
       const readme = await readSource('README.md');
       assertSame(
-        readme.includes('npm install'),
+        /```[^\n]*\nnpm install\n```/.test(readme),
         true,
-        'README must contain an install command (npm install)',
+        'README must contain an install command (npm install) inside a fenced code block',
       );
       assertSame(
         readme.includes('createRealm'),
