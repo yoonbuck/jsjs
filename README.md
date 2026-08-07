@@ -41,13 +41,13 @@ Every selected record passes. Conformance methodology, the supported ES5.1
 surface, denominator semantics, the live coverage table, and the detailed report
 are in [docs/conformance.md](docs/conformance.md).
 
-### Architecture
+## Architecture
 
 Source flow, realms and intrinsics, the type system (values, objects,
 environments, references, completions), evaluator boundaries, host adapters, and
 the embedding API are documented in [docs/architecture.md](docs/architecture.md).
 
-#### Limitations and deviations
+## Limitations and deviations
 
 The engine has a small number of intentional deviations from the ES5.1 text
 (mostly following ES2015+ errata every engine ships) and one known limitation

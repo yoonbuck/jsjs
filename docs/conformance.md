@@ -54,8 +54,8 @@ global object.
 tests are in scope; `tools/test262/es5-selection.js` implements it as pure,
 host-free code so the decisions can be tested without a checkout, and
 `npm run test262:select` applies it to the pinned tree and writes
-`upstream-subset.json`. The policy is data, not prose: `npm run
-test262:select:check` re-derives the manifest without writing and fails if the
+`upstream-subset.json`. The policy is data, not prose:
+`npm run test262:select:check` re-derives the manifest without writing and fails if the
 committed one has drifted, so the selection can never quietly diverge from the
 rules that justify it.
 
@@ -102,12 +102,15 @@ editions deliberately changed. The 776 classified exclusions break down as:
 
 The distinction that matters is between the first four categories and the last.
 The first four say _the test is not about ES5.1_; only `engine-deviation` says
-_this engine does not do what ES5.1 asks_, and there are 13 such entries, every
-one of them documented in [docs/limitations.md](limitations.md). Two categories — `post-es5-syntax` and
+_this engine does not do what ES5.1 asks_, and every one of them is documented in [docs/limitations.md](limitations.md). Two categories — `post-es5-syntax` and
 `post-es5-builtin` — come from structural filters and coarse prefixes, so they
-carry a reason but not a clause; the other three must name the ES5.1 clause or
-the [docs/limitations.md](limitations.md) heading that makes this engine's behaviour correct, and the parser
-rejects an entry that does not.
+carry a reason but not a clause; the other three require a reason that names
+the ES5.1 clause or the [docs/limitations.md](limitations.md) heading that
+makes this engine's behaviour correct — this is enforced by human review, not
+by machine. Only the `engine-deviation` category is machine-checked:
+`test/node/repository-invariants.test.js` verifies that each
+`engine-deviation` reason references an anchor that exists in
+`docs/limitations.md`.
 
 ## Feature manifest
 

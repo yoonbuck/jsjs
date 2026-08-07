@@ -23,7 +23,7 @@ Annex B extensions, so patterns web engines accept via Annex B (`/]/`, `/{/`,
 patterns too: `"a{b".match("{")` throws where an Annex B engine matches `"{"`
 literally.
 
-**Backing code:** `src/builtins/regexp-syntax.js` (the strict ES5.1 grammar
+**Backing code:** `src/runtime/regexp-syntax.js` (the strict ES5.1 grammar
 validator).
 **Verification:** `evaluateScript(realm, 'try { "a{b".match("{"); "ok" } catch(e) { e.constructor.name }')` → `"SyntaxError"`.
 
@@ -37,7 +37,7 @@ as invalid identity escapes, where the spec's exact `IdentifierPart` would
 accept them. The approximation is documented in `regexp-syntax.js`'s module
 header.
 
-**Backing code:** `src/builtins/regexp-syntax.js`, module-level comment.
+**Backing code:** `src/runtime/regexp-syntax.js`, module-level comment.
 
 ### RegExp literals are validated at evaluation time
 
@@ -48,9 +48,9 @@ evaluated, so such a pattern throws a guest `SyntaxError` at the point the
 literal expression executes, not when the program is parsed.
 
 **Backing code:** `src/evaluator/expressions.js` (the `Literal` handler for
-RegExp nodes calls `src/builtins/regexp-syntax.js`).
+RegExp nodes calls `src/runtime/regexp-syntax.js`).
 
-### Zero-width global matchreplace count
+### Zero-width global match/replace count
 
 ES5 15.5.4.10 step 8.f.iii.2 bumps `lastIndex` only when
 `thisIndex === previousLastIndex`, not when the match is empty. For `/\b/g` on
@@ -59,11 +59,11 @@ ES2015+ engines yield 2, because ES2015 replaced this with
 `AdvanceStringIndex`-on-empty-match. The implementation follows the ES5.1 text
 exactly.
 
-**Backing code:** `src/builtins/string-builtins.js` (`String.prototype.match`
+**Backing code:** `src/builtins/string-regexp.js` (`String.prototype.match`
 and `String.prototype.replace`).
 **Verification:** `evaluateScript(realm, '"ab".match(new RegExp("\\\\b","g")).length')` → `3`.
 
-### Matching runs on the hosts RegExp engine
+### Matching runs on the host's RegExp engine
 
 `src/runtime/regexp-compat.js` is the sole host boundary for guest-visible
 regular expression semantics: it compiles an already-validated pattern with the
@@ -83,7 +83,7 @@ Literal ES5 15.7.4.6 step 8.a resets `f` to 0, making
 `(0).toExponential(5)` be `"0e+0"`. This follows the ES2015+ errata fix every
 engine ships: `"0.00000e+0"`.
 
-**Backing code:** `src/builtins/number-builtins.js` (`toExponential`).
+**Backing code:** `src/builtins/number-format.js` (`toExponential`).
 **Verification:** `evaluateScript(realm, '(0).toExponential(5)')` → `"0.00000e+0"`.
 
 ### toFixed receiver vs argument order
@@ -93,7 +93,7 @@ receiver. This validates the receiver first (the ES2015+ order, and the order
 ES5 already used for `toExponential`/`toPrecision`), so
 `Number.prototype.toFixed.call({}, 21)` throws `TypeError`, not `RangeError`.
 
-**Backing code:** `src/builtins/number-builtins.js` (`toFixed`).
+**Backing code:** `src/builtins/primitive-wrappers.js` (`toFixed`).
 **Verification:** `evaluateScript(realm, 'try { Number.prototype.toFixed.call({}, 21) } catch(e) { e.constructor.name }')` → `"TypeError"`.
 
 ### toPrecision in exponential notation
@@ -102,7 +102,7 @@ Literal ES5 15.7.4.7 step 10.c always splits `m` around a `.`, giving
 `"1.e+2"`. This applies the ES2015+ `p !== 1` guard, so
 `(123).toPrecision(1)` is `"1e+2"`.
 
-**Backing code:** `src/builtins/number-builtins.js` (`toPrecision`).
+**Backing code:** `src/builtins/number-format.js` (`toPrecision`).
 **Verification:** `evaluateScript(realm, '(123).toPrecision(1)')` → `"1e+2"`.
 
 ### Global var and function declarations use own-property checks
@@ -125,7 +125,7 @@ Test262 pins.
 1–21, throwing `RangeError` outside them — the ES5.1 ranges, not the wider
 ES2018+ `toFixed` 0–100 range.
 
-**Backing code:** `src/builtins/number-builtins.js`.
+**Backing code:** `src/builtins/primitive-wrappers.js`.
 **Verification:** `evaluateScript(realm, 'try { (1).toFixed(21) } catch(e) { e.constructor.name }')` → `"RangeError"`.
 
 ### toString with a radix other than 10
@@ -144,7 +144,7 @@ validation and coercion order, and the special values (`NaN`, signed zero, the
 infinities) — never the implementation-dependent tails, which no conforming
 test may pin.
 
-**Backing code:** `src/builtins/number-builtins.js` (`toString`).
+**Backing code:** `src/builtins/primitive-wrappers.js` (`toString`).
 **Verification:** `evaluateScript(realm, '(0.1).toString(3).length')` → `1102`.
 
 ### toLocaleString
@@ -152,7 +152,7 @@ test may pin.
 ES5 15.7.4.3 is explicitly implementation-defined; this returns exactly
 `toString()`'s result, with no locale, separator, or `Intl` dependency.
 
-**Backing code:** `src/builtins/number-builtins.js` (`toLocaleString`).
+**Backing code:** `src/builtins/primitive-wrappers.js` (`toLocaleString`).
 
 ### localeCompare
 
@@ -162,7 +162,7 @@ lexicographic order — the same order the relational operators use — so it is
 deterministic and host-independent, and `"\u00e9"` vs. `"e\u0301"` compares
 nonzero.
 
-**Backing code:** `src/builtins/string-builtins.js` (`localeCompare`).
+**Backing code:** `src/builtins/string-search.js` (`localeCompare`).
 **Verification:** `evaluateScript(realm, '"\\u00e9".localeCompare("e\\u0301") !== 0')` → `true`.
 
 ### toLocaleLowerCase and toLocaleUpperCase
@@ -171,7 +171,7 @@ ES5 15.5.4.17/15.5.4.19 permit locale-sensitive results; these return exactly
 their locale-insensitive counterparts, so no host locale or ICU build can change
 engine output.
 
-**Backing code:** `src/builtins/string-builtins.js`.
+**Backing code:** `src/builtins/string-case.js`.
 
 ### toLowerCase and toUpperCase
 
@@ -180,7 +180,7 @@ locale-insensitive `SpecialCasing.txt` entries and the Final\_Sigma condition.
 Surrogate pairs are decoded, mapped, and re-encoded; unpaired surrogates pass
 through.
 
-**Backing code:** `src/builtins/string-builtins.js`,
+**Backing code:** `src/builtins/string-case.js`,
 `src/builtins/unicode-case-data.js`.
 
 ### substr
@@ -188,10 +188,10 @@ through.
 Annex B rather than the main ES5 body, implemented because it is web reality;
 `start`/`length` follow B.2.3 including negative `start`.
 
-**Backing code:** `src/builtins/string-builtins.js` (`substr`).
+**Backing code:** `src/builtins/primitive-wrappers.js` (`substr`).
 **Verification:** `evaluateScript(realm, '"hello".substr(-2)')` → `"lo"`.
 
-### Maths transcendental functions
+### Math's transcendental functions
 
 ES5 15.8.2 states the results of `acos`, `asin`, `atan`, `atan2`, `cos`,
 `exp`, `log`, `pow`, `sin`, `sqrt`, and `tan` are **implementation-dependent**
@@ -201,7 +201,7 @@ the exactly-specified cases (`NaN`, the infinities, signed zero, domain errors,
 `pow`'s full table) are engine behaviour while the last-ulp digits are the
 host's.
 
-**Backing code:** `src/builtins/math-builtins.js`.
+**Backing code:** `src/builtins/math.js`.
 
 ### Math.random
 
@@ -209,7 +209,7 @@ host's.
 this forwards to the host's `Math.random`, so it is the one built-in whose
 result no realm can reproduce.
 
-**Backing code:** `src/builtins/math-builtins.js` (`random`).
+**Backing code:** `src/builtins/math.js` (`random`).
 
 ### JSON.stringify and lone surrogates
 
@@ -220,7 +220,7 @@ rather than the ES2019 well-formed-`JSON.stringify` change, so
 `JSON.stringify("\uD800")` is three code units — a quote, the raw surrogate, and
 a quote — not the escaped `"\ud800"`.
 
-**Backing code:** `src/builtins/json-builtins.js` (`stringify`).
+**Backing code:** `src/builtins/json.js` (`stringify`).
 **Verification:** `evaluateScript(realm, 'JSON.stringify("\\uD800").length')` → `3`.
 
 ### escape and unescape
@@ -229,7 +229,7 @@ Annex B rather than the main ES5 body, implemented for the same web-reality
 reason as `substr`; `escape` emits `%uXXXX` above `U+00FF`, and `unescape`
 never throws, passing malformed sequences through unchanged.
 
-**Backing code:** `src/builtins/global-builtins.js`.
+**Backing code:** `src/builtins/global-uri.js`.
 **Verification:** `evaluateScript(realm, 'escape("\\u0100")')` → `"%u0100"`.
 
 ## Known limitations
@@ -239,7 +239,7 @@ implementation falls short of what a hosted engine should do. They are written
 down for the same reason the deviations are — an undocumented shortfall is
 indistinguishable from a bug.
 
-### Guest recursion depth is the hosts
+### Guest recursion depth is the host's
 
 The evaluator recurses on the host stack, so unbounded guest recursion exhausts
 it and the host's own `RangeError` propagates out of `evaluateScript` instead of

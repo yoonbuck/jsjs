@@ -175,7 +175,7 @@ Each built-in family is a module under `src/builtins/` that exports a
 
 ## Host adapters
 
-The engine has four host boundaries:
+The engine has five host boundaries:
 
 1. **Parser** — `src/parser-dependency.js` imports Acorn from the vendored build.
    The parser is the only place the engine reaches outside `src/`.
@@ -187,15 +187,26 @@ The engine has four host boundaries:
    the host with a structural meaning the host could get wrong.
 
 3. **Date/time** — `src/runtime/date.js` defines a `DateHost` adapter with
-   `now()`, `timezoneOffset()`, and `daylightSavingTA()`. `createDateHost()`
-   fills defaults from the host (`Date.now`, `new Date().getTimezoneOffset()`).
-   Embedders override these through `RealmOptions`.
+   three members: `now()` (returns milliseconds since epoch),
+   `timezoneOffset(utcMilliseconds)` (returns the UTC offset in minutes for
+   any instant, encoding both standard and daylight saving rules), and an
+   optional `standardTimezoneOffset` number (the stable standard-time offset,
+   used to derive DaylightSavingTA without probing; when omitted the engine
+   derives it from January/July UTC probes). `createDateHost()` fills defaults
+   from the host (`Date.now`, `new Date(t).getTimezoneOffset()`). Embedders
+   override these through `RealmOptions`.
 
 4. **`Math.random`** — forwarded to the host's `Math.random`; the one built-in
    whose result no realm can reproduce.
 
+5. **`Math` transcendentals** — `src/builtins/math.js` forwards eleven
+   guest-visible built-ins (`pow`, `sqrt`, `exp`, `log`, `sin`, `cos`, `tan`,
+   `asin`, `acos`, `atan`, `atan2`) to the host `Math` after applying the
+   specified special-value, sign, and domain rules. The exactly-specified cases
+   are engine behaviour; the last-ulp digits are the host's.
+
 Nothing else in the engine reaches the host: `JSON`, `parseInt`, `parseFloat`,
-the URI functions, and all other built-ins are self-contained implementations.
+and the URI functions are self-contained implementations.
 
 ## Embedding API
 
@@ -211,12 +222,13 @@ Creates a fresh realm with a complete ES5 intrinsic graph and global object.
 `options` accepts host adapter overrides for date/time:
 
 - `dateHost` — a partial `DateHost` object (`now`, `timezoneOffset`,
-  `daylightSavingTA`)
+  `standardTimezoneOffset`)
 - `now` / `clock` — shorthand for `dateHost.now`
-- `standardTimezoneOffset` / `standardTimeZoneOffset` — shorthand for
-  `dateHost.timezoneOffset` (constant)
-- `timezoneOffset` / `timeZoneOffset` — shorthand for a
-  `dateHost.timezoneOffset` function
+- `standardTimezoneOffset` / `standardTimeZoneOffset` — the stable
+  standard-time offset in minutes; consumed as a distinct numeric field that
+  avoids the January/July probing derivation
+- `timezoneOffset` / `timeZoneOffset` — shorthand for
+  `dateHost.timezoneOffset` (a function from UTC milliseconds to minutes)
 
 ### `evaluateScript(realm, source, parserOptions?): { type: 'normal' | 'throw', value: unknown }`
 
