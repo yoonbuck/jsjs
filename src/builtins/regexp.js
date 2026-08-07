@@ -55,12 +55,12 @@ export function createRegExpIntrinsics(realm) {
         return pattern;
       }
 
-      return constructRegExp(regExpPrototype, pattern, flags);
+      return constructRegExp(realm, regExpPrototype, pattern, flags);
     },
     construct(args) {
       const [pattern, flags] = args;
 
-      return constructRegExp(regExpPrototype, pattern, flags);
+      return constructRegExp(realm, regExpPrototype, pattern, flags);
     },
   });
 
@@ -344,7 +344,7 @@ export function createRegExpFromPattern(realm, patternSource, flagsText) {
     regExpConstructor.get('prototype')
   );
 
-  return buildRegExp(regExpPrototype, patternSource, flagsText);
+  return buildRegExp(realm, regExpPrototype, patternSource, flagsText);
 }
 
 /**
@@ -355,12 +355,13 @@ export function createRegExpFromPattern(realm, patternSource, flagsText) {
  * and flags; otherwise `pattern`/`flags` are ES5 15.10.4.1's `P`/`F`, coerced
  * with `ToString` in that order.
  *
+ * @param {Realm} realm
  * @param {EngineObject} prototype
  * @param {unknown} pattern
  * @param {unknown} flags
  * @returns {EngineRegExp}
  */
-function constructRegExp(prototype, pattern, flags) {
+function constructRegExp(realm, prototype, pattern, flags) {
   if (isRegExpObject(pattern)) {
     if (flags !== undefined) {
       throw new GuestErrorSignal(
@@ -371,22 +372,24 @@ function constructRegExp(prototype, pattern, flags) {
 
     const source = /** @type {EngineRegExp} */ (pattern);
     return buildRegExp(
+      realm,
       prototype,
       source.patternSource,
       flagsToString(source.flags),
     );
   }
 
-  return buildRegExp(prototype, pattern, flags);
+  return buildRegExp(realm, prototype, pattern, flags);
 }
 
 /**
+ * @param {Realm} realm
  * @param {EngineObject} prototype
  * @param {unknown} pattern
  * @param {unknown} flags
  * @returns {EngineRegExp}
  */
-function buildRegExp(prototype, pattern, flags) {
+function buildRegExp(realm, prototype, pattern, flags) {
   // ES5 15.10.4.1: P is coerced before F, so a `toString` side effect on
   // `pattern` is observable before one on `flags`.
   const patternSource = pattern === undefined ? '' : toString(pattern);
@@ -407,7 +410,12 @@ function buildRegExp(prototype, pattern, flags) {
   let compiled;
 
   try {
-    compiled = compilePattern(patternSource, parsedFlags);
+    compiled = compilePattern(
+      patternSource,
+      parsedFlags,
+      undefined,
+      realm.stackGuard,
+    );
   } catch (error) {
     throw convertSyntaxError(error);
   }
