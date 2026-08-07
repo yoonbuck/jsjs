@@ -99,6 +99,32 @@ const tests = [
     },
   },
   {
+    // ES5 15.10.6.2 step 9.a.i only resets `lastIndex` to 0 "if global is
+    // true"; a non-global regexp's failed match must leave a bogus
+    // (negative, or otherwise out-of-range) `lastIndex` untouched, exactly
+    // as it leaves a successful match's `lastIndex` untouched above.
+    name: 'a non-global regexp with a failed match leaves an out-of-range lastIndex untouched',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        run(
+          realm,
+          'var r = /abc/; r.lastIndex = -17; var result = r.exec("cdefg"); ' +
+            '(result === null) + ":" + r.lastIndex;',
+        ),
+        'true:-17',
+      );
+      assertSame(
+        run(
+          realm,
+          'var r = /abc/; r.lastIndex = 10; var result = r.exec("cdefg"); ' +
+            '(result === null) + ":" + r.lastIndex;',
+        ),
+        'true:10',
+      );
+    },
+  },
+  {
     name: 'a global regexp walks lastIndex across successive exec calls and resets it to 0 on failure',
     run() {
       const realm = createRealm();

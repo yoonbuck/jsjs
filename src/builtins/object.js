@@ -107,9 +107,11 @@ export function createObjectIntrinsics(realm) {
       name: 'hasOwnProperty',
       length: 1,
       call(thisValue, args) {
+        // ES5.1 15.2.4.5 steps 1-2: ToString(V) runs before ToObject(this),
+        // so a throwing V-coercion must pre-empt a throwing/absent `this`.
+        const propertyKey = toString(args[0]);
         return (
-          toObject(realm, thisValue).getOwnProperty(toString(args[0])) !==
-          undefined
+          toObject(realm, thisValue).getOwnProperty(propertyKey) !== undefined
         );
       },
     }),
@@ -149,8 +151,12 @@ export function createObjectIntrinsics(realm) {
       name: 'propertyIsEnumerable',
       length: 1,
       call(thisValue, args) {
+        // ES5.1 15.2.4.7 steps 1-2: P = ToString(V) runs before O =
+        // ToObject(this), so a throwing V-coercion must pre-empt a
+        // throwing/absent `this` (e.g. a bare, unbound call).
+        const propertyKey = toString(args[0]);
         const descriptor = toObject(realm, thisValue).getOwnProperty(
-          toString(args[0]),
+          propertyKey,
         );
         return descriptor !== undefined && descriptor.enumerable === true;
       },

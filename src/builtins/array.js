@@ -500,6 +500,12 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
     }
 
     let index = fromIndex >= 0 ? fromIndex : maximum(length + fromIndex, 0);
+    // ToInteger leaves -0 unchanged, and a >= 0 comparison treats -0 as
+    // non-negative, so a `fromIndex` of -0 would otherwise seed `index`
+    // with -0 and surface it as the found result below.
+    if (index === 0) {
+      index = 0;
+    }
 
     while (index < length) {
       const name = String(index);
@@ -537,6 +543,11 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
 
       let index =
         fromIndex >= 0 ? minimum(fromIndex, length - 1) : length + fromIndex;
+      // Same -0 normalization as indexOf above: ToInteger leaves -0
+      // unchanged, so a `fromIndex` of -0 must not surface as a -0 result.
+      if (index === 0) {
+        index = 0;
+      }
 
       while (index >= 0) {
         const name = String(index);

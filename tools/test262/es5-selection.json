@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "excludedDirectories": ["test/intl402", "test/staging"],
+  "excludedDirectories": ["test/intl402"],
   "builtins": [
     "Array",
     "Boolean",
@@ -30,7 +30,6 @@
     "undefined"
   ],
   "excludedLanguageDirectories": [
-    "block-scope",
     "computed-property-names",
     "destructuring",
     "export",
@@ -3918,6 +3917,971 @@
       "path": "test/language/statements/with/let-array-with-newline.js",
       "category": "post-es5-syntax",
       "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+    },
+    {
+      "path": "test/staging/sm/Array/from_length_setter.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Array.from`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Array/from_realms.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Array/getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Array/includes-trailing-holes.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Array.prototype.includes`, an ES2016 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Array/sort-typedarray-with-own-length.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Array/unshift-with-enumeration.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Reflect`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/ArrayBuffer/bug1777413.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/ArrayBuffer/getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/DataView/getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `DataView`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Date/defaultvalue.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Date/non-iso.js",
+      "category": "host-dependent",
+      "reason": "Date.parse's handling of non-ISO date-time strings is implementation-defined (ES5.1 §15.9.4.2 only mandates support for the ISO 8601 subset defined in §15.9.1.15); this test asserts a specific non-standard-format parse result that is host/engine-specific."
+    },
+    {
+      "path": "test/staging/sm/Date/prototype-is-not-a-date.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/Function/10.2.1.1.6.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.3.3 block-level function-declaration semantics (Web-compat hoisting/scoping); ES5.1 §12/§10.5 has no such semantics."
+    },
+    {
+      "path": "test/staging/sm/Function/arguments-caller-callee.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts the ES2017+ restricted-property (\"poison pill\") wording change for `arguments.callee`/`.caller` in strict mode; the underlying restriction is already ES5.1 §10.6, but this test's exact error-message/attribute expectations track post-ES5 spec refinements to that mechanism."
+    },
+    {
+      "path": "test/staging/sm/Function/arguments-property-attributes.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2017+ refinements to the `arguments.callee`/`.caller` poison-pill accessor's exact property attributes; ES5.1 §10.6 defines the poison pill but with different attribute details than later editions."
+    },
+    {
+      "path": "test/staging/sm/Function/builtin-no-construct.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Function/configurable-length.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3.5.1 gives every built-in/user function a `length` that is {writable:false, enumerable:false, configurable:false}; ES2015 §19.2.4 made `length` configurable, so `delete fn.length` succeeding is post-ES5."
+    },
+    {
+      "path": "test/staging/sm/Function/function-name.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3.5.1 defines no `name` own property on functions; ES2015 §19.2.4.2 added `name`, so asserting its presence/attributes is post-ES5."
+    },
+    {
+      "path": "test/staging/sm/Function/function-toString-builtin-name.js",
+      "category": "host-dependent",
+      "reason": "Asserts an exact `Function.prototype.toString` decompilation format (source-text reproduction down to whitespace/comment/directive placement); ES5.1 §15.3.4.2 leaves the returned string wholly implementation-defined, so the exact textual format is a host/engine detail, not an ES5.1-mandated behavior."
+    },
+    {
+      "path": "test/staging/sm/JSON/stringify-special-escapes.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2019's \"well-formed JSON.stringify\" proposal added `\\uXXXX` escaping of lone/unpaired surrogates; ES5.1 §15.12.3's `Quote` algorithm only escapes control characters, `\"`, and `\\`, passing an unpaired surrogate through unescaped -- this engine already implements the ES5.1-faithful (pre-ES2019) behavior, which this test does not expect."
+    },
+    {
+      "path": "test/staging/sm/JSON/stringify.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015+ §9.1.12 [[OwnPropertyKeys]] integer-index-first enumeration order (array-index-like keys sorted numerically ahead of other string keys); ES5.1 §12.6.4/§15.2.3.4 do not specify a fixed relative order for non-array-index string properties, and this engine enumerates own properties in insertion order regardless of whether a key looks numeric."
+    },
+    {
+      "path": "test/staging/sm/Map/NaN-as-key.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Map/forEach-selfhosted-behavior.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Map/getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/acosh-exact.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/asinh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.asinh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/atanh-exact.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/cbrt-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.cbrt`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/clz32.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.clz32`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/cosh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.cosh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/expm1-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.expm1`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/expm1-monotonicity.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.expm1`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/fround.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.fround`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/log10-approx.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/log10-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.log10`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/log1p-exact.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/log2-approx.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/log2-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.log2`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/sign.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.sign`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/sinh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.sinh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/tanh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.tanh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/trunc.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Number/15.7.3.7-EPSILON.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.EPSILON`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/20.1.2.10-MIN_SAFE_INTEGER.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.MIN_SAFE_INTEGER`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/20.1.2.6-MAX_SAFE_INTEGER.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.MAX_SAFE_INTEGER`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/isSafeInteger-01.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.isSafeInteger`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/parseFloat-01.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.parseFloat`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseFloat`)."
+    },
+    {
+      "path": "test/staging/sm/Number/parseInt-01.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.parseInt`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseInt`)."
+    },
+    {
+      "path": "test/staging/sm/Number/parseInt-default-to-decimal.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.parseInt`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseInt`)."
+    },
+    {
+      "path": "test/staging/sm/Promise/bug-1287334.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Promise/bug-1289040.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Promise/methods-non-enumerable.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/proxy-__proto__.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/proxy-constructNonObject.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/regress-bug950407.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/revoke-no-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/match.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace-compile-elembase.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace-compile.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace-sticky.js",
+      "category": "post-es5-syntax",
+      "reason": "Uses the `y` (sticky) RegExp flag, added by ES2015; ES5.1 §15.10.4.1 defines only the `g`/`i`/`m` flags."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/search.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/codePointAt.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.prototype.codePointAt`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/fromCodePoint.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.fromCodePoint`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/match-forward-lookahead.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.5.4.10 step 8.f.iii.2's global-match loop bumps `lastIndex` only by comparing the post-match `lastIndex` against the value it held before the current `exec()` call (`thisIndex === previousLastIndex`), not by checking whether the match itself was empty; ES2015+ replaced this with an `AdvanceStringIndex`-based check that behaves differently for adjacent zero-width matches. This engine already implements the ES5.1-faithful algorithm (see `test/string-regexp.test.js`), which yields 4 matches for `/(?=x)/g` here rather than the ES2015+ count of 2 this test expects."
+    },
+    {
+      "path": "test/staging/sm/String/raw.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.raw`, an ES2015 builtin (introduced for tagged templates) absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/replace-math.js",
+      "category": "host-dependent",
+      "reason": "Constructs a replacement string large enough to overflow this engine's maximum string length, throwing a host `RangeError`; ES5.1 imposes no maximum string length, so exactly how large a string an implementation can allocate before failing is implementation-defined."
+    },
+    {
+      "path": "test/staging/sm/String/replace-updates-global-lastIndex.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.5.4.11's RegExp branch does the search \"in the same manner as in String.prototype.match, including the update of `lastIndex`\" (this engine's `replaceWithRegExp` implements exactly that, see `src/builtins/string-regexp.js`), so `lastIndex` is updated to each match's end position before every replacer-callback invocation, per the ES5.1-mandated algorithm. This test instead expects `lastIndex` to stay whatever the replacer callback itself last set it to, unaffected by the engine's internal search progress -- a SpiderMonkey-specific internal-search optimization that later editions' spec text does not require either, but that this ES5.1-faithful implementation does not reproduce."
+    },
+    {
+      "path": "test/staging/sm/String/string-code-point-upper-lower-mapping.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.fromCodePoint`/`String.prototype.codePointAt`, ES2015 builtins absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/string-upper-lower-mapping.js",
+      "category": "host-dependent",
+      "reason": "A 40,000+ case, machine-generated `toUpperCase`/`toLowerCase` table sourced from a specific, recent Unicode Character Database version (the file's own header records \"Unicode version: 17.0.0\"); ES5.1 §15.5.4.16-18 requires following \"the Unicode Character Database\" without pinning a version, so the exact case-mapping table is host/engine-specific and tracks whichever Unicode version an implementation ships."
+    },
+    {
+      "path": "test/staging/sm/Symbol/equality.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/for.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/json-stringify-keys.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/property-accessor.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/property-inheritance.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/property-nonwritable.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/realms.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/surfaces.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/typeof.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/constructor-undefined-args.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/element-setting-converts-using-ToNumber.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/indexOf-never-returns-negative-zero.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/lastIndexOf-never-returns-negative-zero.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/prototype-constructor-identity.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/set-negative-offset.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (`ArrayBuffer`/typed arrays), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/set-same-buffer-different-source-target-types.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/class/newTargetProxyNative.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/eval/line-terminator-paragraph-terminator.js",
+      "category": "post-es5-syntax",
+      "reason": "Relies on U+2028/U+2029 being valid inside a string literal, an ES2019 grammar change (\"JSON superset\") that let LineTerminator code points other than LF/CR appear unescaped in string literals; ES5.1 §7.8.4 treats U+2028/U+2029 as unterminated-string-producing line terminators inside string literals."
+    },
+    {
+      "path": "test/staging/sm/expressions/destructuring-array-default-call.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/expressions/destructuring-array-default-function-nested.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/expressions/destructuring-array-default-function.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/expressions/destructuring-array-default-simple.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/expressions/destructuring-array-default-yield.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/expressions/object-literal-__proto__.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.3.1 gives `__proto__:` in an object literal prototype-mutation semantics; ES5.1 §11.1.5 treats `__proto__` as an ordinary own property, which is what this engine does."
+    },
+    {
+      "path": "test/staging/sm/extensions/TypedArray-set-object-funky-length-detaches.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/TypedArray-subarray-arguments-detaching.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/__proto__.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/extensions/arguments-property-access-in-function.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/extensions/array-inherited-__proto__.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/extensions/array-pop-proxy.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/arraybuffer-prototype.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/builtin-function-arguments-caller.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/extensions/censor-strict-caller.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/extensions/cross-global-eval-is-indirect.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/destructure-accessor.js",
+      "category": "post-es5-syntax",
+      "reason": "Uses destructuring-assignment syntax (`[{ get: ..., set: ... }] = ...`) with a computed accessor-style pattern; ES5.1 §11.13/§12.2 have no destructuring assignment or destructuring binding forms at all (they are an ES2015 addition)."
+    },
+    {
+      "path": "test/staging/sm/extensions/error-tostring-function.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on `Function.prototype.name` (ES2015 §19.2.4.2, absent from ES5.1 §15.3.5.1) to build the expected `Error#toString` text."
+    },
+    {
+      "path": "test/staging/sm/extensions/es5ish-defineGetter-defineSetter.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on the legacy `Object.prototype.__defineGetter__`/`__defineSetter__` methods, added by ES2015 Annex B §B.2.2.2/§B.2.2.3; ES5.1 Annex B defines no such methods (accessor properties are only reachable via `Object.defineProperty`/object-literal getter-setter syntax in ES5.1)."
+    },
+    {
+      "path": "test/staging/sm/extensions/function-caller-skips-eval-frames.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/extensions/function-properties.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/extensions/getOwnPropertyNames-__proto__.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/extensions/mutable-proto-special-form.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/extensions/nested-delete-name-in-evalcode.js",
+      "category": "post-es5-syntax",
+      "reason": "The eval'd source text contains a `let` declaration, which does not exist in ES5.1 (`let` is an ES2015 addition); the `let` is nested inside a string literal passed to `eval()`, so it is invisible to static ES5-parseability candidate selection but correctly throws a `SyntaxError` at the point the engine actually parses the eval'd text."
+    },
+    {
+      "path": "test/staging/sm/extensions/new-cross-compartment.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/proxy-array-target-length-definition.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/proxy-enumeration.js",
+      "category": "post-es5-builtin",
+      "reason": "Asserts `Object.keys`' interaction with a `Proxy`'s `ownKeys`/`getOwnPropertyDescriptor` traps; `Proxy` is an ES2015 builtin absent from ES5.1, and this engine's `Object.keys` (with no `Proxy` to intercept it) enumerates the plain own-property set instead."
+    },
+    {
+      "path": "test/staging/sm/extensions/proxy-strict.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/regress-469625-01.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/extensions/regress-480579.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/extensions/regress-481516.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/extensions/reviver-mutates-holder-array-nonnative.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/reviver-mutates-holder-array.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/reviver-mutates-holder-object-nonnative.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/reviver-mutates-holder-object.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/string-literal-getter-setter-decompilation.js",
+      "category": "host-dependent",
+      "reason": "Asserts an exact `Function.prototype.toString` decompilation format (source-text reproduction down to whitespace/comment/directive placement); ES5.1 §15.3.4.2 leaves the returned string wholly implementation-defined, so the exact textual format is a host/engine detail, not an ES5.1-mandated behavior."
+    },
+    {
+      "path": "test/staging/sm/extensions/typedarray-copyWithin-arguments-detaching.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/typedarray-subarray-of-subarray.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/global/globalThis-enumeration.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `globalThis`, an ES2020 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/lexical-environment/block-scoped-functions-annex-b-arguments.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.3.3 block-level function-declaration semantics (Web-compat hoisting/scoping); ES5.1 §12/§10.5 has no such semantics."
+    },
+    {
+      "path": "test/staging/sm/lexical-environment/block-scoped-functions-annex-b-same-name.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.3.3 block-level function-declaration semantics (Web-compat hoisting/scoping); ES5.1 §12/§10.5 has no such semantics."
+    },
+    {
+      "path": "test/staging/sm/lexical-environment/block-scoped-functions-annex-b-with.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.3.3 block-level function-declaration semantics (Web-compat hoisting/scoping); ES5.1 §12/§10.5 has no such semantics."
+    },
+    {
+      "path": "test/staging/sm/lexical-environment/block-scoped-functions-annex-b.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.3.3 block-level function-declaration semantics (Web-compat hoisting/scoping); ES5.1 §12/§10.5 has no such semantics."
+    },
+    {
+      "path": "test/staging/sm/lexical-environment/block-scoped-functions-strict.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015+ §13.2.14 gives strict-mode block-scoped function declarations their own per-block lexical binding, shadowing the enclosing binding on block exit/re-entry; ES5.1 has no block-scoped declarations at all, so a strict `FunctionDeclaration` nested in a `Block` is outside ES5.1's grammar as a nested statement."
+    },
+    {
+      "path": "test/staging/sm/misc/future-reserved-words.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Array.prototype.includes`, an ES2016 builtin absent from ES5.1, to search its reserved-word list."
+    },
+    {
+      "path": "test/staging/sm/misc/new-with-non-constructor.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/module/await-restricted-nested.js",
+      "category": "post-es5-syntax",
+      "reason": "Uses `import`/`export` module syntax (flagged `module` in the test's frontmatter); ES6 modules do not exist in ES5.1, and this file cannot be parsed as a `Program` (only as a `Module`), so it is unrunnable as an ES5.1 script."
+    },
+    {
+      "path": "test/staging/sm/object/15.2.3.14-01.js",
+      "category": "post-es5-builtin",
+      "reason": "Asserts a `groups` property on `RegExp.prototype.exec`'s result array, added by ES2018 named capture groups (`(?<name>...)`); ES5.1 §15.10.6.2 defines no such property."
+    },
+    {
+      "path": "test/staging/sm/object/bug-1206700.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Reflect`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/object/getter-name.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/object/setPrototypeOf-same-value.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Object.setPrototypeOf`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-428366.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-452189.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on the legacy `Object.prototype.__defineGetter__`/`__defineSetter__` methods, added by ES2015 Annex B §B.2.2.2/§B.2.2.3; ES5.1 Annex B defines no such methods (accessor properties are only reachable via `Object.defineProperty`/object-literal getter-setter syntax in ES5.1)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-541255-3.js",
+      "category": "post-es5-syntax",
+      "reason": "The eval'd source text contains a `let` declaration, which does not exist in ES5.1 (`let` is an ES2015 addition); the `let` is nested inside a string literal passed to `eval()`, so it is invisible to static ES5-parseability candidate selection but correctly throws a `SyntaxError` at the point the engine actually parses the eval'd text."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-541455.js",
+      "category": "host-dependent",
+      "reason": "Asserts an exact `Function.prototype.toString` decompilation format (source-text reproduction down to whitespace/comment/directive placement); ES5.1 §15.3.4.2 leaves the returned string wholly implementation-defined, so the exact textual format is a host/engine detail, not an ES5.1-mandated behavior."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-559438.js",
+      "category": "host-dependent",
+      "reason": "Asserts an exact `Function.prototype.toString` decompilation format (source-text reproduction down to whitespace/comment/directive placement); ES5.1 §15.3.4.2 leaves the returned string wholly implementation-defined, so the exact textual format is a host/engine detail, not an ES5.1-mandated behavior."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-571014.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-577648-2.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-584355.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-586482-1.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-586482-2.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-586482-3.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-586482-4.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-586482-5.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-593256.js",
+      "category": "post-es5-semantics",
+      "reason": "Relies on the legacy `Object.prototype.__defineGetter__`/`__defineSetter__` methods, added by ES2015 Annex B §B.2.2.2/§B.2.2.3; ES5.1 Annex B defines no such methods (accessor properties are only reachable via `Object.defineProperty`/object-literal getter-setter syntax in ES5.1)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-636364.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-643222.js",
+      "category": "host-dependent",
+      "reason": "The test's own comment states its sole purpose is \"this shouldn't trigger an assertion\" (a SpiderMonkey internal-crash regression, not a spec-mandated JS-visible outcome): `eval(\"var x=delete(x)\")` deletes the very binding its own `var` declaration is initializing, mid-initializer, via a stale reference. ES5.1 §10.2.1.1.2 `SetMutableBinding` explicitly *asserts* the target binding still exists at that point (it does not define a fallback), so which of several outcomes an implementation produces once that assumption is violated is implementation-defined; this engine throws a `ReferenceError` instead of the silently-recreated-as-a-global-property outcome this specific host happens to produce."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-665355.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/statements/regress-642975.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the legacy `RegExp.lastMatch`/`RegExp.$1`-`$9` static properties; these were never part of ES5.1 (only much later semi-standardized as \"Legacy RegExp features\" well after ES5.1), so this engine correctly leaves them `undefined`."
+    },
+    {
+      "path": "test/staging/sm/strict/10.4.2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/10.6.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.1.5.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.13.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.13.2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.3.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.3.2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.4.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.4.4.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/11.4.5.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/12.10.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/12.14.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/12.2.1-01.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/12.2.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/13.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.10.7.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.3.5.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.3.5.2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.4.4.11.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.4.4.12.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.4.4.13.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.4.4.6.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.4.4.8.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.4.4.9.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.5.5.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/15.5.5.2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/8.12.5.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/8.12.7-2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/8.12.7.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/8.7.2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/B.1.1.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/B.1.2.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/eval-variable-environment.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/regress-532254.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/strict-function-statements.js",
+      "category": "post-es5-builtin",
+      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
     }
   ]
 }

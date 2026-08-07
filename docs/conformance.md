@@ -61,11 +61,14 @@ rules that justify it.
 
 A file is a candidate only if it survives every filter:
 
-- **Path policy.** `test/intl402` and `test/staging` are excluded wholesale —
-  one is a different specification, the other is explicitly not normative.
-  Under `test/language`, seven directories name syntax ES5.1 does not have at
-  all (`block-scope`, `computed-property-names`, `destructuring`, `export`,
-  `import`, `module-code`, `rest-parameters`). Under `test/built-ins`, an
+- **Path policy.** `test/intl402` is excluded wholesale — it is a different
+  specification. Under `test/language`, six directories name syntax ES5.1 does
+  not have at all (`computed-property-names`, `destructuring`, `export`,
+  `import`, `module-code`, `rest-parameters`). `test/staging` is not excluded
+  wholesale: it is upstream's non-normative scratch area, largely runnable
+  ES5.1-era regression tests inherited from SpiderMonkey, so it is a normal
+  candidate directory and anything in it that must not run is carved out by
+  the classified exclusions below like any other file. Under `test/built-ins`, an
   allow-list of 26 constructors and namespace objects names exactly the ES5.1
   standard library, so a post-ES5 global like `Proxy` or `Symbol` is out of
   scope by construction rather than by 500 individual entries.
@@ -90,14 +93,14 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 776 classified exclusions break down as:
+editions deliberately changed. The 969 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 653   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
-| `post-es5-builtin`   | 80    | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
-| `post-es5-syntax`    | 28    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
-| `host-dependent`     | 13    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
+| `post-es5-semantics` | 694   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
+| `post-es5-builtin`   | 198   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
+| `post-es5-syntax`    | 47    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
+| `host-dependent`     | 28    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
 | `engine-deviation`   | 2     | This engine knowingly differs from what ES5.1 asks. Each entry names a heading in [docs/limitations.md](limitations.md) that documents the choice — a deviation that is not written down is indistinguishable from a bug. Both remaining entries are the same cause: the vendored parser lexes `IdentifierName` with the modern `ID_Continue` property instead of ES5.1 7.6's general categories. |
 
 The distinction that matters is between the first four categories and the last.
@@ -260,8 +263,8 @@ defined exactly under
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 11,351   | 11,351    | 11,351 | 21.187% |
-| (file, variant) | 102,906     | 21,603   | 21,603    | 21,603 | 20.993% |
+| Files           | 53,575      | 11,687   | 11,687    | 11,687 | 21.814% |
+| (file, variant) | 102,906     | 22,209   | 22,209    | 22,209 | 21.582% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).

@@ -141,7 +141,12 @@ export function regExpExec(realm, thisValue, string) {
 
   while (matchResult === null) {
     if (i < 0 || i > length) {
-      R.put('lastIndex', 0, true);
+      // ES5 15.10.6.2 step 9.a.i: the [[Put]] of `lastIndex` to 0 on total
+      // failure happens only "If global is true"; a non-global regexp's
+      // `lastIndex` is left exactly as it was on entry.
+      if (global) {
+        R.put('lastIndex', 0, true);
+      }
       return null;
     }
 
