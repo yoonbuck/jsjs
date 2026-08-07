@@ -68,7 +68,7 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
   'test262-upstream': 'npm run test262:upstream',
 });
 
-/** The exact browser install command the README documents. */
+/** The exact browser install command that docs/testing.md documents. */
 const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
@@ -115,7 +115,7 @@ const DATE_GROUPS = Object.freeze({
  * meaningful.
  */
 const EXPECTED_DRIFT_COMMAND =
-  'git ls-files --error-unmatch docs/test262-report.jsonl README.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl README.md';
+  'git ls-files --error-unmatch docs/test262-report.jsonl docs/conformance.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl docs/conformance.md';
 
 const engine = { createRealm, evaluateScript };
 
@@ -337,10 +337,10 @@ export default [
     },
   },
   {
-    name: 'the browser job installs exactly the headless browser command the README documents',
+    name: 'the browser job installs exactly the headless browser command that docs/testing.md documents',
     run: async () => {
       const { workflow } = await readWorkflow();
-      const readme = await readRepositoryFile('README.md');
+      const testingDoc = await readRepositoryFile('docs/testing.md');
       const commands = runCommands(requireJob(workflow, 'test-browser'));
 
       assertSame(
@@ -355,9 +355,9 @@ export default [
         'the install step must come before the browser suite runs',
       );
       assertSame(
-        readme.includes(BROWSER_INSTALL_COMMAND),
+        testingDoc.includes(BROWSER_INSTALL_COMMAND),
         true,
-        'README.md must document the exact install command CI uses',
+        'docs/testing.md must document the exact install command CI uses',
       );
     },
   },
@@ -404,7 +404,7 @@ export default [
       assertSame(
         drift > run && run >= 0,
         true,
-        `the generated report and README must be checked for drift after the run:\n${commands.join('\n')}`,
+        `the generated report and coverage document must be checked for drift after the run:\n${commands.join('\n')}`,
       );
       assertSame(
         job.steps.indexOf(uploads[0]) >
