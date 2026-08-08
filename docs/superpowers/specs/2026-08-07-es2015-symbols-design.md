@@ -38,6 +38,16 @@ is consulted by `Object.prototype.toString` ahead of the ES5 `[[Class]]` tag.
 The other nine are defined values whose protocols belong to later issues (#38,
 #47), which is recorded in `docs/limitations.md`.
 
+Protocol lookup follows object ownership across agent boundaries. When an
+`EngineObject` created by one agent is passed to a built-in from another
+agent, `@@toPrimitive` and `@@toStringTag` are looked up with the receiver
+object's agent symbols, never the currently executing realm's symbols. A
+property keyed by the other agent's same-named well-known symbol remains an
+ordinary symbol property. Every guest-reachable `EngineObject` has a non-null
+agent; protocol entry points assert that internal invariant rather than
+silently skipping the lookup. Primitive receivers are boxed by the executing
+realm as before, so their behaviour remains realm-local.
+
 ## Scope
 
 - Symbol creation, identity, descriptions, `SymbolDescriptiveString`
