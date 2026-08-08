@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { readFile, rename as renameFile, rm } from 'node:fs/promises';
-import { assertSame } from '../harness/assert.js';
+import { assertSame, assertThrows } from '../harness/assert.js';
 import { captureProtocolProfiles } from '../../benchmark/profile/protocol.js';
 import {
+  buildProfileSidecar,
   runNodeProfile,
   writeProfileArtifactsAtomically,
 } from '../../benchmark/profile/run-node.js';
@@ -37,8 +38,117 @@ const CPU_PROFILE_FIXTURE = Object.freeze({
   samples: [2],
   timeDeltas: [7],
 });
+const PROFILE_OPTIONS = Object.freeze({
+  workload: 'arithmetic-loops',
+  mode: /** @type {'steady'} */ ('steady'),
+  metric: /** @type {'cpu'} */ ('cpu'),
+  runId: 'profile-run',
+  warmups: 1,
+  iterations: 1,
+  cpuSamplingIntervalMicroseconds: 100,
+  allocationSamplingIntervalBytes: 32768,
+  outputDirectory: TEST_OUTPUT_DIRECTORY,
+  source: SOURCE,
+});
 /** @type {import('../harness/runner.js').TestCase[]} */
 const tests = [
+  {
+    name: 'profile runners and sidecars reject missing or blank run IDs before capture',
+    async run() {
+      let nodeSessionCreated = false;
+      let nodeCaptureStarted = false;
+      let chromiumLaunched = false;
+      let error;
+      const missingNodeRunId = /** @type {any} */ ({
+        host: 'node',
+        ...PROFILE_OPTIONS,
+        runId: undefined,
+      });
+
+      try {
+        await runNodeProfile(missingNodeRunId, {
+          createInspectorSession() {
+            nodeSessionCreated = true;
+            throw new Error('Node capture should not start');
+          },
+          async captureProfiles() {
+            nodeCaptureStarted = true;
+            throw new Error('Node capture should not start');
+          },
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      if (!(error instanceof Error)) {
+        throw new Error('Expected blank Node run ID rejection');
+      }
+      assertSame(error.message, 'Profile run ID must be a non-empty string');
+      assertSame(nodeSessionCreated, false);
+      assertSame(nodeCaptureStarted, false);
+
+      error = undefined;
+      try {
+        await runChromiumProfile(
+          { host: 'chromium', ...PROFILE_OPTIONS, runId: '' },
+          {
+            async launch() {
+              chromiumLaunched = true;
+              throw new Error('Chromium capture should not start');
+            },
+          },
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      if (!(error instanceof Error)) {
+        throw new Error('Expected blank Chromium run ID rejection');
+      }
+      assertSame(error.message, 'Profile run ID must be a non-empty string');
+      assertSame(chromiumLaunched, false);
+
+      assertThrows(
+        () =>
+          buildProfileSidecar({
+            host: 'node',
+            runtime: { name: 'node', version: 'v0.0.0' },
+            source: SOURCE,
+            generatedAt: '2026-08-08T00:00:00.000Z',
+            captureOptions: { ...PROFILE_OPTIONS, runId: '' },
+            captureResult: {
+              expectedChecksum: 1,
+              elapsedMilliseconds: 1,
+              result: { checksum: 1, iterations: 1 },
+            },
+          }),
+        RangeError,
+      );
+
+      const missingSidecarRunId = /** @type {any} */ ({
+        ...PROFILE_OPTIONS,
+        runId: undefined,
+      });
+      assertThrows(
+        () =>
+          buildProfileSidecar({
+            host: 'node',
+            runtime: { name: 'node', version: 'v0.0.0' },
+            source: SOURCE,
+            generatedAt: '2026-08-08T00:00:00.000Z',
+            captureOptions: missingSidecarRunId,
+            captureResult: {
+              expectedChecksum: 1,
+              elapsedMilliseconds: 1,
+              result: { checksum: 1, iterations: 1 },
+            },
+          }),
+        RangeError,
+      );
+    },
+  },
   {
     name: 'captureProtocolProfiles captures CPU without enabling allocation profiling',
     async run() {

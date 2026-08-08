@@ -63,6 +63,7 @@ let profileTransactionCounter = 0;
  * @returns {Promise<ReturnType<typeof buildProfileSidecar>>}
  */
 export async function runNodeProfile(options, dependencies = {}) {
+  assertProfileCaptureOptions(options);
   const generatedAt = dependencies.generatedAt ?? new Date().toISOString();
   const source = assertCleanSourceState(options.source);
   const workload = resolveProfileWorkload(options.workload);
@@ -199,6 +200,7 @@ export function buildProfileSidecar({
   cpuProfile,
   allocationProfile,
 }) {
+  assertProfileCaptureOptions(captureOptions);
   const stem = safeProfileStem(
     captureOptions.workload,
     captureOptions.mode,
@@ -260,6 +262,22 @@ export function buildProfileSidecar({
         : { allocation: `${stem}.heapprofile` }),
     }),
   });
+}
+
+/**
+ * @param {unknown} options
+ * @returns {void}
+ */
+export function assertProfileCaptureOptions(options) {
+  if (
+    typeof options !== 'object' ||
+    options === null ||
+    !('runId' in options) ||
+    typeof options.runId !== 'string' ||
+    options.runId.length === 0
+  ) {
+    throw new RangeError('Profile run ID must be a non-empty string');
+  }
 }
 
 /**

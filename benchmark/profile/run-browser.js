@@ -4,6 +4,7 @@ import { contentTypeOf, resolveRepositoryPath } from '../run-browser.js';
 import { assertCleanSourceState } from '../source-state.js';
 import { captureProtocolProfiles } from './protocol.js';
 import {
+  assertProfileCaptureOptions,
   buildProfileSidecar,
   profileArtifactContents,
   profileOutputDirectory,
@@ -60,6 +61,7 @@ const CHROMIUM_SETUP_MESSAGE =
  * @returns {Promise<ReturnType<typeof buildProfileSidecar>>}
  */
 export async function runChromiumProfile(options, dependencies = {}) {
+  assertProfileCaptureOptions(options);
   const workload = resolveProfileWorkload(options.workload);
   const generatedAt = dependencies.generatedAt ?? new Date().toISOString();
   const launch = dependencies.launch ?? (() => chromium.launch());

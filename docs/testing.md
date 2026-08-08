@@ -61,7 +61,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run profile:node`              | Invoke the Node CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                        |
 | `npm run profile:browser`           | Invoke the Chromium CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                    |
 | `npm run profile:smoke`             | Capture a checked one-iteration Node CPU profile of steady `arithmetic-loops` to `.benchmark-results/profile-smoke`                                      |
-| `npm run profile:analyze`           | Verify ignored Node/Chromium profiling sidecars against the shared ignored baseline, then atomically regenerate correlation and aggregate analysis JSON  |
+| `npm run profile:analyze`           | Reserved for Task 2's schema-2 sidecar analyzer migration; do not run it with metric-specific captures until that migration restores compatibility       |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
 | `npm run format`                    | Prettier `--check` over the entire repository                                                                                                            |
