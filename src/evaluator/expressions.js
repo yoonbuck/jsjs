@@ -858,7 +858,11 @@ function evaluateObjectExpression(node, context) {
       throw createUnsupportedNodeError(property);
     }
 
-    const accessor = createFunctionObject(property.value, context.env, context);
+    const accessor = createFunctionObject(property.value, context.env, context, {
+      name: `${property.kind} ${key}`,
+      isMethod: true,
+      homeObject: object,
+    });
     object.defineOwnProperty(key, {
       ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
       enumerable: true,

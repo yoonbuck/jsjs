@@ -96,6 +96,30 @@ const tests = [
       assertSame(run('Function.prototype.bind.name;'), 'bind');
     },
   },
+  {
+    name: 'object literal accessor methods are named "get "/"set " + the key and are not constructors',
+    run() {
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor({get x() { return 1; }}, "x"); d.get.name;',
+        ),
+        'get x',
+      );
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor({set x(v) {}}, "x"); d.set.name;',
+        ),
+        'set x',
+      );
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor({get x() { return 1; }}, "x"); ' +
+            'var threw = false; try { new d.get(); } catch (e) { threw = e.name === "TypeError"; } threw;',
+        ),
+        true,
+      );
+    },
+  },
 ];
 
 export default tests;
