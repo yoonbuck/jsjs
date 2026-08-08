@@ -18,6 +18,7 @@ import staticSemantics from './static-semantics.test.js';
 import parser from './parser.test.js';
 import runtimeRecords from './runtime-records.test.js';
 import objects from './objects.test.js';
+import objectHotPathIntegration from './object-hot-path-integration.test.js';
 import abstractOperations from './abstract-operations.test.js';
 import environments from './environments.test.js';
 import identifierReadFastPath from './identifier-read-fast-path.test.js';
@@ -89,6 +90,10 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: runtimeRecords,
   }),
   Object.freeze({ file: 'test/objects.test.js', tests: objects }),
+  Object.freeze({
+    file: 'test/object-hot-path-integration.test.js',
+    tests: objectHotPathIntegration,
+  }),
   Object.freeze({
     file: 'test/abstract-operations.test.js',
     tests: abstractOperations,
