@@ -293,10 +293,11 @@ not infer JSC function-level hotspots from Node or Chromium.
 
 The analyzer accepted exactly 32 schema-2 sidecars as 16 CPU/allocation pairs.
 The independent audit confirmed all six checksum fields per pair, shared clean
-source/run metadata, matching pair settings, the two interval units, 16
-interpreter observations per metric, 100% shares per aggregate, separate host
-overhead, and independently recomputed equal-observation totals. Running the
-analyzer twice over the same artifacts produced identical SHA-256 outputs:
+source/run metadata, authoritative CPU/allocation active interval settings, the
+two interval units, 16 interpreter observations per metric, 100% shares per
+aggregate, separate host overhead, and independently recomputed
+equal-observation totals. Running the analyzer twice over the same artifacts
+produced identical SHA-256 outputs:
 
 ```text
 ef9a76da682f78e62d428920d750b288e3d114e0a1c6cc6bc63aa912fea7dd1f  checksum-correlation.json

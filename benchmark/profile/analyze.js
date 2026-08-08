@@ -358,7 +358,11 @@ function pairMetricSidecars(sidecars) {
         host: pair.cpu.host,
         runtime: pair.cpu.runtime,
         source: pair.cpu.source,
-        capture: pair.cpu.capture,
+        capture: Object.freeze({
+          ...pair.cpu.capture,
+          allocationSamplingIntervalBytes:
+            pair.allocation.capture.allocationSamplingIntervalBytes,
+        }),
         cpu: pair.cpu,
         allocation: pair.allocation,
       }),
@@ -387,16 +391,6 @@ function validatePairedMetadata(cpu, allocation) {
       'capture.iterations',
       cpu.capture.iterations,
       allocation.capture.iterations,
-    ],
-    [
-      'capture.cpuSamplingIntervalMicroseconds',
-      cpu.capture.cpuSamplingIntervalMicroseconds,
-      allocation.capture.cpuSamplingIntervalMicroseconds,
-    ],
-    [
-      'capture.allocationSamplingIntervalBytes',
-      cpu.capture.allocationSamplingIntervalBytes,
-      allocation.capture.allocationSamplingIntervalBytes,
     ],
   ]) {
     if (left !== right) {

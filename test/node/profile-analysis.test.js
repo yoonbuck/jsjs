@@ -108,6 +108,42 @@ const tests = [
     },
   },
   {
+    name: 'profile analysis pairs distinct active metric intervals and reports their authoritative values',
+    async run() {
+      const fixture = await createFixture();
+
+      try {
+        const cpuUrl = new URL(
+          'profiles/node/arithmetic-loops-cold-cpu.json',
+          fixture.profileUrl,
+        );
+        const allocationUrl = new URL(
+          'profiles/node/arithmetic-loops-cold-allocation.json',
+          fixture.profileUrl,
+        );
+        const cpu = JSON.parse(await readFile(cpuUrl, 'utf8'));
+        const allocation = JSON.parse(await readFile(allocationUrl, 'utf8'));
+        cpu.capture.cpuSamplingIntervalMicroseconds = 50;
+        allocation.capture.allocationSamplingIntervalBytes = 65536;
+        await writeJson(cpuUrl, cpu);
+        await writeJson(allocationUrl, allocation);
+
+        const result = await analyzeProfileArtifacts(fixture);
+        const correlation = result.correlation.profiles.find(
+          (profile) =>
+            profile.host === 'node' &&
+            profile.workload === 'arithmetic-loops' &&
+            profile.mode === 'cold',
+        );
+
+        assertSame(correlation?.cpuSamplingIntervalMicroseconds, 50);
+        assertSame(correlation?.allocationSamplingIntervalBytes, 65536);
+      } finally {
+        await removeFixture();
+      }
+    },
+  },
+  {
     name: 'profile analysis requires recapture when either paired metric lacks interpreter samples',
     async run() {
       for (const metric of METRICS) {
@@ -191,10 +227,11 @@ const tests = [
     },
   },
   {
-    name: 'profile analysis requires paired run, source, runtime, and interval metadata',
+    name: 'profile analysis requires paired run, source, runtime, and invalid active interval metadata',
     async run() {
       /** @type {readonly {
        *   name: string,
+       *   metric?: 'cpu' | 'allocation',
        *   mutate: (sidecar: Record<string, any>) => void,
        *   message: string,
        * }[]} */
@@ -228,16 +265,34 @@ const tests = [
           message: 'runtime.version',
         },
         {
-          name: 'CPU interval',
+          name: 'malformed CPU interval',
+          metric: 'cpu',
           mutate(sidecar) {
-            sidecar.capture.cpuSamplingIntervalMicroseconds = 200;
+            sidecar.capture.cpuSamplingIntervalMicroseconds = 'invalid';
           },
           message: 'cpuSamplingIntervalMicroseconds',
         },
         {
-          name: 'allocation interval',
+          name: 'nonpositive CPU interval',
+          metric: 'cpu',
           mutate(sidecar) {
-            sidecar.capture.allocationSamplingIntervalBytes = 65536;
+            sidecar.capture.cpuSamplingIntervalMicroseconds = 0;
+          },
+          message: 'cpuSamplingIntervalMicroseconds',
+        },
+        {
+          name: 'malformed allocation interval',
+          metric: 'allocation',
+          mutate(sidecar) {
+            sidecar.capture.allocationSamplingIntervalBytes = 'invalid';
+          },
+          message: 'allocationSamplingIntervalBytes',
+        },
+        {
+          name: 'nonpositive allocation interval',
+          metric: 'allocation',
+          mutate(sidecar) {
+            sidecar.capture.allocationSamplingIntervalBytes = 0;
           },
           message: 'allocationSamplingIntervalBytes',
         },
@@ -248,7 +303,7 @@ const tests = [
 
         try {
           const sidecarUrl = new URL(
-            'profiles/node/arithmetic-loops-cold-allocation.json',
+            `profiles/node/arithmetic-loops-cold-${testCase.metric ?? 'allocation'}.json`,
             fixture.profileUrl,
           );
           const sidecar = JSON.parse(await readFile(sidecarUrl, 'utf8'));

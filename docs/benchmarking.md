@@ -85,10 +85,12 @@ npm run profile:analyze
 The analyzer requires exactly one CPU and one allocation sidecar for every
 host/workload/mode observation. Pair members must have the same run ID, clean
 source commit, runtime identity, warmup/iteration settings, and both
-metric-specific interval settings. Each member must also have a non-`host`
-interpreter denominator; a zero-denominator sidecar rejects its matched pair
-with a recapture-required error. It writes checksum correlation and aggregate
-files only beneath `.benchmark-results/`.
+metric-specific interval settings: the CPU interval comes from the CPU sidecar
+and the allocation interval comes from the allocation sidecar. Inactive
+interval defaults are not compared across sidecars. Each member must also have
+a non-`host` interpreter denominator; a zero-denominator sidecar rejects its
+matched pair with a recapture-required error. It writes checksum correlation
+and aggregate files only beneath `.benchmark-results/`.
 
 Hotspot percentages are interpreter-only: each metric sidecar first excludes
 `host` frames (including GC, idle, inspector, and harness frames), then the
