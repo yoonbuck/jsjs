@@ -418,6 +418,27 @@ const tests = [
     },
   },
   {
+    name: 'normalizeProfileUrl treats mixed-case absolute schemes as absolute URLs',
+    run() {
+      assertSame(
+        normalizeProfileUrl('HtTp://example.test/src/runtime/object.js'),
+        'HtTp://example.test/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('HtTpS://example.test/src/runtime/object.js'),
+        'HtTpS://example.test/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('HTtp://JSJS.LOCALHOST:80/src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('FiLe:///repo/src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+    },
+  },
+  {
     name: 'normalizeProfileUrl keeps the origin gate when host URL support is unavailable',
     run() {
       for (const missingUrl of [

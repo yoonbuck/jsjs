@@ -387,16 +387,16 @@ export function normalizeProfileUrl(url) {
  * @returns {'file:' | 'http:' | 'https:' | null}
  */
 function absoluteProfileUrlProtocol(url) {
-  if (url.startsWith('http://')) {
-    return 'http:';
+  const schemeSeparator = url.indexOf('://');
+
+  if (schemeSeparator === -1) {
+    return null;
   }
 
-  if (url.startsWith('https://')) {
-    return 'https:';
-  }
+  const protocol = url.slice(0, schemeSeparator + 1).toLowerCase();
 
-  if (url.startsWith('file://')) {
-    return 'file:';
+  if (protocol === 'http:' || protocol === 'https:' || protocol === 'file:') {
+    return protocol;
   }
 
   return null;
@@ -489,14 +489,16 @@ function readHttpUrlParts(url, protocol) {
  * @returns {string}
  */
 function normalizeHttpAuthority(authority, protocol) {
+  const normalizedAuthority = authority.toLowerCase();
+
   if (
-    (protocol === 'http:' && authority.endsWith(':80')) ||
-    (protocol === 'https:' && authority.endsWith(':443'))
+    (protocol === 'http:' && normalizedAuthority.endsWith(':80')) ||
+    (protocol === 'https:' && normalizedAuthority.endsWith(':443'))
   ) {
-    return authority.slice(0, authority.lastIndexOf(':'));
+    return normalizedAuthority.slice(0, normalizedAuthority.lastIndexOf(':'));
   }
 
-  return authority;
+  return normalizedAuthority;
 }
 
 /**
