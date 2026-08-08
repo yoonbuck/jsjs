@@ -285,6 +285,26 @@ const tests = [
     },
   },
   {
+    name: 'sloppy duplicate block functions share one binding and the last declaration wins',
+    run() {
+      const sources = [
+        'var r; { r = f(); function f() { return 1; } function f() { return 2; } } r',
+        'var r; switch (0) { case 0: r = f(); function f() { return 1; } default: function f() { return 2; } } r',
+        'var r; try { r = f(); function f() { return 1; } function f() { return 2; } } finally {} r',
+      ];
+
+      for (const source of sources) {
+        assertNormal(run(source), 2);
+      }
+    },
+  },
+  {
+    name: 'strict duplicate block functions remain a SyntaxError',
+    run() {
+      assertParseRejects('"use strict"; { function f() {} function f() {} }');
+    },
+  },
+  {
     name: 'Annex B.3.3: a sloppy block function aliases into the enclosing var scope',
     run() {
       assertNormal(run('{ function f() { return 42; } } typeof f'), 'function');

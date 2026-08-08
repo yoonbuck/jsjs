@@ -334,10 +334,10 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * - Iteration and `with` bodies: never a function declaration, in any mode —
  *   there is no Annex B tolerance for them. A surrounding label chain
  *   (`with (o) a: b: function f(){}`) does not help.
- * - `if` branch: Annex B B.3.4 tolerates a *bare* function declaration as a
- *   branch (`if (1) function f(){}`), but only in sloppy code. A label chain
- *   in a branch (`if (1) l: function f(){}`) is rejected in every mode, and in
- *   strict code even the bare form is rejected.
+ * - `if` branch: reject a function declaration in every mode. Annex B B.3.4
+ *   specifies sloppy-mode semantics for the bare form
+ *   (`if (1) function f(){}`), but the evaluator does not implement those
+ *   semantics yet, so accepting it would silently mis-scope the declaration.
  * - Labelled statement body: Annex B B.3.2 tolerates a function declaration as
  *   a statement-list-level labelled body (`l: function f(){}`) in sloppy code;
  *   strict code forbids it. A labelled body that is itself an illegal position
@@ -470,7 +470,7 @@ function checkFunctionDeclarationPosition(node, strict) {
     for (const branch of [node.consequent, node.alternate]) {
       const offending = resolveBodyFunctionDeclaration(branch);
 
-      if (offending && (offending.labeled || strict)) {
+      if (offending) {
         throw statementPositionFunctionError(
           'an if statement branch',
           offending.fn,
@@ -515,10 +515,6 @@ function pushChild(pending, value, strict) {
  * present. A labelled statement's body is itself a `Statement`, so
  * `a: b: function f(){}` reduces to the function declaration with
  * `labeled: true`. Returns `undefined` when the body is an ordinary statement.
- *
- * The `labeled` flag is what distinguishes the `if`-branch cases: Annex B
- * B.3.4 tolerates only the bare (`labeled: false`) form, so a labelled chain
- * in a branch is rejected even in sloppy code.
  *
  * The visited set guards against a cyclic label chain, which a custom `parse`
  * hook could hand us.

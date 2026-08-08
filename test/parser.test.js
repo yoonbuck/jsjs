@@ -177,17 +177,11 @@ const tests = [
     },
   },
   {
-    name: 'Annex B function-declaration positions stay accepted in sloppy mode',
+    name: 'implemented Annex B function-declaration positions stay accepted in sloppy mode',
     run() {
-      // ES5.1 Annex B / web reality keeps these accepted (JavaScriptCore too)
-      // in *sloppy* code: a bare function as an `if` branch (B.3.4) and a
-      // statement-list-level labelled function (B.3.2, including a label
-      // chain), plus a function inside a block. Guarding them here stops
-      // anyone from over-tightening the pass.
+      // The engine implements sloppy statement-list-level labelled functions
+      // (B.3.2, including a label chain) and functions inside a block.
       const accepted = [
-        'if (true) function f() {}',
-        'if (true) function f() {} else function g() {}',
-        'if (true) ; else function g() {}',
         'label: function f() {}',
         'a: b: function f() {}',
         '{ function f() {} }',
@@ -198,6 +192,22 @@ const tests = [
         const program = parseScript(source);
 
         assertSame(program.type, 'Program');
+      }
+    },
+  },
+  {
+    name: 'a direct if-body function is rejected in sloppy and strict code until Annex B.3.4 is implemented',
+    run() {
+      const rejected = [
+        'if (true) function f() {}',
+        'if (true) function f() {} else function g() {}',
+        'if (true) ; else function g() {}',
+        '"use strict"; if (true) function f() {}',
+        '"use strict"; if (true) ; else function g() {}',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
       }
     },
   },
@@ -242,22 +252,22 @@ const tests = [
     name: 'the strict function-declaration rejection follows per-function strictness',
     run() {
       // Strictness is a property of the nearest function scope, not the whole
-      // program: a strict function inside a sloppy script forbids the Annex B
-      // forms, while a sloppy function keeps them (JavaScriptCore agrees).
+      // program. Labelled functions remain accepted in sloppy function bodies,
+      // while direct if-body functions are rejected until B.3.4 is implemented.
       const rejected = [
         'function outer() { "use strict"; if (1) function f() {} }',
         'function outer() { "use strict"; label: function f() {} }',
         'var g = function () { "use strict"; if (1) function f() {} };',
+        'function outer() { if (1) function f() {} }',
+        'var g = function () { if (1) function f() {} };',
       ];
 
       for (const source of rejected) {
         assertThrows(() => parseScript(source), SyntaxError);
       }
-
       const accepted = [
-        'function outer() { if (1) function f() {} }',
         'function outer() { label: function f() {} }',
-        'var g = function () { if (1) function f() {} };',
+        'var g = function () { label: function f() {} };',
       ];
 
       for (const source of accepted) {

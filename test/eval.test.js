@@ -182,6 +182,43 @@ const tests = [
     },
   },
   {
+    name: 'eval hoists duplicate sloppy block functions with the last declaration winning',
+    run() {
+      assertNormal(
+        run(
+          'eval("{ function f() { return 1; } function f() { return 2; } } f()");',
+        ),
+        2,
+      );
+    },
+  },
+  {
+    name: 'eval rejects duplicate strict block functions with a guest SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(
+          realm,
+          'eval("\\"use strict\\"; { function f() {} function f() {} }");',
+        ),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'eval rejects a direct if-body function in sloppy and strict code',
+    run() {
+      for (const source of [
+        'eval("if (true) function f() {}");',
+        '"use strict"; eval("if (true) function f() {}");',
+      ]) {
+        const realm = createRealm();
+        assertGuestThrow(runIn(realm, source), 'SyntaxError', realm);
+      }
+    },
+  },
+  {
     name: 'eval of deeply nested but valid source does not leak a host RangeError',
     run() {
       // A host RangeError from a runaway AST walk would escape the guest

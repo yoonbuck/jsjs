@@ -828,7 +828,9 @@ export function evaluateVariableDeclaration(node, context) {
  * here, before any statement of the block executes, so a call earlier in the
  * block still resolves it. The function object captures `env`, the *block*
  * environment, as its `[[Scope]]` — not the enclosing one — so a closure it
- * returns observes the block's bindings.
+ * returns observes the block's bindings. Sloppy duplicate function declarations
+ * share one mutable binding; each declaration initializes it in source order, so
+ * the last declaration supplies the hoisted value.
  *
  * @param {readonly any[]} declarations
  * @param {import('../runtime/environment.js').DeclarativeEnvironmentRecord} env
@@ -836,12 +838,25 @@ export function evaluateVariableDeclaration(node, context) {
  * @returns {void}
  */
 export function blockDeclarationInstantiation(declarations, env, context) {
+  const createdFunctionNames = new Set();
+
   for (const declaration of declarations) {
     for (const name of boundNames(declaration)) {
+      if (
+        declaration.type === 'FunctionDeclaration' &&
+        createdFunctionNames.has(name)
+      ) {
+        continue;
+      }
+
       if (isConstantDeclaration(declaration)) {
         env.createImmutableBinding(name, true);
       } else {
         env.createMutableBinding(name, false);
+      }
+
+      if (declaration.type === 'FunctionDeclaration') {
+        createdFunctionNames.add(name);
       }
     }
 

@@ -584,6 +584,11 @@ defensive — kept so a later `sourceType`/`ecmaVersion` change cannot let one
 slip through silently — not reached on any accepted parse. The ES2015 RegExp
 flags `u` and `y` are likewise rejected, but by the engine's existing ES5.1 flag
 validation in `src/runtime/regexp-syntax.js`, not by either mechanism above.
+Annex B.3.4 direct `if`-body function declarations
+(`if (condition) function f() {}`) are also rejected in sloppy as well as strict
+code until their conditional var-scoped replacement semantics are implemented;
+accepting the syntax without those semantics would leave the declaration
+silently mis-scoped.
 
 This is a limitation rather than a deviation: a full ES2015 engine accepts all
 of them, and the engine rejects them only because the evaluator does not yet
