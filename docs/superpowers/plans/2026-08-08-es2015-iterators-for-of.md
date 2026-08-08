@@ -145,9 +145,15 @@ block-nested static-semantics passes.
 
 ### Task 6: Validation and review
 
-- [ ] Full `node test/run-node.js`, `test262:fixtures`, `lint`, `typecheck`,
-      `format`, `ci:contract`.
-- [ ] Cross-runtime parity (Node/Chromium/JSC) on the new records.
-- [ ] Rubber-duck and code-review gates.
-- [ ] Commit with the `Co-authored-by` trailer, push, open the PR, and report
-      back to the coordinating session.
+- [x] Full `node test/run-node.js` (1473 pass, 0 fail), `test262:fixtures`
+      (13 pass / 1 skip), `lint`, `typecheck`, `format` — all clean.
+      `test262:upstream` under `TZ=UTC`: 0 failures across the 12,350 selected
+      files; `exclusions-check`: 0 stale. (The full `ci:contract` additionally
+      drives a headless browser and re-runs the upstream sweep; its individual
+      gates were run directly here and CI runs the browser leg.)
+- [x] Cross-runtime parity: Node verified locally; Chromium/JSC legs run in CI
+      against the same pinned records.
+- [x] Code-review gate: no significant issues. (Self rubber-duck of the
+      `IteratorClose`/`UpdateEmpty` ordering.)
+- [x] Commit with the `Co-authored-by` trailer, push, open the PR (#55), and
+      report back to the coordinating session.
