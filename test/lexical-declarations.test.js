@@ -121,6 +121,25 @@ function assertCompletionThrows(realm, completion, constructorName) {
 }
 
 /**
+ * @param {any} realm
+ * @param {{ type: string, value: unknown }} completion
+ * @param {string} constructorName
+ * @param {string} message
+ */
+function assertCompletionThrowsMessage(
+  realm,
+  completion,
+  constructorName,
+  message,
+) {
+  assertCompletionThrows(realm, completion, constructorName);
+  assertSame(
+    /** @type {EngineObject} */ (completion.value).get('message'),
+    message,
+  );
+}
+
+/**
  * @param {string} source
  */
 function assertParseRejects(source) {
@@ -683,6 +702,59 @@ const tests = [
         undefined,
       );
       assertNormal(evaluateScript(realm, 'brandNewLetName'), 3);
+    },
+  },
+  {
+    name: 'a var that fails its non-extensible check installs no earlier lexical binding',
+    run() {
+      const realm = createRealm();
+      realm.globalObject.preventExtensions();
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'let leaked = 1; var blocked;'),
+        'TypeError',
+      );
+      assertCompletionThrowsMessage(
+        realm,
+        evaluateScript(realm, 'leaked'),
+        'ReferenceError',
+        'leaked is not defined',
+      );
+    },
+  },
+  {
+    name: 'a function declaration that fails its check installs no earlier lexical binding',
+    run() {
+      const realm = createRealm();
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'let early = 1; function undefined() {}'),
+        'TypeError',
+      );
+      assertCompletionThrowsMessage(
+        realm,
+        evaluateScript(realm, 'early'),
+        'ReferenceError',
+        'early is not defined',
+      );
+    },
+  },
+  {
+    name: 'a var check that fails after earlier declarable names installs no binding for any of them',
+    run() {
+      const realm = createRealm();
+      realm.globalObject.preventExtensions();
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'let survivor = 1; var undefined; var blocked;'),
+        'TypeError',
+      );
+      assertCompletionThrowsMessage(
+        realm,
+        evaluateScript(realm, 'survivor'),
+        'ReferenceError',
+        'survivor is not defined',
+      );
     },
   },
 ];

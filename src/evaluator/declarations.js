@@ -57,31 +57,45 @@ import {
  * edition number leaked into the plan, as it did for
  * `FunctionDeclarationInstantiation`, which is §9.2.12 in ES2015.)
  *
- * The algorithm first performs its cross-script early checks against the global
- * environment record (§15.1.8 steps 5-6), which never mutate it: for every
- * lexically declared name a guest `SyntaxError` if it collides with an existing
- * global `var`, an existing global lexical binding, or a restricted global
- * property (`undefined`/`NaN`/`Infinity`); for every `var` name a guest
- * `SyntaxError` if it collides with an existing global lexical binding. Within a
- * single script Acorn rejects such conflicts at parse time, so these runtime
- * checks only fire across scripts in the same realm (or, once Task 8 installs
- * it, for `eval`). Because they run before any binding is created, a script
- * that fails a check leaves the global environment unmodified.
+ * §15.1.8 is deliberately two-phase, and the split matters for atomicity: it
+ * runs *every* check before creating *any* binding, so a script that cannot be
+ * fully instantiated leaves the global environment untouched (§15.1.8 NOTE 2 at
+ * step 13: "If any such errors are detected, no bindings are instantiated for
+ * the script.").
  *
- * It then instantiates bindings (§15.1.8 steps 16-18): lexically scoped
- * `let`/`const` names get *uninitialized* declarative bindings —
- * `createImmutableBinding(name, true)` for a `const`, `createMutableBinding(
- * name, false)` for a `let` — which is their temporal dead zone until the
- * declarator runs; a top-level `FunctionDeclaration` is var-scoped, not lexical,
- * so it is not in this list. Function declarations are then instantiated and
- * bound with `createGlobalFunctionBinding(name, fo, false)`, and `var` names
- * with `createGlobalVarBinding(name, false)`. These two helpers keep their
- * deliberate own-property model on the global object (see their JSDoc): a
- * `var`/function name that cannot be declared — e.g. a new name on a
- * non-extensible global — raises a guest `TypeError` from `[[DefineOwnProperty]]`
- * (§15.1.8's `CanDeclareGlobalVar`/`CanDeclareGlobalFunction` are checked
- * implicitly there), while a global *lexical* binding lives only in the
- * declarative record and is therefore invisible on the global object.
+ * Check phase (§15.1.8 steps 5, 6, 10, 12) — no mutation of the global
+ * environment:
+ * - step 5: for every lexically declared name, a guest `SyntaxError` if it
+ *   collides with an existing global `var`, an existing global lexical binding,
+ *   or a restricted global property (`undefined`/`NaN`/`Infinity`);
+ * - step 6: for every `var` name, a guest `SyntaxError` if it collides with an
+ *   existing global lexical binding;
+ * - step 10: for each top-level function name (last declaration of a name wins,
+ *   hence the reverse walk), a guest `TypeError` if `CanDeclareGlobalFunction`
+ *   is false;
+ * - step 12: for each `var` name that is not also a function name, a guest
+ *   `TypeError` if `CanDeclareGlobalVar` is false.
+ *
+ * Within a single script Acorn rejects the step 5/6 conflicts at parse time, so
+ * those runtime checks only fire across scripts in the same realm (or, once
+ * Task 8 installs it, for `eval`). The step 10/12 `TypeError`s (e.g. a new name
+ * on a non-extensible global) are surfaced by delegating to
+ * `createGlobalFunctionBinding`/`createGlobalVarBinding`, which — by their
+ * own-property model — are guaranteed to reject *before* mutating whenever the
+ * matching `CanDeclare*` predicate is false; that reuses their exact messages
+ * without creating anything.
+ *
+ * Create phase (§15.1.8 steps 15-17), reached only once every check has passed:
+ * - step 15: lexically scoped `let`/`const` names get *uninitialized*
+ *   declarative bindings — `createImmutableBinding(name, true)` for a `const`,
+ *   `createMutableBinding(name, false)` for a `let` — their temporal dead zone
+ *   until the declarator runs. A top-level `FunctionDeclaration` is var-scoped,
+ *   not lexical, so it is not in this list. A global lexical binding lives only
+ *   in the declarative record and is therefore invisible on the global object.
+ * - step 16: the top-level function declarations are bound to their function
+ *   objects with `createGlobalFunctionBinding(name, fo, false)`;
+ * - step 17: the `var` names get `undefined`-initialized bindings with
+ *   `createGlobalVarBinding(name, false)`.
  *
  * For non-strict scripts this also performs ES2015 Annex B.3.3.2's global slice:
  * a block-level function declaration whose name can legally be declared as a
@@ -105,7 +119,7 @@ export function globalDeclarationInstantiation(program, context) {
 
   // §15.1.8 step 5: reject a lexical name that conflicts with an existing
   // global var, an existing global lexical binding, or a restricted global
-  // property. Pure checks — no binding is created before they all pass.
+  // property.
   for (const name of lexNames) {
     if (
       globalEnvironment.hasVarDeclaration(name) ||
@@ -130,7 +144,74 @@ export function globalDeclarationInstantiation(program, context) {
     }
   }
 
-  // §15.1.8 step 16: instantiate — but do not initialize — the lexically scoped
+  const varScoped = topLevelVarScopedDeclarations(program.body);
+
+  // §15.1.8 steps 8-10: walk the var-scoped declarations in reverse so the last
+  // declaration of a repeated function name wins, collect the function objects
+  // to initialize (restored to source order via unshift), and check
+  // `CanDeclareGlobalFunction` for each. A false predicate must abort here,
+  // before any binding is created; `createGlobalFunctionBinding` is guaranteed
+  // to reject without mutating in exactly that case, so calling it reuses its
+  // precise `TypeError` message. Instantiating the function object early has no
+  // global side effect (it only captures `context.env` as its `[[Scope]]`).
+  /** @type {{ name: string, functionObject: EngineFunction }[]} */
+  const functionsToInitialize = [];
+  /** @type {Set<string>} */
+  const declaredFunctionNames = new Set();
+
+  for (let index = varScoped.length - 1; index >= 0; index -= 1) {
+    const declaration = varScoped[index];
+    if (declaration.type !== 'FunctionDeclaration') {
+      continue;
+    }
+
+    const name = declaration.id.name;
+    if (declaredFunctionNames.has(name)) {
+      continue;
+    }
+
+    const functionObject = instantiateFunctionObject(declaration, context);
+    if (!globalEnvironment.canDeclareGlobalFunction(name)) {
+      globalEnvironment.createGlobalFunctionBinding(
+        name,
+        functionObject,
+        false,
+      );
+    }
+
+    declaredFunctionNames.add(name);
+    functionsToInitialize.unshift({ name, functionObject });
+  }
+
+  // §15.1.8 steps 11-12: collect the var names that are not also function
+  // names, checking `CanDeclareGlobalVar` for each. As above, a false predicate
+  // aborts before any binding is created; `createGlobalVarBinding` rejects
+  // without mutating in that case (a new name on a non-extensible global).
+  /** @type {string[]} */
+  const declaredVarNames = [];
+  /** @type {Set<string>} */
+  const seenVarNames = new Set();
+
+  for (const name of varNames) {
+    if (declaredFunctionNames.has(name)) {
+      continue;
+    }
+
+    if (!globalEnvironment.canDeclareGlobalVar(name)) {
+      globalEnvironment.createGlobalVarBinding(name, false);
+    }
+
+    if (!seenVarNames.has(name)) {
+      seenVarNames.add(name);
+      declaredVarNames.push(name);
+    }
+  }
+
+  // Every check has now passed (§15.1.8 NOTE 2 / step 13): from here no
+  // creation can fail for an ordinary global object, so the following mutations
+  // are effectively atomic.
+
+  // §15.1.8 step 15: instantiate — but do not initialize — the lexically scoped
   // declarations. `topLevelLexicallyScopedDeclarations` yields only
   // `let`/`const` (function declarations are var-scoped), so each name gets an
   // uninitialized binding (its TDZ) that `evaluateVariableDeclaration` later
@@ -145,29 +226,14 @@ export function globalDeclarationInstantiation(program, context) {
     }
   }
 
-  const varScoped = topLevelVarScopedDeclarations(program.body);
-
-  // §15.1.8 step 17: instantiate the top-level function declarations, binding
-  // each to its function object (non-configurable, `configurableBindings`
-  // false). `createGlobalFunctionBinding` applies the 10.5 redefinition rules
-  // and raises a guest `TypeError` for an undeclarable function name.
-  for (const declaration of varScoped) {
-    if (declaration.type !== 'FunctionDeclaration') {
-      continue;
-    }
-
-    const functionObject = instantiateFunctionObject(declaration, context);
-    globalEnvironment.createGlobalFunctionBinding(
-      declaration.id.name,
-      functionObject,
-      false,
-    );
+  // §15.1.8 step 16: bind each top-level function declaration to its function
+  // object (non-configurable, `configurableBindings` false).
+  for (const { name, functionObject } of functionsToInitialize) {
+    globalEnvironment.createGlobalFunctionBinding(name, functionObject, false);
   }
 
-  // §15.1.8 step 18: create the `undefined`-initialized global var bindings.
-  // `createGlobalVarBinding` raises a guest `TypeError` for an undeclarable var
-  // name (e.g. a new name on a non-extensible global).
-  for (const name of varNames) {
+  // §15.1.8 step 17: create the `undefined`-initialized global var bindings.
+  for (const name of declaredVarNames) {
     globalEnvironment.createGlobalVarBinding(name, false);
   }
 
