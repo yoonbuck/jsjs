@@ -48,8 +48,8 @@ const CANDIDATE_INFO = Object.freeze({
   declaresFeatures: false,
   features: Object.freeze([]),
   isModule: false,
-  parsesAtEs5: true,
-  includesParseAtEs5: true,
+  parsesUnderEngineGrammar: true,
+  includesParseUnderEngineGrammar: true,
 });
 
 /**
@@ -479,7 +479,7 @@ export default [
       assertSame(
         isCandidatePath(
           path,
-          { ...CANDIDATE_INFO, parsesAtEs5: false },
+          { ...CANDIDATE_INFO, parsesUnderEngineGrammar: false },
           policy,
         ),
         false,
@@ -487,7 +487,7 @@ export default [
       assertSame(
         isCandidatePath(
           path,
-          { ...CANDIDATE_INFO, includesParseAtEs5: false },
+          { ...CANDIDATE_INFO, includesParseUnderEngineGrammar: false },
           policy,
         ),
         false,

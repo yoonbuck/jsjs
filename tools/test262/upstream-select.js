@@ -5,12 +5,13 @@
  * this command is what *writes* that file. Rather than hand-curating thousands
  * of paths, it walks the pinned tree once and keeps every test that the ES5.1
  * selection policy (`tools/test262/es5-selection.js` + `es5-selection.json`)
- * says is in scope: a script (not a module) that parses as ES5 code, lives
- * under an in-scope directory, declares no `features:` tag outside what a
- * `featureAreas` claim covers for its path, and is not carved out by a
- * classified exclusion. Everything host-specific — reading the tree, parsing
- * at ES5, and writing the manifest — lives here; the policy itself is pure and
- * host-free so the same decisions can be tested without a checkout.
+ * says is in scope: a script (not a module) that parses under the engine's
+ * supported grammar, lives under an in-scope directory, declares no `features:`
+ * tag outside what a `featureAreas` claim covers for its path, and is not
+ * carved out by a classified exclusion. Everything host-specific — reading the
+ * tree, parsing with the engine, and writing the manifest — lives here; the
+ * policy itself is pure and host-free so the same decisions can be tested
+ * without a checkout.
  *
  * The same three guards `test262:upstream` uses protect this command, because a
  * subset derived from the wrong tree is worse than no subset at all: the
@@ -25,7 +26,7 @@
 
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { parse } from '../../vendor/acorn/acorn.mjs';
+import { parseScript } from '../../src/parser.js';
 import {
   ES5_SELECTION_FILE,
   buildUpstreamSubset,
@@ -43,7 +44,7 @@ const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 /** The Test262 subtree the selection walks; harness and tooling live outside it. */
 const TEST_SUBTREE = 'test';
 
-/** The harness directory whose includes must themselves parse as ES5. */
+/** The harness directory whose includes must themselves parse under the grammar. */
 const HARNESS_DIRECTORY = 'harness';
 
 /**
@@ -57,8 +58,8 @@ const READABLE_CANDIDATE = Object.freeze({
   declaresFeatures: false,
   features: Object.freeze([]),
   isModule: false,
-  parsesAtEs5: true,
-  includesParseAtEs5: true,
+  parsesUnderEngineGrammar: true,
+  includesParseUnderEngineGrammar: true,
 });
 
 /**
@@ -70,15 +71,20 @@ function readRepositoryFile(path) {
 }
 
 /**
- * Whether a source parses as ES5 script code. Selection asks only the yes/no
- * question the ES5 grammar answers, so a syntax error is a "no", never a throw.
+ * Whether a source parses under the engine's supported grammar — ES5.1 plus the
+ * lexical declarations the engine now accepts. Using the engine's own
+ * `parseScript` (rather than a bare Acorn call at a fixed `ecmaVersion`) keeps
+ * selection honest as the grammar grows: whatever the engine can parse is
+ * exactly what is in scope. Selection asks only the yes/no question, so a parse
+ * failure — including the engine's ES2015-not-yet-supported early errors and
+ * its stack-overflow-to-`SyntaxError` conversion — is a "no", never a throw.
  *
  * @param {string} source
  * @returns {boolean}
  */
-function parsesAsEs5(source) {
+function parsesUnderEngineGrammar(source) {
   try {
-    parse(source, { ecmaVersion: 5, sourceType: 'script' });
+    parseScript(source);
 
     return true;
   } catch {
@@ -128,9 +134,9 @@ async function listTestFiles(checkoutPath) {
 }
 
 /**
- * Reads every harness include and records whether it parses as ES5. A test that
- * pulls in an include the ES5 grammar rejects cannot itself run as ES5 code, so
- * such a test is not in scope even when its own body parses.
+ * Reads every harness include and records whether it parses under the engine's
+ * supported grammar. A test that pulls in an include the grammar rejects cannot
+ * itself run, so such a test is not in scope even when its own body parses.
  *
  * @param {string} checkoutPath
  * @returns {Promise<Map<string, boolean>>}
@@ -152,7 +158,7 @@ async function readHarnessParsing(checkoutPath) {
       `${checkoutPath}/${HARNESS_DIRECTORY}/${entry.name}`,
     );
 
-    parsing.set(entry.name, parsesAsEs5(source));
+    parsing.set(entry.name, parsesUnderEngineGrammar(source));
   }
 
   return parsing;
@@ -191,8 +197,8 @@ async function selectPaths(options) {
       declaresFeatures: frontmatter.hasFeatures,
       features: frontmatter.features,
       isModule: frontmatter.isModule,
-      parsesAtEs5: parsesAsEs5(source),
-      includesParseAtEs5: frontmatter.includes.every(
+      parsesUnderEngineGrammar: parsesUnderEngineGrammar(source),
+      includesParseUnderEngineGrammar: frontmatter.includes.every(
         (name) => harnessParsing.get(name) !== false,
       ),
     };

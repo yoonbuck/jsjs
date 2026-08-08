@@ -9,13 +9,14 @@
  * `*-run.js`/`*-select.js` entry points), it touches no filesystem and no host
  * API: it parses text and computes, so it is importable from any host and
  * testable without a checkout. The Node entry point `upstream-select.js` walks
- * the tree, runs Acorn, and reads/writes files; it hands this module strings and
- * booleans.
+ * the tree, parses each file with the engine's own `parseScript`, and
+ * reads/writes files; it hands this module strings and booleans.
  *
  * The policy expresses four structural filters as data — excluded top-level
  * directories, the allowed `test/built-ins/<name>` list, the excluded
- * `test/language/<dir>` list, and (applied by the caller) the "parses at
- * ecmaVersion 5" and "frontmatter carries no `module` flag" filters — plus a
+ * `test/language/<dir>` list, and (applied by the caller) the "parses under the
+ * engine's supported grammar" and "frontmatter carries no `module` flag"
+ * filters — plus a
  * `featureAreas` list that names, per directory prefix, exactly which Test262
  * `features:` tags the engine is willing to run there, and an `exclusions`
  * array that records, with a category and a cited reason, every remaining
@@ -101,8 +102,8 @@ const TEST_ROOT = 'test/';
  *   declaresFeatures: boolean,
  *   features: readonly string[],
  *   isModule: boolean,
- *   parsesAtEs5: boolean,
- *   includesParseAtEs5: boolean,
+ *   parsesUnderEngineGrammar: boolean,
+ *   includesParseUnderEngineGrammar: boolean,
  * }} Es5CandidateInfo
  */
 
@@ -512,7 +513,7 @@ export function isCandidatePath(path, info, policy) {
     return false;
   }
 
-  return info.parsesAtEs5 && info.includesParseAtEs5;
+  return info.parsesUnderEngineGrammar && info.includesParseUnderEngineGrammar;
 }
 
 /**
