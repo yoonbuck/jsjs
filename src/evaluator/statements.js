@@ -23,7 +23,11 @@ import {
   blockDeclarationInstantiation,
   evaluateVariableDeclaration,
 } from './declarations.js';
-import { lexicallyScopedDeclarations } from './static-semantics.js';
+import {
+  boundNames,
+  isConstantDeclaration,
+  lexicallyScopedDeclarations,
+} from './static-semantics.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
 
 /**
@@ -379,6 +383,17 @@ function evaluateDoWhileStatement(node, context, labelSet) {
  * @returns {Completion}
  */
 function evaluateForStatement(node, context, labelSet) {
+  // ES2015 §13.7.4.7: a `for` head that lexically declares (`let`/`const`)
+  // scopes its bindings to the loop and, for `let`, copies them per iteration.
+  // A `var` head or a bare-expression head keeps the ES5 code path below.
+  if (
+    node.init &&
+    node.init.type === 'VariableDeclaration' &&
+    node.init.kind !== 'var'
+  ) {
+    return evaluateLexicalForStatement(node, context, labelSet);
+  }
+
   if (node.init) {
     if (node.init.type === 'VariableDeclaration') {
       evaluateVariableDeclaration(node.init, context);
@@ -419,6 +434,114 @@ function evaluateForStatement(node, context, labelSet) {
 }
 
 /**
+ * Evaluates a `for` statement whose head is a `let`/`const` declaration
+ * (ES2015 §13.7.4.7 runtime semantics plus §13.7.4.7 `ForBodyEvaluation`).
+ *
+ * The head's bound names get a dedicated `loopEnv` — `const` bindings
+ * immutable, `let` bindings mutable, both uninitialized until the head
+ * declaration runs in `loopEnv`. `perIterationLets` is the bound names for a
+ * `let` head and empty for a `const` head (a `const` binding never needs a
+ * fresh per-iteration copy). `CreatePerIterationEnvironment` runs once before
+ * the first test and again after each body evaluation *before* the update, so
+ * the test and update always observe the current iteration's bindings — the
+ * ordering that makes `for (let i = 0; i < 3; i++) f.push(() => i)` capture
+ * `0, 1, 2` rather than a single shared `i`.
+ *
+ * The engine threads an immutable `EvaluationContext` rather than mutating a
+ * running execution context, so "set the LexicalEnvironment to
+ * thisIterationEnv" is expressed by rebuilding `loopContext` and using it for
+ * the test, body, and update alike.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @param {string[]} labelSet
+ * @returns {Completion}
+ */
+function evaluateLexicalForStatement(node, context, labelSet) {
+  const isConst = isConstantDeclaration(node.init);
+  const names = boundNames(node.init);
+
+  const loopEnv = newDeclarativeEnvironment(context.env);
+  for (const name of names) {
+    if (isConst) {
+      loopEnv.createImmutableBinding(name, true);
+    } else {
+      loopEnv.createMutableBinding(name, false);
+    }
+  }
+
+  /** @type {EvaluationContext} */
+  let loopContext = { ...context, env: loopEnv };
+  evaluateVariableDeclaration(node.init, loopContext);
+
+  const perIterationLets = isConst ? [] : names;
+  loopContext = createPerIterationEnvironment(perIterationLets, loopContext);
+
+  /** @type {unknown} */
+  let value = EMPTY;
+
+  while (
+    node.test === null ||
+    toBoolean(evaluateExpressionValue(node.test, loopContext))
+  ) {
+    const bodyResult = evaluateStatement(node.body, loopContext);
+    const { value: nextValue, action } = applyLoopBodyResult(
+      bodyResult,
+      value,
+      labelSet,
+    );
+    value = nextValue;
+
+    if (action === 'break') {
+      return createNormalCompletion(value);
+    }
+
+    if (action === 'propagate') {
+      return { ...bodyResult, value };
+    }
+
+    loopContext = createPerIterationEnvironment(perIterationLets, loopContext);
+
+    if (node.update) {
+      evaluateExpressionValue(node.update, loopContext);
+    }
+  }
+
+  return createNormalCompletion(value);
+}
+
+/**
+ * ES2015 §13.7.4.8 `CreatePerIterationEnvironment`. With a non-empty name
+ * list, builds a fresh declarative environment whose *outer* is the last
+ * iteration environment's outer — not the last environment itself, which
+ * would grow an ever-deeper chain across iterations — copies each name's
+ * current value across, and returns a context rebased on it. With an empty
+ * list (a `const` head) it is a no-op and returns `context` unchanged.
+ *
+ * @param {string[]} perIterationBindings
+ * @param {EvaluationContext} context
+ * @returns {EvaluationContext}
+ */
+function createPerIterationEnvironment(perIterationBindings, context) {
+  if (perIterationBindings.length === 0) {
+    return context;
+  }
+
+  const lastIterationEnv = context.env;
+  const thisIterationEnv = newDeclarativeEnvironment(lastIterationEnv.outer);
+
+  for (const name of perIterationBindings) {
+    thisIterationEnv.createMutableBinding(name, false);
+    thisIterationEnv.initializeBinding(
+      name,
+      lastIterationEnv.getBindingValue(name, true),
+    );
+  }
+
+  return { ...context, env: thisIterationEnv };
+}
+
+/**
  * Evaluates a `ForInStatement`, implementing ECMA-262 12.6.4 runtime
  * semantics. `right` is evaluated once; a `null`/`undefined` result
  * short-circuits to a no-op loop (12.6.4 step 2) rather than throwing,
@@ -438,13 +561,38 @@ function evaluateForStatement(node, context, labelSet) {
  * unguaranteed; they stay outside the snapshot, which is what keeps an
  * enumeration that grows its own object finite.
  *
+ * A `let`/`const` left-hand side (ES2015 §13.7.5.11, §13.7.5.13) additionally
+ * scopes its binding to the loop. The head's bound names get *uninitialized*
+ * bindings in a throwaway environment while `right` is evaluated, so
+ * `for (let x in x)` reads `x` in its TDZ and throws a `ReferenceError`. Each
+ * iteration then gets its own fresh environment over the *original* outer
+ * environment, with the head's binding created (immutable for `const`, mutable
+ * for `let`) and initialized to that iteration's key — a captured closure
+ * therefore observes that iteration's key, not the last one.
+ *
  * @param {any} node
  * @param {EvaluationContext} context
  * @param {string[]} labelSet
  * @returns {Completion}
  */
 function evaluateForInStatement(node, context, labelSet) {
-  const rightValue = evaluateExpressionValue(node.right, context);
+  const isLexical =
+    node.left.type === 'VariableDeclaration' && node.left.kind !== 'var';
+
+  /** @type {unknown} */
+  let rightValue;
+  if (isLexical) {
+    const tdzEnv = newDeclarativeEnvironment(context.env);
+    for (const name of boundNames(node.left)) {
+      tdzEnv.createMutableBinding(name, false);
+    }
+    rightValue = evaluateExpressionValue(node.right, {
+      ...context,
+      env: tdzEnv,
+    });
+  } else {
+    rightValue = evaluateExpressionValue(node.right, context);
+  }
 
   if (rightValue === null || rightValue === undefined) {
     return createNormalCompletion(EMPTY);
@@ -452,6 +600,8 @@ function evaluateForInStatement(node, context, labelSet) {
 
   const object = toObject(context.realm, rightValue);
   const keys = enumerableKeysForIn(object);
+
+  const isConst = isLexical && isConstantDeclaration(node.left);
 
   /** @type {unknown} */
   let value = EMPTY;
@@ -461,9 +611,23 @@ function evaluateForInStatement(node, context, labelSet) {
       continue;
     }
 
-    assignForInTarget(node.left, key, context);
+    let iterationContext = context;
+    if (isLexical) {
+      const iterationEnv = newDeclarativeEnvironment(context.env);
+      for (const name of boundNames(node.left)) {
+        if (isConst) {
+          iterationEnv.createImmutableBinding(name, true);
+        } else {
+          iterationEnv.createMutableBinding(name, false);
+        }
+        iterationEnv.initializeBinding(name, key);
+      }
+      iterationContext = { ...context, env: iterationEnv };
+    } else {
+      assignForInTarget(node.left, key, context);
+    }
 
-    const bodyResult = evaluateStatement(node.body, context);
+    const bodyResult = evaluateStatement(node.body, iterationContext);
     const { value: nextValue, action } = applyLoopBodyResult(
       bodyResult,
       value,

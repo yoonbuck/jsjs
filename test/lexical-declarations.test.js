@@ -236,6 +236,96 @@ const tests = [
       );
     },
   },
+  {
+    name: 'a for let head gives each iteration its own binding while a var head shares one',
+    run() {
+      assertNormal(
+        run(
+          'var fns = []; for (let i = 0; i < 3; i++) { fns.push(function () { return i; }); } "" + fns[0]() + fns[1]() + fns[2]()',
+        ),
+        '012',
+      );
+      assertNormal(
+        run(
+          'var fns = []; for (var i = 0; i < 3; i++) { fns.push(function () { return i; }); } "" + fns[0]() + fns[1]() + fns[2]()',
+        ),
+        '333',
+      );
+    },
+  },
+  {
+    name: 'a for const head is readable, terminates the loop, and rejects an assigning update with a TypeError',
+    run() {
+      assertNormal(
+        run(
+          'var sum = 0; var n = 0; for (const c = 10; n < 3; n = n + 1) { sum = sum + c; } sum',
+        ),
+        30,
+      );
+      assertThrows('for (const i = 0; i < 3; i++) { }', 'TypeError');
+    },
+  },
+  {
+    name: 'continue carries the per-iteration for let binding forward into each closure',
+    run() {
+      assertNormal(
+        run(
+          'var fns = []; for (let i = 0; i < 4; i++) { if (i === 1) { continue; } fns.push(function () { return i; }); } "" + fns.length + fns[0]() + fns[1]() + fns[2]()',
+        ),
+        '3023',
+      );
+    },
+  },
+  {
+    name: 'a labelled break escapes a for let loop with the accumulated value',
+    run() {
+      assertNormal(
+        run(
+          'var r = -1; outer: for (let i = 0; i < 5; i++) { if (i === 2) { break outer; } r = i; } r',
+        ),
+        1,
+      );
+    },
+  },
+  {
+    name: 'a for-in let head reads its own binding in the TDZ when evaluating the right expression',
+    run() {
+      assertThrows('var x = { a: 1 }; for (let x in x) { }', 'ReferenceError');
+    },
+  },
+  {
+    name: 'a for-in const head binds freshly per iteration so each closure captures its own key',
+    run() {
+      assertNormal(
+        run(
+          'var o = { a: 1, b: 2, c: 3 }; var fns = []; for (const k in o) { fns.push(function () { return k; }); } "" + fns[0]() + fns[1]() + fns[2]()',
+        ),
+        'abc',
+      );
+    },
+  },
+  {
+    name: 'a var declared in a for let body hoists past the loop environment to the enclosing variable scope',
+    run() {
+      assertNormal(
+        run(
+          'var total = 0; for (let i = 0; i < 3; i++) { var seen = i; total = total + seen; } "" + total + seen',
+        ),
+        '32',
+      );
+    },
+  },
+  {
+    name: 'a for let head shadows an outer binding of the same name without mutating it',
+    run() {
+      assertNormal(
+        run(
+          'var i = 99; var captured; for (let i = 0; i < 1; i++) { captured = i; } "" + captured + i',
+        ),
+        '099',
+      );
+    },
+  },
 ];
 
 export default tests;
