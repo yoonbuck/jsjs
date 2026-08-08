@@ -843,6 +843,26 @@ const tests = [
       assertSame(run('JSON.stringify(Symbol("x"));'), undefined);
       assertSame(run('JSON.stringify({ a: Symbol("x") });'), '{}');
       assertSame(run('JSON.stringify([Symbol("x")]);'), '[null]');
+      // A symbol key must not be coerced into the string key its description
+      // renders as: doing so would emit that key twice and run its getter
+      // twice (ES2015 24.3.2 enumerates only String-typed own keys).
+      assertSame(
+        run(
+          'var s = Symbol("a"); var o = {}; o[s] = 1; o["Symbol(a)"] = 2;' +
+            'JSON.stringify(o);',
+        ),
+        '{"Symbol(a)":2}',
+      );
+      assertSame(
+        run(
+          'var count = 0; var s = Symbol("g"); var o = {};' +
+            'Object.defineProperty(o, "Symbol(g)", {' +
+            '  get: function () { count += 1; return 1; }, enumerable: true' +
+            '});' +
+            'o[s] = 9; JSON.stringify(o) + "|" + count;',
+        ),
+        '{"Symbol(g)":1}|1',
+      );
     },
   },
   {
