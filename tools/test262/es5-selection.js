@@ -15,12 +15,20 @@
  * The policy expresses four structural filters as data — excluded top-level
  * directories, the allowed `test/built-ins/<name>` list, the excluded
  * `test/language/<dir>` list, and (applied by the caller) the "parses at
- * ecmaVersion 5" and "frontmatter carries no `features:`/`module`" filters — plus
- * an `exclusions` array that records, with a category and a cited reason, every
- * remaining file that is out of scope because it asserts post-ES5 behaviour,
- * needs a host facility, needs `Date`, or exercises a documented intentional
+ * ecmaVersion 5" and "frontmatter carries no `module` flag" filters — plus a
+ * `featureAreas` list that names, per directory prefix, exactly which Test262
+ * `features:` tags the engine is willing to run there, and an `exclusions`
+ * array that records, with a category and a cited reason, every remaining
+ * file that is out of scope because it asserts post-ES5 behaviour, needs a
+ * host facility, needs `Date`, or exercises a documented intentional
  * deviation. The structural filters produce the candidate set; the exclusions
  * carve the classified failures out of it.
+ *
+ * `featureAreas` is what lets a post-ES5.1 feature the engine has actually
+ * implemented earn coverage without reopening the whole tree. A tagged test
+ * is in scope only where an area covers its path *and* claims every tag it
+ * declares, so adding one feature cannot silently pull in the thousands of
+ * tests elsewhere that happen to share a tag.
  */
 
 import { sortStrings } from './selection.js';
@@ -56,10 +64,13 @@ const POLICY_KEYS = Object.freeze([
   'excludedDirectories',
   'builtins',
   'excludedLanguageDirectories',
+  'featureAreas',
   'exclusions',
 ]);
 
 const EXCLUSION_KEYS = Object.freeze(['path', 'prefix', 'category', 'reason']);
+
+const FEATURE_AREA_KEYS = Object.freeze(['prefix', 'features', 'reason']);
 
 const TEST_ROOT = 'test/';
 
@@ -72,15 +83,23 @@ const TEST_ROOT = 'test/';
  * }} Es5Exclusion
  *
  * @typedef {{
+ *   prefix: string,
+ *   features: readonly string[],
+ *   reason: string,
+ * }} Es5FeatureArea
+ *
+ * @typedef {{
  *   version: number,
  *   excludedDirectories: readonly string[],
  *   builtins: readonly string[],
  *   excludedLanguageDirectories: readonly string[],
+ *   featureAreas: readonly Es5FeatureArea[],
  *   exclusions: readonly Es5Exclusion[],
  * }} Es5SelectionPolicy
  *
  * @typedef {{
- *   hasFeatures: boolean,
+ *   declaresFeatures: boolean,
+ *   features: readonly string[],
  *   isModule: boolean,
  *   parsesAtEs5: boolean,
  *   includesParseAtEs5: boolean,
@@ -149,6 +168,7 @@ export function parseEs5Selection(text) {
     'excludedLanguageDirectories',
     { requireTestPrefix: false, allowEmpty: true },
   );
+  const featureAreas = parseFeatureAreas(record.featureAreas);
   const exclusions = parseExclusions(record.exclusions);
 
   return Object.freeze({
@@ -156,7 +176,85 @@ export function parseEs5Selection(text) {
     excludedDirectories: Object.freeze(excludedDirectories),
     builtins: Object.freeze(builtins),
     excludedLanguageDirectories: Object.freeze(excludedLanguageDirectories),
+    featureAreas: Object.freeze(featureAreas),
     exclusions: Object.freeze(exclusions),
+  });
+}
+
+/**
+ * Parses the `featureAreas` policy: the prefix-scoped claims that let a
+ * feature-tagged test back into scope.
+ *
+ * @param {unknown} value
+ * @returns {Es5FeatureArea[]}
+ */
+function parseFeatureAreas(value) {
+  if (!Array.isArray(value)) {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas must be an array`,
+    );
+  }
+
+  const areas = value.map((entry) => parseFeatureArea(entry));
+  const prefixes = areas.map((area) => area.prefix);
+
+  if (new Set(prefixes).size !== prefixes.length) {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas must not name the same prefix twice`,
+    );
+  }
+
+  if (!isSorted(prefixes)) {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas must be sorted by prefix`,
+    );
+  }
+
+  return areas;
+}
+
+/**
+ * @param {unknown} entry
+ * @returns {Es5FeatureArea}
+ */
+function parseFeatureArea(entry) {
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas entries must be objects`,
+    );
+  }
+
+  const record = /** @type {Record<string, unknown>} */ (entry);
+
+  requireExactKeys(
+    record,
+    FEATURE_AREA_KEYS,
+    `${ES5_SELECTION_FILE} featureAreas entries`,
+  );
+
+  const { prefix } = record;
+
+  if (typeof prefix !== 'string' || !prefix.startsWith(TEST_ROOT)) {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas entries must name a prefix under test/`,
+    );
+  }
+
+  const features = parseStringList(record.features, `featureAreas ${prefix}`, {
+    requireTestPrefix: false,
+    allowEmpty: false,
+  });
+
+  if (typeof record.reason !== 'string' || record.reason.trim() === '') {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas entry ${prefix} must give a non-empty reason`,
+    );
+  }
+
+  return Object.freeze({
+    prefix,
+    features: Object.freeze(features),
+    reason: record.reason,
   });
 }
 
@@ -318,37 +416,64 @@ function exclusionKey(exclusion) {
 
 /**
  * Scans a raw test source for the frontmatter facts the structural filters need,
- * without a full YAML parse: whether the frontmatter declares any `features:`,
+ * without a full YAML parse: which `features:` the frontmatter declares,
  * whether it carries the `module` flag, and which harness files it includes via
  * the flow-sequence form. Kept deliberately textual so it never throws on the
  * whole 53k-file tree the way a strict metadata parse can.
  *
+ * `hasFeatures` and `features` answer two different questions on purpose.
+ * Upstream writes most tags as a flow sequence (`features: [Symbol]`), which
+ * this reads, but a couple of hundred files use block style
+ * (`features:\n  - Symbol`), which it does not. Those report
+ * `hasFeatures: true` with an empty `features`, so no claim can ever match
+ * them and they keep the "excluded" answer they have always had: a tag this
+ * scanner cannot read is a tag the policy must not silently allow.
+ *
  * @param {string} source
- * @returns {{ hasFeatures: boolean, isModule: boolean, includes: string[] }}
+ * @returns {{ hasFeatures: boolean, features: string[], isModule: boolean, includes: string[] }}
  */
 export function scanFrontmatter(source) {
   const match = source.match(/\/\*---([\s\S]*?)---\*\//);
   const frontmatter = match ? match[1] : '';
   const flagsLine = frontmatter.match(/^flags:.*$/m);
   const includesMatch = frontmatter.match(/^includes:\s*\[(.*)\]/m);
-  const includes = includesMatch
-    ? includesMatch[1]
-        .split(',')
-        .map((name) => name.trim())
-        .filter((name) => name !== '')
-    : [];
+  const featuresMatch = frontmatter.match(/^features:\s*\[(.*)\]/m);
 
   return {
     hasFeatures: /^features:/m.test(frontmatter),
+    features: parseFlowSequence(featuresMatch),
     isModule: flagsLine ? /\bmodule\b/.test(flagsLine[0]) : false,
-    includes,
+    includes: parseFlowSequence(includesMatch),
   };
 }
 
 /**
- * Whether a path survives the four structural filters. Exclusions are applied
+ * @param {RegExpMatchArray | null} match
+ * @returns {string[]}
+ */
+function parseFlowSequence(match) {
+  return match
+    ? match[1]
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => name !== '')
+    : [];
+}
+
+/**
+ * Whether a path survives the structural filters. Exclusions are applied
  * separately by {@link isSelectedPath}, because the candidate set is what the
  * classification is measured against and the exclusions are what carve it down.
+ *
+ * A test that declares `features:` is out of scope by default — the engine
+ * makes no blanket claim about any optional feature. A **feature area**
+ * (`featureAreas` in the policy) is the narrow, reviewable exception: inside
+ * one named prefix, and only for the tags that area lists, a tagged test
+ * becomes an ordinary candidate again. Both halves matter. Requiring the
+ * prefix keeps a claim like `Symbol` from dragging in every `Symbol`-tagged
+ * test across the whole tree; requiring *every* declared tag to be claimed
+ * keeps a test that also needs `cross-realm` or `Symbol.matchAll` out, so an
+ * area can never admit more than it says it does.
  *
  * @param {string} path Repository-relative upstream path, e.g. `test/built-ins/Array/x.js`.
  * @param {Es5CandidateInfo} info
@@ -379,11 +504,44 @@ export function isCandidatePath(path, info, policy) {
     return false;
   }
 
-  if (info.hasFeatures || info.isModule) {
+  if (info.isModule) {
+    return false;
+  }
+
+  if (info.declaresFeatures && !isClaimedByFeatureArea(path, info, policy)) {
     return false;
   }
 
   return info.parsesAtEs5 && info.includesParseAtEs5;
+}
+
+/**
+ * Whether some feature area covers `path` and claims every tag the test
+ * declares. The prefix match is on a directory boundary, exactly like an
+ * exclusion prefix, so `test/built-ins/Symbol` never swallows a sibling
+ * directory whose name merely starts the same way.
+ *
+ * @param {string} path
+ * @param {Es5CandidateInfo} info
+ * @param {Es5SelectionPolicy} policy
+ * @returns {boolean}
+ */
+function isClaimedByFeatureArea(path, info, policy) {
+  if (info.features.length === 0) {
+    return false;
+  }
+
+  for (const area of policy.featureAreas) {
+    if (path !== area.prefix && !path.startsWith(`${area.prefix}/`)) {
+      continue;
+    }
+
+    if (info.features.every((name) => area.features.includes(name))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
