@@ -345,7 +345,18 @@ function normalizeHosts(selectedHosts) {
     return ALL_HOSTS;
   }
 
-  return Object.freeze(selectedHosts.filter(isBenchmarkHost));
+  /** @type {BenchmarkHost[]} */
+  const concreteHosts = [];
+
+  for (const host of selectedHosts) {
+    if (!isBenchmarkHost(host)) {
+      throw new TypeError(`Expected a concrete benchmark host, got ${host}`);
+    }
+
+    concreteHosts.push(host);
+  }
+
+  return Object.freeze(concreteHosts);
 }
 
 /**
