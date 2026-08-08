@@ -256,15 +256,6 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // Direct eval hoists a `var`/function binding into the VariableEnvironment
-  // (§18.2.1.2): a catch clause installs a fresh lexical environment for its
-  // parameter, but a `var`/function declared by a direct eval in the catch body
-  // must land in the enclosing function (or global) variable environment and
-  // outlive the catch scope. A hoisted function *object* still captures the
-  // eval's lexical environment as its `[[Scope]]` (§18.2.1.2 step 10.a), so it
-  // sees the eval's own lexical bindings and the surrounding lexical scope.
-  // ---------------------------------------------------------------------------
   {
     name: 'direct eval var inside a catch block hoists into the enclosing function scope',
     run() {
@@ -696,11 +687,6 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // §18.2.1.1 (PerformEval) steps 12-14: a non-strict eval runs in a fresh
-  // LexicalEnvironment over the caller's, while `var`/function hoist into the
-  // caller's VariableEnvironment.
-  // ---------------------------------------------------------------------------
   {
     name: 'eval("let x = 1;") does not leak x to the caller (fresh lexical environment)',
     run() {
@@ -761,10 +747,6 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // §18.2.1.1: identifier resolution reaches the caller's bindings through the
-  // fresh lexical environment's outer reference.
-  // ---------------------------------------------------------------------------
   {
     name: 'direct eval reads and writes an enclosing let binding',
     run() {
@@ -803,11 +785,6 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // §18.2.1.2 (EvalDeclarationInstantiation) step 5: a top-level `var` name that
-  // collides with a `let`/`const` between the lexical and variable environments
-  // is a guest SyntaxError.
-  // ---------------------------------------------------------------------------
   {
     name: 'let x; eval("var x") in the same block is a guest SyntaxError',
     run() {
@@ -853,10 +830,6 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // Strict eval (§18.2.1.1 step 14: varEnv is lexEnv) keeps its own scope for
-  // both `var` and `let`, so neither leaks to the caller.
-  // ---------------------------------------------------------------------------
   {
     name: 'strict-caller eval var does not leak to the caller',
     run() {
@@ -894,11 +867,6 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // A direct eval that reads an enclosing binding still in its temporal dead
-  // zone throws the TDZ ReferenceError on that binding (distinguished from an
-  // unresolved-identifier ReferenceError by its message).
-  // ---------------------------------------------------------------------------
   {
     name: 'direct eval reading an enclosing binding in its TDZ throws the TDZ ReferenceError',
     run() {
@@ -912,13 +880,8 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // ES2015 Annex B.3.3.3: a non-strict eval's block-level function declaration
-  // must NOT create its var-scoped alias when a like-named lexical declaration
-  // exists in the chain between the eval's lexical and variable environments.
-  // ---------------------------------------------------------------------------
   {
-    name: 'eval block-function alias is suppressed by an enclosing let of the same name',
+    name: 'Annex B.3.3.3: eval block-function alias is suppressed by an enclosing let of the same name',
     run() {
       assertNormal(
         run('{ let f = 1; eval("{ function f(){} }"); } typeof f;'),
