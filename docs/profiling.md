@@ -317,7 +317,12 @@ ef9a76da682f78e62d428920d750b288e3d114e0a1c6cc6bc63aa912fea7dd1f  checksum-corre
   signals, not a precise setup-cost decomposition.
 - JSC is timing/checksum-only evidence in this pass.
 
-## Issue #42 optimization evidence
+## Historical (superseded) Issue #42 optimization evidence
+
+> **Superseded for performance decisions.** The `d9ed3e2`/`cf203aa` timing and
+> profile claims in this historical section are retained for provenance only.
+> The current-main rebaseline below supersedes them; do not use this section to
+> accept the rebased branch's performance.
 
 This follow-up captures the post-optimization evidence for issue #42 on top of the baseline above. Timing claims come only from the unprofiled benchmark medians in `.benchmark-results/issue-42-before` and `.benchmark-results/issue-42-after`. CPU/allocation profiles are attribution-only samples; they explain where sampled interpreter work moved, not how much wall time was saved.
 
@@ -570,6 +575,12 @@ copies; no tracked source was changed. Before and after every capture,
 `git status --porcelain --untracked-files=all` was empty in the source
 worktree and active branch. Each host report records `gitDirty: false`.
 
+The active `HEAD` later advanced to `4b30e877ea30099527a6cecd4f3ff0ee41b3178e`
+through the test-only commit `4b30e87`. `git` tree-object checks confirm that
+its `src` (`31112d1c…`) and `benchmark` (`fa85549a…`) trees are byte-identical
+to the measured candidate `3f26148`; no measured source or benchmark content
+changed.
+
 ```sh
 ARTIFACT_ROOT=/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main
 BASELINE_SHA=7132f03fa28de824879894a815be6e2087ed9fb2
@@ -656,13 +667,22 @@ nonzero paired deltas and exact sign-test `p = 0.03125`.
 | Node geomean     | -10.96% | -15.61% … -7.38%  |         ±10.88% | improvement |
 | All-host geomean | -13.46% | -14.28% … -11.12% |          ±4.02% | improvement |
 
-There were **zero non-target regressions**. All three host geomean point
-estimates and the all-host geomean improve. The gate is nevertheless **not
-accepted**: `acceptance.accepted === false`. Its only blocking target is
-`node/arrays/steady`: the -10.55% point estimate and confidence interval are
-negative, but the magnitude is inside its ±12.09% measured self-noise
-envelope. Thus 11 of 12 target cells have `improvement` verdicts, while that
-cell is `within-noise`; aggregation does not override the blocking cell.
+The comparison emits two non-target underpowered warnings:
+`chromium/calls-recursion/cold` (-1.15%) and `node/json/steady` (-8.05%).
+Both point in the improvement direction; neither is a regression, so the
+non-target regression conclusion remains **zero**.
+
+All three host geomean point estimates and the all-host geomean improve. The
+plan/tool target-materiality predicate nevertheless fails:
+`acceptance.accepted === false`. Its only blocking target is
+`node/arrays/steady`. Its displayed envelope is ±12.09%, while the actual
+criterion compares `abs(pointLogRatio)` `0.111455273` against the
+nearest-rank p95 (the second-largest) of 30 pooled self-differences,
+`0.114088087`; the log-space gap is `0.002632814`. Twenty-eight of the 30
+self-differences are below the effect. The only two above it are baseline
+cross-round r2–r4 and r4–r5, both attributable to the documented baseline
+drift. Thus 11 of 12 target cells have `improvement` verdicts, while that cell
+is `within-noise`; aggregation does not override the blocking cell.
 
 ### Matched CPU and allocation profiles
 
@@ -694,16 +714,16 @@ node benchmark/profile/cli.js \
   --warmups=1 --iterations="$iterations" --output="$output"
 ```
 
-| Host     | Workload          | Mode   | Iterations |   Checksum | CPU baseline/candidate (ms) | Allocation baseline/candidate (ms) |
-| -------- | ----------------- | ------ | ---------: | ---------: | --------------------------: | ---------------------------------: |
-| Node     | object-properties | cold   |          4 | 1122746965 |           333.913 / 259.078 |                  373.564 / 297.030 |
-| Node     | object-properties | steady |        512 | 1122746965 |       36378.051 / 30489.777 |              47164.180 / 33217.840 |
-| Node     | arrays            | cold   |          4 |  778416596 |           269.919 / 219.775 |                  287.679 / 240.989 |
-| Node     | arrays            | steady |          5 |  778416596 |           293.713 / 270.191 |                  315.747 / 274.372 |
-| Chromium | object-properties | cold   |          5 | 1122746965 |           351.200 / 285.700 |                  368.900 / 298.700 |
-| Chromium | object-properties | steady |          5 | 1122746965 |           344.300 / 276.300 |                  350.400 / 276.400 |
-| Chromium | arrays            | cold   |          6 |  778416596 |           323.300 / 285.300 |                  329.700 / 289.800 |
-| Chromium | arrays            | steady |         48 |  778416596 |         2408.900 / 2143.600 |                2464.700 / 2165.700 |
+| Host     | Workload          | Mode   | Iterations |   Checksum | CPU capture-window baseline/candidate (ms) | Allocation capture-window baseline/candidate (ms) |
+| -------- | ----------------- | ------ | ---------: | ---------: | -----------------------------------------: | ------------------------------------------------: |
+| Node     | object-properties | cold   |          4 | 1122746965 |                          333.913 / 259.078 |                                 373.564 / 297.030 |
+| Node     | object-properties | steady |        512 | 1122746965 |                      36378.051 / 30489.777 |                             47164.180 / 33217.840 |
+| Node     | arrays            | cold   |          4 |  778416596 |                          269.919 / 219.775 |                                 287.679 / 240.989 |
+| Node     | arrays            | steady |          5 |  778416596 |                          293.713 / 270.191 |                                 315.747 / 274.372 |
+| Chromium | object-properties | cold   |          5 | 1122746965 |                          351.200 / 285.700 |                                 368.900 / 298.700 |
+| Chromium | object-properties | steady |          5 | 1122746965 |                          344.300 / 276.300 |                                 350.400 / 276.400 |
+| Chromium | arrays            | cold   |          6 |  778416596 |                          323.300 / 285.300 |                                 329.700 / 289.800 |
+| Chromium | arrays            | steady |         48 |  778416596 |                        2408.900 / 2143.600 |                               2464.700 / 2165.700 |
 
 | Host     | Workload          | Mode   | Baseline profile run ID                                           | Candidate profile run ID                                                            |
 | -------- | ----------------- | ------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -734,6 +754,14 @@ were paired with CPU captures using the same retried run IDs; the final
 analyzer validation above is over those replacement pairs. No interval,
 warmup, iteration, source SHA, or workload checksum was changed.
 
+The Chromium recapture between those initial rejects and the promoted retry,
+`candidate-shell-variable-collision-recapture-1`, is the third rejected
+profile attempt. Its Chromium artifact was discarded solely for a metadata
+defect: it carries the Node-named run ID
+`issue42-current-main-candidate-node-object-properties-cold-recapture-1`, not
+because of its sampled values. The effective final attempt depth for
+`chromium/object-properties/cold` is therefore three.
+
 ### Interpreter-normalized attribution deltas
 
 Shares below normalize each observation to non-host interpreter samples before
@@ -754,6 +782,12 @@ an isolated parser or method-level causal decomposition.
 | Steady arrays            | CPU        | arrays          |  3.3784% |   3.5278% |  +0.1494 |
 | Steady arrays            | Allocation | object-property | 76.7196% |  12.7806% | -63.9390 |
 | Steady arrays            | Allocation | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+
+Every `0.0000%` allocation entry above is a sampled zero with a validated,
+nonzero interpreter denominator, never a missing or zero denominator. For
+example, the steady Node object-properties allocation artifacts have
+`136492` baseline and `101012` candidate interpreter bytes; their
+object-property and arrays category shares are both zero after normalization.
 
 The whole-branch `arrays` target has a consistent timing improvement on all
 three hosts, but this profile evidence does **not** isolate the array parser's
