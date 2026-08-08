@@ -9,14 +9,22 @@
  * @returns {{ batchSize: number, elapsedMs: number, checksum: number }}
  */
 export function calibrateBatchSize(runBatch, options) {
+  const targetSampleMs = positiveFiniteOption(
+    options.targetSampleMs,
+    'targetSampleMs',
+  );
+  const maxBatchSize = positiveIntegerOption(
+    options.maxBatchSize,
+    'maxBatchSize',
+  );
   const initial = checkedBatchResult(
     runBatch(1),
     options.expectedChecksum,
     options.context,
   );
   const batchSize = clampBatchSize(
-    Math.ceil(options.targetSampleMs / initial.elapsedMs),
-    options.maxBatchSize,
+    Math.ceil(targetSampleMs / initial.elapsedMs),
+    maxBatchSize,
   );
   const confirmed = checkedBatchResult(
     runBatch(batchSize),
@@ -66,4 +74,30 @@ function checkedBatchResult(result, expectedChecksum, context) {
   }
 
   return result;
+}
+
+/**
+ * @param {number} value
+ * @param {string} name
+ * @returns {number}
+ */
+function positiveFiniteOption(value, name) {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError(`${name} must be a positive finite number`);
+  }
+
+  return value;
+}
+
+/**
+ * @param {number} value
+ * @param {string} name
+ * @returns {number}
+ */
+function positiveIntegerOption(value, name) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new RangeError(`${name} must be a positive integer`);
+  }
+
+  return value;
 }

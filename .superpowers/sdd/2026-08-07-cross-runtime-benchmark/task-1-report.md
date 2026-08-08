@@ -44,3 +44,22 @@
   - No blocking defects found in self-review.
 - **Concerns:**
   - The report file cannot include the future report-commit SHA without self-reference; that SHA is returned separately in the CLI response.
+
+## Fix Round 1
+
+- **Red commands and failures:**
+  1. `node test/run-node.js test/benchmark-core.test.js` — failed on `benchmark statistics use defined median p95 CV and geomean semantics` with `Expected false to be the same value as true` after changing the test to require floating-point tolerance at the geometric-mean boundary, which exposed the integer snap in `benchmark/statistics.js`.
+  2. `node test/run-node.js test/benchmark-core.test.js` — failed on `calibration rejects invalid target sample and max batch options before probing` with `Expected function to throw RangeError`, showing `calibrateBatchSize` accepted invalid `targetSampleMs`/`maxBatchSize` instead of rejecting them at the API boundary.
+- **Green commands and results:**
+  1. `node test/run-node.js test/benchmark-core.test.js` — all 9/9 benchmark core tests passed after removing the geometric-mean integer snap and validating calibration options before probing.
+  2. `node test/run-node.js test/node/repository-invariants.test.js` — all repository invariant checks passed after the fix.
+- **Files changed:**
+  - `benchmark/statistics.js`
+  - `benchmark/calibration.js`
+  - `test/benchmark-core.test.js`
+  - `.superpowers/sdd/2026-08-07-cross-runtime-benchmark/task-1-report.md`
+- **Self-review:**
+  - Confirmed `geometricMean` now returns the raw log-averaged floating-point result with no tolerance-based rounding.
+  - Confirmed the regression test asserts explicit floating-point tolerance on a near-integer boundary case that the old snap misreported.
+  - Confirmed `calibrateBatchSize` now rejects non-finite/non-positive `targetSampleMs` and non-integer/non-positive `maxBatchSize` before calling `runBatch`.
+  - Confirmed required focused and invariant test suites pass after the change.

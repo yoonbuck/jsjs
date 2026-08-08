@@ -10,6 +10,16 @@ import {
 } from '../benchmark/statistics.js';
 import { WORKLOADS, workloadsForProfile } from '../benchmark/workloads.js';
 
+/**
+ * @param {number} actual
+ * @param {number} expected
+ * @param {number} tolerance
+ * @returns {void}
+ */
+function assertWithin(actual, expected, tolerance) {
+  assertSame(Math.abs(actual - expected) <= tolerance, true);
+}
+
 const tests = [
   {
     name: 'benchmark workloads have committed checksums',
@@ -61,10 +71,18 @@ const tests = [
   {
     name: 'benchmark statistics use defined median p95 CV and geomean semantics',
     run() {
+      const expectedGeometricMean = Math.exp(
+        (Math.log(4) + Math.log(4 * (1 + Number.EPSILON))) / 2,
+      );
+
       assertSame(median([4, 1, 3, 2]), 2.5);
       assertSame(percentile95([1, 2, 3, 4, 5]), 5);
       assertSame(coefficientOfVariation([2, 2, 2]), 0);
-      assertSame(geometricMean([4, 16]), 8);
+      assertWithin(
+        geometricMean([4, 4 * (1 + Number.EPSILON)]),
+        expectedGeometricMean,
+        Number.EPSILON,
+      );
       assertThrows(() => median([]), RangeError);
       assertThrows(() => geometricMean([1, 0]), RangeError);
     },
@@ -152,6 +170,40 @@ const tests = [
           ),
         RangeError,
       );
+    },
+  },
+  {
+    name: 'calibration rejects invalid target sample and max batch options before probing',
+    run() {
+      let calls = 0;
+      const runBatch = () => {
+        calls += 1;
+        return { elapsedMs: 1, checksum: 17 };
+      };
+
+      assertThrows(
+        () =>
+          calibrateBatchSize(runBatch, {
+            expectedChecksum: 17,
+            targetSampleMs: Number.NaN,
+            maxBatchSize: 4,
+            context: 'nan target fixture',
+          }),
+        RangeError,
+      );
+      assertSame(calls, 0);
+
+      assertThrows(
+        () =>
+          calibrateBatchSize(runBatch, {
+            expectedChecksum: 17,
+            targetSampleMs: 10,
+            maxBatchSize: Number.NaN,
+            context: 'nan max fixture',
+          }),
+        RangeError,
+      );
+      assertSame(calls, 0);
     },
   },
 ];

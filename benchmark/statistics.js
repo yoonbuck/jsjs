@@ -29,14 +29,7 @@ export function coefficientOfVariation(values) {
 export function geometricMean(values) {
   const numericValues = numericValuesOnly(values, true);
   const total = numericValues.reduce((sum, value) => sum + Math.log(value), 0);
-  const result = Math.exp(total / numericValues.length);
-
-  return (
-    Math.abs(result - Math.round(result)) <=
-    Number.EPSILON * Math.max(1, Math.abs(result)) * 2
-  )
-    ? Math.round(result)
-    : result;
+  return Math.exp(total / numericValues.length);
 }
 
 /**
