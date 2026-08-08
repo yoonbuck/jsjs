@@ -573,6 +573,8 @@ context only. Their timing claims come from six paired, unprofiled
 full-workload captures; their CPU/allocation profiles are sampled
 interpreter-attribution diagnostics, not wall-time measurements or proof of an
 isolated implementation contribution.
+The historical candidate SHAs in this section are no longer reachable from
+repository refs; the commands are retained for provenance only.
 
 ### Exact revisions, roots, and commands
 
@@ -1016,9 +1018,14 @@ target-materiality predicate fails. Seven target cells are exceptions:
 
 The all-host aggregate and every host point estimate improve, and every host
 verdict is improvement or within-noise. That aggregation does not override any
-target exception. This is a recurring plan/tool target-materiality miss of the
-kind covered by plan-owner ruling A; the ruling does not alter methodology,
-apply an exemption, or turn `acceptance.accepted` true. The tool reports
+target exception. The two Node object-property exceptions are
+noise-envelope-only misses that retain CIs excluding zero and 6/0 signs
+(`p = 0.03125`), the same shape as ruling A's single Task 4 cell. The other
+five fail all three criteria and establish no significant direction on that
+host, which is weaker evidence than ruling A adjudicated. Ruling A governs the
+disposition—preserve `acceptance.accepted === false` and do not recapture,
+retune, or change the parser—not the strength of this evidence. It does not
+apply an exemption or turn `acceptance.accepted` true. The tool reports
 `exceptionalReview.required === false`; no exceptional-review exemption was
 used.
 
@@ -1087,7 +1094,11 @@ isolated parser/array contribution or a wall-time causal claim.
 
 Every displayed `0.0000%` allocation share has a validated nonzero
 interpreter denominator; it is a sampled zero, not missing data. Profile
-windows and sampled totals are diagnostics, not benchmark timing.
+windows and sampled totals are diagnostics, not benchmark timing. Allocation
+denominators are 32,800–207,792 B against a 32,768 B interval, or roughly 1–6
+sampled allocations per observation, so per-observation allocation shares are
+coarsely quantized and the -32.7222-point aggregate is a low-resolution
+diagnostic.
 
 ### Reproducibility, rejected attempt, and limits
 
@@ -1103,9 +1114,22 @@ windows and sampled totals are diagnostics, not benchmark timing.
   Its external ledger parser incorrectly expected a nested report metadata
   object; no candidate side was captured, no value was used, and a fresh
   canonical round 1 pair replaced it. This was an audit-script error, not a
-  timing or checksum failure.
+  timing or checksum failure. The discarded baseline was faster than its
+  replacement on every target cell (Node arrays/cold 67.02 ms versus 81.26 ms;
+  Node object-properties/cold 91.75 ms versus 104.64 ms), so the replacement
+  favored the candidate numerically; the abort occurred before any candidate
+  capture, making the decision structurally outcome-blind.
 - JSC has timing evidence only; the profile collector supports Node and
   Chromium.
+- Rounds 4–5 (20:44–20:49Z) show a shared machine-level disturbance on Node
+  and JSC but not Chromium. It is not revision-aligned: round 4 slowed the JSC
+  candidate and Node baseline; round 5 slowed both Node and JSC candidates.
+  The paired design absorbs the disturbance into the empirical envelope and
+  sign test. The reported `node/arrays/cold` point estimate is itself the
+  paired median of the six log ratios, -17.41%, versus -19.52% for their mean,
+  despite a round-4 delta of -53.6%. The capture therefore cannot be described
+  as meeting the “otherwise idle machine” precondition in
+  `docs/benchmarking.md`.
 - The comparison is one-machine evidence with substantial Node/JSC empirical
   noise in several cells. It does not establish portability or acceptance.
 - Profile attribution excludes host/GC/idle/harness frames and uses sampled
