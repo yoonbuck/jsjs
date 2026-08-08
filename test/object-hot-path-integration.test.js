@@ -16,7 +16,10 @@ import { createRealm } from '../src/runtime/realm.js';
  */
 function publicDescriptor(target, name, message) {
   const descriptor = target.getOwnProperty(name);
-  assertSame(descriptor === undefined, false, message);
+  if (descriptor === undefined) {
+    assertSame(descriptor === undefined, false, message);
+    throw new Error('unreachable');
+  }
   return descriptor;
 }
 
@@ -43,13 +46,19 @@ function peekOwnDescriptor(target, name, message) {
     /** @type {{ _peekOwnDescriptor?: (name: import('../src/runtime/descriptors.js').PropertyKey) => import('../src/runtime/descriptors.js').CompletePropertyDescriptor | undefined }} */ (
       target
     )._peekOwnDescriptor;
-  assertSame(typeof peek, 'function', message);
+  if (typeof peek !== 'function') {
+    assertSame(typeof peek, 'function', message);
+    throw new Error('unreachable');
+  }
   const descriptor = peek.call(target, name);
-  assertSame(
-    descriptor === undefined,
-    false,
-    `${message}: missing ${String(name)}`,
-  );
+  if (descriptor === undefined) {
+    assertSame(
+      descriptor === undefined,
+      false,
+      `${message}: missing ${String(name)}`,
+    );
+    throw new Error('unreachable');
+  }
   return descriptor;
 }
 
