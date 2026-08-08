@@ -683,6 +683,9 @@ self-differences are below the effect. The only two above it are baseline
 cross-round r2–r4 and r4–r5, both attributable to the documented baseline
 drift. Thus 11 of 12 target cells have `improvement` verdicts, while that cell
 is `within-noise`; aggregation does not override the blocking cell.
+Plan-owner ruling A accepts Task 4 despite this tool result: the user
+non-target rule passes with zero regressions, and `node/arrays/steady` is a
+documented plan/tool target-materiality miss.
 
 ### Matched CPU and allocation profiles
 
