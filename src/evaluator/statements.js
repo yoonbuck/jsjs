@@ -201,24 +201,27 @@ function evaluateBlock(node, context) {
  * so ordinarily this produces no value (ECMA-262 13 / ES2015 §14.1.20).
  *
  * The exception is ES2015 Annex B.3.3: when non-strict declaration
- * instantiation gave this block-level function a var-scoped alias (its name is
- * in `context.annexBFunctionNames`), evaluating it in source order copies the
- * block binding's current value into the variable environment
- * (B.3.3.1 step 1.a.iii's replacement evaluation). The `env !== variableEnv`
- * guard restricts the copy to a genuine block context — a top-level function of
- * the same name evaluates with `env === variableEnv` and must not self-copy.
+ * instantiation gave *this* block-level function declaration a var-scoped alias
+ * (this node is in `context.annexBFunctionDeclarations`), evaluating it in
+ * source order copies the block binding's current value into the variable
+ * environment (B.3.3.1 step 1.a.iii's replacement evaluation). Eligibility is
+ * keyed on node identity, not the name: two block functions may share a name
+ * yet only one be eligible, so only the eligible node copies. The
+ * `env !== variableEnv` guard restricts the copy to a genuine block context — a
+ * top-level function evaluates with `env === variableEnv` and must not
+ * self-copy.
  *
  * @param {any} node
  * @param {EvaluationContext} context
  * @returns {Completion}
  */
 function evaluateFunctionDeclaration(node, context) {
-  const aliasNames = context.annexBFunctionNames;
+  const aliasDeclarations = context.annexBFunctionDeclarations;
 
   if (
-    aliasNames !== undefined &&
+    aliasDeclarations !== undefined &&
     context.env !== context.variableEnv &&
-    aliasNames.has(node.id.name)
+    aliasDeclarations.has(node)
   ) {
     const name = node.id.name;
     const value = getValue(getIdentifierReference(context.env, name, false));

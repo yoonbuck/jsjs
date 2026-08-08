@@ -26,17 +26,14 @@ const tests = [
     },
   },
   {
-    name: 'block-nested function declarations follow Annex B.3.3 in sloppy code',
+    name: 'block function is callable after its block via the Annex B.3.3 var alias in sloppy code',
     run() {
-      // A block function is callable after its block via the var alias
-      // (Annex B.3.3.1): the alias is created `undefined` at instantiation and
-      // takes the function's value when the declaration is reached in source
-      // order.
       assertSame(run('{ function f() { return 1; } } f();'), 1);
-
-      // The alias is `undefined` until the declaration executes, so a block
-      // that never runs leaves it `undefined` — the case the pre-Task-4 engine
-      // got wrong by binding eagerly.
+    },
+  },
+  {
+    name: 'block function in a never-run block leaves its Annex B.3.3 var alias undefined (sloppy)',
+    run() {
       assertSame(
         run('if (false) { function f() { return 1; } } typeof f;'),
         'undefined',
@@ -47,9 +44,11 @@ const tests = [
         ),
         'undefined',
       );
-
-      // Reading the alias before the block runs sees `undefined`, not the
-      // function object.
+    },
+  },
+  {
+    name: 'reading the Annex B.3.3 var alias before its block runs sees undefined, not the function',
+    run() {
       assertSame(
         run('var r = typeof f; { function f() { return 1; } } r;'),
         'undefined',

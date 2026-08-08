@@ -17,7 +17,7 @@ import { evaluateExpressionValue } from './expressions.js';
 import { evaluateStatementList } from './statements.js';
 import { hasUseStrictDirective } from './directive.js';
 import {
-  annexBBlockFunctionNames,
+  annexBBlockFunctionDeclarations,
   boundNames,
   isConstantDeclaration,
   topLevelLexicallyDeclaredNames,
@@ -61,9 +61,10 @@ import {
  * For non-strict scripts this also performs ES2015 Annex B.3.3.2's global slice:
  * a block-level function declaration whose name can legally be declared as a
  * global `var` gets an `undefined`-initialized global var binding here, and the
- * name is recorded on `context.annexBFunctionNames` so the function's own
- * evaluation copies its value into the global scope in source order (see
- * `evaluateFunctionDeclaration`, `./statements.js`). Script-level `let`/`const`
+ * declaration node is recorded on `context.annexBFunctionDeclarations` so the
+ * function's own evaluation copies its value into the global scope in source
+ * order (see `evaluateFunctionDeclaration`, `./statements.js`). Script-level
+ * `let`/`const`
  * bindings themselves are still not instantiated — the global environment's
  * declarative record fills in when Task 7 rewrites this function as §15.1.11.
  *
@@ -99,22 +100,24 @@ export function globalDeclarationInstantiation(program, context) {
   }
 
   if (!context.strict) {
-    const aliasNames = annexBBlockFunctionNames(
+    const aliasDeclarations = annexBBlockFunctionDeclarations(
       program.body,
       new Set(topLevelLexicallyDeclaredNames(program.body)),
     );
-    /** @type {Set<string>} */
+    /** @type {Set<any>} */
     const aliased = new Set();
 
-    for (const name of aliasNames) {
+    for (const declaration of aliasDeclarations) {
       // B.3.3.2: only create the alias when the global var is declarable.
-      if (globalEnvironment.canDeclareGlobalVar(name)) {
-        globalEnvironment.createGlobalVarBinding(name, false);
-        aliased.add(name);
+      // Eligibility is per declaration node, so an ineligible same-name
+      // declaration elsewhere neither creates a binding nor joins `aliased`.
+      if (globalEnvironment.canDeclareGlobalVar(declaration.id.name)) {
+        globalEnvironment.createGlobalVarBinding(declaration.id.name, false);
+        aliased.add(declaration);
       }
     }
 
-    context.annexBFunctionNames = aliased;
+    context.annexBFunctionDeclarations = aliased;
   }
 }
 
@@ -191,21 +194,23 @@ export function functionDeclarationInstantiation(
     // gets an `undefined`-initialized var binding in the activation
     // environment when doing so raises no early error, so a later read of the
     // name outside the block sees `undefined` (or the function, once the block
-    // executes and `evaluateFunctionDeclaration` copies it across). The name is
-    // recorded on the context for that copy step to consult.
-    const aliasNames = annexBBlockFunctionNames(
+    // executes and `evaluateFunctionDeclaration` copies it across). Eligibility
+    // is per declaration node — recorded as an identity set so an ineligible
+    // same-name declaration does not alias.
+    const aliasDeclarations = annexBBlockFunctionDeclarations(
       functionNode.body.body,
       new Set(topLevelLexicallyDeclaredNames(functionNode.body.body)),
     );
 
-    for (const name of aliasNames) {
+    for (const declaration of aliasDeclarations) {
+      const name = declaration.id.name;
       if (!env.hasBinding(name)) {
         env.createMutableBinding(name, false);
         env.initializeBinding(name, undefined);
       }
     }
 
-    context.annexBFunctionNames = new Set(aliasNames);
+    context.annexBFunctionDeclarations = new Set(aliasDeclarations);
   }
 }
 
@@ -258,21 +263,31 @@ export function evalDeclarationInstantiation(program, context, variableEnv) {
   if (!context.strict) {
     // ES2015 Annex B.3.3.3: a non-strict eval's block-level function
     // declarations also get a configurable var alias in the eval's variable
-    // environment. The full clause walks the environment chain rejecting a
-    // name already lexically bound between the block and `variableEnv`; that
-    // deeper check belongs with Task 8's `EvalDeclarationInstantiation`
-    // rewrite, so this creates the alias for every eligible candidate and
-    // records it for the copy step.
-    const aliasNames = annexBBlockFunctionNames(
+    // environment. Eligibility is per declaration node, recorded as an identity
+    // set so an ineligible same-name declaration does not alias.
+    //
+    // KNOWN DEFECT, DEFERRED TO TASK 8: B.3.3.3 step 1.a.ii also rejects a name
+    // already lexically bound in the *running execution context's* lexical
+    // environment chain between the eval and its variable environment. That
+    // check needs the eval's own lexical environment, which does not exist
+    // until Task 8 installs it (ES2015 §18.2.1.1 steps 12-14, `PerformEval`).
+    // Until then `outerLexicalNames` sees only the eval body's own top-level
+    // lexical names, not the caller's, so:
+    //     { let f = 1; eval("{ function f(){} }"); } typeof f
+    // wrongly yields "function" (the alias is created and copied) when it must
+    // yield "undefined" (the caller's `let f` makes `var f` an early error, so
+    // no alias). This cannot be fixed here without that lexical environment;
+    // Task 8 owns the fix.
+    const aliasDeclarations = annexBBlockFunctionDeclarations(
       program.body,
       new Set(topLevelLexicallyDeclaredNames(program.body)),
     );
 
-    for (const name of aliasNames) {
-      ensureEvalVarBinding(variableEnv, name);
+    for (const declaration of aliasDeclarations) {
+      ensureEvalVarBinding(variableEnv, declaration.id.name);
     }
 
-    context.annexBFunctionNames = new Set(aliasNames);
+    context.annexBFunctionDeclarations = new Set(aliasDeclarations);
   }
 }
 

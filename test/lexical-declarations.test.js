@@ -45,6 +45,21 @@ function assertThrows(source, constructorName) {
   throw new Error(`Thrown value is not an instance of ${constructorName}`);
 }
 
+/**
+ * @param {string} source
+ * @param {string} name
+ * @returns {unknown}
+ */
+function globalHasBindingAfter(source, name) {
+  const realm = createRealm();
+  try {
+    evaluateScript(realm, source);
+  } catch {
+    void 0;
+  }
+  return evaluateScript(realm, `'${name}' in this`).value;
+}
+
 /** @type {import('./harness/runner.js').TestCase[]} */
 const tests = [
   {
@@ -134,6 +149,15 @@ const tests = [
     },
   },
   {
+    name: 'a switch earlier case reading a binding declared in a later case throws in its TDZ',
+    run() {
+      assertThrows(
+        'switch (1) { case 1: a; case 2: let a = 1; }',
+        'ReferenceError',
+      );
+    },
+  },
+  {
     name: 'a switch discriminant is evaluated in the outer environment',
     run() {
       assertNormal(
@@ -186,6 +210,29 @@ const tests = [
       assertNormal(
         run("'use strict'; { function f() {} } typeof f"),
         'undefined',
+      );
+    },
+  },
+  {
+    name: 'Annex B.3.3: only the eligible same-named block function aliases into the var scope',
+    run() {
+      assertNormal(
+        run(
+          '{ function f() { return 1; } } { let f; { function f() { return 2; } } } f()',
+        ),
+        1,
+      );
+    },
+  },
+  {
+    name: 'Annex B.3.3: a dead for-head let blocks the var alias for a same-named block function',
+    run() {
+      assertSame(
+        globalHasBindingAfter(
+          'for (let f = 0; false; ) { function f() {} }',
+          'f',
+        ),
+        false,
       );
     },
   },

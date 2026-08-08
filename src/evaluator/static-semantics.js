@@ -155,10 +155,9 @@ function collectOrdered(seed, classify) {
  * some other node type the caller must classify itself (a declaration, or an
  * unrecognized/unsupported statement).
  *
- * This is shared, unchanged, by both the spec-pure walk (`varScopedDeclarations`)
- * and the top-level walk that deliberately diverges from the spec to preserve
- * this engine's current behavior (`topLevelVarScopedDeclarations`); the two
- * differ only in what a `FunctionDeclaration` terminal node contributes.
+ * This drives the spec-pure ES2015 §13.2.11/§13.2.12 walk (`varScopedDeclarations`
+ * / `varDeclaredNames` via `classifyVarScope`), which descends through these
+ * containers but never into a `FunctionDeclaration`'s body.
  *
  * @param {any} node
  * @param {any[]} pending
@@ -252,7 +251,7 @@ function classifyVarScope(node, pending) {
  * other item — including a `Block`, `if`, loop, `try`, or `switch` that may
  * *contain* a nested `FunctionDeclaration` — designates none: a nested
  * function is lexically scoped, and its web-legacy var alias is Annex B.3.3's
- * job (`annexBBlockFunctionNames`), not `TopLevelVarScopedDeclarations`.
+ * job (`annexBBlockFunctionDeclarations`), not `TopLevelVarScopedDeclarations`.
  *
  * @param {any} item
  * @returns {any}
@@ -458,10 +457,11 @@ export function topLevelLexicallyDeclaredNames(statements) {
  *
  * A `FunctionDeclaration` nested inside a block, `if`, loop, `try`, or `switch`
  * is *not* collected here: it is lexically scoped, and its non-strict web-
- * legacy var alias is `annexBBlockFunctionNames`' job (Annex B.3.3), not this
- * function's. This is the real spec behavior; before block scoping existed a
- * deliberate stand-in collected such functions here (Task 1), which Task 4
- * replaced with `annexBBlockFunctionNames` when it implemented block scoping.
+ * legacy var alias is `annexBBlockFunctionDeclarations`' job (Annex B.3.3), not
+ * this function's. This is the real spec behavior; before block scoping existed
+ * a deliberate stand-in collected such functions here (Task 1), which Task 4
+ * replaced with `annexBBlockFunctionDeclarations` when it implemented block
+ * scoping.
  *
  * @param {readonly any[]} statements
  * @returns {any[]}
@@ -487,6 +487,28 @@ export function topLevelVarScopedDeclarations(statements) {
 }
 
 /**
+ * The lexically-declared names of a `for`/`for-in` head — the `BoundNames` of a
+ * `let`/`const` `VariableDeclaration` in the head, or `[]` for a `var` or
+ * expression head. Such a head is a lexical scope boundary over the loop body:
+ * `for (let f; ; ) { var f; }` is an Early Error (ES2015 §13.7.5.1's "any
+ * element of the BoundNames of LexicalDeclaration also occurs in the
+ * VarDeclaredNames"), so a block-level `function f` in the body is *not*
+ * eligible for the Annex B.3.3 var alias.
+ *
+ * @param {any} node
+ * @returns {string[]}
+ */
+function forHeadLexicalNames(node) {
+  const head = node.type === 'ForStatement' ? node.init : node.left;
+
+  if (head && head.type === 'VariableDeclaration' && head.kind !== 'var') {
+    return boundNames(head);
+  }
+
+  return [];
+}
+
+/**
  * Enqueues, onto `worklist`, every nested block-like `StatementList` reachable
  * from `list` without crossing a function boundary or descending *through*
  * another block first — the shallowest `Block`, `switch` `CaseBlock` (all
@@ -495,10 +517,15 @@ export function topLevelVarScopedDeclarations(statements) {
  * containers (`if`, loops, `with`, labels) are transparent: their bodies are
  * walked for the blocks *they* contain, but a bare `FunctionDeclaration` that
  * is their direct child — `if (x) function f(){}` — is Annex B.3.2/B.3.4
- * territory, not B.3.3, so it is deliberately skipped. Each enqueued list
- * carries `enclosingLexical`, the lexical names bound by every block on the
- * path to it. The walk is an explicit worklist for the same reason the rest of
- * this module is: it runs outside the stack guard, over parser-accepted depth.
+ * territory, not B.3.3, so it is deliberately skipped.
+ *
+ * Each enqueued list carries `enclosingLexical`, the lexical names bound on the
+ * path to it. A `for`/`for-in` head that declares `let`/`const` adds those
+ * names for its body subtree only (`forHeadLexicalNames`), because such a head
+ * is a lexical scope boundary — hence `pending` carries a per-node lexical set
+ * rather than one set for the whole traversal. The walk is an explicit worklist
+ * for the same reason the rest of this module is: it runs outside the stack
+ * guard, over parser-accepted depth.
  *
  * @param {readonly any[]} list
  * @param {ReadonlySet<string>} enclosingLexical
@@ -506,15 +533,21 @@ export function topLevelVarScopedDeclarations(statements) {
  * @returns {void}
  */
 function pushNestedBlockLists(list, enclosingLexical, worklist) {
-  /** @type {any[]} */
-  const pending = [...list];
+  /** @type {{ node: any, lexical: ReadonlySet<string> }[]} */
+  const pending = [];
+  for (const node of list) {
+    pending.push({ node, lexical: enclosingLexical });
+  }
 
   while (pending.length > 0) {
-    const node = pending.pop();
+    const { node, lexical } =
+      /** @type {{ node: any, lexical: ReadonlySet<string> }} */ (
+        pending.pop()
+      );
 
     switch (node.type) {
       case 'BlockStatement':
-        worklist.push({ list: node.body, enclosingLexical });
+        worklist.push({ list: node.body, enclosingLexical: lexical });
         break;
       case 'SwitchStatement': {
         /** @type {any[]} */
@@ -524,31 +557,43 @@ function pushNestedBlockLists(list, enclosingLexical, worklist) {
             caseBlock.push(statement);
           }
         }
-        worklist.push({ list: caseBlock, enclosingLexical });
+        worklist.push({ list: caseBlock, enclosingLexical: lexical });
         break;
       }
       case 'TryStatement':
-        pending.push(node.block);
+        pending.push({ node: node.block, lexical });
         if (node.handler !== null) {
-          pending.push(node.handler.body);
+          pending.push({ node: node.handler.body, lexical });
         }
         if (node.finalizer !== null) {
-          pending.push(node.finalizer);
+          pending.push({ node: node.finalizer, lexical });
         }
         break;
       case 'IfStatement':
-        pending.push(node.consequent);
+        pending.push({ node: node.consequent, lexical });
         if (node.alternate) {
-          pending.push(node.alternate);
+          pending.push({ node: node.alternate, lexical });
         }
         break;
       case 'ForStatement':
-      case 'ForInStatement':
+      case 'ForInStatement': {
+        const headNames = forHeadLexicalNames(node);
+        let bodyLexical = lexical;
+        if (headNames.length > 0) {
+          const augmented = new Set(lexical);
+          for (const name of headNames) {
+            augmented.add(name);
+          }
+          bodyLexical = augmented;
+        }
+        pending.push({ node: node.body, lexical: bodyLexical });
+        break;
+      }
       case 'WhileStatement':
       case 'DoWhileStatement':
       case 'LabeledStatement':
       case 'WithStatement':
-        pending.push(node.body);
+        pending.push({ node: node.body, lexical });
         break;
       default:
         break;
@@ -558,37 +603,43 @@ function pushNestedBlockLists(list, enclosingLexical, worklist) {
 
 /**
  * ES2015 Annex B.3.3 (Block-Level Function Declarations Web Legacy
- * Compatibility Semantics): the names of `FunctionDeclaration`s directly
- * contained in a `Block`, `switch` `CaseBlock`, or `try` part anywhere within
+ * Compatibility Semantics): the `FunctionDeclaration` nodes directly contained
+ * in a `Block`, `switch` `CaseBlock`, or `try` part anywhere within
  * `statements` (without crossing a function boundary) that are *eligible* for a
- * var-scoped alias of the same name, in source order, deduplicated.
+ * var-scoped alias of the same name, returned in source order.
+ *
+ * Eligibility is a property of each declaration node, not of its name: two
+ * block functions may share a name yet differ in eligibility, and only the
+ * eligible ones alias. Callers therefore key their per-declaration copy on node
+ * identity (a `Set` of these nodes), never on the name — see
+ * `evaluateFunctionDeclaration` (`./statements.js`). The result is a
+ * `*Declarations` list of nodes, so it needs no de-duplication and preserves
+ * the module's source-order contract.
  *
  * `outerLexicalNames` is the set of names lexically declared at the top level
  * of the enclosing function/script/eval scope (its
- * `TopLevelLexicallyDeclaredNames`). A candidate `F` is eligible only when
- * replacing its declaration with `var F` would raise no early error — i.e. `F`
- * collides with no lexical declaration in `outerLexicalNames` nor in any block
- * on the path from the function to `F`'s block (B.3.3.1's "would not produce any
- * Early Errors" clause). A block's own lexical names cannot collide with a
- * function it directly contains (the parser rejects that redeclaration), so
- * they only matter for the *deeper* blocks they enclose, which is exactly how
- * `enclosingLexical` accumulates them.
+ * `TopLevelLexicallyDeclaredNames`). A candidate declaration of `F` is eligible
+ * only when replacing it with `var F` would raise no early error — i.e. `F`
+ * collides with no lexical declaration in `outerLexicalNames`, in any block on
+ * the path from the function to `F`'s block, nor in a `for`/`for-in` head that
+ * encloses `F`'s block (B.3.3.1's "would not produce any Early Errors" clause).
+ * A block's own lexical names cannot collide with a function it directly
+ * contains (the parser rejects that redeclaration), so they only matter for the
+ * *deeper* blocks they enclose, which is exactly how `enclosingLexical`
+ * accumulates them.
  *
  * The caller (function/global/eval declaration instantiation) creates an
- * `undefined`-initialized var binding for each returned name where doing so is
- * legal for that scope, and the block function's evaluation copies its value
- * into the var scope in source order — see `evaluateFunctionDeclaration`
- * (`./statements.js`).
+ * `undefined`-initialized var binding for each returned declaration's name
+ * where doing so is legal for that scope, and the block function's evaluation
+ * copies its value into the var scope in source order.
  *
  * @param {readonly any[]} statements
  * @param {ReadonlySet<string>} outerLexicalNames
- * @returns {string[]}
+ * @returns {any[]}
  */
-export function annexBBlockFunctionNames(statements, outerLexicalNames) {
-  /** @type {string[]} */
-  const names = [];
-  /** @type {Set<string>} */
-  const seen = new Set();
+export function annexBBlockFunctionDeclarations(statements, outerLexicalNames) {
+  /** @type {any[]} */
+  const eligible = [];
   /** @type {{ list: readonly any[], enclosingLexical: ReadonlySet<string> }[]} */
   const worklist = [];
 
@@ -605,11 +656,8 @@ export function annexBBlockFunctionNames(statements, outerLexicalNames) {
         continue;
       }
 
-      const name = declaration.id.name;
-
-      if (!scope.enclosingLexical.has(name) && !seen.has(name)) {
-        seen.add(name);
-        names.push(name);
+      if (!scope.enclosingLexical.has(declaration.id.name)) {
+        eligible.push(declaration);
       }
     }
 
@@ -622,7 +670,11 @@ export function annexBBlockFunctionNames(statements, outerLexicalNames) {
     pushNestedBlockLists(scope.list, innerLexical, worklist);
   }
 
-  return names;
+  // The LIFO worklist visits scopes out of source order; sort by parser offset
+  // so the returned list honors the `*Declarations` source-order contract.
+  eligible.sort((a, b) => a.start - b.start);
+
+  return eligible;
 }
 
 /**
@@ -631,7 +683,7 @@ export function annexBBlockFunctionNames(statements, outerLexicalNames) {
  * preserved. Includes top-level function declaration names alongside `var`
  * names, since ES2015 treats a top-level function declaration as var-scoped; a
  * function nested in a block is lexically scoped and excluded (its Annex B.3.3
- * alias, if any, is `annexBBlockFunctionNames`' concern).
+ * alias, if any, is `annexBBlockFunctionDeclarations`' concern).
  *
  * @param {readonly any[]} statements
  * @returns {string[]}

@@ -16,11 +16,14 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  * enclosing function (or global) variable environment rather than into the
  * lexical scope that vanishes when the construct exits (ECMA-262 10.4.2 / 10.5).
  *
- * `annexBFunctionNames`, when present, is the set of block-level function names
- * that non-strict declaration instantiation gave a var-scoped alias (ES2015
- * Annex B.3.3); it threads unchanged into every nested block of the same var
- * scope so `evaluateFunctionDeclaration` can copy each function's value across
- * in source order. It is absent in strict code and where no such alias exists.
+ * `annexBFunctionDeclarations`, when present, is the set of block-level
+ * `FunctionDeclaration` *nodes* that non-strict declaration instantiation gave a
+ * var-scoped alias (ES2015 Annex B.3.3); it threads unchanged into every nested
+ * block of the same var scope so `evaluateFunctionDeclaration` can copy each
+ * eligible function's value across in source order. Membership is by node
+ * identity, not name, so two same-name block functions that differ in
+ * eligibility are told apart. It is absent in strict code and where no such
+ * alias exists.
  *
  * @typedef {{
  *   realm: import('../runtime/realm.js').Realm,
@@ -29,7 +32,7 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  *   strict: boolean,
  *   thisValue: unknown,
  *   homeObject?: import('../runtime/object.js').EngineObject | undefined,
- *   annexBFunctionNames?: Set<string>,
+ *   annexBFunctionDeclarations?: Set<any>,
  * }} EvaluationContext
  */
 

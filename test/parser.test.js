@@ -737,22 +737,19 @@ const tests = [
     },
   },
   {
-    name: 'a block-scoped lexical declaration evaluates; a top-level one awaits Tasks 6-8',
+    name: 'a nested-block lexical declaration evaluates instead of raising UnsupportedNodeError',
     run() {
       const realm = createRealm();
-
-      // Task 4 wires up lexical bindings for block, switch, and try scopes, so
-      // a nested-block `let` now evaluates instead of raising the removed
-      // Task 3 scaffold's UnsupportedNodeError.
       assertSame(evaluateScript(realm, '{ let x = 1; x; }').value, 1);
-
-      // A top-level lexical declaration still has no binding created for it
-      // (global/eval instantiation is Tasks 7 and 8), so it fails with a
-      // controlled engine-level error rather than silently misbehaving.
+    },
+  },
+  {
+    name: 'a top-level lexical declaration raises a controlled UnsupportedOperationError pending Tasks 6-8',
+    run() {
+      const realm = createRealm();
       const error = /** @type {any} */ (
         assertThrows(() => evaluateScript(realm, 'let y = 1;'), Error)
       );
-
       assertSame(error.name, 'UnsupportedOperationError');
     },
   },
