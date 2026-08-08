@@ -14,6 +14,7 @@
  */
 
 import foundation from './foundation.test.js';
+import staticSemantics from './static-semantics.test.js';
 import parser from './parser.test.js';
 import runtimeRecords from './runtime-records.test.js';
 import objects from './objects.test.js';
@@ -74,6 +75,10 @@ import profilingCore from './profiling-core.test.js';
 /** @type {readonly TestSuite[]} */
 export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({ file: 'test/foundation.test.js', tests: foundation }),
+  Object.freeze({
+    file: 'test/static-semantics.test.js',
+    tests: staticSemantics,
+  }),
   Object.freeze({ file: 'test/parser.test.js', tests: parser }),
   Object.freeze({
     file: 'test/runtime-records.test.js',
