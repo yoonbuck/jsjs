@@ -791,6 +791,7 @@ function summarizeMetricObservations(observations, metric) {
   let sampledTotal = 0;
   let interpreterTotal = 0;
   let overheadTotal = 0;
+  let interpreterObservationCount = 0;
 
   for (const observation of observations) {
     const summary = observation[metric].summary;
@@ -807,6 +808,10 @@ function summarizeMetricObservations(observations, metric) {
         observationInterpreterTotal += frame[valueField];
         interpreterTotal += frame[valueField];
       }
+    }
+
+    if (observationInterpreterTotal > 0) {
+      interpreterObservationCount += 1;
     }
 
     for (const category of summary.categories) {
@@ -837,11 +842,15 @@ function summarizeMetricObservations(observations, metric) {
 
   return Object.freeze({
     interpreter: Object.freeze({
+      observationCount: interpreterObservationCount,
       categories: Object.freeze(
-        meanShareEntries(interpreterCategoryShares, observations.length),
+        meanShareEntries(
+          interpreterCategoryShares,
+          interpreterObservationCount,
+        ),
       ),
       frames: Object.freeze(
-        meanShareEntries(interpreterFrameShares, observations.length),
+        meanShareEntries(interpreterFrameShares, interpreterObservationCount),
       ),
     }),
     overhead: Object.freeze({
@@ -1589,6 +1598,7 @@ function formatCause(error) {
 /**
  * @typedef {{
  *   interpreter: {
+ *     observationCount: number,
  *     categories: readonly AnalysisEntry[],
  *     frames: readonly AnalysisEntry[],
  *   },

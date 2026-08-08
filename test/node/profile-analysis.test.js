@@ -108,6 +108,52 @@ const tests = [
     },
   },
   {
+    name: 'profile analysis normalizes interpreter shares over sample-bearing observations',
+    async run() {
+      const fixture = await createFixture();
+
+      try {
+        for (const host of HOSTS) {
+          const sidecarUrl = new URL(
+            `profiles/${host}/arithmetic-loops-cold-allocation.json`,
+            fixture.profileUrl,
+          );
+          const sidecar = JSON.parse(await readFile(sidecarUrl, 'utf8'));
+          sidecar.summaries.allocation = createSummary(
+            [
+              {
+                category: 'host',
+                url: '',
+                functionName: '(idle)',
+                selfSize: 100,
+              },
+            ],
+            'selfSize',
+          );
+          await writeJson(sidecarUrl, sidecar);
+        }
+
+        const result = await analyzeProfileArtifacts(fixture);
+        const group = result.analysis.groups.all;
+        const aggregate = group.allocation;
+        const evaluator = aggregate.interpreter.categories.find(
+          (entry) => entry.key === 'evaluator',
+        );
+        const categoryTotal = aggregate.interpreter.categories.reduce(
+          (total, entry) => total + (entry.percentage ?? 0),
+          0,
+        );
+
+        assertSame(group.profileCount, 4);
+        assertSame(aggregate.interpreter.observationCount, 2);
+        assertSame(evaluator?.percentage, 10);
+        assertSame(categoryTotal, 100);
+      } finally {
+        await removeFixture();
+      }
+    },
+  },
+  {
     name: 'profile analysis rejects missing and duplicate metric sidecars',
     async run() {
       const fixture = await createFixture();

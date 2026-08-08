@@ -1,23 +1,169 @@
 # Interpreter profiling evidence
 
-This document records a reproducible local evidence pass for the jsjs
-interpreter. It ranks sampled CPU/allocation hot paths; it is not a regression
-baseline and does not prescribe an optimization. The captures were made at
-source commit `12ac7fb1673722616858ef8b45bcf50074565746` on macOS 15.7.8
-(24G824), Apple M1, 8 GiB RAM.
+This is a reproducible, local evidence pass for the jsjs interpreter. It ranks
+sampled interpreter work; it is neither a latency baseline nor an optimization
+decision. CPU and allocation profiles are separate captures, and every
+percentage below is an interpreter-only, equal-observation share.
 
-## Reproduction
+## Interpreter-normalized equal-observation evidence
 
-Install only the Playwright browser executable locked by `package-lock.json` if
-Chromium is unavailable:
+For metric observation `i`, let `I_i` be its non-`host` frames and let
+`v_i(k)` be the sampled self value of category or frame `k`. The analyzer uses:
 
-```sh
-npx playwright install --with-deps --only-shell chromium
+```text
+share_i(k) = 100 * v_i(k) / sum(v_i(f) for f in I_i)
+aggregateShare(k) = sum(share_i(k) for eligible observations i) / eligibleObservationCount
 ```
 
-Capture every benchmark host in one invocation, then summarize that same run:
+An observation with no non-`host` sample has no defined interpreter share, so
+it remains in the paired capture and raw diagnostics but is excluded from that
+metric's `interpreter.observationCount`. This preserves equal weighting among
+the observations that have a nonzero interpreter denominator; it never falls
+back to raw-total or elapsed-time weighting. `profileCount` remains the number
+of CPU/allocation pairs.
+
+The all-observation result has 16 pairs and 16 CPU interpreter observations.
+Allocation has 15 interpreter observations: the Node steady
+`object-properties` capture is a valid, checksum-matching pair with zero
+sampled allocation frames at the required 32,768-byte interval. Every nonempty
+aggregate's category shares sum to 100%.
+
+| Interpreter category    | CPU share (%) | Allocation share (%) |
+| ----------------------- | ------------: | -------------------: |
+| evaluator               |       48.6698 |              38.7079 |
+| references-environments |       16.2186 |               6.8663 |
+| object-property         |       15.8034 |              13.3333 |
+| arithmetic              |       10.7116 |               6.6667 |
+| calls                   |        5.2746 |               0.0000 |
+| other-runtime           |        1.8496 |              23.5376 |
+| arrays                  |        0.7241 |               3.1337 |
+| completions             |        0.6261 |               3.3093 |
+| parser                  |        0.0691 |               2.2215 |
+| realm-setup             |        0.0531 |               2.2237 |
+| **interpreter total**   |  **100.0000** |         **100.0000** |
+
+The leading interpreter frames are likewise normalized shares, not portions of
+a summed raw sample total.
+
+| CPU frame                                     | Share (%) |
+| --------------------------------------------- | --------: |
+| `expressions.js#evaluateExpression`           |   10.2438 |
+| `expressions.js#evaluateExpressionValue`      |   10.0273 |
+| `expressions.js#applyBinaryOperator`          |    7.9211 |
+| `expressions.js#evaluateBinaryExpression`     |    7.1407 |
+| `object.js#defineOwnProperty`                 |    6.6200 |
+| `conversion.js#toInt32`                       |    5.1548 |
+| `reference.js#getValue`                       |    3.2178 |
+| `statements.js#evaluateStatement`             |    2.9416 |
+| `object.js#getOwnProperty`                    |    2.7395 |
+| `function-object.js#createArgumentsObject`    |    2.6770 |
+| `expressions.js#evaluateAssignmentExpression` |    2.6539 |
+| `environment.js#getIdentifierReference`       |    2.4744 |
+
+| Allocation frame                            | Share (%) |
+| ------------------------------------------- | --------: |
+| `expressions.js#applyBinaryOperator`        |   10.0240 |
+| `expressions.js#evaluateExpression`         |    8.5114 |
+| `reference.js#getValue`                     |    6.8663 |
+| `conversion.js#toInt32`                     |    6.6667 |
+| `expressions.js#evaluateBinaryExpression`   |    6.6667 |
+| `expressions.js#evaluateExpressionValue`    |    6.6667 |
+| `descriptors.js#completePropertyDescriptor` |    6.6667 |
+| `object.js#defineOwnProperty`               |    6.6667 |
+| `global-numeric.js#installNumericGlobals`   |    6.6667 |
+| `json.js#createJSONIntrinsics`              |    6.6667 |
+| `regexp-syntax.js#PatternParser`            |    6.6667 |
+| `declarations.js#execute`                   |    3.3333 |
+| `completion.js#createReturnCompletion`      |    3.3093 |
+| `array-object.js#defineOwnProperty`         |    3.1337 |
+
+## Separate host, GC, idle, inspector, and harness overhead
+
+`host` frames never enter the tables above or their denominators. They remain
+raw diagnostic values, with CPU measured in sampled self microseconds and
+allocation measured in sampled bytes.
+
+| Raw overhead frame/group                                              |      CPU (µs) | Allocation (B) |
+| --------------------------------------------------------------------- | ------------: | -------------: |
+| Inspector transport (`node:inspector#post`)                           |       757,786 |        396,560 |
+| Garbage collector                                                     |       549,523 |              0 |
+| Host program                                                          |       411,706 |              0 |
+| Idle                                                                  |        16,660 |              0 |
+| Capture/browser harness (`run`, `runBrowserProfilePage`, target)      |         5,359 |        164,048 |
+| Host built-ins (`set`, `keys`, `RegExp`, `String`, `Map`, `evaluate`) |             0 |        306,696 |
+| Other host frames                                                     |        29,579 |         98,480 |
+| **All host overhead**                                                 | **1,770,613** |    **965,784** |
+
+The harness and host values are intentionally visible rather than attributed
+to interpreter code. The raw all-observation diagnostics are 18,832,441 µs CPU
+samples (17,061,828 µs interpreter) and 1,870,280 B allocation samples
+(904,496 B interpreter); neither total is a percentage weight.
+
+## Workload-specific steady evidence
+
+These rows average the Node and Chromium steady observations equally. The
+allocation observation count is shown because the Node steady
+`object-properties` allocation capture had no non-host sample at the required
+interval.
+
+| Workload          | CPU observations | Leading CPU categories (%)                                                  | Allocation observations | Leading allocation categories (%)                        |
+| ----------------- | ---------------: | --------------------------------------------------------------------------- | ----------------------: | -------------------------------------------------------- |
+| arithmetic-loops  |                2 | evaluator 61.7826; arithmetic 20.1312; references-environments 14.8278      |                       2 | evaluator 50.1802; references-environments 25.0000       |
+| arrays            |                2 | evaluator 46.1185; references-environments 20.4089; object-property 17.5896 |                       2 | object-property 50.0000; references-environments 26.4973 |
+| calls-recursion   |                2 | evaluator 39.4295; calls 20.8772; object-property 18.4492                   |                       2 | evaluator 50.0000; object-property 50.0000               |
+| object-properties |                2 | evaluator 51.1383; object-property 23.0385; references-environments 15.0145 |                       1 | evaluator 100.0000                                       |
+
+Cold captures contain sparse parser/realm evidence that steady captures do
+not: Node cold CPU has parser 0.2102% and realm setup 0.1976%, while Chromium
+cold CPU has parser 0.0662% and realm setup 0.0149%. This establishes boundary
+placement only. Sampling perturbation, unequal profiler work, and the distinct
+cold/steady paths make a standalone setup-cost claim unsound.
+
+## Bounded optimization candidates and exclusions
+
+The following are frame-local, Amdahl-style upper bounds from normalized CPU
+self shares. They are not speedup forecasts and do not justify changing ES
+semantics.
+
+| Candidate                                         | Normalized CPU share | Bound and correctness scope                                                                        |
+| ------------------------------------------------- | -------------------: | -------------------------------------------------------------------------------------------------- |
+| Tighten `evaluateBinaryExpression` dispatch       |               7.1407 | Bound only for this sampled mix; preserve coercion, operators, completions, and abrupt completion. |
+| Reduce redundant work around `toInt32` conversion |               5.1548 | Measure first; preserve numeric conversion and host-value behavior.                                |
+| Avoid unnecessary `createArgumentsObject` work    |               2.6770 | Measure call shapes; preserve strictness, aliasing, `callee`, and observability.                   |
+
+Cached lookup, lightweight-context, and bytecode work remain excluded as issue
+#40 architecture work. Object, descriptor, property, and array paths remain
+excluded as issue #42 work, even where they have large normalized shares.
+
+## Evidence identity and exact commands
+
+The clean source commit was
+`7a69f7b97d40b82ec54c43a66c087817076f9322`. Before any capture,
+`git status --porcelain --untracked-files=all` was empty and
+`git rev-parse HEAD` returned that revision. Every capture CLI independently
+called the clean-source check and recorded `gitDirty: false`.
+
+| Item                | Value                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Baseline schema     | `3`                                                                                                                                    |
+| Baseline run ID     | `74a3df62-e40e-4b34-aee2-2e923f92ce9c`                                                                                                 |
+| Baseline time       | `2026-08-08T06:19:39.183Z`                                                                                                             |
+| Profile schema      | `2` sidecars                                                                                                                           |
+| Profile run ID      | `profile-evidence-20260808-7a69f7b-final`                                                                                              |
+| Node                | `v26.5.1`                                                                                                                              |
+| Chromium            | Playwright shell `151.0.7922.34`                                                                                                       |
+| JSC                 | `/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc mtimeMs=1784736095000` |
+| CPU interval        | `100` **microseconds**                                                                                                                 |
+| Allocation interval | `32768` **bytes**                                                                                                                      |
+
+Use fresh ignored roots; do not reuse a previous profiler directory:
 
 ```sh
+test -z "$(git status --porcelain --untracked-files=all)"
+git rev-parse HEAD
+rm -rf .benchmark-results/profiling-baseline .benchmark-results/interpreter-profiling
+
+PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" \
 JSC=/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc \
   node benchmark/cli.js run --host=all --output=.benchmark-results/profiling-baseline
 node benchmark/cli.js summary \
@@ -25,80 +171,51 @@ node benchmark/cli.js summary \
   --output=.benchmark-results/profiling-baseline
 ```
 
-Capture the two protocol metrics separately for the four interpreter workloads.
-These are the exact capture settings used for the evidence below: one checked
-warmup, one checked measured invocation, and an explicit interval of 100 for
-each metric.
+The profile run uses one shared nonempty ID. CPU and allocation are different
+invocations: CPU uses `--cpu-sampling-interval-microseconds=100`; allocation
+uses `--allocation-sampling-interval-bytes=32768`. The CPU-only measured
+capture window, not allocation-inflated elapsed time, is at least 250 ms for
+every final pair. Start at one iteration; if that CPU window is shorter,
+increase the pair's iteration count and recapture both metric files with the
+same settings. The final counts were:
 
 ```sh
-for host in node chromium; do
-  for workload in arithmetic-loops calls-recursion object-properties arrays; do
-    for mode in cold steady; do
-      run_id="$host-$workload-$mode"
-      node benchmark/profile/cli.js \
-        --host="$host" \
-        --workload="$workload" \
-        --mode="$mode" \
-        --metric=cpu \
-        --run-id="$run_id" \
-        --cpu-sampling-interval-microseconds=100 \
-        --warmups=1 \
-        --iterations=1 \
-        --output=.benchmark-results/interpreter-profiling
-      node benchmark/profile/cli.js \
-        --host="$host" \
-        --workload="$workload" \
-        --mode="$mode" \
-        --metric=allocation \
-        --run-id="$run_id" \
-        --allocation-sampling-interval-bytes=100 \
-        --warmups=1 \
-        --iterations=1 \
-        --output=.benchmark-results/interpreter-profiling
-    done
-  done
-done
-```
+run_id=profile-evidence-20260808-7a69f7b-final
+output=.benchmark-results/interpreter-profiling
 
-These metric-specific sidecars are the analysis contract. Run:
+capture_pair() {
+  host=$1 workload=$2 mode=$3 iterations=$4
+  node benchmark/profile/cli.js \
+    --host="$host" --workload="$workload" --mode="$mode" --metric=cpu \
+    --run-id="$run_id" --cpu-sampling-interval-microseconds=100 \
+    --warmups=1 --iterations="$iterations" --output="$output"
+  node benchmark/profile/cli.js \
+    --host="$host" --workload="$workload" --mode="$mode" --metric=allocation \
+    --run-id="$run_id" --allocation-sampling-interval-bytes=32768 \
+    --warmups=1 --iterations="$iterations" --output="$output"
+}
 
-```sh
+capture_pair node arithmetic-loops cold 8
+capture_pair node arithmetic-loops steady 8
+capture_pair node calls-recursion cold 5
+capture_pair node calls-recursion steady 5
+capture_pair node object-properties cold 4
+capture_pair node object-properties steady 128
+capture_pair node arrays cold 4
+capture_pair node arrays steady 5
+capture_pair chromium arithmetic-loops cold 13
+capture_pair chromium arithmetic-loops steady 13
+capture_pair chromium calls-recursion cold 9
+capture_pair chromium calls-recursion steady 9
+capture_pair chromium object-properties cold 5
+capture_pair chromium object-properties steady 5
+capture_pair chromium arrays cold 6
+capture_pair chromium arrays steady 48
+
 npm run profile:analyze
 ```
 
-The analyzer pairs exactly one CPU and one allocation sidecar for each
-host/workload/mode key and requires matching run ID, clean source commit,
-runtime identity, capture settings, and metric-specific intervals. It keeps the
-two profiler elapsed times and sampled totals as diagnostics only. For every
-metric sidecar, it excludes `host` category frames (including GC, idle,
-inspector, and harness frames), computes interpreter-only category/frame
-shares, then arithmetic-means those shares across observations. Output remains
-under `.benchmark-results/`.
-
-The measured profiler durations ranged from 293.0 ms to 12,944.5 ms, so every
-row exceeds the 250 ms target without changing a workload source. Profile
-overhead is intentionally visible: capture duration is much larger than the
-unprofiled benchmark median, particularly with allocation sampling at 100
-bytes. Use the benchmark medians for timing and profile shares for attribution;
-do not compare those two columns as equal wall-clock measurements.
-
-### Runtime and artifact metadata
-
-| Runtime                     | Version/identity                                                                                                                       |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Node                        | `v26.5.1`                                                                                                                              |
-| Chromium (Playwright shell) | `151.0.7922.34`                                                                                                                        |
-| JSC                         | `/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc mtimeMs=1784736095000` |
-
-The system JSC accepts neither a useful `--version` response (it emits
-`ERROR: invalid option: --version`) nor a profiler protocol consumed by this
-CLI. The baseline therefore records its resolved executable identity. Its
-`--help` advertises `--sample` and `-p <file>`, but this shell offered no
-verified, stable, machine-readable function-level CPU or allocation mechanism
-for this evidence pass. The JSC evidence below is benchmark timing and checksum
-evidence only; no JSC function-level hotspot claim is made.
-
-All generated evidence stays local and ignored:
+The output is local and ignored:
 
 ```text
 .benchmark-results/profiling-baseline/{node,chromium,jsc,summary}.json
@@ -108,159 +225,95 @@ All generated evidence stays local and ignored:
 .benchmark-results/interpreter-profiling/profile-analysis.json
 ```
 
-The first directory holds the one shared baseline run
-`d0b3e5e3-b3da-40f8-b277-b56b98d3cbb9` generated at
-`2026-08-08T04:11:08.082Z`. The second holds the raw `.cpuprofile`,
-`.heapprofile`, and sidecar JSON files. None is a committed baseline. In
-particular, sampled allocation bytes below are weighted allocations attributed
-by the profiler, **not** retained heap, live-object size, or heap growth.
+## Timing and checksum diagnostics
 
-## Checksum-correlated timing
+Every profile pair matches the baseline expected and observed checksum plus its
+CPU expected/observed and allocation expected/observed checksums. The table
+shows the shared checksum once; the capture windows and sampled totals are
+diagnostics only.
 
-The historical tables below predate the paired schema-2, interpreter-normalized
-analysis method. They remain an unrecomputed record only; do not treat their
-raw-total shares as current hotspot rankings. This task does not regenerate
-local profiling evidence.
+| Host     | Workload          | Mode   | Iterations |    Checksum | CPU window (ms) | CPU samples (µs) | Allocation window (ms) | Allocation samples (B) |
+| -------- | ----------------- | ------ | ---------: | ----------: | --------------: | ---------------: | ---------------------: | ---------------------: |
+| Chromium | arithmetic-loops  | cold   |         13 |  1397312734 |         268.200 |          286,046 |                275.500 |                 98,508 |
+| Chromium | arithmetic-loops  | steady |         13 |  1397312734 |         258.200 |          275,204 |                265.200 |                131,668 |
+| Chromium | calls-recursion   | cold   |          9 | -1100296460 |         273.300 |          290,605 |                387.700 |                 68,884 |
+| Chromium | calls-recursion   | steady |          9 | -1100296460 |         261.400 |          279,362 |                370.800 |                103,368 |
+| Chromium | object-properties | cold   |          5 |  1122746965 |         368.100 |          385,475 |                404.100 |                 72,048 |
+| Chromium | object-properties | steady |          5 |  1122746965 |         366.700 |          387,136 |                389.900 |                 32,880 |
+| Chromium | arrays            | cold   |          6 |   778416596 |         347.400 |          370,265 |                362.300 |                 67,828 |
+| Chromium | arrays            | steady |         48 |   778416596 |       2,590.900 |        2,612,200 |              2,785.000 |                 66,944 |
+| Node     | arithmetic-loops  | cold   |          8 |  1397312734 |         301.827 |          392,395 |                340.384 |                254,584 |
+| Node     | arithmetic-loops  | steady |          8 |  1397312734 |         297.216 |          435,394 |                240.920 |                132,464 |
+| Node     | calls-recursion   | cold   |          5 | -1100296460 |         514.832 |          660,937 |                491.477 |                198,968 |
+| Node     | calls-recursion   | steady |          5 | -1100296460 |         258.468 |          335,847 |                432.354 |                200,400 |
+| Node     | object-properties | cold   |          4 |  1122746965 |         476.837 |          567,776 |                426.682 |                150,344 |
+| Node     | object-properties | steady |        128 |  1122746965 |      10,681.803 |       10,764,793 |             11,916.103 |                      0 |
+| Node     | arrays            | cold   |          4 |   778416596 |         293.924 |          368,397 |                393.833 |                186,264 |
+| Node     | arrays            | steady |          5 |   778416596 |         355.761 |          420,609 |                381.449 |                105,128 |
 
-`jsjs median` is the baseline's unprofiled jsjs median. `CPU` is
-`sample-count / sampled self-time total`; allocation is sampled bytes. These
-four fields keep every hotspot observation attached to its cost and checked
-result.
+The one shared unprofiled baseline supplies timing and checksum context. These
+medians are not profile timing and must not be combined with profile windows.
 
-| Host     | Workload          | Mode   | Checksum (BE = BO = SE = SO) | jsjs median (ms) | Profile ms/iter |                    CPU | Sampled alloc. |
-| -------- | ----------------- | ------ | ---------------------------: | ---------------: | --------------: | ---------------------: | -------------: |
-| Node     | arithmetic-loops  | cold   |                   1397312734 |           23.189 |         808.409 |     5,208 / 902,305 µs |       59,856 B |
-| Node     | arithmetic-loops  | steady |                   1397312734 |           23.183 |         649.444 |     4,141 / 742,402 µs |       24,936 B |
-| Node     | calls-recursion   | cold   |                  -1100296460 |           36.397 |      12,944.470 | 80,366 / 13,040,955 µs |      131,744 B |
-| Node     | calls-recursion   | steady |                  -1100296460 |           35.154 |       9,000.794 |  58,352 / 9,089,240 µs |      103,992 B |
-| Node     | object-properties | cold   |                   1122746965 |           83.426 |       6,984.313 |  37,871 / 7,068,357 µs |       47,504 B |
-| Node     | object-properties | steady |                   1122746965 |           85.221 |       6,489.073 |  32,393 / 6,588,054 µs |       34,160 B |
-| Node     | arrays            | cold   |                    778416596 |           69.404 |       5,519.678 |  31,325 / 5,624,174 µs |       58,016 B |
-| Node     | arrays            | steady |                    778416596 |           65.758 |       4,218.817 |  24,639 / 4,339,715 µs |       51,320 B |
-| Chromium | arithmetic-loops  | cold   |                   1397312734 |           19.700 |         388.500 |     2,004 / 420,153 µs |       56,748 B |
-| Chromium | arithmetic-loops  | steady |                   1397312734 |           19.400 |         293.000 |     1,854 / 313,025 µs |       41,024 B |
-| Chromium | calls-recursion   | cold   |                  -1100296460 |           27.800 |       4,668.800 |  27,311 / 4,707,039 µs |      122,820 B |
-| Chromium | calls-recursion   | steady |                  -1100296460 |           27.325 |       4,729.700 |  27,347 / 4,765,137 µs |      124,784 B |
-| Chromium | object-properties | cold   |                   1122746965 |           77.500 |       2,922.100 |  16,158 / 2,957,601 µs |       84,152 B |
-| Chromium | object-properties | steady |                   1122746965 |           77.350 |       2,309.000 |  13,191 / 2,352,715 µs |       69,940 B |
-| Chromium | arrays            | cold   |                    778416596 |           57.500 |       1,850.100 |  11,571 / 1,882,530 µs |       64,352 B |
-| Chromium | arrays            | steady |                    778416596 |           56.700 |       1,444.200 |   9,356 / 1,473,834 µs |       58,988 B |
+| Host     | Workload          | Mode   |    Checksum | Native median (ms) | jsjs median (ms) |
+| -------- | ----------------- | ------ | ----------: | -----------------: | ---------------: |
+| Node     | arithmetic-loops  | cold   |  1397312734 |              0.265 |           21.967 |
+| Node     | arithmetic-loops  | steady |  1397312734 |              0.031 |           21.332 |
+| Node     | calls-recursion   | cold   | -1100296460 |              0.329 |           34.156 |
+| Node     | calls-recursion   | steady | -1100296460 |              0.138 |           32.082 |
+| Node     | object-properties | cold   |  1122746965 |              1.686 |           81.389 |
+| Node     | object-properties | steady |  1122746965 |              0.034 |           81.288 |
+| Node     | arrays            | cold   |   778416596 |              0.699 |           62.507 |
+| Node     | arrays            | steady |   778416596 |              0.095 |           60.167 |
+| Chromium | arithmetic-loops  | cold   |  1397312734 |              0.400 |           19.500 |
+| Chromium | arithmetic-loops  | steady |  1397312734 |              0.155 |           19.220 |
+| Chromium | calls-recursion   | cold   | -1100296460 |              0.300 |           27.700 |
+| Chromium | calls-recursion   | steady | -1100296460 |              0.170 |           27.350 |
+| Chromium | object-properties | cold   |  1122746965 |              0.500 |           77.300 |
+| Chromium | object-properties | steady |  1122746965 |              0.052 |           77.300 |
+| Chromium | arrays            | cold   |   778416596 |              0.800 |           57.000 |
+| Chromium | arrays            | steady |   778416596 |              0.086 |           56.200 |
 
-The matching JSC baseline rows also all checksum-validated. Its jsjs medians
-(cold / steady, ms) are recorded below with the exact expected and observed
-baseline checksums. JSC has no profile sidecar, profiler duration, CPU samples,
-or allocation samples; those profile-only fields are therefore `N/A`, rather
-than inferred from the Node or Chromium captures.
+JSC has the same clean baseline/checksum evidence but no compatible
+function-level profiler. Its timing and checksum-only rows are deliberately
+separate:
 
-| Workload          | Mode   | Expected baseline checksum | Observed baseline checksum | jsjs median (ms) | Profile ms/iter | CPU | Sampled alloc. |
-| ----------------- | ------ | -------------------------: | -------------------------: | ---------------: | --------------: | --- | -------------: |
-| arithmetic-loops  | cold   |                 1397312734 |                 1397312734 |           21.900 |             N/A | N/A |            N/A |
-| arithmetic-loops  | steady |                 1397312734 |                 1397312734 |           21.560 |             N/A | N/A |            N/A |
-| calls-recursion   | cold   |                -1100296460 |                -1100296460 |           34.060 |             N/A | N/A |            N/A |
-| calls-recursion   | steady |                -1100296460 |                -1100296460 |           33.340 |             N/A | N/A |            N/A |
-| object-properties | cold   |                 1122746965 |                 1122746965 |           88.720 |             N/A | N/A |            N/A |
-| object-properties | steady |                 1122746965 |                 1122746965 |           87.720 |             N/A | N/A |            N/A |
-| arrays            | cold   |                  778416596 |                  778416596 |           83.740 |             N/A | N/A |            N/A |
-| arrays            | steady |                  778416596 |                  778416596 |           82.260 |             N/A | N/A |            N/A |
+| Workload          | Mode   |    Checksum | Native median (ms) | jsjs median (ms) |
+| ----------------- | ------ | ----------: | -----------------: | ---------------: |
+| arithmetic-loops  | cold   |  1397312734 |              0.180 |           21.520 |
+| arithmetic-loops  | steady |  1397312734 |              0.039 |           21.144 |
+| calls-recursion   | cold   | -1100296460 |              0.400 |           32.880 |
+| calls-recursion   | steady | -1100296460 |              0.069 |           44.527 |
+| object-properties | cold   |  1122746965 |              1.380 |           87.180 |
+| object-properties | steady |  1122746965 |              0.073 |           87.490 |
+| arrays            | cold   |   778416596 |              0.520 |           85.920 |
+| arrays            | steady |   778416596 |              0.084 |           83.360 |
 
-This is timing and checksum evidence only, subject to the JSC limitation above.
+The system JSC shell rejects a useful `--version` response and has no verified,
+stable machine-readable CPU/allocation profile path consumed by this CLI. Do
+not infer JSC function-level hotspots from Node or Chromium.
 
-## Historical raw-total sampled evidence
+## Audit and limits
 
-The following unrecomputed totals aggregate all 16 captured profiles:
-66,267,236 µs of sampled CPU self time and 1,134,336 sampled allocation bytes.
-They use the superseded raw-total weighting and are retained only to document
-the earlier run. Corrected hotspot shares are equal-observation,
-interpreter-only percentages; allocation remains sampled bytes rather than
-retained-memory size.
+The analyzer accepted exactly 32 schema-2 sidecars as 16 CPU/allocation pairs.
+The independent audit confirmed all six checksum fields per pair, shared clean
+source/run metadata, matching pair settings, the two interval units, separate
+host overhead, and independently recomputed equal-observation totals. Running
+the analyzer twice over the same artifacts produced identical SHA-256 outputs:
 
-| Rank | CPU category             |     Self time | Share | Allocation category      | Sampled bytes | Share |
-| ---: | ------------------------ | ------------: | ----: | ------------------------ | ------------: | ----: |
-|    1 | evaluator                | 21,584,119 µs | 32.6% | host                     |     538,708 B | 47.5% |
-|    2 | other-runtime            | 14,735,087 µs | 22.2% | evaluator                |     224,660 B | 19.8% |
-|    3 | calls                    |  6,630,091 µs | 10.0% | references-environments  |     121,656 B | 10.7% |
-|    4 | object-property          |  6,395,832 µs |  9.7% | object-property          |      84,100 B |  7.4% |
-|    5 | references-environments  |  6,274,068 µs |  9.5% | other-runtime            |      80,792 B |  7.1% |
-|    6 | arithmetic               |  4,395,124 µs |  6.6% | calls                    |      38,264 B |  3.4% |
-|    — | all remaining categories |  6,252,915 µs |  9.4% | all remaining categories |      46,156 B |  4.1% |
+```text
+7aa8c8844c1f2a76036c722c968b38053165607f60c17cdbb0d878b11968db8f  checksum-correlation.json
+52f69d15e383ca8092159971270fbc90b7edcf9695c1c9cb3bae01fb7b223739  profile-analysis.json
+```
 
-`host` allocation includes profiler/browser/host frames and is not an
-interpreter optimization target. The dominant attributed frames were:
-
-| CPU frame                                   |    Self time | Share | Allocation frame                                   | Sampled bytes | Share |
-| ------------------------------------------- | -----------: | ----: | -------------------------------------------------- | ------------: | ----: |
-| `descriptors.js#copyDescriptorFields`       | 8,633,752 µs | 13.0% | `run-browser-page.js#runBrowserProfilePage` (host) |     128,916 B | 11.4% |
-| `expressions.js#evaluateBinaryExpression`   | 8,596,899 µs | 13.0% | host `set`                                         |     125,092 B | 11.0% |
-| `function-object.js#createArgumentsObject`  | 5,329,487 µs |  8.0% | `reference.js#getValue`                            |     107,728 B |  9.5% |
-| `descriptors.js#completePropertyDescriptor` | 4,263,959 µs |  6.4% | host `Map`                                         |      59,468 B |  5.2% |
-| `object.js#defineOwnProperty`               | 3,310,836 µs |  5.0% | `expressions.js#applyBinaryOperator`               |      55,032 B |  4.9% |
-| garbage collector (host)                    | 3,095,533 µs |  4.7% | `statements.js#evaluateStatement`                  |      53,192 B |  4.7% |
-
-The workload-specific steady profiles support the same attribution: arithmetic
-spent 31.4% of its captured CPU in references/environments
-(`getIdentifierReference` alone 30.5%); calls-recursion spent 20.0% in calls;
-object-properties spent 29.0% in other-runtime/descriptors; and arrays
-attributed 20.9% of sampled allocation to `array-object.js#defineOwnProperty`.
-Those latter object/property/array observations are deliberately not candidates
-here: they belong to issue #42.
-
-## Cold setup evidence
-
-Cold creates a realm and evaluates the source for every invocation. Steady
-constructs the realm and guest function before capture, then calls it. Browser
-launch and page creation remain outside both boundaries. The profiled
-cold-minus-steady duration deltas (one invocation) were:
-
-| Host     | Arithmetic |       Calls | Object properties |      Arrays |
-| -------- | ---------: | ----------: | ----------------: | ----------: |
-| Node     |  +159.0 ms | +3,943.7 ms |         +495.2 ms | +1,300.9 ms |
-| Chromium |   +95.5 ms |    -60.9 ms |         +613.1 ms |   +405.9 ms |
-
-These are supporting attribution signals, not setup timing measurements:
-sampling perturbation and the one Chromium calls-recursion negative make a
-precise cold-setup cost claim unsound. Still, cold-only sample observations
-show the expected boundary work:
-
-- Parser self samples totaled 1,833 µs on Node and 911 µs on Chromium; steady
-  had zero parser-category samples in every row.
-- Realm setup self samples totaled 435 µs on Node and 513 µs on Chromium;
-  steady had zero realm-setup samples in every row.
-- Cold frames included `create*Intrinsics` for Math, Array, Object, Date,
-  RegExp, and primitive wrappers, plus `Realm`/`createNativeFunction`; their
-  sparse samples establish that intrinsic construction is in the cold path.
-- Chromium cold captures included `environment.js#initializeBinding`
-  (410 µs CPU and 120 sampled B). Its small and inconsistent sampled delta,
-  and the absence of a Node sample, mean environment construction is observed
-  but not quantified as a reliable standalone cost.
-
-## Candidate order and scope
-
-Upper bounds are Amdahl-style limits from disjoint sampled CPU frame shares:
-they assume eliminating the named frame's own sampled time, not a forecast.
-No optimization was implemented.
-
-| Rank | Candidate and owner                                                                                                                     | Evidence and upper-bound benefit                                                                                  | Implementation risk | Correctness risk                                                                 |
-| ---: | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
-|    1 | Tighten `evaluateBinaryExpression` dispatch (`src/evaluator/expressions.js`, evaluator owner)                                           | 8,596,899 µs, 13.0% of captured CPU; at most 13% of this mixed workload/profile total.                            | Medium              | High: coercion, operator, completion, and abrupt-completion semantics.           |
-|    2 | Avoid unnecessary arguments-object work (`src/runtime/function-object.js`, function-runtime owner)                                      | `createArgumentsObject`: 5,329,487 µs, 8.0% overall; calls category reaches 20.0% in steady calls-recursion.      | Medium              | High: strictness, aliasing, `callee`, and function-call observability.           |
-|    3 | Narrow `isPrimitive` conversion checks (`src/runtime/conversion.js`, conversion owner)                                                  | 2,923,731 µs, 4.4% overall; an upper bound, not a reason to bypass ES conversions.                                | Low-medium          | Medium-high: boxed primitives, host values, and reference/completion boundaries. |
-|    4 | Reduce redundant normal-completion creation (`src/runtime/completion.js`, completion owner)                                             | `createNormalCompletion`: 1,673,538 µs, 2.5% overall; 8.0% CPU and 19.3% sampled allocation in steady arithmetic. | Medium              | High: completion identity and abrupt-control-flow propagation.                   |
-|    5 | Measure cold intrinsic construction again only after a lower-perturbation capture is available (`src/runtime/realm.js`, builtins owner) | Parser/realm samples prove placement but are sparse; no credible standalone benefit bound.                        | Medium              | Medium: initialization order and ES intrinsic identity.                          |
-
-Cached lookup/lightweight-context/bytecode work is explicitly excluded as issue
-#40 architecture work. Object, descriptor, property, and array hot paths are
-explicitly excluded as issue #42 work, even though the profiles show them.
-
-## Limits
-
-- This is one machine and one run; repeat on a quiet, fixed-power machine before
-  choosing work.
-- CPU profiles are sampled self time. They do not establish inclusive cost or a
-  causal speedup estimate.
-- Allocation samples are not retained heap; garbage collection and allocation
-  samples are affected by collector and profiler behavior.
-- The capture has one measured iteration because each source workload already
-  exceeded 250 ms under the requested profiler. The benchmark baseline has its
-  own calibrated warmups and samples.
-- Node and Chromium support the inspector/CDP capture used here. The system JSC
-  shell was benchmarked, but no stable JSC function-level profile is claimed.
+- This is one machine and one evidence pass; repeat on a quiet fixed-power
+  machine before choosing work.
+- CPU profiles are sampled self time, not inclusive cost or a causal speedup
+  estimate.
+- Allocation samples are sampled bytes, not retained heap, live-object size, or
+  heap growth. A zero sample at the coarse allocation interval is explicitly
+  reported rather than invented.
+- Profile elapsed windows establish capture coverage only. Use the unprofiled
+  baseline medians for timing.
+- Cold and steady have different boundaries; their shares are attribution
+  signals, not a precise setup-cost decomposition.
+- JSC is timing/checksum-only evidence in this pass.
