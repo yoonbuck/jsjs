@@ -187,6 +187,19 @@ const tests = [
         ),
         'TypeError',
       );
+      assertSame(
+        run(
+          'var a = Object.preventExtensions({}); ' +
+            'var name; try { Object.setPrototypeOf(a, {}); } catch (e) { name = e.name; } name;',
+        ),
+        'TypeError',
+      );
+      assertSame(
+        run(
+          'var name; try { Object.setPrototypeOf({}, 42); } catch (e) { name = e.name; } name;',
+        ),
+        'TypeError',
+      );
     },
   },
   {
