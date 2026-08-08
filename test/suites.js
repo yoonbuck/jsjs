@@ -69,6 +69,7 @@ import iterators from './iterators.test.js';
 import forOf from './for-of.test.js';
 import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
+import arrayIndex from './array-index.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -279,5 +280,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/profiling-core.test.js',
     tests: profilingCore,
+  }),
+  Object.freeze({
+    file: 'test/array-index.test.js',
+    tests: arrayIndex,
   }),
 ]);
