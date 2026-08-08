@@ -85,10 +85,14 @@ export function runJscBenchmark(config, options = {}) {
 }
 
 /**
+ * @template T
  * @param {unknown} stdout
- * @param {(value: unknown) => unknown} [validate]
+ * @param {(value: unknown) => T} [validate]
+ * @returns {T}
  */
-export function parseJscReport(stdout, validate = validateHostReport) {
+export function parseJscReport(stdout, validate) {
+  const parse =
+    validate ?? /** @type {(value: unknown) => T} */ (validateHostReport);
   const lines = String(stdout)
     .split(/\r?\n/u)
     .filter((line) => line.trim().length > 0);
@@ -97,7 +101,7 @@ export function parseJscReport(stdout, validate = validateHostReport) {
     throw new Error('jsc stdout must contain exactly one JSON report');
   }
 
-  return validate(JSON.parse(lines[0]));
+  return parse(JSON.parse(lines[0]));
 }
 
 /**

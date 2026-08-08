@@ -141,9 +141,10 @@ const tests = [
 
       assertSame(validateHostReport(report), report);
       assertSame(
-        assertThrows(() => validateHostReport(badSchema), TypeError).message.includes(
-          'schemaVersion',
-        ),
+        assertThrows(
+          () => validateHostReport(badSchema),
+          TypeError,
+        ).message.includes('schemaVersion'),
         true,
       );
       assertSame(
@@ -222,7 +223,10 @@ const tests = [
       assertSame(executorFactories, 1);
       assertSame(coldResult.lanes.native.batchSize, 5);
       assertSame(coldResult.lanes.native.samplesMs.join(','), '5,5,5');
-      assertSame(coldResult.lanes.native.normalizedSamplesMs.join(','), '1,1,1');
+      assertSame(
+        coldResult.lanes.native.normalizedSamplesMs.join(','),
+        '1,1,1',
+      );
       assertSame(coldResult.lanes.jsjs.batchSize, 3);
       assertSame(coldResult.lanes.jsjs.samplesMs.join(','), '6,6,6');
       assertSame(coldResult.lanes.jsjs.normalizedSamplesMs.join(','), '2,2,2');
@@ -324,7 +328,10 @@ const tests = [
           RangeError,
         );
 
-        assertSame(error.message, 'fixture lane batch count must be a positive integer');
+        assertSame(
+          error.message,
+          'fixture lane batch count must be a positive integer',
+        );
         assertSame(executeCalls, 0);
         assertSame(nowCalls, 0);
       }
@@ -489,7 +496,7 @@ const tests = [
 
       assertSame(validExecutors.cold(), workload.expectedChecksum);
 
-      for (const invalidValue of [17.5, 2_147_483_648]) {
+      for (const invalidValue of [17.5, 2147483648]) {
         const invalidExecutors = createJsjsExecutors(
           createEngine(invalidValue),
           workload,
@@ -555,12 +562,15 @@ const tests = [
       assertSame(executors.steady(), 17);
       assertSame(createdRealms.length, 3);
       assertSame(
-        evaluatedSources.filter((source) => source === '(function () { return 17; }())')
-          .length,
+        evaluatedSources.filter(
+          (source) => source === '(function () { return 17; }())',
+        ).length,
         2,
       );
       assertSame(
-        evaluatedSources.some((source) => source.includes('function __jsjsBenchmark()')),
+        evaluatedSources.some((source) =>
+          source.includes('function __jsjsBenchmark()'),
+        ),
         true,
       );
       assertSame(steadyInvocations.length, 2);
@@ -575,7 +585,9 @@ const tests = [
     name: 'benchmark workloads have committed checksums',
     run() {
       assertSame(
-        WORKLOADS.map(({ name, expectedChecksum }) => `${name}:${expectedChecksum}`).join(','),
+        WORKLOADS.map(
+          ({ name, expectedChecksum }) => `${name}:${expectedChecksum}`,
+        ).join(','),
         [
           'arithmetic-loops:1397312734',
           'calls-recursion:-1100296460',
@@ -595,7 +607,10 @@ const tests = [
     run() {
       const smoke = workloadsForProfile('smoke');
       assertSame(smoke.length, WORKLOADS.length);
-      assertSame(smoke.every((entry) => entry.source.length > 0), true);
+      assertSame(
+        smoke.every((entry) => entry.source.length > 0),
+        true,
+      );
       assertSame(
         smoke.every((entry) => Number.isInteger(entry.expectedChecksum)),
         true,
@@ -686,15 +701,12 @@ const tests = [
     run() {
       const error = assertThrows(
         () =>
-          calibrateBatchSize(
-            () => ({ elapsedMs: 1, checksum: 9 }),
-            {
-              expectedChecksum: 17,
-              targetSampleMs: 10,
-              maxBatchSize: 4,
-              context: 'cold jsjs arrays',
-            },
-          ),
+          calibrateBatchSize(() => ({ elapsedMs: 1, checksum: 9 }), {
+            expectedChecksum: 17,
+            targetSampleMs: 10,
+            maxBatchSize: 4,
+            context: 'cold jsjs arrays',
+          }),
         Error,
       );
       assertSame(error.message.includes('cold jsjs arrays'), true);
@@ -705,15 +717,12 @@ const tests = [
     run() {
       assertThrows(
         () =>
-          calibrateBatchSize(
-            () => ({ elapsedMs: 0, checksum: 17 }),
-            {
-              expectedChecksum: 17,
-              targetSampleMs: 10,
-              maxBatchSize: 4,
-              context: 'zero fixture',
-            },
-          ),
+          calibrateBatchSize(() => ({ elapsedMs: 0, checksum: 17 }), {
+            expectedChecksum: 17,
+            targetSampleMs: 10,
+            maxBatchSize: 4,
+            context: 'zero fixture',
+          }),
         RangeError,
       );
       assertThrows(

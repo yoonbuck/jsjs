@@ -74,9 +74,16 @@ export async function runChromiumBenchmark(config, options = {}) {
     await page.goto(`${ORIGIN}/benchmark/run-browser.html`);
 
     const report = await page.evaluate(
-      async ({ benchmarkConfig, benchmarkGeneratedAt, benchmarkVersion }) => {
+      async ({
+        benchmarkConfig,
+        benchmarkGeneratedAt,
+        benchmarkVersion,
+        modulePath,
+      }) => {
         const { runBrowserPageBenchmark } =
-          await import('/benchmark/run-browser-page.js');
+          /** @type {{ runBrowserPageBenchmark: typeof import('./run-browser-page.js').runBrowserPageBenchmark }} */ (
+            await import(modulePath)
+          );
 
         return runBrowserPageBenchmark(benchmarkConfig, {
           generatedAt: benchmarkGeneratedAt,
@@ -87,6 +94,7 @@ export async function runChromiumBenchmark(config, options = {}) {
         benchmarkConfig: config,
         benchmarkGeneratedAt: generatedAt,
         benchmarkVersion: version,
+        modulePath: '/benchmark/run-browser-page.js',
       },
     );
 
@@ -97,11 +105,16 @@ export async function runChromiumBenchmark(config, options = {}) {
 }
 
 /**
+ * @template T
  * @param {unknown} report
- * @param {(value: unknown) => unknown} [validate]
+ * @param {(value: unknown) => T} [validate]
+ * @returns {T}
  */
-export function parseChromiumReport(report, validate = validateHostReport) {
-  return validate(report);
+export function parseChromiumReport(report, validate) {
+  const parse =
+    validate ?? /** @type {(value: unknown) => T} */ (validateHostReport);
+
+  return parse(report);
 }
 
 /**

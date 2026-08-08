@@ -15,13 +15,13 @@ export const PROFILES = Object.freeze({
     warmups: 3,
     samples: 9,
     targetSampleMs: 100,
-    maxBatchSize: 1_000_000,
+    maxBatchSize: 1000000,
   }),
   smoke: Object.freeze({
     warmups: 1,
     samples: 3,
     targetSampleMs: 5,
-    maxBatchSize: 10_000,
+    maxBatchSize: 10000,
   }),
 });
 

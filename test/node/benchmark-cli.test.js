@@ -139,6 +139,11 @@ const tests = [
       const calls = [];
       let activeHosts = 0;
       let peakHosts = 0;
+      /** @type {typeof writeHostReport} */
+      const writeReport = async (outputDirectory, report) => {
+        calls.push(`write:${outputDirectory}:${report.host}`);
+        return new URL('write-report.json', REPOSITORY_ROOT_URL);
+      };
 
       await main(['run', '--host=all', `--output=${OUTPUT_DIRECTORY}`], {
         resolveConfig(options) {
@@ -153,9 +158,7 @@ const tests = [
           chromium: createRunner('chromium'),
           jsc: createRunner('jsc'),
         },
-        async writeReport(outputDirectory, report) {
-          calls.push(`write:${outputDirectory}:${report.host}`);
-        },
+        writeReport,
       });
 
       assertSame(

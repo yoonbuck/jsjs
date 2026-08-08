@@ -27,6 +27,11 @@ async function main() {
     typeof globalThis.performance?.now === 'function'
       ? globalThis.performance.now.bind(globalThis.performance)
       : Date.now;
+  const config = globalThis.__jsjsBenchmarkConfig;
+
+  if (config === undefined) {
+    throw new Error('Missing JSC benchmark config');
+  }
 
   return runHostBenchmark({
     host: 'jsc',
@@ -37,7 +42,7 @@ async function main() {
         : 'jsc',
     now: monotonicNowFrom(rawNow),
     engine: runtimeEngine,
-    config: globalThis.__jsjsBenchmarkConfig,
+    config,
     generatedAt:
       typeof globalThis.__jsjsBenchmarkGeneratedAt === 'string' &&
       globalThis.__jsjsBenchmarkGeneratedAt.length > 0

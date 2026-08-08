@@ -157,7 +157,16 @@ const tests = [
       assertSame(
         parseJscReport('{"host":"jsc"}\n', (value) => {
           validated += 1;
-          return { validated: value };
+          if (
+            typeof value !== 'object' ||
+            value === null ||
+            !('host' in value) ||
+            typeof value.host !== 'string'
+          ) {
+            throw new TypeError('Expected parsed jsc report host');
+          }
+
+          return { validated: { host: value.host } };
         }).validated.host,
         'jsc',
       );

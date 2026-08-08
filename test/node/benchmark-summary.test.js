@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { parseBenchmarkArguments, main } from '../../benchmark/cli.js';
 import {
+  compareCodeUnitLexically,
   summarizeReports,
   summaryToCsv,
 } from '../../benchmark/summarize.js';
@@ -9,6 +10,12 @@ import { validateHostReport } from '../../benchmark/report.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const SUMMARY_DIRECTORY = '.benchmark-results/test-node-summary';
+
+/**
+ * @typedef {ReturnType<typeof import('../../benchmark/run.js').runHostBenchmark>} HostReport
+ * @typedef {HostReport['results'][number]} HostResult
+ * @typedef {HostResult['lanes']['native']} LaneResult
+ */
 
 const tests = [
   {
@@ -99,6 +106,25 @@ const tests = [
     },
   },
   {
+    name: 'benchmark summary lexical comparator sorts by code units instead of case-insensitive locale rules',
+    run() {
+      const fileNames = ['a-host.json', 'B-host.json', 'b-host.json'];
+      const lexical = [...fileNames].sort(compareCodeUnitLexically);
+      const caseInsensitive = [...fileNames].sort((left, right) =>
+        left.toLowerCase().localeCompare(right.toLowerCase(), 'en'),
+      );
+
+      assertSame(
+        JSON.stringify(lexical),
+        JSON.stringify(['B-host.json', 'a-host.json', 'b-host.json']),
+      );
+      assertSame(
+        JSON.stringify(caseInsensitive) === JSON.stringify(lexical),
+        false,
+      );
+    },
+  },
+  {
     name: 'benchmark summary rejects schema config workload order and checksum divergence with both host names',
     run() {
       const nodeReport = createFixtureReport({ host: 'node' });
@@ -136,7 +162,10 @@ const tests = [
   {
     name: 'benchmark summary command reads lexical json reports excludes summary json and writes artifacts',
     async run() {
-      const directoryUrl = new URL(`${SUMMARY_DIRECTORY}/`, REPOSITORY_ROOT_URL);
+      const directoryUrl = new URL(
+        `${SUMMARY_DIRECTORY}/`,
+        REPOSITORY_ROOT_URL,
+      );
 
       await rm(directoryUrl, { recursive: true, force: true });
       await mkdir(directoryUrl, { recursive: true });
@@ -148,13 +177,23 @@ const tests = [
         new URL('a-chromium.json', directoryUrl),
         createFixtureReport({ host: 'chromium' }),
       );
-      await writeFile(new URL('summary.json', directoryUrl), 'not json\n', 'utf8');
+      await writeFile(
+        new URL('summary.json', directoryUrl),
+        'not json\n',
+        'utf8',
+      );
 
-      const summary = await main([
+      const summaryResult = await main([
         'summary',
         `--input=${SUMMARY_DIRECTORY}`,
         `--output=${SUMMARY_DIRECTORY}`,
       ]);
+      if (Array.isArray(summaryResult)) {
+        throw new Error(
+          'Expected benchmark summary command to return one summary',
+        );
+      }
+
       const persistedSummary = JSON.parse(
         await readFile(new URL('summary.json', directoryUrl), 'utf8'),
       );
@@ -163,9 +202,12 @@ const tests = [
         'utf8',
       );
 
-      assertSame(summary.hosts.join(','), 'chromium,node');
-      assertSame(JSON.stringify(persistedSummary), JSON.stringify(summary));
-      assertSame(persistedCsv, summaryToCsv(summary));
+      assertSame(summaryResult.hosts.join(','), 'chromium,node');
+      assertSame(
+        JSON.stringify(persistedSummary),
+        JSON.stringify(summaryResult),
+      );
+      assertSame(persistedCsv, summaryToCsv(summaryResult));
 
       await rm(directoryUrl, { recursive: true, force: true });
     },
@@ -174,9 +216,10 @@ const tests = [
 
 /**
  * @param {{ host: string }} options
- * @returns {ReturnType<typeof validateHostReport>}
+ * @returns {HostReport}
  */
 function createFixtureReport({ host }) {
+  /** @type {HostReport['config']} */
   const config = {
     profile: 'smoke',
     warmups: 1,
@@ -196,6 +239,7 @@ function createFixtureReport({ host }) {
       },
     ],
   };
+  /** @type {Record<string, Record<'cold' | 'steady', number>>} */
   const slowdowns =
     host === 'node'
       ? {
@@ -206,7 +250,7 @@ function createFixtureReport({ host }) {
           alpha: { cold: 9, steady: 16 },
           beta: { cold: 4, steady: 1 },
         };
-  /** @type {any[]} */
+  /** @type {HostResult[]} */
   const results = [];
 
   config.workloads.forEach((workload, workloadIndex) => {
@@ -232,14 +276,17 @@ function createFixtureReport({ host }) {
     );
   });
 
-  return validateHostReport({
+  /** @type {HostReport} */
+  const report = {
     schemaVersion: 1,
     generatedAt: '2026-08-07T00:00:00.000Z',
     host,
     version: `${host}-1.0.0`,
     config,
     results,
-  });
+  };
+
+  return validateHostReport(report);
 }
 
 /**
@@ -251,7 +298,7 @@ function createFixtureReport({ host }) {
  *   slowdown: number,
  *   nativeMedianMs: number,
  * }} options
- * @returns {object}
+ * @returns {HostResult}
  */
 function createResult(options) {
   return {
@@ -270,7 +317,7 @@ function createResult(options) {
 /**
  * @param {number} batchSize
  * @param {number} medianMs
- * @returns {object}
+ * @returns {LaneResult}
  */
 function createLane(batchSize, medianMs) {
   return {
@@ -286,8 +333,8 @@ function createLane(batchSize, medianMs) {
 }
 
 /**
- * @param {ReturnType<typeof createFixtureReport>} report
- * @param {ReturnType<typeof createFixtureReport>} incompatible
+ * @param {HostReport} report
+ * @param {unknown} incompatible
  * @param {string} fragment
  * @returns {void}
  */
@@ -296,16 +343,23 @@ function expectIncompatible(report, incompatible, fragment) {
     () => summarizeReports([report, incompatible]),
     Error,
   );
+  const incompatibleHost =
+    typeof incompatible === 'object' &&
+    incompatible !== null &&
+    'host' in incompatible &&
+    typeof incompatible.host === 'string'
+      ? incompatible.host
+      : 'unknown';
 
   assertSame(error.message.includes(report.host), true);
-  assertSame(error.message.includes(incompatible.host), true);
+  assertSame(error.message.includes(incompatibleHost), true);
   assertSame(error.message.includes(fragment), true);
 }
 
 /**
- * @param {Record<string, any>} report
- * @param {Record<string, any>} changes
- * @returns {any}
+ * @param {HostReport} report
+ * @param {Record<string, unknown>} changes
+ * @returns {unknown}
  */
 function withChanges(report, changes) {
   return {
@@ -315,12 +369,13 @@ function withChanges(report, changes) {
 }
 
 /**
- * @param {ReturnType<typeof createFixtureReport>} report
+ * @param {HostReport} report
  * @param {number} samples
- * @returns {ReturnType<typeof createFixtureReport>}
+ * @returns {HostReport}
  */
 function withSampleCount(report, samples) {
-  return validateHostReport({
+  /** @type {HostReport} */
+  const nextReport = {
     ...report,
     config: {
       ...report.config,
@@ -333,7 +388,9 @@ function withSampleCount(report, samples) {
         jsjs: withLaneSamples(result.lanes.jsjs, samples),
       },
     })),
-  });
+  };
+
+  return validateHostReport(nextReport);
 }
 
 /**
@@ -344,7 +401,7 @@ function withSampleCount(report, samples) {
  *   summary: { median: number, p95: number, coefficientOfVariation: number },
  * }} lane
  * @param {number} samples
- * @returns {object}
+ * @returns {LaneResult}
  */
 function withLaneSamples(lane, samples) {
   return {
@@ -358,8 +415,8 @@ function withLaneSamples(lane, samples) {
 }
 
 /**
- * @param {ReturnType<typeof createFixtureReport>} report
- * @returns {ReturnType<typeof createFixtureReport>}
+ * @param {HostReport} report
+ * @returns {HostReport}
  */
 function reorderWorkloads(report) {
   const workloads = [...report.config.workloads].reverse();
@@ -367,24 +424,28 @@ function reorderWorkloads(report) {
     report.results.filter((result) => result.workload === workload.name),
   );
 
-  return validateHostReport({
+  /** @type {HostReport} */
+  const nextReport = {
     ...report,
     config: {
       ...report.config,
       workloads,
     },
     results,
-  });
+  };
+
+  return validateHostReport(nextReport);
 }
 
 /**
- * @param {ReturnType<typeof createFixtureReport>} report
+ * @param {HostReport} report
  * @param {string} workloadName
  * @param {number} expectedChecksum
- * @returns {ReturnType<typeof createFixtureReport>}
+ * @returns {HostReport}
  */
 function withChecksum(report, workloadName, expectedChecksum) {
-  return validateHostReport({
+  /** @type {HostReport} */
+  const nextReport = {
     ...report,
     config: {
       ...report.config,
@@ -399,7 +460,9 @@ function withChecksum(report, workloadName, expectedChecksum) {
         ? { ...result, checksum: expectedChecksum }
         : result,
     ),
-  });
+  };
+
+  return validateHostReport(nextReport);
 }
 
 /**

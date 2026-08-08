@@ -24,6 +24,10 @@ declare module 'node:fs/promises' {
     data: string,
     encoding?: string,
   ): Promise<void>;
+  export function rename(
+    oldPath: string | URL,
+    newPath: string | URL,
+  ): Promise<void>;
   export function mkdir(
     path: string | URL,
     options?: { recursive?: boolean },
@@ -48,13 +52,41 @@ declare module 'node:url' {
   export function fileURLToPath(url: string | URL): string;
 }
 
+declare module 'node:path' {
+  const path: {
+    isAbsolute(path: string): boolean;
+  };
+  export default path;
+}
+
 declare module 'node:fs' {
   export function existsSync(path: string | URL): boolean;
+}
+
+declare module 'node:perf_hooks' {
+  export const performance: {
+    now(): number;
+  };
 }
 
 // The full local CI contract shells out to run every declared CI command for
 // real, rather than grepping source text for its expected effect.
 declare module 'node:child_process' {
+  export interface ReadableStreamLike {
+    setEncoding(encoding: 'utf8'): void;
+    on(event: 'data', listener: (chunk: string) => void): ReadableStreamLike;
+  }
+
+  export interface ChildProcessLike {
+    stdout?: ReadableStreamLike | null;
+    stderr?: ReadableStreamLike | null;
+    on(event: 'error', listener: (error: Error) => void): ChildProcessLike;
+    on(
+      event: 'close',
+      listener: (code: number | null, signal: string | null) => void,
+    ): ChildProcessLike;
+  }
+
   export function execFileSync(
     command: string,
     args?: string[],
@@ -74,6 +106,14 @@ declare module 'node:child_process' {
     stderr: string;
     error?: Error;
   };
+  export function spawn(
+    command: string,
+    args?: string[],
+    options?: {
+      env?: Record<string, string | undefined>;
+      stdio?: ['ignore', 'pipe', 'pipe'];
+    },
+  ): ChildProcessLike;
 }
 
 // The workflow contract parses the generated YAML with a real parser instead of
@@ -91,6 +131,20 @@ declare var quit: ((code?: number) => void) | undefined;
 // Optional launcher configuration for the JavaScriptCore adapter.
 declare var jsjsTest262Root: string | undefined;
 declare var jsjsTest262Features: string[] | undefined;
+declare var __jsjsBenchmarkConfig:
+  | ReturnType<typeof import('../benchmark/config.js').resolveBenchmarkConfig>
+  | undefined;
+declare var __jsjsBenchmarkGeneratedAt: string | undefined;
+declare var __jsjsBenchmarkVersion: string | undefined;
+
+declare module '/benchmark/run-browser-page.js' {
+  export function runBrowserPageBenchmark(
+    config: ReturnType<
+      typeof import('../benchmark/config.js').resolveBenchmarkConfig
+    >,
+    options?: { generatedAt?: string; version?: string },
+  ): ReturnType<typeof import('../benchmark/run.js').runHostBenchmark>;
+}
 
 // JavaScriptCore exposes the running module's URL as `import.meta.filename`
 // rather than `import.meta.url`.

@@ -6,6 +6,10 @@ const REPOSITORY_ROOT_URL = new URL('../', import.meta.url);
 let temporaryFileCounter = 0;
 
 /**
+ * @typedef {ReturnType<typeof import('./run.js').runHostBenchmark>} BenchmarkReport
+ */
+
+/**
  * @param {string} outputDirectory
  * @returns {URL}
  */
@@ -40,17 +44,16 @@ export function resolveOutputDirectory(outputDirectory) {
 }
 
 /**
- * @template T
  * @param {string} outputDirectory
- * @param {T} report
+ * @param {BenchmarkReport} report
  * @param {{
- *   validate?: (value: T) => T,
+ *   validate?: (value: BenchmarkReport) => BenchmarkReport,
  * }} [options]
  * @returns {Promise<URL>}
  */
 export async function writeHostReport(outputDirectory, report, options = {}) {
   const validate = options.validate ?? validateHostReport;
-  const validatedReport = validate(report);
+  const validatedReport = /** @type {BenchmarkReport} */ (validate(report));
 
   return writeOutputFile(
     outputDirectory,
@@ -126,7 +129,10 @@ function safeHostFileStem(host) {
  * @returns {string}
  */
 function safeOutputFileName(fileName) {
-  if (typeof fileName !== 'string' || !/^[a-z0-9-]+\.(json|csv)$/u.test(fileName)) {
+  if (
+    typeof fileName !== 'string' ||
+    !/^[a-z0-9-]+\.(json|csv)$/u.test(fileName)
+  ) {
     throw new RangeError(`Benchmark output file name is not safe: ${fileName}`);
   }
 

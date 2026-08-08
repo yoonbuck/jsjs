@@ -3,6 +3,43 @@ import { writeOutputFile, resolveOutputDirectory } from './output.js';
 import { REPORT_SCHEMA_VERSION, validateHostReport } from './report.js';
 import { geometricMean } from './statistics.js';
 
+/**
+ * @typedef {ReturnType<typeof import('./run.js').runHostBenchmark>} HostReport
+ * @typedef {HostReport['results'][number]} HostResult
+ * @typedef {{
+ *   host: string,
+ *   mode: 'cold' | 'steady',
+ *   geometricMeanSlowdown: number,
+ * }} AggregateRow
+ * @typedef {{
+ *   host: string,
+ *   mode: 'cold' | 'steady',
+ *   workload: string,
+ *   geometricMeanSlowdown: number,
+ *   slowdown: number,
+ *   checksum: number,
+ *   nativeMedianMs: number,
+ *   nativeP95Ms: number,
+ *   nativeCoefficientOfVariation: number,
+ *   nativeBatchSize: number,
+ *   jsjsMedianMs: number,
+ *   jsjsP95Ms: number,
+ *   jsjsCoefficientOfVariation: number,
+ *   jsjsBatchSize: number,
+ *   boundary: string,
+ * }} WorkloadRow
+ * @typedef {keyof WorkloadRow} CsvColumn
+ * @typedef {{
+ *   schemaVersion: 1,
+ *   hosts: readonly string[],
+ *   config: HostReport['config'],
+ *   methodology: readonly { mode: 'cold' | 'steady', boundary: string }[],
+ *   aggregate: readonly AggregateRow[],
+ *   workloads: readonly WorkloadRow[],
+ * }} BenchmarkSummary
+ */
+
+/** @type {readonly CsvColumn[]} */
 const CSV_COLUMNS = Object.freeze([
   'host',
   'mode',
@@ -23,41 +60,14 @@ const CSV_COLUMNS = Object.freeze([
 
 /**
  * @param {readonly unknown[]} reports
- * @returns {{
- *   schemaVersion: 1,
- *   hosts: readonly string[],
- *   config: ReturnType<typeof validateHostReport>['config'],
- *   methodology: readonly { mode: 'cold' | 'steady', boundary: string }[],
- *   aggregate: readonly {
- *     host: string,
- *     mode: 'cold' | 'steady',
- *     geometricMeanSlowdown: number,
- *   }[],
- *   workloads: readonly {
- *     host: string,
- *     mode: 'cold' | 'steady',
- *     workload: string,
- *     geometricMeanSlowdown: number,
- *     slowdown: number,
- *     checksum: number,
- *     nativeMedianMs: number,
- *     nativeP95Ms: number,
- *     nativeCoefficientOfVariation: number,
- *     nativeBatchSize: number,
- *     jsjsMedianMs: number,
- *     jsjsP95Ms: number,
- *     jsjsCoefficientOfVariation: number,
- *     jsjsBatchSize: number,
- *     boundary: string,
- *   }[],
- * }}
+ * @returns {BenchmarkSummary}
  */
 export function summarizeReports(reports) {
   if (!Array.isArray(reports) || reports.length === 0) {
     throw new RangeError('Expected at least one benchmark report');
   }
 
-  const reference = validateHostReport(reports[0]);
+  const reference = validateSummaryReport(reports[0]);
   const modeOrder = modesFor(reference, reference.host);
   const methodology = Object.freeze(
     modeOrder.map((mode) =>
@@ -75,7 +85,7 @@ export function summarizeReports(reports) {
     let candidate;
 
     try {
-      candidate = validateHostReport(reports[index]);
+      candidate = validateSummaryReport(reports[index]);
     } catch (error) {
       throw compatibilityError(reference.host, candidateHost, error);
     }
@@ -91,10 +101,13 @@ export function summarizeReports(reports) {
     validatedReports.push(candidate);
   }
 
+  /** @type {AggregateRow[]} */
   const aggregate = [];
+  /** @type {WorkloadRow[]} */
   const workloads = [];
 
   for (const report of validatedReports) {
+    /** @type {Map<'cold' | 'steady', number>} */
     const aggregateByMode = new Map(
       modeOrder.map((mode) => [
         mode,
@@ -105,16 +118,25 @@ export function summarizeReports(reports) {
         ),
       ]),
     );
+    /** @type {Map<string, HostResult>} */
     const resultsByPair = new Map(
-      report.results.map((result) => [`${result.workload}:${result.mode}`, result]),
+      report.results.map((result) => [
+        `${result.workload}:${result.mode}`,
+        result,
+      ]),
     );
 
     for (const mode of modeOrder) {
+      const geometricMeanSlowdown = aggregateValueForMode(
+        aggregateByMode,
+        mode,
+        report.host,
+      );
       aggregate.push(
         Object.freeze({
           host: report.host,
           mode,
-          geometricMeanSlowdown: aggregateByMode.get(mode),
+          geometricMeanSlowdown,
         }),
       );
     }
@@ -129,12 +151,18 @@ export function summarizeReports(reports) {
           );
         }
 
+        const geometricMeanSlowdown = aggregateValueForMode(
+          aggregateByMode,
+          mode,
+          report.host,
+        );
+
         workloads.push(
           Object.freeze({
             host: report.host,
             mode,
             workload: workload.name,
-            geometricMeanSlowdown: aggregateByMode.get(mode),
+            geometricMeanSlowdown,
             slowdown: result.slowdown,
             checksum: result.checksum,
             nativeMedianMs: result.lanes.native.summary.median,
@@ -165,12 +193,12 @@ export function summarizeReports(reports) {
 }
 
 /**
- * @param {ReturnType<typeof summarizeReports>} summary
+ * @param {BenchmarkSummary} summary
  * @returns {string}
  */
 export function summaryToCsv(summary) {
   const rows = summary.workloads.map((row) =>
-    CSV_COLUMNS.map((column) => formatCsvCell(row[column])).join(','),
+    CSV_COLUMNS.map((column) => formatCsvCell(csvCell(row, column))).join(','),
   );
 
   return `${CSV_COLUMNS.join(',')}\n${rows.join('\n')}\n`;
@@ -181,11 +209,16 @@ export function summaryToCsv(summary) {
  * @param {string} outputDirectory
  * @returns {Promise<ReturnType<typeof summarizeReports>>}
  */
-export async function summarizeReportDirectory(inputDirectory, outputDirectory) {
+export async function summarizeReportDirectory(
+  inputDirectory,
+  outputDirectory,
+) {
   const inputDirectoryUrl = resolveOutputDirectory(inputDirectory);
   const fileNames = (await readdir(inputDirectoryUrl))
-    .filter((fileName) => fileName.endsWith('.json') && fileName !== 'summary.json')
-    .sort((left, right) => left.localeCompare(right));
+    .filter(
+      (fileName) => fileName.endsWith('.json') && fileName !== 'summary.json',
+    )
+    .sort(compareCodeUnitLexically);
 
   if (fileNames.length === 0) {
     throw new Error(
@@ -213,7 +246,7 @@ export async function summarizeReportDirectory(inputDirectory, outputDirectory) 
 }
 
 /**
- * @param {ReturnType<typeof validateHostReport>} report
+ * @param {HostReport} report
  * @param {string} host
  * @returns {readonly ('cold' | 'steady')[]}
  */
@@ -236,7 +269,7 @@ function modesFor(report, host) {
 }
 
 /**
- * @param {ReturnType<typeof validateHostReport>} report
+ * @param {HostReport} report
  * @param {'cold' | 'steady'} mode
  * @param {string} host
  * @returns {string}
@@ -269,8 +302,8 @@ function boundaryForMode(report, mode, host) {
 }
 
 /**
- * @param {ReturnType<typeof validateHostReport>} reference
- * @param {ReturnType<typeof validateHostReport>} candidate
+ * @param {HostReport} reference
+ * @param {HostReport} candidate
  * @returns {void}
  */
 function assertCompatible(reference, candidate) {
@@ -394,6 +427,22 @@ function assertCompatible(reference, candidate) {
 }
 
 /**
+ * @param {Map<'cold' | 'steady', number>} aggregateByMode
+ * @param {'cold' | 'steady'} mode
+ * @param {string} host
+ * @returns {number}
+ */
+function aggregateValueForMode(aggregateByMode, mode, host) {
+  const geometricMeanSlowdown = aggregateByMode.get(mode);
+
+  if (geometricMeanSlowdown === undefined) {
+    throw new Error(`Missing aggregate slowdown for ${host} mode ${mode}`);
+  }
+
+  return geometricMeanSlowdown;
+}
+
+/**
  * @param {string} referenceHost
  * @param {string} candidateHost
  * @param {unknown} error
@@ -443,12 +492,46 @@ function assertSameValue(referenceHost, candidateHost, path, actual, expected) {
 }
 
 /**
+ * @param {WorkloadRow} row
+ * @param {CsvColumn} column
+ * @returns {string | number}
+ */
+function csvCell(row, column) {
+  return row[column];
+}
+
+/**
+ * @param {unknown} report
+ * @returns {HostReport}
+ */
+function validateSummaryReport(report) {
+  return /** @type {HostReport} */ (validateHostReport(report));
+}
+
+/**
+ * @param {string} left
+ * @param {string} right
+ * @returns {number}
+ */
+export function compareCodeUnitLexically(left, right) {
+  if (left < right) {
+    return -1;
+  }
+
+  if (left > right) {
+    return 1;
+  }
+
+  return 0;
+}
+
+/**
  * @param {unknown} value
  * @returns {string}
  */
 function formatCsvCell(value) {
   if (typeof value === 'string') {
-    return `"${value.replaceAll('"', '""')}"`;
+    return `"${value.replace(/"/g, '""')}"`;
   }
 
   return String(value);
