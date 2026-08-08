@@ -257,11 +257,13 @@ const tests = [
   },
 
   // ---------------------------------------------------------------------------
-  // Direct eval hoists into the VariableEnvironment, not the LexicalEnvironment
-  // (10.4.2 + 10.5): a catch clause installs a fresh lexical environment for
-  // its parameter, but a `var`/function declared by a direct eval in the catch
-  // body must land in the enclosing function (or global) variable environment
-  // and outlive the catch scope.
+  // Direct eval hoists a `var`/function binding into the VariableEnvironment
+  // (§18.2.1.2): a catch clause installs a fresh lexical environment for its
+  // parameter, but a `var`/function declared by a direct eval in the catch body
+  // must land in the enclosing function (or global) variable environment and
+  // outlive the catch scope. A hoisted function *object* still captures the
+  // eval's lexical environment as its `[[Scope]]` (§18.2.1.2 step 10.a), so it
+  // sees the eval's own lexical bindings and the surrounding lexical scope.
   // ---------------------------------------------------------------------------
   {
     name: 'direct eval var inside a catch block hoists into the enclosing function scope',
@@ -286,15 +288,24 @@ const tests = [
     },
   },
   {
-    name: 'direct eval function declaration inside a catch block closes over the function scope, not the catch parameter',
+    name: 'a direct-eval hoisted function captures the eval lexical environment, so a catch-nested one sees the catch parameter',
     run() {
-      // The hoisted function captures the VariableEnvironment as its [[Scope]],
-      // so `e` (a catch-only lexical binding) is not visible inside it.
       assertNormal(
         run(
           'function f() { try { throw 42; } catch (e) { eval("function g(){ return typeof e; }"); } return g(); } f();',
         ),
-        'undefined',
+        'number',
+      );
+    },
+  },
+  {
+    name: 'a direct-eval hoisted function sees a let declared in the same eval',
+    run() {
+      assertNormal(
+        run(
+          'function o() { eval("let x = 41; function f(){ return x + 1; }"); return f(); } o();',
+        ),
+        42,
       );
     },
   },
@@ -686,10 +697,9 @@ const tests = [
   },
 
   // ---------------------------------------------------------------------------
-  // ES2015 §18.2.1.1 (PerformEval) steps 12-14: a non-strict eval now runs in a
-  // fresh LexicalEnvironment over the caller's, so `let`/`const`/`class` stay in
-  // the eval and never leak, while `var`/function still hoist into the caller's
-  // VariableEnvironment.
+  // §18.2.1.1 (PerformEval) steps 12-14: a non-strict eval runs in a fresh
+  // LexicalEnvironment over the caller's, while `var`/function hoist into the
+  // caller's VariableEnvironment.
   // ---------------------------------------------------------------------------
   {
     name: 'eval("let x = 1;") does not leak x to the caller (fresh lexical environment)',
@@ -752,8 +762,8 @@ const tests = [
   },
 
   // ---------------------------------------------------------------------------
-  // Direct eval reads and writes an enclosing `let`, and sees an enclosing
-  // block's bindings, through its fresh lexical environment's outer chain.
+  // §18.2.1.1: identifier resolution reaches the caller's bindings through the
+  // fresh lexical environment's outer reference.
   // ---------------------------------------------------------------------------
   {
     name: 'direct eval reads and writes an enclosing let binding',
@@ -794,9 +804,9 @@ const tests = [
   },
 
   // ---------------------------------------------------------------------------
-  // ES2015 §18.2.1.2 (EvalDeclarationInstantiation) step 5: a non-strict eval
-  // whose top-level `var` name collides with a `let`/`const` between its lexical
-  // environment and its variable environment is a guest SyntaxError.
+  // §18.2.1.2 (EvalDeclarationInstantiation) step 5: a top-level `var` name that
+  // collides with a `let`/`const` between the lexical and variable environments
+  // is a guest SyntaxError.
   // ---------------------------------------------------------------------------
   {
     name: 'let x; eval("var x") in the same block is a guest SyntaxError',

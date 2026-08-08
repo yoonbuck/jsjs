@@ -365,18 +365,21 @@ export function functionDeclarationInstantiation(
  * `variableEnv` is *configurable/deletable*: `eval("var x = 1")` followed by
  * `delete x` succeeds, where a script-level `var x` is non-deletable.
  *
- * The var/function bindings are created in `variableEnv`, chosen by
+ * The var/function *bindings* are created in `variableEnv`, chosen by
  * `performEval` (`src/evaluator/eval.js`) per §18.2.1.1 steps 12-14: the
  * caller's variable environment for a direct eval (so the bindings outlive the
  * eval call and are visible to the caller — including when the direct eval sits
  * inside a `catch`, whose lexical scope is *not* the variable environment), the
  * realm's global environment for an indirect eval, or the eval's own fresh
- * lexical environment for a strict eval (so nothing leaks). The eval body's
- * `let`/`const`/`class` declarations are instead instantiated into
- * `context.env`, the eval's *lexical* environment (§18.2.1.2 step 5's
- * `lexDeclarations` loop), which `performEval` builds fresh over the caller's
- * lexical scope and discards when the call returns, so they never leak. No
- * `arguments` object is created for eval code.
+ * lexical environment for a strict eval (so nothing leaks). A hoisted function
+ * *object* nonetheless captures `context.env` — the eval's *lexical*
+ * environment — as its `[[Scope]]` (§18.2.1.2 step 10.a's
+ * `InstantiateFunctionObject(f, lexEnv)`), so it sees the eval body's own
+ * `let`/`const`; only its binding lands in `variableEnv`. The eval body's
+ * `let`/`const` declarations are likewise instantiated into `context.env`
+ * (§18.2.1.2 step 5's `lexDeclarations` loop), which `performEval` builds fresh
+ * over the caller's lexical scope and discards when the call returns, so they
+ * never leak. No `arguments` object is created for eval code.
  *
  * §18.2.1.2 step 5 also guards `var`/lexical conflicts for a non-strict eval:
  * a top-level `var` name may not collide with a lexical binding anywhere on the
@@ -426,11 +429,13 @@ export function evalDeclarationInstantiation(program, context, variableEnv) {
       continue;
     }
 
-    const functionObject = createFunctionObject(
-      declaration,
-      variableEnv,
-      context,
-    );
+    // §18.2.1.2 step 10.a: `InstantiateFunctionObject(f, lexEnv)` — the hoisted
+    // function object captures the eval's *lexical* environment (`context.env`)
+    // as its `[[Scope]]`, so it sees the eval body's own `let`/`const` and the
+    // caller's lexical scope. Only its *binding* lands in `variableEnv` below
+    // (with the configurable/deletable, ES5.1 §10.5 global rules), mirroring the
+    // body/var split Task 6 established for function bodies (§9.2.12).
+    const functionObject = instantiateFunctionObject(declaration, context);
     defineEvalFunctionBinding(variableEnv, declaration.id.name, functionObject);
   }
 
@@ -471,7 +476,7 @@ export function evalDeclarationInstantiation(program, context, variableEnv) {
   }
 
   // §18.2.1.2 step 5's `lexDeclarations` loop: instantiate — but do not
-  // initialize — the eval body's top-level `let`/`const`/class into the eval's
+  // initialize — the eval body's top-level `let`/`const` into the eval's
   // lexical environment (`context.env`) with a block's rules, so each name gets
   // its TDZ binding that `evaluateVariableDeclaration` later initializes. This
   // is what makes `eval("let x = 1")` resolve `x` without leaking it.

@@ -47,7 +47,7 @@
  *
  * The engine threads the two environments as separate context fields — `env`
  * (LexicalEnvironment) and `variableEnv` (VariableEnvironment). The fresh
- * `lexEnv` is where the eval body's `let`/`const`/`class` declarations are
+ * `lexEnv` is where the eval body's `let`/`const` declarations are
  * instantiated (`EvalDeclarationInstantiation`, §18.2.1.2), so they are visible
  * to the eval body through the outer chain but discarded when the call returns
  * and never leak to the caller. The body's `var`s and function declarations
@@ -115,7 +115,7 @@ export function performEval(x, callerContext) {
   const strict = inheritedStrict || hasUseStrictDirective(program.body);
 
   // §18.2.1.1 steps 12-14 environment set-up. The eval always runs in a *fresh*
-  // LexicalEnvironment over the caller's, so its `let`/`const`/`class` stay in
+  // LexicalEnvironment over the caller's, so its `let`/`const` stay in
   // the eval and never leak; identifier resolution still reaches the caller's
   // bindings through that fresh environment's outer reference. `var`s and
   // functions hoist into the caller's VariableEnvironment (the caller's
