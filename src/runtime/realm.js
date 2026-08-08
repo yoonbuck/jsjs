@@ -56,6 +56,10 @@ import {
   createDateIntrinsics,
   installDateConstructor,
 } from '../builtins/date.js';
+import {
+  createIteratorIntrinsics,
+  installIteratorMethods,
+} from '../builtins/iterator.js';
 import { GuestErrorSignal } from './completion.js';
 import { StackGuard } from './stack-guard.js';
 import { createAgent } from './agent.js';
@@ -210,6 +214,14 @@ export class Realm {
     const dateIntrinsics = createDateIntrinsics(this);
     Object.assign(this.intrinsics, dateIntrinsics);
     installDateConstructor(this.globalObject, dateIntrinsics);
+
+    // Iterator intrinsics come last: they add methods to the already-built
+    // %Array.prototype% and %String.prototype% and need no constructor of their
+    // own, so nothing above depends on them and they depend only on the
+    // fundamental prototypes and the agent's well-known symbols.
+    const iteratorIntrinsics = createIteratorIntrinsics(this);
+    Object.assign(this.intrinsics, iteratorIntrinsics);
+    installIteratorMethods(this, iteratorIntrinsics);
   }
 
   /**

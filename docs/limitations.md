@@ -333,9 +333,12 @@ implements ES5.1, so `Date.parse('1970-01-01T00:00:00')` is `0`. The upstream
 test for the ES2015 rule asserts that value equals the host's time-zone offset,
 so it passes in UTC — where the two editions agree — and fails everywhere else.
 It is therefore selected rather than excluded, because in the UTC environment CI
-validates in the engine genuinely satisfies it. A contributor running
-`npm run test262:upstream` from a non-UTC zone will see that one file fail; that
-is this deviation showing through, not a regression.
+validates in the engine genuinely satisfies it. So that the committed report and
+coverage table stay a pure function of the engine rather than of the contributor's
+clock, `npm run test262:upstream` refuses to run outside UTC and prints the
+`TZ=UTC npm run test262:upstream` invocation to use instead; CI pins the same
+`TZ=UTC`. This is the one file whose result would otherwise move with the host
+zone, so pinning the zone is enough to make the artifacts reproducible.
 
 ### Number-to-string and string-to-number use the host's algorithms
 
@@ -426,35 +429,37 @@ implementation falls short of what a hosted engine should do. They are written
 down for the same reason the deviations are — an undocumented shortfall is
 indistinguishable from a bug.
 
-### Well-known symbols are defined but only @@toPrimitive and @@toStringTag are honoured
+### Well-known symbols are defined but only @@toPrimitive, @@toStringTag and @@iterator are honoured
 
 The engine implements ES2015 Symbols (see
 [docs/conformance.md](conformance.md#symbols-and-property-keys)) and defines all
 eleven of ECMA-262 §6.1.5.1's well-known symbols as own properties of `Symbol`,
-with the specified attributes and shared across realms. Two of them do
-something: `@@toPrimitive` is a real step of `ToPrimitive`, and a string
-`@@toStringTag` is preferred by `Object.prototype.toString`.
+with the specified attributes and shared across realms. Three of them do
+something: `@@toPrimitive` is a real step of `ToPrimitive`, a string
+`@@toStringTag` is preferred by `Object.prototype.toString`, and `@@iterator`
+drives the iteration protocol — `GetIterator` reads it, so `obj[Symbol.iterator]`
+makes `obj` iterable in `for`-`of` and every built-in iterator (Array, String,
+`arguments`) installs it (yoonbuck/jsjs#47).
 
-The other nine — `@@hasInstance`, `@@isConcatSpreadable`, `@@iterator`,
+The other eight — `@@hasInstance`, `@@isConcatSpreadable`,
 `@@match`, `@@replace`, `@@search`, `@@species`, `@@split`, and
-`@@unscopables` — are values with no behaviour behind them. Setting
-`obj[Symbol.iterator]` does not make `obj` iterable, `instanceof` does not
+`@@unscopables` — are values with no behaviour behind them. `instanceof` does not
 consult `@@hasInstance`, `Array.prototype.concat` does not consult
 `@@isConcatSpreadable`, `String.prototype.match` and friends do not dispatch
 through `@@match`/`@@replace`/`@@search`/`@@split`, no built-in reads
 `@@species`, and `with` does not consult `@@unscopables`.
 
 This is a deliberate staging boundary rather than an oversight: those protocols
-belong to the issues that introduce the machinery they need — iterators and
-`for-of` (yoonbuck/jsjs#47) and the ES2015 object and function runtime updates
-(yoonbuck/jsjs#38) — and defining the keys first is what lets those land
-without re-opening this one. The values have to exist now regardless, because
-they are the extension points every later protocol is keyed by.
+belong to the issues that introduce the machinery they need — chiefly the ES2015
+object and function runtime updates (yoonbuck/jsjs#38) — and defining the keys
+first is what lets those land without re-opening this one. The values have to
+exist now regardless, because they are the extension points every later protocol
+is keyed by.
 
-**Observable example:** `var o = {}; o[Symbol.iterator] = function () {};` then
-`typeof o[Symbol.iterator]` is `"function"` and
-`Object.getOwnPropertySymbols(o)[0] === Symbol.iterator` is `true`, but no
-built-in ever calls it.
+**Observable example:** `var o = {}; o[Symbol.hasInstance] = function () { return true; };`
+then `typeof o[Symbol.hasInstance]` is `"function"` and
+`Object.getOwnPropertySymbols(o)[0] === Symbol.hasInstance` is `true`, but
+`1 instanceof o` still throws a `TypeError` because `instanceof` never calls it.
 **Backing code:** `src/runtime/symbol.js`, `src/runtime/agent.js`,
 `src/builtins/symbol.js`.
 

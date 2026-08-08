@@ -39,6 +39,7 @@ import { COVERAGE_DOCUMENT_FILE } from '../test262/coverage.js';
  *   uses?: string,
  *   with?: Readonly<Record<string, string>>,
  *   run?: string,
+ *   env?: Readonly<Record<string, string>>,
  * }} WorkflowStep
  *
  * @typedef {{
@@ -144,10 +145,15 @@ function pinned(action) {
 /**
  * @param {string} name
  * @param {string} run
+ * @param {Readonly<Record<string, string>>} [env]
  * @returns {WorkflowStep}
  */
-function runStep(name, run) {
-  return Object.freeze({ name, run });
+function runStep(name, run, env) {
+  return Object.freeze({
+    name,
+    run,
+    ...(env === undefined ? {} : { env: Object.freeze({ ...env }) }),
+  });
 }
 
 /**
@@ -307,7 +313,9 @@ export function createCiJobs(test262) {
           'Check the ES5 selection is current',
           'npm run test262:select:check',
         ),
-        runStep('Run the pinned Test262 subset', 'npm run test262:upstream'),
+        runStep('Run the pinned Test262 subset', 'npm run test262:upstream', {
+          TZ: 'UTC',
+        }),
         runStep(
           'Check for stale exclusions',
           'npm run test262:exclusions:check',
@@ -423,6 +431,14 @@ function renderStep(workflowStep) {
     lines.push('        with:');
 
     for (const [key, value] of Object.entries(workflowStep.with)) {
+      lines.push(`          ${key}: '${value}'`);
+    }
+  }
+
+  if (workflowStep.env !== undefined) {
+    lines.push('        env:');
+
+    for (const [key, value] of Object.entries(workflowStep.env)) {
       lines.push(`          ${key}: '${value}'`);
     }
   }

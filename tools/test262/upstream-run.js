@@ -168,11 +168,55 @@ export async function assertPinnedCheckout(pin) {
 }
 
 /**
+ * Refuses to run outside a UTC time zone, because the generated artifacts are
+ * committed and checked byte-for-byte against a UTC continuous-integration run.
+ *
+ * A handful of selected upstream tests read the host's local time-zone offset —
+ * `Date/parse/without-utc-offset.js` is the canonical one: ES5.1 7.9.1.15 reads
+ * an offsetless ISO string as UTC, so this ES5.1 engine returns `0`, which the
+ * ES2015 test only accepts where the host offset is also `0`. Regenerating the
+ * report from, say, `America/Los_Angeles` records that file as a failure and its
+ * offset in every timestamp-bearing record, so the committed artifacts would
+ * disagree with CI and `test262:upstream:check` would flap by machine rather
+ * than by engine behaviour. Generating under `TZ=UTC` (the environment CI uses)
+ * makes the two artifacts a pure function of the engine and the pinned tree.
+ *
+ * The probe uses both a January and a July instant so a zone that merely happens
+ * to sit at `+00:00` for one season (for example Europe/London in winter) is
+ * still rejected; only a zone that is `+00:00` year round passes.
+ *
+ * @returns {void}
+ */
+export function assertUtcTimeZone() {
+  const januaryOffset = new Date(Date.UTC(2020, 0, 1)).getTimezoneOffset();
+  const julyOffset = new Date(Date.UTC(2020, 6, 1)).getTimezoneOffset();
+
+  if (januaryOffset === 0 && julyOffset === 0) {
+    return;
+  }
+
+  const zone = process.env.TZ ?? 'a non-UTC time zone';
+
+  throw new Error(
+    [
+      `The Test262 report must be generated under UTC, but this process is running in ${zone}.`,
+      'Some selected tests read the host time-zone offset, so a non-UTC run writes',
+      'artifacts that disagree with the UTC CI run and its byte-for-byte drift check.',
+      'Re-run with the time zone pinned to UTC, exactly as CI does:',
+      '  TZ=UTC npm run test262:upstream',
+    ].join('\n'),
+  );
+}
+
+/**
  * @param {readonly string[]} argv
  * @returns {Promise<number>}
  */
 export async function main(argv = []) {
   const check = parseOptions(argv);
+
+  assertUtcTimeZone();
+
   const pin = await readTest262Pin();
 
   await assertPinnedCheckout(pin);

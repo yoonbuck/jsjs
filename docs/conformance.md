@@ -10,13 +10,19 @@ lexical declarations**: `let` and `const` bindings, block scope, the temporal
 dead zone (a `ReferenceError` on access before initialization), `const`
 assignment errors, per-iteration `for`/`for-in` loop bindings, and lexical
 scope for blocks, `switch` case blocks, `try` parts, function bodies, `eval`
-code, and the global environment. It also accepts ES2015 **block-level function
-declarations**, scoping them to their block and implementing the Annex B.3.3
-sloppy-mode `var`-alias so `{ function f(){} } f()` still resolves while
+code, and the global environment. It also implements the ES2015 **iteration
+protocol**: the `Iterator`/`Iterable` abstract operations, `%IteratorPrototype%`,
+the Array and String iterators reachable through `Array.prototype`
+`values`/`keys`/`entries`/`@@iterator` and `String.prototype[@@iterator]`, the
+`arguments` object's `@@iterator`, and the `for`-`of` statement — including
+per-iteration lexical bindings and `IteratorClose` on `break`, `return`,
+`throw`, and labeled abrupt completions. It also accepts ES2015 **block-level
+function declarations**, scoping them to their block and implementing the Annex
+B.3.3 sloppy-mode `var`-alias so `{ function f(){} } f()` still resolves while
 `if (false) { function g(){} } typeof g` is `'undefined'`. Nothing else from
 ES2015 is implemented: the parser accepts the syntax above and rejects every
 other ES2015 construct — classes, arrow functions, template literals,
-`for`-`of`, generators, destructuring and default/rest patterns, spread,
+generators, destructuring and default/rest patterns, spread,
 `new.target`, modules, computed/shorthand/method object properties,
 binary and octal numeric literals, and `\u{…}` code-point escapes (plus the
 ES2017 `async`/`await` forms) — so the grammar the engine parses is exactly the
@@ -100,9 +106,10 @@ Two well-known symbols are wired into real protocols, because `Symbol` itself
 needs them: `@@toPrimitive` is consulted by `ToPrimitive` ahead of
 `valueOf`/`toString`, and `Object.prototype.toString` prefers a **string**
 `@@toStringTag` over the ES5.1 `[[Class]]` tag. No ES5 object carries either
-property, so every ES5 tag and conversion is unchanged. The other nine
+property, so every ES5 tag and conversion is unchanged. `@@iterator` is honoured
+too, driving the ES2015 iteration protocol (yoonbuck/jsjs#47). The other eight
 well-known symbols are defined values whose protocols are not yet honoured —
-see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only-toprimitive-and-tostringtag-are-honoured).
+see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only-toprimitive-tostringtag-and-iterator-are-honoured).
 
 ## How the ES5 selection is derived
 
@@ -166,14 +173,14 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 594 classified exclusions break down as:
+editions deliberately changed. The 613 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 334   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
-| `post-es5-builtin`   | 196   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
+| `post-es5-semantics` | 344   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
+| `post-es5-builtin`   | 203   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
 | `post-es5-syntax`    | 31    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
-| `host-dependent`     | 31    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
+| `host-dependent`     | 33    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
 | `engine-deviation`   | 2     | This engine knowingly differs from what ES5.1 asks. Each entry names a heading in [docs/limitations.md](limitations.md) that documents the choice — a deviation that is not written down is indistinguishable from a bug. Both remaining entries are the same cause: the vendored parser lexes `IdentifierName` with the modern `ID_Continue` property instead of ES5.1 7.6's general categories. |
 
 The distinction that matters is between the first four categories and the last.
@@ -338,7 +345,13 @@ subset against `tc39/test262` at the revision `package.json` names, writes every
 per-test record to [`docs/test262-report.jsonl`](test262-report.jsonl), and
 rewrites this block from the same run. `npm run test262:upstream:check` fails if
 either artifact has drifted, and the `test262-upstream` job fails CI the same way,
-so no number here can outlive the run that produced it. The denominators are
+so no number here can outlive the run that produced it. The run refuses to start
+outside a UTC time zone, because a few selected tests read the host's local
+offset (see
+[the offsetless-date deviation](limitations.md#the-clock-and-the-local-time-zone-come-from-the-host)),
+so the committed artifacts are a pure function of the engine and the pinned tree,
+not of the machine that generated them; CI pins `TZ=UTC` for the same reason.
+Regenerate with `TZ=UTC npm run test262:upstream`. The denominators are
 defined exactly under
 [What the coverage numbers count](#what-the-coverage-numbers-count).
 
@@ -368,8 +381,8 @@ upstream checkout at `vendor/test262`; see the Test262 section above).
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 12,279   | 12,279    | 12,279 | 22.919% |
-| (file, variant) | 102,906     | 23,361   | 23,361    | 23,361 | 22.701% |
+| Files           | 53,575      | 12,350   | 12,350    | 12,350 | 23.052% |
+| (file, variant) | 102,906     | 23,485   | 23,485    | 23,485 | 22.822% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).

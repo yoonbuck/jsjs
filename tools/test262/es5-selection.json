@@ -3,6 +3,7 @@
   "excludedDirectories": ["test/intl402"],
   "builtins": [
     "Array",
+    "ArrayIteratorPrototype",
     "Boolean",
     "Date",
     "Error",
@@ -16,6 +17,7 @@
     "Object",
     "RegExp",
     "String",
+    "StringIteratorPrototype",
     "Symbol",
     "ThrowTypeError",
     "decodeURI",
@@ -40,9 +42,44 @@
   ],
   "featureAreas": [
     {
+      "prefix": "test/built-ins/Array/prototype/Symbol.iterator",
+      "features": ["Symbol.iterator"],
+      "reason": "ES2015 §22.1.3.30 `Array.prototype[@@iterator]` is implemented as the same function object as `Array.prototype.values` (issue #47); the engine claims the `Symbol.iterator` tag in `tools/test262/features.json`."
+    },
+    {
+      "prefix": "test/built-ins/Array/prototype/entries",
+      "features": ["Symbol.iterator"],
+      "reason": "ES2015 §22.1.3.4 `Array.prototype.entries` returns an Array Iterator (issue #47); the engine claims the `Symbol.iterator` tag in `tools/test262/features.json`."
+    },
+    {
+      "prefix": "test/built-ins/Array/prototype/keys",
+      "features": ["Symbol.iterator"],
+      "reason": "ES2015 §22.1.3.13 `Array.prototype.keys` returns an Array Iterator (issue #47); the engine claims the `Symbol.iterator` tag in `tools/test262/features.json`."
+    },
+    {
+      "prefix": "test/built-ins/Array/prototype/values",
+      "features": ["Symbol.iterator"],
+      "reason": "ES2015 §22.1.3.29 `Array.prototype.values` returns an Array Iterator (issue #47); the engine claims the `Symbol.iterator` tag in `tools/test262/features.json`. Tests that also need `Reflect.construct` or `arrow-function` stay out of scope."
+    },
+    {
+      "prefix": "test/built-ins/ArrayIteratorPrototype",
+      "features": ["Symbol.iterator", "Symbol.toStringTag"],
+      "reason": "ES2015 §22.1.5 `%ArrayIteratorPrototype%` and its `next`/`@@toStringTag` are implemented (issue #47); the engine claims the `Symbol.iterator` and `Symbol.toStringTag` tags in `tools/test262/features.json`. Tests that also need `TypedArray` stay out of scope."
+    },
+    {
       "prefix": "test/built-ins/Object/getOwnPropertySymbols",
       "features": ["Symbol"],
       "reason": "ES2015 §19.1.2.8 `Object.getOwnPropertySymbols` is implemented (issue #43); the engine claims the `Symbol` tag in `tools/test262/features.json`."
+    },
+    {
+      "prefix": "test/built-ins/String/prototype/Symbol.iterator",
+      "features": ["Symbol.iterator"],
+      "reason": "ES2015 §21.1.3.27 `String.prototype[@@iterator]` yields a String Iterator over code points (issue #47); the engine claims the `Symbol.iterator` tag in `tools/test262/features.json`."
+    },
+    {
+      "prefix": "test/built-ins/StringIteratorPrototype",
+      "features": ["Symbol.iterator", "Symbol.toStringTag"],
+      "reason": "ES2015 §21.1.5 `%StringIteratorPrototype%` and its `next`/`@@toStringTag` are implemented (issue #47); the engine claims the `Symbol.iterator` and `Symbol.toStringTag` tags in `tools/test262/features.json`."
     },
     {
       "prefix": "test/built-ins/Symbol",
@@ -1851,33 +1888,38 @@
     },
     {
       "path": "test/language/statements/for-of/cptn-decl-abrupt-empty.js",
-      "category": "post-es5-syntax",
-      "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+      "category": "post-es5-semantics",
+      "reason": "`for-of` parses (issue #47) but this asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
       "path": "test/language/statements/for-of/cptn-decl-itr.js",
-      "category": "post-es5-syntax",
-      "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+      "category": "post-es5-semantics",
+      "reason": "`for-of` parses (issue #47) but this asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
       "path": "test/language/statements/for-of/cptn-decl-no-itr.js",
-      "category": "post-es5-syntax",
-      "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+      "category": "post-es5-semantics",
+      "reason": "`for-of` parses (issue #47) but this asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
       "path": "test/language/statements/for-of/cptn-expr-abrupt-empty.js",
-      "category": "post-es5-syntax",
-      "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+      "category": "post-es5-semantics",
+      "reason": "`for-of` parses (issue #47) but this asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
       "path": "test/language/statements/for-of/cptn-expr-itr.js",
-      "category": "post-es5-syntax",
-      "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+      "category": "post-es5-semantics",
+      "reason": "`for-of` parses (issue #47) but this asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
       "path": "test/language/statements/for-of/cptn-expr-no-itr.js",
+      "category": "post-es5-semantics",
+      "reason": "`for-of` parses (issue #47) but this asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
+    },
+    {
+      "path": "test/language/statements/for-of/head-lhs-async-invalid.js",
       "category": "post-es5-syntax",
-      "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
+      "reason": "Asserts a parse-phase SyntaxError for `for (async of ...)`, an ES2017 lookahead restriction added to disambiguate `for-await`; ES2015's grammar has no such restriction, so `async` is an ordinary identifier LHS at `ecmaVersion` 6 and the loop runs."
     },
     {
       "path": "test/language/statements/for/cptn-decl-expr-iter.js",
@@ -2120,6 +2162,11 @@
       "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/Array/from_this.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Array.from`, an ES2015 builtin absent from ES5.1."
+    },
+    {
       "path": "test/staging/sm/Array/getter-name.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
@@ -2138,6 +2185,11 @@
       "path": "test/staging/sm/Array/unshift-with-enumeration.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Reflect`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Array/values.js",
+      "category": "post-es5-semantics",
+      "reason": "`Array.prototype.values` exists (issue #47), but this asserts ES2015 §22.1.3.32 `Array.prototype[@@unscopables]` hides `values` from a `with` scope; this engine does not honour `@@unscopables` (see docs/limitations.md) and applies ES5.1 §12.10 `with`-scoping, so the array’s inherited `values` shadows the outer binding."
     },
     {
       "path": "test/staging/sm/ArrayBuffer/bug1777413.js",
@@ -2390,6 +2442,16 @@
       "reason": "Requires the Test262 `$262` host object (cross-realm via `$262.createRealm`); this engine defines no ES5.1 `$262` host facility."
     },
     {
+      "path": "test/staging/sm/RegExp/descriptor.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts the ES2015 §21.2.5 accessor properties `RegExp.prototype.{flags,global,ignoreCase,multiline,source,sticky,unicode}`; ES5.1 §15.10.7 makes `source`/`global`/`ignoreCase`/`multiline` data properties and defines no `flags`/`sticky`/`unicode`, so `getOwnPropertyDescriptor` returns `undefined` and has no `get`."
+    },
+    {
+      "path": "test/staging/sm/RegExp/exec-lastIndex-negative.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts the ES2015 §21.2.5.2.2 clamp of a negative `lastIndex` to 0 via `ToLength`; ES5.1 §15.10.6.2 uses `ToInteger`, so a negative `lastIndex` produces no match and `exec` returns `null`, which is what this engine returns."
+    },
+    {
       "path": "test/staging/sm/RegExp/exec.js",
       "category": "post-es5-semantics",
       "reason": "Asserts that a non-global regexp's failed `exec` call leaves an out-of-range `lastIndex` untouched (e.g. `lastIndex = -17` stays `-17` after a failed match). ES5.1 §15.10.6.2 step 9.a.i unconditionally resets `lastIndex` to 0 on total match failure -- the algorithm's `Repeat` loop performs `[[Put]](\"lastIndex\", 0, true)` and returns `null` whenever the search index runs out of range, with no `global` guard on that step; only the *success* path's `lastIndex` update (step 11, \"If global is true ... [[Put]] ... e\") is conditioned on `global`. This test's own embedded copy of the ES5.1 algorithm (in its header comment) confirms step 9.a.i is unconditional, yet its assertions expect the reset to be skipped for non-global regexps -- a SpiderMonkey-specific behavior (bugzilla.mozilla.org/show_bug.cgi?id=646490) that predates and diverges from the ES5.1-mandated algorithm this engine implements."
@@ -2405,6 +2467,11 @@
       "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/RegExp/prototype-different-global.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1 (cross-realm via `$262.createRealm`)."
+    },
+    {
       "path": "test/staging/sm/RegExp/replace-compile-elembase.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
@@ -2418,6 +2485,11 @@
       "path": "test/staging/sm/RegExp/replace-sticky.js",
       "category": "post-es5-syntax",
       "reason": "Uses the `y` (sticky) RegExp flag, added by ES2015; ES5.1 §15.10.4.1 defines only the `g`/`i`/`m` flags."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace-twoBytes.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2015 §21.1.3.14 `String.prototype.replace` dispatch through a regexp-like object’s `@@replace`/`exec`; ES5.1 §15.5.4.11 does not consult `@@replace`, so the custom `exec` is never called."
     },
     {
       "path": "test/staging/sm/RegExp/replace.js",
@@ -2480,6 +2552,16 @@
       "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/Symbol/species.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Int8Array`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/well-known.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
       "path": "test/staging/sm/TypedArray/constructor-undefined-args.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
@@ -2490,9 +2572,19 @@
       "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
     },
     {
+      "path": "test/staging/sm/TypedArray/from_realms.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the include does not parse."
+    },
+    {
       "path": "test/staging/sm/TypedArray/getter-name.js",
       "category": "post-es5-builtin",
       "reason": "Depends on the typed array family (e.g. `Float32Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/has-property-op.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the include does not parse."
     },
     {
       "path": "test/staging/sm/TypedArray/indexOf-never-returns-negative-zero.js",
@@ -2520,9 +2612,29 @@
       "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/TypedArray/set-with-receiver.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the include does not parse."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/sort_byteoffset.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the include does not parse."
+    },
+    {
       "path": "test/staging/sm/TypedArray/sort_globals.js",
       "category": "host-dependent",
       "reason": "Requires the Test262 `$262` host object (`$262.createRealm`/`$262.global`); this engine defines no ES5.1 `$262` host facility."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/toLocaleString-nointl.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the include does not parse."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/uint8clamped-constructor.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Uint8ClampedArray`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/class/newTargetCCW.js",
@@ -2760,12 +2872,22 @@
       "reason": "Depends on `Reflect`, an ES2015 builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/object/defineProperty-proxy.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
       "path": "test/staging/sm/object/getter-name.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
     },
     {
       "path": "test/staging/sm/object/values-entries-indexed.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Object.values`/`Object.entries`, ES2017 builtins absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/object/values-entries-typedarray.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Object.values`/`Object.entries`, ES2017 builtins absent from ES5.1."
     },
@@ -2778,6 +2900,11 @@
       "path": "test/staging/sm/regress/regress-452189.js",
       "category": "post-es5-semantics",
       "reason": "Relies on the legacy `Object.prototype.__defineGetter__`/`__defineSetter__` methods, added by ES2015 Annex B §B.2.2.2/§B.2.2.3; ES5.1 Annex B defines no such methods (accessor properties are only reachable via `Object.defineProperty`/object-literal getter-setter syntax in ES5.1)."
+    },
+    {
+      "path": "test/staging/sm/regress/regress-503860.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Object.prototype.__defineSetter__`, an ES2015 Annex B B.2.2.5 method absent from ES5.1."
     },
     {
       "path": "test/staging/sm/regress/regress-541455.js",
@@ -3023,6 +3150,11 @@
       "path": "test/staging/sm/strict/eval-variable-environment.js",
       "category": "post-es5-builtin",
       "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+    },
+    {
+      "path": "test/staging/sm/strict/primitive-assignment.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Reflect.set`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/strict/regress-532254.js",

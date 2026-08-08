@@ -189,6 +189,7 @@ function pushVarScopeContainerChildren(node, pending) {
       pending.push(node.body);
       return true;
     case 'ForInStatement':
+    case 'ForOfStatement':
       if (node.left.type === 'VariableDeclaration') {
         pending.push(node.left);
       }
@@ -576,7 +577,8 @@ function pushNestedBlockLists(list, enclosingLexical, worklist) {
         }
         break;
       case 'ForStatement':
-      case 'ForInStatement': {
+      case 'ForInStatement':
+      case 'ForOfStatement': {
         const headNames = forHeadLexicalNames(node);
         let bodyLexical = lexical;
         if (headNames.length > 0) {

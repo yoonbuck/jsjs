@@ -416,6 +416,16 @@ export default [
         true,
         'the upload publishes what the run just wrote',
       );
+
+      const runStep = job.steps.find(
+        (/** @type {any} */ step) => step.run === 'npm run test262:upstream',
+      );
+
+      assertSame(
+        runStep?.env?.TZ,
+        'UTC',
+        'the pinned subset must run under TZ=UTC so the committed report and coverage are a pure function of the engine, not the runner time zone',
+      );
     },
   },
   {

@@ -65,6 +65,8 @@ import uriGlobals from './uri-globals.test.js';
 import jsonParse from './json-parse.test.js';
 import jsonStringify from './json-stringify.test.js';
 import es2015ObjectFunction from './es2015-object-function.test.js';
+import iterators from './iterators.test.js';
+import forOf from './for-of.test.js';
 import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
 
@@ -261,6 +263,14 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/es2015-object-function.test.js',
     tests: es2015ObjectFunction,
+  }),
+  Object.freeze({
+    file: 'test/iterators.test.js',
+    tests: iterators,
+  }),
+  Object.freeze({
+    file: 'test/for-of.test.js',
+    tests: forOf,
   }),
   Object.freeze({
     file: 'test/benchmark-core.test.js',
