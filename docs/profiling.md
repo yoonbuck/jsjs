@@ -321,8 +321,8 @@ ef9a76da682f78e62d428920d750b288e3d114e0a1c6cc6bc63aa912fea7dd1f  checksum-corre
 
 > **Superseded for performance decisions.** The `d9ed3e2`/`cf203aa` timing and
 > profile claims in this historical section are retained for provenance only.
-> The current-main rebaseline below supersedes them; do not use this section to
-> accept the rebased branch's performance.
+> The exact `2cc8699` lexical/TDZ-main rebaseline below supersedes them; do not
+> use this section to accept the rebased branch's performance.
 
 This follow-up captures the post-optimization evidence for issue #42 on top of the baseline above. Timing claims come only from the unprofiled benchmark medians in `.benchmark-results/issue-42-before` and `.benchmark-results/issue-42-after`. CPU/allocation profiles are attribution-only samples; they explain where sampled interpreter work moved, not how much wall time was saved.
 
@@ -551,14 +551,28 @@ node benchmark/profile/analyze.js --baseline=.benchmark-results/issue-42-after -
 - Cold and steady have different execution boundaries, so a before/after change in one mode does not decompose directly into startup cost versus steady-state cost.
 - This is one machine, one Node build, one Chromium shell build, and one system JSC shell. Re-run on a quiet fixed-power machine before making broader claims.
 
-## Issue #42 current-main rebaseline (2026-08-08)
+## Issue #42 7132/3f pre-lexical rebaseline (historical, superseded)
 
-This section replaces the performance decision evidence for the rebased issue
-#42 branch. The earlier `d9ed3e2` evidence above is retained as historical
-context only; it is not evidence for the current-main comparison. Timing claims
-below come only from the six paired, unprofiled full-workload captures.
-CPU/allocation profiles are sampled interpreter-attribution diagnostics, not
-wall-time measurements or proof of an isolated implementation contribution.
+> **Historical evidence only.** This entire `7132`-based pass is superseded by
+> the exact lexical/TDZ-main evidence in the next section. It is retained for
+> traceability, not as a performance claim about the exact `2cc8699` main
+> baseline.
+
+Its pre-rebase mapping was baseline
+`7132f03fa28de824879894a815be6e2087ed9fb2` → candidate
+`3f26148841096c75822bddee709a4ee766a89aa9`. `7132f03` is the predecessor of
+the reachable lexical/TDZ main baseline
+`2cc8699b60946ea508271648d4379de534cd2d71`; it does not contain that main
+advance. The candidate currently measured below is the reachable exact branch
+commit `57361388be5ce06407dce3164736aa1ca78db246`, not the historical `3f26148`
+snapshot. Legacy artifact names containing `current-main` are preserved
+verbatim only because they identify this historical capture.
+
+The earlier `d9ed3e2` evidence above and this 7132/3f pass are historical
+context only. Their timing claims come from six paired, unprofiled
+full-workload captures; their CPU/allocation profiles are sampled
+interpreter-attribution diagnostics, not wall-time measurements or proof of an
+isolated implementation contribution.
 
 ### Exact revisions, roots, and commands
 
@@ -575,11 +589,12 @@ copies; no tracked source was changed. Before and after every capture,
 `git status --porcelain --untracked-files=all` was empty in the source
 worktree and active branch. Each host report records `gitDirty: false`.
 
-The active `HEAD` later advanced to `4b30e877ea30099527a6cecd4f3ff0ee41b3178e`
-through the test-only commit `4b30e87`. `git` tree-object checks confirm that
-its `src` (`31112d1c…`) and `benchmark` (`fa85549a…`) trees are byte-identical
-to the measured candidate `3f26148`; no measured source or benchmark content
-changed.
+At the time of this historical pass, the then-active `HEAD` later advanced to
+`4b30e877ea30099527a6cecd4f3ff0ee41b3178e` through the test-only commit
+`4b30e87`. `git` tree-object checks at that time confirmed that its `src`
+(`31112d1c…`) and `benchmark` (`fa85549a…`) trees were byte-identical to the
+historical measured candidate `3f26148`; that statement does not apply to the
+new lexical/TDZ-main comparison.
 
 ```sh
 ARTIFACT_ROOT=/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main
@@ -798,7 +813,7 @@ contribution from the other branch changes. Use the paired timing table and
 its per-cell verdicts for performance decisions; specifically, do not claim a
 gate acceptance while `node/arrays/steady` remains inside empirical noise.
 
-### Current-main validation artifacts
+### Historical 7132 validation artifacts
 
 Ignored raw captures, the manifest, comparison output, analyzer output, and
 metadata/determinism audits are preserved under
@@ -808,3 +823,291 @@ for capture logs, metadata audits, and archives created alongside the temporary
 detached worktrees. The comparison output is
 `.benchmark-results/issue-42-current-main/comparison.json` and
 `.benchmark-results/issue-42-current-main/comparison.md`.
+
+## Issue #42 exact lexical/TDZ-main rebaseline (2026-08-08)
+
+This is the performance evidence for the exact lexical/TDZ main advance. It
+supersedes every historical `7132`-based figure above. Negative timing deltas
+mean that the exact candidate is faster. The timing results are whole-branch
+measurements; sampled CPU/allocation attribution is diagnostic only and does
+not isolate a parser gain or any single implementation change.
+
+### Exact revisions, fresh worktrees, and preserved roots
+
+| Item                      | Baseline                                                                                                                | Candidate                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Source commit             | `2cc8699b60946ea508271648d4379de534cd2d71`                                                                              | `57361388be5ce06407dce3164736aa1ca78db246`                                                                               |
+| Reachability at capture   | `main` / `origin/main`                                                                                                  | `yoonbuck-optimize-object-array-hot-paths`                                                                               |
+| Detached capture worktree | `/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main-2cc/baseline-wt` | `/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main-2cc/candidate-wt` |
+| `src` tree                | `ec4e0bd5e8b73e7ec724f38710cead6aef50bec8`                                                                              | `f0281dcd83f6f8dfe504b46e08c9f3b45bb2003e`                                                                               |
+| `benchmark` tree          | `fa77f777836a5aca8f63ee7c69f86409378c4456`                                                                              | `fa85549a9b3a224c04627ac0d43c2ff807bfe7b0`                                                                               |
+| Canonical timing roots    | `.benchmark-results/issue-42-current-main-2cc/baseline-1` … `baseline-6`                                                | `.benchmark-results/issue-42-current-main-2cc/candidate-1` … `candidate-6`                                               |
+| Canonical profile root    | `.benchmark-results/issue-42-current-main-2cc/profiles-baseline`                                                        | `.benchmark-results/issue-42-current-main-2cc/profiles-candidate`                                                        |
+
+Both capture checkouts were created fresh and detached. Each linked
+`node_modules` and generated `vendor/acorn` to the active worktree; both links,
+both clean source states, detached `HEAD`s, identical `package-lock.json`
+SHA-256 values, and the ignored output directories are recorded in
+`/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main-2cc/worktree-dependency-audit.json`.
+Before capture, active `HEAD` was exactly `5736138`; its `src`, `benchmark`,
+and `package.json` tree objects matched the candidate detached checkout. Every
+source checkout stayed clean before and after capture.
+
+```sh
+ARTIFACT_ROOT=/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main-2cc
+BASELINE_SHA=2cc8699b60946ea508271648d4379de534cd2d71
+CANDIDATE_SHA=57361388be5ce06407dce3164736aa1ca78db246
+JSC_DIR=/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers
+JSC_BIN="$JSC_DIR/jsc"
+
+git worktree add --detach "$ARTIFACT_ROOT/baseline-wt" "$BASELINE_SHA"
+git worktree add --detach "$ARTIFACT_ROOT/candidate-wt" "$CANDIDATE_SHA"
+ln -s "$PWD/node_modules" "$ARTIFACT_ROOT/baseline-wt/node_modules"
+ln -s "$PWD/node_modules" "$ARTIFACT_ROOT/candidate-wt/node_modules"
+mkdir -p "$ARTIFACT_ROOT"/{baseline-wt,candidate-wt}/vendor
+ln -s "$PWD/vendor/acorn" "$ARTIFACT_ROOT/baseline-wt/vendor/acorn"
+ln -s "$PWD/vendor/acorn" "$ARTIFACT_ROOT/candidate-wt/vendor/acorn"
+```
+
+The canonical ignored result root is
+`.benchmark-results/issue-42-current-main-2cc/`; external logs, audit files,
+the ledger, and any rejected attempts live under `$ARTIFACT_ROOT`. The host
+versions were Node `v26.5.1`, Chromium `151.0.7922.34`, and system JSC
+`/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc`
+with `mtimeMs=1784736095000`.
+
+### Six-pair full-workload timing capture
+
+Every root used the unchanged default full workload: `arithmetic-loops`,
+`calls-recursion`, `object-properties`, `arrays`, `strings`, `json`, and
+`regexp`; cold and steady modes; warmups `3`; samples `9`; target sample time
+`100 ms`; and maximum batch size `1000000`.
+
+```sh
+PATH="$JSC_DIR:$PATH" JSC="$JSC_BIN" \
+  node benchmark/cli.js run --host=all \
+  --output=.benchmark-results/issue-42-current-main-2cc/<side>-<round>
+```
+
+Rounds 1, 3, and 5 ran baseline→candidate; rounds 2, 4, and 6 ran
+candidate→baseline. The canonical window was 20:36:00Z through 20:52:37Z;
+the comparison verifies the report timestamps, while the external ledger also
+records command start and finish timestamps.
+
+| Round | Order              | Baseline run ID / generatedAt                                       | Candidate run ID / generatedAt                                      |
+| ----: | ------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+|     1 | baseline→candidate | `48605018-0b1e-4793-a757-210c88d99553` / `2026-08-08T20:36:00.327Z` | `f7565d65-33ae-455a-a8ed-d25a0814c389` / `2026-08-08T20:37:24.772Z` |
+|     2 | candidate→baseline | `7c1a4152-ed90-438f-b3ca-c71f235a8bd7` / `2026-08-08T20:40:05.295Z` | `9cdb26eb-33fa-4b8f-9501-776bfe109495` / `2026-08-08T20:38:45.486Z` |
+|     3 | baseline→candidate | `b501a648-31f9-4550-a338-75bab9e136ea` / `2026-08-08T20:41:30.849Z` | `0c4bfa7a-f491-4812-a996-4f2badd7e51c` / `2026-08-08T20:42:56.709Z` |
+|     4 | candidate→baseline | `62764ff8-ec01-4cc7-a153-0957ae962ce3` / `2026-08-08T20:45:37.369Z` | `8ef47e8d-4a86-453c-8269-6ef6e82b7446` / `2026-08-08T20:44:17.479Z` |
+|     5 | baseline→candidate | `ff1e9f13-c5f9-4ca3-bc52-a90276c13bef` / `2026-08-08T20:47:07.704Z` | `c75572de-2314-48c9-9877-fe9d3c477a01` / `2026-08-08T20:48:31.414Z` |
+|     6 | candidate→baseline | `0ca29225-1122-4dfd-8e34-f2781e716bd3` / `2026-08-08T20:51:12.692Z` | `738e200b-59ac-48d5-a452-aee77967786b` / `2026-08-08T20:49:53.241Z` |
+
+The manifest at
+`.benchmark-results/issue-42-current-main-2cc/comparison-manifest.json`
+retains the same workload-only targets, `object-properties` and `arrays`, so
+each target spans all three hosts and both modes. It retains seed `420042` and
+`20000` paired-bootstrap resamples; no target predicate, non-target rule, or
+methodology was changed.
+
+```sh
+node benchmark/cli.js compare \
+  --manifest=.benchmark-results/issue-42-current-main-2cc/comparison-manifest.json \
+  --output=.benchmark-results/issue-42-current-main-2cc/<output-stem>
+```
+
+The exact candidate gate ran twice to validation-only stems
+`comparison-validation-1` and `comparison-validation-2`, then once to
+canonical `comparison`. All three JSON and Markdown reports are identical
+after removal of their sole generated-at value/line. The canonical outputs are
+`comparison.json` and `comparison.md`; the determinism audit is
+`$ARTIFACT_ROOT/comparison-determinism-audit.json`.
+
+The timing audit at `$ARTIFACT_ROOT/timing-metadata-audit.json` verifies six
+pairs, 12 roots, 12 unique run IDs, 3/3 counterbalance, exact side/source
+commits, clean source metadata, stable host versions/configuration, per-pair
+timestamp order, 36 host-report SHA-256 values, and all 504 workload-result
+checksums.
+
+### Target cells, all non-target results, and gate result
+
+Each target row below uses the paired median log ratio, deterministic paired
+bootstrap interval, exact two-sided sign test, and empirical 95th-percentile
+self-difference envelope. The `−/+` column is negative/positive paired
+deltas, followed by sign-test p.
+
+| Host     | Workload          | Mode   | Point Δ | 95% CI            | Empirical noise | −/+; sign p  | Verdict      |
+| -------- | ----------------- | ------ | ------: | ----------------- | --------------: | ------------ | ------------ |
+| chromium | object-properties | cold   | -19.07% | -20.72% … -13.86% |          ±7.61% | 6/0; 0.03125 | improvement  |
+| chromium | object-properties | steady | -17.53% | -20.01% … -14.64% |          ±7.22% | 6/0; 0.03125 | improvement  |
+| chromium | arrays            | cold   | -12.97% | -15.31% … -10.68% |          ±4.08% | 6/0; 0.03125 | improvement  |
+| chromium | arrays            | steady | -13.28% | -14.63% … -11.15% |          ±4.26% | 6/0; 0.03125 | improvement  |
+| jsc      | object-properties | cold   | -21.44% | -27.27% … +22.30% |         ±80.50% | 4/2; 0.68750 | within-noise |
+| jsc      | object-properties | steady | -21.65% | -24.05% … -7.75%  |         ±17.99% | 6/0; 0.03125 | improvement  |
+| jsc      | arrays            | cold   | -10.77% | -15.25% … +5.24%  |         ±18.98% | 4/2; 0.68750 | within-noise |
+| jsc      | arrays            | steady | -12.06% | -16.50% … +10.20% |         ±39.13% | 5/1; 0.21875 | within-noise |
+| node     | object-properties | cold   | -18.64% | -30.90% … -11.54% |         ±27.35% | 6/0; 0.03125 | within-noise |
+| node     | object-properties | steady | -20.66% | -29.68% … -12.50% |         ±26.28% | 6/0; 0.03125 | within-noise |
+| node     | arrays            | cold   | -17.41% | -39.25% … +3.90%  |         ±84.93% | 4/2; 0.68750 | within-noise |
+| node     | arrays            | steady | -12.62% | -21.51% … +23.46% |         ±52.49% | 4/2; 0.68750 | within-noise |
+
+All 30 non-target cells are retained below. The unchanged user non-target rule
+passes: **zero non-target regressions**.
+
+| Host     | Workload         | Mode   | Point Δ | 95% CI            | Empirical noise | −/+; sign p  | Verdict      |
+| -------- | ---------------- | ------ | ------: | ----------------- | --------------: | ------------ | ------------ |
+| chromium | arithmetic-loops | cold   |  -0.96% | -2.13% … +0.73%   |          ±2.93% | 4/2; 0.68750 | within-noise |
+| chromium | arithmetic-loops | steady |  -0.63% | -1.87% … +3.54%   |          ±4.48% | 4/2; 0.68750 | within-noise |
+| chromium | calls-recursion  | cold   |  -2.09% | -3.72% … +1.71%   |          ±4.34% | 5/1; 0.21875 | within-noise |
+| chromium | calls-recursion  | steady |  -1.73% | -3.68% … +2.44%   |          ±4.53% | 4/2; 0.68750 | within-noise |
+| chromium | strings          | cold   | -16.99% | -18.05% … -16.04% |          ±3.09% | 6/0; 0.03125 | improvement  |
+| chromium | strings          | steady | -17.53% | -19.08% … -13.82% |          ±4.65% | 6/0; 0.03125 | improvement  |
+| chromium | json             | cold   | -10.57% | -11.63% … -7.81%  |          ±3.70% | 6/0; 0.03125 | improvement  |
+| chromium | json             | steady | -10.66% | -11.21% … -9.29%  |          ±3.13% | 6/0; 0.03125 | improvement  |
+| chromium | regexp           | cold   | -19.46% | -21.58% … -18.87% |          ±5.43% | 6/0; 0.03125 | improvement  |
+| chromium | regexp           | steady | -18.97% | -19.75% … -17.79% |          ±3.49% | 6/0; 0.03125 | improvement  |
+| jsc      | arithmetic-loops | cold   |  +0.33% | -4.92% … +45.24%  |         ±60.55% | 3/3; 1.00000 | within-noise |
+| jsc      | arithmetic-loops | steady |  -0.78% | -6.72% … +34.47%  |         ±39.66% | 3/3; 1.00000 | within-noise |
+| jsc      | calls-recursion  | cold   |  -0.60% | -7.06% … +31.87%  |         ±36.83% | 3/3; 1.00000 | within-noise |
+| jsc      | calls-recursion  | steady | +11.66% | -16.38% … +28.53% |         ±44.32% | 2/4; 0.68750 | within-noise |
+| jsc      | strings          | cold   | -22.07% | -26.17% … -12.82% |         ±16.15% | 6/0; 0.03125 | improvement  |
+| jsc      | strings          | steady | -25.17% | -28.10% … -10.39% |         ±21.20% | 6/0; 0.03125 | improvement  |
+| jsc      | json             | cold   | -15.98% | -18.74% … -2.44%  |         ±26.96% | 5/1; 0.21875 | underpowered |
+| jsc      | json             | steady | -13.71% | -19.99% … -0.69%  |         ±21.77% | 5/1; 0.21875 | underpowered |
+| jsc      | regexp           | cold   | -24.32% | -27.33% … -0.61%  |         ±28.65% | 5/1; 0.21875 | underpowered |
+| jsc      | regexp           | steady | -24.73% | -30.64% … -12.73% |         ±19.32% | 6/0; 0.03125 | improvement  |
+| node     | arithmetic-loops | cold   |  -6.94% | -19.06% … +6.29%  |         ±27.93% | 4/2; 0.68750 | within-noise |
+| node     | arithmetic-loops | steady |  -3.57% | -14.20% … +10.45% |         ±31.84% | 3/3; 1.00000 | within-noise |
+| node     | calls-recursion  | cold   |  -1.67% | -14.16% … +13.47% |         ±27.98% | 3/3; 1.00000 | within-noise |
+| node     | calls-recursion  | steady |  +0.65% | -5.88% … +11.91%  |         ±25.60% | 2/4; 0.68750 | within-noise |
+| node     | strings          | cold   | -13.40% | -25.13% … +33.72% |         ±80.82% | 4/2; 0.68750 | within-noise |
+| node     | strings          | steady | -16.02% | -22.15% … +4.05%  |         ±24.67% | 5/1; 0.21875 | within-noise |
+| node     | json             | cold   |  -6.76% | -21.21% … +19.74% |         ±26.63% | 4/2; 0.68750 | within-noise |
+| node     | json             | steady |  -7.42% | -32.52% … +7.11%  |         ±76.63% | 5/1; 0.21875 | within-noise |
+| node     | regexp           | cold   | -18.21% | -42.41% … +2.42%  |         ±78.21% | 5/1; 0.21875 | within-noise |
+| node     | regexp           | steady | -18.35% | -36.25% … +8.06%  |         ±53.60% | 5/1; 0.21875 | within-noise |
+
+The sole comparison warning is: **3 cells excluded zero but could not support a
+verdict and are reported as underpowered** —
+`jsc/json/cold`, `jsc/json/steady`, and `jsc/regexp/cold`; collect more
+counterbalanced pairs. All three point toward improvement, and none is a
+regression.
+
+| Aggregate | Point Δ | 95% CI            | Empirical noise | −/+; sign p  | Verdict      |
+| --------- | ------: | ----------------- | --------------: | ------------ | ------------ |
+| chromium  | -11.73% | -12.51% … -10.34% |          ±2.81% | 6/0; 0.03125 | improvement  |
+| jsc       | -14.29% | -18.91% … +7.61%  |         ±24.46% | 4/2; 0.68750 | within-noise |
+| node      | -12.18% | -25.05% … +7.12%  |         ±32.90% | 5/1; 0.21875 | within-noise |
+| all-hosts | -12.51% | -14.89% … -4.01%  |         ±13.54% | 5/1; 0.21875 | underpowered |
+
+`acceptance.gateReady` is `true`, but `acceptance.accepted` is **`false`**.
+The user non-target rule passes with zero regressions; the unchanged tool
+target-materiality predicate fails. Seven target cells are exceptions:
+
+| Target                        | Point Δ | Empirical noise | Point log ratio | Noise log ratio | Unmet criteria                                                                                |
+| ----------------------------- | ------: | --------------: | --------------: | --------------: | --------------------------------------------------------------------------------------------- |
+| jsc/object-properties/cold    | -21.44% |         ±80.50% |         -0.2413 |         +0.5905 | confidence-interval-includes-zero, sign-test-not-significant, within-empirical-noise-envelope |
+| jsc/arrays/cold               | -10.77% |         ±18.98% |         -0.1139 |         +0.1738 | confidence-interval-includes-zero, sign-test-not-significant, within-empirical-noise-envelope |
+| jsc/arrays/steady             | -12.06% |         ±39.13% |         -0.1285 |         +0.3303 | confidence-interval-includes-zero, sign-test-not-significant, within-empirical-noise-envelope |
+| node/object-properties/cold   | -18.64% |         ±27.35% |         -0.2063 |         +0.2418 | within-empirical-noise-envelope                                                               |
+| node/object-properties/steady | -20.66% |         ±26.28% |         -0.2315 |         +0.2333 | within-empirical-noise-envelope                                                               |
+| node/arrays/cold              | -17.41% |         ±84.93% |         -0.1913 |         +0.6148 | confidence-interval-includes-zero, sign-test-not-significant, within-empirical-noise-envelope |
+| node/arrays/steady            | -12.62% |         ±52.49% |         -0.1349 |         +0.4219 | confidence-interval-includes-zero, sign-test-not-significant, within-empirical-noise-envelope |
+
+The all-host aggregate and every host point estimate improve, and every host
+verdict is improvement or within-noise. That aggregation does not override any
+target exception. This is a recurring plan/tool target-materiality miss of the
+kind covered by plan-owner ruling A; the ruling does not alter methodology,
+apply an exemption, or turn `acceptance.accepted` true. The tool reports
+`exceptionalReview.required === false`; no exceptional-review exemption was
+used.
+
+### Matched Node and Chromium profiles
+
+Each revision used the same per-cell iterations and intervals. CPU and
+allocation were separate invocations with the same side/cell run ID; both used
+`--warmups=1`, CPU `--cpu-sampling-interval-microseconds=100`, and allocation
+`--allocation-sampling-interval-bytes=32768`.
+
+```sh
+node benchmark/profile/cli.js \
+  --host="$host" --workload="$workload" --mode="$mode" --metric=cpu \
+  --run-id="$run_id" --cpu-sampling-interval-microseconds=100 \
+  --warmups=1 --iterations="$iterations" --output="$output"
+node benchmark/profile/cli.js \
+  --host="$host" --workload="$workload" --mode="$mode" --metric=allocation \
+  --run-id="$run_id" --allocation-sampling-interval-bytes=32768 \
+  --warmups=1 --iterations="$iterations" --output="$output"
+
+node benchmark/profile/analyze.js \
+  --baseline=.benchmark-results/issue-42-current-main-2cc/<side>-1 \
+  --profiles=.benchmark-results/issue-42-current-main-2cc/profiles-<side>
+```
+
+| Host     | Workload          | Mode   | Iterations |   Checksum | CPU baseline/candidate (ms) | Allocation baseline/candidate (ms) |
+| -------- | ----------------- | ------ | ---------: | ---------: | --------------------------: | ---------------------------------: |
+| Node     | object-properties | cold   |          5 | 1122746965 |           417.400 / 426.124 |                  516.875 / 394.957 |
+| Node     | object-properties | steady |        512 | 1122746965 |       44776.015 / 32064.054 |              47683.260 / 35145.689 |
+| Node     | arrays            | cold   |          5 |  778416596 |           382.191 / 314.345 |                  415.439 / 335.142 |
+| Node     | arrays            | steady |          5 |  778416596 |           351.414 / 290.118 |                  364.770 / 300.897 |
+| Chromium | object-properties | cold   |          5 | 1122746965 |           376.300 / 297.400 |                  404.900 / 300.500 |
+| Chromium | object-properties | steady |          5 | 1122746965 |           363.200 / 293.200 |                  382.900 / 301.600 |
+| Chromium | arrays            | cold   |          6 |  778416596 |           354.300 / 309.000 |                  365.200 / 316.000 |
+| Chromium | arrays            | steady |         48 |  778416596 |         2617.600 / 2285.200 |                2718.900 / 2299.100 |
+
+The candidate analyzer accepted eight CPU/allocation pairs per revision:
+source SHA and `gitDirty: false`, runtime/version, paired run IDs, warmups,
+iterations, sampling intervals, raw-artifact existence, expected/observed
+checksums, and non-host interpreter denominators all validate. The smallest
+CPU capture window is 290.118 ms. The audit at
+`$ARTIFACT_ROOT/profile-metadata-audit.json` records all 16 side/cell rows, 64
+raw sidecar/artifact SHA-256 values, all capture windows, and nonzero
+denominators. No denominator or metadata capture was invalid, so there were no
+profile retries or promoted invalid artifacts; `profile-invalid-attempts/` is
+absent.
+
+Shares normalize each metric observation to non-host interpreter samples before
+equal-observation aggregation. They are whole-branch attribution, not an
+isolated parser/array contribution or a wall-time causal claim.
+
+| Scope                    | Metric     | Category        | Baseline | Candidate | Δ points |
+| ------------------------ | ---------- | --------------- | -------: | --------: | -------: |
+| All 8 observations       | CPU        | object-property | 20.0254% |   7.3980% | -12.6273 |
+| All 8 observations       | CPU        | arrays          |  1.1968% |   1.6421% |  +0.4453 |
+| All 8 observations       | Allocation | object-property | 32.7222% |   0.0000% | -32.7222 |
+| All 8 observations       | Allocation | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+| Steady object-properties | CPU        | object-property | 20.1497% |   5.5525% | -14.5972 |
+| Steady object-properties | CPU        | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+| Steady object-properties | Allocation | object-property |  0.0000% |   0.0000% |  +0.0000 |
+| Steady object-properties | Allocation | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+| Steady arrays            | CPU        | object-property | 16.2128% |   8.5661% |  -7.6467 |
+| Steady arrays            | CPU        | arrays          |  2.6754% |   2.9188% |  +0.2433 |
+| Steady arrays            | Allocation | object-property | 16.2111% |   0.0000% | -16.2111 |
+| Steady arrays            | Allocation | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+
+Every displayed `0.0000%` allocation share has a validated nonzero
+interpreter denominator; it is a sampled zero, not missing data. Profile
+windows and sampled totals are diagnostics, not benchmark timing.
+
+### Reproducibility, rejected attempt, and limits
+
+- Canonical raw outputs and the manifest live under
+  `.benchmark-results/issue-42-current-main-2cc/`. External command logs,
+  `timing-capture-ledger.ndjson`, `profile-capture-ledger.ndjson`,
+  `timing-metadata-audit.json`, `comparison-determinism-audit.json`,
+  `profile-metadata-audit.json`, `profile-category-deltas.json`, and
+  `worktree-dependency-audit.json`, and `copy-integrity-audit.json` live under
+  `$ARTIFACT_ROOT`.
+- One unpaired **pre-canonical timing** baseline capture was archived at
+  `$ARTIFACT_ROOT/timing-invalid-attempts/baseline-1-ledger-schema-abort/`.
+  Its external ledger parser incorrectly expected a nested report metadata
+  object; no candidate side was captured, no value was used, and a fresh
+  canonical round 1 pair replaced it. This was an audit-script error, not a
+  timing or checksum failure.
+- JSC has timing evidence only; the profile collector supports Node and
+  Chromium.
+- The comparison is one-machine evidence with substantial Node/JSC empirical
+  noise in several cells. It does not establish portability or acceptance.
+- Profile attribution excludes host/GC/idle/harness frames and uses sampled
+  self time/bytes. It is not inclusive cost, retained heap, object lifetime,
+  or a causal speedup decomposition.
