@@ -569,15 +569,8 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // ES2015 lexical declarations. `PARSER_OPTIONS.ecmaVersion` is 6, so Acorn
-  // emits `let`/`const` `VariableDeclaration` nodes and runs its own lexical
-  // scope analysis. These parse in every position the ES2015 grammar allows
-  // them: a top-level `StatementListItem`, a block's `StatementListItem`, and a
-  // `for` head. (Evaluating them is Task 4; parsing is all this task enables.)
-  // ---------------------------------------------------------------------------
   {
-    name: 'let and const declarations parse in every position the grammar allows',
+    name: 'let and const declarations parse in every position the ES2015 grammar allows: top level, block, and for head, through parseScript and parseEval',
     run() {
       const accepted = [
         ['let x = 1;', 'let'],
@@ -594,7 +587,6 @@ const tests = [
         assertSame(program.body[0].kind, kind, source);
       }
 
-      // Block-scoped and `for`-head positions, plus parity through `parseEval`.
       const parses = [
         '{ let x = 1; }',
         '{ const y = 2; }',
@@ -609,18 +601,8 @@ const tests = [
       }
     },
   },
-
-  // ---------------------------------------------------------------------------
-  // Raising the grammar to ES2015 makes Acorn accept every other ES2015
-  // addition too, none of which the evaluator implements. The unsupported pass
-  // — reached from the same `validateScriptProgram` walk that both `parseScript`
-  // and `parseEval` funnel through — rejects each as a parse-time early error,
-  // so scripts, direct `eval`, and the dynamic `Function` constructor all
-  // refuse them the way they already refuse a statement-position function
-  // declaration or an ES5-invalid regexp literal.
-  // ---------------------------------------------------------------------------
   {
-    name: 'each unsupported ES2015 construct is rejected from parseScript and parseEval',
+    name: 'each reachable unsupported ES2015 construct is rejected by the pass from parseScript and parseEval',
     run() {
       const rejected = [
         'class C {}',
@@ -654,12 +636,32 @@ const tests = [
     },
   },
   {
-    name: 'two representative unsupported constructs reject a dynamic Function as a guest SyntaxError',
+    name: 'unsupported ES2015 constructs unreachable in a script are still rejected as SyntaxErrors from parseScript and parseEval',
     run() {
-      // The dynamic `Function` constructor parses its body through `parseEval`,
-      // so the host `SyntaxError` the pass raises must surface as a realm-local
-      // guest `SyntaxError` at construction, exactly as an ES5-invalid regexp
-      // literal already does.
+      const rejected = [
+        'class C { m() {} }',
+        'var c = class { static m() {} };',
+        'super.x;',
+        'super();',
+        'async function f() {}',
+        'var af = async () => 1;',
+        'await x;',
+        "import x from 'y';",
+        "import('x');",
+        'export { a };',
+        'export default 1;',
+        "export * from 'y';",
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+        assertThrows(() => parseEval(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'two representative unsupported constructs reject a dynamic Function at construction as a guest SyntaxError',
+    run() {
       const realm = createRealm();
 
       for (const body of ['class C {}', 'return () => 1;']) {
@@ -678,29 +680,19 @@ const tests = [
     },
   },
   {
-    name: 'the unsupported-ES2015 rejection carries the offending node position',
+    name: 'the unsupported-ES2015 rejection carries the offending node position (class keyword at 0-based index 2)',
     run() {
       const error = /** @type {any} */ (
         assertThrows(() => parseScript('  class C {}'), SyntaxError)
       );
 
-      // The `class` keyword starts at 0-based index 2.
       assertSame(error.pos, 2);
       assertSame(error.loc.line, 1);
       assertSame(error.loc.column, 2);
     },
   },
-
-  // ---------------------------------------------------------------------------
-  // Regression net for the version bump: every ES5 early error the engine
-  // relied on must survive raising `ecmaVersion` to 6. Acorn keeps each of
-  // these a `SyntaxError` at ES6 — the strict-mode ones through the forced
-  // strict parser, `/x/u` and `/x/y` through the engine's own ES5.1 flag
-  // validator — but pinning them guards against a future parser change quietly
-  // relaxing one.
-  // ---------------------------------------------------------------------------
   {
-    name: 'ES5 early errors survive the ES2015 grammar bump',
+    name: 'ES5 early errors survive the ES2015 grammar bump: strict with, strict octal, strict duplicate params, strict delete of an identifier, a reserved-word binding, the ES5.1-only regexp flags u and y, and a function declaration in an iteration body',
     run() {
       const rejected = [
         '"use strict"; with (this) {}',
@@ -718,17 +710,8 @@ const tests = [
       }
     },
   },
-
-  // ---------------------------------------------------------------------------
-  // ES2015 static semantics the engine now *inherits* from the vendored parser
-  // running at `ecmaVersion: 6` and must keep. Each is asserted through
-  // `parseScript` — never by calling the parser directly — so the engine owns
-  // the guarantee, not Acorn. These are the redeclaration, `let`-name,
-  // missing-initializer, and single-statement-position early errors of
-  // ES2015 §13.3.1 / §14.
-  // ---------------------------------------------------------------------------
   {
-    name: 'ES2015 lexical static semantics are inherited and kept',
+    name: 'ES2015 lexical static semantics are inherited from the vendored parser and kept, asserted through parseScript: redeclaration, let-name, missing initializer, and single-statement-position early errors',
     run() {
       const rejected = [
         'let x; let x;',
@@ -753,15 +736,8 @@ const tests = [
       }
     },
   },
-
-  // ---------------------------------------------------------------------------
-  // Until Task 4 implements lexical binding instantiation, evaluating a
-  // `let`/`const` declaration is genuinely unimplemented: the scaffold in
-  // `evaluateVariableDeclaration` throws for any non-`var` kind, which surfaces
-  // as a host engine-limitation error rather than a guest completion.
-  // ---------------------------------------------------------------------------
   {
-    name: 'evaluating a lexical declaration is an unsupported-node error until Task 4',
+    name: 'evaluating a lexical declaration is an UnsupportedNodeError until Task 4 implements lexical binding instantiation',
     run() {
       const realm = createRealm();
 

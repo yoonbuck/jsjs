@@ -22,14 +22,15 @@ const PARSER_OPTIONS = Object.freeze({
  * detached `Parser.parse` reference because Acorn's static `parse` reads `this`
  * (`new this(...)`), so it must stay a method call.
  *
- * At `ecmaVersion: 6` Acorn already re-applies the ES §12.6 reserved-word rule
- * to unescaped `IdentifierName`s itself, so an identifier whose code points
- * spell a reserved word (`var \u0063lass = 1`, a strict escaped `yield` label,
- * escaped `implements`/`package`/`private` bindings, escaped `let` in a lexical
- * declaration) is already a parse-phase `SyntaxError`. The `ecmaVersion < 6`
- * plugin that used to restore that check by hand is therefore obsolete and has
- * been removed; the upstream `val-*-via-escape` / `value-yield-strict-escaped`
- * tests still pass on Acorn's native behavior.
+ * At `ecmaVersion: 6` Acorn interprets an identifier's Unicode escape
+ * sequences *before* applying the ES §12.6 reserved-word rule, so an identifier
+ * whose code points spell a reserved word (`var \u0063lass = 1`, a strict
+ * escaped `yield` label, escaped `implements`/`package`/`private` bindings,
+ * escaped `let` in a lexical declaration) is already a parse-phase
+ * `SyntaxError`. The `ecmaVersion < 6` plugin that used to restore that check by
+ * hand is therefore obsolete and has been removed; the upstream
+ * `val-*-via-escape` / `value-yield-strict-escaped` tests still pass on Acorn's
+ * native behavior.
  *
  * @param {string} source
  * @param {any} options
@@ -230,6 +231,32 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * binary/octal or code-point-escape `Literal` — are handled by
  * `checkUnsupportedEs2015Node` directly, since they turn on a flag rather than
  * on `node.type`.
+ *
+ * Several entries are *defensive*: no input to a `sourceType: 'script'` parser
+ * at `ecmaVersion: 6` can make the pass reach them, because Acorn rejects the
+ * only construct that would produce them earlier. They are kept so the table is
+ * a complete statement of "unsupported ES2015 node types" rather than only the
+ * currently-reachable ones, and so a later `sourceType`/`ecmaVersion` change
+ * cannot let one slip through silently:
+ *
+ * - `ClassBody` / `MethodDefinition` only occur inside a class, which is
+ *   rejected first at `ClassDeclaration` / `ClassExpression`. (`{ m() {} }` is a
+ *   `Property` with `method: true`, not a `MethodDefinition`.)
+ * - `Super` only occurs inside a method; `super` anywhere else is a parse error
+ *   Acorn raises itself ("'super' keyword outside a method").
+ * - `AwaitExpression` is an ES2017 feature; at `ecmaVersion: 6` `await x` and
+ *   `async function`/`async () =>` are parse errors Acorn raises itself, and the
+ *   `async` flag is never set (see the flag check in `checkUnsupportedEs2015Node`).
+ * - `ImportDeclaration` / `ImportExpression` / `ExportNamedDeclaration` /
+ *   `ExportDefaultDeclaration` / `ExportAllDeclaration` require
+ *   `sourceType: 'module'`; in a script Acorn rejects them itself ("'import' and
+ *   'export' may appear only with 'sourceType: module'").
+ *
+ * The reachable entries are `ClassDeclaration`, `ClassExpression`,
+ * `ArrowFunctionExpression`, `TemplateLiteral`, `TemplateElement`,
+ * `TaggedTemplateExpression`, `ForOfStatement`, `YieldExpression`,
+ * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`,
+ * `SpreadElement`, and `MetaProperty` (via `new.target` inside a function).
  *
  * @type {ReadonlyMap<string, string>}
  */
