@@ -68,9 +68,14 @@ the measurement core.
 ## Calibration and sampling
 
 Cold samples are single unbatched invocations, including warmups, with workload
-scale encoded in the deterministic source. Steady host lanes calibrate
-independently: timed probes estimate an invocation duration, then select a batch
-size toward a configurable target sample duration. Batch growth is bounded.
+scale encoded in the deterministic source. Smoke sources repeat their reduced
+work 32 times inside one checksum-preserving invocation. Host clocks expose
+synthetic monotonic ticks; if a cold ending read stalls or its duration does not
+exceed the floating-point measurable floor, the run fails with host, workload,
+mode, and lane context instead of recording epsilon or batching cold work.
+Steady host lanes calibrate independently: timed probes estimate an invocation
+duration, then select a batch size toward a configurable target sample duration.
+Batch growth is bounded.
 
 Calibration never changes workload semantics. Every batch returns and verifies
 the checksum from its final invocation. Warmup batches run after calibration,

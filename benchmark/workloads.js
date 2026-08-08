@@ -20,6 +20,28 @@ function createWorkload(name, source, expectedChecksum) {
   return Object.freeze({ name, source, expectedChecksum });
 }
 
+/**
+ * @param {Workload} workload
+ * @param {number} repetitions
+ * @returns {Workload}
+ */
+function scaleWorkload(workload, repetitions) {
+  return createWorkload(
+    workload.name,
+    workloadSource([
+      '(function () {',
+      '  var __jsjsBenchmarkChecksum = 0;',
+      '  var __jsjsBenchmarkRepeat;',
+      `  for (__jsjsBenchmarkRepeat = 0; __jsjsBenchmarkRepeat < ${repetitions}; __jsjsBenchmarkRepeat += 1) {`,
+      `    __jsjsBenchmarkChecksum = ${workload.source};`,
+      '  }',
+      '  return __jsjsBenchmarkChecksum;',
+      '}())',
+    ]),
+    workload.expectedChecksum,
+  );
+}
+
 export const WORKLOADS = Object.freeze([
   createWorkload(
     'arithmetic-loops',
@@ -148,7 +170,7 @@ export const WORKLOADS = Object.freeze([
   ),
 ]);
 
-const SMOKE_WORKLOADS = Object.freeze([
+const SMOKE_WORKLOAD_BASES = Object.freeze([
   createWorkload(
     'arithmetic-loops',
     workloadSource([
@@ -275,6 +297,10 @@ const SMOKE_WORKLOADS = Object.freeze([
     9941,
   ),
 ]);
+
+const SMOKE_WORKLOADS = Object.freeze(
+  SMOKE_WORKLOAD_BASES.map((workload) => scaleWorkload(workload, 32)),
+);
 
 /** @type {Readonly<Record<string, readonly Workload[]>>} */
 const PROFILE_WORKLOADS = Object.freeze({

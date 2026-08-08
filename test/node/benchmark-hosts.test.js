@@ -1,5 +1,6 @@
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { resolveBenchmarkConfig } from '../../benchmark/config.js';
+import * as benchmarkHost from '../../benchmark/host.js';
 import { monotonicNowFrom } from '../../benchmark/host.js';
 import {
   contentTypeOf,
@@ -75,7 +76,7 @@ const tests = [
     },
   },
   {
-    name: 'node benchmark wraps stalled performance clocks monotonically',
+    name: 'node benchmark rejects cold samples from a stalled performance clock',
     async run() {
       const config = resolveBenchmarkConfig({
         profile: 'smoke',
@@ -84,20 +85,24 @@ const tests = [
         maxBatchSize: 1,
         workloads: ['arithmetic-loops'],
       });
-      const report = await runNodeBenchmark(config, {
-        generatedAt: '2026-08-07T00:00:00.000Z',
-        runId: 'node-clock-fixture',
-        now: () => 7,
-      });
+      let error;
 
-      assertSame(report.runId, 'node-clock-fixture');
+      try {
+        await runNodeBenchmark(config, {
+          generatedAt: '2026-08-07T00:00:00.000Z',
+          runId: 'node-clock-fixture',
+          now: () => 7,
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
       assertSame(
-        report.results.every((result) =>
-          [
-            ...result.lanes.native.samplesMs,
-            ...result.lanes.jsjs.samplesMs,
-          ].every((sample) => sample > 0),
-        ),
+        error instanceof RangeError &&
+          error.message.includes('node') &&
+          error.message.includes('cold') &&
+          error.message.includes('arithmetic-loops') &&
+          error.message.includes('clock'),
         true,
       );
     },
@@ -134,10 +139,18 @@ const tests = [
     run() {
       const values = [7, 7, 7];
       const now = monotonicNowFrom(() => values.shift() ?? 7);
+      const syntheticClockTicksFrom =
+        /** @type {(clock: () => number) => number} */ (
+          /** @type {any} */ (benchmarkHost).syntheticClockTicksFrom
+        );
 
+      assertSame(typeof syntheticClockTicksFrom, 'function');
       assertSame(now(), 7);
+      assertSame(syntheticClockTicksFrom(now), 0);
       assertSame(now() > 7, true);
+      assertSame(syntheticClockTicksFrom(now), 1);
       assertSame(now() > 7, true);
+      assertSame(syntheticClockTicksFrom(now), 2);
     },
   },
   {

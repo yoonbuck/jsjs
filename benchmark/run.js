@@ -1,5 +1,6 @@
 import { calibrateBatchSize } from './calibration.js';
 import { createJsjsExecutors, createNativeExecutors } from './executors.js';
+import { syntheticClockTicksFrom } from './host.js';
 import { REPORT_SCHEMA_VERSION } from './report.js';
 import { summarizeSamples } from './statistics.js';
 
@@ -93,14 +94,14 @@ export function runHostBenchmark({
         config,
         expectedChecksum: workload.expectedChecksum,
         now,
-        context: `${mode} native ${workload.name}`,
+        context: `${host} ${mode} native ${workload.name}`,
         mode,
       });
       const jsjs = sampleLane(executors.jsjs[mode], {
         config,
         expectedChecksum: workload.expectedChecksum,
         now,
-        context: `${mode} jsjs ${workload.name}`,
+        context: `${host} ${mode} jsjs ${workload.name}`,
         mode,
       });
 
@@ -200,6 +201,7 @@ function sampleLane(execute, options) {
       now: options.now,
       expectedChecksum: options.expectedChecksum,
       context: options.context,
+      requireMeasurableClock: options.mode === 'cold',
     });
   const batchSize =
     options.mode === 'cold'
@@ -239,6 +241,7 @@ function sampleLane(execute, options) {
  *   now: () => number,
  *   expectedChecksum: number,
  *   context: string,
+ *   requireMeasurableClock?: boolean,
  * }} options
  * @returns {{ elapsedMs: number, checksum: number }}
  */
@@ -250,6 +253,7 @@ export function measureBatch(execute, count, options) {
   }
 
   const startedAt = options.now();
+  const syntheticTicksAfterStart = syntheticClockTicksFrom(options.now);
   let checksum = execute();
   /** @type {{ invocation: number, checksum: number } | null} */
   let mismatch =
@@ -272,7 +276,8 @@ export function measureBatch(execute, count, options) {
     }
   }
 
-  const elapsedMs = options.now() - startedAt;
+  const finishedAt = options.now();
+  const elapsedMs = finishedAt - startedAt;
 
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
     throw new RangeError(
@@ -280,10 +285,28 @@ export function measureBatch(execute, count, options) {
     );
   }
 
+  if (
+    options.requireMeasurableClock === true &&
+    (syntheticClockTicksFrom(options.now) > syntheticTicksAfterStart ||
+      elapsedMs <= minimumMeasurableElapsedMs(startedAt))
+  ) {
+    throw new RangeError(
+      `${options.context} clock did not advance measurably for one unbatched invocation`,
+    );
+  }
+
   if (mismatch !== null) {
     throw new Error(
       `${options.context} checksum mismatch at batch invocation ${mismatch.invocation} of ${count}: expected ${options.expectedChecksum}, got ${mismatch.checksum}`,
     );
+  }
+
+  /**
+   * @param {number} startedAt
+   * @returns {number}
+   */
+  function minimumMeasurableElapsedMs(startedAt) {
+    return Math.max(1, Math.abs(startedAt)) * Number.EPSILON;
   }
 
   return {

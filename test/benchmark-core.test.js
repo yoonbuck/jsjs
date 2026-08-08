@@ -9,6 +9,7 @@ import {
   validateHostReport,
 } from '../benchmark/report.js';
 import { measureBatch, runHostBenchmark } from '../benchmark/run.js';
+import { monotonicNowFrom } from '../benchmark/host.js';
 import { PROFILES, resolveBenchmarkConfig } from '../benchmark/config.js';
 import { calibrateBatchSize } from '../benchmark/calibration.js';
 import {
@@ -316,6 +317,61 @@ const tests = [
         assertSame(error.message.includes('cold'), true);
         assertSame(error.message.includes('native'), true);
         assertSame(nativeColdCalls, badInvocation);
+      }
+    },
+  },
+  {
+    name: 'host benchmark rejects unmeasurable cold samples with host workload mode and lane context',
+    run() {
+      const rawTimes = [0, 1, 1, 1];
+      const error = assertThrows(
+        () =>
+          runHostBenchmark({
+            host: 'coarse-host',
+            version: '1',
+            now: monotonicNowFrom(() => rawTimes.shift() ?? 1),
+            engine: {
+              createExecutors() {
+                return {
+                  native: {
+                    cold() {
+                      return 326514743;
+                    },
+                    steady() {
+                      return 326514743;
+                    },
+                  },
+                  jsjs: {
+                    cold() {
+                      return 326514743;
+                    },
+                    steady() {
+                      return 326514743;
+                    },
+                  },
+                };
+              },
+            },
+            config: resolveBenchmarkConfig({
+              profile: 'smoke',
+              warmups: 1,
+              samples: 1,
+              workloads: ['arithmetic-loops'],
+            }),
+            generatedAt: '2026-08-07T00:00:00.000Z',
+            runId: 'coarse-clock-run',
+          }),
+        RangeError,
+      );
+
+      for (const fragment of [
+        'coarse-host',
+        'arithmetic-loops',
+        'cold',
+        'native',
+        'clock',
+      ]) {
+        assertSame(error.message.includes(fragment), true);
       }
     },
   },
@@ -637,6 +693,26 @@ const tests = [
       );
       assertSame(
         smoke.some((entry, index) => entry.source !== WORKLOADS[index].source),
+        true,
+      );
+    },
+  },
+  {
+    name: 'smoke profile scales work inside each checksum-preserving invocation',
+    run() {
+      const smoke = workloadsForProfile('smoke');
+
+      assertSame(
+        smoke.every((entry) =>
+          entry.source.includes('__jsjsBenchmarkRepeat < 32'),
+        ),
+        true,
+      );
+      assertSame(
+        smoke.every(
+          (entry) =>
+            Function(`return ${entry.source};`)() === entry.expectedChecksum,
+        ),
         true,
       );
     },

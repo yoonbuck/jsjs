@@ -124,8 +124,10 @@ The default profile runs seven deterministic workloads:
 - `json`
 - `regexp`
 
-The smoke profile keeps the same seven workload names but uses reduced source so
-the harness still exercises real execution paths while finishing quickly.
+The smoke profile keeps the same seven workload names but uses reduced source
+repeated 32 times inside each invocation. The wrapper returns the final
+repetition's committed checksum. This keeps cold samples unbatched while making
+one source-to-result invocation large enough for coarse Chromium and JSC clocks.
 
 Profile defaults come from `benchmark/config.js`:
 
@@ -161,8 +163,15 @@ Cold mode uses the fixed work encoded in the selected workload source. Every
 cold warmup and measured sample is exactly one invocation, so `batchSize` is
 always `1`, `samplesMs` equals `normalizedSamplesMs`, and both native and jsjs
 use symmetric one-source-to-result sample boundaries. The default sources are
-scaled for measurement; smoke sources are intentionally smaller and remain
-correctness-only.
+scaled for measurement; smoke sources use the checksum-preserving repetitions
+described above and remain correctness-only.
+
+Host clock wrappers record when they had to synthesize monotonic progress
+because the underlying clock stalled or moved backward. A cold invocation is
+accepted only when its ending clock read advances without synthesis and its
+elapsed time exceeds the floating-point clock floor. Otherwise the run fails
+with host, workload, mode, and lane context. Cold mode never responds by
+batching or amortizing multiple invocations.
 
 Steady mode calibrates each host, workload, and lane (`native` and `jsjs`)
 independently:
@@ -214,6 +223,8 @@ Checksum validation happens during:
 
 Any mismatch aborts the run with workload, mode, lane, and batch-invocation
 context. Invalid reports never replace the final `*.json` output file.
+An unmeasurable cold invocation likewise aborts rather than recording an
+epsilon-sized duration that would corrupt its median and slowdown.
 
 ## Artifact layout and schema
 
