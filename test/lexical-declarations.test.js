@@ -326,6 +326,121 @@ const tests = [
       );
     },
   },
+  {
+    name: 'a let at a sloppy function body top level is readable after its declaration',
+    run() {
+      assertNormal(run('function f() { let a = 5; return a; } f()'), 5);
+    },
+  },
+  {
+    name: 'a const at a sloppy function body top level is readable after its declaration',
+    run() {
+      assertNormal(run('function f() { const c = 42; return c; } f()'), 42);
+    },
+  },
+  {
+    name: 'reading a function-body let before its declaration throws a ReferenceError',
+    run() {
+      assertThrows('function f() { a; let a = 1; } f()', 'ReferenceError');
+    },
+  },
+  {
+    name: 'a function-body let shadows a same-named outer binding without mutating it',
+    run() {
+      assertNormal(
+        run('var x = 1; function f() { let x = 2; return x; } "" + f() + x'),
+        '21',
+      );
+    },
+  },
+  {
+    name: 'a parameter is visible to the function body alongside body lexicals',
+    run() {
+      assertNormal(run('function f(p) { let a = p + 1; return a; } f(10)'), 11);
+    },
+  },
+  {
+    name: 'a closure over a function-body const captures the body binding',
+    run() {
+      assertNormal(
+        run(
+          'function f() { const v = 7; return function () { return v; }; } f()()',
+        ),
+        7,
+      );
+    },
+  },
+  {
+    name: 'a nested function sees the outer function body lexical bindings',
+    run() {
+      assertNormal(
+        run(
+          'function f() { let a = 3; function g() { return a; } return g(); } f()',
+        ),
+        3,
+      );
+    },
+  },
+  {
+    name: 'arguments is still bound in a function with body lexical declarations',
+    run() {
+      assertNormal(
+        run('function f() { let a = 1; return arguments[0] + a; } f(9)'),
+        10,
+      );
+    },
+  },
+  {
+    name: 'a let at a strict function body top level is readable after its declaration',
+    run() {
+      assertNormal(
+        run("function f() { 'use strict'; let a = 5; return a; } f()"),
+        5,
+      );
+    },
+  },
+  {
+    name: 'reading a strict function-body let before its declaration throws a ReferenceError',
+    run() {
+      assertThrows(
+        "function f() { 'use strict'; a; let a = 1; } f()",
+        'ReferenceError',
+      );
+    },
+  },
+  {
+    name: 'a strict function-body const closure captures the body binding',
+    run() {
+      assertNormal(
+        run(
+          "function f() { 'use strict'; const v = 7; return function () { return v; }; } f()()",
+        ),
+        7,
+      );
+    },
+  },
+  {
+    name: 'a strict nested function sees the outer strict function body lexical bindings',
+    run() {
+      assertNormal(
+        run(
+          "function f() { 'use strict'; let a = 3; function g() { return a; } return g(); } f()",
+        ),
+        3,
+      );
+    },
+  },
+  {
+    name: 'arguments is still bound in a strict function with body lexical declarations',
+    run() {
+      assertNormal(
+        run(
+          "function f() { 'use strict'; let a = 1; return arguments[0] + a; } f(9)",
+        ),
+        10,
+      );
+    },
+  },
 ];
 
 export default tests;

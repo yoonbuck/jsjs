@@ -21,6 +21,7 @@ import {
   boundNames,
   isConstantDeclaration,
   topLevelLexicallyDeclaredNames,
+  topLevelLexicallyScopedDeclarations,
   topLevelVarDeclaredNames,
   topLevelVarScopedDeclarations,
 } from './static-semantics.js';
@@ -140,9 +141,16 @@ export function functionDeclarationInstantiation(
   args,
   context,
 ) {
+  // ES2015 §9.2.15: the activation bindings — parameters, `arguments`, the
+  // body's `var` names, and its top-level function declarations — all live in
+  // the *variable* environment. The nested function objects instantiated below
+  // still capture `context.env` (the body's *lexical* environment) as their
+  // `[[Scope]]` per step 33, so a sloppy function's hoisted inner function sees
+  // the body's `let`/`const`. For strict code, and everywhere else this runs,
+  // `context.env === context.variableEnv`, so this is unchanged there.
   const env =
     /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
-      context.env
+      context.variableEnv
     );
   const parameterNames = functionObject.parameterNames;
 
@@ -424,6 +432,15 @@ export function createFunctionObject(node, scope, context, options = {}) {
  * environment is the function's captured `[[Scope]]`, so closures observe
  * the environment their function was created in rather than the caller's.
  *
+ * Per ES2015 §9.2.15 the activation environment `varEnv` is the *variable*
+ * environment — `functionDeclarationInstantiation` binds the parameters,
+ * `arguments`, the body's `var` names, and its top-level function declarations
+ * there, and a direct `eval("var …")` in the body hoists there too — while the
+ * body's *lexical* environment `lexEnv` (holding its `let`/`const`) is layered
+ * over it. The body statement list evaluates with `env: lexEnv` for identifier
+ * resolution and `variableEnv: varEnv`; see the inline comments for why the
+ * strict case shares one environment.
+ *
  * @param {any} node
  * @param {EngineFunction} functionObject
  * @param {unknown} thisValue
@@ -431,18 +448,44 @@ export function createFunctionObject(node, scope, context, options = {}) {
  * @returns {{ type: string, value: unknown }}
  */
 function executeFunctionBody(node, functionObject, thisValue, args) {
-  const env = newDeclarativeEnvironment(functionObject.scope);
+  const varEnv = newDeclarativeEnvironment(functionObject.scope);
+
+  // ES2015 §9.2.15 steps 30-32: the body's lexical environment is `varEnv`
+  // itself when the function is strict, or a fresh declarative environment over
+  // it when it is not. Sharing one environment in the strict case is exactly
+  // what step 31 specifies, and it is unobservable: the early errors that would
+  // let the merge show through are raised at parse time — a formal parameter
+  // cannot be redeclared as a body `let`/`const`, and a lexically declared name
+  // cannot collide with a var-scoped one — so the two records' binding sets are
+  // disjoint and whether they live in one record or two changes no lookup.
+  const lexEnv = functionObject.strict
+    ? varEnv
+    : newDeclarativeEnvironment(varEnv);
+
   /** @type {EvaluationContext} */
   const context = {
     realm: functionObject.realm,
-    env,
-    variableEnv: env,
+    // `env` is the lexical environment so nested function declarations
+    // instantiated below capture it (§9.2.15 step 33); the activation bindings
+    // still land in `variableEnv`.
+    env: lexEnv,
+    variableEnv: varEnv,
     strict: functionObject.strict,
     thisValue,
     homeObject: functionObject.homeObject,
   };
 
   functionDeclarationInstantiation(node, functionObject, args, context);
+
+  // ES2015 §9.2.15 steps 33-34: instantiate the body's top-level
+  // lexically-scoped declarations into `lexEnv` with the same rules a block
+  // uses — `let`/`const` uninitialized (TDZ), function declarations created and
+  // initialized eagerly.
+  blockDeclarationInstantiation(
+    topLevelLexicallyScopedDeclarations(node.body.body),
+    lexEnv,
+    context,
+  );
 
   return evaluateStatementList(node.body.body, context);
 }
