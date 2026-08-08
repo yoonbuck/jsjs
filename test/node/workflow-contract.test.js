@@ -66,6 +66,7 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
   'test-browser': 'npm run test:browser',
   'test262-fixtures': 'npm run test262:fixtures',
   'test262-upstream': 'npm run test262:upstream',
+  'benchmark-smoke': 'npm run benchmark:smoke',
 });
 
 /** The exact browser install command that docs/testing.md documents. */
@@ -415,6 +416,34 @@ export default [
         true,
         'the upload publishes what the run just wrote',
       );
+    },
+  },
+  {
+    name: 'the benchmark smoke job depends on vendor and performs correctness-only validation',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, 'benchmark-smoke');
+      const commands = runCommands(job);
+
+      assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
+      assertSame(
+        usesSteps(job, 'actions/upload-artifact').length,
+        0,
+        'benchmark-smoke must not upload artifacts',
+      );
+      assertSame(
+        commands.includes('npm run benchmark:smoke'),
+        true,
+        `benchmark-smoke must run npm run benchmark:smoke, found: ${commands.join(' | ')}`,
+      );
+
+      for (const command of commands) {
+        assertSame(
+          /\b(threshold|baseline|regression)\b/i.test(command),
+          false,
+          `benchmark-smoke must stay correctness-only, found: ${command}`,
+        );
+      }
     },
   },
   {

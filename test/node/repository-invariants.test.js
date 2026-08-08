@@ -285,6 +285,7 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
 /** Reference documents that must exist under docs/ after reorganization. */
 const REFERENCE_DOCS = Object.freeze([
   'docs/architecture.md',
+  'docs/benchmarking.md',
   'docs/testing.md',
   'docs/conformance.md',
   'docs/limitations.md',
@@ -361,6 +362,44 @@ function extractNpmRunCommands(source) {
     [...normalized.matchAll(COMMAND_PATTERN)].map((m) => m[1]),
   );
   return [...seen];
+}
+
+/**
+ * Extracts the first column from a Markdown table immediately following
+ * `heading`, without interpreting other Markdown sections.
+ *
+ * @param {string} source
+ * @param {string} heading
+ * @returns {string[]}
+ */
+function markdownTableFirstColumnUnderHeading(source, heading) {
+  const lines = source.split('\n');
+  const headingIndex = lines.findIndex(
+    (line) => line.trim() === `## ${heading}`,
+  );
+
+  if (headingIndex < 0) {
+    return [];
+  }
+
+  /** @type {string[]} */
+  const sectionLines = [];
+
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (/^##\s+/.test(line)) {
+      break;
+    }
+
+    sectionLines.push(line);
+  }
+
+  return sectionLines
+    .filter((line) => /^\|/.test(line))
+    .slice(2)
+    .map((line) => line.split('|')[1]?.trim() ?? '')
+    .filter((cell) => cell.length > 0);
 }
 
 /**
@@ -996,6 +1035,7 @@ export default [
       const EXPECTED_DOC_FILES = [
         'README.md',
         'docs/architecture.md',
+        'docs/benchmarking.md',
         'docs/conformance.md',
         'docs/limitations.md',
         'docs/testing.md',
@@ -1276,6 +1316,28 @@ export default [
         readme.includes('evaluateScript'),
         true,
         'README must contain an embedding example that calls evaluateScript',
+      );
+    },
+  },
+  {
+    name: 'README command table documents every benchmark script',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const readme = await readSource('README.md');
+      const commands = markdownTableFirstColumnUnderHeading(readme, 'Commands');
+      const benchmarkCommands = Object.keys(manifest.scripts ?? {})
+        .filter(
+          (script) => script === 'benchmark' || script.startsWith('benchmark:'),
+        )
+        .map((script) => `\`npm run ${script}\``);
+      const missing = benchmarkCommands.filter(
+        (command) => !commands.includes(command),
+      );
+
+      assertSame(
+        missing.join('\n'),
+        '',
+        `README command table missing benchmark commands: ${missing.join(', ')}`,
       );
     },
   },
