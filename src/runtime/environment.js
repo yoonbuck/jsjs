@@ -17,8 +17,8 @@ import { isDataDescriptor } from './descriptors.js';
 
 /**
  * A declarative environment record holds bindings created directly by
- * declarations (`var`, function parameters, catch clauses, and future
- * `let`/`const` bindings) rather than as properties of an object.
+ * declarations (`var`, function parameters, catch clauses, and `let`/`const`
+ * lexical declarations) rather than as properties of an object.
  */
 export class DeclarativeEnvironmentRecord {
   /**
@@ -338,12 +338,12 @@ export class ObjectEnvironmentRecord {
 }
 
 /**
- * The global environment record combines a declarative record (reserved for
- * lexical global bindings) with an object environment record bound to the
- * realm's global object (`var`/function declarations). This mirrors the
- * dual-record global environment structure so future lexical global bindings
- * have a home without disturbing the object-backed var bindings ES5 relies
- * on.
+ * The global environment record combines a declarative record (holding
+ * lexical global bindings — `let`/`const` and lexical function declarations at
+ * global scope) with an object environment record bound to the realm's global
+ * object (`var`/function declarations). This mirrors the dual-record global
+ * environment structure so lexical global bindings have a home without
+ * disturbing the object-backed var bindings ES5 relies on.
  */
 export class GlobalEnvironmentRecord {
   /**
@@ -460,8 +460,8 @@ export class GlobalEnvironmentRecord {
    * @returns {void}
    */
   createGlobalFunctionBinding(name, value, deletable) {
-    // A lexical global binding (future let/const) would take precedence; ES5
-    // never creates one, but keep the delegation correct if it ever does.
+    // A lexical global binding (let/const) takes precedence; ES5 never creates
+    // one, but the delegation stays correct now that ES2015 can.
     if (this.declarativeRecord.hasBinding(name)) {
       this.declarativeRecord.setMutableBinding(name, value, false);
       return;

@@ -9,11 +9,18 @@ import {
   EngineFunction,
   createArgumentsObject,
 } from '../runtime/function-object.js';
-import { createUnsupportedNodeError } from '../runtime/errors.js';
+import {
+  createUnsupportedNodeError,
+  createUnsupportedOperationError,
+} from '../runtime/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateStatementList } from './statements.js';
 import { hasUseStrictDirective } from './directive.js';
 import {
+  annexBBlockFunctionNames,
+  boundNames,
+  isConstantDeclaration,
+  topLevelLexicallyDeclaredNames,
   topLevelVarDeclaredNames,
   topLevelVarScopedDeclarations,
 } from './static-semantics.js';
@@ -35,7 +42,7 @@ import {
  */
 
 /**
- * Performs (a deliberately ES5-only slice of) Global Declaration
+ * Performs (a deliberately ES5-shaped slice of) Global Declaration
  * Instantiation (ECMA-262 10.5 with `configurableBindings = false`): walks the
  * program body for every function and `var` declaration reachable without
  * crossing a function boundary and creates a *non-configurable* global binding
@@ -50,6 +57,15 @@ import {
  * declaration redefines a configurable colliding property and takes the value
  * of a writable+enumerable non-configurable one, and any other
  * non-configurable collision (e.g. `function undefined() {}`) throws.
+ *
+ * For non-strict scripts this also performs ES2015 Annex B.3.3.2's global slice:
+ * a block-level function declaration whose name can legally be declared as a
+ * global `var` gets an `undefined`-initialized global var binding here, and the
+ * name is recorded on `context.annexBFunctionNames` so the function's own
+ * evaluation copies its value into the global scope in source order (see
+ * `evaluateFunctionDeclaration`, `./statements.js`). Script-level `let`/`const`
+ * bindings themselves are still not instantiated — the global environment's
+ * declarative record fills in when Task 7 rewrites this function as §15.1.11.
  *
  * This must run before the program's statement list is evaluated so
  * identifier references and hoisted reads/calls see the binding even
@@ -80,6 +96,25 @@ export function globalDeclarationInstantiation(program, context) {
 
   for (const name of varNames) {
     globalEnvironment.createGlobalVarBinding(name, false);
+  }
+
+  if (!context.strict) {
+    const aliasNames = annexBBlockFunctionNames(
+      program.body,
+      new Set(topLevelLexicallyDeclaredNames(program.body)),
+    );
+    /** @type {Set<string>} */
+    const aliased = new Set();
+
+    for (const name of aliasNames) {
+      // B.3.3.2: only create the alias when the global var is declarable.
+      if (globalEnvironment.canDeclareGlobalVar(name)) {
+        globalEnvironment.createGlobalVarBinding(name, false);
+        aliased.add(name);
+      }
+    }
+
+    context.annexBFunctionNames = aliased;
   }
 }
 
@@ -150,6 +185,28 @@ export function functionDeclarationInstantiation(
       env.initializeBinding(name, undefined);
     }
   }
+
+  if (!context.strict) {
+    // ES2015 Annex B.3.3.1: a non-strict block-level function declaration also
+    // gets an `undefined`-initialized var binding in the activation
+    // environment when doing so raises no early error, so a later read of the
+    // name outside the block sees `undefined` (or the function, once the block
+    // executes and `evaluateFunctionDeclaration` copies it across). The name is
+    // recorded on the context for that copy step to consult.
+    const aliasNames = annexBBlockFunctionNames(
+      functionNode.body.body,
+      new Set(topLevelLexicallyDeclaredNames(functionNode.body.body)),
+    );
+
+    for (const name of aliasNames) {
+      if (!env.hasBinding(name)) {
+        env.createMutableBinding(name, false);
+        env.initializeBinding(name, undefined);
+      }
+    }
+
+    context.annexBFunctionNames = new Set(aliasNames);
+  }
 }
 
 /**
@@ -196,6 +253,26 @@ export function evalDeclarationInstantiation(program, context, variableEnv) {
 
   for (const name of varNames) {
     ensureEvalVarBinding(variableEnv, name);
+  }
+
+  if (!context.strict) {
+    // ES2015 Annex B.3.3.3: a non-strict eval's block-level function
+    // declarations also get a configurable var alias in the eval's variable
+    // environment. The full clause walks the environment chain rejecting a
+    // name already lexically bound between the block and `variableEnv`; that
+    // deeper check belongs with Task 8's `EvalDeclarationInstantiation`
+    // rewrite, so this creates the alias for every eligible candidate and
+    // records it for the copy step.
+    const aliasNames = annexBBlockFunctionNames(
+      program.body,
+      new Set(topLevelLexicallyDeclaredNames(program.body)),
+    );
+
+    for (const name of aliasNames) {
+      ensureEvalVarBinding(variableEnv, name);
+    }
+
+    context.annexBFunctionNames = new Set(aliasNames);
   }
 }
 
@@ -356,44 +433,120 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
 }
 
 /**
- * Executes a `var` declaration's initializers, assigning each declarator
- * with an `init` expression to its (already-hoisted) binding. A
- * `VariableDeclaration`'s own completion value is always `EMPTY`
- * (ECMA-262 12.2), so callers combining it into a statement list see the
- * previous statement's value carried forward via `updateEmpty`.
+ * Executes a `VariableDeclaration`'s initializers. A `VariableDeclaration`'s
+ * own completion value is always `EMPTY` (ECMA-262 12.2 / ES2015 §13.3.1.4),
+ * so callers combining it into a statement list see the previous statement's
+ * value carried forward via `updateEmpty`.
+ *
+ * `var` (ES5.1 §12.2.1) resolves each declarator's identifier to a Reference
+ * and `PutValue`s the initializer into the already-hoisted binding, leaving a
+ * declarator with no initializer untouched. `let`/`const` (ES2015 §13.3.1.4)
+ * instead *initialize* the binding that `blockDeclarationInstantiation` (or a
+ * later loop/function/global instantiation) already created uninitialized —
+ * `InitializeReferencedBinding`, not `PutValue`, because assigning would trip
+ * the temporal-dead-zone check on the binding's own initialization. A `let`
+ * with no initializer initializes to `undefined`; a `const` always has one
+ * (the parser enforces it).
  *
  * @param {any} node
  * @param {EvaluationContext} context
  * @returns {{ type: 'normal', value: unknown }}
  */
 export function evaluateVariableDeclaration(node, context) {
-  // Task 3 scaffold, removed by Task 4: raising the parser to ES2015 makes
-  // Acorn emit `let`/`const` `VariableDeclaration` nodes, but their evaluation
-  // (block-scoped bindings, TDZ, `const` immutability) is not implemented until
-  // Task 4. Refusing a non-`var` declaration here keeps the parser change from
-  // silently mis-evaluating a lexical declaration as a `var` in the meantime.
-  if (node.kind !== 'var') {
-    throw createUnsupportedNodeError(node);
+  if (node.kind === 'var') {
+    for (const declarator of node.declarations) {
+      if (declarator.init) {
+        // ES5.1 §12.2.1: evaluate the Identifier to a Reference *before* the
+        // Initialiser, so a `with`-bound target captured here survives a
+        // property the initializer deletes and PutValue writes back through it.
+        const reference = getIdentifierReference(
+          context.env,
+          declarator.id.name,
+          context.strict,
+        );
+        const value = isAnonymousFunctionExpression(declarator.init)
+          ? createFunctionObject(declarator.init, context.env, context, {
+              name: declarator.id.name,
+            })
+          : evaluateExpressionValue(declarator.init, context);
+        putValue(reference, value);
+      }
+    }
+
+    return createNormalCompletion(EMPTY);
   }
 
   for (const declarator of node.declarations) {
-    if (declarator.init) {
-      // ES5.1 §12.2.1: evaluate the Identifier to a Reference *before* the
-      // Initialiser, so a `with`-bound target captured here survives a
-      // property the initializer deletes and PutValue writes back through it.
-      const reference = getIdentifierReference(
-        context.env,
-        declarator.id.name,
-        context.strict,
+    const value = declarator.init
+      ? evaluateExpressionValue(declarator.init, context)
+      : undefined;
+
+    // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
+    // way `ResolveBinding` does (through the environment chain) and initialize
+    // the record that holds it, lifting the name out of its TDZ.
+    const reference = getIdentifierReference(
+      context.env,
+      declarator.id.name,
+      context.strict,
+    );
+
+    if (reference.base === undefined) {
+      // The binding should have been created uninitialized by the enclosing
+      // scope's declaration instantiation. Reaching an unresolvable reference
+      // here means the lexical declaration sits at a scope whose instantiation
+      // does not yet create lexical bindings: the top level of a function body
+      // (Task 6) or of global/eval code (Tasks 7 and 8). Block, `switch`, and
+      // `try` lexicals — this task's scope — always resolve. Fail loudly with
+      // an engine-level error rather than dereferencing `undefined`.
+      throw createUnsupportedOperationError(
+        `lexical declaration of '${declarator.id.name}' outside a block scope`,
       );
-      const value = isAnonymousFunctionExpression(declarator.init)
-        ? createFunctionObject(declarator.init, context.env, context, {
-            name: declarator.id.name,
-          })
-        : evaluateExpressionValue(declarator.init, context);
-      putValue(reference, value);
     }
+
+    const environment =
+      /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
+        reference.base
+      );
+    environment.initializeBinding(declarator.id.name, value);
   }
 
   return createNormalCompletion(EMPTY);
+}
+
+/**
+ * Performs ES2015 §13.2.14 `BlockDeclarationInstantiation` for `declarations`
+ * (the `LexicallyScopedDeclarations` of a `Block`, `switch` `CaseBlock`, or
+ * `try` part) into the block's fresh declarative environment `env`.
+ *
+ * Each bound name gets an uninitialized binding — `createImmutableBinding(name,
+ * true)` for a `const`, `createMutableBinding(name, false)` for a `let` — which
+ * is what puts a `let`/`const` in its temporal dead zone until its declarator
+ * runs. A `FunctionDeclaration` is different: it is created and initialized
+ * here, before any statement of the block executes, so a call earlier in the
+ * block still resolves it. The function object captures `env`, the *block*
+ * environment, as its `[[Scope]]` — not the enclosing one — so a closure it
+ * returns observes the block's bindings.
+ *
+ * @param {readonly any[]} declarations
+ * @param {import('../runtime/environment.js').DeclarativeEnvironmentRecord} env
+ * @param {EvaluationContext} context
+ * @returns {void}
+ */
+export function blockDeclarationInstantiation(declarations, env, context) {
+  for (const declaration of declarations) {
+    for (const name of boundNames(declaration)) {
+      if (isConstantDeclaration(declaration)) {
+        env.createImmutableBinding(name, true);
+      } else {
+        env.createMutableBinding(name, false);
+      }
+    }
+
+    if (declaration.type === 'FunctionDeclaration') {
+      env.initializeBinding(
+        declaration.id.name,
+        createFunctionObject(declaration, env, context),
+      );
+    }
+  }
 }

@@ -32,6 +32,7 @@ import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
 import switchLabels from './switch-labels.test.js';
+import lexicalDeclarations from './lexical-declarations.test.js';
 import stackOverflow from './stack-overflow.test.js';
 import updateAssignment from './update-assignment.test.js';
 import inInstanceof from './in-instanceof.test.js';
@@ -128,6 +129,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/switch-labels.test.js',
     tests: switchLabels,
+  }),
+  Object.freeze({
+    file: 'test/lexical-declarations.test.js',
+    tests: lexicalDeclarations,
   }),
   Object.freeze({
     file: 'test/stack-overflow.test.js',

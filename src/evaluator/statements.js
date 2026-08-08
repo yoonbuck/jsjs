@@ -16,10 +16,14 @@ import {
   newDeclarativeEnvironment,
   newObjectEnvironment,
 } from '../runtime/environment.js';
-import { putValue } from '../runtime/reference.js';
+import { putValue, getValue } from '../runtime/reference.js';
 import { enumerableKeysForIn, isEnumerableForIn } from '../runtime/object.js';
 import { evaluateExpression, evaluateExpressionValue } from './expressions.js';
-import { evaluateVariableDeclaration } from './declarations.js';
+import {
+  blockDeclarationInstantiation,
+  evaluateVariableDeclaration,
+} from './declarations.js';
+import { lexicallyScopedDeclarations } from './static-semantics.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
 
 /**
@@ -80,14 +84,11 @@ export function evaluateStatement(node, context, labelSet = []) {
       case 'EmptyStatement':
         return createNormalCompletion(EMPTY);
       case 'BlockStatement':
-        return evaluateStatementList(node.body, context);
+        return evaluateBlock(node, context);
       case 'VariableDeclaration':
         return evaluateVariableDeclaration(node, context);
       case 'FunctionDeclaration':
-        // Declaration instantiation already created and bound the function
-        // object before the statement list ran, so reaching the declaration
-        // in source order produces no value (ECMA-262 13).
-        return createNormalCompletion(EMPTY);
+        return evaluateFunctionDeclaration(node, context);
       case 'IfStatement':
         return evaluateIfStatement(node, context);
       case 'WhileStatement':
@@ -160,6 +161,71 @@ export function evaluateStatementList(statements, context) {
   }
 
   return result;
+}
+
+/**
+ * Evaluates a `BlockStatement` (ES2015 §13.2.13). A block that declares
+ * something lexically runs in a fresh declarative environment seeded by
+ * `blockDeclarationInstantiation`, with `variableEnv` threaded through
+ * unchanged the way `evaluateWithStatement` does — so `var`s and a direct
+ * `eval("var …")` still hoist to the enclosing function/global scope.
+ *
+ * A block with no lexical declarations skips the environment entirely: an
+ * empty declarative record over the current one is unobservable, and skipping
+ * it keeps every ES5 program — and the 22219 pinned Test262 records — on the
+ * exact path they took before block scoping existed.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Completion}
+ */
+function evaluateBlock(node, context) {
+  const declarations = lexicallyScopedDeclarations(node.body);
+
+  if (declarations.length === 0) {
+    return evaluateStatementList(node.body, context);
+  }
+
+  const blockEnv = newDeclarativeEnvironment(context.env);
+  const blockContext = { ...context, env: blockEnv };
+
+  blockDeclarationInstantiation(declarations, blockEnv, blockContext);
+
+  return evaluateStatementList(node.body, blockContext);
+}
+
+/**
+ * Evaluates a `FunctionDeclaration` reached in source order. Its binding was
+ * created before the statement list ran (var-scope instantiation for a
+ * top-level function, `blockDeclarationInstantiation` for a block-level one),
+ * so ordinarily this produces no value (ECMA-262 13 / ES2015 §14.1.20).
+ *
+ * The exception is ES2015 Annex B.3.3: when non-strict declaration
+ * instantiation gave this block-level function a var-scoped alias (its name is
+ * in `context.annexBFunctionNames`), evaluating it in source order copies the
+ * block binding's current value into the variable environment
+ * (B.3.3.1 step 1.a.iii's replacement evaluation). The `env !== variableEnv`
+ * guard restricts the copy to a genuine block context — a top-level function of
+ * the same name evaluates with `env === variableEnv` and must not self-copy.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Completion}
+ */
+function evaluateFunctionDeclaration(node, context) {
+  const aliasNames = context.annexBFunctionNames;
+
+  if (
+    aliasNames !== undefined &&
+    context.env !== context.variableEnv &&
+    aliasNames.has(node.id.name)
+  ) {
+    const name = node.id.name;
+    const value = getValue(getIdentifierReference(context.env, name, false));
+    context.variableEnv.setMutableBinding(name, value, false);
+  }
+
+  return createNormalCompletion(EMPTY);
 }
 
 /**
@@ -496,10 +562,18 @@ function runSwitchCasesFrom(
 }
 
 /**
- * Evaluates a `SwitchStatement`, implementing ECMA-262 12.11 runtime
+ * Evaluates a `SwitchStatement`, implementing ES2015 §13.12.11 runtime
  * semantics: strict-equality case matching with lazy, left-to-right test
  * evaluation, full fallthrough once a match is found, and a two-pass
  * algorithm when a `default` clause is present.
+ *
+ * The whole `CaseBlock` — every clause's `consequent` concatenated in source
+ * order — is one lexical scope: its environment is created and instantiated
+ * once, before any case test or consequent runs, so a `let`/`const` declared in
+ * one clause is in the temporal dead zone (not undeclared) when an earlier
+ * clause reads it. The discriminant, by contrast, is evaluated first, in the
+ * *outer* environment. A `CaseBlock` with no lexical declarations skips the
+ * environment, keeping ES5 switches on their existing path.
  *
  * @param {any} node
  * @param {EvaluationContext} context
@@ -509,6 +583,23 @@ function runSwitchCasesFrom(
 function evaluateSwitchStatement(node, context, labelSet) {
   const switchValue = evaluateExpressionValue(node.discriminant, context);
   const cases = /** @type {any[]} */ (node.cases);
+
+  /** @type {any[]} */
+  const caseBlockStatements = [];
+  for (const switchCase of cases) {
+    for (const statement of switchCase.consequent) {
+      caseBlockStatements.push(statement);
+    }
+  }
+
+  const declarations = lexicallyScopedDeclarations(caseBlockStatements);
+  let caseContext = context;
+
+  if (declarations.length > 0) {
+    const caseEnv = newDeclarativeEnvironment(context.env);
+    caseContext = { ...context, env: caseEnv };
+    blockDeclarationInstantiation(declarations, caseEnv, caseContext);
+  }
 
   // Find the default clause index (-1 if absent).
   let defaultIndex = -1;
@@ -525,7 +616,7 @@ function evaluateSwitchStatement(node, context, labelSet) {
   let matchIndex = -1;
 
   for (let i = 0; i < passAEnd; i += 1) {
-    const testValue = evaluateExpressionValue(cases[i].test, context);
+    const testValue = evaluateExpressionValue(cases[i].test, caseContext);
     if (strictEqualityComparison(switchValue, testValue)) {
       matchIndex = i;
       break;
@@ -533,7 +624,7 @@ function evaluateSwitchStatement(node, context, labelSet) {
   }
 
   if (matchIndex !== -1) {
-    return runSwitchCasesFrom(cases, matchIndex, context, labelSet, EMPTY);
+    return runSwitchCasesFrom(cases, matchIndex, caseContext, labelSet, EMPTY);
   }
 
   // No match in Pass A.
@@ -544,7 +635,7 @@ function evaluateSwitchStatement(node, context, labelSet) {
 
   // Pass B: scan cases after the default for a match.
   for (let i = defaultIndex + 1; i < cases.length; i += 1) {
-    const testValue = evaluateExpressionValue(cases[i].test, context);
+    const testValue = evaluateExpressionValue(cases[i].test, caseContext);
     if (strictEqualityComparison(switchValue, testValue)) {
       matchIndex = i;
       break;
@@ -553,7 +644,7 @@ function evaluateSwitchStatement(node, context, labelSet) {
 
   // Run from the matched case, or from the default if nothing matched in Pass B.
   const startIndex = matchIndex !== -1 ? matchIndex : defaultIndex;
-  return runSwitchCasesFrom(cases, startIndex, context, labelSet, EMPTY);
+  return runSwitchCasesFrom(cases, startIndex, caseContext, labelSet, EMPTY);
 }
 
 /**
@@ -642,13 +733,21 @@ function evaluateWithStatement(node, context) {
 }
 
 /**
- * Evaluates a `TryStatement` node, implementing ECMA-262 12.14 runtime
+ * Evaluates a `TryStatement` node, implementing ES2015 §13.15.8 runtime
  * semantics for all three forms: `try/catch`, `try/finally`, and
  * `try/catch/finally`.
  *
- * The catch clause gets its own declarative environment so the catch
- * parameter shadows any outer binding of the same name for the duration of
- * the catch body, then disappears.
+ * `node.block`, `node.handler.body`, and `node.finalizer` are each a `Block`,
+ * so each is evaluated through the block path (`evaluateBlock`) and gets its
+ * own lexical environment when it declares something — a `let` in the try body
+ * is not visible in the catch or finally body, and each may re-declare the same
+ * name without collision. The catch clause additionally installs its own
+ * declarative environment for the catch *parameter* (§13.15.7), which stays
+ * outside the handler `Block`'s own environment, so the parameter shadows any
+ * outer binding of the same name and then disappears. Its VariableEnvironment
+ * is unchanged (the spread keeps `context.variableEnv`), so a direct
+ * `eval("var x")` in the catch body still hoists `x` into the enclosing
+ * function or global scope rather than into the vanishing catch scope.
  *
  * Any `ThrowSignal` or `GuestErrorSignal` that escapes the try block, catch
  * body, or finally body is intercepted by `runToCompletion` and converted
@@ -662,7 +761,7 @@ function evaluateWithStatement(node, context) {
 function evaluateTryStatement(node, context) {
   // Evaluate the try block, capturing any host-level throw signals.
   let blockCompletion = runToCompletion(
-    () => evaluateStatementList(node.block.body, context),
+    () => evaluateBlock(node.block, context),
     context.realm,
   );
 
@@ -674,15 +773,10 @@ function evaluateTryStatement(node, context) {
       catchEnv.createMutableBinding(paramName);
       catchEnv.initializeBinding(paramName, blockCompletion.value);
 
-      // The catch clause installs a fresh *lexical* environment for its
-      // parameter, but the VariableEnvironment is unchanged: the spread keeps
-      // `context.variableEnv`, so a direct `eval("var x")` in the catch body
-      // hoists `x` into the enclosing function (or global), not into this
-      // catch scope that disappears when the clause exits (ECMA-262 12.14).
       const catchContext = { ...context, env: catchEnv };
 
       blockCompletion = runToCompletion(
-        () => evaluateStatementList(node.handler.body.body, catchContext),
+        () => evaluateBlock(node.handler.body, catchContext),
         context.realm,
       );
     }
@@ -691,7 +785,7 @@ function evaluateTryStatement(node, context) {
   // Run the finally block (if any), in the original environment.
   if (node.finalizer !== null) {
     const finallyCompletion = runToCompletion(
-      () => evaluateStatementList(node.finalizer.body, context),
+      () => evaluateBlock(node.finalizer, context),
       context.realm,
     );
 

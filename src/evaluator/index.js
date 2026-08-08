@@ -8,12 +8,19 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  * `env` is the LexicalEnvironment (identifier resolution) and `variableEnv`
  * is the VariableEnvironment (where `var`/function declarations hoist to).
  * ES5 keeps them equal on entering global, function, and eval code, so almost
- * everywhere `variableEnv === env`; they diverge only where a construct
- * installs a fresh *lexical* scope over an unchanged variable scope — a
- * `catch` clause today, and a `with` statement once Task 3 lands. Tracking
- * both is what lets a direct `eval("var x")` inside a `catch` hoist `x` into
- * the enclosing function (or global) variable environment rather than into the
- * catch scope that vanishes when the clause exits (ECMA-262 10.4.2 / 10.5).
+ * everywhere `variableEnv === env`; they diverge wherever a construct installs
+ * a fresh *lexical* scope over an unchanged variable scope — a `catch` clause,
+ * a `with` statement, and now every `Block`, `switch` `CaseBlock`, and `try`
+ * part that declares something lexically (ES2015 block scoping). Tracking both
+ * is what lets a direct `eval("var x")` inside such a scope hoist `x` into the
+ * enclosing function (or global) variable environment rather than into the
+ * lexical scope that vanishes when the construct exits (ECMA-262 10.4.2 / 10.5).
+ *
+ * `annexBFunctionNames`, when present, is the set of block-level function names
+ * that non-strict declaration instantiation gave a var-scoped alias (ES2015
+ * Annex B.3.3); it threads unchanged into every nested block of the same var
+ * scope so `evaluateFunctionDeclaration` can copy each function's value across
+ * in source order. It is absent in strict code and where no such alias exists.
  *
  * @typedef {{
  *   realm: import('../runtime/realm.js').Realm,
@@ -22,6 +29,7 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  *   strict: boolean,
  *   thisValue: unknown,
  *   homeObject?: import('../runtime/object.js').EngineObject | undefined,
+ *   annexBFunctionNames?: Set<string>,
  * }} EvaluationContext
  */
 

@@ -291,19 +291,16 @@ const tests = [
     },
   },
   {
-    name: 'topLevelVarScopedDeclarations still hoists a block-nested FunctionDeclaration (pre-Task-4 compatibility)',
+    name: 'topLevelVarScopedDeclarations excludes a block-nested FunctionDeclaration (ES2015 §13.2.10)',
     run() {
       const statements = body('{ function f() {} } var a;');
       const declarations = topLevelVarScopedDeclarations(statements);
 
       assertSame(
         JSON.stringify(declarations.map(tag)),
-        JSON.stringify(['FunctionDeclaration(f)', 'VariableDeclaration(a)']),
+        JSON.stringify(['VariableDeclaration(a)']),
       );
-      assertSame(
-        JSON.stringify(topLevelVarDeclaredNames(statements)),
-        '["f","a"]',
-      );
+      assertSame(JSON.stringify(topLevelVarDeclaredNames(statements)), '["a"]');
     },
   },
   {
@@ -381,7 +378,7 @@ const tests = [
       const depth = 20000;
       let node = {
         type: 'BlockStatement',
-        body: body('function deepest() {}'),
+        body: body('var deepest;'),
       };
 
       for (let i = 0; i < depth; i += 1) {
@@ -390,7 +387,7 @@ const tests = [
 
       const declarations = topLevelVarScopedDeclarations([node]);
       assertSame(declarations.length, 1);
-      assertSame(tag(declarations[0]), 'FunctionDeclaration(deepest)');
+      assertSame(tag(declarations[0]), 'VariableDeclaration(deepest)');
     },
   },
 ];

@@ -37,16 +37,16 @@
  *
  * This engine threads ES5's two environments as separate context fields —
  * `env` (LexicalEnvironment) and `variableEnv` (VariableEnvironment). They are
- * equal on entering eval code in the ordinary case, but a direct eval nested
- * in a `catch` clause (and, once Task 3 lands, a `with` statement) inherits a
- * caller whose lexical scope is the catch/with scope while its variable scope
- * is still the enclosing function or global. `performEval` therefore parses
- * and evaluates the body against the caller's LexicalEnvironment but hoists the
- * body's `var`s and function declarations into the caller's VariableEnvironment
- * (10.4.2 direct case), so a `catch`-nested `eval("var x")` creates `x` in the
- * enclosing function — where it is still visible after the clause exits —
- * rather than in the vanishing catch scope. Strict eval instead runs in a
- * single fresh declarative environment used as both, so nothing leaks
+ * equal on entering eval code in the ordinary case, but a direct eval nested in
+ * a `catch` clause, a `with` statement, or a `let`/`const`-declaring block
+ * inherits a caller whose lexical scope is that inner scope while its variable
+ * scope is still the enclosing function or global. `performEval` therefore
+ * parses and evaluates the body against the caller's LexicalEnvironment but
+ * hoists the body's `var`s and function declarations into the caller's
+ * VariableEnvironment (10.4.2 direct case), so a `catch`-nested `eval("var x")`
+ * creates `x` in the enclosing function — where it is still visible after the
+ * clause exits — rather than in the vanishing catch scope. Strict eval instead
+ * runs in a single fresh declarative environment used as both, so nothing leaks
  * (10.4.2.1).
  */
 

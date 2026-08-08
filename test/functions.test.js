@@ -26,28 +26,33 @@ const tests = [
     },
   },
   {
-    name: 'block-nested function declarations hoist eagerly, deviating from Annex B',
+    name: 'block-nested function declarations follow Annex B.3.3 in sloppy code',
     run() {
-      assertSame(run('var r = f(); { function f() { return 1; } } r;'), 1);
-      assertSame(
-        run('var r = f(); while (false) { function f() { return 2; } } r;'),
-        2,
-      );
+      // A block function is callable after its block via the var alias
+      // (Annex B.3.3.1): the alias is created `undefined` at instantiation and
+      // takes the function's value when the declaration is reached in source
+      // order.
+      assertSame(run('{ function f() { return 1; } } f();'), 1);
 
-      // Annex B leaves the binding `undefined` until the declaration is
-      // evaluated, so a real engine reports 'undefined' for both of these.
-      // The current engine binds the function during declaration
-      // instantiation regardless of whether the block ever runs; this
-      // pins that known deviation rather than endorsing it.
+      // The alias is `undefined` until the declaration executes, so a block
+      // that never runs leaves it `undefined` — the case the pre-Task-4 engine
+      // got wrong by binding eagerly.
       assertSame(
         run('if (false) { function f() { return 1; } } typeof f;'),
-        'function',
+        'undefined',
       );
       assertSame(
         run(
           'function g() { if (false) { function h() { return 2; } } return typeof h; } g();',
         ),
-        'function',
+        'undefined',
+      );
+
+      // Reading the alias before the block runs sees `undefined`, not the
+      // function object.
+      assertSame(
+        run('var r = typeof f; { function f() { return 1; } } r;'),
+        'undefined',
       );
     },
   },

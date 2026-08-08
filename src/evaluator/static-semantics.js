@@ -244,43 +244,34 @@ function classifyVarScope(node, pending) {
 }
 
 /**
- * `classify` callback for `topLevelVarScopedDeclarations`. Identical to
- * `classifyVarScope` except a `FunctionDeclaration` *is* a terminal
- * contribution here.
+ * The top-level `FunctionDeclaration` `item` designates, or `null`. A
+ * `FunctionDeclaration` is one directly, and a `LabeledStatement` chain
+ * (§13.2.8/§13.2.10 reach a `FunctionDeclaration` through `LabelledStatement`)
+ * designates the `FunctionDeclaration` it ultimately wraps, unwrapped
+ * iteratively so an arbitrarily long label chain costs no stack depth. Every
+ * other item — including a `Block`, `if`, loop, `try`, or `switch` that may
+ * *contain* a nested `FunctionDeclaration` — designates none: a nested
+ * function is lexically scoped, and its web-legacy var alias is Annex B.3.3's
+ * job (`annexBBlockFunctionNames`), not `TopLevelVarScopedDeclarations`.
  *
- * ES2015 §13.2.9/§13.2.10 only give this treatment to a `FunctionDeclaration`
- * that is a *direct* `StatementListItem` of the top-level list (or reached
- * through a chain of `LabeledStatement`s starting there) — everything else
- * falls back to the ordinary, spec-pure walk, so a `function` nested inside a
- * top-level `if`/block is lexically scoped, not var-scoped, in real ES2015.
- *
- * This engine does not implement block scoping yet (that is a later task in
- * the ES2015 lexical-declarations plan — see Task 4), so a block-scoped
- * `FunctionDeclaration` has nowhere to live except the variable scope it
- * already lives in for ES5. Rather than regress `{ function f() {} } f();`
- * (which the pre-refactor `pushHoistingChildren`/`collectFunctionDeclarations`
- * walk in `./declarations.js` hoisted to the variable scope, unconditionally,
- * at any nesting depth), this classify function deliberately keeps collecting
- * a `FunctionDeclaration` found *anywhere* the container walk reaches — not
- * only at the direct top level or through a label chain. That is a knowing
- * divergence from §13.2.9/§13.2.10, standing in for Annex B.3.3 (Block-Level
- * Function Declarations Web Legacy Compatibility Semantics) until Task 4
- * implements real block scoping and Annex B.3.3 together and removes it.
- *
- * @param {any} node
- * @param {any[]} pending
+ * @param {any} item
  * @returns {any}
  */
-function classifyVarScopeWithFunctionHoistingCompat(node, pending) {
-  if (node.type === 'VariableDeclaration') {
-    return node.kind === 'var' ? node : null;
+function topLevelFunctionDeclarationOf(item) {
+  if (item.type === 'FunctionDeclaration') {
+    return item;
   }
 
-  if (node.type === 'FunctionDeclaration') {
-    return node;
+  if (item.type === 'LabeledStatement') {
+    let body = item.body;
+
+    while (body.type === 'LabeledStatement') {
+      body = body.body;
+    }
+
+    return body.type === 'FunctionDeclaration' ? body : null;
   }
 
-  pushVarScopeContainerChildren(node, pending);
   return null;
 }
 
@@ -456,35 +447,191 @@ export function topLevelLexicallyDeclaredNames(statements) {
 
 /**
  * ES2015 §13.2.10 (`TopLevelVarScopedDeclarations`) over `statements`, a
- * `Program`/function body's `StatementList`: every `var` `VariableDeclaration`
- * *and* every `FunctionDeclaration` reachable without crossing a function
- * boundary, in source order.
+ * `Program`/function body's `StatementList`: every top-level
+ * `FunctionDeclaration` — direct, or reached through a top-level
+ * `LabeledStatement` chain — treated as var-scoped ("At the top level of a
+ * function, or script, function declarations are treated like var declarations
+ * rather than like lexical declarations", the §13.2.7 note), interleaved in
+ * source order with the ordinary `VarScopedDeclarations` of every other item
+ * (every `var` reachable without crossing a function boundary; §13.1.6 via its
+ * per-statement forms).
  *
- * Uses `classifyVarScopeWithFunctionHoistingCompat` rather than the spec-pure
- * `classifyVarScope` `varScopedDeclarations` uses — see that classify
- * function's doc comment for why: this engine has no block scoping yet, so a
- * `FunctionDeclaration` nested anywhere in a top-level block/if/loop/etc. is
- * still hoisted to the variable scope here, matching this engine's pre-Task-1
- * behavior exactly (`collectFunctionDeclarations` in `./declarations.js`, now
- * deleted) rather than real ES2015 (where only a *direct* top-level
- * `FunctionDeclaration`, or one reached through a top-level label chain, is
- * var-scoped). Task 4 replaces this with real block scoping plus Annex B.3.3
- * and removes the divergence.
+ * A `FunctionDeclaration` nested inside a block, `if`, loop, `try`, or `switch`
+ * is *not* collected here: it is lexically scoped, and its non-strict web-
+ * legacy var alias is `annexBBlockFunctionNames`' job (Annex B.3.3), not this
+ * function's. This is the real spec behavior; before block scoping existed a
+ * deliberate stand-in collected such functions here (Task 1), which Task 4
+ * replaced with `annexBBlockFunctionNames` when it implemented block scoping.
  *
  * @param {readonly any[]} statements
  * @returns {any[]}
  */
 export function topLevelVarScopedDeclarations(statements) {
-  return collectOrdered(statements, classifyVarScopeWithFunctionHoistingCompat);
+  /** @type {any[]} */
+  const results = [];
+
+  for (const item of statements) {
+    const functionDeclaration = topLevelFunctionDeclarationOf(item);
+
+    if (functionDeclaration !== null) {
+      results.push(functionDeclaration);
+      continue;
+    }
+
+    for (const declaration of varScopedDeclarations([item])) {
+      results.push(declaration);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Enqueues, onto `worklist`, every nested block-like `StatementList` reachable
+ * from `list` without crossing a function boundary or descending *through*
+ * another block first — the shallowest `Block`, `switch` `CaseBlock` (all
+ * clause consequents concatenated into the one lexical scope §13.12.11 gives
+ * them), and `try` part (each a `Block`) directly inside `list`. Non-block
+ * containers (`if`, loops, `with`, labels) are transparent: their bodies are
+ * walked for the blocks *they* contain, but a bare `FunctionDeclaration` that
+ * is their direct child — `if (x) function f(){}` — is Annex B.3.2/B.3.4
+ * territory, not B.3.3, so it is deliberately skipped. Each enqueued list
+ * carries `enclosingLexical`, the lexical names bound by every block on the
+ * path to it. The walk is an explicit worklist for the same reason the rest of
+ * this module is: it runs outside the stack guard, over parser-accepted depth.
+ *
+ * @param {readonly any[]} list
+ * @param {ReadonlySet<string>} enclosingLexical
+ * @param {{ list: readonly any[], enclosingLexical: ReadonlySet<string> }[]} worklist
+ * @returns {void}
+ */
+function pushNestedBlockLists(list, enclosingLexical, worklist) {
+  /** @type {any[]} */
+  const pending = [...list];
+
+  while (pending.length > 0) {
+    const node = pending.pop();
+
+    switch (node.type) {
+      case 'BlockStatement':
+        worklist.push({ list: node.body, enclosingLexical });
+        break;
+      case 'SwitchStatement': {
+        /** @type {any[]} */
+        const caseBlock = [];
+        for (const switchCase of node.cases) {
+          for (const statement of switchCase.consequent) {
+            caseBlock.push(statement);
+          }
+        }
+        worklist.push({ list: caseBlock, enclosingLexical });
+        break;
+      }
+      case 'TryStatement':
+        pending.push(node.block);
+        if (node.handler !== null) {
+          pending.push(node.handler.body);
+        }
+        if (node.finalizer !== null) {
+          pending.push(node.finalizer);
+        }
+        break;
+      case 'IfStatement':
+        pending.push(node.consequent);
+        if (node.alternate) {
+          pending.push(node.alternate);
+        }
+        break;
+      case 'ForStatement':
+      case 'ForInStatement':
+      case 'WhileStatement':
+      case 'DoWhileStatement':
+      case 'LabeledStatement':
+      case 'WithStatement':
+        pending.push(node.body);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+/**
+ * ES2015 Annex B.3.3 (Block-Level Function Declarations Web Legacy
+ * Compatibility Semantics): the names of `FunctionDeclaration`s directly
+ * contained in a `Block`, `switch` `CaseBlock`, or `try` part anywhere within
+ * `statements` (without crossing a function boundary) that are *eligible* for a
+ * var-scoped alias of the same name, in source order, deduplicated.
+ *
+ * `outerLexicalNames` is the set of names lexically declared at the top level
+ * of the enclosing function/script/eval scope (its
+ * `TopLevelLexicallyDeclaredNames`). A candidate `F` is eligible only when
+ * replacing its declaration with `var F` would raise no early error — i.e. `F`
+ * collides with no lexical declaration in `outerLexicalNames` nor in any block
+ * on the path from the function to `F`'s block (B.3.3.1's "would not produce any
+ * Early Errors" clause). A block's own lexical names cannot collide with a
+ * function it directly contains (the parser rejects that redeclaration), so
+ * they only matter for the *deeper* blocks they enclose, which is exactly how
+ * `enclosingLexical` accumulates them.
+ *
+ * The caller (function/global/eval declaration instantiation) creates an
+ * `undefined`-initialized var binding for each returned name where doing so is
+ * legal for that scope, and the block function's evaluation copies its value
+ * into the var scope in source order — see `evaluateFunctionDeclaration`
+ * (`./statements.js`).
+ *
+ * @param {readonly any[]} statements
+ * @param {ReadonlySet<string>} outerLexicalNames
+ * @returns {string[]}
+ */
+export function annexBBlockFunctionNames(statements, outerLexicalNames) {
+  /** @type {string[]} */
+  const names = [];
+  /** @type {Set<string>} */
+  const seen = new Set();
+  /** @type {{ list: readonly any[], enclosingLexical: ReadonlySet<string> }[]} */
+  const worklist = [];
+
+  pushNestedBlockLists(statements, outerLexicalNames, worklist);
+
+  while (worklist.length > 0) {
+    const scope =
+      /** @type {{ list: readonly any[], enclosingLexical: ReadonlySet<string> }} */ (
+        worklist.pop()
+      );
+
+    for (const declaration of lexicallyScopedDeclarations(scope.list)) {
+      if (declaration.type !== 'FunctionDeclaration') {
+        continue;
+      }
+
+      const name = declaration.id.name;
+
+      if (!scope.enclosingLexical.has(name) && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+
+    /** @type {Set<string>} */
+    const innerLexical = new Set(scope.enclosingLexical);
+    for (const name of lexicallyDeclaredNames(scope.list)) {
+      innerLexical.add(name);
+    }
+
+    pushNestedBlockLists(scope.list, innerLexical, worklist);
+  }
+
+  return names;
 }
 
 /**
  * ES2015 §13.2.9 (`TopLevelVarDeclaredNames`) over `statements` — the names
  * `topLevelVarScopedDeclarations` collects, in source order, with duplicates
- * preserved. Includes top-level (and nested-block, per the compatibility
- * note on `topLevelVarScopedDeclarations`) function declaration names
- * alongside `var` names, since ES2015 treats a top-level function declaration
- * as var-scoped.
+ * preserved. Includes top-level function declaration names alongside `var`
+ * names, since ES2015 treats a top-level function declaration as var-scoped; a
+ * function nested in a block is lexically scoped and excluded (its Annex B.3.3
+ * alias, if any, is `annexBBlockFunctionNames`' concern).
  *
  * @param {readonly any[]} statements
  * @returns {string[]}
