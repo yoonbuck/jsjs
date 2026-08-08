@@ -942,14 +942,29 @@ const tests = [
             'var own = Reflect.ownKeys(o);' +
             'var symbols = Object.getOwnPropertySymbols(o);' +
             'var loop = []; for (var key in o) { loop.push(key); }' +
+            'var descriptor = Object.getOwnPropertyDescriptor(own, "0");' +
             'own.slice(0, 5).join(",") + "|" +' +
             '(own[5] === first) + "," + (own[6] === second) + "|" +' +
             'Object.getOwnPropertyNames(o).join(",") + "|" +' +
             '(symbols[0] === first) + "," + (symbols[1] === second) + "|" +' +
             'Object.keys(o).join(",") + "|" + loop.join(",") + "|" +' +
-            'JSON.stringify(o);',
+            'JSON.stringify(o) + "|" +' +
+            'descriptor.writable + "," + descriptor.enumerable + "," +' +
+            'descriptor.configurable;',
         ),
-        '1,2,10,z,a|true,true|1,2,10,z,a|true,true|1,2,10,z,a|1,2,10,z,a|{"1":"one","2":"two","10":"ten","z":"z","a":"a"}',
+        '1,2,10,z,a|true,true|1,2,10,z,a|true,true|1,2,10,z,a|1,2,10,z,a|{"1":"one","2":"two","10":"ten","z":"z","a":"a"}|true,true,true',
+      );
+    },
+  },
+  {
+    name: 'computed super member access preserves a symbol property key',
+    run() {
+      assertSame(
+        run(
+          'var key = Symbol("key"); Object.prototype[key] = 7;' +
+            'var object = { get value() { return super[key]; } }; object.value;',
+        ),
+        7,
       );
     },
   },
