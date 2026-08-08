@@ -532,19 +532,21 @@ const tests = [
   {
     // ES5 11.4.1 step 5: deleting a non-configurable property in strict mode
     // throws a TypeError. Inside a try/catch, that TypeError must be catchable
-    // as a normal guest throw.
+    // as a normal guest throw. Use an explicitly non-configurable own property
+    // rather than f.length (which is now configurable per ES2015).
     name: 'strict try/catch: delete of non-configurable property throws catchable TypeError',
     run() {
       const realm = createRealm();
-      // f.length is non-configurable; deleting it in strict mode must throw.
+      // obj.x is explicitly non-configurable; deleting it in strict mode must throw.
       const result = runIn(
         realm,
         [
           '"use strict";',
           'var caught;',
           'try {',
-          '  function f(a, b) {}',
-          '  delete f.length;',
+          '  var obj = {};',
+          '  Object.defineProperty(obj, "x", { value: 1, configurable: false });',
+          '  delete obj.x;',
           '} catch (e) {',
           '  caught = e;',
           '}',

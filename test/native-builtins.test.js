@@ -72,7 +72,7 @@ const tests = [
       assertSame(nameDescriptor.value, 'sample');
       assertSame(nameDescriptor.writable, false);
       assertSame(nameDescriptor.enumerable, false);
-      assertSame(nameDescriptor.configurable, false);
+      assertSame(nameDescriptor.configurable, true);
 
       const lengthDescriptor = expectDefined(
         fn.getOwnProperty('length'),
@@ -81,7 +81,7 @@ const tests = [
       assertSame(lengthDescriptor.value, 2);
       assertSame(lengthDescriptor.writable, false);
       assertSame(lengthDescriptor.enumerable, false);
-      assertSame(lengthDescriptor.configurable, false);
+      assertSame(lengthDescriptor.configurable, true);
 
       assertSame(fn.getOwnProperty('prototype'), undefined);
 

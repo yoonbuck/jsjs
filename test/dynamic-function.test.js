@@ -420,7 +420,7 @@ const tests = [
   // Object shape and descriptors (13.2 via EngineFunction).
   // ---------------------------------------------------------------------------
   {
-    name: 'the length property is non-writable, non-enumerable, non-configurable',
+    name: 'the length property is non-writable, non-enumerable, configurable (ES2015)',
     run() {
       assertNormal(
         run(
@@ -428,16 +428,20 @@ const tests = [
             'var d = Object.getOwnPropertyDescriptor(f, "length");' +
             'd.value + "," + d.writable + "," + d.enumerable + "," + d.configurable;',
         ),
-        '2,false,false,false',
+        '2,false,false,true',
       );
     },
   },
   {
-    name: 'a dynamic function has no own name property (ES5.1, not ES6)',
+    name: 'a dynamic function has an own name property of "anonymous" (ES2015)',
     run() {
       assertNormal(
         run('var f = new Function("return 1;");' + 'f.hasOwnProperty("name");'),
-        false,
+        true,
+      );
+      assertNormal(
+        run('var f = new Function("return 1;");' + 'f.name;'),
+        'anonymous',
       );
     },
   },

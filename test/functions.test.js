@@ -218,7 +218,7 @@ const tests = [
       assertSame(descriptor.value, 3);
       assertSame(descriptor.writable, false);
       assertSame(descriptor.enumerable, false);
-      assertSame(descriptor.configurable, false);
+      assertSame(descriptor.configurable, true);
       assertSame(run('function g() {} g.length;'), 0);
     },
   },
