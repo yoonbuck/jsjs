@@ -167,6 +167,37 @@ const tests = [
       );
     },
   },
+  {
+    name: 'Object.setPrototypeOf changes an object\'s prototype and rejects a cycle',
+    run() {
+      assertSame(
+        run(
+          'var a = {}; var b = { x: 1 }; Object.setPrototypeOf(a, b); a.x;',
+        ),
+        1,
+      );
+      assertSame(
+        run('var a = {}; Object.setPrototypeOf(a, null); Object.getPrototypeOf(a);'),
+        null,
+      );
+      assertSame(
+        run(
+          'var a = {}; var b = {}; Object.setPrototypeOf(b, a); ' +
+            'var name; try { Object.setPrototypeOf(a, b); } catch (e) { name = e.name; } name;',
+        ),
+        'TypeError',
+      );
+    },
+  },
+  {
+    name: 'Object.is implements SameValue, distinguishing NaN and -0 from ===',
+    run() {
+      assertSame(run('Object.is(NaN, NaN);'), true);
+      assertSame(run('Object.is(0, -0);'), false);
+      assertSame(run('Object.is(1, 1);'), true);
+      assertSame(run('Object.is({}, {});'), false);
+    },
+  },
 ];
 
 export default tests;

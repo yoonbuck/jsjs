@@ -63,6 +63,43 @@ export class EngineObject {
   }
 
   /**
+   * Implements ECMA-262 9.1.2 `OrdinarySetPrototypeOf`: same-value is a
+   * trivial success, a non-null non-object candidate or a non-extensible
+   * receiver rejects, and a candidate that would introduce a cycle (walking
+   * its own prototype chain and finding `this`) rejects too. Otherwise
+   * replaces `_prototype`.
+   *
+   * @param {EngineObject | null} value
+   * @returns {boolean}
+   */
+  setPrototypeOf(value) {
+    if (value === this._prototype) {
+      return true;
+    }
+
+    if (value !== null && !(value instanceof EngineObject)) {
+      return false;
+    }
+
+    if (!this._extensible) {
+      return false;
+    }
+
+    for (
+      let current = /** @type {EngineObject | null} */ (value);
+      current !== null;
+      current = current.getPrototype()
+    ) {
+      if (current === this) {
+        return false;
+      }
+    }
+
+    this._prototype = value;
+    return true;
+  }
+
+  /**
    * Implements ECMA-262 9.1.12 `OrdinaryOwnPropertyKeys`'s key order: every
    * array-index string key first, in ascending numeric order, then every
    * other key (this engine has no symbols yet, so that is exactly the
