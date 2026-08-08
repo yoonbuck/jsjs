@@ -149,13 +149,23 @@ full host startup time.
 Each host, workload, mode, and lane (`native` and `jsjs`) is calibrated
 independently:
 
-1. Run one timed batch of size `1`.
-2. Verify the checksum and require a positive finite `elapsedMs`.
-3. Compute `ceil(targetSampleMs / initialElapsedMs)`.
-4. Clamp that batch size into `[1, maxBatchSize]`.
-5. Run one confirmation batch at the selected batch size.
-6. Run `warmups` unrecorded batches at that batch size.
-7. Run `samples` measured batches at that batch size.
+1. Run a timed probe batch, starting at size `1`.
+2. On every probe, verify the checksum and require a positive finite `elapsedMs`.
+3. If the probe is still below the measurable floor of `targetSampleMs / 8`,
+   double the timed probe batch size (capped at `maxBatchSize`) and probe again.
+   This geometric growth avoids calibrating from a coarse clock's tiny positive
+   delta.
+4. If the capped `maxBatchSize` probe still does not reach `targetSampleMs / 8`,
+   keep that already-checked max probe as the calibrated batch size and skip a
+   separate confirmation run.
+5. Otherwise, treat the first probe at or above `targetSampleMs / 8` as the
+   first measurable probe, derive the per-invocation cost as
+   `probeElapsedMs / probeBatchSize`, and choose
+   `max(probeBatchSize, ceil(targetSampleMs / perInvocationCost))`.
+6. Clamp that selected batch size into `[1, maxBatchSize]`, then run one checked
+   confirmation batch at the selected size.
+7. Run `warmups` unrecorded batches at that batch size.
+8. Run `samples` measured batches at that batch size.
 
 For each measured batch the harness stores:
 

@@ -100,7 +100,6 @@ Five suites that need a filesystem and cannot run in the browser or `jsc`:
 - `test/node/benchmark-hosts.test.js` — covers the real Node smoke host plus
   the browser/JSC host adapters' parsing, path-guard, setup-error, and
   monotonic-clock helpers.
-
 - `test/node/benchmark-summary.test.js` — validates cross-host compatibility
   checks, deterministic CSV output, and summary CLI file I/O.
 - `test/node/repository-invariants.test.js` — architecture checks: vendor

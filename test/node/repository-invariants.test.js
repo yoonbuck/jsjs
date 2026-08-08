@@ -1491,6 +1491,49 @@ export default [
     },
   },
   {
+    name: 'docs/benchmarking.md documents geometric calibration instead of the deleted one-probe formula',
+    run: async () => {
+      const source = await readSource('docs/benchmarking.md');
+      const requiredPhrases = [
+        'double the timed probe batch size',
+        '`targetSampleMs / 8`',
+        'coarse clock',
+        'per-invocation cost',
+      ];
+      const forbiddenPhrases = [
+        'Run one timed batch of size `1`.',
+        'Compute `ceil(targetSampleMs / initialElapsedMs)`.',
+      ];
+      /** @type {string[]} */
+      const missing = [];
+      /** @type {string[]} */
+      const stale = [];
+
+      for (const phrase of requiredPhrases) {
+        if (!source.includes(phrase)) {
+          missing.push(phrase);
+        }
+      }
+
+      for (const phrase of forbiddenPhrases) {
+        if (source.includes(phrase)) {
+          stale.push(phrase);
+        }
+      }
+
+      assertSame(
+        missing.join('\n'),
+        '',
+        `docs/benchmarking.md must mention geometric probing and clock granularity: ${missing.join(', ')}`,
+      );
+      assertSame(
+        stale.join('\n'),
+        '',
+        `docs/benchmarking.md still contains deleted one-probe calibration wording: ${stale.join(', ')}`,
+      );
+    },
+  },
+  {
     // Every inline-code span in current documentation that names a repository
     // source path (src/**, test/**, tools/**) must reference a file that exists.
     // This catches stale or mistyped module names in prose.
