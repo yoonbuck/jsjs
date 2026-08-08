@@ -24,7 +24,16 @@ export function createReflectIntrinsics(realm) {
       const result = new EngineArray(realm.intrinsics.arrayPrototype);
 
       for (let index = 0; index < keys.length; index += 1) {
-        result.defineOwnProperty(String(index), { value: keys[index] }, true);
+        result.defineOwnProperty(
+          String(index),
+          {
+            value: keys[index],
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          },
+          true,
+        );
       }
 
       return result;

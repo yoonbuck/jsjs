@@ -835,7 +835,7 @@ function evaluateSuperMemberExpression(node, context) {
   }
 
   const propertyKey = node.computed
-    ? toString(evaluateExpressionValue(node.property, context))
+    ? toPropertyKey(evaluateExpressionValue(node.property, context))
     : node.property.name;
 
   return new Reference(
