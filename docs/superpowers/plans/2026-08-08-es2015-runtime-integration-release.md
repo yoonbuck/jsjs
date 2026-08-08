@@ -24,6 +24,7 @@
 ### Task 1: Establish the Integrated Baseline
 
 **Files:**
+
 - Inspect: `package.json`
 - Inspect: `test/suites.js`
 - Inspect: `test/ci/full-contract.test.js`
@@ -32,6 +33,7 @@
 - Inspect: `docs/conformance.md`
 
 **Interfaces:**
+
 - Consumes: repository scripts in `package.json`
 - Produces: a recorded clean baseline or an exact failing command for Task 2 or Task 3
 
@@ -84,6 +86,7 @@ For each failure, retain the command, test name, actual value, expected value, a
 ### Task 2: Add Cross-Subsystem Portable Regressions
 
 **Files:**
+
 - Create: `test/es2015-runtime-integration.test.js`
 - Modify: `test/suites.js`
 - Modify only if a regression fails: `src/runtime/realm.js`
@@ -97,6 +100,7 @@ For each failure, retain the command, test name, actual value, expected value, a
 - Modify only if a regression fails: `src/evaluator/statements.js`
 
 **Interfaces:**
+
 - Consumes: `createAgent(): Agent`, `createRealm({ agent? }): Realm`, `evaluateScript(realm, source): Completion`
 - Produces: a portable `TestCase[]` suite registered once in `PORTABLE_SUITES`
 
@@ -125,13 +129,28 @@ Add cases proving:
 const agent = createAgent();
 const first = createRealm({ agent });
 const second = createRealm({ agent });
-assertSame(first.intrinsics.symbolConstructor === second.intrinsics.symbolConstructor, false);
-assertSame(val(first, 'Symbol.iterator') === val(second, 'Symbol.iterator'), true);
-assertSame(val(first, 'Symbol.for("shared")') === val(second, 'Symbol.for("shared")'), true);
+assertSame(
+  first.intrinsics.symbolConstructor === second.intrinsics.symbolConstructor,
+  false,
+);
+assertSame(
+  val(first, 'Symbol.iterator') === val(second, 'Symbol.iterator'),
+  true,
+);
+assertSame(
+  val(first, 'Symbol.for("shared")') === val(second, 'Symbol.for("shared")'),
+  true,
+);
 
 const other = createRealm({ agent: createAgent() });
-assertSame(val(first, 'Symbol.iterator') === val(other, 'Symbol.iterator'), false);
-assertSame(val(first, 'Symbol.for("shared")') === val(other, 'Symbol.for("shared")'), false);
+assertSame(
+  val(first, 'Symbol.iterator') === val(other, 'Symbol.iterator'),
+  false,
+);
+assertSame(
+  val(first, 'Symbol.for("shared")') === val(other, 'Symbol.for("shared")'),
+  false,
+);
 ```
 
 - [ ] **Step 2: Add mixed own-key, function metadata, and `super` tests**
@@ -139,12 +158,20 @@ assertSame(val(first, 'Symbol.for("shared")') === val(other, 'Symbol.for("shared
 Add guest assertions for:
 
 ```js
-var s1 = Symbol("s1"), s2 = Symbol("s2");
+var s1 = Symbol('s1'),
+  s2 = Symbol('s2');
 var o = {};
-o.z = 1; o[s1] = 2; o[2] = 3; o.a = 4; o[s2] = 5; o[1] = 6;
-Reflect.ownKeys(o).map(function (k) {
-  return typeof k === "symbol" ? k.toString() : k;
-}).join(",");
+o.z = 1;
+o[s1] = 2;
+o[2] = 3;
+o.a = 4;
+o[s2] = 5;
+o[1] = 6;
+Reflect.ownKeys(o)
+  .map(function (k) {
+    return typeof k === 'symbol' ? k.toString() : k;
+  })
+  .join(',');
 ```
 
 Expected: `"1,2,z,a,Symbol(s1),Symbol(s2)"`. Also assert
@@ -155,10 +182,10 @@ Add an accessor method inherited through a prototype, call its getter and setter
 through `super`, and assert that:
 
 ```js
-Object.getOwnPropertyDescriptor(child, "value").get.name === "get value"
-Object.getOwnPropertyDescriptor(child, "value").get.length === 0
-Object.getOwnPropertyDescriptor(child, "value").set.name === "set value"
-Object.getOwnPropertyDescriptor(child, "value").set.length === 1
+Object.getOwnPropertyDescriptor(child, 'value').get.name === 'get value';
+Object.getOwnPropertyDescriptor(child, 'value').get.length === 0;
+Object.getOwnPropertyDescriptor(child, 'value').set.name === 'set value';
+Object.getOwnPropertyDescriptor(child, 'value').set.length === 1;
 ```
 
 The script must verify that the inherited setter receives the child as `this`,
@@ -171,17 +198,24 @@ Add cases proving all of the following in end-to-end guest code:
 ```js
 var closures = [];
 for (let x of [1, 2, 3]) {
-  closures.push(function () { return x; });
+  closures.push(function () {
+    return x;
+  });
 }
-closures[0]() + "," + closures[1]() + "," + closures[2]();
+closures[0]() + ',' + closures[1]() + ',' + closures[2]();
 ```
 
 Expected: `"1,2,3"`.
 
 ```js
-var x = "outer";
+var x = 'outer';
 var message;
-try { for (let x of x) {} } catch (e) { message = e.name + ":" + e.message; }
+try {
+  for (let x of x) {
+  }
+} catch (e) {
+  message = e.name + ':' + e.message;
+}
 message;
 ```
 
@@ -241,6 +275,7 @@ git commit -m "test: cover ES2015 runtime integration boundaries" \
 ### Task 3: Audit Test262 Claims and UTC Generation
 
 **Files:**
+
 - Modify if required: `tools/test262/es5-selection.json`
 - Modify if required: `tools/test262/features.json`
 - Modify if required: `tools/test262/es5-selection.js`
@@ -253,6 +288,7 @@ git commit -m "test: cover ES2015 runtime integration boundaries" \
 - Test: `test/ci/es2015-object-function-test262.test.js`
 
 **Interfaces:**
+
 - Consumes: `featureAreas`, feature probes, supported-grammar filtering, classified exclusions
 - Produces: deterministic selected paths, report records, and generated coverage documentation
 
@@ -319,10 +355,12 @@ git diff --cached --quiet || git commit -m "test262: integrate ES2015 runtime co
 ### Task 4: Run the Complete Cross-Host Release Matrix
 
 **Files:**
+
 - No source changes expected
 - Generated local output ignored under: `.benchmark-results/`
 
 **Interfaces:**
+
 - Consumes: portable suite registry and pinned Test262 artifacts from Tasks 2-3
 - Produces: complete Node, Chromium, JSC, CI, and benchmark evidence
 
@@ -382,10 +420,12 @@ Expected: no uncommitted tracked changes.
 ### Task 5: Perform Independent High-Capability Review
 
 **Files:**
+
 - Review: all changes from `origin/main...HEAD`
 - Modify only for accepted findings: files named by the finding
 
 **Interfaces:**
+
 - Consumes: committed integration diff and release evidence
 - Produces: zero unresolved high-confidence correctness findings
 
@@ -427,12 +467,14 @@ git diff --cached --quiet || git commit -m "fix: resolve ES2015 integration revi
 ### Task 6: Publish Release Proof and Close the Milestone
 
 **Files:**
+
 - Update only if release evidence belongs in tracked docs: `docs/conformance.md`
 - Update only if behavior changed: `docs/architecture.md`
 - Update only if a limitation changed: `docs/limitations.md`
 - Update only if commands/contracts changed: `docs/testing.md`
 
 **Interfaces:**
+
 - Consumes: passing Task 4 matrix and clean Task 5 review
 - Produces: pushed branch/PR when needed, issue comments with proof, closed #45 and #26
 
