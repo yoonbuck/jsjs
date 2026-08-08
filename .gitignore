@@ -1,4 +1,5 @@
 node_modules/
 /vendor/
 /.superpowers/
+# Generated benchmark reports and raw CPU/allocation profiling evidence.
 /.benchmark-results/

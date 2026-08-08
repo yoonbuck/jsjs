@@ -57,6 +57,29 @@ Host-specific scripts already pass `--host`, and `benchmark:smoke` already passe
 `--host=node --profile=smoke --output=.benchmark-results/smoke`, so do not add a
 second `--host` to those wrappers.
 
+## Interpreter profiling
+
+The Node and Chromium profiler CLI captures CPU and sampled-allocation profiles
+of jsjs workloads:
+
+```sh
+node benchmark/profile/cli.js \
+  --host=node \
+  --workload=arithmetic-loops \
+  --mode=steady \
+  --metric=cpu \
+  --metric=allocation \
+  --warmups=1 \
+  --iterations=1 \
+  --output=.benchmark-results/profiles
+```
+
+See [profiling.md](profiling.md) for the reproducible evidence run, its
+checksum-correlation method, and how to interpret cold versus steady captures.
+Raw `.cpuprofile`, `.heapprofile`, sidecar, and benchmark-report artifacts under
+`.benchmark-results/` are ignored local evidence, not committed baselines or
+performance thresholds.
+
 ## Direct CLI
 
 ### `run`

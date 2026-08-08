@@ -25,7 +25,9 @@ npm install
 This populates `vendor/` through the `prepare` script. For browser and JSC
 prerequisites (Playwright, `jsc` on PATH), see [docs/testing.md](docs/testing.md).
 For benchmark-specific setup, CLI options, artifact schemas, and caveats, see
-[docs/benchmarking.md](docs/benchmarking.md).
+[docs/benchmarking.md](docs/benchmarking.md). For reproducible interpreter
+profiling evidence, hotspot rankings, and limitations, see
+[docs/profiling.md](docs/profiling.md).
 
 ## Usage
 

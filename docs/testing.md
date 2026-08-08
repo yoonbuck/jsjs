@@ -58,6 +58,9 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run benchmark:jsc`             | Run only the `jsc` host benchmark and write `jsc.json` under the default ignored benchmark output directory                                              |
 | `npm run benchmark:smoke`           | Run the smoke profile under Node and write a seven-workload validated report to `.benchmark-results/smoke/node.json`                                     |
 | `npm run benchmark:summary`         | Reject mixed/stale host runs, then atomically write deterministic `summary.json` plus metadata-bearing `summary.csv`                                     |
+| `npm run profile:node`              | Invoke the Node CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                        |
+| `npm run profile:browser`           | Invoke the Chromium CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                    |
+| `npm run profile:smoke`             | Capture a checked one-iteration Node CPU profile of steady `arithmetic-loops` to `.benchmark-results/profile-smoke`                                      |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
 | `npm run format`                    | Prettier `--check` over the entire repository                                                                                                            |
