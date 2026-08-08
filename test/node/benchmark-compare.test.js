@@ -17,11 +17,15 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { main, parseBenchmarkArguments } from '../../benchmark/cli.js';
 import { validateHostReport } from '../../benchmark/report.js';
-import { summarizeSamples } from '../../benchmark/statistics.js';
+import {
+  exactSignTestPValue,
+  summarizeSamples,
+} from '../../benchmark/statistics.js';
 import {
   COMPARISON_SCHEMA_VERSION,
   COMPARISON_MANIFEST_SCHEMA_VERSION,
   MINIMUM_NONZERO_PAIRS_FOR_EXACT_SIGNIFICANCE,
+  compareManifestFile,
 } from '../../benchmark/compare.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
@@ -131,6 +135,82 @@ const tests = [
     },
   },
   {
+    name: 'benchmark statistics preserves representable exact sign-test tail probabilities',
+    run() {
+      assertSame(exactSignTestPValue(54, 0), 2 ** -53);
+    },
+  },
+  {
+    name: 'benchmark compare keeps its artifacts out of manifests and capture roots',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-output-protection`;
+      const pairs = await writeCapturePairs(directory, {
+        hosts: ['node'],
+        rounds: 2,
+        baselineMedian: (cell) => BASE_MEDIANS[cell],
+        candidateMedian: (cell) => BASE_MEDIANS[cell] * 0.9,
+      });
+
+      try {
+        await runCompare(directory, {
+          targets: [{ workload: 'arrays' }],
+          pairs,
+        });
+        const manifestPath = `${directory}/manifest.json`;
+        const manifestContents = await readFile(
+          new URL(manifestPath, REPOSITORY_ROOT_URL),
+          'utf8',
+        );
+
+        await expectComparisonOutputFailure(
+          manifestPath,
+          `${directory}/manifest`,
+          'overwrite manifest',
+        );
+        assertSame(
+          await readFile(new URL(manifestPath, REPOSITORY_ROOT_URL), 'utf8'),
+          manifestContents,
+        );
+
+        const markdownManifestPath = `${directory}/manifest.md`;
+        await writeFile(
+          new URL(markdownManifestPath, REPOSITORY_ROOT_URL),
+          manifestContents,
+          'utf8',
+        );
+        const markdownManifestContents = manifestContents;
+
+        await expectComparisonOutputFailure(
+          markdownManifestPath,
+          `${directory}/manifest`,
+          'overwrite manifest',
+        );
+        assertSame(
+          await readFile(
+            new URL(markdownManifestPath, REPOSITORY_ROOT_URL),
+            'utf8',
+          ),
+          markdownManifestContents,
+        );
+        await expectComparisonOutputFailure(
+          manifestPath,
+          `${directory}/baseline-1/comparison`,
+          'capture root',
+        );
+        await expectComparisonOutputFailure(
+          manifestPath,
+          `${directory}/candidate-1/artifacts/comparison`,
+          'descendant',
+        );
+      } finally {
+        await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+          recursive: true,
+          force: true,
+        });
+      }
+    },
+  },
+  {
     name: 'benchmark compare keeps an identical-engine control with one candidate spike within noise',
     async run() {
       // Six counterbalanced pairs. Both revisions share every round's drift
@@ -143,6 +223,8 @@ const tests = [
       const pairs = await writeCapturePairs(directory, {
         hosts: ['node'],
         rounds: drift.length,
+        baselineCommit: BASE_COMMIT,
+        candidateCommit: BASE_COMMIT,
         baselineMedian: (cell, round) => BASE_MEDIANS[cell] * drift[round],
         candidateMedian: (cell, round) =>
           BASE_MEDIANS[cell] *
@@ -154,8 +236,14 @@ const tests = [
         targets: [{ workload: 'object-properties' }, { workload: 'arrays' }],
         pairs,
       });
+      const repeatedComparison = await runCompare(directory, {
+        targets: [{ workload: 'object-properties' }, { workload: 'arrays' }],
+        pairs,
+      });
 
       assertSame(comparison.schemaVersion, COMPARISON_SCHEMA_VERSION);
+      assertSame(comparison.audit.baselineCommit, BASE_COMMIT);
+      assertSame(comparison.audit.candidateCommit, BASE_COMMIT);
       assertSame(
         comparison.cells.filter((cell) => cell.verdict === 'regression').length,
         0,
@@ -188,9 +276,30 @@ const tests = [
       assertClose(spiked.runs[1].candidateMedianMs, 20 * 1.1 * 1.15, 1e-9);
 
       assertSame(comparison.acceptance.nonTargetRegressionCount, 0);
+      assertSame(comparison.acceptance.targetVerdictsImprove, false);
+      assertSame(comparison.acceptance.targetsMateriallyExceedNoise, false);
       assertSame(comparison.acceptance.gateReady, true);
-      assertSame(comparison.acceptance.accepted, true);
-      assertSame(comparison.warnings.length, 0);
+      assertSame(comparison.acceptance.accepted, false);
+      assertSame(
+        comparison.warnings.some((warning) =>
+          warning.includes('control comparison'),
+        ),
+        true,
+      );
+      assertSame(
+        JSON.stringify(
+          comparison.cells.map((cell) => [
+            cell.ci95LowLogRatio,
+            cell.ci95HighLogRatio,
+          ]),
+        ),
+        JSON.stringify(
+          repeatedComparison.cells.map((cell) => [
+            cell.ci95LowLogRatio,
+            cell.ci95HighLogRatio,
+          ]),
+        ),
+      );
 
       await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
         recursive: true,
@@ -261,6 +370,57 @@ const tests = [
             String(MINIMUM_NONZERO_PAIRS_FOR_EXACT_SIGNIFICANCE),
           ),
         ),
+        true,
+      );
+
+      await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+        recursive: true,
+        force: true,
+      });
+    },
+  },
+  {
+    name: 'benchmark compare measures reciprocal effects against the noise envelope in log space',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-swap-symmetry`;
+      const forwardDirectory = `${directory}/forward`;
+      const reverseDirectory = `${directory}/reverse`;
+      const variation = [1, 1, 1, 1, 1, 1.1];
+      const effect = 1.105;
+      const forwardPairs = await writeCapturePairs(forwardDirectory, {
+        hosts: ['node'],
+        rounds: variation.length,
+        baselineMedian: (cell, round) => BASE_MEDIANS[cell] * variation[round],
+        candidateMedian: (cell, round) =>
+          BASE_MEDIANS[cell] * variation[round] * effect,
+      });
+      const reversePairs = await writeCapturePairs(reverseDirectory, {
+        hosts: ['node'],
+        rounds: variation.length,
+        baselineMedian: (cell, round) =>
+          BASE_MEDIANS[cell] * variation[round] * effect,
+        candidateMedian: (cell, round) => BASE_MEDIANS[cell] * variation[round],
+      });
+      const forward = await runCompare(forwardDirectory, {
+        targets: [{ workload: 'arrays' }],
+        pairs: forwardPairs,
+      });
+      const reverse = await runCompare(reverseDirectory, {
+        targets: [{ workload: 'arrays' }],
+        pairs: reversePairs,
+      });
+      const forwardCell = cellOf(forward, 'node', 'arrays', 'cold');
+      const reverseCell = cellOf(reverse, 'node', 'arrays', 'cold');
+
+      assertSame(forwardCell.criteria.exceedsNoiseEnvelope, true);
+      assertSame(reverseCell.criteria.exceedsNoiseEnvelope, true);
+      assertClose(forwardCell.pointLogRatio, Math.log(effect), 1e-12);
+      assertClose(reverseCell.pointLogRatio, -Math.log(effect), 1e-12);
+      assertClose(forwardCell.noiseEnvelopeLogRatio, Math.log(1.1), 1e-12);
+      assertClose(reverseCell.noiseEnvelopeLogRatio, Math.log(1.1), 1e-12);
+      assertSame(
+        Math.abs(reverseCell.pointEstimatePercent) <
+          forwardCell.noiseEnvelopePercent,
         true,
       );
 
@@ -496,6 +656,243 @@ const tests = [
     },
   },
   {
+    name: 'benchmark compare does not accept a positive all-host aggregate',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-positive-all-host`;
+      const targetLogRatio = Math.log(0.7);
+      /** @type {Record<string, readonly number[]>} */
+      const hostAggregateLogRatios = {
+        node: [-1, -0.05, -0.05, 0.04, 1, 1],
+        chromium: [1.001, 0.1, 0.08, -0.1, -0.999, -0.999],
+      };
+      const pairs = await writeCapturePairs(directory, {
+        hosts: ['node', 'chromium'],
+        rounds: 6,
+        baselineMedian: (cell) => BASE_MEDIANS[cell],
+        candidateMedian: (cell, round, host) => {
+          const logRatio = cell.startsWith('arrays:')
+            ? targetLogRatio
+            : (6 * hostAggregateLogRatios[host][round] - 2 * targetLogRatio) /
+              4;
+
+          return BASE_MEDIANS[cell] * Math.exp(logRatio);
+        },
+      });
+      const comparison = await runCompare(directory, {
+        targets: [{ workload: 'arrays' }],
+        pairs,
+      });
+
+      assertSame(comparison.acceptance.nonTargetRegressionCount, 0);
+      assertSame(
+        comparison.acceptance.allHostGeomeanPointEstimatesImprove,
+        true,
+      );
+      assertSame(
+        comparison.acceptance.allHostGeomeanVerdictsImproveOrWithinNoise,
+        true,
+      );
+      assertSame(comparison.acceptance.allHostAggregateImproves, false);
+      assertSame(comparison.allHostAggregate.pointEstimatePercent > 0, true);
+      assertSame(comparison.acceptance.targetVerdictsImprove, true);
+      assertSame(comparison.acceptance.targetsMateriallyExceedNoise, true);
+      assertSame(comparison.acceptance.gateReady, true);
+      assertSame(comparison.acceptance.accepted, false);
+
+      await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+        recursive: true,
+        force: true,
+      });
+    },
+  },
+  {
+    name: 'benchmark compare does not accept a materially regressing target',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-regressing-target`;
+      const drift = [1.0, 1.02, 0.99, 1.03, 0.98, 1.01];
+      /** @type {Record<string, number>} */
+      const ratios = {
+        'object-properties:cold': 0.7,
+        'object-properties:steady': 0.7,
+        'arrays:cold': 1.12,
+        'arrays:steady': 1.12,
+        'arithmetic-loops:cold': 0.7,
+        'arithmetic-loops:steady': 0.7,
+      };
+      const pairs = await writeCapturePairs(directory, {
+        hosts: ['node'],
+        rounds: drift.length,
+        baselineMedian: (cell, round) => BASE_MEDIANS[cell] * drift[round],
+        candidateMedian: (cell, round) =>
+          BASE_MEDIANS[cell] * drift[round] * ratios[cell],
+      });
+      const comparison = await runCompare(directory, {
+        targets: [{ workload: 'arrays' }],
+        pairs,
+      });
+
+      assertSame(comparison.acceptance.nonTargetRegressionCount, 0);
+      assertSame(
+        comparison.acceptance.allHostGeomeanPointEstimatesImprove,
+        true,
+      );
+      assertSame(
+        comparison.acceptance.allHostGeomeanVerdictsImproveOrWithinNoise,
+        true,
+      );
+      assertSame(comparison.acceptance.allHostAggregateImproves, true);
+      assertSame(comparison.acceptance.targetVerdictsImprove, false);
+      assertSame(comparison.acceptance.targetsMateriallyExceedNoise, true);
+      assertSame(comparison.acceptance.gateReady, true);
+      assertSame(comparison.acceptance.accepted, false);
+
+      await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+        recursive: true,
+        force: true,
+      });
+    },
+  },
+  {
+    name: 'benchmark compare does not accept an immaterial target',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-immaterial-target`;
+      const drift = [1.0, 1.02, 0.99, 1.03, 0.98, 1.01];
+      /** @type {Record<string, number>} */
+      const ratios = {
+        'object-properties:cold': 0.8,
+        'object-properties:steady': 0.8,
+        'arrays:cold': 1.004,
+        'arrays:steady': 1.004,
+        'arithmetic-loops:cold': 0.8,
+        'arithmetic-loops:steady': 0.8,
+      };
+      const pairs = await writeCapturePairs(directory, {
+        hosts: ['node'],
+        rounds: drift.length,
+        baselineMedian: (cell, round) => BASE_MEDIANS[cell] * drift[round],
+        candidateMedian: (cell, round) =>
+          BASE_MEDIANS[cell] * drift[round] * ratios[cell],
+      });
+      const comparison = await runCompare(directory, {
+        targets: [{ workload: 'arrays' }],
+        pairs,
+      });
+
+      assertSame(comparison.acceptance.nonTargetRegressionCount, 0);
+      assertSame(
+        comparison.acceptance.allHostGeomeanPointEstimatesImprove,
+        true,
+      );
+      assertSame(
+        comparison.acceptance.allHostGeomeanVerdictsImproveOrWithinNoise,
+        true,
+      );
+      assertSame(comparison.acceptance.allHostAggregateImproves, true);
+      assertSame(comparison.acceptance.targetVerdictsImprove, false);
+      assertSame(comparison.acceptance.targetsMateriallyExceedNoise, false);
+      assertSame(comparison.acceptance.gateReady, true);
+      assertSame(comparison.acceptance.accepted, false);
+
+      await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+        recursive: true,
+        force: true,
+      });
+    },
+  },
+  {
+    name: 'benchmark compare rejects capture timestamps that contradict the declared order',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-timestamp-order`;
+      const pairs = await writeCapturePairs(directory, {
+        hosts: ['node'],
+        rounds: 2,
+        baselineMedian: (cell) => BASE_MEDIANS[cell],
+        candidateMedian: (cell) => BASE_MEDIANS[cell] * 0.9,
+      });
+
+      try {
+        await expectCompareFailure(
+          directory,
+          pairs,
+          'Capture order',
+          `${directory}/candidate-1/node.json`,
+          (report) => ({
+            ...report,
+            generatedAt: '2026-08-07T23:59:00.000Z',
+          }),
+        );
+        await expectCompareFailure(
+          directory,
+          pairs,
+          'invalid generatedAt',
+          `${directory}/candidate-1/node.json`,
+          (report) => ({ ...report, generatedAt: 'not-a-timestamp' }),
+        );
+        await expectCompareFailure(
+          directory,
+          pairs,
+          'invalid generatedAt',
+          `${directory}/candidate-1/node.json`,
+          (report) => ({
+            ...report,
+            generatedAt: '2026-02-30T00:00:00.000Z',
+          }),
+        );
+        await expectCompareFailure(
+          directory,
+          pairs,
+          'timestamps must differ',
+          `${directory}/candidate-1/node.json`,
+          (report) => ({
+            ...report,
+            generatedAt: '2026-08-08T00:00:00.000Z',
+          }),
+        );
+      } finally {
+        await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+          recursive: true,
+          force: true,
+        });
+      }
+    },
+  },
+  {
+    name: 'benchmark compare requires capture orders to remain within one pair of each other',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-skewed-orders`;
+      const pairs = await writeCapturePairs(directory, {
+        hosts: ['node'],
+        rounds: 6,
+        orders: [
+          'baseline-candidate',
+          'baseline-candidate',
+          'baseline-candidate',
+          'baseline-candidate',
+          'baseline-candidate',
+          'candidate-baseline',
+        ],
+        baselineMedian: (cell) => BASE_MEDIANS[cell],
+        candidateMedian: (cell) => BASE_MEDIANS[cell] * 0.9,
+      });
+      const comparison = await runCompare(directory, {
+        targets: [{ workload: 'arrays' }],
+        pairs,
+      });
+
+      assertSame(comparison.audit.counterbalanced, false);
+      assertSame(comparison.acceptance.gateReady, false);
+      assertSame(
+        comparison.warnings.some((warning) => warning.includes('within one')),
+        true,
+      );
+
+      await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+        recursive: true,
+        force: true,
+      });
+    },
+  },
+  {
     name: 'benchmark compare rejects checksum source config and pairing mismatches across capture roots',
     async run() {
       const directory = `${COMPARE_DIRECTORY}-mismatch`;
@@ -589,12 +986,17 @@ const tests = [
 
       // A single capture order is a design failure, not a data failure: it
       // must warn and refuse gate readiness rather than throw.
-      const singleOrder = await runCompare(directory, {
+      const singleOrderDirectory = `${directory}-single-order`;
+      const singleOrderPairs = await writeCapturePairs(singleOrderDirectory, {
+        hosts: ['node'],
+        rounds: 2,
+        orders: ['baseline-candidate', 'baseline-candidate'],
+        baselineMedian,
+        candidateMedian: (cell, round) => baselineMedian(cell, round) * 0.9,
+      });
+      const singleOrder = await runCompare(singleOrderDirectory, {
         targets: [{ workload: 'arrays' }],
-        pairs: pairs.map((pair) => ({
-          ...pair,
-          order: /** @type {'baseline-candidate'} */ ('baseline-candidate'),
-        })),
+        pairs: singleOrderPairs,
       });
       assertSame(singleOrder.acceptance.gateReady, false);
       assertSame(
@@ -649,6 +1051,10 @@ const tests = [
         recursive: true,
         force: true,
       });
+      await rm(new URL(`${singleOrderDirectory}/`, REPOSITORY_ROOT_URL), {
+        recursive: true,
+        force: true,
+      });
     },
   },
 ];
@@ -659,6 +1065,8 @@ const tests = [
  *   hosts: readonly string[],
  *   rounds: number,
  *   orders?: readonly ('baseline-candidate' | 'candidate-baseline')[],
+ *   baselineCommit?: string,
+ *   candidateCommit?: string,
  *   baselineMedian: (cell: string, round: number, host: string) => number,
  *   candidateMedian: (cell: string, round: number, host: string) => number,
  * }} options
@@ -678,10 +1086,20 @@ async function writeCapturePairs(directory, options) {
       options.orders?.[round] ??
       (round % 2 === 0 ? 'baseline-candidate' : 'candidate-baseline');
 
-    for (const side of /** @type {const} */ (['baseline', 'candidate'])) {
+    const captureOrder =
+      order === 'baseline-candidate'
+        ? /** @type {const} */ (['baseline', 'candidate'])
+        : /** @type {const} */ (['candidate', 'baseline']);
+
+    for (
+      let captureIndex = 0;
+      captureIndex < captureOrder.length;
+      captureIndex += 1
+    ) {
+      const side = captureOrder[captureIndex];
       const root = `${directory}/${side}-${round + 1}`;
       const generatedAt = new Date(
-        Date.UTC(2026, 7, 8, 0, round * 2 + (side === 'baseline' ? 0 : 1)),
+        Date.UTC(2026, 7, 8, 0, round * 2 + captureIndex),
       ).toISOString();
 
       await mkdir(new URL(`${root}/`, REPOSITORY_ROOT_URL), {
@@ -697,7 +1115,10 @@ async function writeCapturePairs(directory, options) {
           host,
           runId: `${side}-${round + 1}`,
           generatedAt,
-          gitCommit: side === 'baseline' ? BASE_COMMIT : CANDIDATE_COMMIT,
+          gitCommit:
+            side === 'baseline'
+              ? (options.baselineCommit ?? BASE_COMMIT)
+              : (options.candidateCommit ?? CANDIDATE_COMMIT),
           cells: Object.keys(BASE_MEDIANS).map((cell) => ({
             workload: cell.slice(0, cell.indexOf(':')),
             mode: /** @type {Mode} */ (cell.slice(cell.indexOf(':') + 1)),
@@ -860,6 +1281,39 @@ async function runCompare(directory, manifest) {
       `--manifest=${manifestPath}`,
       `--output=${directory}/comparison`,
     ])
+  );
+}
+
+/**
+ * @param {string} manifestPath
+ * @param {string} outputBase
+ * @param {string} fragment
+ * @returns {Promise<void>}
+ */
+async function expectComparisonOutputFailure(
+  manifestPath,
+  outputBase,
+  fragment,
+) {
+  let error;
+
+  try {
+    await compareManifestFile(manifestPath, outputBase);
+  } catch (caught) {
+    error = caught;
+  }
+
+  assertSame(
+    error instanceof Error,
+    true,
+    `expected an output failure for ${fragment}`,
+  );
+  assertSame(
+    error instanceof Error && error.message.includes(fragment),
+    true,
+    `expected the output failure to name ${fragment}, got ${
+      error instanceof Error ? error.message : String(error)
+    }`,
   );
 }
 

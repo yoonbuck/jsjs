@@ -212,9 +212,39 @@ function binomialTailSum(total, from, to) {
  * @returns {number}
  */
 function ratioToNumber(numerator, denominator) {
-  const scale = 1n << 53n;
+  if (numerator === 0n) {
+    return 0;
+  }
 
-  return Number((numerator * scale) / denominator) / Number(scale);
+  const exponent = bigintBitLength(numerator) - bigintBitLength(denominator);
+  const shift = 52 - exponent;
+  const scaledNumerator =
+    shift >= 0 ? numerator << BigInt(shift) : numerator >> BigInt(-shift);
+  const significand = Number(
+    (scaledNumerator + denominator / 2n) / denominator,
+  );
+
+  return scaleByPowerOfTwo(significand, exponent - 52);
+}
+
+/**
+ * @param {bigint} value
+ * @returns {number}
+ */
+function bigintBitLength(value) {
+  return value.toString(2).length;
+}
+
+/**
+ * @param {number} value
+ * @param {number} exponent
+ * @returns {number}
+ */
+function scaleByPowerOfTwo(value, exponent) {
+  const firstExponent =
+    exponent < -1022 ? -1022 : exponent > 1023 ? 1023 : exponent;
+
+  return value * 2 ** firstExponent * 2 ** (exponent - firstExponent);
 }
 
 /**

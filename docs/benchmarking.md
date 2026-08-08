@@ -199,13 +199,18 @@ that number can never be read as a regression again.
 2. Capture in rounds. Within a round, capture baseline and candidate back to
    back so both see the same thermal and scheduler conditions.
 3. Alternate the order between rounds: baseline first in one round, candidate
-   first in the next. This counterbalancing is what stops the time slot inside a
+   first in the next. Both orders must occur, and their counts may differ by at
+   most one pair. This near-equal counterbalancing stops the time slot inside a
    round from aliasing the revision contrast.
 4. Collect at least six pairs. Fewer than six nonzero paired deltas cannot reach
    an exact two-sided sign-test `p < 0.05` at any effect size, so smaller designs
    are reported as `underpowered` by construction.
 5. Never edit the capture roots. `compare` re-validates every report and rejects
-   dirty sources, mixed commits, mixed configurations, and altered checksums.
+   dirty sources, mixed commits, mixed configurations, altered checksums, and
+   timestamp inconsistencies. For `baseline-candidate`, the baseline
+   `generatedAt` must be strictly earlier than the candidate timestamp; for
+   `candidate-baseline`, the candidate must be strictly earlier. Equal, invalid,
+   and order-mismatched timestamps are rejected.
 
 ```sh
 # round 1: baseline first
@@ -242,7 +247,8 @@ node benchmark/cli.js run --host=all --output=.benchmark-results/cmp/base-2
 
 `targets` names the workloads the change is meant to speed up; each entry may
 narrow to a `host` or a `mode`. Every other cell is a non-target. `pairs` must
-list at least two pairs, and every capture root may appear only once.
+list at least two pairs, every capture root may appear only once, and each
+declared order must match the roots' strictly ordered `generatedAt` timestamps.
 
 ### Statistical rule
 
@@ -264,15 +270,19 @@ A cell is one host, workload, and mode. Its per-run value is the median of
   percentile as a relative percentage. This is the machine's own reproducibility
   for that cell, measured from the same captures. It is never a configured
   percentage.
+- **Magnitude comparison.** Verdicts compare the absolute median paired log
+  ratio with that nonnegative log-space noise envelope. Percentages are
+  display-only: this makes `+x%` and its reciprocal slowdown use the same
+  magnitude criterion instead of treating percentage transforms asymmetrically.
 
 The verdict follows directly:
 
-| Verdict        | Condition                                                                                                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `regression`   | Point estimate above zero, bootstrap interval entirely above zero, exact sign `p < 0.05`, magnitude beyond the measured noise envelope, both capture orders present, and enough pairs for exact significance. |
-| `improvement`  | The same conditions with the signs reversed.                                                                                                                                                                  |
-| `underpowered` | The interval excludes zero, but the sign test or the design cannot support a verdict.                                                                                                                         |
-| `within-noise` | Anything else.                                                                                                                                                                                                |
+| Verdict        | Condition                                                                                                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `regression`   | Point estimate above zero, bootstrap interval entirely above zero, exact sign `p < 0.05`, magnitude beyond the measured log-space noise envelope, both capture orders present with counts within one pair and timestamps matching their declared order, and enough pairs for exact significance. |
+| `improvement`  | The same conditions with the signs reversed.                                                                                                                                                                                                                                                     |
+| `underpowered` | The interval excludes zero, but the sign test or the design cannot support a verdict.                                                                                                                                                                                                            |
+| `within-noise` | Anything else.                                                                                                                                                                                                                                                                                   |
 
 An `underpowered` cell is never reported as a regression. That distinction is the
 whole point of the gate: an interval that excludes zero is not evidence when
@@ -282,11 +292,16 @@ three pairs cannot produce a `p` below 0.25.
 
 For each run, `compare` takes the geometric mean of the jsjs medians across every
 workload and mode of a host, then applies the identical paired statistic, noise
-envelope, and verdict. It repeats this across all hosts together. The acceptance
-block reports explicit booleans: whether every host geomean point estimate
-improves, whether every host geomean verdict is an improvement or within noise,
-how many non-target regressions were found, and whether the targets move beyond
-their own measured noise.
+envelope, and verdict. It repeats this across all hosts together. A comparison is
+accepted only when all of these predicates hold:
+
+1. The design is gate-ready.
+2. No non-target cell has a regression verdict.
+3. Every host geomean point estimate improves, and every host geomean verdict is
+   an improvement or within noise.
+4. The all-host aggregate point estimate improves.
+5. Every declared target has an improvement verdict and materially exceeds its
+   own measured noise envelope.
 
 Non-target workloads are expected to stay within measured noise. A statistically
 significant non-target regression is exceptional and is never approved by this

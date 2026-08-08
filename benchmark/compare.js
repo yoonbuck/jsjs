@@ -73,6 +73,9 @@ import {
  * }} CaptureRoot
  * @typedef {{
  *   pairs: number,
+ *   pointLogRatio: number,
+ *   ci95LowLogRatio: number,
+ *   ci95HighLogRatio: number,
  *   pointEstimatePercent: number,
  *   ci95LowPercent: number,
  *   ci95HighPercent: number,
@@ -83,6 +86,7 @@ import {
  *     pValue: number,
  *     significant: boolean,
  *   },
+ *   noiseEnvelopeLogRatio: number,
  *   noiseEnvelopePercent: number,
  *   noiseEnvelopeSamples: number,
  * }} PairedStatistic
@@ -124,12 +128,12 @@ const CAPTURE_ORDERS = Object.freeze([
 const MODES = Object.freeze(['cold', 'steady']);
 
 const METHODOLOGY_DESCRIPTION = Object.freeze([
-  'Every capture root is one `benchmark/cli.js run` output directory. A pair is one baseline root and one candidate root captured next to each other, with the capture order recorded.',
+  'Every capture root is one `benchmark/cli.js run` output directory. A pair is one baseline root and one candidate root captured next to each other, with the capture order and generatedAt timestamps recorded.',
   'Cell statistic: the run median of `lanes.jsjs.normalizedSamplesMs` per root, then one paired relative log ratio per round, `log(candidate) - log(baseline)`.',
   'Point estimate: `exp(median(paired log ratios)) - 1`.',
   'Interval: deterministic paired bootstrap of that median, resampling whole pairs with replacement from a seeded PRNG.',
   'Significance: exact two-sided sign test over the nonzero paired deltas. No normal approximation.',
-  'Noise envelope: within each revision, every pairwise absolute log difference among its repeated run medians; baseline and candidate self-differences are pooled and the 95th percentile is transformed back to a relative percentage. This is measured noise, not a configured threshold.',
+  'Noise envelope: within each revision, every pairwise absolute log difference among its repeated run medians; baseline and candidate self-differences are pooled and the 95th percentile is transformed back to a relative percentage. Verdicts compare the original nonnegative log envelope with the absolute point log ratio; percentages are display-only. This is measured noise, not a configured threshold.',
   'Aggregates: per run, the geometric mean of the jsjs run medians across every workload/mode cell of one host (and across all hosts), then the identical paired statistic, noise envelope, and verdict.',
 ]);
 
@@ -307,7 +311,7 @@ export function compareCaptureRoots(manifest, roots, options = {}) {
 
   if (!counterbalanced) {
     warnings.push(
-      `Capture orders are not counterbalanced (${describeOrderCounts(audit.orderCounts)}). A gate-ready verdict needs both ${CAPTURE_ORDERS.join(' and ')} orders so the within-pair time slot cannot alias the revision contrast.`,
+      `Capture orders are not counterbalanced (${describeOrderCounts(audit.orderCounts)}). A gate-ready verdict needs both ${CAPTURE_ORDERS.join(' and ')} orders with counts within one pair, so the within-pair time slot cannot alias the revision contrast.`,
     );
   }
 
@@ -487,6 +491,7 @@ export async function compareManifestFile(
     await readComparisonManifest(manifestPath),
     options,
   );
+  assertComparisonOutputPaths(manifestPath, directory, stem, manifest);
   const roots = await readCaptureRoots(manifest);
   const comparison = compareCaptureRoots(manifest, roots, {
     generatedAt: options.generatedAt,
@@ -504,6 +509,41 @@ export async function compareManifestFile(
   );
 
   return comparison;
+}
+
+/**
+ * @param {string} manifestPath
+ * @param {string} directory
+ * @param {string} stem
+ * @param {ComparisonManifest} manifest
+ * @returns {void}
+ */
+function assertComparisonOutputPaths(manifestPath, directory, stem, manifest) {
+  const manifestUrl = resolveRepositoryFile(manifestPath);
+  const outputDirectoryUrl = resolveOutputDirectory(directory);
+  const outputArtifacts = [`${stem}.json`, `${stem}.md`].map(
+    (fileName) => new URL(fileName, outputDirectoryUrl),
+  );
+
+  for (const artifactUrl of outputArtifacts) {
+    if (artifactUrl.href === manifestUrl.href) {
+      throw new RangeError(
+        `Benchmark comparison output artifact would overwrite manifest: ${artifactUrl.pathname}`,
+      );
+    }
+  }
+
+  for (const pair of manifest.pairs) {
+    for (const root of [pair.baseline, pair.candidate]) {
+      const captureRootUrl = resolveOutputDirectory(root);
+
+      if (outputDirectoryUrl.href.startsWith(captureRootUrl.href)) {
+        throw new RangeError(
+          `Benchmark comparison output directory must not be a capture root or descendant: ${outputDirectoryUrl.pathname} is within ${captureRootUrl.pathname}`,
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -794,6 +834,7 @@ function auditCaptureRoots(manifest, roots) {
 
   const baselineCommit = uniqueCommit(baselineCommits, 'baseline');
   const candidateCommit = uniqueCommit(candidateCommits, 'candidate');
+  assertCaptureTimestampOrder(manifest, roots);
   /** @type {Record<CaptureOrder, number>} */
   const orderCounts = {
     'baseline-candidate': 0,
@@ -830,7 +871,11 @@ function auditCaptureRoots(manifest, roots) {
     uniqueRunIds: runIds.size,
     checksumsVerified,
     orderCounts: Object.freeze(orderCounts),
-    counterbalanced: CAPTURE_ORDERS.every((order) => orderCounts[order] > 0),
+    counterbalanced:
+      CAPTURE_ORDERS.every((order) => orderCounts[order] > 0) &&
+      Math.abs(
+        orderCounts['baseline-candidate'] - orderCounts['candidate-baseline'],
+      ) <= 1,
     reportSchemaVersion: REPORT_SCHEMA_VERSION,
     config: Object.freeze({
       profile: reference.reports[0].config.profile,
@@ -844,6 +889,73 @@ function auditCaptureRoots(manifest, roots) {
     }),
     cells,
   });
+}
+
+/**
+ * @param {ComparisonManifest} manifest
+ * @param {readonly CaptureRoot[]} roots
+ * @returns {void}
+ */
+function assertCaptureTimestampOrder(manifest, roots) {
+  for (const pair of manifest.pairs) {
+    const baseline = roots.find(
+      (root) => root.pairIndex === pair.index && root.side === 'baseline',
+    );
+    const candidate = roots.find(
+      (root) => root.pairIndex === pair.index && root.side === 'candidate',
+    );
+
+    if (baseline === undefined || candidate === undefined) {
+      throw new Error(
+        `Capture pair ${pair.round} is incomplete and cannot verify timestamps`,
+      );
+    }
+
+    const baselineTimestamp = captureTimestamp(baseline);
+    const candidateTimestamp = captureTimestamp(candidate);
+
+    if (baselineTimestamp === candidateTimestamp) {
+      throw new Error(
+        `Capture pair ${pair.round} timestamps must differ: baseline and candidate both report ${baseline.generatedAt}`,
+      );
+    }
+
+    const first = pair.order === 'baseline-candidate' ? baseline : candidate;
+    const second = pair.order === 'baseline-candidate' ? candidate : baseline;
+    const firstTimestamp =
+      pair.order === 'baseline-candidate'
+        ? baselineTimestamp
+        : candidateTimestamp;
+    const secondTimestamp =
+      pair.order === 'baseline-candidate'
+        ? candidateTimestamp
+        : baselineTimestamp;
+
+    if (firstTimestamp >= secondTimestamp) {
+      throw new Error(
+        `Capture order ${pair.order} for pair ${pair.round} contradicts generatedAt timestamps: ${first.side} ${first.generatedAt}, ${second.side} ${second.generatedAt}`,
+      );
+    }
+  }
+}
+
+/**
+ * @param {CaptureRoot} root
+ * @returns {number}
+ */
+function captureTimestamp(root) {
+  const timestamp = Date.parse(root.generatedAt);
+
+  if (
+    !Number.isFinite(timestamp) ||
+    new Date(timestamp).toISOString() !== root.generatedAt
+  ) {
+    throw new Error(
+      `Capture root ${root.root} has invalid generatedAt timestamp: ${root.generatedAt}`,
+    );
+  }
+
+  return timestamp;
 }
 
 /**
@@ -1187,12 +1299,18 @@ function comparePairedSeries(baselineValues, candidateValues, manifest) {
     ...pairwiseAbsoluteLogDifferences(baselineValues),
     ...pairwiseAbsoluteLogDifferences(candidateValues),
   ];
+  const ci95LowLogRatio = quantile(resampledMedians, 0.025);
+  const ci95HighLogRatio = quantile(resampledMedians, 0.975);
+  const noiseEnvelopeLogRatio = percentile95(selfDifferences);
 
   return Object.freeze({
     pairs: logRatios.length,
+    pointLogRatio,
+    ci95LowLogRatio,
+    ci95HighLogRatio,
     pointEstimatePercent: toPercent(pointLogRatio),
-    ci95LowPercent: toPercent(quantile(resampledMedians, 0.025)),
-    ci95HighPercent: toPercent(quantile(resampledMedians, 0.975)),
+    ci95LowPercent: toPercent(ci95LowLogRatio),
+    ci95HighPercent: toPercent(ci95HighLogRatio),
     signTest: Object.freeze({
       nonzeroPairs,
       positivePairs,
@@ -1202,7 +1320,8 @@ function comparePairedSeries(baselineValues, candidateValues, manifest) {
         pValue < SIGNIFICANCE_LEVEL &&
         nonzeroPairs >= MINIMUM_NONZERO_PAIRS_FOR_EXACT_SIGNIFICANCE,
     }),
-    noiseEnvelopePercent: toPercent(percentile95(selfDifferences)),
+    noiseEnvelopeLogRatio,
+    noiseEnvelopePercent: toPercent(noiseEnvelopeLogRatio),
     noiseEnvelopeSamples: selfDifferences.length,
   });
 }
@@ -1242,18 +1361,18 @@ function pairwiseAbsoluteLogDifferences(values) {
  * }}
  */
 function verdictFor(statistic, design) {
-  const point = statistic.pointEstimatePercent;
+  const point = statistic.pointLogRatio;
   const intervalDirection =
-    point > 0 && statistic.ci95LowPercent > 0
+    point > 0 && statistic.ci95LowLogRatio > 0
       ? 'regression'
-      : point < 0 && statistic.ci95HighPercent < 0
+      : point < 0 && statistic.ci95HighLogRatio < 0
         ? 'improvement'
         : null;
   const criteria = Object.freeze({
     pointEstimateNonZero: point !== 0,
     confidenceIntervalExcludesZero: intervalDirection !== null,
     signTestSignificant: statistic.signTest.significant,
-    exceedsNoiseEnvelope: Math.abs(point) > statistic.noiseEnvelopePercent,
+    exceedsNoiseEnvelope: Math.abs(point) > statistic.noiseEnvelopeLogRatio,
     counterbalanced: design.counterbalanced,
     exactSignificancePossible:
       design.exactSignificancePossibleByDesign &&
@@ -1343,6 +1462,7 @@ function summarizeAcceptance(
       aggregate.verdict === 'improvement' ||
       aggregate.verdict === 'within-noise',
   );
+  const allHostAggregateImproves = allHostAggregate.pointEstimatePercent < 0;
   const targetVerdictsImprove =
     targets.length > 0 &&
     targets.every((cell) => cell.verdict === 'improvement');
@@ -1366,7 +1486,10 @@ function summarizeAcceptance(
     gateReady &&
     nonTargetRegressions.length === 0 &&
     allHostGeomeanPointEstimatesImprove &&
-    allHostGeomeanVerdictsImproveOrWithinNoise;
+    allHostGeomeanVerdictsImproveOrWithinNoise &&
+    allHostAggregateImproves &&
+    targetVerdictsImprove &&
+    targetsMateriallyExceedNoise;
 
   return Object.freeze({
     gateReady,
@@ -1384,7 +1507,7 @@ function summarizeAcceptance(
     ),
     allHostGeomeanPointEstimatesImprove,
     allHostGeomeanVerdictsImproveOrWithinNoise,
-    allHostAggregateImproves: allHostAggregate.pointEstimatePercent < 0,
+    allHostAggregateImproves,
     targetVerdictsImprove,
     targetsMateriallyExceedNoise,
     targetExceptions: Object.freeze(
