@@ -88,6 +88,14 @@ const tests = [
       assertSame(run('var o = {1: function () {}}; o[1].name;'), '1');
     },
   },
+  {
+    name: 'bound functions are named "bound " followed by the target function\'s name',
+    run() {
+      assertSame(run('function f() {} f.bind(null).name;'), 'bound f');
+      assertSame(run('(function () {}).bind(null).name;'), 'bound ');
+      assertSame(run('Function.prototype.bind.name;'), 'bind');
+    },
+  },
 ];
 
 export default tests;
