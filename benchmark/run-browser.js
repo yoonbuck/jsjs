@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { validateHostReport } from './report.js';
+import { assertCleanSourceState } from './source-state.js';
 
 const REPOSITORY_ROOT = new URL('../', import.meta.url);
 const ORIGIN = 'http://jsjs.localhost';
@@ -32,10 +33,12 @@ const CHROMIUM_SETUP_MESSAGE =
  *   launch?: () => Promise<import('playwright').Browser>,
  *   generatedAt?: string,
  *   runId?: string,
+ *   source?: { gitCommit: string, gitDirty: false },
  * }} [options]
  */
 export async function runChromiumBenchmark(config, options = {}) {
   const launch = options.launch ?? (() => chromium.launch());
+  const source = assertCleanSourceState(options.source);
   let browser;
 
   try {
@@ -81,6 +84,7 @@ export async function runChromiumBenchmark(config, options = {}) {
         benchmarkConfig,
         benchmarkGeneratedAt,
         benchmarkRunId,
+        benchmarkSource,
         benchmarkVersion,
         modulePath,
       }) => {
@@ -92,6 +96,7 @@ export async function runChromiumBenchmark(config, options = {}) {
         return runBrowserPageBenchmark(benchmarkConfig, {
           generatedAt: benchmarkGeneratedAt,
           runId: benchmarkRunId,
+          source: benchmarkSource,
           version: benchmarkVersion,
         });
       },
@@ -99,6 +104,7 @@ export async function runChromiumBenchmark(config, options = {}) {
         benchmarkConfig: config,
         benchmarkGeneratedAt: generatedAt,
         benchmarkRunId: runId,
+        benchmarkSource: source,
         benchmarkVersion: version,
         modulePath: '/benchmark/run-browser-page.js',
       },

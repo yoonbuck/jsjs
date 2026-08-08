@@ -1,4 +1,4 @@
-export const REPORT_SCHEMA_VERSION = 2;
+export const REPORT_SCHEMA_VERSION = 3;
 
 const MODES = Object.freeze(['cold', 'steady']);
 
@@ -15,6 +15,10 @@ export function validateHostReport(value) {
   nonEmptyStringAt(report.runId, 'runId');
   nonEmptyStringAt(report.host, 'host');
   nonEmptyStringAt(report.version, 'version');
+  const source = objectAt(report.source, 'source');
+
+  nonEmptyStringAt(source.gitCommit, 'source.gitCommit');
+  exactBooleanAt(source.gitDirty, 'source.gitDirty', false);
 
   const config = objectAt(report.config, 'config');
   nonEmptyStringAt(config.profile, 'config.profile');
@@ -268,6 +272,18 @@ function nonNegativeFiniteAt(value, path) {
  */
 function exactNumberAt(value, path, expected) {
   if (typeof value !== 'number' || !Object.is(value, expected)) {
+    throw new TypeError(`${path} must equal ${expected}`);
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} path
+ * @param {boolean} expected
+ * @returns {void}
+ */
+function exactBooleanAt(value, path, expected) {
+  if (typeof value !== 'boolean' || value !== expected) {
     throw new TypeError(`${path} must equal ${expected}`);
   }
 }

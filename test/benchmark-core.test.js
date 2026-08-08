@@ -21,6 +21,11 @@ import {
 } from '../benchmark/statistics.js';
 import { WORKLOADS, workloadsForProfile } from '../benchmark/workloads.js';
 
+const SOURCE = Object.freeze({
+  gitCommit: '0123456789abcdef0123456789abcdef01234567',
+  gitDirty: false,
+});
+
 /**
  * @param {number} actual
  * @param {number} expected
@@ -90,7 +95,7 @@ function findResult(report, mode) {
 
 const tests = [
   {
-    name: 'host reports validate schema version checksums and sample counts',
+    name: 'host reports require clean source metadata',
     run() {
       let nowMs = 0;
       const report = runHostBenchmark({
@@ -131,13 +136,16 @@ const tests = [
         }),
         generatedAt: '2026-08-07T00:00:00.000Z',
         runId: 'fixture-run',
+        source: SOURCE,
       });
+      const missingSource = cloneValue(report);
       const badSchema = cloneValue(report);
       const missingRunId = cloneValue(report);
       const badChecksum = cloneValue(report);
       const badSampleCount = cloneValue(report);
       const emptyWorkloads = cloneValue(report);
 
+      delete missingSource.source;
       badSchema.schemaVersion = REPORT_SCHEMA_VERSION + 1;
       delete missingRunId.runId;
       badChecksum.results[0].checksum += 1;
@@ -146,6 +154,13 @@ const tests = [
       emptyWorkloads.results = [];
 
       assertSame(validateHostReport(report), report);
+      assertSame(
+        assertThrows(
+          () => validateHostReport(missingSource),
+          TypeError,
+        ).message.includes('source'),
+        true,
+      );
       assertSame(
         assertThrows(
           () => validateHostReport(badSchema),
@@ -228,6 +243,7 @@ const tests = [
         }),
         generatedAt: '2026-08-07T00:00:00.000Z',
         runId: 'fixture-run',
+        source: SOURCE,
       });
       const coldResult = findResult(report, 'cold');
       const steadyResult = findResult(report, 'steady');
@@ -310,6 +326,7 @@ const tests = [
               }),
               generatedAt: '2026-08-07T00:00:00.000Z',
               runId: 'fixture-run',
+              source: SOURCE,
             }),
           Error,
         );
@@ -360,6 +377,7 @@ const tests = [
             }),
             generatedAt: '2026-08-07T00:00:00.000Z',
             runId: 'coarse-clock-run',
+            source: SOURCE,
           }),
         RangeError,
       );

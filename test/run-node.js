@@ -12,7 +12,7 @@
  * browser and an upstream Test262 checkout being present. `npm run ci:contract`
  * runs them through `test/run-ci-contract.js` instead.
  *
- * Usage: `node test/run-node.js [test/foo.test.js]`
+ * Usage: `node test/run-node.js [test/foo.test.js ...]`
  */
 
 import { runTests } from './harness/runner.js';
@@ -20,6 +20,8 @@ import { PORTABLE_SUITES } from './suites.js';
 import benchmarkCli from './node/benchmark-cli.test.js';
 import benchmarkHosts from './node/benchmark-hosts.test.js';
 import benchmarkSummary from './node/benchmark-summary.test.js';
+import profileAnalysis from './node/profile-analysis.test.js';
+import profilingCli from './node/profiling-cli.test.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
 import workflowContract from './node/workflow-contract.test.js';
 
@@ -42,6 +44,14 @@ const NODE_ONLY_SUITES = Object.freeze([
     tests: benchmarkSummary,
   }),
   Object.freeze({
+    file: 'test/node/profile-analysis.test.js',
+    tests: profileAnalysis,
+  }),
+  Object.freeze({
+    file: 'test/node/profiling-cli.test.js',
+    tests: profilingCli,
+  }),
+  Object.freeze({
     file: 'test/node/repository-invariants.test.js',
     tests: repositoryInvariants,
   }),
@@ -59,10 +69,11 @@ main().catch((error) => {
 });
 
 async function main() {
-  const [, , testPath] = process.argv;
-  const suites = testPath
-    ? [await loadSuite(testPath)]
-    : [...PORTABLE_SUITES, ...NODE_ONLY_SUITES];
+  const testPaths = process.argv.slice(2);
+  const suites =
+    testPaths.length > 0
+      ? await Promise.all(testPaths.map((testPath) => loadSuite(testPath)))
+      : [...PORTABLE_SUITES, ...NODE_ONLY_SUITES];
   let failed = 0;
 
   for (const suite of suites) {

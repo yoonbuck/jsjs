@@ -37,6 +37,12 @@ async function main() {
     throw new Error('Missing JSC benchmark config');
   }
 
+  const source = globalThis.__jsjsBenchmarkSource;
+
+  if (source === undefined) {
+    throw new Error('Missing JSC benchmark source metadata');
+  }
+
   return runHostBenchmark({
     host: 'jsc',
     version:
@@ -57,5 +63,6 @@ async function main() {
       globalThis.__jsjsBenchmarkRunId.length > 0
         ? globalThis.__jsjsBenchmarkRunId
         : `jsc-${new Date().toISOString()}`,
+    source,
   });
 }

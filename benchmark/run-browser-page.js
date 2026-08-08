@@ -14,9 +14,14 @@ import { runHostBenchmark } from './run.js';
  *     expectedChecksum: number,
  *   }[],
  * }} config
- * @param {{ generatedAt?: string, runId?: string, version?: string }} [options]
+ * @param {{
+ *   generatedAt?: string,
+ *   runId?: string,
+ *   source: { gitCommit: string, gitDirty: false },
+ *   version?: string,
+ * }} options
  */
-export function runBrowserPageBenchmark(config, options = {}) {
+export function runBrowserPageBenchmark(config, options) {
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const rawNow =
     typeof globalThis.performance?.now === 'function'
@@ -34,5 +39,6 @@ export function runBrowserPageBenchmark(config, options = {}) {
     config,
     generatedAt,
     runId: options.runId ?? `chromium-${generatedAt}`,
+    source: options.source,
   });
 }

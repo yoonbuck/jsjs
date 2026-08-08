@@ -16,6 +16,11 @@ import {
   runJscBenchmark,
 } from '../../benchmark/spawn-jsc.js';
 
+const SOURCE = Object.freeze({
+  gitCommit: '0123456789abcdef0123456789abcdef01234567',
+  gitDirty: false,
+});
+
 /**
  * @param {{
  *   results: readonly {
@@ -57,7 +62,7 @@ const tests = [
         profile: 'smoke',
         workloads: ['arithmetic-loops'],
       });
-      const report = await runNodeBenchmark(config);
+      const report = await runNodeBenchmark(config, { source: SOURCE });
       const cold = findResult(report, 'cold');
       const steady = findResult(report, 'steady');
 
@@ -93,6 +98,7 @@ const tests = [
           generatedAt: '2026-08-07T00:00:00.000Z',
           runId: 'node-clock-fixture',
           now: () => 7,
+          source: SOURCE,
         });
       } catch (caught) {
         error = caught;
@@ -218,6 +224,7 @@ const tests = [
       try {
         await runJscBenchmark(config, {
           command: '/fake/jsc',
+          source: SOURCE,
           version: 'fake-jsc',
           spawnProcess: createFakeJscProcess({
             stdout: '',
@@ -256,6 +263,7 @@ const tests = [
       try {
         await runJscBenchmark(config, {
           command: '/fake/jsc',
+          source: SOURCE,
           version: 'fake-jsc',
           spawnProcess: createFakeJscProcess({
             stdout: 'Error: jsc cold native arithmetic-loops checksum mismatch',
@@ -289,6 +297,7 @@ const tests = [
       try {
         await runJscBenchmark(config, {
           command: '/fake/jsc',
+          source: SOURCE,
           version: 'fake-jsc',
           spawnProcess: createFakeJscProcess({
             stdout: '{"host":"jsc"}\n',

@@ -148,6 +148,8 @@ declare var __jsjsBenchmarkConfig:
   | undefined;
 declare var __jsjsBenchmarkGeneratedAt: string | undefined;
 declare var __jsjsBenchmarkRunId: string | undefined;
+declare var __jsjsBenchmarkSource:
+  { gitCommit: string; gitDirty: false } | undefined;
 declare var __jsjsBenchmarkVersion: string | undefined;
 
 declare module '/benchmark/run-browser-page.js' {
@@ -155,7 +157,12 @@ declare module '/benchmark/run-browser-page.js' {
     config: ReturnType<
       typeof import('../benchmark/config.js').resolveBenchmarkConfig
     >,
-    options?: { generatedAt?: string; runId?: string; version?: string },
+    options: {
+      generatedAt?: string;
+      runId?: string;
+      source: { gitCommit: string; gitDirty: false };
+      version?: string;
+    },
   ): ReturnType<typeof import('../benchmark/run.js').runHostBenchmark>;
 }
 

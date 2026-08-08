@@ -57,6 +57,54 @@ Host-specific scripts already pass `--host`, and `benchmark:smoke` already passe
 `--host=node --profile=smoke --output=.benchmark-results/smoke`, so do not add a
 second `--host` to those wrappers.
 
+## Interpreter profiling
+
+The Node and Chromium profiler CLI captures one metric per invocation. CPU and
+sampled-allocation captures for the same workload/mode use metric-specific
+sidecars and may coexist:
+
+```sh
+node benchmark/profile/cli.js \
+  --host=node \
+  --workload=arithmetic-loops \
+  --mode=steady \
+  --metric=cpu \
+  --run-id=node-arithmetic-loops-steady \
+  --cpu-sampling-interval-microseconds=100 \
+  --warmups=1 \
+  --iterations=1 \
+  --output=.benchmark-results/profiles
+```
+
+Analyze a matched baseline and schema-2 sidecar set with:
+
+```sh
+npm run profile:analyze
+```
+
+The analyzer requires exactly one CPU and one allocation sidecar for every
+host/workload/mode observation. Pair members must have the same run ID, clean
+source commit, runtime identity, warmup/iteration settings, and both
+metric-specific interval settings: the CPU interval comes from the CPU sidecar
+and the allocation interval comes from the allocation sidecar. Inactive
+interval defaults are not compared across sidecars. Each member must also have
+a non-`host` interpreter denominator; a zero-denominator sidecar rejects its
+matched pair with a recapture-required error. It writes checksum correlation
+and aggregate files only beneath `.benchmark-results/`.
+
+Hotspot percentages are interpreter-only: each metric sidecar first excludes
+`host` frames (including GC, idle, inspector, and harness frames), then the
+analyzer arithmetic-means those per-observation shares. Therefore
+`interpreter.observationCount` equals the paired observation count for each
+metric. Raw sampled totals and profile elapsed times remain diagnostics; they
+are not aggregation weights.
+
+See [profiling.md](profiling.md) for the reproducible evidence run, its
+checksum-correlation method, and how to interpret cold versus steady captures.
+Raw `.cpuprofile`, `.heapprofile`, sidecar, and benchmark-report artifacts under
+`.benchmark-results/` are ignored local evidence, not committed baselines or
+performance thresholds.
+
 ## Direct CLI
 
 ### `run`
@@ -246,15 +294,19 @@ The default output tree is ignored by git:
 
 ### Host report JSON (`<host>.json`)
 
-Every host report is validated against schema version `2` before it is written:
+Every host report is validated against schema version `3` before it is written:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedAt": "2026-08-07T00:00:00.000Z",
   "runId": "shared UUID for one CLI run",
   "host": "node|chromium|jsc",
   "version": "host runtime version string",
+  "source": {
+    "gitCommit": "full clean-tree revision",
+    "gitDirty": false
+  },
   "config": {
     "profile": "default|smoke",
     "warmups": 3,
@@ -311,7 +363,7 @@ There is one result row for every workload/mode pair, so the total row count is
 `benchmark/summarize.js` accepts only mutually compatible host reports. The
 summary schema is:
 
-- `schemaVersion: 2`
+- `schemaVersion: 3`
 - `runId` and `generatedAt`: shared run identity copied from the host reports
 - `hosts`: host names in the lexical file-read order used by the CLI
 - `hostMetadata`: `{ host, version, generatedAt, runId }[]`
