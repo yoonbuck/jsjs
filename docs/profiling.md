@@ -25,28 +25,44 @@ node benchmark/cli.js summary \
   --output=.benchmark-results/profiling-baseline
 ```
 
-Capture both protocol metrics for the four interpreter workloads. These are the
-exact capture settings used for the evidence below: one checked warmup, one
-checked measured invocation, and the default explicit sampling interval of 100.
+Capture the two protocol metrics separately for the four interpreter workloads.
+These are the exact capture settings used for the evidence below: one checked
+warmup, one checked measured invocation, and an explicit interval of 100 for
+each metric.
 
 ```sh
 for host in node chromium; do
   for workload in arithmetic-loops calls-recursion object-properties arrays; do
     for mode in cold steady; do
+      run_id="$host-$workload-$mode"
       node benchmark/profile/cli.js \
         --host="$host" \
         --workload="$workload" \
         --mode="$mode" \
         --metric=cpu \
-        --metric=allocation \
+        --run-id="$run_id" \
+        --cpu-sampling-interval-microseconds=100 \
         --warmups=1 \
         --iterations=1 \
-        --sampling-interval=100 \
+        --output=.benchmark-results/interpreter-profiling
+      node benchmark/profile/cli.js \
+        --host="$host" \
+        --workload="$workload" \
+        --mode="$mode" \
+        --metric=allocation \
+        --run-id="$run_id" \
+        --allocation-sampling-interval-bytes=100 \
+        --warmups=1 \
+        --iterations=1 \
         --output=.benchmark-results/interpreter-profiling
     done
   done
 done
 ```
+
+These metric-specific sidecars are the capture contract for follow-on analysis
+work. Do not regenerate the published derived evidence with them until that
+analysis migration lands.
 
 Correlate the captured sidecars with the shared baseline and regenerate both
 derived evidence files without rerunning profiles:

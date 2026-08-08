@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { contentTypeOf, resolveRepositoryPath } from '../run-browser.js';
+import { assertCleanSourceState } from '../source-state.js';
 import { captureProtocolProfiles } from './protocol.js';
 import {
   buildProfileSidecar,
   profileArtifactContents,
   profileOutputDirectory,
-  readGitCommit,
   resolveProfileWorkload,
   writeProfileArtifactsAtomically,
 } from './run-node.js';
@@ -42,17 +42,19 @@ const CHROMIUM_SETUP_MESSAGE =
  *   host: 'chromium',
  *   workload: string,
  *   mode: 'cold' | 'steady',
- *   metrics: readonly string[],
+ *   metric: 'cpu' | 'allocation',
+ *   runId: string,
  *   warmups: number,
  *   iterations: number,
- *   samplingInterval: number,
+ *   cpuSamplingIntervalMicroseconds: number,
+ *   allocationSamplingIntervalBytes: number,
  *   outputDirectory: string,
+ *   source: { gitCommit: string, gitDirty: false },
  * }} options
  * @param {{
  *   launch?: () => Promise<ProfileBrowser>,
  *   createCDPSession?: (page: ProfileBrowserPage) => Promise<{ send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>> }>,
  *   captureProfiles?: typeof captureProtocolProfiles,
- *   gitCommit?: () => Promise<string>,
  *   generatedAt?: string,
  * }} [dependencies]
  * @returns {Promise<ReturnType<typeof buildProfileSidecar>>}
@@ -61,6 +63,7 @@ export async function runChromiumProfile(options, dependencies = {}) {
   const workload = resolveProfileWorkload(options.workload);
   const generatedAt = dependencies.generatedAt ?? new Date().toISOString();
   const launch = dependencies.launch ?? (() => chromium.launch());
+  const source = assertCleanSourceState(options.source);
   let browser;
 
   try {
@@ -84,8 +87,9 @@ export async function runChromiumProfile(options, dependencies = {}) {
     const capture = await captureProfiles({
       post: (method, params) =>
         /** @type {any} */ (session).send(method, params),
-      metrics: options.metrics,
-      samplingInterval: options.samplingInterval,
+      metric: options.metric,
+      cpuSamplingIntervalMicroseconds: options.cpuSamplingIntervalMicroseconds,
+      allocationSamplingIntervalBytes: options.allocationSamplingIntervalBytes,
       run() {
         return measureBrowserProfilePage(page, workload, options);
       },
@@ -102,7 +106,7 @@ export async function runChromiumProfile(options, dependencies = {}) {
           ? { userAgent: capture.result.runtimeVersion }
           : {}),
       }),
-      gitCommit: await (dependencies.gitCommit ?? readGitCommit)(),
+      source,
       generatedAt,
       captureOptions: options,
       captureResult: capture.result,

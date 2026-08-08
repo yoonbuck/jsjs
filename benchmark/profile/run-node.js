@@ -1,9 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
-import { fileURLToPath } from 'node:url';
 import { monotonicNowFrom, runtimeEngine } from '../host.js';
 import { resolveOutputDirectory } from '../output.js';
+import { assertCleanSourceState } from '../source-state.js';
 import { resolveBenchmarkConfig } from '../config.js';
 import { captureProtocolProfiles } from './protocol.js';
 import {
@@ -14,7 +13,7 @@ import { createProfileTarget } from './target.js';
 // @ts-expect-error Node ships this runtime module; the repo's TS config lacks its types.
 import inspector from 'node:inspector';
 
-const PROFILE_SCHEMA_VERSION = 1;
+const PROFILE_SCHEMA_VERSION = 2;
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const BENCHMARK_RESULTS_URL = new URL(
   '.benchmark-results/',
@@ -44,17 +43,19 @@ let profileTransactionCounter = 0;
  *   host: 'node',
  *   workload: string,
  *   mode: 'cold' | 'steady',
- *   metrics: readonly string[],
+ *   metric: 'cpu' | 'allocation',
+ *   runId: string,
  *   warmups: number,
  *   iterations: number,
- *   samplingInterval: number,
+ *   cpuSamplingIntervalMicroseconds: number,
+ *   allocationSamplingIntervalBytes: number,
  *   outputDirectory: string,
+ *   source: { gitCommit: string, gitDirty: false },
  * }} options
  * @param {{
  *   now?: () => number,
  *   engine?: ProfileEngine,
  *   captureProfiles?: typeof captureProtocolProfiles,
- *   gitCommit?: () => Promise<string>,
  *   runtimeVersion?: string,
  *   generatedAt?: string,
  *   createInspectorSession?: () => InspectorSession,
@@ -63,6 +64,7 @@ let profileTransactionCounter = 0;
  */
 export async function runNodeProfile(options, dependencies = {}) {
   const generatedAt = dependencies.generatedAt ?? new Date().toISOString();
+  const source = assertCleanSourceState(options.source);
   const workload = resolveProfileWorkload(options.workload);
   const now =
     dependencies.now ?? monotonicNowFrom(performance.now.bind(performance));
@@ -87,8 +89,9 @@ export async function runNodeProfile(options, dependencies = {}) {
 
     const capture = await captureProfiles({
       post,
-      metrics: options.metrics,
-      samplingInterval: options.samplingInterval,
+      metric: options.metric,
+      cpuSamplingIntervalMicroseconds: options.cpuSamplingIntervalMicroseconds,
+      allocationSamplingIntervalBytes: options.allocationSamplingIntervalBytes,
       async run() {
         const startedAt = now();
         const result = target.runMeasured();
@@ -107,7 +110,7 @@ export async function runNodeProfile(options, dependencies = {}) {
         name: 'node',
         version: dependencies.runtimeVersion ?? process.version,
       }),
-      gitCommit: await (dependencies.gitCommit ?? readGitCommit)(),
+      source,
       generatedAt,
       captureOptions: options,
       captureResult: capture.result,
@@ -134,15 +137,17 @@ export async function runNodeProfile(options, dependencies = {}) {
  * @param {{
  *   host: 'node' | 'chromium',
  *   runtime: { name: string, version: string, userAgent?: string },
- *   gitCommit: string,
+ *   source: { gitCommit: string, gitDirty: false },
  *   generatedAt: string,
  *   captureOptions: {
  *     workload: string,
  *     mode: 'cold' | 'steady',
- *     metrics: readonly string[],
+ *     metric: 'cpu' | 'allocation',
+ *     runId: string,
  *     warmups: number,
  *     iterations: number,
- *     samplingInterval: number,
+ *     cpuSamplingIntervalMicroseconds: number,
+ *     allocationSamplingIntervalBytes: number,
  *   },
  *   captureResult: {
  *     expectedChecksum: number,
@@ -153,18 +158,20 @@ export async function runNodeProfile(options, dependencies = {}) {
  *   allocationProfile?: unknown,
  * }} options
  * @returns {{
- *   schemaVersion: 1,
+ *   schemaVersion: 2,
  *   generatedAt: string,
  *   host: 'node' | 'chromium',
  *   runtime: { name: string, version: string, userAgent?: string },
- *   gitCommit: string,
+ *   source: { gitCommit: string, gitDirty: false },
  *   capture: {
  *     workload: string,
  *     mode: 'cold' | 'steady',
- *     metrics: readonly string[],
+ *     metric: 'cpu' | 'allocation',
+ *     runId: string,
  *     warmups: number,
  *     iterations: number,
- *     samplingInterval: number,
+ *     cpuSamplingIntervalMicroseconds: number,
+ *     allocationSamplingIntervalBytes: number,
  *   },
  *   result: {
  *     expectedChecksum: number,
@@ -185,28 +192,36 @@ export async function runNodeProfile(options, dependencies = {}) {
 export function buildProfileSidecar({
   host,
   runtime,
-  gitCommit,
+  source,
   generatedAt,
   captureOptions,
   captureResult,
   cpuProfile,
   allocationProfile,
 }) {
-  const stem = safeProfileStem(captureOptions.workload, captureOptions.mode);
+  const stem = safeProfileStem(
+    captureOptions.workload,
+    captureOptions.mode,
+    captureOptions.metric,
+  );
 
   return Object.freeze({
     schemaVersion: PROFILE_SCHEMA_VERSION,
     generatedAt,
     host,
     runtime,
-    gitCommit,
+    source,
     capture: Object.freeze({
       workload: captureOptions.workload,
       mode: captureOptions.mode,
-      metrics: Object.freeze([...captureOptions.metrics]),
+      metric: captureOptions.metric,
+      runId: captureOptions.runId,
       warmups: captureOptions.warmups,
       iterations: captureOptions.iterations,
-      samplingInterval: captureOptions.samplingInterval,
+      cpuSamplingIntervalMicroseconds:
+        captureOptions.cpuSamplingIntervalMicroseconds,
+      allocationSamplingIntervalBytes:
+        captureOptions.allocationSamplingIntervalBytes,
     }),
     result: Object.freeze({
       expectedChecksum: captureResult.expectedChecksum,
@@ -215,7 +230,7 @@ export function buildProfileSidecar({
       elapsedMilliseconds: captureResult.elapsedMilliseconds,
     }),
     summaries: Object.freeze({
-      ...(cpuProfile === undefined
+      ...(captureOptions.metric !== 'cpu' || cpuProfile === undefined
         ? {}
         : {
             cpu: summarizeCpuProfile(
@@ -224,7 +239,8 @@ export function buildProfileSidecar({
               ),
             ),
           }),
-      ...(allocationProfile === undefined
+      ...(captureOptions.metric !== 'allocation' ||
+      allocationProfile === undefined
         ? {}
         : {
             allocation: summarizeAllocationProfile(
@@ -235,8 +251,11 @@ export function buildProfileSidecar({
           }),
     }),
     artifacts: Object.freeze({
-      ...(cpuProfile === undefined ? {} : { cpu: `${stem}.cpuprofile` }),
-      ...(allocationProfile === undefined
+      ...(captureOptions.metric !== 'cpu' || cpuProfile === undefined
+        ? {}
+        : { cpu: `${stem}.cpuprofile` }),
+      ...(captureOptions.metric !== 'allocation' ||
+      allocationProfile === undefined
         ? {}
         : { allocation: `${stem}.heapprofile` }),
     }),
@@ -277,7 +296,11 @@ export function profileOutputDirectory(outputDirectory, host) {
 /**
  * @param {{
  *   artifacts: { cpu?: string, allocation?: string },
- *   capture: { workload: string, mode: 'cold' | 'steady' },
+ *   capture: {
+ *     workload: string,
+ *     mode: 'cold' | 'steady',
+ *     metric: 'cpu' | 'allocation',
+ *   },
  * }} sidecar
  * @param {unknown} cpuProfile
  * @param {unknown} allocationProfile
@@ -290,7 +313,11 @@ export function profileArtifactContents(
 ) {
   /** @type {{ fileName: string, contents: string }[]} */
   const files = [];
-  const stem = safeProfileStem(sidecar.capture.workload, sidecar.capture.mode);
+  const stem = safeProfileStem(
+    sidecar.capture.workload,
+    sidecar.capture.mode,
+    sidecar.capture.metric,
+  );
 
   if (sidecar.artifacts.cpu !== undefined && cpuProfile !== undefined) {
     files.push({
@@ -422,16 +449,6 @@ export async function writeProfileArtifactsAtomically(
 }
 
 /**
- * @returns {Promise<string>}
- */
-export async function readGitCommit() {
-  return execFileSync('git', ['rev-parse', 'HEAD'], {
-    cwd: fileURLToPath(REPOSITORY_ROOT_URL),
-    encoding: 'utf8',
-  }).trim();
-}
-
-/**
  * @returns {InspectorSession}
  */
 function createInspectorSession() {
@@ -524,9 +541,10 @@ function stemArtifactFileNames(stem) {
 /**
  * @param {string} workload
  * @param {'cold' | 'steady'} mode
+ * @param {'cpu' | 'allocation'} metric
  * @returns {string}
  */
-function safeProfileStem(workload, mode) {
+function safeProfileStem(workload, mode, metric) {
   if (!/^[a-z0-9-]+$/u.test(workload)) {
     throw new RangeError(`Unsafe profile workload name: ${workload}`);
   }
@@ -535,7 +553,11 @@ function safeProfileStem(workload, mode) {
     throw new RangeError(`Unsafe profile mode: ${mode}`);
   }
 
-  return `${workload}-${mode}`;
+  if (metric !== 'cpu' && metric !== 'allocation') {
+    throw new RangeError(`Unsafe profile metric: ${metric}`);
+  }
+
+  return `${workload}-${mode}-${metric}`;
 }
 
 /**

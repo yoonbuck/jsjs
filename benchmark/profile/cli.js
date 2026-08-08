@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import { readCleanSourceState } from '../source-state.js';
 import { parseProfileArguments } from './target.js';
 import { runChromiumProfile } from './run-browser.js';
 import { runNodeProfile } from './run-node.js';
@@ -26,17 +27,20 @@ if (isMain(process.argv[1])) {
  * @param {readonly string[]} argv
  * @param {{
  *   runners?: Readonly<ProfileRunners>,
+ *   readSourceState?: typeof readCleanSourceState,
  * }} [options]
  * @returns {Promise<unknown>}
  */
 export async function main(argv, options = {}) {
   const profileOptions = parseProfileArguments(argv);
   const runners = options.runners ?? DEFAULT_RUNNERS;
+  const source = (options.readSourceState ?? readCleanSourceState)();
 
   if (profileOptions.host === 'node') {
     return runners.node({
       ...profileOptions,
       host: 'node',
+      source,
     });
   }
 
@@ -44,6 +48,7 @@ export async function main(argv, options = {}) {
     return runners.chromium({
       ...profileOptions,
       host: 'chromium',
+      source,
     });
   }
 

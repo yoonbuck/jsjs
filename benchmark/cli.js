@@ -8,6 +8,7 @@ import {
 import { runChromiumBenchmark } from './run-browser.js';
 import { runJscBenchmark } from './spawn-jsc.js';
 import { runNodeBenchmark } from './run-node.js';
+import { readCleanSourceState } from './source-state.js';
 import { summarizeReportDirectory } from './summarize.js';
 
 /**
@@ -243,7 +244,8 @@ function parseSummaryArguments(argumentsList) {
  * @param {{
  *   resolveConfig?: typeof resolveBenchmarkConfig,
  *   createRunMetadata?: () => { generatedAt: string, runId: string },
- *   runners?: Readonly<Record<BenchmarkHost, (config: ReturnType<typeof resolveBenchmarkConfig>, metadata: { generatedAt: string, runId: string }) => Promise<unknown>>>,
+ *   readSourceState?: typeof readCleanSourceState,
+ *   runners?: Readonly<Record<BenchmarkHost, (config: ReturnType<typeof resolveBenchmarkConfig>, metadata: { generatedAt: string, runId: string, source: Readonly<{ gitCommit: string, gitDirty: false }> }) => Promise<unknown>>>,
  *   writeReports?: typeof writeHostReportsAtomically,
  *   summarizeDirectory?: typeof summarizeReportDirectory,
  * }} [options]
@@ -262,8 +264,12 @@ export async function main(argv, options = {}) {
   const runners = options.runners ?? DEFAULT_RUNNERS;
   const writeReports = options.writeReports ?? writeHostReportsAtomically;
   const createMetadata = options.createRunMetadata ?? createRunMetadata;
+  const readSourceState = options.readSourceState ?? readCleanSourceState;
   const config = resolveConfig(parsed.config);
-  const metadata = createMetadata();
+  const metadata = Object.freeze({
+    ...createMetadata(),
+    source: readSourceState(),
+  });
   /** @type {unknown[]} */
   const reports = [];
 

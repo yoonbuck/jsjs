@@ -36,7 +36,7 @@ import { geometricMean } from './statistics.js';
  * }} WorkloadRow
  * @typedef {keyof WorkloadRow} CsvColumn
  * @typedef {{
- *   schemaVersion: 2,
+ *   schemaVersion: 3,
  *   runId: string,
  *   generatedAt: string,
  *   hosts: readonly string[],

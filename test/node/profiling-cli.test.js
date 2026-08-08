@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { access, readFile, rename as renameFile, rm } from 'node:fs/promises';
+import { readFile, rename as renameFile, rm } from 'node:fs/promises';
 import { assertSame } from '../harness/assert.js';
 import { captureProtocolProfiles } from '../../benchmark/profile/protocol.js';
 import {
@@ -12,6 +12,10 @@ import { workloadsForProfile } from '../../benchmark/workloads.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const TEST_OUTPUT_DIRECTORY = '.benchmark-results/test-profile-cli';
+const SOURCE = Object.freeze({
+  gitCommit: '0123456789abcdef0123456789abcdef01234567',
+  gitDirty: false,
+});
 const ARITHMETIC_LOOPS_CHECKSUM = workloadsForProfile('default').find(
   (workload) => workload.name === 'arithmetic-loops',
 )?.expectedChecksum;
@@ -33,29 +37,10 @@ const CPU_PROFILE_FIXTURE = Object.freeze({
   samples: [2],
   timeDeltas: [7],
 });
-const ALLOCATION_PROFILE_FIXTURE = Object.freeze({
-  head: {
-    id: 1,
-    callFrame: { functionName: '(root)', url: '' },
-    selfSize: 0,
-    children: [
-      {
-        id: 2,
-        callFrame: {
-          functionName: 'push',
-          url: 'src/runtime/array-object.js',
-        },
-        selfSize: 32,
-        children: [],
-      },
-    ],
-  },
-});
-
 /** @type {import('../harness/runner.js').TestCase[]} */
 const tests = [
   {
-    name: 'captureProtocolProfiles starts requested metrics stops them and disables domains',
+    name: 'captureProtocolProfiles captures CPU without enabling allocation profiling',
     async run() {
       /** @type {{ method: string, params: unknown }[]} */
       const calls = [];
@@ -64,28 +49,17 @@ const tests = [
         samples: [],
         timeDeltas: [],
       });
-      const allocationProfile = Object.freeze({
-        head: {
-          id: 1,
-          callFrame: { functionName: '(root)', url: '' },
-          selfSize: 0,
-          children: [],
-        },
-      });
       let runCalls = 0;
 
       const result = await captureProtocolProfiles({
-        metrics: ['cpu', 'allocation'],
-        samplingInterval: 100,
+        metric: 'cpu',
+        cpuSamplingIntervalMicroseconds: 100,
+        allocationSamplingIntervalBytes: 32768,
         async post(method, params) {
           calls.push({ method, params: params ?? null });
 
           if (method === 'Profiler.stop') {
             return { profile: cpuProfile };
-          }
-
-          if (method === 'HeapProfiler.stopSampling') {
-            return { profile: allocationProfile };
           }
 
           return {};
@@ -103,20 +77,13 @@ const tests = [
           { method: 'Profiler.enable', params: null },
           { method: 'Profiler.setSamplingInterval', params: { interval: 100 } },
           { method: 'Profiler.start', params: null },
-          { method: 'HeapProfiler.enable', params: null },
-          {
-            method: 'HeapProfiler.startSampling',
-            params: { samplingInterval: 100 },
-          },
-          { method: 'HeapProfiler.stopSampling', params: null },
           { method: 'Profiler.stop', params: null },
-          { method: 'HeapProfiler.disable', params: null },
           { method: 'Profiler.disable', params: null },
         ]),
       );
       assertSame(result.result.checksum, 123);
       assertSame(result.cpuProfile, cpuProfile);
-      assertSame(result.allocationProfile, allocationProfile);
+      assertSame('allocationProfile' in result, false);
     },
   },
   {
@@ -129,8 +96,9 @@ const tests = [
 
       try {
         await captureProtocolProfiles({
-          metrics: ['cpu', 'allocation'],
-          samplingInterval: 512,
+          metric: 'allocation',
+          cpuSamplingIntervalMicroseconds: 100,
+          allocationSamplingIntervalBytes: 512,
           async post(method) {
             methods.push(method);
 
@@ -164,14 +132,9 @@ const tests = [
       assertSame(
         methods.join(','),
         [
-          'Profiler.enable',
-          'Profiler.setSamplingInterval',
-          'Profiler.start',
           'HeapProfiler.enable',
           'HeapProfiler.startSampling',
-          'Profiler.stop',
           'HeapProfiler.disable',
-          'Profiler.disable',
         ].join(','),
       );
     },
@@ -185,8 +148,9 @@ const tests = [
 
       try {
         await captureProtocolProfiles({
-          metrics: ['cpu'],
-          samplingInterval: 250,
+          metric: 'cpu',
+          cpuSamplingIntervalMicroseconds: 250,
+          allocationSamplingIntervalBytes: 32768,
           async post(method, params) {
             calls.push({ method, params: params ?? null });
 
@@ -232,8 +196,9 @@ const tests = [
 
       try {
         await captureProtocolProfiles({
-          metrics: ['cpu', 'allocation'],
-          samplingInterval: 64,
+          metric: 'allocation',
+          cpuSamplingIntervalMicroseconds: 100,
+          allocationSamplingIntervalBytes: 64,
           async post(method) {
             methods.push(method);
 
@@ -265,15 +230,10 @@ const tests = [
       assertSame(
         methods.join(','),
         [
-          'Profiler.enable',
-          'Profiler.setSamplingInterval',
-          'Profiler.start',
           'HeapProfiler.enable',
           'HeapProfiler.startSampling',
           'HeapProfiler.stopSampling',
-          'Profiler.stop',
           'HeapProfiler.disable',
-          'Profiler.disable',
         ].join(','),
       );
     },
@@ -287,8 +247,9 @@ const tests = [
 
       try {
         await captureProtocolProfiles({
-          metrics: ['allocation'],
-          samplingInterval: 64,
+          metric: 'allocation',
+          cpuSamplingIntervalMicroseconds: 100,
+          allocationSamplingIntervalBytes: 64,
           async post(method) {
             methods.push(method);
 
@@ -323,7 +284,7 @@ const tests = [
     },
   },
   {
-    name: 'writeProfileArtifactsAtomically removes stale sibling artifacts when metrics shrink',
+    name: 'writeProfileArtifactsAtomically preserves separate CPU and allocation artifacts',
     async run() {
       const outputDirectory = `${TEST_OUTPUT_DIRECTORY}-artifacts/profiles/node`;
       const outputUrl = new URL(
@@ -334,56 +295,45 @@ const tests = [
 
       await writeProfileArtifactsAtomically(outputDirectory, [
         {
-          fileName: 'arithmetic-loops-steady.cpuprofile',
+          fileName: 'arithmetic-loops-steady-cpu.cpuprofile',
           contents: '{"version":1}\n',
         },
         {
-          fileName: 'arithmetic-loops-steady.heapprofile',
-          contents: '{"heap":1}\n',
-        },
-        {
-          fileName: 'arithmetic-loops-steady.json',
-          contents: '{"metrics":["cpu","allocation"]}\n',
+          fileName: 'arithmetic-loops-steady-cpu.json',
+          contents: '{"metric":"cpu"}\n',
         },
       ]);
       await writeProfileArtifactsAtomically(outputDirectory, [
         {
-          fileName: 'arithmetic-loops-steady.cpuprofile',
-          contents: '{"version":2}\n',
+          fileName: 'arithmetic-loops-steady-allocation.heapprofile',
+          contents: '{"heap":1}\n',
         },
         {
-          fileName: 'arithmetic-loops-steady.json',
-          contents: '{"metrics":["cpu"]}\n',
+          fileName: 'arithmetic-loops-steady-allocation.json',
+          contents: '{"metric":"allocation"}\n',
         },
       ]);
 
       const profileDirectoryUrl = new URL('profiles/node/', outputUrl);
-      const staleHeapUrl = new URL(
-        'arithmetic-loops-steady.heapprofile',
-        profileDirectoryUrl,
-      );
-      let staleHeapExists = true;
-
-      try {
-        await access(staleHeapUrl);
-      } catch {
-        staleHeapExists = false;
-      }
-
-      assertSame(staleHeapExists, false);
       assertSame(
         await readFile(
-          new URL('arithmetic-loops-steady.cpuprofile', profileDirectoryUrl),
+          new URL(
+            'arithmetic-loops-steady-cpu.cpuprofile',
+            profileDirectoryUrl,
+          ),
           'utf8',
         ),
-        '{"version":2}\n',
+        '{"version":1}\n',
       );
       assertSame(
         await readFile(
-          new URL('arithmetic-loops-steady.json', profileDirectoryUrl),
+          new URL(
+            'arithmetic-loops-steady-allocation.heapprofile',
+            profileDirectoryUrl,
+          ),
           'utf8',
         ),
-        '{"metrics":["cpu"]}\n',
+        '{"heap":1}\n',
       );
 
       await rm(outputUrl, { recursive: true, force: true });
@@ -488,7 +438,13 @@ const tests = [
       );
       await rm(outputUrl, { recursive: true, force: true });
       const workload = workloadsForProfile('default')[0];
-      /** @type {{ metrics?: readonly string[], samplingInterval?: number }} */
+      /**
+       * @type {{
+       *   metric?: 'cpu' | 'allocation',
+       *   cpuSamplingIntervalMicroseconds?: number,
+       *   allocationSamplingIntervalBytes?: number,
+       * }}
+       */
       const captureOptions = {};
 
       const sidecar = await runNodeProfile(
@@ -496,23 +452,27 @@ const tests = [
           host: 'node',
           workload: workload.name,
           mode: 'steady',
-          metrics: ['cpu', 'allocation'],
+          metric: 'cpu',
+          runId: 'profile-run',
           warmups: 1,
           iterations: 2,
-          samplingInterval: 100,
+          cpuSamplingIntervalMicroseconds: 100,
+          allocationSamplingIntervalBytes: 32768,
           outputDirectory: TEST_OUTPUT_DIRECTORY,
+          source: SOURCE,
         },
         {
           engine: fixtureEngine(workload.expectedChecksum),
-          gitCommit: async () => 'abc123def456',
           async captureProfiles(options) {
-            captureOptions.metrics = options.metrics;
-            captureOptions.samplingInterval = options.samplingInterval;
+            captureOptions.metric = options.metric;
+            captureOptions.cpuSamplingIntervalMicroseconds =
+              options.cpuSamplingIntervalMicroseconds;
+            captureOptions.allocationSamplingIntervalBytes =
+              options.allocationSamplingIntervalBytes;
             const result = await options.run();
             return {
               result,
               cpuProfile: CPU_PROFILE_FIXTURE,
-              allocationProfile: ALLOCATION_PROFILE_FIXTURE,
             };
           },
         },
@@ -520,42 +480,34 @@ const tests = [
 
       const profileDirectoryUrl = new URL('profiles/node/', outputUrl);
       const sidecarUrl = new URL(
-        `${workload.name}-steady.json`,
+        `${workload.name}-steady-cpu.json`,
         profileDirectoryUrl,
       );
       const cpuUrl = new URL(
-        `${workload.name}-steady.cpuprofile`,
-        profileDirectoryUrl,
-      );
-      const heapUrl = new URL(
-        `${workload.name}-steady.heapprofile`,
+        `${workload.name}-steady-cpu.cpuprofile`,
         profileDirectoryUrl,
       );
       const persisted = JSON.parse(await readFile(sidecarUrl, 'utf8'));
 
-      assertSame(captureOptions.metrics?.join(','), 'cpu,allocation');
-      assertSame(captureOptions.samplingInterval, 100);
-      assertSame(sidecar.schemaVersion, 1);
-      assertSame(sidecar.gitCommit, 'abc123def456');
+      assertSame(captureOptions.metric, 'cpu');
+      assertSame(captureOptions.cpuSamplingIntervalMicroseconds, 100);
+      assertSame(captureOptions.allocationSamplingIntervalBytes, 32768);
+      assertSame(sidecar.schemaVersion, 2);
+      assertSame(sidecar.source, SOURCE);
       assertSame(sidecar.result.expectedChecksum, workload.expectedChecksum);
       assertSame(sidecar.result.checksum, workload.expectedChecksum);
       assertSame(sidecar.result.elapsedMilliseconds > 0, true);
-      assertSame(persisted.artifacts.cpu, `${workload.name}-steady.cpuprofile`);
       assertSame(
-        persisted.artifacts.allocation,
-        `${workload.name}-steady.heapprofile`,
+        persisted.artifacts.cpu,
+        `${workload.name}-steady-cpu.cpuprofile`,
       );
+      assertSame(persisted.artifacts.allocation, undefined);
       assertSame(persisted.summaries.cpu.total, 7);
-      assertSame(persisted.summaries.allocation.total, 32);
+      assertSame(persisted.summaries.allocation, undefined);
       assertSame(
         JSON.parse(await readFile(cpuUrl, 'utf8')).samples.length,
         CPU_PROFILE_FIXTURE.samples.length,
       );
-      assertSame(
-        JSON.parse(await readFile(heapUrl, 'utf8')).head.children.length,
-        1,
-      );
-
       await rm(outputUrl, { recursive: true, force: true });
     },
   },
@@ -638,11 +590,14 @@ const tests = [
           host: 'chromium',
           workload: workload.name,
           mode: 'cold',
-          metrics: ['cpu'],
+          metric: 'cpu',
+          runId: 'browser-profile-run',
           warmups: 2,
           iterations: 1,
-          samplingInterval: 200,
+          cpuSamplingIntervalMicroseconds: 200,
+          allocationSamplingIntervalBytes: 32768,
           outputDirectory: `${TEST_OUTPUT_DIRECTORY}-browser`,
+          source: SOURCE,
         },
         {
           launch: async () => browser,
@@ -657,7 +612,6 @@ const tests = [
               return {};
             },
           }),
-          gitCommit: async () => 'feedfacecafebeef',
         },
       );
 
@@ -680,10 +634,10 @@ const tests = [
       assertSame(typeof routeHandler, 'function');
       assertSame(sidecar.runtime.version, 'Chromium 1.2.3');
       assertSame(sidecar.runtime.userAgent, 'Browser UA');
-      assertSame(sidecar.gitCommit, 'feedfacecafebeef');
+      assertSame(sidecar.source, SOURCE);
       assertSame(sidecar.capture.mode, 'cold');
       assertSame(sidecar.result.checksum, workload.expectedChecksum);
-      assertSame(sidecar.artifacts.cpu, `${workload.name}-cold.cpuprofile`);
+      assertSame(sidecar.artifacts.cpu, `${workload.name}-cold-cpu.cpuprofile`);
 
       await rm(outputUrl, { recursive: true, force: true });
     },
@@ -699,10 +653,14 @@ const tests = [
           '--workload=arithmetic-loops',
           '--mode=steady',
           '--metric=cpu',
+          '--run-id=profile-run',
           '--warmups=1',
           '--iterations=1',
         ],
         {
+          readSourceState() {
+            return SOURCE;
+          },
           runners: {
             node: async (options) => {
               calls.push(`node:${options.workload}:${options.mode}`);
@@ -720,7 +678,47 @@ const tests = [
     },
   },
   {
-    name: 'profile smoke script writes a sidecar with checksum and CPU samples',
+    name: 'profile CLI rejects a dirty tree before starting the selected host',
+    async run() {
+      let nodeRan = false;
+      let error;
+
+      try {
+        await profileCliMain(
+          [
+            '--host=node',
+            '--workload=arithmetic-loops',
+            '--mode=steady',
+            '--metric=cpu',
+            '--run-id=dirty-tree-run',
+            '--warmups=1',
+            '--iterations=1',
+          ],
+          {
+            readSourceState() {
+              throw new Error('Refusing to run against a dirty working tree');
+            },
+            runners: {
+              async node() {
+                nodeRan = true;
+                return { host: 'node' };
+              },
+              async chromium() {
+                throw new Error('unexpected chromium runner');
+              },
+            },
+          },
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      assertSame(nodeRan, false);
+    },
+  },
+  {
+    name: 'profile CLI writes a sidecar with checksum and CPU samples',
     async run() {
       assertSame(typeof ARITHMETIC_LOOPS_CHECKSUM, 'number');
       const outputUrl = new URL(
@@ -729,22 +727,33 @@ const tests = [
       );
       await rm(outputUrl, { recursive: true, force: true });
 
-      const result = spawnSync('npm', ['run', 'profile:smoke'], {
-        cwd: REPOSITORY_ROOT_URL.pathname,
-        encoding: 'utf8',
-      });
-
-      assertSame(result.status, 0, result.stderr);
+      await profileCliMain(
+        [
+          '--host=node',
+          '--workload=arithmetic-loops',
+          '--mode=steady',
+          '--metric=cpu',
+          '--run-id=profile-smoke',
+          '--warmups=1',
+          '--iterations=1',
+          '--output=.benchmark-results/profile-smoke',
+        ],
+        {
+          readSourceState() {
+            return SOURCE;
+          },
+        },
+      );
       const sidecar = JSON.parse(
         await readFile(
-          new URL('profiles/node/arithmetic-loops-steady.json', outputUrl),
+          new URL('profiles/node/arithmetic-loops-steady-cpu.json', outputUrl),
           'utf8',
         ),
       );
       const cpuProfile = JSON.parse(
         await readFile(
           new URL(
-            'profiles/node/arithmetic-loops-steady.cpuprofile',
+            'profiles/node/arithmetic-loops-steady-cpu.cpuprofile',
             outputUrl,
           ),
           'utf8',
@@ -779,7 +788,7 @@ const tests = [
       assertSame(result.status, 0, result.stdout);
       assertSame(
         result.stdout.includes(
-          '"name":"parseProfileArguments accepts valid arguments","status":"passed"',
+          '"name":"parseProfileArguments returns one metric with metric-specific intervals","status":"passed"',
         ),
         true,
       );

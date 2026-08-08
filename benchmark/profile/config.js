@@ -12,9 +12,11 @@ const PROFILE_OPTIONS = new Set([
   'workload',
   'mode',
   'metric',
+  'run-id',
   'warmups',
   'iterations',
-  'sampling-interval',
+  'cpu-sampling-interval-microseconds',
+  'allocation-sampling-interval-bytes',
   'output',
 ]);
 
@@ -26,10 +28,12 @@ const DEFAULT_OUTPUT_DIRECTORY = '.benchmark-results';
  *   host: string,
  *   workload: string,
  *   mode: 'cold' | 'steady',
- *   metrics: readonly string[],
+ *   metric: 'cpu' | 'allocation',
+ *   runId: string,
  *   warmups: number,
  *   iterations: number,
- *   samplingInterval: number,
+ *   cpuSamplingIntervalMicroseconds: number,
+ *   allocationSamplingIntervalBytes: number,
  *   outputDirectory: string,
  * }}
  */
@@ -40,13 +44,18 @@ export function parseProfileArguments(args) {
   let workload;
   /** @type {string | undefined} */
   let mode;
-  /** @type {string[]} */
-  const metrics = [];
+  /** @type {string | undefined} */
+  let metric;
+  /** @type {string | undefined} */
+  let runId;
   /** @type {number | undefined} */
   let warmups;
   /** @type {number | undefined} */
   let iterations;
-  let samplingInterval = 100;
+  let cpuSamplingIntervalMicroseconds = 100;
+  let allocationSamplingIntervalBytes = 32768;
+  let cpuSamplingIntervalSpecified = false;
+  let allocationSamplingIntervalSpecified = false;
   let outputDirectory = DEFAULT_OUTPUT_DIRECTORY;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -85,7 +94,16 @@ export function parseProfileArguments(args) {
         mode = optionValue;
         break;
       case 'metric':
-        metrics.push(optionValue);
+        if (metric !== undefined) {
+          throw new Error('--metric may be specified only once');
+        }
+        metric = optionValue;
+        break;
+      case 'run-id':
+        if (runId !== undefined) {
+          throw new Error('--run-id may be specified only once');
+        }
+        runId = optionValue;
         break;
       case 'warmups':
         warmups = numericOptionValue(optionValue, 'warmups');
@@ -93,8 +111,19 @@ export function parseProfileArguments(args) {
       case 'iterations':
         iterations = numericOptionValue(optionValue, 'iterations');
         break;
-      case 'sampling-interval':
-        samplingInterval = numericOptionValue(optionValue, 'sampling-interval');
+      case 'cpu-sampling-interval-microseconds':
+        cpuSamplingIntervalMicroseconds = numericOptionValue(
+          optionValue,
+          'cpu-sampling-interval-microseconds',
+        );
+        cpuSamplingIntervalSpecified = true;
+        break;
+      case 'allocation-sampling-interval-bytes':
+        allocationSamplingIntervalBytes = numericOptionValue(
+          optionValue,
+          'allocation-sampling-interval-bytes',
+        );
+        allocationSamplingIntervalSpecified = true;
         break;
       case 'output':
         outputDirectory = optionValue;
@@ -130,16 +159,30 @@ export function parseProfileArguments(args) {
     );
   }
 
-  if (metrics.length === 0) {
-    throw new Error('At least one --metric is required');
+  if (metric === undefined) {
+    throw new Error('--metric is required');
   }
 
-  for (const metric of metrics) {
-    if (!VALID_METRICS.includes(metric)) {
-      throw new RangeError(
-        `Unknown metric: ${metric} (expected one of: ${VALID_METRICS.join(', ')})`,
-      );
-    }
+  if (!VALID_METRICS.includes(metric)) {
+    throw new RangeError(
+      `Unknown metric: ${metric} (expected one of: ${VALID_METRICS.join(', ')})`,
+    );
+  }
+
+  if (runId === undefined || runId.length === 0) {
+    throw new Error('--run-id is required');
+  }
+
+  if (metric === 'cpu' && allocationSamplingIntervalSpecified) {
+    throw new Error(
+      '--allocation-sampling-interval-bytes requires --metric=allocation',
+    );
+  }
+
+  if (metric === 'allocation' && cpuSamplingIntervalSpecified) {
+    throw new Error(
+      '--cpu-sampling-interval-microseconds requires --metric=cpu',
+    );
   }
 
   if (warmups === undefined) {
@@ -156,10 +199,12 @@ export function parseProfileArguments(args) {
     host,
     workload,
     mode: /** @type {'cold' | 'steady'} */ (mode),
-    metrics: Object.freeze(metrics),
+    metric: /** @type {'cpu' | 'allocation'} */ (metric),
+    runId,
     warmups,
     iterations,
-    samplingInterval,
+    cpuSamplingIntervalMicroseconds,
+    allocationSamplingIntervalBytes,
     outputDirectory,
   });
 }

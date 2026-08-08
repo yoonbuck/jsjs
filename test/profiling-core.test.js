@@ -55,19 +55,23 @@ function fixtureEngine(calls, checksumValue) {
 /** @type {import('./harness/runner.js').TestCase[]} */
 const tests = [
   {
-    name: 'parseProfileArguments accepts valid arguments',
+    name: 'parseProfileArguments returns one metric with metric-specific intervals',
     run() {
       const options = parseProfileArguments([
         '--host=node',
         '--workload=object-properties',
         '--mode=steady',
         '--metric=cpu',
+        '--run-id=profile-run',
         '--warmups=2',
         '--iterations=3',
       ]);
       assertSame(options.workload, 'object-properties');
       assertSame(options.mode, 'steady');
-      assertSame(options.metrics.join(','), 'cpu');
+      assertSame(options.metric, 'cpu');
+      assertSame(options.runId, 'profile-run');
+      assertSame(options.cpuSamplingIntervalMicroseconds, 100);
+      assertSame(options.allocationSamplingIntervalBytes, 32768);
       assertSame(options.warmups, 2);
       assertSame(options.iterations, 3);
       assertSame(options.host, 'node');
@@ -83,6 +87,7 @@ const tests = [
             '--workload=object-properties',
             '--mode=steady',
             '--metric=cpu',
+            '--run-id=profile-run',
             '--warmups=2',
             '--iterations=3',
           ]),
@@ -100,6 +105,7 @@ const tests = [
             '--workload=no-such-workload',
             '--mode=steady',
             '--metric=cpu',
+            '--run-id=profile-run',
             '--warmups=2',
             '--iterations=3',
           ]),
@@ -117,6 +123,7 @@ const tests = [
             '--workload=object-properties',
             '--mode=turbo',
             '--metric=cpu',
+            '--run-id=profile-run',
             '--warmups=2',
             '--iterations=3',
           ]),
@@ -134,6 +141,7 @@ const tests = [
             '--workload=object-properties',
             '--mode=steady',
             '--metric=cpu',
+            '--run-id=profile-run',
             '--warmups=0',
             '--iterations=3',
           ]),
@@ -151,6 +159,7 @@ const tests = [
             '--workload=object-properties',
             '--mode=steady',
             '--metric=cpu',
+            '--run-id=profile-run',
             '--warmups=2',
             '--iterations=0',
           ]),
@@ -159,18 +168,58 @@ const tests = [
     },
   },
   {
-    name: 'parseProfileArguments accepts multiple metrics',
+    name: 'parseProfileArguments rejects combined metrics',
     run() {
-      const options = parseProfileArguments([
+      assertSame(
+        assertThrows(
+          () =>
+            parseProfileArguments([
+              '--host=node',
+              '--workload=object-properties',
+              '--mode=cold',
+              '--metric=cpu',
+              '--metric=allocation',
+              '--run-id=profile-run',
+              '--warmups=1',
+              '--iterations=1',
+            ]),
+          Error,
+        ).message,
+        '--metric may be specified only once',
+      );
+    },
+  },
+  {
+    name: 'parseProfileArguments uses allocation defaults and rejects the wrong interval option',
+    run() {
+      const allocation = parseProfileArguments([
         '--host=node',
         '--workload=object-properties',
-        '--mode=cold',
-        '--metric=cpu',
+        '--mode=steady',
         '--metric=allocation',
+        '--run-id=allocation-run',
         '--warmups=1',
         '--iterations=1',
       ]);
-      assertSame(options.metrics.join(','), 'cpu,allocation');
+
+      assertSame(allocation.allocationSamplingIntervalBytes, 32768);
+      assertSame(
+        assertThrows(
+          () =>
+            parseProfileArguments([
+              '--host=node',
+              '--workload=object-properties',
+              '--mode=steady',
+              '--metric=cpu',
+              '--run-id=cpu-run',
+              '--allocation-sampling-interval-bytes=4096',
+              '--warmups=1',
+              '--iterations=1',
+            ]),
+          Error,
+        ).message,
+        '--allocation-sampling-interval-bytes requires --metric=allocation',
+      );
     },
   },
   {
@@ -181,6 +230,7 @@ const tests = [
         '--workload=object-properties',
         '--mode=steady',
         '--metric=cpu',
+        '--run-id=profile-run',
         '--warmups=1',
         '--iterations=1',
       ]);
@@ -195,6 +245,7 @@ const tests = [
         '--workload=object-properties',
         '--mode=steady',
         '--metric=cpu',
+        '--run-id=profile-run',
         '--warmups=1',
         '--iterations=1',
         '--output=.benchmark-results/profiles',
@@ -212,6 +263,7 @@ const tests = [
             '--workload=object-properties',
             '--mode=steady',
             '--metric=cpu',
+            '--run-id=profile-run',
             '--warmups=1',
             '--iterations=1',
             '--output=/tmp/profiles',

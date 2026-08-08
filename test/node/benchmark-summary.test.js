@@ -146,7 +146,7 @@ const tests = [
 
       expectIncompatible(
         nodeReport,
-        withChanges(chromiumReport, { schemaVersion: 3 }),
+        withChanges(chromiumReport, { schemaVersion: 4 }),
         'schemaVersion',
       );
       expectIncompatible(
@@ -351,11 +351,15 @@ function createFixtureReport({
 
   /** @type {HostReport} */
   const report = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt,
     runId,
     host,
     version: `${host}-1.0.0`,
+    source: {
+      gitCommit: '0123456789abcdef0123456789abcdef01234567',
+      gitDirty: false,
+    },
     config,
     results,
   };

@@ -2,8 +2,9 @@
  * @template TResult
  * @param {{
  *   post: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>,
- *   metrics: readonly string[],
- *   samplingInterval: number,
+ *   metric: 'cpu' | 'allocation',
+ *   cpuSamplingIntervalMicroseconds: number,
+ *   allocationSamplingIntervalBytes: number,
  *   run: () => Promise<TResult>,
  * }} options
  * @returns {Promise<{
@@ -14,12 +15,18 @@
  */
 export async function captureProtocolProfiles({
   post,
-  metrics,
-  samplingInterval,
+  metric,
+  cpuSamplingIntervalMicroseconds,
+  allocationSamplingIntervalBytes,
   run,
 }) {
-  const captureCpu = metrics.includes('cpu');
-  const captureAllocation = metrics.includes('allocation');
+  const captureCpu = metric === 'cpu';
+  const captureAllocation = metric === 'allocation';
+
+  if (!captureCpu && !captureAllocation) {
+    throw new RangeError(`Unsupported profile metric: ${metric}`);
+  }
+
   let cpuEnabled = false;
   let cpuStarted = false;
   let allocationEnabled = false;
@@ -38,7 +45,7 @@ export async function captureProtocolProfiles({
       await post('Profiler.enable');
       cpuEnabled = true;
       await post('Profiler.setSamplingInterval', {
-        interval: samplingInterval,
+        interval: cpuSamplingIntervalMicroseconds,
       });
       await post('Profiler.start');
       cpuStarted = true;
@@ -48,7 +55,7 @@ export async function captureProtocolProfiles({
       await post('HeapProfiler.enable');
       allocationEnabled = true;
       await post('HeapProfiler.startSampling', {
-        samplingInterval,
+        samplingInterval: allocationSamplingIntervalBytes,
       });
       allocationStarted = true;
     }

@@ -4,6 +4,7 @@ import { assertSame, assertThrows } from '../harness/assert.js';
 import { resolveBenchmarkConfig } from '../../benchmark/config.js';
 import { runNodeBenchmark } from '../../benchmark/run-node.js';
 import { parseBenchmarkArguments, main } from '../../benchmark/cli.js';
+import { readCleanSourceState } from '../../benchmark/source-state.js';
 import {
   writeHostReport,
   writeHostReportsAtomically,
@@ -11,6 +12,10 @@ import {
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const OUTPUT_DIRECTORY = '.benchmark-results/test-node-cli';
+const SOURCE = Object.freeze({
+  gitCommit: '0123456789abcdef0123456789abcdef01234567',
+  gitDirty: false,
+});
 
 const tests = [
   {
@@ -112,6 +117,7 @@ const tests = [
       const report = await runNodeBenchmark(config, {
         generatedAt: '2026-08-07T00:00:00.000Z',
         runId: 'atomic-fixture',
+        source: SOURCE,
       });
       const outputDirectory = `${OUTPUT_DIRECTORY}-atomic`;
       const outputUrl = new URL(`${outputDirectory}/`, REPOSITORY_ROOT_URL);
@@ -143,7 +149,7 @@ const tests = [
         profile: 'smoke',
         workloads: ['arrays'],
       });
-      const report = await runNodeBenchmark(config);
+      const report = await runNodeBenchmark(config, { source: SOURCE });
       const invalidReport = {
         ...report,
         results: [
@@ -215,6 +221,9 @@ const tests = [
             runId: 'all-host-fixture',
           };
         },
+        readSourceState() {
+          return SOURCE;
+        },
         resolveConfig(options) {
           calls.push(`config:${JSON.stringify(options)}`);
           return resolveBenchmarkConfig({
@@ -262,6 +271,154 @@ const tests = [
           return { host, ...metadata };
         };
       }
+    },
+  },
+  {
+    name: 'benchmark CLI reads clean source state once and forwards it to every host',
+    async run() {
+      /** @type {Readonly<{ gitCommit: string, gitDirty: false }>} */
+      const source = Object.freeze({
+        gitCommit: '0123456789abcdef0123456789abcdef01234567',
+        gitDirty: false,
+      });
+      let sourceReads = 0;
+      /** @type {string[]} */
+      const hosts = [];
+
+      await main(['run', '--host=all', `--output=${OUTPUT_DIRECTORY}`], {
+        createRunMetadata() {
+          return {
+            generatedAt: '2026-08-07T00:00:00.000Z',
+            runId: 'source-fixture',
+          };
+        },
+        readSourceState() {
+          sourceReads += 1;
+          return source;
+        },
+        resolveConfig() {
+          return resolveBenchmarkConfig({
+            profile: 'smoke',
+            workloads: ['arrays'],
+          });
+        },
+        runners: {
+          node: createRunner('node'),
+          chromium: createRunner('chromium'),
+          jsc: createRunner('jsc'),
+        },
+        async writeReports() {
+          return [];
+        },
+      });
+
+      assertSame(sourceReads, 1);
+      assertSame(hosts.join(','), 'node,chromium,jsc');
+
+      /**
+       * @param {'node' | 'chromium' | 'jsc'} host
+       * @returns {(config: unknown, metadata: { generatedAt: string, runId: string, source: Readonly<{ gitCommit: string, gitDirty: false }> }) => Promise<{ host: 'node' | 'chromium' | 'jsc' }>}
+       */
+      function createRunner(host) {
+        return async (_config, metadata) => {
+          assertSame(metadata.source, source);
+          hosts.push(host);
+          return { host };
+        };
+      }
+    },
+  },
+  {
+    name: 'source state accepts only a clean tree with a concrete revision',
+    run() {
+      /** @type {string[]} */
+      const commands = [];
+      const source = readCleanSourceState({
+        runCommand(args) {
+          commands.push(args.join(' '));
+          return args[0] === 'rev-parse'
+            ? '0123456789abcdef0123456789abcdef01234567\n'
+            : '';
+        },
+      });
+
+      assertSame(source.gitCommit, '0123456789abcdef0123456789abcdef01234567');
+      assertSame(source.gitDirty, false);
+      assertSame(Object.isFrozen(source), true);
+      assertSame(
+        commands.join(','),
+        'rev-parse HEAD,status --porcelain --untracked-files=normal',
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            readCleanSourceState({
+              runCommand(args) {
+                return args[0] === 'rev-parse'
+                  ? '0123456789abcdef0123456789abcdef01234567\n'
+                  : ' M benchmark/cli.js\n';
+              },
+            }),
+          Error,
+        ).message,
+        'Refusing to run against a dirty working tree',
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            readCleanSourceState({
+              runCommand() {
+                return '';
+              },
+            }),
+          Error,
+        ).message.includes('git revision'),
+        true,
+      );
+    },
+  },
+  {
+    name: 'benchmark CLI rejects a dirty tree before running hosts or writing reports',
+    async run() {
+      let hostRan = false;
+      let reportsWritten = false;
+      let error;
+
+      try {
+        await main(['run', '--host=node', `--output=${OUTPUT_DIRECTORY}`], {
+          readSourceState() {
+            throw new Error('Refusing to run against a dirty working tree');
+          },
+          resolveConfig() {
+            return resolveBenchmarkConfig({
+              profile: 'smoke',
+              workloads: ['arrays'],
+            });
+          },
+          runners: {
+            async node() {
+              hostRan = true;
+              return { host: 'node' };
+            },
+            async chromium() {
+              throw new Error('unexpected chromium runner');
+            },
+            async jsc() {
+              throw new Error('unexpected jsc runner');
+            },
+          },
+          async writeReports() {
+            reportsWritten = true;
+            return [];
+          },
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      assertSame(hostRan, false);
+      assertSame(reportsWritten, false);
     },
   },
 ];

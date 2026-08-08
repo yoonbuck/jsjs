@@ -59,8 +59,9 @@ second `--host` to those wrappers.
 
 ## Interpreter profiling
 
-The Node and Chromium profiler CLI captures CPU and sampled-allocation profiles
-of jsjs workloads:
+The Node and Chromium profiler CLI captures one metric per invocation. CPU and
+sampled-allocation captures for the same workload/mode use metric-specific
+sidecars and may coexist:
 
 ```sh
 node benchmark/profile/cli.js \
@@ -68,7 +69,8 @@ node benchmark/profile/cli.js \
   --workload=arithmetic-loops \
   --mode=steady \
   --metric=cpu \
-  --metric=allocation \
+  --run-id=node-arithmetic-loops-steady \
+  --cpu-sampling-interval-microseconds=100 \
   --warmups=1 \
   --iterations=1 \
   --output=.benchmark-results/profiles
@@ -289,15 +291,19 @@ The default output tree is ignored by git:
 
 ### Host report JSON (`<host>.json`)
 
-Every host report is validated against schema version `2` before it is written:
+Every host report is validated against schema version `3` before it is written:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedAt": "2026-08-07T00:00:00.000Z",
   "runId": "shared UUID for one CLI run",
   "host": "node|chromium|jsc",
   "version": "host runtime version string",
+  "source": {
+    "gitCommit": "full clean-tree revision",
+    "gitDirty": false
+  },
   "config": {
     "profile": "default|smoke",
     "warmups": 3,
@@ -354,7 +360,7 @@ There is one result row for every workload/mode pair, so the total row count is
 `benchmark/summarize.js` accepts only mutually compatible host reports. The
 summary schema is:
 
-- `schemaVersion: 2`
+- `schemaVersion: 3`
 - `runId` and `generatedAt`: shared run identity copied from the host reports
 - `hosts`: host names in the lexical file-read order used by the CLI
 - `hostMetadata`: `{ host, version, generatedAt, runId }[]`

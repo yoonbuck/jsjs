@@ -4,6 +4,7 @@ import { access, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateHostReport } from './report.js';
+import { assertCleanSourceState } from './source-state.js';
 
 const JSC_PATH_HINT =
   '/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers';
@@ -27,11 +28,13 @@ const JSC_PATH_HINT =
  *   version?: string,
  *   generatedAt?: string,
  *   runId?: string,
+ *   source?: { gitCommit: string, gitDirty: false },
  *   discoverIdentity?: typeof discoverJscRuntimeIdentity,
  * }} [options]
  */
 export async function runJscBenchmark(config, options = {}) {
   const command = options.command ?? process.env.JSC ?? 'jsc';
+  const source = assertCleanSourceState(options.source);
   const spawnProcess = options.spawnProcess ?? spawn;
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const runId = options.runId ?? `jsc-${generatedAt}`;
@@ -45,6 +48,7 @@ export async function runJscBenchmark(config, options = {}) {
       createJscPrelude(config, {
         generatedAt,
         runId,
+        source,
         version,
       }),
       '-m',
@@ -194,7 +198,12 @@ export function jscSetupError(error) {
 
 /**
  * @param {unknown} config
- * @param {{ generatedAt: string, runId: string, version: string }} options
+ * @param {{
+ *   generatedAt: string,
+ *   runId: string,
+ *   source?: { gitCommit: string, gitDirty: false },
+ *   version: string,
+ * }} options
  * @returns {string}
  */
 export function createJscPrelude(config, options) {
@@ -212,6 +221,7 @@ export function createJscPrelude(config, options) {
     `globalThis.__jsjsBenchmarkConfig = ${configJson};`,
     `globalThis.__jsjsBenchmarkGeneratedAt = ${JSON.stringify(options.generatedAt)};`,
     `globalThis.__jsjsBenchmarkRunId = ${JSON.stringify(options.runId)};`,
+    `globalThis.__jsjsBenchmarkSource = ${JSON.stringify(options.source)};`,
     `globalThis.__jsjsBenchmarkVersion = ${JSON.stringify(options.version)};`,
   ].join(' ');
 }

@@ -43,13 +43,15 @@ const MODES = Object.freeze(['cold', 'steady']);
  *   },
  *   generatedAt: string,
  *   runId: string,
+ *   source: { gitCommit: string, gitDirty: false },
  * }} options
  * @returns {{
- *   schemaVersion: 2,
+ *   schemaVersion: 3,
  *   generatedAt: string,
  *   runId: string,
  *   host: string,
  *   version: string,
+ *   source: { gitCommit: string, gitDirty: false },
  *   config: {
  *     profile: string,
  *     warmups: number,
@@ -83,6 +85,7 @@ export function runHostBenchmark({
   config,
   generatedAt,
   runId,
+  source,
 }) {
   const results = [];
 
@@ -127,6 +130,7 @@ export function runHostBenchmark({
     runId,
     host,
     version,
+    source,
     config,
     results: Object.freeze(results),
   });
