@@ -44,7 +44,9 @@ full ES5.1 standard library plus ES2015 `Symbol`. Each realm gets its own
 agent — the owner of the well-known symbols and the global symbol registry —
 unless `createRealm({ agent })` opts several realms into sharing one.
 `evaluateScript(realm, source)` parses and evaluates a script, returning
-`{ type: 'normal' | 'throw', value }`. See
+`{ type: 'normal' | 'throw', value }`. The engine implements ES5.1 plus ES2015
+lexical declarations (`let`/`const`, block scope) and block-level function
+declarations. See
 [docs/architecture.md](docs/architecture.md) for the full embedding API.
 
 ## Commands
@@ -89,9 +91,11 @@ the embedding API are documented in [docs/architecture.md](docs/architecture.md)
 ## Limitations and deviations
 
 The engine has a small number of intentional deviations from the ES5.1 text
-(mostly following ES2015+ errata every engine ships) and one known limitation
-(guest recursion depth: bounded by an engine-owned budget of 500 engine
-frames, raising a catchable guest `RangeError`, rather than by the host's
-stack). The full tables, spec citations, observable examples,
-and backing code references are in
+(mostly following ES2015+ errata every engine ships, plus the ES2015 grammar's
+removal of the strict duplicate-property early error) and known limitations —
+guest recursion depth is bounded by an engine-owned budget of 500 engine frames,
+raising a catchable guest `RangeError` rather than by the host's stack, and
+ES2015 syntax beyond lexical and block-level function declarations is rejected
+at parse time. The full
+tables, spec citations, observable examples, and backing code references are in
 [docs/limitations.md](docs/limitations.md).

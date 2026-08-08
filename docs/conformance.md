@@ -5,16 +5,37 @@ engine implements, and the live coverage numbers produced by the Test262 suite.
 
 ## Supported subset
 
+This engine implements the ES5.1 language and standard library **plus ES2015
+lexical declarations**: `let` and `const` bindings, block scope, the temporal
+dead zone (a `ReferenceError` on access before initialization), `const`
+assignment errors, per-iteration `for`/`for-in` loop bindings, and lexical
+scope for blocks, `switch` case blocks, `try` parts, function bodies, `eval`
+code, and the global environment. It also accepts ES2015 **block-level function
+declarations**, scoping them to their block and implementing the Annex B.3.3
+sloppy-mode `var`-alias so `{ function f(){} } f()` still resolves while
+`if (false) { function g(){} } typeof g` is `'undefined'`. Nothing else from
+ES2015 is implemented: the parser accepts the syntax above and rejects every
+other ES2015 construct — classes, arrow functions, template literals,
+`for`-`of`, generators, destructuring and default/rest patterns, spread,
+`new.target`, modules, computed/shorthand/method object properties,
+binary and octal numeric literals, and `\u{…}` code-point escapes (plus the
+ES2017 `async`/`await` forms) — so the grammar the engine parses is exactly the
+grammar it runs. The ES2015 RegExp flags `u` and `y` are likewise rejected, but
+by the engine's own ES5.1 flag validation (`src/runtime/regexp-syntax.js`)
+rather than by that pass. A rejection at the top level is the host `SyntaxError`
+every parse failure raises; source reaching the parser through `eval` or the
+dynamic `Function` constructor becomes a catchable guest `SyntaxError` instead.
+
 Fixtures deliberately stay inside what the engine implements today: `var`,
-function declarations and expressions, object and array literals (including
-getter/setter syntax), member access and calls, `new`, arithmetic, comparison,
-logical and conditional operators, simple `=` assignment, all compound
-assignment operators (`+= -= *= /= %= <<= >>= >>>= &= ^= |=`), prefix and
+`let`, `const`, function declarations and expressions, object and array literals
+(including getter/setter syntax), member access and calls, `new`, arithmetic,
+comparison, logical and conditional operators, simple `=` assignment, all
+compound assignment operators (`+= -= *= /= %= <<= >>= >>>= &= ^= |=`), prefix and
 postfix `++`/`--`, bitwise operators (`& | ^ ~ << >> >>>`), the unary operators
 `typeof`, `void`, `!`, `+` and `-`, `in`, `instanceof`, `delete`,
 `if`/`while`/`do`/`for`/`for-in`/`return`/`throw`, `try`/`catch`/`finally`,
-`switch`, `with`, `debugger`, labelled statements with `break`/`continue`, and
-the `NaN`, `Infinity`, `undefined` globals.
+`switch`, `with`, `debugger`, block statements, labelled statements with
+`break`/`continue`, and the `NaN`, `Infinity`, `undefined` globals.
 
 `for-in` enumerates own-then-inherited enumerable string-keyed properties in
 insertion order, each name at most once and never a name shadowed earlier in
@@ -123,12 +144,16 @@ A file is a candidate only if it survives every filter:
   eleven well-known symbol tags — scoped to `test/built-ins/Symbol` and
   `test/built-ins/Object/getOwnPropertySymbols`.
 
-- **An `ecmaVersion: 5` parse filter.** Every remaining file — and every harness
-  file it `includes` — is parsed at ES5 with the vendored acorn. A file that
-  will not parse as ES5 is testing syntax this engine is not required to accept,
-  so it is excluded structurally rather than by name. This is what keeps the
-  policy honest as the pin moves: new upstream tests written in modern syntax
-  drop out automatically instead of appearing as failures.
+- **An engine-grammar parse filter.** Every remaining file — and every harness
+  file it `includes` — is parsed with the engine's own `parseScript` (the same
+  grammar the engine runs, currently ES5.1 plus ES2015 lexical declarations and
+  block-level function declarations). A file that will not parse under that
+  grammar is testing syntax this engine is not required to accept, so it is
+  excluded structurally rather than by name. Routing the filter through the
+  engine itself is what keeps the policy honest as both the pin and the grammar
+  move: new upstream tests written in still-unsupported syntax drop out
+  automatically, and each syntax milestone widens the selection by construction
+  rather than by a hand-tuned `ecmaVersion`.
 - **Classified exclusions.** What survives all of the above but still must not
   run is carved out one path (or prefix) at a time, each with a category and a
   written reason.
@@ -141,14 +166,14 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 612 classified exclusions break down as:
+editions deliberately changed. The 594 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 347   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
-| `post-es5-builtin`   | 188   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
-| `post-es5-syntax`    | 47    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
-| `host-dependent`     | 28    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
+| `post-es5-semantics` | 334   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
+| `post-es5-builtin`   | 196   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
+| `post-es5-syntax`    | 31    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
+| `host-dependent`     | 31    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
 | `engine-deviation`   | 2     | This engine knowingly differs from what ES5.1 asks. Each entry names a heading in [docs/limitations.md](limitations.md) that documents the choice — a deviation that is not written down is indistinguishable from a bug. Both remaining entries are the same cause: the vendored parser lexes `IdentifierName` with the modern `ID_Continue` property instead of ES5.1 7.6's general categories. |
 
 The distinction that matters is between the first four categories and the last.
@@ -343,8 +368,8 @@ upstream checkout at `vendor/test262`; see the Test262 section above).
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 12,108   | 12,108    | 12,108 | 22.6%   |
-| (file, variant) | 102,906     | 23,045   | 23,045    | 23,045 | 22.394% |
+| Files           | 53,575      | 12,279   | 12,279    | 12,279 | 22.919% |
+| (file, variant) | 102,906     | 23,361   | 23,361    | 23,361 | 22.701% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
@@ -363,8 +388,9 @@ inventing one would describe something the run never measured.
 
 The selected subset is small by construction: every path in it was verified to
 pass with this engine, so the low whole-suite percentage is an honest statement
-of how much of Test262 an ES5-only engine has been pointed at, not a pass rate
-over tests it was never asked to run.
+of how much of Test262 an engine at this language level — ES5.1 plus ES2015
+lexical declarations and block-level function declarations — has been pointed at, not a pass rate over tests it was
+never asked to run.
 
 ## Policy artifacts
 

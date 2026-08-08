@@ -11,8 +11,9 @@ engines happen to do, and the two are not the same thing: several entries below
 describe places where this engine follows ES5.1 exactly and therefore differs
 from every browser. Any `engine-deviation` exclusion in
 [`tools/test262/es5-selection.json`](../tools/test262/es5-selection.json) must
-name one of the headings below; only two exclusions still do, because every
-other one filed under it turned out to be ES5.1-mandated behaviour. See
+name one of the headings below; two do — both name the `IdentifierName` heading
+below — because every other one once filed under the category
+turned out to be ES5.1-mandated behaviour. See
 [docs/conformance.md](conformance.md) for the exclusion categories and counts.
 
 ## Intentional deviations
@@ -325,6 +326,17 @@ is how the engine's own Date tests stay deterministic.
 **Backing code:** `src/runtime/date.js` (`createDateHost`).
 **Verification:** `evaluateScript(createRealm({ dateHost: { now: () => 1234567890123, timezoneOffset: () => 0 } }), 'new Date(0).toString()')` → `"Thu Jan 01 1970 00:00:00 GMT+0000 (Local)"` on every host and in every time zone.
 
+One consequence is worth knowing before running the upstream suite outside UTC.
+ES5.1 7.9.1.15 reads every offsetless ISO 8601 string as UTC, while ES2015
+20.3.1.15 rereads the offsetless date-_time_ form as local time; this engine
+implements ES5.1, so `Date.parse('1970-01-01T00:00:00')` is `0`. The upstream
+test for the ES2015 rule asserts that value equals the host's time-zone offset,
+so it passes in UTC — where the two editions agree — and fails everywhere else.
+It is therefore selected rather than excluded, because in the UTC environment CI
+validates in the engine genuinely satisfies it. A contributor running
+`npm run test262:upstream` from a non-UTC zone will see that one file fail; that
+is this deviation showing through, not a regression.
+
 ### Number-to-string and string-to-number use the host's algorithms
 
 After the engine has itself validated the ES5.1 grammar and handled every
@@ -373,6 +385,39 @@ never throws, passing malformed sequences through unchanged.
 
 **Backing code:** `src/builtins/global-uri.js`.
 **Verification:** `evaluateScript(realm, 'escape("\\u0100")')` → `"%u0100"`.
+
+### Strict-mode duplicate object property names are no longer an early error
+
+ES5.1 §11.1.5 makes a duplicate data-property name in an object literal a
+SyntaxError in strict code (`"use strict"; ({ a: 1, a: 2 })`). ES2015 removed
+that early error on purpose — an ordinary duplicate property name is legal, and
+the later definition simply wins — and this engine follows ES2015 here because
+raising the parser to `ecmaVersion: 6` is what enables lexical declarations, and
+Acorn drops the ES5 strict duplicate-property check at that edition. So
+`"use strict"; ({ a: 1, a: 2 }).a` evaluates to `2` rather than throwing. This
+does not extend to `__proto__`: a duplicate `__proto__` _definition_ in an
+object literal (`({ __proto__: null, __proto__: {} })`) is a distinct ES2015
+early error that Acorn still enforces, so it is rejected.
+
+This is the one place the ES2015 lexical-declarations milestone deliberately
+changes an existing ES5.1 behaviour: an ES5.1 engine would reject the strict
+form, and this engine now accepts it. It is a knowing divergence from ES5.1's
+letter that adopting the ES2015 grammar carried along, listed here rather than
+under known limitations because it is a deliberate choice, not a shortfall. The
+upstream tests that assert this sloppy acceptance — `11.1.5-2gs.js`,
+`prop-dup-data-data.js`, and the `11.1.5_4-4-*` files under
+`test/language/expressions/object/` — are **selected and passing**, not
+excluded. The one duplicate-property test that stays out, `__proto__-duplicate.js`,
+is excluded **structurally by the engine-grammar parse filter** (it asserts the
+`__proto__` early error above, so it no longer parses under the engine's
+grammar), not by a classified exclusion entry.
+
+**Backing code:** `src/parser.js` (`ecmaVersion: 6` in `PARSER_OPTIONS`).
+**Verification:**
+`evaluateScript(realm, '(function(){ "use strict"; return ({ a: 1, a: 2 }).a; })()')`
+→ `{ type: 'normal', value: 2 }`; and
+`evaluateScript(realm, 'try { eval("({ __proto__: null, __proto__: {} })"); "ok" } catch (e) { e.constructor.name }')`
+→ `{ type: 'normal', value: 'SyntaxError' }`.
 
 ## Known limitations
 
@@ -490,9 +535,9 @@ host `RangeError` for a pattern that is merely too deep.
 
 The **hoisting passes** that follow a successful parse
 (`globalDeclarationInstantiation`, `functionDeclarationInstantiation`, and
-`evalDeclarationInstantiation`, all through `collectVarNames` and
-`collectFunctionDeclarations`) keep an explicit stack instead of the host's,
-and push their children one at a time rather than spreading them as call
+`evalDeclarationInstantiation`, all through the declaration-name walks in
+`src/evaluator/static-semantics.js`) keep an explicit worklist instead of the
+host's, and push their children one at a time rather than spreading them as call
 arguments. Between them those two make the walk's cost independent of the
 program's shape: neither its depth nor the width of any statement list can
 reach a host limit. Both matter, because the parser accepts programs that
@@ -515,6 +560,48 @@ defects behind a guest error.
 (`src/runtime/regexp-syntax.js`); the parse-time conversion is `asParseFailure`
 in `src/parser.js`; the iterative walks are `EngineObject#getProperty`
 (`src/runtime/object.js`), `BoundFunction#hasInstance`
-(`src/builtins/function.js`), and `collectVarNames` /
-`collectFunctionDeclarations` (`src/evaluator/declarations.js`).
+(`src/builtins/function.js`), and the declaration-name walks in
+`src/evaluator/static-semantics.js`.
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.
+
+### ES2015 syntax beyond lexical and block-level function declarations is rejected at parse time
+
+The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
+and block-level function declarations, but no other ES2015 feature, so its
+parser accepts that syntax and rejects every other ES2015 construct at parse
+time. Most are refused by the engine's own early-error pass
+(`checkUnsupportedEs2015Node`): classes, arrow functions, template and tagged
+template literals, `for`-`of`, generators and `yield`, destructuring patterns
+(object, array, and default/rest/assignment patterns), spread elements,
+`new.target`, computed/shorthand/method object properties, binary (`0b`) and
+octal (`0o`) numeric literals, and `\u{…}` code-point escapes in strings and
+identifiers. Two families never reach that pass, because the vendored Acorn
+refuses them itself before it runs: module syntax
+(`import`/`export`/`import()`), rejected because the parser is configured with
+`sourceType: 'script'`, and the ES2017 `async`/`await` forms, which are not ES6
+syntax at `ecmaVersion: 6`. Their entries in the pass's rejection table are
+defensive — kept so a later `sourceType`/`ecmaVersion` change cannot let one
+slip through silently — not reached on any accepted parse. The ES2015 RegExp
+flags `u` and `y` are likewise rejected, but by the engine's existing ES5.1 flag
+validation in `src/runtime/regexp-syntax.js`, not by either mechanism above.
+Annex B.3.4 direct `if`-body function declarations
+(`if (condition) function f() {}`) are also rejected in sloppy as well as strict
+code until their conditional var-scoped replacement semantics are implemented;
+accepting the syntax without those semantics would leave the declaration
+silently mis-scoped.
+
+This is a limitation rather than a deviation: a full ES2015 engine accepts all
+of them, and the engine rejects them only because the evaluator does not yet
+implement them. Rejecting at the parser keeps the grammar the engine parses
+identical to the grammar it runs — a construct that would misbehave at runtime
+is refused up front with a message naming what is missing — rather than parsing
+a form the evaluator would then mishandle. A top-level `evaluateScript` call
+surfaces the rejection as the host `SyntaxError` that every parse failure
+raises; guest code that reaches the parser through `eval` or `Function` gets a
+catchable guest `SyntaxError`.
+
+**Backing code:** `src/parser.js` (`checkUnsupportedEs2015Node` and
+`UNSUPPORTED_ES2015_NODE_MESSAGES`).
+**Verification:**
+`evaluateScript(realm, 'try { eval("class C {}"); "ok" } catch (e) { e.constructor.name }')`
+→ `{ type: 'normal', value: 'SyntaxError' }`.

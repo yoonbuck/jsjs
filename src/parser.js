@@ -1,7 +1,7 @@
 // The parser dependency is reached through `./parser-dependency.js`, the one
 // engine module that names it: see that file for why the vendored build exists
 // and how it keeps Node, browser, and `jsc` runs on the same source.
-import { Parser, tokTypes } from './parser-dependency.js';
+import { Parser } from './parser-dependency.js';
 import { normalizeSyntaxError } from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import {
@@ -11,151 +11,33 @@ import {
 } from './runtime/regexp-syntax.js';
 
 const PARSER_OPTIONS = Object.freeze({
-  ecmaVersion: 5,
+  ecmaVersion: 6,
   sourceType: 'script',
   locations: true,
   ranges: true,
 });
 
 /**
- * An Acorn plugin that restores the ES5.1 §7.6 / §7.6.1 rule Acorn drops for
- * scripts parsed as `ecmaVersion < 6`: a `ReservedWord` is matched against the
- * *IdentifierName* only after its Unicode escape sequences are interpreted, so
- * an identifier whose code points spell a reserved word is never a valid
- * `Identifier`. Acorn's `checkUnreserved` returns early — before its
- * reserved-word test — for any identifier whose source contains a backslash
- * when `ecmaVersion < 6` (a deliberate ES3-era liberty), so it accepts
- * `var \u0063lass = 1` and a strict-mode escaped `yield` label. Both are
- * parse-phase `SyntaxError`s in every real engine and in the upstream
- * `val-*-via-escape` / `value-yield-strict-escaped` tests.
+ * Parses with Acorn's base script parser. A named wrapper rather than a
+ * detached `Parser.parse` reference because Acorn's static `parse` reads `this`
+ * (`new this(...)`), so it must stay a method call.
  *
- * The override re-applies the reserved-word test to the already-unescaped
- * `name`, but only when the raw source span differs from that name — i.e. only
- * when the identifier actually carried an escape — and then defers to the base
- * method so every non-escaped case, keyword, and binding restriction is handled
- * exactly as before. Acorn only calls `checkUnreserved` for `Identifier`
- * positions (bindings, references, labels) and skips it for the `IdentifierName`
- * positions (`obj.class`, `{ class: 1 }`) that parse a liberal identifier, so
- * reserved words stay legal as property names.
- *
- * @param {typeof Parser} Base
- * @returns {typeof Parser}
- */
-function withEscapedReservedWordCheck(Base) {
-  /**
-   * The base prototype, reached as `any` so calling its `checkUnreserved`
-   * type-checks: Acorn's `Parser` type declares neither that method nor the
-   * `reservedWords`/`strict`/`raiseRecoverable` internals this override uses.
-   * Calling through the prototype is equivalent to `super.checkUnreserved`.
-   */
-  const baseProto = /** @type {any} */ (Base).prototype;
-
-  return class extends Base {
-    /**
-     * @param {any} node
-     * @returns {void}
-     */
-    checkUnreserved(node) {
-      const self = /** @type {any} */ (this);
-
-      if (self.input.slice(node.start, node.end) !== node.name) {
-        const reserved = self.strict
-          ? self.reservedWordsStrict
-          : self.reservedWords;
-
-        if (reserved.test(node.name)) {
-          self.raiseRecoverable(
-            node.start,
-            `The keyword '${node.name}' is reserved`,
-          );
-        }
-      }
-
-      baseProto.checkUnreserved.call(this, node);
-    }
-  };
-}
-
-/**
- * An Acorn plugin that restores the `super` keyword at `ecmaVersion: 5`.
- *
- * Acorn only adds `"super"` to its keyword-matching regex when
- * `ecmaVersion >= 6` (its internal `keywords$1` table); below that version
- * the text `super` tokenizes as an ordinary identifier `name` token, so it
- * never reaches Acorn's own `case types$1._super:` branch in
- * `parseExprAtom` — the branch that already builds the correct `Super` AST
- * node, requires the next token to be `.`, `[`, or `(`, and checks
- * `this.allowSuper` (a scope flag Acorn already sets while parsing a
- * `get`/`set` accessor body via `parseMethod`, regardless of
- * `ecmaVersion` — ES5's own accessor grammar goes through the same
- * `parseMethod` path ES6 methods do). Instead it falls through to the
- * ordinary identifier path and is rejected by the ES5.1 future-reserved-word
- * check (`withEscapedReservedWordCheck`'s sibling, Acorn's own
- * `checkUnreserved`).
- *
- * This override corrects only the token *type* for the exact text `super`,
- * immediately after the base `readWord` has already run (so every other
- * word, and every other keyword, is tokenized exactly as before). Every
- * other ES6 keyword (`class`, `const`, `let`, `extends`, ...) still
- * tokenizes as an ordinary `name` and is still rejected the same way it is
- * today — this plugin touches nothing but the one word `super`.
- *
- * @param {typeof Parser} Base
- * @returns {typeof Parser}
- */
-function withSuperKeywordAtEs5(Base) {
-  const baseProto = /** @type {any} */ (Base).prototype;
-
-  return class extends Base {
-    /**
-     * @returns {void}
-     */
-    readWord() {
-      baseProto.readWord.call(this);
-
-      const self = /** @type {any} */ (this);
-
-      if (self.value === 'super' && self.type === tokTypes.name) {
-        self.type = tokTypes._super;
-      }
-    }
-  };
-}
-
-/**
- * The ordinary script parser, an Acorn subclass carrying the escaped
- * reserved-word early error. Constructed lazily and memoized so the plugin
- * subclass is built once.
- *
- * @type {typeof Parser | undefined}
- */
-let scriptParser;
-
-/**
- * @returns {typeof Parser}
- */
-function getScriptParser() {
-  if (scriptParser === undefined) {
-    scriptParser = Parser.extend(
-      withEscapedReservedWordCheck,
-      withSuperKeywordAtEs5,
-    );
-  }
-
-  return scriptParser;
-}
-
-/**
- * Parses with the memoized script parser. A named wrapper rather than a
- * detached `getScriptParser().parse` reference because Acorn's static `parse`
- * reads `this` (`new this(...)`), so it must stay a method call.
+ * At `ecmaVersion: 6` Acorn interprets an identifier's Unicode escape
+ * sequences *before* applying the ES §12.6 reserved-word rule, so an identifier
+ * whose code points spell a reserved word (`var \u0063lass = 1`, a strict
+ * escaped `yield` label, escaped `implements`/`package`/`private` bindings,
+ * escaped `let` in a lexical declaration) is already a parse-phase
+ * `SyntaxError`. The `ecmaVersion < 6` plugin that used to restore that check by
+ * hand is therefore obsolete and has been removed; the upstream
+ * `val-*-via-escape` / `value-yield-strict-escaped` tests still pass on Acorn's
+ * native behavior.
  *
  * @param {string} source
  * @param {any} options
  * @returns {any}
  */
 function parseWithScriptParser(source, options) {
-  return getScriptParser().parse(source, options);
+  return Parser.parse(source, options);
 }
 
 /**
@@ -170,11 +52,12 @@ function parseWithScriptParser(source, options) {
  * eval requires. Prepending a synthetic `"use strict";` to the source would
  * shift positions and is deliberately avoided.
  *
- * It also carries the escaped reserved-word early error, so a strict eval
- * rejects an escaped strict FutureReservedWord (`\u0079ield`) exactly as a
- * script does.
+ * At `ecmaVersion: 6` Acorn re-applies the reserved-word rule to escaped
+ * identifiers itself (see `parseWithScriptParser`), so a strict eval rejects an
+ * escaped strict FutureReservedWord (`\u0079ield`) exactly as a script does
+ * without any plugin of ours.
  *
- * Constructed lazily and memoized so the plugin subclass is built once.
+ * Constructed lazily and memoized so the subclass is built once.
  *
  * @type {typeof Parser | undefined}
  */
@@ -186,8 +69,6 @@ let strictParser;
 function getStrictParser() {
   if (strictParser === undefined) {
     strictParser = Parser.extend(
-      withEscapedReservedWordCheck,
-      withSuperKeywordAtEs5,
       (Base) =>
         class extends Base {
           /**
@@ -233,7 +114,7 @@ export function parseScript(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
-  return validateScriptProgram(program);
+  return validateScriptProgram(program, source);
 }
 
 /**
@@ -252,7 +133,7 @@ export function parseScript(source, options = {}) {
  * @returns {any}
  */
 export function parseEval(source, strict = false) {
-  const parser = strict ? getStrictParser() : getScriptParser();
+  const parser = strict ? getStrictParser() : Parser;
 
   let program;
 
@@ -262,7 +143,7 @@ export function parseEval(source, strict = false) {
     throw asParseFailure(error, true);
   }
 
-  return validateScriptProgram(program, strict);
+  return validateScriptProgram(program, source, strict);
 }
 
 /**
@@ -273,11 +154,18 @@ export function parseEval(source, strict = false) {
  * inherits strictness with no directive of its own. The early-error pass folds
  * the program's own `"use strict"` directive in on top of it.
  *
+ * `source` is the exact text the parser consumed, threaded through so the
+ * unsupported-ES2015 pass can compare an `Identifier`'s raw source span
+ * (`source.slice(node.start, node.end)`) against its interpreted `name` to
+ * detect an ES2015 code-point escape (`\u{...}`), the way `checkUnreserved`
+ * once compared the two.
+ *
  * @param {unknown} program
+ * @param {string} source
  * @param {boolean} [strict=false]
  * @returns {any}
  */
-function validateScriptProgram(program, strict = false) {
+function validateScriptProgram(program, source, strict = false) {
   if (
     !program ||
     typeof program !== 'object' ||
@@ -290,6 +178,7 @@ function validateScriptProgram(program, strict = false) {
 
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
+    source,
     strict,
   );
 
@@ -312,6 +201,109 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
   ['DoWhileStatement', 'do-while statement'],
   ['ForStatement', 'for statement'],
   ['ForInStatement', 'for-in statement'],
+]);
+
+/**
+ * The ES2015 node types the engine parses (because `ecmaVersion: 6` makes
+ * Acorn accept them and run its own lexical-scope analysis) but does not yet
+ * evaluate, mapped to the guest `SyntaxError` message that names the construct.
+ *
+ * Raising `PARSER_OPTIONS.ecmaVersion` to 6 is what enables `let`/`const`,
+ * block scope, and their static early errors — the scope of this milestone —
+ * but it also makes Acorn accept every *other* ES2015 grammar addition. None of
+ * those are implemented, and silently parsing a `class` or an arrow function
+ * that the evaluator then mishandles would be worse than refusing it, so this
+ * pass — reached from `checkStatementPositionFunctionDeclarations`, which both
+ * `parseScript` and `parseEval` funnel through — rejects each as a parse-time
+ * early error, exactly the way the statement-position and regexp passes beside
+ * it already do. `src/evaluator/eval.js` and `src/evaluator/dynamic-function.js`
+ * convert the host `SyntaxError` into a realm-local guest one.
+ *
+ * A `Map` rather than an object literal for the same reason
+ * `STATEMENT_BODY_PARENT_LABELS` gives: a node whose `type` names an
+ * `Object.prototype` member (`constructor`, `toString`, `valueOf`) must not be
+ * mistaken for an entry. `MethodDefinition`'s presence here makes that concrete
+ * — a bare-object literal keyed by node type would answer `has('constructor')`
+ * for every node.
+ *
+ * The three ES2015 additions that are not a distinct node type — a `Property`
+ * that is computed/shorthand/method, a generator/async `Function*`, and a
+ * binary/octal or code-point-escape `Literal` — are handled by
+ * `checkUnsupportedEs2015Node` directly, since they turn on a flag rather than
+ * on `node.type`.
+ *
+ * Each entry is one of three kinds, by *why* it fires (or does not). This was
+ * established empirically: for every entry, a `sourceType: 'script'`,
+ * `ecmaVersion: 6` snippet that would produce the node was parsed against the
+ * vendored Acorn and the resulting AST inspected for the node type; the walk's
+ * parent-first order (see `checkStatementPositionFunctionDeclarations`) then
+ * determines which ancestor, if any, this pass rejects first.
+ *
+ * *Reachable* — this pass is what rejects the construct, because the node is the
+ * first unsupported one the walk visits on some accepted parse:
+ * `ClassDeclaration`, `ClassExpression`, `ArrowFunctionExpression`,
+ * `TemplateLiteral`, `TaggedTemplateExpression`, `ForOfStatement`,
+ * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`,
+ * `SpreadElement`, and `MetaProperty` (via `new.target` inside a function).
+ *
+ * *Parent-blocked* — the node genuinely appears in ASTs Acorn produces, but the
+ * walk always rejects an ancestor first, so this entry never fires on its own.
+ * These are defence-in-depth: were the walk order or a parent's flag ever to
+ * change, the node would still be refused rather than silently evaluated.
+ * - `ClassBody` / `MethodDefinition` occur only inside a class, rejected first
+ *   at `ClassDeclaration` / `ClassExpression`. (`{ m() {} }` is a `Property`
+ *   with `method: true`, not a `MethodDefinition`.)
+ * - `TemplateElement` is a child of `TemplateLiteral`, rejected first.
+ * - `YieldExpression` occurs only inside a generator, whose enclosing
+ *   `Function` is rejected first by the `generator: true` flag check in
+ *   `checkUnsupportedEs2015Node`.
+ *
+ * `Super` is deliberately absent from the table: object-literal accessors carry
+ * `super` property references, which the engine implements (see
+ * `src/runtime/super-reference.js`). An accessor is a `Property` with
+ * `kind: 'get'`/`'set'` and `method: false`, so it is not caught by the
+ * object-method flag check either; `super` in an object *method* shorthand is
+ * still refused, because that `Property` has `method: true`. `super` outside any
+ * method or accessor is a parse error Acorn raises itself.
+ *
+ * *Acorn-blocked* — the parser refuses the source before any such node exists,
+ * so this pass never sees it. Kept so a later `sourceType`/`ecmaVersion` change
+ * cannot let one slip through silently.
+ * - `AwaitExpression` is an ES2017 feature; at `ecmaVersion: 6` `await x` and
+ *   `async function`/`async () =>` are parse errors Acorn raises itself, and the
+ *   `async` flag is never set (see the flag check in `checkUnsupportedEs2015Node`).
+ * - `ImportDeclaration` / `ExportNamedDeclaration` / `ExportDefaultDeclaration` /
+ *   `ExportAllDeclaration` require `sourceType: 'module'`; in a script Acorn
+ *   rejects them itself ("'import' and 'export' may appear only with
+ *   'sourceType: module'"). `ImportExpression` (dynamic `import()`) is likewise
+ *   rejected in a script at `ecmaVersion: 6` — it only becomes a script node at
+ *   `ecmaVersion: 11`.
+ *
+ * @type {ReadonlyMap<string, string>}
+ */
+const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
+  ['ClassDeclaration', '`class` declarations are not supported'],
+  ['ClassExpression', '`class` expressions are not supported'],
+  ['ClassBody', '`class` bodies are not supported'],
+  ['MethodDefinition', 'class and object methods are not supported'],
+  ['ArrowFunctionExpression', 'arrow functions are not supported'],
+  ['TemplateLiteral', 'template literals are not supported'],
+  ['TemplateElement', 'template literals are not supported'],
+  ['TaggedTemplateExpression', 'tagged template literals are not supported'],
+  ['ForOfStatement', '`for`-`of` statements are not supported'],
+  ['YieldExpression', 'generators and `yield` are not supported'],
+  ['AwaitExpression', '`await` expressions are not supported'],
+  ['ObjectPattern', 'destructuring patterns are not supported'],
+  ['ArrayPattern', 'destructuring patterns are not supported'],
+  ['AssignmentPattern', 'default value patterns are not supported'],
+  ['RestElement', 'rest elements are not supported'],
+  ['SpreadElement', 'spread elements are not supported'],
+  ['MetaProperty', '`new.target` is not supported'],
+  ['ImportDeclaration', 'import declarations are not supported'],
+  ['ImportExpression', 'dynamic `import` is not supported'],
+  ['ExportNamedDeclaration', 'export declarations are not supported'],
+  ['ExportDefaultDeclaration', 'export declarations are not supported'],
+  ['ExportAllDeclaration', 'export declarations are not supported'],
 ]);
 
 /**
@@ -342,10 +334,10 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * - Iteration and `with` bodies: never a function declaration, in any mode —
  *   there is no Annex B tolerance for them. A surrounding label chain
  *   (`with (o) a: b: function f(){}`) does not help.
- * - `if` branch: Annex B B.3.4 tolerates a *bare* function declaration as a
- *   branch (`if (1) function f(){}`), but only in sloppy code. A label chain
- *   in a branch (`if (1) l: function f(){}`) is rejected in every mode, and in
- *   strict code even the bare form is rejected.
+ * - `if` branch: reject a function declaration in every mode. Annex B B.3.4
+ *   specifies sloppy-mode semantics for the bare form
+ *   (`if (1) function f(){}`), but the evaluator does not implement those
+ *   semantics yet, so accepting it would silently mis-scope the declaration.
  * - Labelled statement body: Annex B B.3.2 tolerates a function declaration as
  *   a statement-list-level labelled body (`l: function f(){}`) in sloppy code;
  *   strict code forbids it. A labelled body that is itself an illegal position
@@ -366,10 +358,11 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * makes a cyclic tree — which the `parse` hook could hand us — terminate.
  *
  * @param {any} root
+ * @param {string} source The exact text parsed, for the code-point-escape check.
  * @param {boolean} rootStrict
  * @returns {void}
  */
-function checkStatementPositionFunctionDeclarations(root, rootStrict) {
+function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
   /** @type {{ node: any, strict: boolean }[]} */
   const pending = [{ node: root, strict: rootStrict }];
   /** @type {WeakSet<object>} */
@@ -403,6 +396,7 @@ function checkStatementPositionFunctionDeclarations(root, rootStrict) {
 
     checkFunctionDeclarationPosition(node, strict);
     checkRegularExpressionLiteral(node);
+    checkUnsupportedEs2015Node(node, source);
 
     const childStrict = childScopeStrictness(node, strict);
     const keys = Object.keys(node);
@@ -476,7 +470,7 @@ function checkFunctionDeclarationPosition(node, strict) {
     for (const branch of [node.consequent, node.alternate]) {
       const offending = resolveBodyFunctionDeclaration(branch);
 
-      if (offending && (offending.labeled || strict)) {
+      if (offending) {
         throw statementPositionFunctionError(
           'an if statement branch',
           offending.fn,
@@ -522,10 +516,6 @@ function pushChild(pending, value, strict) {
  * `a: b: function f(){}` reduces to the function declaration with
  * `labeled: true`. Returns `undefined` when the body is an ordinary statement.
  *
- * The `labeled` flag is what distinguishes the `if`-branch cases: Annex B
- * B.3.4 tolerates only the bare (`labeled: false`) form, so a labelled chain
- * in a branch is rejected even in sloppy code.
- *
  * The visited set guards against a cyclic label chain, which a custom `parse`
  * hook could hand us.
  *
@@ -565,6 +555,147 @@ function resolveBodyFunctionDeclaration(statement) {
 function statementPositionFunctionError(context, node) {
   return normalizeSyntaxError({
     message: `Function declarations cannot appear as ${context}`,
+    pos: typeof node.start === 'number' ? node.start : undefined,
+    loc: node.loc ? node.loc.start : undefined,
+  });
+}
+
+/**
+ * Rejects an ES2015 construct the parser now accepts (because it runs at
+ * `ecmaVersion: 6`) but the evaluator does not yet implement, as a parse-time
+ * early error. See `UNSUPPORTED_ES2015_NODE_MESSAGES` for the rationale and the
+ * full node-type table; this function adds the three cases that turn on a flag
+ * rather than a distinct `node.type`:
+ *
+ * - a `Property` that is `computed` (`{ [k]: 1 }`), `shorthand` (`{ x }`), or a
+ *   `method` (`{ m() {} }`) — the ES5.1 grammar has only `key: value`;
+ * - a `FunctionDeclaration` / `FunctionExpression` that is a `generator`
+ *   (`function* g(){}`) or `async`;
+ * - a numeric `Literal` written in the ES2015 binary (`0b`) or octal (`0o`)
+ *   forms, and any string `Literal` or `Identifier` carrying an ES2015
+ *   code-point escape (`\u{...}`).
+ *
+ * The code-point escape is detected on `Literal.raw` for a string literal
+ * (Acorn's verbatim source text of the literal) and, for an `Identifier`, on
+ * the raw source span `source.slice(node.start, node.end)` — the interpreted
+ * `name` no longer contains the backslash sequence, so the source is the only
+ * place the escape survives, exactly as the former `checkUnreserved` plugin
+ * compared the span to the name. A custom `parse` hook can hand us a node whose
+ * `start`/`end` do not index `source`; the `typeof` guards below make that a
+ * no-op rather than a spurious rejection.
+ *
+ * @param {any} node
+ * @param {string} source
+ * @returns {void}
+ */
+function checkUnsupportedEs2015Node(node, source) {
+  const typeMessage = UNSUPPORTED_ES2015_NODE_MESSAGES.get(node.type);
+
+  if (typeMessage !== undefined) {
+    throw unsupportedEs2015Error(typeMessage, node);
+  }
+
+  if (
+    node.type === 'Property' &&
+    (node.computed || node.shorthand || node.method)
+  ) {
+    throw unsupportedEs2015Error(
+      'computed, shorthand, and method object properties are not supported',
+      node,
+    );
+  }
+
+  if (
+    (node.type === 'FunctionDeclaration' ||
+      node.type === 'FunctionExpression') &&
+    (node.generator || node.async)
+  ) {
+    throw unsupportedEs2015Error(
+      node.async
+        ? 'async functions are not supported'
+        : 'generators and `yield` are not supported',
+      node,
+    );
+  }
+
+  if (node.type === 'Literal' && typeof node.raw === 'string') {
+    if (/^0[bBoO]/.test(node.raw)) {
+      throw unsupportedEs2015Error(
+        'binary and octal numeric literals are not supported',
+        node,
+      );
+    }
+
+    if (typeof node.value === 'string' && hasCodePointEscape(node.raw)) {
+      throw unsupportedEs2015Error(
+        'unicode code-point escapes (`\\u{...}`) are not supported',
+        node,
+      );
+    }
+  }
+
+  if (
+    node.type === 'Identifier' &&
+    typeof node.start === 'number' &&
+    typeof node.end === 'number' &&
+    hasCodePointEscape(source.slice(node.start, node.end))
+  ) {
+    throw unsupportedEs2015Error(
+      'unicode code-point escapes (`\\u{...}`) are not supported',
+      node,
+    );
+  }
+}
+
+/**
+ * Whether `text` contains an ES2015 code-point escape `\u{...}` — a `u{`
+ * introduced by an *odd*-length run of backslashes, so the final backslash is
+ * an escape introducer rather than an escaped backslash.
+ *
+ * The naive `text.includes('\\u{')` misreads a string literal like `"\\u{"`,
+ * whose source is an escaped backslash (`\\`) followed by the literal
+ * characters `u{`: its raw text still contains the three characters `\u{`, but
+ * the `u` is not escaped and there is no code-point escape. The upstream
+ * `RegExp/unicode_restricted_identity_escape_u` tests, whose pattern strings
+ * spell exactly that, are what force this distinction. Counting the preceding
+ * backslashes is the same parity test a lexer applies to decide whether a
+ * backslash starts an escape sequence.
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+function hasCodePointEscape(text) {
+  for (
+    let index = text.indexOf('u{');
+    index !== -1;
+    index = text.indexOf('u{', index + 1)
+  ) {
+    let backslashes = 0;
+
+    for (let scan = index - 1; scan >= 0 && text[scan] === '\\'; scan -= 1) {
+      backslashes += 1;
+    }
+
+    if (backslashes % 2 === 1) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Builds the guest-facing `SyntaxError` for a rejected unsupported-ES2015
+ * construct, carrying the offending node's position through
+ * `normalizeSyntaxError` so it reads like any other parse error.
+ *
+ * @param {string} message
+ * @param {any} node
+ * @returns {SyntaxError}
+ */
+function unsupportedEs2015Error(message, node) {
+  return normalizeSyntaxError({
+    message,
     pos: typeof node.start === 'number' ? node.start : undefined,
     loc: node.loc ? node.loc.start : undefined,
   });

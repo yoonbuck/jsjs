@@ -64,6 +64,25 @@ function assertGuestThrow(completion, constructorName, realm) {
   throw new Error(`Thrown value is not an instance of ${constructorName}`);
 }
 
+/**
+ * Assert the completion is a guest throw of `constructorName` in `realm` whose
+ * `message` own property is exactly `message`. Used for TDZ reads, whose
+ * `ReferenceError` must be told apart from an unresolved-identifier
+ * `ReferenceError` by its message.
+ *
+ * @param {{ type: string, value: unknown }} completion
+ * @param {string} constructorName
+ * @param {string} message
+ * @param {import('../src/runtime/realm.js').Realm} realm
+ */
+function assertGuestThrowMessage(completion, constructorName, message, realm) {
+  assertGuestThrow(completion, constructorName, realm);
+  assertSame(
+    /** @type {EngineObject} */ (completion.value).get('message'),
+    message,
+  );
+}
+
 const tests = [
   // ---------------------------------------------------------------------------
   // 15.1.2.1 step 1: a non-String argument is returned unchanged (no coercion)
@@ -163,6 +182,43 @@ const tests = [
     },
   },
   {
+    name: 'eval hoists duplicate sloppy block functions with the last declaration winning',
+    run() {
+      assertNormal(
+        run(
+          'eval("{ function f() { return 1; } function f() { return 2; } } f()");',
+        ),
+        2,
+      );
+    },
+  },
+  {
+    name: 'eval rejects duplicate strict block functions with a guest SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(
+          realm,
+          'eval("\\"use strict\\"; { function f() {} function f() {} }");',
+        ),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'eval rejects a direct if-body function in sloppy and strict code',
+    run() {
+      for (const source of [
+        'eval("if (true) function f() {}");',
+        '"use strict"; eval("if (true) function f() {}");',
+      ]) {
+        const realm = createRealm();
+        assertGuestThrow(runIn(realm, source), 'SyntaxError', realm);
+      }
+    },
+  },
+  {
     name: 'eval of deeply nested but valid source does not leak a host RangeError',
     run() {
       // A host RangeError from a runaway AST walk would escape the guest
@@ -237,13 +293,6 @@ const tests = [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // Direct eval hoists into the VariableEnvironment, not the LexicalEnvironment
-  // (10.4.2 + 10.5): a catch clause installs a fresh lexical environment for
-  // its parameter, but a `var`/function declared by a direct eval in the catch
-  // body must land in the enclosing function (or global) variable environment
-  // and outlive the catch scope.
-  // ---------------------------------------------------------------------------
   {
     name: 'direct eval var inside a catch block hoists into the enclosing function scope',
     run() {
@@ -267,15 +316,24 @@ const tests = [
     },
   },
   {
-    name: 'direct eval function declaration inside a catch block closes over the function scope, not the catch parameter',
+    name: 'a direct-eval hoisted function captures the eval lexical environment, so a catch-nested one sees the catch parameter',
     run() {
-      // The hoisted function captures the VariableEnvironment as its [[Scope]],
-      // so `e` (a catch-only lexical binding) is not visible inside it.
       assertNormal(
         run(
           'function f() { try { throw 42; } catch (e) { eval("function g(){ return typeof e; }"); } return g(); } f();',
         ),
-        'undefined',
+        'number',
+      );
+    },
+  },
+  {
+    name: 'a direct-eval hoisted function sees a let declared in the same eval',
+    run() {
+      assertNormal(
+        run(
+          'function o() { eval("let x = 41; function f(){ return x + 1; }"); return f(); } o();',
+        ),
+        42,
       );
     },
   },
@@ -663,6 +721,209 @@ const tests = [
       // realm B's.
       assertSame(realmA.globalObject.get('madeInA'), result.value);
       assertSame(realmB.globalObject.getOwnProperty('madeInA'), undefined);
+    },
+  },
+
+  {
+    name: 'eval("let x = 1;") does not leak x to the caller (fresh lexical environment)',
+    run() {
+      assertNormal(run('eval("let x = 1;"); typeof x;'), 'undefined');
+    },
+  },
+  {
+    name: 'eval("const x = 1;") does not leak x to the caller',
+    run() {
+      assertNormal(run('eval("const x = 1;"); typeof x;'), 'undefined');
+    },
+  },
+  {
+    name: 'direct eval let inside a function does not leak into the caller function scope',
+    run() {
+      assertNormal(
+        run(
+          'function f() { eval("let localLet = 5;"); return typeof localLet; } f();',
+        ),
+        'undefined',
+      );
+    },
+  },
+  {
+    name: 'eval("let x = 1;") completion value is the empty-normal undefined',
+    run() {
+      assertNormal(run('eval("let x = 1;");'), undefined);
+    },
+  },
+  {
+    name: 'direct eval can read its own let across statements',
+    run() {
+      assertNormal(run('eval("let x = 41; x + 1;");'), 42);
+    },
+  },
+  {
+    name: 'eval("var x = 1;") still leaks x into the sloppy direct-eval caller scope',
+    run() {
+      assertNormal(run('eval("var x = 7;"); x;'), 7);
+    },
+  },
+  {
+    name: 'eval("var x = 1;") creates a deletable binding (configurable)',
+    run() {
+      assertNormal(
+        run('eval("var dx = 9;"); var removed = delete dx; removed;'),
+        true,
+      );
+    },
+  },
+  {
+    name: 'a deleted eval-created var is gone afterwards',
+    run() {
+      assertNormal(
+        run('eval("var dx = 9;"); delete dx; typeof dx;'),
+        'undefined',
+      );
+    },
+  },
+
+  {
+    name: 'direct eval reads and writes an enclosing let binding',
+    run() {
+      assertNormal(
+        run('function f() { let a = 1; eval("a = 5;"); return a; } f();'),
+        5,
+      );
+    },
+  },
+  {
+    name: 'direct eval inside a block sees that block-scoped binding',
+    run() {
+      assertNormal(run('var out; { let b = 7; out = eval("b + 1"); } out;'), 8);
+    },
+  },
+  {
+    name: 'direct eval inside a catch still hoists its var past the catch scope',
+    run() {
+      assertNormal(
+        run(
+          'function f() { try { throw 0; } catch (e) { eval("var hoisted = 3;"); } return hoisted; } f();',
+        ),
+        3,
+      );
+    },
+  },
+  {
+    name: 'Annex B.3.5: eval("var x") in a catch whose parameter is x binds the parameter, not a new var',
+    run() {
+      assertNormal(
+        run(
+          'var x = "global-x"; var log = ""; function g() { try { throw 8; } catch (x) { eval("var x = 42;"); log += x; } x = "g"; log += x; } g(); x + "|" + log;',
+        ),
+        'global-x|42g',
+      );
+    },
+  },
+
+  {
+    name: 'let x; eval("var x") in the same block is a guest SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'function f() { let x = 1; eval("var x = 2;"); } f();'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'let x at global script scope; eval("var x") is a guest SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'let gx = 1; eval("var gx = 2;");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'let x at global scope; indirect eval("var x") is a guest SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'let gy = 1; (0, eval)("var gy = 2;");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'a var collision with an outer const is also a guest SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'function f() { const c = 1; eval("var c = 2;"); } f();'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+
+  {
+    name: 'strict-caller eval var does not leak to the caller',
+    run() {
+      assertNormal(
+        run('"use strict"; eval("var sx = 1;"); typeof sx;'),
+        'undefined',
+      );
+    },
+  },
+  {
+    name: 'strict-source eval var does not leak to the caller',
+    run() {
+      assertNormal(
+        run('eval("\'use strict\'; var sx = 1;"); typeof sx;'),
+        'undefined',
+      );
+    },
+  },
+  {
+    name: 'strict-source eval let does not leak to the caller',
+    run() {
+      assertNormal(
+        run('eval("\'use strict\'; let sy = 1;"); typeof sy;'),
+        'undefined',
+      );
+    },
+  },
+  {
+    name: 'strict eval can still read its own let and var internally',
+    run() {
+      assertNormal(
+        run('eval("\'use strict\'; let a = 2; var b = 3; a + b;");'),
+        5,
+      );
+    },
+  },
+
+  {
+    name: 'direct eval reading an enclosing binding in its TDZ throws the TDZ ReferenceError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrowMessage(
+        runIn(realm, 'function f() { eval("z"); let z = 1; } f();'),
+        'ReferenceError',
+        "Cannot access 'z' before initialization",
+        realm,
+      );
+    },
+  },
+
+  {
+    name: 'Annex B.3.3.3: eval block-function alias is suppressed by an enclosing let of the same name',
+    run() {
+      assertNormal(
+        run('{ let f = 1; eval("{ function f(){} }"); } typeof f;'),
+        'undefined',
+      );
     },
   },
 ];

@@ -14,6 +14,7 @@
  */
 
 import foundation from './foundation.test.js';
+import staticSemantics from './static-semantics.test.js';
 import parser from './parser.test.js';
 import runtimeRecords from './runtime-records.test.js';
 import objects from './objects.test.js';
@@ -31,6 +32,7 @@ import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
 import switchLabels from './switch-labels.test.js';
+import lexicalDeclarations from './lexical-declarations.test.js';
 import stackOverflow from './stack-overflow.test.js';
 import updateAssignment from './update-assignment.test.js';
 import inInstanceof from './in-instanceof.test.js';
@@ -74,6 +76,10 @@ import profilingCore from './profiling-core.test.js';
 /** @type {readonly TestSuite[]} */
 export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({ file: 'test/foundation.test.js', tests: foundation }),
+  Object.freeze({
+    file: 'test/static-semantics.test.js',
+    tests: staticSemantics,
+  }),
   Object.freeze({ file: 'test/parser.test.js', tests: parser }),
   Object.freeze({
     file: 'test/runtime-records.test.js',
@@ -123,6 +129,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/switch-labels.test.js',
     tests: switchLabels,
+  }),
+  Object.freeze({
+    file: 'test/lexical-declarations.test.js',
+    tests: lexicalDeclarations,
   }),
   Object.freeze({
     file: 'test/stack-overflow.test.js',

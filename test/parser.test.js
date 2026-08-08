@@ -1,5 +1,5 @@
 import { assertSame, assertThrows } from './harness/assert.js';
-import { parseScript } from '../src/parser.js';
+import { parseScript, parseEval } from '../src/parser.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 
@@ -177,17 +177,11 @@ const tests = [
     },
   },
   {
-    name: 'Annex B function-declaration positions stay accepted in sloppy mode',
+    name: 'implemented Annex B function-declaration positions stay accepted in sloppy mode',
     run() {
-      // ES5.1 Annex B / web reality keeps these accepted (JavaScriptCore too)
-      // in *sloppy* code: a bare function as an `if` branch (B.3.4) and a
-      // statement-list-level labelled function (B.3.2, including a label
-      // chain), plus a function inside a block. Guarding them here stops
-      // anyone from over-tightening the pass.
+      // The engine implements sloppy statement-list-level labelled functions
+      // (B.3.2, including a label chain) and functions inside a block.
       const accepted = [
-        'if (true) function f() {}',
-        'if (true) function f() {} else function g() {}',
-        'if (true) ; else function g() {}',
         'label: function f() {}',
         'a: b: function f() {}',
         '{ function f() {} }',
@@ -198,6 +192,22 @@ const tests = [
         const program = parseScript(source);
 
         assertSame(program.type, 'Program');
+      }
+    },
+  },
+  {
+    name: 'a direct if-body function is rejected in sloppy and strict code until Annex B.3.4 is implemented',
+    run() {
+      const rejected = [
+        'if (true) function f() {}',
+        'if (true) function f() {} else function g() {}',
+        'if (true) ; else function g() {}',
+        '"use strict"; if (true) function f() {}',
+        '"use strict"; if (true) ; else function g() {}',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
       }
     },
   },
@@ -242,22 +252,22 @@ const tests = [
     name: 'the strict function-declaration rejection follows per-function strictness',
     run() {
       // Strictness is a property of the nearest function scope, not the whole
-      // program: a strict function inside a sloppy script forbids the Annex B
-      // forms, while a sloppy function keeps them (JavaScriptCore agrees).
+      // program. Labelled functions remain accepted in sloppy function bodies,
+      // while direct if-body functions are rejected until B.3.4 is implemented.
       const rejected = [
         'function outer() { "use strict"; if (1) function f() {} }',
         'function outer() { "use strict"; label: function f() {} }',
         'var g = function () { "use strict"; if (1) function f() {} };',
+        'function outer() { if (1) function f() {} }',
+        'var g = function () { if (1) function f() {} };',
       ];
 
       for (const source of rejected) {
         assertThrows(() => parseScript(source), SyntaxError);
       }
-
       const accepted = [
-        'function outer() { if (1) function f() {} }',
         'function outer() { label: function f() {} }',
-        'var g = function () { if (1) function f() {} };',
+        'var g = function () { label: function f() {} };',
       ];
 
       for (const source of accepted) {
@@ -566,6 +576,192 @@ const tests = [
       // validator treats it as a non-IdentifierPart and allows `\\\u00B7`.
       parseScript('var a\u00B7b;');
       parseScript('/\\\u00B7/;');
+    },
+  },
+
+  {
+    name: 'let and const declarations parse in every position the ES2015 grammar allows: top level, block, and for head, through parseScript and parseEval',
+    run() {
+      const accepted = [
+        ['let x = 1;', 'let'],
+        ['const y = 2;', 'const'],
+        ['let a = 1, b = 2, c;', 'let'],
+        ['const p = 1, q = 2;', 'const'],
+      ];
+
+      for (const [source, kind] of accepted) {
+        const program = parseScript(source);
+
+        assertSame(program.type, 'Program', source);
+        assertSame(program.body[0].type, 'VariableDeclaration', source);
+        assertSame(program.body[0].kind, kind, source);
+      }
+
+      const parses = [
+        '{ let x = 1; }',
+        '{ const y = 2; }',
+        'for (let i = 0; i < 1; i = i + 1) {}',
+        'for (const k in this) {}',
+        'l: { let x = 1; }',
+      ];
+
+      for (const source of parses) {
+        assertSame(parseScript(source).type, 'Program', source);
+        assertSame(parseEval(source).type, 'Program', source);
+      }
+    },
+  },
+  {
+    name: 'each reachable unsupported ES2015 construct is rejected by the pass from parseScript and parseEval',
+    run() {
+      const rejected = [
+        'class C {}',
+        'var c = class {};',
+        'var f = () => 1;',
+        '`template`;',
+        'tag`template`;',
+        'for (var x of []) {}',
+        'function* g() { yield 1; }',
+        'var d = { a };',
+        'var d = { [k]: 1 };',
+        'var d = { m() {} };',
+        'var { a } = this;',
+        'var [ a ] = this;',
+        'function withDefault(a = 1) { return a; }',
+        'function withRest(...a) { return a; }',
+        'foo(...a);',
+        'function withMeta() { return new.target; }',
+        '0b101;',
+        '0B101;',
+        '0o17;',
+        '0O17;',
+        'var s = "\\u{41}";',
+        'var \\u{63}at = 1;',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+        assertThrows(() => parseEval(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'unsupported ES2015 constructs unreachable in a script are still rejected as SyntaxErrors from parseScript and parseEval',
+    run() {
+      const rejected = [
+        'class C { m() {} }',
+        'var c = class { static m() {} };',
+        'super.x;',
+        'super();',
+        'async function f() {}',
+        'var af = async () => 1;',
+        'await x;',
+        "import x from 'y';",
+        "import('x');",
+        'export { a };',
+        'export default 1;',
+        "export * from 'y';",
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+        assertThrows(() => parseEval(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'two representative unsupported constructs reject a dynamic Function at construction as a guest SyntaxError',
+    run() {
+      const realm = createRealm();
+
+      for (const body of ['class C {}', 'return () => 1;']) {
+        assertSame(
+          evaluateScript(
+            realm,
+            'var name = "none";' +
+              `try { new Function(${JSON.stringify(body)}) } ` +
+              'catch (e) { name = e.constructor.name }' +
+              'name;',
+          ).value,
+          'SyntaxError',
+          body,
+        );
+      }
+    },
+  },
+  {
+    name: 'the unsupported-ES2015 rejection carries the offending node position (class keyword at 0-based index 2)',
+    run() {
+      const error = /** @type {any} */ (
+        assertThrows(() => parseScript('  class C {}'), SyntaxError)
+      );
+
+      assertSame(error.pos, 2);
+      assertSame(error.loc.line, 1);
+      assertSame(error.loc.column, 2);
+    },
+  },
+  {
+    name: 'ES5 early errors survive the ES2015 grammar bump: strict with, strict octal, strict duplicate params, strict delete of an identifier, a reserved-word binding, the ES5.1-only regexp flags u and y, and a function declaration in an iteration body',
+    run() {
+      const rejected = [
+        '"use strict"; with (this) {}',
+        '"use strict"; var x = 010;',
+        '"use strict"; function f(a, a) {}',
+        '"use strict"; delete x;',
+        'var enum;',
+        '/x/u;',
+        '/x/y;',
+        'while (false) function f() {}',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'ES2015 lexical static semantics are inherited from the vendored parser and kept, asserted through parseScript: redeclaration, let-name, missing initializer, and single-statement-position early errors',
+    run() {
+      const rejected = [
+        'let x; let x;',
+        'let y; var y;',
+        'var z; let z;',
+        'let let;',
+        'const let = 1;',
+        'const missingInitializer;',
+        'try {} catch (e) { let e; }',
+        'function shadow(a) { let a; }',
+        'for (let i = 0;;) { var i; }',
+        'switch (this) { case 1: let x; break; default: let x; }',
+        'if (this) let x = 1;',
+        'while (false) let x = 1;',
+        'label: let x = 1;',
+        '"use strict"; let eval = 1;',
+        '"use strict"; let arguments = 1;',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'a nested-block lexical declaration evaluates instead of raising UnsupportedNodeError',
+    run() {
+      const realm = createRealm();
+      assertSame(evaluateScript(realm, '{ let x = 1; x; }').value, 1);
+    },
+  },
+  {
+    name: 'a top-level lexical declaration in eval evaluates and does not leak to the caller',
+    run() {
+      const realm = createRealm();
+      assertSame(
+        evaluateScript(realm, 'eval("let y = 41; y + 1;");').value,
+        42,
+      );
+      assertSame(evaluateScript(realm, 'typeof y;').value, 'undefined');
     },
   },
 ];
