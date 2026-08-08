@@ -120,13 +120,13 @@ function isGlobalPutTarget(globalObject) {
 
 /**
  * Implements ECMA-262 8.7 `HasPrimitiveBase`: the reference's base *value*
- * is a String, Number, or Boolean primitive. `null` and `undefined` never
- * reach here — `CheckObjectCoercible` rejects them while the property
+ * is a String, Number, Boolean, or Symbol primitive. `null` and `undefined`
+ * never reach here — `CheckObjectCoercible` rejects them while the property
  * reference is being built (11.2.1 step 5) — and an environment-record
  * reference carries no base value at all.
  *
  * @param {Reference} reference
- * @returns {reference is Reference & { thisValue: string | number | boolean }}
+ * @returns {reference is Reference & { thisValue: string | number | boolean | symbol }}
  */
 function hasPrimitiveBase(reference) {
   const value = reference.thisValue;
@@ -134,7 +134,8 @@ function hasPrimitiveBase(reference) {
   return (
     typeof value === 'string' ||
     typeof value === 'number' ||
-    typeof value === 'boolean'
+    typeof value === 'boolean' ||
+    typeof value === 'symbol'
   );
 }
 

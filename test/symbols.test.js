@@ -10,6 +10,7 @@ import {
   symbolKeyFor,
 } from '../src/runtime/symbol.js';
 import { createRealm } from '../src/runtime/realm.js';
+import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import {
@@ -42,6 +43,30 @@ function assertGuestTypeError(body) {
   );
 
   assertSame(error.typeName, 'TypeError');
+}
+
+/**
+ * Runs guest `source` in a fresh realm whose global object binds `sym` to a
+ * symbol primitive, so the evaluator's property-key paths can be exercised
+ * independently of the guest-visible `Symbol` constructor.
+ *
+ * @param {string} source
+ * @param {{ completion?: 'value' | 'type' }} [options]
+ * @returns {unknown}
+ */
+function runWithSymbol(source, options = {}) {
+  const realm = createRealm();
+
+  realm.globalObject.defineOwnProperty('sym', {
+    value: createSymbol('collide'),
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+
+  const completion = evaluateScript(realm, source);
+
+  return options.completion === 'type' ? completion.type : completion.value;
 }
 
 const tests = [
@@ -340,6 +365,126 @@ const tests = [
       );
       assertSame(symbolFor('shared') === symbolFor('shared'), true);
       assertSame(WELL_KNOWN_SYMBOLS.iterator, WELL_KNOWN_SYMBOLS.iterator);
+    },
+  },
+  {
+    name: 'a computed member expression accepts a symbol key',
+    run() {
+      assertSame(runWithSymbol('var o = {}; o[sym] = 1; o[sym];'), 1);
+      assertSame(runWithSymbol('var o = {}; o[sym];'), undefined);
+    },
+  },
+  {
+    name: 'a symbol key never collides with its descriptive string',
+    run() {
+      assertSame(
+        runWithSymbol(
+          'var o = {}; o[sym] = "symbol"; o["Symbol(collide)"] = "string";' +
+            'o[sym] + "/" + o["Symbol(collide)"];',
+        ),
+        'symbol/string',
+      );
+      assertSame(
+        runWithSymbol('var o = {}; o[sym] = 1; "Symbol(collide)" in o;'),
+        false,
+      );
+    },
+  },
+  {
+    name: 'the in operator and delete accept symbol keys',
+    run() {
+      assertSame(runWithSymbol('var o = {}; sym in o;'), false);
+      assertSame(runWithSymbol('var o = {}; o[sym] = 1; sym in o;'), true);
+      assertSame(
+        runWithSymbol('var o = {}; o[sym] = 1; delete o[sym]; sym in o;'),
+        false,
+      );
+      assertSame(runWithSymbol('var o = {}; delete o[sym];'), true);
+    },
+  },
+  {
+    name: 'a symbol-keyed property is inherited and shadowed like a string-keyed one',
+    run() {
+      assertSame(
+        runWithSymbol(
+          'function F() {} var f = new F(); F.prototype[sym] = "proto";' +
+            'var before = f[sym]; f[sym] = "own";' +
+            'before + "/" + f[sym] + "/" + F.prototype[sym];',
+        ),
+        'proto/own/proto',
+      );
+    },
+  },
+  {
+    name: 'inherited symbol-keyed accessors run for reads and writes',
+    run() {
+      const realm = createRealm();
+      const symbol = createSymbol('collide');
+      const proto = new EngineObject(realm.intrinsics.objectPrototype);
+      /** @type {unknown} */
+      let written;
+
+      proto.defineOwnProperty(symbol, {
+        get: realm.createNativeFunction({
+          name: 'get',
+          length: 0,
+          call() {
+            return 23;
+          },
+        }),
+        set: realm.createNativeFunction({
+          name: 'set',
+          length: 1,
+          call(_thisValue, args) {
+            written = args[0];
+            return undefined;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+
+      for (const [name, value] of /** @type {[string, unknown][]} */ ([
+        ['sym', symbol],
+        ['proto', proto],
+      ])) {
+        realm.globalObject.defineOwnProperty(name, {
+          value,
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        });
+      }
+
+      const completion = evaluateScript(
+        realm,
+        'var o = Object.create(proto); var read = o[sym];' +
+          'o[sym] = "written"; read;',
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 23);
+      assertSame(written, 'written');
+    },
+  },
+  {
+    name: 'assigning to a symbol property of a symbol primitive follows the wrapper rules',
+    run() {
+      assertSame(runWithSymbol('sym.a = 0; typeof sym.a;'), 'undefined');
+      assertSame(
+        runWithSymbol('"use strict"; sym.a = 0;', { completion: 'type' }),
+        'throw',
+      );
+      assertSame(
+        runWithSymbol('"use strict"; sym[62] = 0;', { completion: 'type' }),
+        'throw',
+      );
+    },
+  },
+  {
+    name: 'a numeric computed key is still the string key it always was',
+    run() {
+      assertSame(runWithSymbol('var o = {}; o[62] = "n"; o["62"];'), 'n');
     },
   },
 ];

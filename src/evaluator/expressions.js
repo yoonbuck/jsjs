@@ -19,6 +19,7 @@ import {
   toNumber,
   toObject,
   toString,
+  toPropertyKey,
 } from '../runtime/conversion.js';
 import {
   abstractEqualityComparison,
@@ -413,9 +414,9 @@ function applyBinaryOperator(operator, left, right) {
     case '^':
       return bitwiseXOR(left, right);
     case 'in': {
-      // ES5 11.8.7 step 5: check RHS type BEFORE any ToString(lval) call,
-      // so a guest toString/valueOf on the LHS cannot run or override the
-      // thrown error when the RHS is not an object.
+      // ES5 11.8.7 step 5: check RHS type BEFORE any key coercion on the
+      // LHS, so a guest toString/valueOf on the LHS cannot run or override
+      // the thrown error when the RHS is not an object.
       if (!(right instanceof EngineObject)) {
         throw new GuestErrorSignal(
           'TypeError',
@@ -423,7 +424,7 @@ function applyBinaryOperator(operator, left, right) {
         );
       }
 
-      return right.hasProperty(toString(left));
+      return right.hasProperty(toPropertyKey(left));
     }
     case 'instanceof': {
       if (!(right instanceof EngineObject)) {
@@ -800,7 +801,7 @@ function evaluateMemberExpression(node, context) {
 
   return new Reference(
     toObjectBase(context.realm, baseValue),
-    toString(propertyKey),
+    toPropertyKey(propertyKey),
     context.strict,
     baseValue,
   );
