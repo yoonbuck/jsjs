@@ -39,26 +39,6 @@
   ],
   "exclusions": [
     {
-      "path": "test/annexB/built-ins/Date/prototype/getYear/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/annexB/built-ins/Date/prototype/getYear/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/annexB/built-ins/Date/prototype/setYear/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/annexB/built-ins/Date/prototype/setYear/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/annexB/built-ins/RegExp/RegExp-decimal-escape-class-range.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.2.19 `ClassEscape :: DecimalEscape` evaluates the escape and throws a SyntaxError unless the result is a single character, so `/[\\d][\\12-\\14]{1,}/`'s `\\12` (a backreference with no 12th group) is a mandatory ES5.1 SyntaxError. ES2015 Annex B B.1.4 added `ClassAtomNoDashInRange :: \\ ClassEscape` leniency that reinterprets it as a legacy octal; ES5.1 has no Annex B RegExp grammar at all."
@@ -159,39 +139,9 @@
       "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
     },
     {
-      "path": "test/annexB/built-ins/String/prototype/substr/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 makes built-in function `length` non-configurable; ES2015 §19.2.4 changed it to configurable."
-    },
-    {
-      "path": "test/annexB/built-ins/String/prototype/substr/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3 defines no built-in function `name` own property; ES2015 §19.2.4 added it."
-    },
-    {
       "prefix": "test/annexB/built-ins/String/prototype/sup",
       "category": "post-es5-builtin",
       "reason": "The legacy String HTML wrapper methods were added by ES2015 Annex B §B.2.3.2; ES5.1 Annex B §B.2.3 defines only `String.prototype.substr`."
-    },
-    {
-      "path": "test/annexB/built-ins/escape/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 makes built-in function `length` non-configurable; ES2015 §19.2.4 changed it to configurable."
-    },
-    {
-      "path": "test/annexB/built-ins/escape/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3 defines no built-in function `name` own property; ES2015 §19.2.4 added it."
-    },
-    {
-      "path": "test/annexB/built-ins/unescape/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 makes built-in function `length` non-configurable; ES2015 §19.2.4 changed it to configurable."
-    },
-    {
-      "path": "test/annexB/built-ins/unescape/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3 defines no built-in function `name` own property; ES2015 §19.2.4 added it."
     },
     {
       "prefix": "test/annexB/language/eval-code",
@@ -219,21 +169,6 @@
       "reason": "`Array.from` is a built-in ES5.1 does not define; ES5.1 §15.4 enumerates the complete Array member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Array/isArray/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Array/of",
       "category": "post-es5-builtin",
       "reason": "`Array.of` is a built-in ES5.1 does not define; ES5.1 §15.4 enumerates the complete Array member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
@@ -247,16 +182,6 @@
       "path": "test/built-ins/Array/prototype/concat/create-ctor-poisoned.js",
       "category": "post-es5-semantics",
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/concat/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/concat/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Array/prototype/copyWithin",
@@ -299,16 +224,6 @@
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
-      "path": "test/built-ins/Array/prototype/every/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/every/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Array/prototype/fill",
       "category": "post-es5-builtin",
       "reason": "`Array.prototype.fill` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
@@ -339,16 +254,6 @@
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
     },
     {
-      "path": "test/built-ins/Array/prototype/filter/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/filter/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Array/prototype/find",
       "category": "post-es5-builtin",
       "reason": "`Array.prototype.find` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
@@ -377,16 +282,6 @@
       "path": "test/built-ins/Array/prototype/forEach/15.4.4.18-3-7.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/forEach/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/forEach/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Array/prototype/indexOf/15.4.4.14-3-12.js",
@@ -429,29 +324,9 @@
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
     },
     {
-      "path": "test/built-ins/Array/prototype/indexOf/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/indexOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/join/S15.4.4.5_A4_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/join/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/join/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Array/prototype/keys",
@@ -482,16 +357,6 @@
       "path": "test/built-ins/Array/prototype/lastIndexOf/length-near-integer-limit.js",
       "category": "post-es5-semantics",
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/lastIndexOf/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/lastIndexOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Array/prototype/map/15.4.4.19-3-12.js",
@@ -544,16 +409,6 @@
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
     },
     {
-      "path": "test/built-ins/Array/prototype/map/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/map/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/pop/S15.4.4.6_A2_T2.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
@@ -572,16 +427,6 @@
       "path": "test/built-ins/Array/prototype/pop/S15.4.4.6_A3_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/pop/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/pop/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Array/prototype/push/S15.4.4.7_A2_T2.js",
@@ -604,16 +449,6 @@
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
     },
     {
-      "path": "test/built-ins/Array/prototype/push/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/push/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/reduce/15.4.4.21-3-12.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
@@ -627,16 +462,6 @@
       "path": "test/built-ins/Array/prototype/reduce/15.4.4.21-3-7.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/reduce/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/reduce/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Array/prototype/reduceRight/15.4.4.22-3-12.js",
@@ -659,44 +484,14 @@
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
     },
     {
-      "path": "test/built-ins/Array/prototype/reduceRight/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/reduceRight/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/reverse/S15.4.4.8_A3_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
-      "path": "test/built-ins/Array/prototype/reverse/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/reverse/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/shift/S15.4.4.9_A3_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/shift/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/shift/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Array/prototype/slice/S15.4.4.10_A3_T3.js",
@@ -717,16 +512,6 @@
       "path": "test/built-ins/Array/prototype/slice/create-non-array-invalid-len.js",
       "category": "post-es5-semantics",
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/slice/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/slice/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Array/prototype/some/15.4.4.17-3-12.js",
@@ -764,29 +549,9 @@
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
-      "path": "test/built-ins/Array/prototype/some/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/some/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/sort/S15.4.4.11_A4_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/sort/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/sort/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Array/prototype/splice/S15.4.4.12_A3_T1.js",
@@ -814,26 +579,6 @@
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
     },
     {
-      "path": "test/built-ins/Array/prototype/splice/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/splice/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/toLocaleString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/toLocaleString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.4.4.3 steps 8.a-8.d (and 10.d.i-10.d.iv for the tail) box each element with `ToObject` and invokes `toLocaleString` on that wrapper, so a strict override observes an object `this` (\"object,object\"); ES2015 §22.1.3.26 dropped the boxing and invokes on the raw primitive (\"boolean,boolean\"), which the test pins via `es6id: 22.1.3.26`. This engine implements the ES5.1 algorithm, so the expectation is unreachable by any ES5.1-compliant engine."
@@ -844,64 +589,14 @@
       "reason": "ES5.1 §15.4.4.3 steps 8.a-8.d (and 10.d.i-10.d.iv for the tail) box each element with `ToObject` and invokes `toLocaleString` on that wrapper, so a strict override observes an object `this` (\"object,object\"); ES2015 §22.1.3.26 dropped the boxing and invokes on the raw primitive (\"boolean,boolean\"), which the test pins via `es6id: 22.1.3.26`. This engine implements the ES5.1 algorithm, so the expectation is unreachable by any ES5.1-compliant engine."
     },
     {
-      "path": "test/built-ins/Array/prototype/toString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Array/prototype/unshift/S15.4.4.13_A3_T2.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
-      "path": "test/built-ins/Array/prototype/unshift/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/unshift/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Array/prototype/values",
       "category": "post-es5-builtin",
       "reason": "`Array.prototype.values` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Boolean/prototype/toString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Boolean/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Boolean/prototype/valueOf/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Boolean/prototype/valueOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/UTC/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/UTC/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Date/UTC/return-value.js",
@@ -914,224 +609,9 @@
       "reason": "ES5.1 §15.9.3.2 defines `new Date(value)` as `v = ToPrimitive(value)`, so constructing from a Date object observably calls its `toString`/`valueOf`; ES2015 §20.3.2.2 added a `[[DateValue]]` fast path that bypasses them. The test (tagged `es6id: 20.3.2.2`) asserts neither method is called."
     },
     {
-      "path": "test/built-ins/Date/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/now/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/parse/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/parse/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getDate/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getDate/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getDay/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getDay/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getFullYear/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getFullYear/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getHours/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getHours/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getMilliseconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getMilliseconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getMinutes/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getMinutes/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getMonth/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getMonth/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getSeconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getSeconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getTime/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getTime/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getTimezoneOffset/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getTimezoneOffset/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCDate/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCDate/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCDay/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCDay/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCFullYear/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCFullYear/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCHours/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCHours/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCMilliseconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCMilliseconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCMinutes/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCMinutes/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCMonth/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCMonth/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCSeconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/getUTCSeconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Date/prototype/no-date-value.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.9.5 states the Date prototype object \"is itself a Date object (its [[Class]] is \\\"Date\\\") whose [[PrimitiveValue]] is NaN\", so `Date.prototype.getTime()` returns NaN; ES2015 §20.3.4 made it an ordinary object without [[DateValue]], so the method throws TypeError. The test asserts the ES2015 behaviour."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setDate/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setDate/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Date/prototype/setFullYear/15.9.5.40_1.js",
@@ -1139,254 +619,9 @@
       "reason": "ES5.1 §15.9.5 makes `Date.prototype` itself a Date object, so `Date.prototype.setFullYear(2012)` sets its [[PrimitiveValue]] and returns a time value; ES2015 §20.3.4 made it an ordinary object, so the method throws TypeError. Despite the ES5-style filename the assertion encodes the ES2015 rule."
     },
     {
-      "path": "test/built-ins/Date/prototype/setFullYear/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setFullYear/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setHours/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setHours/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setMilliseconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setMilliseconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setMinutes/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setMinutes/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setMonth/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setMonth/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setSeconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setSeconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setTime/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setTime/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCDate/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCDate/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCFullYear/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCFullYear/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCHours/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCHours/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCMilliseconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCMilliseconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCMinutes/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCMinutes/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCMonth/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCMonth/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCSeconds/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/setUTCSeconds/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toDateString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toDateString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toISOString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toJSON/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toJSON/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toLocaleDateString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toLocaleDateString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toLocaleString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toLocaleString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toLocaleTimeString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toLocaleTimeString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toTimeString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toTimeString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toUTCString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/toUTCString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/valueOf/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Date/prototype/valueOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Error/prototype/S15.11.4_A2.js",
       "category": "post-es5-builtin",
       "reason": "`Error.prototype.S15.11.4_A2` is a built-in ES5.1 does not define; ES5.1 §15.11.4 enumerates the complete Error.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Error/prototype/toString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Error/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Function/StrictFunction_restricted-properties.js",
@@ -1394,44 +629,9 @@
       "reason": "`Function.StrictFunction_restricted-properties` is a built-in ES5.1 does not define; ES5.1 §15.3.3 enumerates the complete Function member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Function/instance-name.js",
-      "category": "post-es5-builtin",
-      "reason": "`Function.instance-name` is a built-in ES5.1 does not define; ES5.1 §15.3.3 enumerates the complete Function member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Function/length/15.3.3.2-1.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/length/S15.3.5.1_A2_T1.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/length/S15.3.5.1_A2_T2.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Function/length/S15.3.5.1_A2_T3.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
       "path": "test/built-ins/Function/prototype/apply/argarray-not-object.js",
       "category": "post-es5-semantics",
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/apply/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/apply/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Function/prototype/bind/BoundFunction_restricted-properties.js",
@@ -1444,51 +644,6 @@
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
     },
     {
-      "path": "test/built-ins/Function/prototype/bind/instance-length-prop-desc.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/bind/instance-length-tointeger.js",
-      "category": "post-es5-semantics",
-      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/bind/instance-name-chained.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §19.2.3.2 gives a bound function an inferred `name` (\"bound \" + target name) and a computed `length`; ES5.1 §15.3.4.5 defines neither, and its `length` is {configurable:false} so redefining it throws."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/bind/instance-name-error.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §19.2.3.2 gives a bound function an inferred `name` (\"bound \" + target name) and a computed `length`; ES5.1 §15.3.4.5 defines neither, and its `length` is {configurable:false} so redefining it throws."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/bind/instance-name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §19.2.3.2 gives a bound function an inferred `name` (\"bound \" + target name) and a computed `length`; ES5.1 §15.3.4.5 defines neither, and its `length` is {configurable:false} so redefining it throws."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/bind/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/bind/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/call/S15.3.4.4_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/call/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Function/prototype/length.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
@@ -1499,94 +654,14 @@
       "reason": "`Function.prototype.name` is a built-in ES5.1 does not define; ES5.1 §15.3.4 enumerates the complete Function.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Function/prototype/toString/S15.3.4.2_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Function/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/JSON/parse/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/JSON/parse/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/JSON/stringify/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/JSON/stringify/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/abs/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/abs/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/acos/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/acos/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Math/acosh",
       "category": "post-es5-builtin",
       "reason": "`Math.acosh` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Math/asin/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/asin/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Math/asinh",
       "category": "post-es5-builtin",
       "reason": "`Math.asinh` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Math/atan/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/atan/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/atan2/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/atan2/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Math/atanh",
@@ -1599,29 +674,9 @@
       "reason": "`Math.cbrt` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Math/ceil/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/ceil/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Math/clz32",
       "category": "post-es5-builtin",
       "reason": "`Math.clz32` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Math/cos/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/cos/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Math/cosh",
@@ -1629,29 +684,9 @@
       "reason": "`Math.cosh` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Math/exp/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/exp/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Math/expm1",
       "category": "post-es5-builtin",
       "reason": "`Math.expm1` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Math/floor/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/floor/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Math/fround",
@@ -1669,16 +704,6 @@
       "reason": "`Math.imul` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Math/log/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/log/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Math/log10",
       "category": "post-es5-builtin",
       "reason": "`Math.log10` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
@@ -1694,59 +719,9 @@
       "reason": "`Math.log2` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Math/max/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/max/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/min/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/min/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/pow/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/pow/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/random/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/random/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Math/round/S15.8.2.15_A7.js",
       "category": "post-es5-semantics",
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
-      "path": "test/built-ins/Math/round/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/round/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Math/sign",
@@ -1754,39 +729,9 @@
       "reason": "`Math.sign` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Math/sin/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/sin/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/Math/sinh",
       "category": "post-es5-builtin",
       "reason": "`Math.sinh` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Math/sqrt/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/sqrt/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/tan/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Math/tan/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Math/tanh",
@@ -1799,32 +744,12 @@
       "reason": "`Math.trunc` is a built-in ES5.1 does not define; ES5.1 §15.8 enumerates the complete Math member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/NativeErrors/EvalError/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/EvalError/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
       "path": "test/built-ins/NativeErrors/EvalError/proto.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
     {
       "path": "test/built-ins/NativeErrors/EvalError/prototype/not-error-object.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/RangeError/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/RangeError/name.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
@@ -1839,32 +764,12 @@
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
     {
-      "path": "test/built-ins/NativeErrors/ReferenceError/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/ReferenceError/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
       "path": "test/built-ins/NativeErrors/ReferenceError/proto.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
     {
       "path": "test/built-ins/NativeErrors/ReferenceError/prototype/not-error-object.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/SyntaxError/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/SyntaxError/name.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
@@ -1879,32 +784,12 @@
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
     {
-      "path": "test/built-ins/NativeErrors/TypeError/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/TypeError/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
       "path": "test/built-ins/NativeErrors/TypeError/proto.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
     {
       "path": "test/built-ins/NativeErrors/TypeError/prototype/not-error-object.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/URIError/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
-    },
-    {
-      "path": "test/built-ins/NativeErrors/URIError/name.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
@@ -1974,66 +859,6 @@
       "reason": "`Number.parseInt` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Number/prototype/toExponential/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toExponential/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toFixed/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toFixed/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toLocaleString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toLocaleString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toPrecision/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toPrecision/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/valueOf/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Number/prototype/valueOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Number/string-binary-literal.js",
       "category": "post-es5-builtin",
       "reason": "`Number.string-binary-literal` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
@@ -2047,21 +872,6 @@
       "prefix": "test/built-ins/Object/assign",
       "category": "post-es5-builtin",
       "reason": "`Object.assign` is a built-in ES5.1 does not define; ES5.1 §15.2.3/§15.2.4 enumerates the complete Object member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Object/create/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/defineProperties/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/defineProperty/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Object/entries",
@@ -2094,11 +904,6 @@
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
     },
     {
-      "path": "test/built-ins/Object/freeze/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-1-3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
@@ -2112,31 +917,6 @@
       "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-1.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-186.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-187.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-191.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-194.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-201.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-212.js",
@@ -2157,16 +937,6 @@
       "path": "test/built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-215.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyDescriptor/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyDescriptor/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Object/getOwnPropertyDescriptor/primitive-string.js",
@@ -2192,21 +962,6 @@
       "path": "test/built-ins/Object/getOwnPropertyNames/15.2.3.4-1.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-44.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-49.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Object/getOwnPropertyNames/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/Object/getOwnPropertySymbols",
@@ -2259,11 +1014,6 @@
       "reason": "ES5.1 §15.11.7.6/§15.11.7.7 give each NativeError constructor `[[Prototype]]` = `Function.prototype` and give `NativeError.prototype` `[[Class]]` = \"Error\" (\"[object Error]\"); ES2015 §19.5.6 makes NativeError subclass `Error` (`[[Prototype]]` = `Error`) with an ordinary \"[object Object]\" tag."
     },
     {
-      "path": "test/built-ins/Object/getPrototypeOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Object/internals/DefineOwnProperty/consistent-value-function-arguments.js",
       "category": "post-es5-semantics",
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
@@ -2314,11 +1064,6 @@
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
     },
     {
-      "path": "test/built-ins/Object/isExtensible/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Object/isFrozen/15.2.3.12-1-1.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
@@ -2344,19 +1089,9 @@
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
     },
     {
-      "path": "test/built-ins/Object/isFrozen/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Object/isSealed/15.2.3.11-1.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
-    },
-    {
-      "path": "test/built-ins/Object/isSealed/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Object/keys/15.2.3.14-1-1.js",
@@ -2372,11 +1107,6 @@
       "path": "test/built-ins/Object/keys/15.2.3.14-1-3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
-    },
-    {
-      "path": "test/built-ins/Object/keys/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Object/preventExtensions/15.2.3.10-1-1.js",
@@ -2404,51 +1134,6 @@
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
     },
     {
-      "path": "test/built-ins/Object/preventExtensions/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/hasOwnProperty/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/hasOwnProperty/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/isPrototypeOf/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/isPrototypeOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/propertyIsEnumerable/S15.2.4.7_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/propertyIsEnumerable/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/toLocaleString/S15.2.4.3_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/toLocaleString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/Object/prototype/toLocaleString/primitive_this_value.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.2.4.3 `Object.prototype.toLocaleString` does `ToObject(this)` (step 1) and calls `toString` on that wrapper, so a strict `toString` override observes an object `this` (\"object\"); ES2015 §19.1.3.5 removed the `ToObject` and passes the primitive through (\"boolean\"). This engine returns the ES5.1 \"object\"."
@@ -2457,36 +1142,6 @@
       "path": "test/built-ins/Object/prototype/toLocaleString/primitive_this_value_getter.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.2.4.3 `Object.prototype.toLocaleString` does `ToObject(this)` (step 1) and calls `toString` on that wrapper, so a strict `toString` override observes an object `this` (\"object\"); ES2015 §19.1.3.5 removed the `ToObject` and passes the primitive through (\"boolean\"). This engine returns the ES5.1 \"object\"."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/toString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/valueOf/S15.2.4.4_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/prototype/valueOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/seal/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/Object/seal/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/Object/seal/seal-arraybuffer.js",
@@ -2659,19 +1314,9 @@
       "reason": "ES5.1 §15.10.6.2 coerces `lastIndex` with `ToInteger` and returns null when the index is negative or past the input; ES2015 §21.2.5.2.2 uses `ToLength`, clamping a negative `lastIndex` to 0."
     },
     {
-      "path": "test/built-ins/RegExp/prototype/exec/S15.10.6.2_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/RegExp/prototype/exec/failure-lastindex-access.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.6.2 coerces `lastIndex` with `ToInteger` and returns null when the index is negative or past the input; ES2015 §21.2.5.2.2 uses `ToLength`, clamping a negative `lastIndex` to 0."
-    },
-    {
-      "path": "test/built-ins/RegExp/prototype/exec/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/RegExp/prototype/flags/length.js",
@@ -2819,26 +1464,6 @@
       "reason": "ES5.1 §15.10.6.2 coerces `lastIndex` with `ToInteger` and returns null when the index is negative or past the input; ES2015 §21.2.5.2.2 uses `ToLength`, clamping a negative `lastIndex` to 0."
     },
     {
-      "path": "test/built-ins/RegExp/prototype/test/S15.10.6.3_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/RegExp/prototype/test/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/RegExp/prototype/toString/S15.10.6.4_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/RegExp/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/RegExp/prototype/unicode/length.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
@@ -2869,94 +1494,14 @@
       "reason": "`RegExp.valid-flags-y` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/String/fromCharCode/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/charAt/S15.5.4.4_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/charAt/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/charCodeAt/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "prefix": "test/built-ins/String/prototype/codePointAt",
       "category": "post-es5-builtin",
       "reason": "`String.prototype.codePointAt` is a built-in ES5.1 does not define; ES5.1 §15.5.4 enumerates the complete String.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/String/prototype/concat/S15.5.4.6_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/concat/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/indexOf/S15.5.4.7_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/indexOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/lastIndexOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/String/prototype/localeCompare/15.5.4.9_CE.js",
       "category": "host-dependent",
       "reason": "`String.prototype.localeCompare` collation is implementation/locale-defined (ES5.1 §15.5.4.9); the result depends on host CLDR data this engine does not ship."
-    },
-    {
-      "path": "test/built-ins/String/prototype/localeCompare/S15.5.4.9_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/localeCompare/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/match/S15.5.4.10_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/match/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/match/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "prefix": "test/built-ins/String/prototype/normalize",
@@ -2979,49 +1524,9 @@
       "reason": "`String.prototype.repeat` is a built-in ES5.1 does not define; ES5.1 §15.5.4 enumerates the complete String.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/String/prototype/replace/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/replace/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/String/prototype/replace/tostring-this-throws-symbol.js",
       "category": "post-es5-semantics",
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
-      "path": "test/built-ins/String/prototype/search/S15.5.4.12_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/search/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/slice/S15.5.4.13_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/slice/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/split/checking-if-deleting-the-string-prototype-split-length-property-fails.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/split/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/String/prototype/split/separator-regexp.js",
@@ -3034,84 +1539,9 @@
       "reason": "`String.prototype.startsWith` is a built-in ES5.1 does not define; ES5.1 §15.5.4 enumerates the complete String.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/String/prototype/substring/S15.5.4.15_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/substring/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toLocaleLowerCase/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toLocaleUpperCase/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toLowerCase/S15.5.4.16_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toLowerCase/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toString/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toString/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/built-ins/String/prototype/toString/non-generic.js",
       "category": "post-es5-semantics",
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toUpperCase/S15.5.4.18_A9.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/toUpperCase/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/trim/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/valueOf/length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/String/prototype/valueOf/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/built-ins/String/prototype/valueOf/non-generic.js",
@@ -3127,76 +1557,6 @@
       "path": "test/built-ins/ThrowTypeError/unique-per-realm-function-proto.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
-    },
-    {
-      "path": "test/built-ins/decodeURI/S15.1.3.1_A5.2.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/decodeURI/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/decodeURIComponent/S15.1.3.2_A5.2.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/decodeURIComponent/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/encodeURI/S15.1.3.3_A5.2.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/encodeURI/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/encodeURIComponent/S15.1.3.4_A5.2.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/encodeURIComponent/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/eval/length-non-configurable.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/eval/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/isFinite/prop-desc.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/isNaN/prop-desc.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/parseFloat/prop-desc.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
-      "path": "test/built-ins/parseInt/prop-desc.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
       "path": "test/harness/assert-throws-same-realm.js",
@@ -3244,22 +1604,7 @@
       "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
     },
     {
-      "path": "test/language/expressions/assignment/fn-name-cover.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
-    },
-    {
-      "path": "test/language/expressions/assignment/fn-name-fn.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
-    },
-    {
       "path": "test/language/expressions/assignment/fn-name-lhs-cover.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
-    },
-    {
-      "path": "test/language/expressions/assignment/fn-name-lhs-member.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
     },
@@ -3289,11 +1634,6 @@
       "reason": "ES2015 §12.15 evaluates the assignment target reference (and its `ToPropertyKey`) before the right-hand side; ES5.1 §11.13.1/§11.2.1 evaluate the MemberExpression, including `CheckObjectCoercible`, first, which is what this engine does."
     },
     {
-      "path": "test/language/expressions/delete/11.4.1-5-a-28-s.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1/§15.10.5 give built-in constructor/function `length` {configurable:false}, so a strict-mode `delete` throws `TypeError`; ES2015 §19.2.4.1 made `length` configurable, so the delete becomes a no-op returning true."
-    },
-    {
       "path": "test/language/expressions/function/forbidden-ext/b1/func-expr-strict-forbidden-ext-direct-access-prop-arguments.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
@@ -3302,11 +1642,6 @@
       "path": "test/language/expressions/function/forbidden-ext/b1/func-expr-strict-forbidden-ext-direct-access-prop-caller.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
-    },
-    {
-      "path": "test/language/expressions/function/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
     },
     {
       "path": "test/language/expressions/object/11.1.5-2gs.js",
@@ -3644,11 +1979,6 @@
       "reason": "Uses ES2015+ syntax (`let`/`const`/destructuring/arrow/`class`/`async`/`for-of`) via `eval`, a loop head, or a nested construct, so the construct is not covered by ES5.1 and does not parse at `ecmaVersion` 5."
     },
     {
-      "path": "test/language/statements/function/13.2-15-1.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
-    },
-    {
       "path": "test/language/statements/function/13.2-30-s.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
@@ -3662,11 +1992,6 @@
       "path": "test/language/statements/function/forbidden-ext/b1/cls-expr-meth-forbidden-ext-direct-access-prop-caller.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
-    },
-    {
-      "path": "test/language/statements/function/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
     },
     {
       "path": "test/language/statements/if/cptn-else-false-abrupt-empty.js",
@@ -3844,16 +2169,6 @@
       "reason": "Asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
     },
     {
-      "path": "test/language/statements/variable/fn-name-cover.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
-    },
-    {
-      "path": "test/language/statements/variable/fn-name-fn.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §14.1.21/§12.15.4 give function definitions (and anonymous functions assigned to a binding) a `name` own property; ES5.1 §15.3 defines no function `name`."
-    },
-    {
       "path": "test/language/statements/while/cptn-abrupt-empty.js",
       "category": "post-es5-semantics",
       "reason": "Asserts ES2015 statement completion-value semantics (ES2015 §13, empty-completion propagation); ES5.1 §12/§15.1.2.1 propagate the previous statement value differently, which is what this engine returns."
@@ -3974,11 +2289,6 @@
       "reason": "ES5.1 §15.3.5.1 gives every built-in/user function a `length` that is {writable:false, enumerable:false, configurable:false}; ES2015 §19.2.4 made `length` configurable, so `delete fn.length` succeeding is post-ES5."
     },
     {
-      "path": "test/staging/sm/Function/function-name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 defines no `name` own property on functions; ES2015 §19.2.4.2 added `name`, so asserting its presence/attributes is post-ES5."
-    },
-    {
       "path": "test/staging/sm/Function/function-toString-builtin-name.js",
       "category": "host-dependent",
       "reason": "Asserts an exact `Function.prototype.toString` decompilation format (source-text reproduction down to whitespace/comment/directive placement); ES5.1 §15.3.4.2 leaves the returned string wholly implementation-defined, so the exact textual format is a host/engine detail, not an ES5.1-mandated behavior."
@@ -3987,11 +2297,6 @@
       "path": "test/staging/sm/JSON/stringify-special-escapes.js",
       "category": "post-es5-semantics",
       "reason": "ES2019's \"well-formed JSON.stringify\" proposal added `\\uXXXX` escaping of lone/unpaired surrogates; ES5.1 §15.12.3's `Quote` algorithm only escapes control characters, `\"`, and `\\`, passing an unpaired surrogate through unescaped -- this engine already implements the ES5.1-faithful (pre-ES2019) behavior, which this test does not expect."
-    },
-    {
-      "path": "test/staging/sm/JSON/stringify.js",
-      "category": "post-es5-semantics",
-      "reason": "Asserts ES2015+ §9.1.12 [[OwnPropertyKeys]] integer-index-first enumeration order (array-index-like keys sorted numerically ahead of other string keys); ES5.1 §12.6.4/§15.2.3.4 do not specify a fixed relative order for non-array-index string properties, and this engine enumerates own properties in insertion order regardless of whether a key looks numeric."
     },
     {
       "path": "test/staging/sm/Map/NaN-as-key.js",
@@ -4424,11 +2729,6 @@
       "reason": "Uses destructuring-assignment syntax (`[{ get: ..., set: ... }] = ...`) with a computed accessor-style pattern; ES5.1 §11.13/§12.2 have no destructuring assignment or destructuring binding forms at all (they are an ES2015 addition)."
     },
     {
-      "path": "test/staging/sm/extensions/error-tostring-function.js",
-      "category": "post-es5-semantics",
-      "reason": "Relies on `Function.prototype.name` (ES2015 §19.2.4.2, absent from ES5.1 §15.3.5.1) to build the expected `Error#toString` text."
-    },
-    {
       "path": "test/staging/sm/extensions/es5ish-defineGetter-defineSetter.js",
       "category": "post-es5-semantics",
       "reason": "Relies on the legacy `Object.prototype.__defineGetter__`/`__defineSetter__` methods, added by ES2015 Annex B §B.2.2.2/§B.2.2.3; ES5.1 Annex B defines no such methods (accessor properties are only reachable via `Object.defineProperty`/object-literal getter-setter syntax in ES5.1)."
@@ -4587,11 +2887,6 @@
       "path": "test/staging/sm/object/getter-name.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
-    },
-    {
-      "path": "test/staging/sm/object/setPrototypeOf-same-value.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Object.setPrototypeOf`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/regress/regress-428366.js",

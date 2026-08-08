@@ -1,7 +1,7 @@
 // The parser dependency is reached through `./parser-dependency.js`, the one
 // engine module that names it: see that file for why the vendored build exists
 // and how it keeps Node, browser, and `jsc` runs on the same source.
-import { Parser } from './parser-dependency.js';
+import { Parser, tokTypes } from './parser-dependency.js';
 import { normalizeSyntaxError } from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import {
@@ -77,6 +77,52 @@ function withEscapedReservedWordCheck(Base) {
 }
 
 /**
+ * An Acorn plugin that restores the `super` keyword at `ecmaVersion: 5`.
+ *
+ * Acorn only adds `"super"` to its keyword-matching regex when
+ * `ecmaVersion >= 6` (its internal `keywords$1` table); below that version
+ * the text `super` tokenizes as an ordinary identifier `name` token, so it
+ * never reaches Acorn's own `case types$1._super:` branch in
+ * `parseExprAtom` — the branch that already builds the correct `Super` AST
+ * node, requires the next token to be `.`, `[`, or `(`, and checks
+ * `this.allowSuper` (a scope flag Acorn already sets while parsing a
+ * `get`/`set` accessor body via `parseMethod`, regardless of
+ * `ecmaVersion` — ES5's own accessor grammar goes through the same
+ * `parseMethod` path ES6 methods do). Instead it falls through to the
+ * ordinary identifier path and is rejected by the ES5.1 future-reserved-word
+ * check (`withEscapedReservedWordCheck`'s sibling, Acorn's own
+ * `checkUnreserved`).
+ *
+ * This override corrects only the token *type* for the exact text `super`,
+ * immediately after the base `readWord` has already run (so every other
+ * word, and every other keyword, is tokenized exactly as before). Every
+ * other ES6 keyword (`class`, `const`, `let`, `extends`, ...) still
+ * tokenizes as an ordinary `name` and is still rejected the same way it is
+ * today — this plugin touches nothing but the one word `super`.
+ *
+ * @param {typeof Parser} Base
+ * @returns {typeof Parser}
+ */
+function withSuperKeywordAtEs5(Base) {
+  const baseProto = /** @type {any} */ (Base).prototype;
+
+  return class extends Base {
+    /**
+     * @returns {void}
+     */
+    readWord() {
+      baseProto.readWord.call(this);
+
+      const self = /** @type {any} */ (this);
+
+      if (self.value === 'super' && self.type === tokTypes.name) {
+        self.type = tokTypes._super;
+      }
+    }
+  };
+}
+
+/**
  * The ordinary script parser, an Acorn subclass carrying the escaped
  * reserved-word early error. Constructed lazily and memoized so the plugin
  * subclass is built once.
@@ -90,7 +136,10 @@ let scriptParser;
  */
 function getScriptParser() {
   if (scriptParser === undefined) {
-    scriptParser = Parser.extend(withEscapedReservedWordCheck);
+    scriptParser = Parser.extend(
+      withEscapedReservedWordCheck,
+      withSuperKeywordAtEs5,
+    );
   }
 
   return scriptParser;
@@ -138,6 +187,7 @@ function getStrictParser() {
   if (strictParser === undefined) {
     strictParser = Parser.extend(
       withEscapedReservedWordCheck,
+      withSuperKeywordAtEs5,
       (Base) =>
         class extends Base {
           /**

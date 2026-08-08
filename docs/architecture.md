@@ -88,6 +88,35 @@ Property descriptors are plain objects with the four ES5 fields (`value`,
 `configurable` for accessor). `isDataDescriptor`, `isAccessorDescriptor`, and
 the conversion/validation helpers live here.
 
+### Own-property-key order (`src/runtime/object.js`)
+
+`EngineObject#ownPropertyKeys()` returns keys in ECMA-262 9.1.12
+`OrdinaryOwnPropertyKeys` order: array-index string keys first in ascending
+numeric order, then every other key in creation order (this engine has no
+symbols yet, so the symbol bucket ES2015 defines is currently always empty).
+`Object.keys`, `Object.getOwnPropertyNames`, `for-in` (`enumerableKeysForIn`),
+and `JSON.stringify` all read through this one method, so they share the
+order automatically.
+
+### Method `[[HomeObject]]` and `super` (`src/runtime/function-object.js`, `src/runtime/super-reference.js`)
+
+Object-literal `get`/`set` accessors carry an ES2015 `[[HomeObject]]`
+internal slot (`EngineFunction#homeObject`) pointing at the object literal
+they were defined in, and are created non-constructible
+(`createFunctionObject(..., { isMethod: true, ... })` sets
+`EngineFunction#_isConstructor = false`, matching ES2015 `FunctionCreate`'s
+`Method` kind). `super.prop`/`super[expr]` inside such an accessor resolves
+through `SuperReferenceBase` (`src/runtime/super-reference.js`): the property
+lookup starts at `homeObject.getPrototype()`, but the accessor's own `this`
+stays the receiver for both the read and the write — implemented by
+`setPropertyWithReceiver`, a receiver-aware sibling of `EngineObject#put`
+used only by this path. Parsing `super` at all requires a narrowly-scoped
+Acorn plugin in `src/parser.js` that restores the `super` keyword token at
+`ecmaVersion: 5` (Acorn's own `Super`-node handling, `allowSuper` scope
+tracking, and early errors are otherwise unchanged); no other ES6 grammar is
+reachable through it. `super(...)` (`SuperCall`) is not implemented — it is
+only valid in a derived class constructor, and classes are issue #25.
+
 ### Environment records (`src/runtime/environment.js`)
 
 - `DeclarativeEnvironmentRecord` — bindings from `var`, function parameters,
@@ -210,28 +239,28 @@ missing rather than silently misbehaving.
 Each built-in family is a module under `src/builtins/` that exports a
 `create*Intrinsics(realm)` function and an `install*` function:
 
-| Module                  | Family / globals                                          |
-| ----------------------- | --------------------------------------------------------- |
-| `fundamental.js`        | `Object.prototype`, `Function.prototype`, global values   |
-| `errors.js`             | Error constructors and prototypes                         |
-| `object.js`             | `Object` constructor methods (`create`, `keys`, etc.)     |
-| `function.js`           | `Function` constructor, `bind`, `apply`, `call`           |
-| `array.js`              | `Array` constructor and prototype methods                 |
-| `primitive-wrappers.js` | `Boolean`, `Number`, `String` constructors and prototypes |
-| `regexp.js`             | `RegExp` constructor and prototype methods                |
-| `math.js`               | `Math` object (constants and functions)                   |
-| `global-numeric.js`     | `parseInt`, `parseFloat`, `isNaN`, `isFinite`             |
-| `global-uri.js`         | URI encoding/decoding, `escape`/`unescape`                |
-| `global-eval.js`        | `eval` global function                                    |
-| `json.js`               | `JSON.parse`, `JSON.stringify`                            |
-| `date.js`               | `Date` constructor, prototype, `parse`, `UTC`, `now`      |
-| `shared.js`             | `createNativeFunction` and helpers shared across families |
-| `string-case.js`        | Case conversion implementation                            |
-| `string-pattern.js`     | `match`, `replace` pattern helpers                        |
-| `string-search.js`      | `search`, `split` pattern helpers                         |
-| `string-regexp.js`      | String↔RegExp dispatch                                    |
-| `number-format.js`      | `toFixed`, `toExponential`, `toPrecision`                 |
-| `unicode-case-data.js`  | Generated Unicode case-mapping tables                     |
+| Module                  | Family / globals                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fundamental.js`        | `Object.prototype`, `Function.prototype`, global values                                                                                                                                                                                                                                                                                                                                                    |
+| `errors.js`             | Error constructors and prototypes                                                                                                                                                                                                                                                                                                                                                                          |
+| `object.js`             | `Object` constructor methods (`create`, `keys`, `setPrototypeOf`, `is`, etc.)                                                                                                                                                                                                                                                                                                                              |
+| `function.js`           | `Function` constructor, `bind`, `apply`, `call`; `EngineFunction`'s `name`/`length` own properties are `configurable: true` (ES2015 changed this from ES5's `false`), and `name` is assigned per `SetFunctionName`/`NamedEvaluation` — including anonymous-function inference for `var`/assignment/object-literal-property targets — in `src/evaluator/declarations.js` and `src/evaluator/expressions.js` |
+| `array.js`              | `Array` constructor and prototype methods                                                                                                                                                                                                                                                                                                                                                                  |
+| `primitive-wrappers.js` | `Boolean`, `Number`, `String` constructors and prototypes                                                                                                                                                                                                                                                                                                                                                  |
+| `regexp.js`             | `RegExp` constructor and prototype methods                                                                                                                                                                                                                                                                                                                                                                 |
+| `math.js`               | `Math` object (constants and functions)                                                                                                                                                                                                                                                                                                                                                                    |
+| `global-numeric.js`     | `parseInt`, `parseFloat`, `isNaN`, `isFinite`                                                                                                                                                                                                                                                                                                                                                              |
+| `global-uri.js`         | URI encoding/decoding, `escape`/`unescape`                                                                                                                                                                                                                                                                                                                                                                 |
+| `global-eval.js`        | `eval` global function                                                                                                                                                                                                                                                                                                                                                                                     |
+| `json.js`               | `JSON.parse`, `JSON.stringify`                                                                                                                                                                                                                                                                                                                                                                             |
+| `date.js`               | `Date` constructor, prototype, `parse`, `UTC`, `now`                                                                                                                                                                                                                                                                                                                                                       |
+| `shared.js`             | `createNativeFunction` and helpers shared across families                                                                                                                                                                                                                                                                                                                                                  |
+| `string-case.js`        | Case conversion implementation                                                                                                                                                                                                                                                                                                                                                                             |
+| `string-pattern.js`     | `match`, `replace` pattern helpers                                                                                                                                                                                                                                                                                                                                                                         |
+| `string-search.js`      | `search`, `split` pattern helpers                                                                                                                                                                                                                                                                                                                                                                          |
+| `string-regexp.js`      | String↔RegExp dispatch                                                                                                                                                                                                                                                                                                                                                                                     |
+| `number-format.js`      | `toFixed`, `toExponential`, `toPrecision`                                                                                                                                                                                                                                                                                                                                                                  |
+| `unicode-case-data.js`  | Generated Unicode case-mapping tables                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Host adapters
 

@@ -41,7 +41,11 @@ import {
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
-import { createFunctionObject } from './declarations.js';
+import { SuperReferenceBase } from '../runtime/super-reference.js';
+import {
+  createFunctionObject,
+  isAnonymousFunctionExpression,
+} from './declarations.js';
 // Direct-eval interception (see isDirectEvalCall) calls into the eval
 // implementation. This closes a loop through the pre-existing intra-evaluator
 // cycle expressions <-> declarations <-> statements; performEval is a
@@ -481,7 +485,13 @@ function evaluateAssignmentExpression(node, context) {
   );
 
   if (node.operator === '=') {
-    const value = evaluateExpressionValue(node.right, context);
+    const value =
+      node.left.type === 'Identifier' &&
+      isAnonymousFunctionExpression(node.right)
+        ? createFunctionObject(node.right, context.env, context, {
+            name: node.left.name,
+          })
+        : evaluateExpressionValue(node.right, context);
     putValue(reference, value);
     return value;
   }
@@ -663,13 +673,14 @@ function evaluateNewExpression(node, context) {
  * @returns {unknown}
  */
 function referenceThisValue(reference) {
-  if (
-    reference instanceof Reference &&
-    reference.base instanceof EngineObject
-  ) {
-    return reference.thisValue === undefined
-      ? reference.base
-      : reference.thisValue;
+  if (reference instanceof Reference) {
+    if (reference.thisValue !== undefined) {
+      return reference.thisValue;
+    }
+
+    if (reference.base instanceof EngineObject) {
+      return reference.base;
+    }
   }
 
   // ECMA-262 5.1 §11.2.3 step 7 / §10.3.1: when the callee resolves through an
@@ -741,6 +752,10 @@ function describeCallee(node) {
  * @returns {Reference}
  */
 function evaluateMemberExpression(node, context) {
+  if (node.object.type === 'Super') {
+    return evaluateSuperMemberExpression(node, context);
+  }
+
   const baseValue = evaluateExpressionValue(node.object, context);
   const propertyKey = node.computed
     ? evaluateExpressionValue(node.property, context)
@@ -753,6 +768,45 @@ function evaluateMemberExpression(node, context) {
     toString(propertyKey),
     context.strict,
     baseValue,
+  );
+}
+
+/**
+ * Evaluates a `super.prop`/`super[expr]` `MemberExpression` (ECMA-262
+ * 12.3.5): resolves ES2015 `GetSuperBase` off the currently executing
+ * method's `[[HomeObject]]` and builds a `SuperReferenceBase` so
+ * `GetValue`/`PutValue` read and write through the home object's
+ * *prototype* while keeping the method's own `this` as the receiver. A
+ * missing `homeObject` (an ordinary function, reached only if some future
+ * syntax addition parses `super` somewhere Acorn's own `allowSuper` check
+ * should have already rejected) is defense in depth: it throws the same
+ * guest `ReferenceError` a real engine's static early error would have
+ * produced, documented as an intentional runtime fallback for what the
+ * specification instead catches at parse time.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Reference}
+ */
+function evaluateSuperMemberExpression(node, context) {
+  const homeObject = context.homeObject;
+
+  if (!(homeObject instanceof EngineObject)) {
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      "'super' keyword is only valid inside a method",
+    );
+  }
+
+  const propertyKey = node.computed
+    ? toString(evaluateExpressionValue(node.property, context))
+    : node.property.name;
+
+  return new Reference(
+    new SuperReferenceBase(homeObject, context.thisValue),
+    propertyKey,
+    context.strict,
+    context.thisValue,
   );
 }
 
@@ -834,8 +888,14 @@ function evaluateObjectExpression(node, context) {
     const key = evaluatePropertyKey(property.key);
 
     if (property.kind === 'init') {
+      const value = isAnonymousFunctionExpression(property.value)
+        ? createFunctionObject(property.value, context.env, context, {
+            name: key,
+          })
+        : evaluateExpressionValue(property.value, context);
+
       object.defineOwnProperty(key, {
-        value: evaluateExpressionValue(property.value, context),
+        value,
         writable: true,
         enumerable: true,
         configurable: true,
@@ -847,7 +907,16 @@ function evaluateObjectExpression(node, context) {
       throw createUnsupportedNodeError(property);
     }
 
-    const accessor = createFunctionObject(property.value, context.env, context);
+    const accessor = createFunctionObject(
+      property.value,
+      context.env,
+      context,
+      {
+        name: `${property.kind} ${key}`,
+        isMethod: true,
+        homeObject: object,
+      },
+    );
     object.defineOwnProperty(key, {
       ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
       enumerable: true,

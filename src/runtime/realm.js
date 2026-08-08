@@ -118,10 +118,23 @@ export class Realm {
         );
       },
     });
-    // ES5.1 §13.2.3: the unique [[ThrowTypeError]] function has
-    // [[Extensible]] = false. Its `length` and `name` are already
-    // non-writable and non-configurable (createNativeFunction), so making it
-    // non-extensible also makes it "frozen" (Object.isFrozen === true).
+    // ES5.1 §13.2.3 / ES2015+ restricted-function-properties: the unique
+    // [[ThrowTypeError]] intrinsic must be genuinely frozen — its `length` and
+    // `name` own properties must be non-configurable even though ordinary
+    // native functions now use configurable: true per ES2015. Re-define both
+    // here explicitly before locking extensibility.
+    throwTypeErrorFunction.defineOwnProperty('length', {
+      value: 0,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    throwTypeErrorFunction.defineOwnProperty('name', {
+      value: '',
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
     throwTypeErrorFunction.preventExtensions();
     this.intrinsics.throwTypeErrorFunction = throwTypeErrorFunction;
 

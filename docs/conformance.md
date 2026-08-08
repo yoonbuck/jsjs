@@ -93,12 +93,12 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 964 classified exclusions break down as:
+editions deliberately changed. The 623 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 689   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
-| `post-es5-builtin`   | 198   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
+| `post-es5-semantics` | 350   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
+| `post-es5-builtin`   | 196   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
 | `post-es5-syntax`    | 47    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
 | `host-dependent`     | 28    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
 | `engine-deviation`   | 2     | This engine knowingly differs from what ES5.1 asks. Each entry names a heading in [docs/limitations.md](limitations.md) that documents the choice — a deviation that is not written down is indistinguishable from a bug. Both remaining entries are the same cause: the vendored parser lexes `IdentifierName` with the modern `ID_Continue` property instead of ES5.1 7.6's general categories. |
@@ -259,12 +259,34 @@ so no number here can outlive the run that produced it. The denominators are
 defined exactly under
 [What the coverage numbers count](#what-the-coverage-numbers-count).
 
+## ES2015 focused coverage
+
+Issue #38 (ES2015 object/function runtime updates) is covered by a small,
+hand-picked set of upstream Test262 files, run via `test/ci/es2015-object-function-test262.test.js`
+(part of `npm run ci:contract`) rather than folded into the ES5
+`upstream-subset.json`/`es5-selection.json` pipeline above, which stays
+scoped to the ES5.1 engine and shared with the parallel lexical-declarations
+(#41) and Symbols (#43) branches:
+
+- `vendor/test262/test/language/expressions/function/name.js`, `vendor/test262/test/language/statements/function/name.js`,
+  `vendor/test262/test/built-ins/Function/prototype/bind/{name,length}.js` — function `name`/`length` semantics
+- `vendor/test262/test/built-ins/Object/keys/return-order.js`, `vendor/test262/test/built-ins/Object/getOwnPropertyNames/order-after-define-property.js` —
+  ES2015 own-property-key order
+- `vendor/test262/test/language/expressions/object/{getter,setter}-prop-desc.js`,
+  `vendor/test262/test/language/expressions/object/{getter,setter}-super-prop.js` — method `[[HomeObject]]`/`super`
+- `vendor/test262/test/built-ins/Object/setPrototypeOf/{o-not-obj-coercible,property-descriptor,set-failure-cycle,set-failure-non-extensible,success}.js`,
+  `vendor/test262/test/built-ins/Object/is/{length,name,not-same-value-x-y-number,not-same-value-x-y-object,object-is,same-value-x-y-number}.js` —
+  the two new `Object` statics
+
+Reproduce locally: `node test/run-ci-contract.js` (requires the pinned
+upstream checkout at `vendor/test262`; see the Test262 section above).
+
 <!-- test262-coverage:begin -->
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 11,692   | 11,692    | 11,692 | 21.824% |
-| (file, variant) | 102,906     | 22,219   | 22,219    | 22,219 | 21.592% |
+| Files           | 53,575      | 12,033   | 12,033    | 12,033 | 22.46%  |
+| (file, variant) | 102,906     | 22,900   | 22,900    | 22,900 | 22.253% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).

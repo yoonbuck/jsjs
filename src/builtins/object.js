@@ -212,6 +212,46 @@ function installObjectReflectionMethods(realm, objectConstructor) {
   defineNativeMethod(
     realm,
     objectConstructor,
+    'setPrototypeOf',
+    2,
+    (_this, args) => {
+      const target = args[0];
+      const proto = args[1];
+
+      if (target === null || target === undefined) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          'Cannot convert undefined or null to object',
+        );
+      }
+
+      if (proto !== null && !(proto instanceof EngineObject)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          'Object prototype may only be an object or null',
+        );
+      }
+
+      if (!(target instanceof EngineObject)) {
+        return target;
+      }
+
+      if (!target.setPrototypeOf(proto)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          'Object.setPrototypeOf could not set the requested prototype',
+        );
+      }
+
+      return target;
+    },
+  );
+  defineNativeMethod(realm, objectConstructor, 'is', 2, (_this, args) =>
+    Object.is(args[0], args[1]),
+  );
+  defineNativeMethod(
+    realm,
+    objectConstructor,
     'getOwnPropertyDescriptor',
     2,
     (_this, args) =>

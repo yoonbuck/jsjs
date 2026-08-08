@@ -266,15 +266,34 @@ export function instantiateFunctionObject(node, context) {
 }
 
 /**
- * Shared "Creating Function Objects" path (ECMA-262 13.2) for function
- * declarations and function expressions.
+ * @typedef {{
+ *   name?: string,
+ *   isMethod?: boolean,
+ *   homeObject?: import('../runtime/object.js').EngineObject,
+ * }} CreateFunctionObjectOptions
+ */
+
+/**
+ * ECMA-262's `IsAnonymousFunctionDefinition`, restricted to the one AST shape
+ * this ES5-syntax engine can produce it for: a `FunctionExpression` with no
+ * `id`. (Arrow functions and class expressions, the grammar's other two
+ * anonymous-definition shapes, are not implemented yet — see issue #25.)
  *
+ * @param {any} node
+ * @returns {boolean}
+ */
+export function isAnonymousFunctionExpression(node) {
+  return node.type === 'FunctionExpression' && !node.id;
+}
+
+/**
  * @param {any} node
  * @param {import('../runtime/environment.js').EnvironmentRecordLike} scope
  * @param {EvaluationContext} context
+ * @param {CreateFunctionObjectOptions} [options={}]
  * @returns {EngineFunction}
  */
-export function createFunctionObject(node, scope, context) {
+export function createFunctionObject(node, scope, context, options = {}) {
   /** @type {string[]} */
   const parameterNames = [];
 
@@ -293,15 +312,24 @@ export function createFunctionObject(node, scope, context) {
   // the function's own body opens with a "use strict" directive prologue
   // (ECMA-262 10.1.1 — "once strict, always strict" applies transitively).
   const strict = context.strict || hasUseStrictDirective(node.body.body);
+  const name = options.name ?? (node.id ? node.id.name : '');
 
-  return new EngineFunction({
+  const functionObject = new EngineFunction({
     realm: context.realm,
     parameterNames,
     scope,
     strict,
+    name,
+    isMethod: options.isMethod ?? false,
     execute: (functionObject, thisValue, args) =>
       executeFunctionBody(node, functionObject, thisValue, args),
   });
+
+  if (options.homeObject !== undefined) {
+    functionObject.homeObject = options.homeObject;
+  }
+
+  return functionObject;
 }
 
 /**
@@ -324,6 +352,7 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
     variableEnv: env,
     strict: functionObject.strict,
     thisValue,
+    homeObject: functionObject.homeObject,
   };
 
   functionDeclarationInstantiation(node, functionObject, args, context);
@@ -531,7 +560,11 @@ export function evaluateVariableDeclaration(node, context) {
         declarator.id.name,
         context.strict,
       );
-      const value = evaluateExpressionValue(declarator.init, context);
+      const value = isAnonymousFunctionExpression(declarator.init)
+        ? createFunctionObject(declarator.init, context.env, context, {
+            name: declarator.id.name,
+          })
+        : evaluateExpressionValue(declarator.init, context);
       putValue(reference, value);
     }
   }
