@@ -26,9 +26,11 @@ function fixtureEngine(calls, checksumValue) {
     createRealm() {
       return {
         globalObject: {
+          /** @param {string} name */
           get(name) {
             if (name === '__jsjsBenchmark') {
               return {
+                /** @param {unknown} _thisValue @param {unknown[]} _args */
                 callFunction(_thisValue, _args) {
                   calls.push('steady');
                   return checksumValue;
@@ -222,6 +224,7 @@ const tests = [
     name: 'createProfileTarget counts warmup and measured invocations',
     run() {
       const workload = workloadsForProfile('smoke')[0];
+      /** @type {string[]} */
       const calls = [];
       const target = createProfileTarget({
         workload,
@@ -242,6 +245,7 @@ const tests = [
     name: 'createProfileTarget checksum mismatch throws',
     run() {
       const workload = workloadsForProfile('smoke')[0];
+      /** @type {string[]} */
       const calls = [];
       // Engine returns the wrong checksum — invokeChecked must throw.
       const engine = fixtureEngine(calls, workload.expectedChecksum + 1);
@@ -264,6 +268,7 @@ const tests = [
     name: 'createProfileTarget cold mode creates realm per invocation',
     run() {
       const workload = workloadsForProfile('smoke')[0];
+      /** @type {string[]} */
       const calls = [];
       const target = createProfileTarget({
         workload,
@@ -423,24 +428,24 @@ const tests = [
       assertSame(result.total, 500);
       assertSame(result.frames.length > 0, true);
 
-      const objectFrame = result.frames.find((f) =>
+      const objectFrame = /** @type {*} */ (result.frames.find((f) =>
         f.url.includes('object.js'),
-      );
+      ));
       assertSame(objectFrame !== undefined, true);
       assertSame(objectFrame.selfTime, 350);
 
-      const envFrame = result.frames.find((f) =>
+      const envFrame = /** @type {*} */ (result.frames.find((f) =>
         f.url.includes('environment.js'),
-      );
+      ));
       assertSame(envFrame !== undefined, true);
       assertSame(envFrame.selfTime, 150);
 
       const categories = result.categories;
-      const objCat = categories.find((c) => c.category === 'object-property');
+      const objCat = /** @type {*} */ (categories.find((c) => c.category === 'object-property'));
       assertSame(objCat !== undefined, true);
       assertSame(objCat.selfTime, 350);
 
-      const envCat = categories.find((c) => c.category === 'references-environments');
+      const envCat = /** @type {*} */ (categories.find((c) => c.category === 'references-environments'));
       assertSame(envCat !== undefined, true);
       assertSame(envCat.selfTime, 150);
     },
@@ -518,18 +523,18 @@ const tests = [
 
       assertSame(result.total, 1536);
 
-      const arrayFrame = result.frames.find((f) =>
+      const arrayFrame = /** @type {*} */ (result.frames.find((f) =>
         f.url.includes('array-object.js'),
-      );
+      ));
       assertSame(arrayFrame !== undefined, true);
       assertSame(arrayFrame.selfSize, 1024);
 
       const categories = result.categories;
-      const arrayCat = categories.find((c) => c.category === 'arrays');
+      const arrayCat = /** @type {*} */ (categories.find((c) => c.category === 'arrays'));
       assertSame(arrayCat !== undefined, true);
       assertSame(arrayCat.selfSize, 1024);
 
-      const envCat = categories.find((c) => c.category === 'references-environments');
+      const envCat = /** @type {*} */ (categories.find((c) => c.category === 'references-environments'));
       assertSame(envCat !== undefined, true);
       assertSame(envCat.selfSize, 512);
     },
@@ -581,7 +586,7 @@ const tests = [
         timeDeltas: [100, 100],
       };
       const result = summarizeCpuProfile(profile);
-      const frame = result.frames.find((f) => f.url.includes('object.js'));
+      const frame = /** @type {*} */ (result.frames.find((f) => f.url.includes('object.js')));
       assertSame(frame !== undefined, true);
       assertSame(frame.percentage, 100);
     },
@@ -605,7 +610,7 @@ const tests = [
         },
       };
       const result = summarizeAllocationProfile(profile);
-      const frame = result.frames.find((f) => f.url.includes('array-object.js'));
+      const frame = /** @type {*} */ (result.frames.find((f) => f.url.includes('array-object.js')));
       assertSame(frame !== undefined, true);
       assertSame(frame.percentage, 100);
     },
