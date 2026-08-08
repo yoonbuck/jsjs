@@ -121,9 +121,23 @@ result.
 | Chromium | arrays            | steady |                    778416596 |           56.700 |       1,444.200 |   9,356 / 1,473,834 µs |       58,988 B |
 
 The matching JSC baseline rows also all checksum-validated. Its jsjs medians
-(cold / steady, ms) were arithmetic-loops 21.900 / 21.560, calls-recursion
-34.060 / 33.340, object-properties 88.720 / 87.720, and arrays 83.740 /
-82.260. This is timing evidence only, subject to the JSC limitation above.
+(cold / steady, ms) are recorded below with the exact expected and observed
+baseline checksums. JSC has no profile sidecar, profiler duration, CPU samples,
+or allocation samples; those profile-only fields are therefore `N/A`, rather
+than inferred from the Node or Chromium captures.
+
+| Workload          | Mode   | Expected baseline checksum | Observed baseline checksum | jsjs median (ms) | Profile ms/iter | CPU | Sampled alloc. |
+| ----------------- | ------ | -------------------------: | -------------------------: | ---------------: | --------------: | --- | -------------: |
+| arithmetic-loops  | cold   |                 1397312734 |                 1397312734 |           21.900 |             N/A | N/A |            N/A |
+| arithmetic-loops  | steady |                 1397312734 |                 1397312734 |           21.560 |             N/A | N/A |            N/A |
+| calls-recursion   | cold   |                -1100296460 |                -1100296460 |           34.060 |             N/A | N/A |            N/A |
+| calls-recursion   | steady |                -1100296460 |                -1100296460 |           33.340 |             N/A | N/A |            N/A |
+| object-properties | cold   |                 1122746965 |                 1122746965 |           88.720 |             N/A | N/A |            N/A |
+| object-properties | steady |                 1122746965 |                 1122746965 |           87.720 |             N/A | N/A |            N/A |
+| arrays            | cold   |                  778416596 |                  778416596 |           83.740 |             N/A | N/A |            N/A |
+| arrays            | steady |                  778416596 |                  778416596 |           82.260 |             N/A | N/A |            N/A |
+
+This is timing and checksum evidence only, subject to the JSC limitation above.
 
 ## Ranked sampled evidence
 
@@ -132,14 +146,15 @@ sampled CPU self time and 1,134,336 sampled allocation bytes. CPU percentages
 are shares of that CPU total; allocation percentages are shares of that sampled
 allocation total, not retained-memory shares.
 
-| Rank | CPU category            |     Self time | Share | Allocation category     | Sampled bytes | Share |
-| ---: | ----------------------- | ------------: | ----: | ----------------------- | ------------: | ----: |
-|    1 | evaluator               | 21,584,119 µs | 32.6% | host                    |     538,708 B | 47.5% |
-|    2 | other-runtime           | 14,735,087 µs | 22.2% | evaluator               |     224,660 B | 19.8% |
-|    3 | calls                   |  6,630,091 µs | 10.0% | references-environments |     121,656 B | 10.7% |
-|    4 | object-property         |  6,395,832 µs |  9.7% | object-property         |      84,100 B |  7.4% |
-|    5 | references-environments |  6,274,068 µs |  9.5% | other-runtime           |      80,792 B |  7.1% |
-|    6 | arithmetic              |  4,395,124 µs |  6.6% | calls                   |      38,264 B |  3.4% |
+| Rank | CPU category             |     Self time | Share | Allocation category      | Sampled bytes | Share |
+| ---: | ------------------------ | ------------: | ----: | ------------------------ | ------------: | ----: |
+|    1 | evaluator                | 21,584,119 µs | 32.6% | host                     |     538,708 B | 47.5% |
+|    2 | other-runtime            | 14,735,087 µs | 22.2% | evaluator                |     224,660 B | 19.8% |
+|    3 | calls                    |  6,630,091 µs | 10.0% | references-environments  |     121,656 B | 10.7% |
+|    4 | object-property          |  6,395,832 µs |  9.7% | object-property          |      84,100 B |  7.4% |
+|    5 | references-environments  |  6,274,068 µs |  9.5% | other-runtime            |      80,792 B |  7.1% |
+|    6 | arithmetic               |  4,395,124 µs |  6.6% | calls                    |      38,264 B |  3.4% |
+|    — | all remaining categories |  6,252,915 µs |  9.4% | all remaining categories |      46,156 B |  4.1% |
 
 `host` allocation includes profiler/browser/host frames and is not an
 interpreter optimization target. The dominant attributed frames were:
@@ -196,13 +211,13 @@ Upper bounds are Amdahl-style limits from disjoint sampled CPU frame shares:
 they assume eliminating the named frame's own sampled time, not a forecast.
 No optimization was implemented.
 
-| Rank | Candidate and owner                                                                                                                     | Evidence and upper-bound benefit                                                                                  | Implementation / correctness risk                                                |
-| ---: | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-|    1 | Tighten `evaluateBinaryExpression` dispatch (`src/evaluator/expressions.js`, evaluator owner)                                           | 8,596,899 µs, 13.0% of captured CPU; at most 13% of this mixed workload/profile total.                            | High: coercion, operator, completion, and abrupt-completion semantics.           |
-|    2 | Avoid unnecessary arguments-object work (`src/runtime/function-object.js`, function-runtime owner)                                      | `createArgumentsObject`: 5,329,487 µs, 8.0% overall; calls category reaches 20.0% in steady calls-recursion.      | High: strictness, aliasing, `callee`, and function-call observability.           |
-|    3 | Narrow `isPrimitive` conversion checks (`src/runtime/conversion.js`, conversion owner)                                                  | 2,923,731 µs, 4.4% overall; an upper bound, not a reason to bypass ES conversions.                                | Medium-high: boxed primitives, host values, and reference/completion boundaries. |
-|    4 | Reduce redundant normal-completion creation (`src/runtime/completion.js`, completion owner)                                             | `createNormalCompletion`: 1,673,538 µs, 2.5% overall; 8.0% CPU and 19.3% sampled allocation in steady arithmetic. | High: completion identity and abrupt-control-flow propagation.                   |
-|    5 | Measure cold intrinsic construction again only after a lower-perturbation capture is available (`src/runtime/realm.js`, builtins owner) | Parser/realm samples prove placement but are sparse; no credible standalone benefit bound.                        | Medium: initialization order and ES intrinsic identity.                          |
+| Rank | Candidate and owner                                                                                                                     | Evidence and upper-bound benefit                                                                                  | Implementation risk | Correctness risk                                                                 |
+| ---: | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
+|    1 | Tighten `evaluateBinaryExpression` dispatch (`src/evaluator/expressions.js`, evaluator owner)                                           | 8,596,899 µs, 13.0% of captured CPU; at most 13% of this mixed workload/profile total.                            | Medium              | High: coercion, operator, completion, and abrupt-completion semantics.           |
+|    2 | Avoid unnecessary arguments-object work (`src/runtime/function-object.js`, function-runtime owner)                                      | `createArgumentsObject`: 5,329,487 µs, 8.0% overall; calls category reaches 20.0% in steady calls-recursion.      | Medium              | High: strictness, aliasing, `callee`, and function-call observability.           |
+|    3 | Narrow `isPrimitive` conversion checks (`src/runtime/conversion.js`, conversion owner)                                                  | 2,923,731 µs, 4.4% overall; an upper bound, not a reason to bypass ES conversions.                                | Low-medium          | Medium-high: boxed primitives, host values, and reference/completion boundaries. |
+|    4 | Reduce redundant normal-completion creation (`src/runtime/completion.js`, completion owner)                                             | `createNormalCompletion`: 1,673,538 µs, 2.5% overall; 8.0% CPU and 19.3% sampled allocation in steady arithmetic. | Medium              | High: completion identity and abrupt-control-flow propagation.                   |
+|    5 | Measure cold intrinsic construction again only after a lower-perturbation capture is available (`src/runtime/realm.js`, builtins owner) | Parser/realm samples prove placement but are sparse; no credible standalone benefit bound.                        | Medium              | Medium: initialization order and ES intrinsic identity.                          |
 
 Cached lookup/lightweight-context/bytecode work is explicitly excluded as issue
 #40 architecture work. Object, descriptor, property, and array hot paths are
