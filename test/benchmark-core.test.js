@@ -1,4 +1,14 @@
 import { assertSame, assertThrows } from './harness/assert.js';
+import { createRealm, evaluateScript } from '../src/index.js';
+import {
+  createJsjsExecutors,
+  createNativeExecutors,
+} from '../benchmark/executors.js';
+import {
+  REPORT_SCHEMA_VERSION,
+  validateHostReport,
+} from '../benchmark/report.js';
+import { runHostBenchmark } from '../benchmark/run.js';
 import { PROFILES, resolveBenchmarkConfig } from '../benchmark/config.js';
 import { calibrateBatchSize } from '../benchmark/calibration.js';
 import {
@@ -20,7 +30,359 @@ function assertWithin(actual, expected, tolerance) {
   assertSame(Math.abs(actual - expected) <= tolerance, true);
 }
 
+/**
+ * @param {unknown} value
+ * @returns {any}
+ */
+function cloneValue(value) {
+  return /** @type {any} */ (JSON.parse(JSON.stringify(value)));
+}
+
+/**
+ * @param {{
+ *   results: readonly {
+ *     mode: 'cold' | 'steady',
+ *     lanes: {
+ *       native: {
+ *         batchSize: number,
+ *         samplesMs: readonly number[],
+ *         normalizedSamplesMs: readonly number[],
+ *       },
+ *       jsjs: {
+ *         batchSize: number,
+ *         samplesMs: readonly number[],
+ *         normalizedSamplesMs: readonly number[],
+ *       },
+ *     },
+ *     slowdown: number,
+ *   }[],
+ * }} report
+ * @param {'cold' | 'steady'} mode
+ * @returns {{
+ *   mode: 'cold' | 'steady',
+ *   lanes: {
+ *     native: {
+ *       batchSize: number,
+ *       samplesMs: readonly number[],
+ *       normalizedSamplesMs: readonly number[],
+ *     },
+ *     jsjs: {
+ *       batchSize: number,
+ *       samplesMs: readonly number[],
+ *       normalizedSamplesMs: readonly number[],
+ *     },
+ *   },
+ *   slowdown: number,
+ * }}
+ */
+function findResult(report, mode) {
+  const result = report.results.find((entry) => entry.mode === mode);
+
+  if (result === undefined) {
+    throw new Error(`Missing benchmark result for mode ${mode}`);
+  }
+
+  return result;
+}
+
 const tests = [
+  {
+    name: 'host reports validate schema version checksums and sample counts',
+    run() {
+      let nowMs = 0;
+      const report = runHostBenchmark({
+        host: 'fixture',
+        version: '1',
+        now: () => nowMs,
+        engine: {
+          createExecutors() {
+            return {
+              native: {
+                cold() {
+                  nowMs += 1;
+                  return 326514743;
+                },
+                steady() {
+                  nowMs += 1;
+                  return 326514743;
+                },
+              },
+              jsjs: {
+                cold() {
+                  nowMs += 2;
+                  return 326514743;
+                },
+                steady() {
+                  nowMs += 2;
+                  return 326514743;
+                },
+              },
+            };
+          },
+        },
+        config: resolveBenchmarkConfig({
+          profile: 'smoke',
+          warmups: 1,
+          samples: 3,
+          workloads: ['arithmetic-loops'],
+        }),
+        generatedAt: '2026-08-07T00:00:00.000Z',
+      });
+      const badSchema = cloneValue(report);
+      const badChecksum = cloneValue(report);
+      const badSampleCount = cloneValue(report);
+      const emptyWorkloads = cloneValue(report);
+
+      badSchema.schemaVersion = REPORT_SCHEMA_VERSION + 1;
+      badChecksum.results[0].checksum += 1;
+      badSampleCount.results[0].lanes.native.samplesMs.pop();
+      emptyWorkloads.config.workloads = [];
+      emptyWorkloads.results = [];
+
+      assertSame(validateHostReport(report), report);
+      assertSame(
+        assertThrows(() => validateHostReport(badSchema), TypeError).message.includes(
+          'schemaVersion',
+        ),
+        true,
+      );
+      assertSame(
+        assertThrows(
+          () => validateHostReport(badChecksum),
+          TypeError,
+        ).message.includes('results[0].checksum'),
+        true,
+      );
+      assertSame(
+        assertThrows(
+          () => validateHostReport(badSampleCount),
+          TypeError,
+        ).message.includes('results[0].lanes.native.samplesMs'),
+        true,
+      );
+      assertSame(
+        assertThrows(
+          () => validateHostReport(emptyWorkloads),
+          TypeError,
+        ).message.includes('config.workloads'),
+        true,
+      );
+    },
+  },
+  {
+    name: 'host benchmark measures deterministic native and jsjs batches per mode',
+    run() {
+      let nowMs = 0;
+      let executorFactories = 0;
+      const report = runHostBenchmark({
+        host: 'fixture',
+        version: '1',
+        now: () => nowMs,
+        engine: {
+          createExecutors() {
+            executorFactories += 1;
+
+            return {
+              native: {
+                cold() {
+                  nowMs += 1;
+                  return 326514743;
+                },
+                steady() {
+                  nowMs += 1;
+                  return 326514743;
+                },
+              },
+              jsjs: {
+                cold() {
+                  nowMs += 2;
+                  return 326514743;
+                },
+                steady() {
+                  nowMs += 2;
+                  return 326514743;
+                },
+              },
+            };
+          },
+        },
+        config: resolveBenchmarkConfig({
+          profile: 'smoke',
+          warmups: 1,
+          samples: 3,
+          workloads: ['arithmetic-loops'],
+        }),
+        generatedAt: '2026-08-07T00:00:00.000Z',
+      });
+      const coldResult = findResult(report, 'cold');
+      const steadyResult = findResult(report, 'steady');
+
+      assertSame(report.schemaVersion, REPORT_SCHEMA_VERSION);
+      assertSame(report.results.length, 2);
+      assertSame(executorFactories, 1);
+      assertSame(coldResult.lanes.native.batchSize, 5);
+      assertSame(coldResult.lanes.native.samplesMs.join(','), '5,5,5');
+      assertSame(coldResult.lanes.native.normalizedSamplesMs.join(','), '1,1,1');
+      assertSame(coldResult.lanes.jsjs.batchSize, 3);
+      assertSame(coldResult.lanes.jsjs.samplesMs.join(','), '6,6,6');
+      assertSame(coldResult.lanes.jsjs.normalizedSamplesMs.join(','), '2,2,2');
+      assertSame(steadyResult.lanes.native.batchSize, 5);
+      assertSame(steadyResult.lanes.jsjs.batchSize, 3);
+      assertSame(coldResult.slowdown, 2);
+      assertSame(steadyResult.slowdown, 2);
+    },
+  },
+  {
+    name: 'native steady executors preserve plain function this binding',
+    run() {
+      const executors = createNativeExecutors({
+        name: 'this-fixture',
+        source: '(function () { return this === globalThis ? 1 : 0; }())',
+        expectedChecksum: 1,
+      });
+
+      assertSame(executors.cold(), 1);
+      assertSame(executors.steady(), 1);
+    },
+  },
+  {
+    name: 'native executors compile cold calls each time and steady calls once',
+    run() {
+      /** @type {string[]} */
+      const compileSources = [];
+      let coldCalls = 0;
+      let steadyCalls = 0;
+      const executors = createNativeExecutors(
+        {
+          name: 'fixture',
+          source: '(function () { return 17; }())',
+          expectedChecksum: 17,
+        },
+        /** @param {string} source */
+        (source) => {
+          compileSources.push(source);
+
+          if (source.includes('return function () { return 17; };')) {
+            return () => () => {
+              steadyCalls += 1;
+              return 17;
+            };
+          }
+
+          return () => {
+            coldCalls += 1;
+            return 17;
+          };
+        },
+      );
+
+      assertSame(executors.cold(), 17);
+      assertSame(executors.cold(), 17);
+      assertSame(executors.steady(), 17);
+      assertSame(executors.steady(), 17);
+      assertSame(coldCalls, 2);
+      assertSame(steadyCalls, 2);
+      assertSame(compileSources.length, 3);
+      assertSame(
+        compileSources.filter(
+          (source) => source === 'return (function () { return 17; }());',
+        ).length,
+        2,
+      );
+      assertSame(
+        compileSources.filter(
+          (source) => source === 'return function () { return 17; };',
+        ).length,
+        1,
+      );
+    },
+  },
+  {
+    name: 'jsjs steady executors read guest functions through the real realm API',
+    run() {
+      const executors = createJsjsExecutors(
+        { createRealm, evaluateScript },
+        {
+          name: 'fixture',
+          source: '(function () { return 17; }())',
+          expectedChecksum: 17,
+        },
+      );
+
+      assertSame(executors.steady(), 17);
+      assertSame(executors.steady(), 17);
+    },
+  },
+  {
+    name: 'jsjs executors isolate cold calls and reuse one steady guest function',
+    run() {
+      /** @type {{ globalObject: Record<string, unknown> }[]} */
+      const createdRealms = [];
+      /** @type {string[]} */
+      const evaluatedSources = [];
+      /** @type {{ thisValue: unknown, args: readonly unknown[], self: unknown }[]} */
+      const steadyInvocations = [];
+      const steadyGuestFunction = {
+        /**
+         * @param {unknown} thisValue
+         * @param {readonly unknown[]} args
+         * @returns {number}
+         */
+        callFunction(thisValue, args) {
+          steadyInvocations.push({ thisValue, args, self: this });
+          return 17;
+        },
+      };
+      const engine = {
+        createRealm() {
+          const realm = { globalObject: {} };
+          createdRealms.push(realm);
+          return realm;
+        },
+        /**
+         * @param {{ globalObject: Record<string, unknown> }} realm
+         * @param {string} source
+         * @returns {{ type: 'normal', value: unknown }}
+         */
+        evaluateScript(realm, source) {
+          evaluatedSources.push(source);
+
+          if (source.includes('__jsjsBenchmark')) {
+            realm.globalObject.__jsjsBenchmark = steadyGuestFunction;
+            return { type: 'normal', value: undefined };
+          }
+
+          return { type: 'normal', value: 17 };
+        },
+      };
+      const executors = createJsjsExecutors(engine, {
+        name: 'fixture',
+        source: '(function () { return 17; }())',
+        expectedChecksum: 17,
+      });
+
+      assertSame(executors.cold(), 17);
+      assertSame(executors.cold(), 17);
+      assertSame(executors.steady(), 17);
+      assertSame(executors.steady(), 17);
+      assertSame(createdRealms.length, 3);
+      assertSame(
+        evaluatedSources.filter((source) => source === '(function () { return 17; }())')
+          .length,
+        2,
+      );
+      assertSame(
+        evaluatedSources.some((source) => source.includes('function __jsjsBenchmark()')),
+        true,
+      );
+      assertSame(steadyInvocations.length, 2);
+      assertSame(steadyInvocations[0].thisValue, undefined);
+      assertSame(Array.isArray(steadyInvocations[0].args), true);
+      assertSame(steadyInvocations[0].args.length, 0);
+      assertSame(steadyInvocations[0].self, steadyGuestFunction);
+      assertSame(steadyInvocations[1].self, steadyGuestFunction);
+    },
+  },
   {
     name: 'benchmark workloads have committed checksums',
     run() {
@@ -66,6 +428,14 @@ const tests = [
         () => resolveBenchmarkConfig({ profile: 'missing' }),
         RangeError,
       );
+      assertThrows(
+        () =>
+          resolveBenchmarkConfig({
+            profile: 'smoke',
+            workloads: ['arithmetic-loops', 'arithmetic-loops'],
+          }),
+        RangeError,
+      );
     },
   },
   {
@@ -105,6 +475,7 @@ const tests = [
   {
     name: 'calibration grows toward the target without exceeding its bound',
     run() {
+      /** @type {number[]} */
       const calls = [];
       const result = calibrateBatchSize(
         (count) => {

@@ -1,5 +1,15 @@
 import { workloadsForProfile } from './workloads.js';
 
+/**
+ * @typedef {{
+ *   warmups: number,
+ *   samples: number,
+ *   targetSampleMs: number,
+ *   maxBatchSize: number,
+ * }} BenchmarkProfile
+ */
+
+/** @type {Readonly<Record<string, Readonly<BenchmarkProfile>>>} */
 export const PROFILES = Object.freeze({
   default: Object.freeze({
     warmups: 3,
@@ -49,6 +59,10 @@ export function resolveBenchmarkConfig(options = {}) {
 
   if (!Array.isArray(selectedNames) || selectedNames.length === 0) {
     throw new RangeError('Benchmark workloads must contain at least one name');
+  }
+
+  if (new Set(selectedNames).size !== selectedNames.length) {
+    throw new RangeError('Benchmark workloads must not contain duplicates');
   }
 
   /** @type {Map<string, { name: string, source: string, expectedChecksum: number }>} */

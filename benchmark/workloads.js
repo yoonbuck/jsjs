@@ -276,6 +276,7 @@ const SMOKE_WORKLOADS = Object.freeze([
   ),
 ]);
 
+/** @type {Readonly<Record<string, readonly Workload[]>>} */
 const PROFILE_WORKLOADS = Object.freeze({
   default: WORKLOADS,
   smoke: SMOKE_WORKLOADS,
