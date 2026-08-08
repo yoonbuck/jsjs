@@ -73,6 +73,7 @@ const tests = [
     name: 'NamedEvaluation infers a name for an anonymous function in a simple assignment',
     run() {
       assertSame(run('var f; f = function () {}; f.name;'), 'f');
+      assertSame(run('f = function () {}; f.name;'), 'f');
       assertSame(
         run('var target; function assignIt() { target = function () {}; } assignIt(); target.name;'),
         'target',
