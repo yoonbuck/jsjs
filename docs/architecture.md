@@ -13,19 +13,22 @@ Source enters through `evaluateScript(realm, source)`, which:
 
 1. **Parses** via `src/parser.js` — Acorn configured at `ecmaVersion: 6`,
    `sourceType: 'script'`. The grammar the engine accepts is ES5.1 plus the
-   ES2015 lexical-declaration syntax (`let`, `const`, and block scope) and
-   nothing else. Raising `ecmaVersion` to 6 hands Acorn's own ES2015 scope
-   analysis the static redeclaration early errors (a `let` colliding with a
-   `var`, two `let`s of the same name in a block) and re-applies the reserved-word
-   rule to escaped identifiers itself, so the hand-written `ecmaVersion < 6`
-   escaped-identifier plugin was deleted as obsolete. A parse-time early-error
-   pass then walks the tree and rejects every other ES2015 construct the
-   evaluator does not implement — classes, arrow functions, template literals,
-   `for`-`of`, generators, `async`/`await`, destructuring patterns, rest/spread,
-   `super`, `new.target`, modules, computed/shorthand/method properties, binary
-   and octal numeric literals, and `\u{…}` code-point escapes — as a guest
-   `SyntaxError`, so the grammar the parser bounds is exactly the grammar the
-   evaluator runs.
+   ES2015 lexical-declaration syntax (`let`, `const`, block scope, and
+   block-level function declarations) and nothing else. Raising `ecmaVersion` to
+   6 hands Acorn's own ES2015 scope analysis the static redeclaration early
+   errors (a `let` colliding with a `var`, two `let`s of the same name in a
+   block) and re-applies the reserved-word rule to escaped identifiers itself, so
+   the hand-written `ecmaVersion < 6` escaped-identifier plugin was deleted as
+   obsolete. A parse-time early-error pass then walks the tree and rejects every
+   other ES2015 construct the evaluator does not implement — classes, arrow
+   functions, template literals, `for`-`of`, generators, destructuring patterns,
+   rest/spread, `super`, `new.target`, modules, computed/shorthand/method
+   properties, binary and octal numeric literals, and `\u{…}` code-point escapes
+   (plus the ES2017 `async`/`await` forms) — so the grammar the parser bounds is
+   exactly the grammar the evaluator runs. A rejection at the top level surfaces
+   as the host `SyntaxError` every parse failure raises; source reaching the
+   parser through `eval` or the dynamic `Function` constructor gets a catchable
+   guest `SyntaxError` instead.
 2. **Hoists** via `src/evaluator/declarations.js` —
    `globalDeclarationInstantiation` (ES2015 §15.1.8) walks the AST, using the
    spec's static-semantics name walks in `src/evaluator/static-semantics.js` to
@@ -209,9 +212,12 @@ fresh `DeclarativeEnvironmentRecord` chained onto the running execution
 context's environment; a `for` loop with a lexical head gets a **new binding
 environment per iteration** (and `for`-`in` a fresh one per enumerated name), so
 a closure created in one iteration captures that iteration's binding rather than
-a single shared one. A function body likewise runs in a lexical environment
-layered over its activation (variable) environment, keeping the body's
-`let`/`const` names distinct from its parameters and `var`s.
+a single shared one. A **non-strict** function body likewise runs in a lexical
+environment layered over its activation (variable) environment, keeping the
+body's `let`/`const` names distinct from its parameters and `var`s (ES2015
+§9.2.12 step 30); a **strict** function reuses the variable environment as its
+lexical environment (step 31), which is unobservable because the parse-time
+early errors keep the two records' binding sets disjoint.
 
 ### References (`src/runtime/reference.js`)
 

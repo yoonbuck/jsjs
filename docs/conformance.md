@@ -10,13 +10,21 @@ lexical declarations**: `let` and `const` bindings, block scope, the temporal
 dead zone (a `ReferenceError` on access before initialization), `const`
 assignment errors, per-iteration `for`/`for-in` loop bindings, and lexical
 scope for blocks, `switch` case blocks, `try` parts, function bodies, `eval`
-code, and the global environment. Nothing else from ES2015 is implemented: the
-parser accepts the ES2015 lexical-declaration syntax and rejects every other
-ES2015 construct — classes, arrow functions, template literals, `for`-`of`,
-generators, `async`/`await`, destructuring and default/rest patterns, spread,
+code, and the global environment. It also accepts ES2015 **block-level function
+declarations**, scoping them to their block and implementing the Annex B.3.3
+sloppy-mode `var`-alias so `{ function f(){} } f()` still resolves while
+`if (false) { function g(){} } typeof g` is `'undefined'`. Nothing else from
+ES2015 is implemented: the parser accepts the syntax above and rejects every
+other ES2015 construct — classes, arrow functions, template literals,
+`for`-`of`, generators, destructuring and default/rest patterns, spread,
 `super`, `new.target`, modules, computed/shorthand/method object properties,
-binary and octal numeric literals, and `\u{…}` code-point escapes — as a guest
-`SyntaxError`, so the grammar the engine parses is exactly the grammar it runs.
+binary and octal numeric literals, and `\u{…}` code-point escapes (plus the
+ES2017 `async`/`await` forms) — so the grammar the engine parses is exactly the
+grammar it runs. The ES2015 RegExp flags `u` and `y` are likewise rejected, but
+by the engine's own ES5.1 flag validation (`src/runtime/regexp-syntax.js`)
+rather than by that pass. A rejection at the top level is the host `SyntaxError`
+every parse failure raises; source reaching the parser through `eval` or the
+dynamic `Function` constructor becomes a catchable guest `SyntaxError` instead.
 
 Fixtures deliberately stay inside what the engine implements today: `var`,
 `let`, `const`, function declarations and expressions, object and array literals

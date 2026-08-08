@@ -380,26 +380,34 @@ never throws, passing malformed sequences through unchanged.
 
 ES5.1 §11.1.5 makes a duplicate data-property name in an object literal a
 SyntaxError in strict code (`"use strict"; ({ a: 1, a: 2 })`). ES2015 removed
-that early error on purpose — duplicate property names are legal in every
-context, the later definition simply wins — and this engine follows ES2015 here
-because raising the parser to `ecmaVersion: 6` is what enables lexical
-declarations, and Acorn drops the ES5 strict duplicate-property check at that
-edition. So `"use strict"; ({ a: 1, a: 2 }).a` evaluates to `2` rather than
-throwing.
+that early error on purpose — an ordinary duplicate property name is legal, and
+the later definition simply wins — and this engine follows ES2015 here because
+raising the parser to `ecmaVersion: 6` is what enables lexical declarations, and
+Acorn drops the ES5 strict duplicate-property check at that edition. So
+`"use strict"; ({ a: 1, a: 2 }).a` evaluates to `2` rather than throwing. This
+does not extend to `__proto__`: a duplicate `__proto__` _definition_ in an
+object literal (`({ __proto__: null, __proto__: {} })`) is a distinct ES2015
+early error that Acorn still enforces, so it is rejected.
 
 This is the one place the ES2015 lexical-declarations milestone deliberately
 changes an existing ES5.1 behaviour: an ES5.1 engine would reject the strict
 form, and this engine now accepts it. It is a knowing divergence from ES5.1's
 letter that adopting the ES2015 grammar carried along, listed here rather than
 under known limitations because it is a deliberate choice, not a shortfall. The
-Test262 tests that assert the ES5.1 early error (`11.1.5-2gs.js`,
-`prop-dup-data-data.js`, `__proto__-duplicate.js`, and the `11.1.5_4-4-*` files)
-are excluded as `post-es5-semantics`, since ES5.1 and ES2015 genuinely disagree.
+upstream tests that assert this sloppy acceptance — `11.1.5-2gs.js`,
+`prop-dup-data-data.js`, and the `11.1.5_4-4-*` files under
+`test/language/expressions/object/` — are **selected and passing**, not
+excluded. The one duplicate-property test that stays out, `__proto__-duplicate.js`,
+is excluded **structurally by the engine-grammar parse filter** (it asserts the
+`__proto__` early error above, so it no longer parses under the engine's
+grammar), not by a classified exclusion entry.
 
 **Backing code:** `src/parser.js` (`ecmaVersion: 6` in `PARSER_OPTIONS`).
 **Verification:**
 `evaluateScript(realm, '(function(){ "use strict"; return ({ a: 1, a: 2 }).a; })()')`
-→ `{ type: 'normal', value: 2 }`.
+→ `{ type: 'normal', value: 2 }`; and
+`evaluateScript(realm, 'try { eval("({ __proto__: null, __proto__: {} })"); "ok" } catch (e) { e.constructor.name }')`
+→ `{ type: 'normal', value: 'SyntaxError' }`.
 
 ## Known limitations
 
@@ -570,14 +578,17 @@ which initializes a lexical binding without a `SetFunctionName` step).
 ### ES2015 syntax outside lexical declarations is rejected at parse time
 
 The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
-but no other ES2015 feature, so its parser accepts the lexical-declaration
-grammar and rejects every other ES2015 construct as a parse-time early error.
-The rejected constructs are classes, arrow functions, template and tagged
-template literals, `for`-`of`, generators and `yield`, `async`/`await`,
-destructuring patterns (object, array, and default/rest/assignment patterns),
-spread elements, `super`, `new.target`, `import`/`export` (module syntax),
-computed/shorthand/method object properties, binary (`0b`) and octal (`0o`)
-numeric literals, and `\u{…}` code-point escapes in strings and identifiers.
+and block-level function declarations, but no other ES2015 feature, so its
+parser accepts that syntax and rejects every other ES2015 construct as a
+parse-time early error. The constructs rejected by that pass are classes, arrow
+functions, template and tagged template literals, `for`-`of`, generators and
+`yield`, destructuring patterns (object, array, and default/rest/assignment
+patterns), spread elements, `super`, `new.target`, `import`/`export` (module
+syntax), computed/shorthand/method object properties, binary (`0b`) and octal
+(`0o`) numeric literals, and `\u{…}` code-point escapes in strings and
+identifiers. The ES2017 `async`/`await` forms are rejected by the same pass. The
+ES2015 RegExp flags `u` and `y` are also rejected, but by the engine's existing
+ES5.1 flag validation in `src/runtime/regexp-syntax.js`, not by this pass.
 
 This is a limitation rather than a deviation: a full ES2015 engine accepts all
 of them, and the engine rejects them only because the evaluator does not yet
