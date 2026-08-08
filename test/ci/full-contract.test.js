@@ -93,6 +93,10 @@ function run(command, args, hint) {
     cwd: REPOSITORY_ROOT_PATH,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    // Pin the time zone to UTC so the generated Test262 artifacts are a pure
+    // function of the engine and the pinned tree, matching the CI environment
+    // regardless of the contributor's local zone (see assertUtcTimeZone).
+    env: { ...process.env, TZ: 'UTC' },
   });
 
   if (result.error !== undefined) {
@@ -239,6 +243,7 @@ function npmRunExpectingFailure(script) {
     cwd: REPOSITORY_ROOT_PATH,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, TZ: 'UTC' },
   });
 
   if (result.error !== undefined) {

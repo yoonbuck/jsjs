@@ -4771,8 +4771,8 @@
 {"type":"test","file":"test/built-ins/Date/parse/prop-desc.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/parse/time-value-maximum-range.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/parse/time-value-maximum-range.js","variant":"strict","status":"passed"}
-{"type":"test","file":"test/built-ins/Date/parse/without-utc-offset.js","variant":"non-strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: Expected SameValue(«0», «28800000») to be true"}
-{"type":"test","file":"test/built-ins/Date/parse/without-utc-offset.js","variant":"strict","status":"failed","reason":"unexpected-throw","message":"guest object with message: Expected SameValue(«0», «28800000») to be true"}
+{"type":"test","file":"test/built-ins/Date/parse/without-utc-offset.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/built-ins/Date/parse/without-utc-offset.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/parse/year-zero.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/parse/year-zero.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/built-ins/Date/parse/zero.js","variant":"non-strict","status":"passed"}
@@ -23488,7 +23488,7 @@
 {"type":"baseline","group":"built-ins/Array","files":2206,"records":4385,"passed":4385,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/ArrayIteratorPrototype","files":17,"records":26,"passed":26,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Boolean","files":35,"records":70,"passed":70,"failed":0,"skipped":0}
-{"type":"baseline","group":"built-ins/Date","files":435,"records":870,"passed":868,"failed":2,"skipped":0}
+{"type":"baseline","group":"built-ins/Date","files":435,"records":870,"passed":870,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Error","files":33,"records":66,"passed":66,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Function","files":370,"records":637,"passed":637,"failed":0,"skipped":0}
 {"type":"baseline","group":"built-ins/Infinity","files":6,"records":10,"passed":10,"failed":0,"skipped":0}
@@ -23539,6 +23539,6 @@
 {"type":"baseline","group":"staging/sm","files":361,"records":640,"passed":640,"failed":0,"skipped":0}
 {"type":"features","supported":["Symbol","Symbol.hasInstance","Symbol.isConcatSpreadable","Symbol.iterator","Symbol.match","Symbol.replace","Symbol.search","Symbol.species","Symbol.split","Symbol.toPrimitive","Symbol.toStringTag","Symbol.unscopables"],"tagged":["Symbol","Symbol.hasInstance","Symbol.isConcatSpreadable","Symbol.iterator","Symbol.match","Symbol.replace","Symbol.search","Symbol.species","Symbol.split","Symbol.toPrimitive","Symbol.toStringTag","Symbol.unscopables"],"untagged":23319}
 {"type":"inventory","files":53575,"records":102906,"malformed":4}
-{"type":"coverage","scope":"files","total":53575,"selected":12350,"attempted":12350,"passed":12349,"selectedPercent":23.052,"attemptedPercent":23.052,"passedPercent":23.05}
-{"type":"coverage","scope":"records","total":102906,"selected":23485,"attempted":23485,"passed":23483,"selectedPercent":22.822,"attemptedPercent":22.822,"passedPercent":22.82}
-{"type":"summary","total":23485,"passed":23483,"failed":2,"skipped":0}
+{"type":"coverage","scope":"files","total":53575,"selected":12350,"attempted":12350,"passed":12350,"selectedPercent":23.052,"attemptedPercent":23.052,"passedPercent":23.052}
+{"type":"coverage","scope":"records","total":102906,"selected":23485,"attempted":23485,"passed":23485,"selectedPercent":22.822,"attemptedPercent":22.822,"passedPercent":22.822}
+{"type":"summary","total":23485,"passed":23485,"failed":0,"skipped":0}

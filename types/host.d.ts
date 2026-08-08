@@ -110,6 +110,7 @@ declare module 'node:child_process' {
       cwd?: string;
       encoding: 'utf8';
       maxBuffer?: number;
+      env?: Record<string, string | undefined>;
     },
   ): {
     status: number | null;

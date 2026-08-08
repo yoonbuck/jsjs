@@ -345,7 +345,13 @@ subset against `tc39/test262` at the revision `package.json` names, writes every
 per-test record to [`docs/test262-report.jsonl`](test262-report.jsonl), and
 rewrites this block from the same run. `npm run test262:upstream:check` fails if
 either artifact has drifted, and the `test262-upstream` job fails CI the same way,
-so no number here can outlive the run that produced it. The denominators are
+so no number here can outlive the run that produced it. The run refuses to start
+outside a UTC time zone, because a few selected tests read the host's local
+offset (see
+[the offsetless-date deviation](limitations.md#the-clock-and-the-local-time-zone-come-from-the-host)),
+so the committed artifacts are a pure function of the engine and the pinned tree,
+not of the machine that generated them; CI pins `TZ=UTC` for the same reason.
+Regenerate with `TZ=UTC npm run test262:upstream`. The denominators are
 defined exactly under
 [What the coverage numbers count](#what-the-coverage-numbers-count).
 
@@ -375,8 +381,8 @@ upstream checkout at `vendor/test262`; see the Test262 section above).
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 12,350   | 12,350    | 12,349 | 23.05%  |
-| (file, variant) | 102,906     | 23,485   | 23,485    | 23,483 | 22.82%  |
+| Files           | 53,575      | 12,350   | 12,350    | 12,350 | 23.052% |
+| (file, variant) | 102,906     | 23,485   | 23,485    | 23,485 | 22.822% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).

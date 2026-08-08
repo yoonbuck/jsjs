@@ -333,9 +333,12 @@ implements ES5.1, so `Date.parse('1970-01-01T00:00:00')` is `0`. The upstream
 test for the ES2015 rule asserts that value equals the host's time-zone offset,
 so it passes in UTC — where the two editions agree — and fails everywhere else.
 It is therefore selected rather than excluded, because in the UTC environment CI
-validates in the engine genuinely satisfies it. A contributor running
-`npm run test262:upstream` from a non-UTC zone will see that one file fail; that
-is this deviation showing through, not a regression.
+validates in the engine genuinely satisfies it. So that the committed report and
+coverage table stay a pure function of the engine rather than of the contributor's
+clock, `npm run test262:upstream` refuses to run outside UTC and prints the
+`TZ=UTC npm run test262:upstream` invocation to use instead; CI pins the same
+`TZ=UTC`. This is the one file whose result would otherwise move with the host
+zone, so pinning the zone is enough to make the artifacts reproducible.
 
 ### Number-to-string and string-to-number use the host's algorithms
 
