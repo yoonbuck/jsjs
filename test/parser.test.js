@@ -429,7 +429,10 @@ const tests = [
     name: 'super outside a method still raises a SyntaxError',
     run() {
       assertThrows(() => parseScript('super.x;'), SyntaxError);
-      assertThrows(() => parseScript('function f() { return super.x; }'), SyntaxError);
+      assertThrows(
+        () => parseScript('function f() { return super.x; }'),
+        SyntaxError,
+      );
     },
   },
   {

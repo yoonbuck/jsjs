@@ -42,7 +42,10 @@ import {
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { SuperReferenceBase } from '../runtime/super-reference.js';
-import { createFunctionObject, isAnonymousFunctionExpression } from './declarations.js';
+import {
+  createFunctionObject,
+  isAnonymousFunctionExpression,
+} from './declarations.js';
 // Direct-eval interception (see isDirectEvalCall) calls into the eval
 // implementation. This closes a loop through the pre-existing intra-evaluator
 // cycle expressions <-> declarations <-> statements; performEval is a
@@ -483,7 +486,8 @@ function evaluateAssignmentExpression(node, context) {
 
   if (node.operator === '=') {
     const value =
-      node.left.type === 'Identifier' && isAnonymousFunctionExpression(node.right)
+      node.left.type === 'Identifier' &&
+      isAnonymousFunctionExpression(node.right)
         ? createFunctionObject(node.right, context.env, context, {
             name: node.left.name,
           })
@@ -902,11 +906,16 @@ function evaluateObjectExpression(node, context) {
       throw createUnsupportedNodeError(property);
     }
 
-    const accessor = createFunctionObject(property.value, context.env, context, {
-      name: `${property.kind} ${key}`,
-      isMethod: true,
-      homeObject: object,
-    });
+    const accessor = createFunctionObject(
+      property.value,
+      context.env,
+      context,
+      {
+        name: `${property.kind} ${key}`,
+        isMethod: true,
+        homeObject: object,
+      },
+    );
     object.defineOwnProperty(key, {
       ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
       enumerable: true,

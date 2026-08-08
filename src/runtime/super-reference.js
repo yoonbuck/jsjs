@@ -102,7 +102,13 @@ export function setPropertyWithReceiver(
     const parent = startObject === null ? null : startObject.getPrototype();
 
     if (parent !== null) {
-      return setPropertyWithReceiver(parent, receiver, name, value, throwOnError);
+      return setPropertyWithReceiver(
+        parent,
+        receiver,
+        name,
+        value,
+        throwOnError,
+      );
     }
 
     return createDataPropertyOnReceiver(
@@ -122,7 +128,13 @@ export function setPropertyWithReceiver(
       );
     }
 
-    return createDataPropertyOnReceiver(receiver, name, value, throwOnError, true);
+    return createDataPropertyOnReceiver(
+      receiver,
+      name,
+      value,
+      throwOnError,
+      true,
+    );
   }
 
   if (!isAccessorDescriptor(ownDescriptor) || ownDescriptor.set === undefined) {

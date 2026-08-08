@@ -75,7 +75,9 @@ const tests = [
       assertSame(run('var f; f = function () {}; f.name;'), 'f');
       assertSame(run('f = function () {}; f.name;'), 'f');
       assertSame(
-        run('var target; function assignIt() { target = function () {}; } assignIt(); target.name;'),
+        run(
+          'var target; function assignIt() { target = function () {}; } assignIt(); target.name;',
+        ),
         'target',
       );
     },
@@ -168,16 +170,16 @@ const tests = [
     },
   },
   {
-    name: 'Object.setPrototypeOf changes an object\'s prototype and rejects a cycle',
+    name: "Object.setPrototypeOf changes an object's prototype and rejects a cycle",
     run() {
       assertSame(
-        run(
-          'var a = {}; var b = { x: 1 }; Object.setPrototypeOf(a, b); a.x;',
-        ),
+        run('var a = {}; var b = { x: 1 }; Object.setPrototypeOf(a, b); a.x;'),
         1,
       );
       assertSame(
-        run('var a = {}; Object.setPrototypeOf(a, null); Object.getPrototypeOf(a);'),
+        run(
+          'var a = {}; Object.setPrototypeOf(a, null); Object.getPrototypeOf(a);',
+        ),
         null,
       );
       assertSame(

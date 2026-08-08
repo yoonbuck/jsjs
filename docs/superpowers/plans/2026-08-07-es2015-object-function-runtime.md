@@ -23,35 +23,37 @@
 
 ## File Map
 
-| File | Change |
-| --- | --- |
-| `src/runtime/object.js` | `EngineObject#ownPropertyKeys()` ES2015 ordering; new `EngineObject#setPrototypeOf` |
-| `src/runtime/function-object.js` | `EngineFunction` gains `name`, `isMethod`, `homeObject`; `length`/`name` become `configurable: true` |
-| `src/builtins/shared.js` | `NativeFunction`'s `length`/`name` become `configurable: true` |
-| `src/evaluator/declarations.js` | `createFunctionObject` gains an `options` parameter; `evaluateVariableDeclaration` NamedEvaluation |
-| `src/evaluator/expressions.js` | Assignment/object-literal NamedEvaluation; method `[[HomeObject]]` wiring; `super` property evaluation |
-| `src/builtins/function.js` | `BoundFunction`'s name becomes `"bound " + target.name` |
-| `src/parser.js` | New Acorn plugin: `super` tokenizes as a keyword at `ecmaVersion: 5` |
-| `src/parser-dependency.js` | Re-export `tokTypes` alongside `parse`/`Parser` |
-| `src/runtime/super-reference.js` | **New.** Receiver-aware property get/set used only by `super.prop` |
-| `src/builtins/object.js` | `Object.setPrototypeOf`, `Object.is` |
-| `test/es2015-object-function.test.js` | **New.** Portable suite for every behavior above |
-| `test/suites.js` | Registers the new suite |
-| `test/ci/es2015-object-function-test262.test.js` | **New.** Focused upstream Test262 coverage |
-| `test/run-ci-contract.js` | Registers the new Test262 suite |
-| `docs/conformance.md` | New "ES2015 focused coverage" section |
-| `docs/architecture.md` | Document `[[HomeObject]]`, `super`, the new ordering, and `Object.setPrototypeOf`/`is` |
+| File                                             | Change                                                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `src/runtime/object.js`                          | `EngineObject#ownPropertyKeys()` ES2015 ordering; new `EngineObject#setPrototypeOf`                    |
+| `src/runtime/function-object.js`                 | `EngineFunction` gains `name`, `isMethod`, `homeObject`; `length`/`name` become `configurable: true`   |
+| `src/builtins/shared.js`                         | `NativeFunction`'s `length`/`name` become `configurable: true`                                         |
+| `src/evaluator/declarations.js`                  | `createFunctionObject` gains an `options` parameter; `evaluateVariableDeclaration` NamedEvaluation     |
+| `src/evaluator/expressions.js`                   | Assignment/object-literal NamedEvaluation; method `[[HomeObject]]` wiring; `super` property evaluation |
+| `src/builtins/function.js`                       | `BoundFunction`'s name becomes `"bound " + target.name`                                                |
+| `src/parser.js`                                  | New Acorn plugin: `super` tokenizes as a keyword at `ecmaVersion: 5`                                   |
+| `src/parser-dependency.js`                       | Re-export `tokTypes` alongside `parse`/`Parser`                                                        |
+| `src/runtime/super-reference.js`                 | **New.** Receiver-aware property get/set used only by `super.prop`                                     |
+| `src/builtins/object.js`                         | `Object.setPrototypeOf`, `Object.is`                                                                   |
+| `test/es2015-object-function.test.js`            | **New.** Portable suite for every behavior above                                                       |
+| `test/suites.js`                                 | Registers the new suite                                                                                |
+| `test/ci/es2015-object-function-test262.test.js` | **New.** Focused upstream Test262 coverage                                                             |
+| `test/run-ci-contract.js`                        | Registers the new Test262 suite                                                                        |
+| `docs/conformance.md`                            | New "ES2015 focused coverage" section                                                                  |
+| `docs/architecture.md`                           | Document `[[HomeObject]]`, `super`, the new ordering, and `Object.setPrototypeOf`/`is`                 |
 
 ---
 
 ### Task 1: ES2015 own-property-key order
 
 **Files:**
+
 - Modify: `src/runtime/object.js` (`EngineObject#ownPropertyKeys`, around line 66-70)
 - Test: Create `test/es2015-object-function.test.js`
 - Modify: `test/suites.js`
 
 **Interfaces:**
+
 - Consumes: nothing new (uses the existing `_properties` Map).
 - Produces: `EngineObject#ownPropertyKeys()` now returns array-index string keys first (ascending numeric order), then every other key in creation order. Every caller (`Object.keys`, `Object.getOwnPropertyNames`, `enumerableKeysForIn`, `JSON.stringify`) is unchanged and inherits the new order automatically.
 
@@ -216,12 +218,14 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 2: Function `name`/`length` attributes
 
 **Files:**
+
 - Modify: `src/runtime/function-object.js` (`EngineFunction` constructor, `EngineFunctionOptions` typedef)
 - Modify: `src/builtins/shared.js` (`NativeFunction` constructor)
 - Modify: `src/evaluator/declarations.js` (`createFunctionObject`)
 - Test: `test/es2015-object-function.test.js`
 
 **Interfaces:**
+
 - Consumes: nothing from Task 1.
 - Produces: `EngineFunctionOptions` gains optional `name` (`string`, default `''`) and `isMethod` (`boolean`, default `false`). `EngineFunction` gets an own `name` property (`{value, writable:false, enumerable:false, configurable:true}`) and its `length`/`name` (and `NativeFunction`'s) both go from `configurable:false` to `configurable:true`. `createFunctionObject(node, scope, context, options = {})` — a new 4th parameter — accepts `{ name, isMethod, homeObject }` (all optional); `options.name` overrides the default (`node.id.name` if present, else `''`); every existing call site (which passes nothing) is unaffected. Later tasks consume `options.name`, `options.isMethod`, and `options.homeObject`.
 
@@ -336,18 +340,18 @@ Update the constructor:
 In `src/builtins/shared.js`, in the `NativeFunction` constructor, change both:
 
 ```js
-    this.defineOwnProperty('length', {
-      value: length,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
-    this.defineOwnProperty('name', {
-      value: name,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
+this.defineOwnProperty('length', {
+  value: length,
+  writable: false,
+  enumerable: false,
+  configurable: false,
+});
+this.defineOwnProperty('name', {
+  value: name,
+  writable: false,
+  enumerable: false,
+  configurable: false,
+});
 ```
 
 to `configurable: true` in both blocks (only the `configurable` value changes).
@@ -469,11 +473,13 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 3: `NamedEvaluation` for var declarators, assignment, and object-literal properties
 
 **Files:**
+
 - Modify: `src/evaluator/declarations.js` (`evaluateVariableDeclaration`; new `isAnonymousFunctionExpression` export)
 - Modify: `src/evaluator/expressions.js` (`evaluateAssignmentExpression`, `evaluateObjectExpression`)
 - Test: `test/es2015-object-function.test.js`
 
 **Interfaces:**
+
 - Consumes: `createFunctionObject(node, scope, context, options)` from Task 2.
 - Produces: `isAnonymousFunctionExpression(node)` exported from `src/evaluator/declarations.js`, returning `node.type === 'FunctionExpression' && !node.id`. Used by both `declarations.js` and `expressions.js`.
 
@@ -569,32 +575,35 @@ export function evaluateVariableDeclaration(node, context) {
 In `src/evaluator/expressions.js`, add `isAnonymousFunctionExpression` to the existing import from `./declarations.js`:
 
 ```js
-import { createFunctionObject, isAnonymousFunctionExpression } from './declarations.js';
+import {
+  createFunctionObject,
+  isAnonymousFunctionExpression,
+} from './declarations.js';
 ```
 
 Then in `evaluateAssignmentExpression`, replace:
 
 ```js
-  if (node.operator === '=') {
-    const value = evaluateExpressionValue(node.right, context);
-    putValue(reference, value);
-    return value;
-  }
+if (node.operator === '=') {
+  const value = evaluateExpressionValue(node.right, context);
+  putValue(reference, value);
+  return value;
+}
 ```
 
 with:
 
 ```js
-  if (node.operator === '=') {
-    const value =
-      node.left.type === 'Identifier' && isAnonymousFunctionExpression(node.right)
-        ? createFunctionObject(node.right, context.env, context, {
-            name: node.left.name,
-          })
-        : evaluateExpressionValue(node.right, context);
-    putValue(reference, value);
-    return value;
-  }
+if (node.operator === '=') {
+  const value =
+    node.left.type === 'Identifier' && isAnonymousFunctionExpression(node.right)
+      ? createFunctionObject(node.right, context.env, context, {
+          name: node.left.name,
+        })
+      : evaluateExpressionValue(node.right, context);
+  putValue(reference, value);
+  return value;
+}
 ```
 
 - [ ] **Step 5: Wire the object-literal `init`-kind property case**
@@ -652,10 +661,12 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 4: `Function.prototype.bind` name
 
 **Files:**
+
 - Modify: `src/builtins/function.js` (`BoundFunction` constructor)
 - Test: `test/es2015-object-function.test.js`
 
 **Interfaces:**
+
 - Consumes: `EngineFunction`/`NativeFunction` `name` property from Task 2.
 - Produces: no new exports; `BoundFunction`'s `name` is now `"bound " + <target's name, or "" if not a string>` instead of the fixed literal `"bound"`.
 
@@ -721,10 +732,12 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 5: Method `[[HomeObject]]` and non-constructible get/set methods
 
 **Files:**
+
 - Modify: `src/evaluator/expressions.js` (`evaluateObjectExpression`)
 - Test: `test/es2015-object-function.test.js`
 
 **Interfaces:**
+
 - Consumes: `EngineFunction`'s `isMethod`/`homeObject` support and `createFunctionObject`'s `options` parameter (Task 2).
 - Produces: object-literal `get`/`set` accessor functions now have `functionObject.homeObject === <the object literal>`, `isConstructor(accessor) === false`, and `name === "get " + key` / `"set " + key`. `EngineFunction.homeObject` (already declared as a field in Task 2) is consumed starting here; no further public API changes.
 
@@ -769,27 +782,27 @@ Expected: FAIL — accessor functions are currently unnamed (`''`) and construct
 In `src/evaluator/expressions.js`, in `evaluateObjectExpression`, replace:
 
 ```js
-    const accessor = createFunctionObject(property.value, context.env, context);
-    object.defineOwnProperty(key, {
-      ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
-      enumerable: true,
-      configurable: true,
-    });
+const accessor = createFunctionObject(property.value, context.env, context);
+object.defineOwnProperty(key, {
+  ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
+  enumerable: true,
+  configurable: true,
+});
 ```
 
 with:
 
 ```js
-    const accessor = createFunctionObject(property.value, context.env, context, {
-      name: `${property.kind} ${key}`,
-      isMethod: true,
-      homeObject: object,
-    });
-    object.defineOwnProperty(key, {
-      ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
-      enumerable: true,
-      configurable: true,
-    });
+const accessor = createFunctionObject(property.value, context.env, context, {
+  name: `${property.kind} ${key}`,
+  isMethod: true,
+  homeObject: object,
+});
+object.defineOwnProperty(key, {
+  ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
+  enumerable: true,
+  configurable: true,
+});
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -811,11 +824,13 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 6: `super` keyword parser plugin
 
 **Files:**
+
 - Modify: `src/parser-dependency.js` (re-export `tokTypes`)
 - Modify: `src/parser.js` (new plugin; wire it into both parser variants)
 - Test: `test/parser.test.js`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `parseScript`/`parseEval` now parse `super.prop` and `super[expr]` (only where Acorn's own `allowSuper` scope tracking already permits it — inside a `get`/`set` accessor body) into a `MemberExpression` whose `object` is `{ type: 'Super' }`. `super` anywhere else (bare, as a binding, followed by `(`) still raises exactly the same errors it does today (`super()` specifically still raises Acorn's own "super() call outside constructor of a subclass", since `allowDirectSuper` is never enabled). No other ES6 grammar becomes parseable.
 
@@ -1007,6 +1022,7 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 7: `super` property read/write at runtime
 
 **Files:**
+
 - Create: `src/runtime/super-reference.js`
 - Modify: `src/evaluator/expressions.js` (`evaluateMemberExpression`)
 - Modify: `src/evaluator/declarations.js` (`executeFunctionBody`)
@@ -1014,6 +1030,7 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 - Test: `test/es2015-object-function.test.js`
 
 **Interfaces:**
+
 - Consumes: the `Super` AST node from Task 6; `context.homeObject`, threaded per-activation from `functionObject.homeObject` (Task 2/5).
 - Produces: `SuperReferenceBase` (a class satisfying the `isPropertyReferenceBase` duck type already used by `src/runtime/reference.js`'s `getValue`/`putValue`) and `setPropertyWithReceiver(startObject, receiver, name, value, throwOnError)`, both exported from `src/runtime/super-reference.js`. `context.homeObject: EngineObject | undefined`, set every function call.
 
@@ -1072,7 +1089,7 @@ Append to `test/es2015-object-function.test.js`:
   },
 ```
 
-(A bare `super.prop` reachable with no enclosing method at all is not something a guest script can construct through this engine's parser: Task 6's grammar only ever produces a `Super` node inside a `get`/`set` accessor body, where Acorn's own `allowSuper` check already requires it. The runtime `ReferenceError` guard added in Step 5 below is defense in depth for that unreachable case, not something this suite can exercise end-to-end — it is implicitly covered by the fact that every other test here *does* have a home object and never hits that branch.)
+(A bare `super.prop` reachable with no enclosing method at all is not something a guest script can construct through this engine's parser: Task 6's grammar only ever produces a `Super` node inside a `get`/`set` accessor body, where Acorn's own `allowSuper` check already requires it. The runtime `ReferenceError` guard added in Step 5 below is defense in depth for that unreachable case, not something this suite can exercise end-to-end — it is implicitly covered by the fact that every other test here _does_ have a home object and never hits that branch.)
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -1455,11 +1472,13 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 8: `Object.setPrototypeOf` and `Object.is`
 
 **Files:**
+
 - Modify: `src/runtime/object.js` (`EngineObject#setPrototypeOf`)
 - Modify: `src/builtins/object.js` (`installObjectReflectionMethods`)
 - Test: `test/es2015-object-function.test.js`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `EngineObject#setPrototypeOf(value)` (returns `boolean`); guest globals `Object.setPrototypeOf(target, proto)` and `Object.is(value1, value2)`.
 
@@ -1554,38 +1573,38 @@ In `src/runtime/object.js`, add this method to the `EngineObject` class, right a
 In `src/builtins/object.js`, in `installObjectReflectionMethods`, add (right after the existing `getPrototypeOf` registration):
 
 ```js
-  defineNativeMethod(
-    realm,
-    objectConstructor,
-    'setPrototypeOf',
-    2,
-    (_this, args) => {
-      const target = requireObjectArgument(args[0]);
-      const proto = args[1];
+defineNativeMethod(
+  realm,
+  objectConstructor,
+  'setPrototypeOf',
+  2,
+  (_this, args) => {
+    const target = requireObjectArgument(args[0]);
+    const proto = args[1];
 
-      if (proto !== null && !(proto instanceof EngineObject)) {
-        throw new GuestErrorSignal(
-          'TypeError',
-          'Object prototype may only be an object or null',
-        );
-      }
+    if (proto !== null && !(proto instanceof EngineObject)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Object prototype may only be an object or null',
+      );
+    }
 
-      if (!target.setPrototypeOf(proto)) {
-        throw new GuestErrorSignal(
-          'TypeError',
-          'Object.setPrototypeOf could not set the requested prototype',
-        );
-      }
+    if (!target.setPrototypeOf(proto)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Object.setPrototypeOf could not set the requested prototype',
+      );
+    }
 
-      return target;
-    },
-  );
-  defineNativeMethod(realm, objectConstructor, 'is', 2, (_this, args) =>
-    Object.is(args[0], args[1]),
-  );
+    return target;
+  },
+);
+defineNativeMethod(realm, objectConstructor, 'is', 2, (_this, args) =>
+  Object.is(args[0], args[1]),
+);
 ```
 
-(`Object.is` on the right-hand side is the *host*'s `Object.is`, correct here because this engine represents every guest primitive as the identical host primitive and every guest object as one `EngineObject` instance — see the existing internal uses of host `Object.is` for `-0` detection in `src/runtime/date.js`, `src/builtins/math.js`, and `src/runtime/object.js` itself.)
+(`Object.is` on the right-hand side is the _host_'s `Object.is`, correct here because this engine represents every guest primitive as the identical host primitive and every guest object as one `EngineObject` instance — see the existing internal uses of host `Object.is` for `-0` detection in `src/runtime/date.js`, `src/builtins/math.js`, and `src/runtime/object.js` itself.)
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -1606,11 +1625,13 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 9: Focused Test262 coverage
 
 **Files:**
+
 - Create: `test/ci/es2015-object-function-test262.test.js`
 - Modify: `test/run-ci-contract.js`
 - Modify: `docs/conformance.md`
 
 **Interfaces:**
+
 - Consumes: `runTest262`, `createNodeTest262Host` (existing, from `tools/test262/runner.js` and `tools/test262/adapters/node.js`); `readTest262Pin` (existing, from `tools/test262/upstream-run.js`).
 - Produces: nothing new consumed elsewhere; this is a leaf test suite.
 
@@ -1688,9 +1709,7 @@ export default [
       });
 
       if (summary.failed > 0 || summary.skipped > 0) {
-        const problems = records.filter(
-          (record) => record.status !== 'passed',
-        );
+        const problems = records.filter((record) => record.status !== 'passed');
 
         throw new Error(
           `Expected every focused file to pass, got: ${JSON.stringify(problems)}`,
@@ -1780,9 +1799,11 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ### Task 10: Documentation and full validation pass
 
 **Files:**
+
 - Modify: `docs/architecture.md`
 
 **Interfaces:**
+
 - Consumes: nothing new; this task only documents and validates the completed feature set.
 - Produces: nothing consumed by other tasks; this is the final task.
 

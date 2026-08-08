@@ -43,7 +43,7 @@ yet in this engine, so the third bucket stays empty until #43).
 ### 2. Function `name` / `length` (ECMA-262 9.2.1–9.2.11, 17)
 
 - `EngineFunction` gains an own `name` property: `{ value, writable: false,
-  enumerable: false, configurable: true }` (ES2015 changed `configurable`
+enumerable: false, configurable: true }` (ES2015 changed `configurable`
   from ES5's `false` to `true` for both `name` and `length` — `length` also
   needs updating to `configurable: true` on both `EngineFunction` and
   `NativeFunction`).
@@ -59,11 +59,11 @@ yet in this engine, so the third bucket stays empty until #43).
     anonymous function; an object-literal `init`-kind `Property` whose value
     is an anonymous function (name = the property key, `ToString`'d same as
     the key itself); accessor (`get`/`set`) methods always get `"get " +
-    key` / `"set " + key` regardless of whether the function is named,
+key` / `"set " + key` regardless of whether the function is named,
     matching `SetFunctionName` with a `prefix` argument.
   - `Function.prototype.bind`: bound function name = `"bound " +
-    Get(target, "name")`, coerced with `ToString`, falling back to `"bound
-    "` if `name` isn't a string.
+Get(target, "name")`, coerced with `ToString`, falling back to `"bound
+"` if `name` isn't a string.
   - The dynamic `Function` constructor (`evaluator/dynamic-function.js`):
     name = `"anonymous"` (ES2015 19.2.1.1.1 `CreateDynamicFunction` step
     using that literal identifier).
@@ -93,7 +93,7 @@ formally calls these `MethodDefinition`s) get:
   `MakeSuperPropertyReference` (12.3.5.1): the lookup starts at
   `homeObject.getPrototype()` but `this` stays the receiver for `[[Get]]`
   and `[[Put]]`. This needs a minimal, self-contained grammar addition
-  (below) because `super` is already a *reserved word* at `ecmaVersion: 5`
+  (below) because `super` is already a _reserved word_ at `ecmaVersion: 5`
   (ES5 §7.6.1.2 Future Reserved Words) — Acorn rejects it outright, so there
   is no way to observe `[[HomeObject]]` from guest code without parsing
   `super` at all. `super(...)` (`SuperCall`, only legal in derived-class
@@ -118,7 +118,7 @@ formally calls these `MethodDefinition`s) get:
   through `context.homeObject`, set in `executeFunctionBody` from
   `functionObject.homeObject`), throws a guest `SyntaxError`-shaped
   `ReferenceError` — documented as an intentional ES5-engine deviation from
-  the spec's *static* early error — if there is no home object, and
+  the spec's _static_ early error — if there is no home object, and
   otherwise resolves the property starting at `homeObject.getPrototype()`
   while keeping `context.thisValue` as the receiver for both read
   (`[[Get]]`) and write (`[[Put]]`) access. `EngineObject#get`/`#put`
@@ -166,7 +166,7 @@ formally calls these `MethodDefinition`s) get:
 - Focused Test262 coverage: hand-picked upstream files (not the ES5
   `upstream-subset.json`/`es5-selection.json` pipeline, which is ES5-scoped
   and shared with sibling branches) covering `test/language/expressions/
-  function/name.js`, `test/language/statements/function/name.js`,
+function/name.js`, `test/language/statements/function/name.js`,
   `test/built-ins/Function/prototype/bind/{name,length}.js`,
   `test/language/expressions/object/{getter,setter}-prop-desc.js`,
   `test/language/expressions/object/{getter,setter}-super-prop.js`,

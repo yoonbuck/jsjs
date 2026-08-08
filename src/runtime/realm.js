@@ -124,13 +124,13 @@ export class Realm {
     // native functions now use configurable: true per ES2015. Re-define both
     // here explicitly before locking extensibility.
     throwTypeErrorFunction.defineOwnProperty('length', {
-      value: throwTypeErrorFunction.getOwnProperty('length').value,
+      value: 0,
       writable: false,
       enumerable: false,
       configurable: false,
     });
     throwTypeErrorFunction.defineOwnProperty('name', {
-      value: throwTypeErrorFunction.getOwnProperty('name').value,
+      value: '',
       writable: false,
       enumerable: false,
       configurable: false,

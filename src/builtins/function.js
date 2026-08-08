@@ -59,7 +59,8 @@ class BoundFunction extends NativeFunction {
       };
     }
 
-    const targetName = target instanceof EngineObject ? target.get('name') : undefined;
+    const targetName =
+      target instanceof EngineObject ? target.get('name') : undefined;
     const boundName = `bound ${typeof targetName === 'string' ? targetName : ''}`;
 
     super(realm, {
