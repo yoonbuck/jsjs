@@ -361,6 +361,177 @@ const tests = [
       assertSame(run('eval("var topInjected = 5;"); topInjected + 2;'), 7);
     },
   },
+  {
+    name: 'a temporal dead zone read throws through the fused path exactly as GetValue does',
+    run() {
+      const outer = new DeclarativeEnvironmentRecord();
+      outer.createMutableBinding('shadowed');
+      outer.initializeBinding('shadowed', 'outer-value');
+      const block = new DeclarativeEnvironmentRecord(outer);
+      block.createMutableBinding('shadowed', false);
+
+      const error = /** @type {GuestErrorSignal} */ (
+        assertThrows(
+          () => getIdentifierBindingValue(block, 'shadowed', false),
+          GuestErrorSignal,
+        )
+      );
+      assertSame(error.typeName, 'ReferenceError');
+      assertSame(
+        error.guestMessage,
+        "Cannot access 'shadowed' before initialization",
+      );
+      assertMatchesReferencePath(block, 'shadowed', false);
+    },
+  },
+  {
+    name: 'a const binding in its dead zone throws through the fused path like a let one',
+    run() {
+      const block = new DeclarativeEnvironmentRecord();
+      block.createImmutableBinding('frozen', true);
+
+      assertThrows(
+        () => getIdentifierBindingValue(block, 'frozen', false),
+        GuestErrorSignal,
+      );
+      assertMatchesReferencePath(block, 'frozen', false);
+
+      block.initializeBinding('frozen', 9);
+      assertSame(getIdentifierBindingValue(block, 'frozen', false), 9);
+      assertMatchesReferencePath(block, 'frozen', false);
+    },
+  },
+  {
+    name: 'a lexical binding shadowing an object environment resolves to the declarative record',
+    run() {
+      const scope = new EngineObject();
+      scope.defineOwnProperty('shared', {
+        value: 'from-with',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const withEnv = new ObjectEnvironmentRecord(scope, null, true);
+      const block = new DeclarativeEnvironmentRecord(withEnv);
+      block.createMutableBinding('shared', false);
+      block.initializeBinding('shared', 'from-let');
+
+      assertSame(getIdentifierBindingValue(block, 'shared', false), 'from-let');
+      assertMatchesReferencePath(block, 'shared', false);
+    },
+  },
+  {
+    name: 'end-to-end: block, const, and per-iteration reads resolve through the fused path',
+    run() {
+      assertSame(run('var r; { let inner = 3; r = inner; } r;'), 3);
+      assertSame(run('var r; { const frozen = 4; r = frozen; } r;'), 4);
+      assertSame(run('var outer = 1; { let outer = 2; } outer;'), 1);
+      assertSame(
+        run(
+          'var reads = []; { for (let i = 0; i < 3; i += 1) { reads.push(function () { return i; }); } } ' +
+            'reads[0]() + "," + reads[1]() + "," + reads[2]();',
+        ),
+        '0,1,2',
+      );
+    },
+  },
+  {
+    name: 'end-to-end: a dead-zone read throws even when an outer binding of the name is initialized',
+    run() {
+      assertSame(
+        run(
+          'var shadowed = "outer"; ' +
+            '{ var caught; try { shadowed; } catch (e) { caught = e.message; } let shadowed = 1; } caught;',
+        ),
+        "Cannot access 'shadowed' before initialization",
+      );
+      assertSame(
+        run(
+          'function f() { try { return early; } catch (e) { return e.message; } let early = 1; } f();',
+        ),
+        "Cannot access 'early' before initialization",
+      );
+      assertSame(
+        run(
+          '{ var caught; try { eval("viaEval"); } catch (e) { caught = e.message; } let viaEval = 1; } caught;',
+        ),
+        "Cannot access 'viaEval' before initialization",
+      );
+    },
+  },
+  {
+    name: 'end-to-end: with-scope and accessor reads still work with a lexical scope layered over them',
+    run() {
+      assertSame(
+        run('var r; with ({ a: 42 }) { let b = 1; r = a + b; } r;'),
+        43,
+      );
+      assertSame(run('var r; with ({ a: 1 }) { let a = 2; r = a; } r;'), 2);
+      assertSame(
+        run(
+          'var calls = 0; ' +
+            'var scope = Object.defineProperty({}, "g", { get: function () { calls += 1; return 9; } }); ' +
+            'var r; with (scope) { let local = 1; r = g + local; } r + "," + calls;',
+        ),
+        '10,1',
+      );
+    },
+  },
+  {
+    name: 'a getter reached from inside a block scope runs at the same stack-guard depth on both paths',
+    run() {
+      const realm = createRealm();
+
+      /** @type {number[]} */
+      const observed = [];
+      const getter = realm.createNativeFunction({
+        name: 'blockScopedProbeGetter',
+        length: 0,
+        call() {
+          observed.push(realm.stackGuard.depth);
+          return 5;
+        },
+      });
+      realm.globalObject.defineOwnProperty('blockProbe', {
+        get: getter,
+        set: undefined,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const blockEnv = new DeclarativeEnvironmentRecord(
+        realm.globalEnvironment,
+      );
+      blockEnv.createMutableBinding('unrelated', false);
+      blockEnv.initializeBinding('unrelated', 1);
+
+      /** @type {import('../src/evaluator/index.js').EvaluationContext} */
+      const context = {
+        realm,
+        env: blockEnv,
+        variableEnv: realm.globalEnvironment,
+        strict: false,
+        thisValue: realm.globalObject,
+      };
+      const node = { type: 'Identifier', name: 'blockProbe' };
+
+      assertSame(realm.stackGuard.depth, 0, 'guard balanced before reference');
+      const reference = evaluateExpression(node, context);
+      assertSame(getValue(/** @type {any} */ (reference)), 5);
+      const referenceDepth = observed.pop();
+
+      assertSame(realm.stackGuard.depth, 0, 'guard balanced before fused');
+      assertSame(evaluateExpressionValue(node, context), 5);
+      const fusedDepth = observed.pop();
+
+      assertSame(
+        fusedDepth,
+        referenceDepth,
+        'getter stack-guard depth through a block scope (fused vs reference)',
+      );
+      assertSame(realm.stackGuard.depth, 0, 'guard balanced after fused path');
+    },
+  },
 ];
 
 export default tests;

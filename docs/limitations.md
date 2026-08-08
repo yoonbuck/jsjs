@@ -11,9 +11,8 @@ engines happen to do, and the two are not the same thing: several entries below
 describe places where this engine follows ES5.1 exactly and therefore differs
 from every browser. Any `engine-deviation` exclusion in
 [`tools/test262/es5-selection.json`](../tools/test262/es5-selection.json) must
-name one of the headings below; six exclusions do — two name the
-`IdentifierName` heading below and four name the `Lexical-binding
-NamedEvaluation` heading — because every other one once filed under the category
+name one of the headings below; two do — both name the `IdentifierName` heading
+below — because every other one once filed under the category
 turned out to be ES5.1-mandated behaviour. See
 [docs/conformance.md](conformance.md) for the exclusion categories and counts.
 
@@ -554,27 +553,6 @@ in `src/parser.js`; the iterative walks are `EngineObject#getProperty`
 `src/evaluator/static-semantics.js`.
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.
 
-### Lexical-binding NamedEvaluation does not set a function name
-
-ES2015 §13.3.1.4 evaluates `let`/`const foo = <anonymous function>` with a step 6
-that calls `SetFunctionName` (§9.2.11) so the binding name becomes the function's
-`name` own property. This engine implements ES2015 lexical declarations but not
-the ES2015 function-object `name` own property that `SetFunctionName` writes — no
-function form here has a `name` own property at all — so that one step is a known
-gap in this milestone's coverage of §13.3.1.4. The four upstream tests
-`fn-name-cover.js` and `fn-name-fn.js` under `test/language/statements/let/` and
-the matching `.../const/` directory assert it and are excluded for this reason. Adding function `name` (with its `writable: false,
-enumerable: false, configurable: true` attributes across every function form)
-belongs to the separate ES2015 object/property-key/function-semantics issue, not
-to lexical declarations; doing it only for `let`/`const` initializers would leave
-`let f = function(){}` with a `name` that `function f(){}` lacks.
-
-**Backing code:** `src/evaluator/declarations.js` (`evaluateVariableDeclaration`,
-which initializes a lexical binding without a `SetFunctionName` step).
-**Verification:**
-`evaluateScript(realm, 'let f = function(){}; f.hasOwnProperty("name")')` →
-`{ type: 'normal', value: false }`.
-
 ### ES2015 syntax beyond lexical and block-level function declarations is rejected at parse time
 
 The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
@@ -583,7 +561,7 @@ parser accepts that syntax and rejects every other ES2015 construct at parse
 time. Most are refused by the engine's own early-error pass
 (`checkUnsupportedEs2015Node`): classes, arrow functions, template and tagged
 template literals, `for`-`of`, generators and `yield`, destructuring patterns
-(object, array, and default/rest/assignment patterns), spread elements, `super`,
+(object, array, and default/rest/assignment patterns), spread elements,
 `new.target`, computed/shorthand/method object properties, binary (`0b`) and
 octal (`0o`) numeric literals, and `\u{…}` code-point escapes in strings and
 identifiers. Two families never reach that pass, because the vendored Acorn

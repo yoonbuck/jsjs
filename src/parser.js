@@ -257,10 +257,14 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * - `YieldExpression` occurs only inside a generator, whose enclosing
  *   `Function` is rejected first by the `generator: true` flag check in
  *   `checkUnsupportedEs2015Node`.
- * - `Super` in `({ m() { return super.x; } })` is a valid ES6 script AST node,
- *   but its enclosing object-method `Property` (`method: true`) is rejected
- *   first by that same flag check. (`super` outside any method is instead a
- *   parse error Acorn raises itself.)
+ *
+ * `Super` is deliberately absent from the table: object-literal accessors carry
+ * `super` property references, which the engine implements (see
+ * `src/runtime/super-reference.js`). An accessor is a `Property` with
+ * `kind: 'get'`/`'set'` and `method: false`, so it is not caught by the
+ * object-method flag check either; `super` in an object *method* shorthand is
+ * still refused, because that `Property` has `method: true`. `super` outside any
+ * method or accessor is a parse error Acorn raises itself.
  *
  * *Acorn-blocked* — the parser refuses the source before any such node exists,
  * so this pass never sees it. Kept so a later `sourceType`/`ecmaVersion` change
@@ -294,7 +298,6 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['AssignmentPattern', 'default value patterns are not supported'],
   ['RestElement', 'rest elements are not supported'],
   ['SpreadElement', 'spread elements are not supported'],
-  ['Super', '`super` is not supported'],
   ['MetaProperty', '`new.target` is not supported'],
   ['ImportDeclaration', 'import declarations are not supported'],
   ['ImportExpression', 'dynamic `import` is not supported'],

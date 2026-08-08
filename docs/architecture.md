@@ -23,7 +23,7 @@ Source enters through `evaluateScript(realm, source)`, which:
    obsolete. A parse-time early-error pass then walks the tree and rejects every
    other ES2015 construct the evaluator does not implement — classes, arrow
    functions, template literals, `for`-`of`, generators, destructuring patterns,
-   rest/spread, `super`, `new.target`, computed/shorthand/method properties,
+   rest/spread, `new.target`, computed/shorthand/method properties,
    binary and octal numeric literals, and `\u{…}` code-point escapes. Module
    syntax (`import`/`export`) and the ES2017 `async`/`await` forms never reach
    that pass — the vendored Acorn refuses them itself, `import`/`export` because
@@ -182,11 +182,12 @@ through `SuperReferenceBase` (`src/runtime/super-reference.js`): the property
 lookup starts at `homeObject.getPrototype()`, but the accessor's own `this`
 stays the receiver for both the read and the write — implemented by
 `setPropertyWithReceiver`, a receiver-aware sibling of `EngineObject#put`
-used only by this path. Parsing `super` at all requires a narrowly-scoped
-Acorn plugin in `src/parser.js` that restores the `super` keyword token at
-`ecmaVersion: 5` (Acorn's own `Super`-node handling, `allowSuper` scope
-tracking, and early errors are otherwise unchanged); no other ES6 grammar is
-reachable through it. `super(...)` (`SuperCall`) is not implemented — it is
+used only by this path. Parsing `super` needs no help from the engine: at
+`ecmaVersion: 6` Acorn tokenizes the keyword itself and applies its own
+`Super`-node handling, `allowSuper` scope tracking, and early errors, so the
+`ecmaVersion: 5` plugin that used to restore the token was deleted along with
+the escaped-identifier one when the parser moved to ES6. `super(...)`
+(`SuperCall`) is not implemented — it is
 only valid in a derived class constructor, and classes are issue #25.
 
 ### Environment records (`src/runtime/environment.js`)

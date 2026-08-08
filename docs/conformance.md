@@ -17,7 +17,7 @@ sloppy-mode `var`-alias so `{ function f(){} } f()` still resolves while
 ES2015 is implemented: the parser accepts the syntax above and rejects every
 other ES2015 construct — classes, arrow functions, template literals,
 `for`-`of`, generators, destructuring and default/rest patterns, spread,
-`super`, `new.target`, modules, computed/shorthand/method object properties,
+`new.target`, modules, computed/shorthand/method object properties,
 binary and octal numeric literals, and `\u{…}` code-point escapes (plus the
 ES2017 `async`/`await` forms) — so the grammar the engine parses is exactly the
 grammar it runs. The ES2015 RegExp flags `u` and `y` are likewise rejected, but

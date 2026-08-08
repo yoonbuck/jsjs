@@ -778,8 +778,19 @@ export function evaluateVariableDeclaration(node, context) {
   }
 
   for (const declarator of node.declarations) {
+    // ES2015 §13.3.1.4 step 6 (NamedEvaluation): a lexical binding whose
+    // initializer is an anonymous function definition names that function after
+    // the binding, so `let f = function () {};` yields `f.name === 'f'`. The
+    // `var` path above applies the same step for §12.2's `VariableDeclaration`;
+    // both route through `createFunctionObject`'s `name` option rather than
+    // setting the property afterwards, so the function is born with the
+    // non-writable, non-enumerable, configurable `name` §9.2.11 requires.
     const value = declarator.init
-      ? evaluateExpressionValue(declarator.init, context)
+      ? isAnonymousFunctionExpression(declarator.init)
+        ? createFunctionObject(declarator.init, context.env, context, {
+            name: declarator.id.name,
+          })
+        : evaluateExpressionValue(declarator.init, context)
       : undefined;
 
     // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
