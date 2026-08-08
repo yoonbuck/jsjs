@@ -69,6 +69,54 @@ function runWithSymbol(source, options = {}) {
   return options.completion === 'type' ? completion.type : completion.value;
 }
 
+/**
+ * @param {string} source
+ * @returns {unknown}
+ */
+function run(source) {
+  return evaluateScript(createRealm(), source).value;
+}
+
+/**
+ * Asserts `source` completes abruptly with a guest error object whose
+ * prototype chain includes the same realm's `constructorName.prototype`, so a
+ * host error leaking out of the engine cannot be mistaken for the specified
+ * guest throw.
+ *
+ * @param {string} source
+ * @param {string} constructorName
+ * @returns {void}
+ */
+function assertGuestThrow(source, constructorName) {
+  const realm = createRealm();
+  const completion = evaluateScript(realm, source);
+
+  assertSame(completion.type, 'throw', source);
+
+  if (!(completion.value instanceof EngineObject)) {
+    throw new Error(
+      `Expected a guest error object from ${source}, got ${typeof completion.value}`,
+    );
+  }
+
+  const constructor = /** @type {any} */ (
+    realm.globalObject.get(constructorName)
+  );
+  const prototype = /** @type {EngineObject} */ (constructor.get('prototype'));
+
+  for (
+    let current = completion.value.getPrototype();
+    current !== null;
+    current = current.getPrototype()
+  ) {
+    if (current === prototype) {
+      return;
+    }
+  }
+
+  throw new Error(`${source} did not throw an instance of ${constructorName}`);
+}
+
 const tests = [
   {
     name: 'every ES2015 well-known symbol exists, in specification order',
@@ -485,6 +533,454 @@ const tests = [
     name: 'a numeric computed key is still the string key it always was',
     run() {
       assertSame(runWithSymbol('var o = {}; o[62] = "n"; o["62"];'), 'n');
+    },
+  },
+  {
+    name: 'Symbol is a callable, non-constructible global',
+    run() {
+      assertSame(run('typeof Symbol;'), 'function');
+      assertSame(run('typeof Symbol("ponies");'), 'symbol');
+      assertSame(run('typeof Symbol();'), 'symbol');
+      assertSame(run('Symbol.length;'), 0);
+      assertSame(run('Symbol.name;'), 'Symbol');
+      assertGuestThrow('new Symbol();', 'TypeError');
+      assertGuestThrow('new Symbol("ponies");', 'TypeError');
+    },
+  },
+  {
+    name: 'the Symbol global and its prototype carry the specified attributes',
+    run() {
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor(this, "Symbol");' +
+            'd.writable + "/" + d.enumerable + "/" + d.configurable;',
+        ),
+        'true/false/true',
+      );
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor(Symbol, "prototype");' +
+            'd.writable + "/" + d.enumerable + "/" + d.configurable;',
+        ),
+        'false/false/false',
+      );
+      assertSame(run('Symbol.prototype.constructor === Symbol;'), true);
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor(Symbol.prototype, "constructor");' +
+            'd.writable + "/" + d.enumerable + "/" + d.configurable;',
+        ),
+        'true/false/true',
+      );
+    },
+  },
+  {
+    name: 'the description argument goes through ToString, so a symbol description throws',
+    run() {
+      assertSame(run('Symbol(1).toString();'), 'Symbol(1)');
+      assertSame(run('Symbol(null).toString();'), 'Symbol(null)');
+      assertSame(run('Symbol().toString();'), 'Symbol()');
+      assertSame(run('Symbol(undefined).toString();'), 'Symbol()');
+      assertGuestThrow('Symbol(Symbol());', 'TypeError');
+      assertGuestThrow(
+        'Symbol({ toString: function () { throw new RangeError(); } });',
+        'RangeError',
+      );
+    },
+  },
+  {
+    name: 'Symbol.prototype.toString and valueOf accept only a Symbol this value',
+    run() {
+      assertSame(run('Symbol.prototype.toString.length;'), 0);
+      assertSame(run('Symbol.prototype.valueOf.length;'), 0);
+      assertSame(
+        run('var s = Symbol("x"); Symbol.prototype.valueOf.call(s) === s;'),
+        true,
+      );
+      assertSame(
+        run(
+          'var s = Symbol("x"); Symbol.prototype.valueOf.call(Object(s)) === s;',
+        ),
+        true,
+      );
+      assertGuestThrow('Symbol.prototype.toString.call("x");', 'TypeError');
+      assertGuestThrow('Symbol.prototype.valueOf.call(1);', 'TypeError');
+      assertGuestThrow(
+        'Symbol.prototype.valueOf.call(Symbol.prototype);',
+        'TypeError',
+      );
+    },
+  },
+  {
+    name: 'a boxed symbol inherits from Symbol.prototype and unboxes to its value',
+    run() {
+      assertSame(
+        run('Object.getPrototypeOf(Object(Symbol("x"))) === Symbol.prototype;'),
+        true,
+      );
+      assertSame(run('typeof Object(Symbol());'), 'object');
+      assertSame(run('var s = Symbol("x"); Object(s) == s;'), true);
+      assertSame(run('var s = Symbol("x"); Object(s) === s;'), false);
+    },
+  },
+  {
+    name: 'the global symbol registry is reachable through Symbol.for and Symbol.keyFor',
+    run() {
+      assertSame(run('Symbol.for.length;'), 1);
+      assertSame(run('Symbol.keyFor.length;'), 1);
+      assertSame(run('Symbol.for("ponies") === Symbol.for("ponies");'), true);
+      assertSame(run('Symbol.for(3) === Symbol.for("3");'), true);
+      assertSame(run('Symbol.for() === Symbol.for("undefined");'), true);
+      assertSame(
+        run('Symbol.for.call(String, "call") === Symbol.for("call");'),
+        true,
+      );
+      assertSame(run('Symbol.keyFor(Symbol.for("round")) === "round";'), true);
+      assertSame(run('Symbol.keyFor(Symbol("round"));'), undefined);
+      assertSame(run('Symbol.keyFor(Symbol.iterator);'), undefined);
+      assertGuestThrow('Symbol.keyFor("not a symbol");', 'TypeError');
+      assertGuestThrow('Symbol.for(Symbol());', 'TypeError');
+    },
+  },
+  {
+    name: 'every well-known symbol is an unwritable, unconfigurable Symbol property',
+    run() {
+      for (const name of WELL_KNOWN_SYMBOL_NAMES) {
+        assertSame(run(`typeof Symbol.${name};`), 'symbol', name);
+        assertSame(
+          run(`Symbol.${name}.toString();`),
+          `Symbol(Symbol.${name})`,
+          name,
+        );
+        assertSame(
+          run(
+            `var d = Object.getOwnPropertyDescriptor(Symbol, "${name}");` +
+              'd.writable + "/" + d.enumerable + "/" + d.configurable;',
+          ),
+          'false/false/false',
+          name,
+        );
+      }
+    },
+  },
+  {
+    name: 'Symbol.prototype carries @@toStringTag and @@toPrimitive',
+    run() {
+      assertSame(run('Symbol.prototype[Symbol.toStringTag];'), 'Symbol');
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toStringTag);' +
+            'd.writable + "/" + d.enumerable + "/" + d.configurable;',
+        ),
+        'false/false/true',
+      );
+      assertSame(
+        run('typeof Symbol.prototype[Symbol.toPrimitive];'),
+        'function',
+      );
+      assertSame(run('Symbol.prototype[Symbol.toPrimitive].length;'), 1);
+      assertSame(
+        run('Symbol.prototype[Symbol.toPrimitive].name;'),
+        '[Symbol.toPrimitive]',
+      );
+      assertSame(
+        run(
+          'var d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive);' +
+            'd.writable + "/" + d.enumerable + "/" + d.configurable;',
+        ),
+        'false/false/true',
+      );
+      assertSame(
+        run(
+          'var s = Symbol("x");' +
+            'Symbol.prototype[Symbol.toPrimitive].call(s) === s;',
+        ),
+        true,
+      );
+      assertGuestThrow(
+        'Symbol.prototype[Symbol.toPrimitive].call("x");',
+        'TypeError',
+      );
+    },
+  },
+  {
+    name: 'symbols resist implicit coercion but not explicit description rendering',
+    run() {
+      assertGuestThrow('Symbol("x") + "";', 'TypeError');
+      assertGuestThrow('"" + Symbol("x");', 'TypeError');
+      assertGuestThrow('+Symbol("x");', 'TypeError');
+      assertGuestThrow('Number(Symbol("x"));', 'TypeError');
+      assertGuestThrow('Symbol("x") < Symbol("x");', 'TypeError');
+      assertSame(run('String(Symbol("x"));'), 'Symbol(x)');
+      assertSame(run('String(Symbol());'), 'Symbol()');
+      assertGuestThrow('new String(Symbol("x"));', 'TypeError');
+      assertSame(run('Boolean(Symbol("x"));'), true);
+      assertSame(run('!Symbol("x");'), false);
+    },
+  },
+  {
+    name: 'symbol values are shared across realms while Symbol itself is not',
+    run() {
+      const first = createRealm();
+      const second = createRealm();
+      const symbolOf = (
+        /** @type {import('../src/runtime/realm.js').Realm} */ realm,
+      ) => realm.globalObject.get('Symbol');
+
+      assertSame(symbolOf(first) === symbolOf(second), false);
+      assertSame(
+        evaluateScript(first, 'Symbol.iterator;').value,
+        evaluateScript(second, 'Symbol.iterator;').value,
+      );
+      assertSame(
+        evaluateScript(first, 'Symbol.for("cross-realm");').value,
+        evaluateScript(second, 'Symbol.for("cross-realm");').value,
+      );
+      assertSame(
+        evaluateScript(second, 'Symbol.keyFor(Symbol.for("cross-realm"));')
+          .value,
+        'cross-realm',
+      );
+      assertSame(
+        evaluateScript(first, 'Symbol.prototype;').value ===
+          evaluateScript(second, 'Symbol.prototype;').value,
+        false,
+      );
+    },
+  },
+  {
+    name: 'reflection splits string keys from symbol keys',
+    run() {
+      assertSame(
+        run(
+          'var s = Symbol("k"); var o = { a: 1 }; o[s] = 2; o.b = 3;' +
+            'Object.keys(o).join(",") + "|" +' +
+            'Object.getOwnPropertyNames(o).join(",") + "|" +' +
+            'Object.getOwnPropertySymbols(o).length + "|" +' +
+            '(Object.getOwnPropertySymbols(o)[0] === s);',
+        ),
+        'a,b|a,b|1|true',
+      );
+      assertSame(run('Object.getOwnPropertySymbols.length;'), 1);
+      assertSame(run('Object.getOwnPropertySymbols({}).length;'), 0);
+      assertSame(run('Object.getOwnPropertySymbols("ab").length;'), 0);
+      assertGuestThrow('Object.getOwnPropertySymbols(null);', 'TypeError');
+      assertGuestThrow('Object.getOwnPropertySymbols(undefined);', 'TypeError');
+    },
+  },
+  {
+    name: 'getOwnPropertySymbols reports symbol keys in definition order',
+    run() {
+      assertSame(
+        run(
+          'var a = Symbol("a"); var b = Symbol("b"); var o = {};' +
+            'Object.defineProperty(o, a, { value: 1 });' +
+            'o.plain = 0;' +
+            'Object.defineProperty(o, b, { value: 2 });' +
+            'var keys = Object.getOwnPropertySymbols(o);' +
+            'keys.length + "/" + (keys[0] === a) + "/" + (keys[1] === b);',
+        ),
+        '2/true/true',
+      );
+    },
+  },
+  {
+    name: 'descriptor and membership reflection accept symbol keys',
+    run() {
+      assertSame(
+        run(
+          'var s = Symbol("k"); var o = {};' +
+            'Object.defineProperty(o, s, { value: 7, enumerable: true });' +
+            'var d = Object.getOwnPropertyDescriptor(o, s);' +
+            'd.value + "/" + d.writable + "/" + d.enumerable + "/" + d.configurable;',
+        ),
+        '7/false/true/false',
+      );
+      assertSame(
+        run(
+          'var s = Symbol("k"); var o = {}; o[s] = 1;' +
+            'o.hasOwnProperty(s) + "/" + o.propertyIsEnumerable(s);',
+        ),
+        'true/true',
+      );
+      assertSame(
+        run(
+          'var s = Symbol("k");' +
+            'Object.getOwnPropertyDescriptor({}, s) === undefined;',
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'for-in and JSON never see symbol keys or symbol values',
+    run() {
+      assertSame(
+        run(
+          'var s = Symbol("k"); var o = { a: 1 }; o[s] = 2;' +
+            'var seen = []; for (var k in o) { seen.push(k); } seen.join(",");',
+        ),
+        'a',
+      );
+      assertSame(
+        run(
+          'var o = { a: 1 };' +
+            'o[Symbol.for("ponies")] = { toJSON: function () { throw "fit"; } };' +
+            'o[Symbol.iterator] = { toJSON: function () { throw "fit"; } };' +
+            'JSON.stringify(o);',
+        ),
+        '{"a":1}',
+      );
+      assertSame(
+        run(
+          'var o = { a: 1 }; o[Symbol("k")] = 1;' +
+            'JSON.stringify(o, function (k, v) {' +
+            '  if (typeof k === "symbol") { throw "fit"; } return v;' +
+            '});',
+        ),
+        '{"a":1}',
+      );
+      assertSame(run('JSON.stringify(Symbol("x"));'), undefined);
+      assertSame(run('JSON.stringify({ a: Symbol("x") });'), '{}');
+      assertSame(run('JSON.stringify([Symbol("x")]);'), '[null]');
+    },
+  },
+  {
+    name: 'Object.prototype.toString reports a string @@toStringTag',
+    run() {
+      assertSame(
+        run('Object.prototype.toString.call(Symbol("x"));'),
+        '[object Symbol]',
+      );
+      assertSame(
+        run('Object.prototype.toString.call(Symbol.prototype);'),
+        '[object Symbol]',
+      );
+      assertSame(
+        run(
+          'var o = {}; o[Symbol.toStringTag] = "Custom";' +
+            'Object.prototype.toString.call(o);',
+        ),
+        '[object Custom]',
+      );
+      assertSame(
+        run(
+          'var o = {}; o[Symbol.toStringTag] = 42;' +
+            'Object.prototype.toString.call(o);',
+        ),
+        '[object Object]',
+      );
+      assertSame(
+        run(
+          'var a = []; a[Symbol.toStringTag] = "Tagged";' +
+            'Object.prototype.toString.call(a);',
+        ),
+        '[object Tagged]',
+      );
+      assertSame(
+        run(
+          'var o = Object.create({});' +
+            'Object.getPrototypeOf(o)[Symbol.toStringTag] = "Inherited";' +
+            'Object.prototype.toString.call(o);',
+        ),
+        '[object Inherited]',
+      );
+    },
+  },
+  {
+    name: 'the ES5 [[Class]] tags survive the @@toStringTag addition',
+    run() {
+      assertSame(run('Object.prototype.toString.call([]);'), '[object Array]');
+      assertSame(run('Object.prototype.toString.call({});'), '[object Object]');
+      assertSame(
+        run('Object.prototype.toString.call(function () {});'),
+        '[object Function]',
+      );
+      assertSame(run('Object.prototype.toString.call(Math);'), '[object Math]');
+      assertSame(run('Object.prototype.toString.call(JSON);'), '[object JSON]');
+      assertSame(
+        run('Object.prototype.toString.call(new Date(0));'),
+        '[object Date]',
+      );
+      assertSame(
+        run('Object.prototype.toString.call(/x/);'),
+        '[object RegExp]',
+      );
+      assertSame(
+        run('Object.prototype.toString.call("x");'),
+        '[object String]',
+      );
+      assertSame(run('Object.prototype.toString.call(1);'), '[object Number]');
+      assertSame(
+        run('Object.prototype.toString.call(true);'),
+        '[object Boolean]',
+      );
+      assertSame(
+        run('Object.prototype.toString.call(new Error("x"));'),
+        '[object Error]',
+      );
+      assertSame(
+        run(
+          '(function () { return Object.prototype.toString.call(arguments); }());',
+        ),
+        '[object Arguments]',
+      );
+      assertSame(
+        run('Object.prototype.toString.call(undefined);'),
+        '[object Undefined]',
+      );
+      assertSame(run('Object.prototype.toString.call(null);'), '[object Null]');
+    },
+  },
+  {
+    name: 'ToPrimitive consults an object’s @@toPrimitive method',
+    run() {
+      assertSame(
+        run(
+          'var hints = []; var o = {};' +
+            'o[Symbol.toPrimitive] = function (hint) { hints.push(hint); return 1; };' +
+            'var sum = o + 1; var num = o * 2; var str = "" + o;' +
+            'hints.join(",");',
+        ),
+        'default,number,default',
+      );
+      assertSame(
+        run(
+          'var o = {};' +
+            'o[Symbol.toPrimitive] = function () { return "primitive"; };' +
+            'var k = {}; k[o] = 1; Object.keys(k).join(",");',
+        ),
+        'primitive',
+      );
+      assertSame(
+        run(
+          'var o = {}; o[Symbol.toPrimitive] = undefined;' +
+            'o.valueOf = function () { return 7; }; o * 1;',
+        ),
+        7,
+      );
+      assertSame(
+        run(
+          'var o = {}; o[Symbol.toPrimitive] = null;' +
+            'o.valueOf = function () { return 7; }; o * 1;',
+        ),
+        7,
+      );
+      assertGuestThrow(
+        'var o = {}; o[Symbol.toPrimitive] = 1; o * 1;',
+        'TypeError',
+      );
+      assertGuestThrow(
+        'var o = {}; o[Symbol.toPrimitive] = function () { return {}; }; o * 1;',
+        'TypeError',
+      );
+      assertSame(
+        run(
+          'var o = {}; o[Symbol.toPrimitive] = function () { return Symbol("s"); };' +
+            'typeof o[Symbol.toPrimitive]();',
+        ),
+        'symbol',
+      );
     },
   },
 ];

@@ -1,6 +1,8 @@
 import { EngineObject } from './object.js';
 import { createPrimitiveWrapper } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
+import { isCallable } from './descriptors.js';
+import { WELL_KNOWN_SYMBOLS } from './symbol.js';
 
 /**
  * @param {unknown} value
@@ -39,6 +41,13 @@ export function toObject(realm, value) {
 }
 
 /**
+ * Implements ES2015 §7.1.1 `ToPrimitive`. The `@@toPrimitive` step is the
+ * one place the ES5.1 algorithm grew: an object that has that method uses it
+ * instead of `OrdinaryToPrimitive`'s `valueOf`/`toString` pair, and must
+ * return a primitive. Everything else — including the hint-to-method-order
+ * mapping and the `'default'` hint behaving as `'number'` — is unchanged,
+ * so no ES5 conversion moves.
+ *
  * @param {unknown} value
  * @param {'string' | 'number' | 'default'} [preferredType='default']
  * @returns {string | number | boolean | symbol | null | undefined}
@@ -48,11 +57,33 @@ export function toPrimitive(value, preferredType = 'default') {
     return value;
   }
 
-  if (value instanceof EngineObject) {
-    return value.defaultValue(preferredType);
+  if (!(value instanceof EngineObject)) {
+    throw new TypeError('Unsupported object coercion');
   }
 
-  throw new TypeError('Unsupported object coercion');
+  const exoticToPrimitive = value.get(WELL_KNOWN_SYMBOLS.toPrimitive);
+
+  if (exoticToPrimitive !== undefined && exoticToPrimitive !== null) {
+    if (!isCallable(exoticToPrimitive)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Symbol.toPrimitive method is not callable',
+      );
+    }
+
+    const result = exoticToPrimitive.callFunction(value, [preferredType]);
+
+    if (!isPrimitive(result)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Symbol.toPrimitive method returned an object',
+      );
+    }
+
+    return result;
+  }
+
+  return value.defaultValue(preferredType);
 }
 
 /**

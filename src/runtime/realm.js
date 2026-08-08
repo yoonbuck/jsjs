@@ -30,6 +30,10 @@ import {
   createRegExpIntrinsics,
   installRegExpConstructor,
 } from '../builtins/regexp.js';
+import {
+  createSymbolIntrinsics,
+  installSymbolConstructor,
+} from '../builtins/symbol.js';
 import { createMathIntrinsics, installMathObject } from '../builtins/math.js';
 import {
   createNumericGlobalIntrinsics,
@@ -160,6 +164,10 @@ export class Realm {
     const regExpIntrinsics = createRegExpIntrinsics(this);
     Object.assign(this.intrinsics, regExpIntrinsics);
     installRegExpConstructor(this.globalObject, regExpIntrinsics);
+
+    const symbolIntrinsics = createSymbolIntrinsics(this);
+    Object.assign(this.intrinsics, symbolIntrinsics);
+    installSymbolConstructor(this.globalObject, symbolIntrinsics);
 
     const mathIntrinsics = createMathIntrinsics(this);
     Object.assign(this.intrinsics, mathIntrinsics);
