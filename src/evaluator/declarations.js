@@ -141,7 +141,7 @@ export function functionDeclarationInstantiation(
   args,
   context,
 ) {
-  // ES2015 §9.2.15: the activation bindings — parameters, `arguments`, the
+  // ES2015 §9.2.12: the activation bindings — parameters, `arguments`, the
   // body's `var` names, and its top-level function declarations — all live in
   // the *variable* environment. The hoisted function objects instantiated below
   // still capture `context.env` (the body's *lexical* environment) as their
@@ -432,7 +432,7 @@ export function createFunctionObject(node, scope, context, options = {}) {
  * environment is the function's captured `[[Scope]]`, so closures observe
  * the environment their function was created in rather than the caller's.
  *
- * Per ES2015 §9.2.15 the activation environment `varEnv` is the *variable*
+ * Per ES2015 §9.2.12 the activation environment `varEnv` is the *variable*
  * environment — `functionDeclarationInstantiation` binds the parameters,
  * `arguments`, the body's `var` names, and its top-level function declarations
  * there, and a direct `eval("var …")` in the body hoists there too — while the
@@ -450,14 +450,20 @@ export function createFunctionObject(node, scope, context, options = {}) {
 function executeFunctionBody(node, functionObject, thisValue, args) {
   const varEnv = newDeclarativeEnvironment(functionObject.scope);
 
-  // ES2015 §9.2.15 step 33: the body's lexical environment is `varEnv` itself
-  // when the function is strict, or a fresh declarative environment over it when
-  // it is not. Sharing one environment in the strict case is exactly what step
-  // 33 specifies, and it is unobservable: the early errors that would let the
-  // merge show through are raised at parse time — a formal parameter cannot be
-  // redeclared as a body `let`/`const`, and a lexically declared name cannot
-  // collide with a var-scoped one — so the two records' binding sets are
-  // disjoint and whether they live in one record or two changes no lookup.
+  // ES2015 §9.2.12: the body's lexical environment is a fresh declarative
+  // environment over `varEnv` when the function is non-strict (step 30) and
+  // `varEnv` itself when it is strict (step 31); step 33 installs it as the
+  // running context's LexicalEnvironment (here, `context.env`). Sharing one
+  // environment in the strict case is unobservable: the early errors that would
+  // let the merge show through are raised at parse time — a formal parameter
+  // cannot be redeclared as a body `let`/`const`, and a lexically declared name
+  // cannot collide with a var-scoped one — so the two records' binding sets are
+  // disjoint and whether they live in one record or two changes no lookup. This
+  // equivalence was verified empirically (Task 6, fix round 2): forcing the
+  // strict case down the fresh-environment path left the full local suite and
+  // the entire pinned Test262 suite (22219/22219) green. The spec-faithful
+  // branch is kept because the spec specifies it, not because it is required to
+  // pass a test.
   const lexEnv = functionObject.strict
     ? varEnv
     : newDeclarativeEnvironment(varEnv);
@@ -466,7 +472,7 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
   const context = {
     realm: functionObject.realm,
     // `env` is the lexical environment so the hoisted function objects
-    // instantiated in `functionDeclarationInstantiation` capture it (§9.2.15
+    // instantiated in `functionDeclarationInstantiation` capture it (§9.2.12
     // step 36); the activation bindings still land in `variableEnv`.
     env: lexEnv,
     variableEnv: varEnv,
@@ -477,7 +483,7 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
 
   functionDeclarationInstantiation(node, functionObject, args, context);
 
-  // ES2015 §9.2.15 step 35: instantiate the body's top-level lexically-scoped
+  // ES2015 §9.2.12 step 35: instantiate the body's top-level lexically-scoped
   // declarations into `lexEnv` with the same rules a block uses — `let`/`const`
   // get uninitialized bindings (TDZ). This list holds only `let`/`const`/class
   // declarations: `topLevelLexicallyScopedDeclarations` excludes function
@@ -555,10 +561,10 @@ export function evaluateVariableDeclaration(node, context) {
       // scope's declaration instantiation. Reaching an unresolvable reference
       // here means the lexical declaration sits at a scope whose instantiation
       // does not yet create lexical bindings: the top level of a script/global
-      // (Task 7) or of eval code (Task 8). Function-body top-level lexicals are
-      // now instantiated (Task 6), and block, `switch`, and `try` lexicals
-      // always resolve, so those never reach here. Fail loudly with an
-      // engine-level error rather than dereferencing `undefined`.
+      // (Task 7) or of eval code (Task 8). Every other lexical scope — a
+      // function body, block, `switch`, or `try` — already resolves, so those
+      // never reach here. Fail loudly with an engine-level error rather than
+      // dereferencing `undefined`.
       throw createUnsupportedOperationError(
         `lexical declaration of '${declarator.id.name}' outside a block scope`,
       );
