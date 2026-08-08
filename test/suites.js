@@ -61,6 +61,7 @@ import uriGlobals from './uri-globals.test.js';
 import jsonParse from './json-parse.test.js';
 import jsonStringify from './json-stringify.test.js';
 import es2015ObjectFunction from './es2015-object-function.test.js';
+import benchmarkCore from './benchmark-core.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -239,5 +240,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/es2015-object-function.test.js',
     tests: es2015ObjectFunction,
+  }),
+  Object.freeze({
+    file: 'test/benchmark-core.test.js',
+    tests: benchmarkCore,
   }),
 ]);

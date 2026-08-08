@@ -218,7 +218,7 @@ export function toGithubSlug(repository) {
 }
 
 /**
- * The nine checks CI runs as distinct jobs.
+ * The ten checks CI runs as distinct jobs.
  *
  * `ci-drift` runs `ci:check`, which is what makes this module the source of
  * truth rather than a convention: a hand-edited workflow fails CI. `vendor`
@@ -276,6 +276,12 @@ export function createCiJobs(test262) {
       'test262-fixtures',
       'Test262 fixtures',
       [runStep('Run the local fixture suite', 'npm run test262:fixtures')],
+      ['vendor'],
+    ),
+    job(
+      'benchmark-smoke',
+      'Benchmark smoke',
+      [runStep('Run benchmark correctness smoke', 'npm run benchmark:smoke')],
       ['vendor'],
     ),
     Object.freeze({

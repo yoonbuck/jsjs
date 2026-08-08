@@ -11,7 +11,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
-import { assertSame } from '../harness/assert.js';
+import { assertSame, assertThrows } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
 import { UNICODE_VERSION } from '../../src/builtins/unicode-case-data.js';
 import {
@@ -285,6 +285,7 @@ const REQUIRED_TEST262_GROUPS = Object.freeze({
 /** Reference documents that must exist under docs/ after reorganization. */
 const REFERENCE_DOCS = Object.freeze([
   'docs/architecture.md',
+  'docs/benchmarking.md',
   'docs/testing.md',
   'docs/conformance.md',
   'docs/limitations.md',
@@ -361,6 +362,131 @@ function extractNpmRunCommands(source) {
     [...normalized.matchAll(COMMAND_PATTERN)].map((m) => m[1]),
   );
   return [...seen];
+}
+
+/**
+ * Extracts the raw Markdown table lines immediately following `heading`,
+ * without interpreting other Markdown sections.
+ *
+ * @param {string} source
+ * @param {string} heading
+ * @returns {string[]}
+ */
+function markdownTableLinesUnderHeading(source, heading) {
+  const lines = source.split('\n');
+  const headingIndex = lines.findIndex(
+    (line) => line.trim() === `## ${heading}`,
+  );
+
+  if (headingIndex < 0) {
+    throw new Error(`Missing Markdown heading: ## ${heading}`);
+  }
+
+  /** @type {string[]} */
+  const sectionLines = [];
+
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (/^##\s+/.test(line)) {
+      break;
+    }
+
+    sectionLines.push(line);
+  }
+
+  const tableLines = sectionLines.filter((line) => /^\|/.test(line));
+
+  if (tableLines.length < 2) {
+    throw new Error(`Missing Markdown table under heading: ## ${heading}`);
+  }
+
+  return tableLines;
+}
+
+/**
+ * Extracts the first column from a Markdown table immediately following
+ * `heading`, without interpreting other Markdown sections.
+ *
+ * @param {string} source
+ * @param {string} heading
+ * @returns {string[]}
+ */
+function markdownTableFirstColumnUnderHeading(source, heading) {
+  return markdownTableLinesUnderHeading(source, heading)
+    .slice(2)
+    .map((line) => line.split('|')[1]?.trim() ?? '')
+    .filter((cell) => cell.length > 0);
+}
+
+/**
+ * Collects each Markdown table block that appears immediately after `label`,
+ * skipping blank lines between the label and the table itself.
+ *
+ * @param {string} source
+ * @param {string} label
+ * @returns {string[][]}
+ */
+function markdownTablesAfterLabel(source, label) {
+  const lines = source.split('\n');
+  /** @type {string[][]} */
+  const tables = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index].trim() !== label) {
+      continue;
+    }
+
+    /** @type {string[]} */
+    const table = [];
+
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor];
+
+      if (table.length === 0 && line.trim() === '') {
+        continue;
+      }
+
+      if (!/^\|/.test(line)) {
+        break;
+      }
+
+      table.push(line);
+    }
+
+    if (table.length > 0) {
+      tables.push(table);
+    }
+  }
+
+  return tables;
+}
+
+/**
+ * Counts Markdown table cells by counting unescaped `|` separators.
+ *
+ * @param {string} row
+ * @returns {number}
+ */
+function markdownTableCellCount(row) {
+  let separators = 0;
+  let backslashes = 0;
+
+  for (const char of row) {
+    if (char === '\\') {
+      backslashes += 1;
+      continue;
+    }
+
+    const escaped = backslashes % 2 === 1;
+    backslashes = 0;
+
+    if (char === '|' && !escaped) {
+      separators += 1;
+    }
+  }
+
+  return Math.max(0, separators - 1);
 }
 
 /**
@@ -996,6 +1122,7 @@ export default [
       const EXPECTED_DOC_FILES = [
         'README.md',
         'docs/architecture.md',
+        'docs/benchmarking.md',
         'docs/conformance.md',
         'docs/limitations.md',
         'docs/testing.md',
@@ -1276,6 +1403,133 @@ export default [
         readme.includes('evaluateScript'),
         true,
         'README must contain an embedding example that calls evaluateScript',
+      );
+    },
+  },
+  {
+    name: 'markdownTableFirstColumnUnderHeading throws when heading or table is missing',
+    run: async () => {
+      assertThrows(
+        () =>
+          markdownTableFirstColumnUnderHeading(
+            [
+              '## Setup',
+              '',
+              '| Command | Meaning |',
+              '| ------- | ------- |',
+              '| `npm test` | Runs tests |',
+            ].join('\n'),
+            'Commands',
+          ),
+        Error,
+      );
+      assertThrows(
+        () =>
+          markdownTableFirstColumnUnderHeading(
+            ['## Commands', '', 'Paragraph only.'].join('\n'),
+            'Commands',
+          ),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'README command table documents every benchmark script',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const readme = await readSource('README.md');
+      const commands = markdownTableFirstColumnUnderHeading(readme, 'Commands');
+      const benchmarkCommands = Object.keys(manifest.scripts ?? {})
+        .filter(
+          (script) => script === 'benchmark' || script.startsWith('benchmark:'),
+        )
+        .map((script) => `\`npm run ${script}\``);
+      const missing = benchmarkCommands.filter(
+        (command) => !commands.includes(command),
+      );
+
+      assertSame(
+        missing.join('\n'),
+        '',
+        `README command table missing benchmark commands: ${missing.join(', ')}`,
+      );
+    },
+  },
+  {
+    name: 'docs/benchmarking.md option tables keep a consistent column count',
+    run: async () => {
+      const source = await readSource('docs/benchmarking.md');
+      const optionTables = markdownTablesAfterLabel(source, 'Options:');
+      /** @type {string[]} */
+      const malformed = [];
+
+      assertSame(
+        optionTables.length >= 2,
+        true,
+        'docs/benchmarking.md must document both the run and summary option tables',
+      );
+
+      for (const [tableIndex, table] of optionTables.entries()) {
+        const expectedColumns = markdownTableCellCount(table[0]);
+
+        for (const row of table.slice(1)) {
+          const actualColumns = markdownTableCellCount(row);
+
+          if (actualColumns !== expectedColumns) {
+            malformed.push(
+              `table ${tableIndex + 1} expected ${expectedColumns} columns but found ${actualColumns}: ${row}`,
+            );
+          }
+        }
+      }
+
+      assertSame(
+        malformed.join('\n'),
+        '',
+        'docs/benchmarking.md option tables must keep a consistent column count',
+      );
+    },
+  },
+  {
+    name: 'docs/benchmarking.md documents geometric calibration instead of the deleted one-probe formula',
+    run: async () => {
+      const source = await readSource('docs/benchmarking.md');
+      const requiredPhrases = [
+        'double the timed probe batch size',
+        '`targetSampleMs / 8`',
+        'coarse clock',
+        'per-invocation cost',
+      ];
+      const forbiddenPhrases = [
+        'Run one timed batch of size `1`.',
+        'Compute `ceil(targetSampleMs / initialElapsedMs)`.',
+      ];
+      /** @type {string[]} */
+      const missing = [];
+      /** @type {string[]} */
+      const stale = [];
+
+      for (const phrase of requiredPhrases) {
+        if (!source.includes(phrase)) {
+          missing.push(phrase);
+        }
+      }
+
+      for (const phrase of forbiddenPhrases) {
+        if (source.includes(phrase)) {
+          stale.push(phrase);
+        }
+      }
+
+      assertSame(
+        missing.join('\n'),
+        '',
+        `docs/benchmarking.md must mention geometric probing and clock granularity: ${missing.join(', ')}`,
+      );
+      assertSame(
+        stale.join('\n'),
+        '',
+        `docs/benchmarking.md still contains deleted one-probe calibration wording: ${stale.join(', ')}`,
       );
     },
   },

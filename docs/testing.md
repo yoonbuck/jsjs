@@ -12,6 +12,9 @@ npm install
 writes `vendor/acorn/` from the version pinned in `package.json`. The vendor
 directory is generated and gitignored.
 
+Benchmark-specific CLI options, artifact schemas, reproducibility guidance, and
+interpretation caveats are in [`docs/benchmarking.md`](benchmarking.md).
+
 ### Browser prerequisites
 
 `npm run test:browser` needs Playwright's headless Chromium shell. Install it
@@ -49,6 +52,12 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                                             |
 | `npm run test262:exclusions:check`  | Runs every per-file exclusion; fails on stale exclusions, missing policy paths, or a missing/wrong pinned checkout                                       |
 | `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                  |
+| `npm run benchmark`                 | Run Node, Chromium, and `jsc` with shared run metadata, atomically promoting the validated report set to `.benchmark-results/`                           |
+| `npm run benchmark:node`            | Run only the Node host benchmark and write `node.json` under the default ignored benchmark output directory                                              |
+| `npm run benchmark:browser`         | Run only the Chromium host benchmark and write `chromium.json` under the default ignored benchmark output directory                                      |
+| `npm run benchmark:jsc`             | Run only the `jsc` host benchmark and write `jsc.json` under the default ignored benchmark output directory                                              |
+| `npm run benchmark:smoke`           | Run the smoke profile under Node and write a seven-workload validated report to `.benchmark-results/smoke/node.json`                                     |
+| `npm run benchmark:summary`         | Reject mixed/stale host runs, then atomically write deterministic `summary.json` plus metadata-bearing `summary.csv`                                     |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
 | `npm run format`                    | Prettier `--check` over the entire repository                                                                                                            |
@@ -83,8 +92,16 @@ URI globals, JSON parse, and JSON stringify.
 
 ### Node-only suites (`test/node/`)
 
-Two suites that need a filesystem and cannot run in the browser or `jsc`:
+Five suites that need a filesystem and cannot run in the browser or `jsc`:
 
+- `test/node/benchmark-cli.test.js` — validates benchmark CLI argument
+  parsing, sequential all-host orchestration, and atomic validated report
+  writes.
+- `test/node/benchmark-hosts.test.js` — covers the real Node smoke host plus
+  the browser/JSC host adapters' parsing, path-guard, setup-error, and
+  monotonic-clock helpers.
+- `test/node/benchmark-summary.test.js` — validates cross-host compatibility
+  checks, deterministic CSV output, and summary CLI file I/O.
 - `test/node/repository-invariants.test.js` — architecture checks: vendor
   invariants, parser dependency isolation, suite registration, Markdown link
   contracts, documentation command validity, reference doc existence.
@@ -225,22 +242,27 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 `npm run ci:generate` rewrites the committed file; `npm run ci:check` fails
 (without writing) if the two have drifted.
 
-Every push and pull request against `main` runs nine jobs:
+Every push and pull request against `main` runs ten jobs:
 
-| Job                | What it runs                                          | Depends on |
-| ------------------ | ----------------------------------------------------- | ---------- |
-| `ci-drift`         | `npm run ci:check`                                    | —          |
-| `vendor`           | `npm run vendor:check`                                | —          |
-| `format`           | `npm run format` (Prettier `--check`)                 | —          |
-| `lint`             | `npm run lint` (ESLint only)                          | —          |
-| `typecheck`        | `npm run typecheck` (`tsc` in checkJs mode)           | —          |
-| `test-node`        | `npm run test:node`                                   | `vendor`   |
-| `test-browser`     | `npm run test:browser` (Playwright headless Chromium) | `vendor`   |
-| `test262-fixtures` | `npm run test262:fixtures` (local fixture tree)       | `vendor`   |
-| `test262-upstream` | `npm run test262:upstream` (pinned upstream subset)   | `vendor`   |
+| Job                | What it runs                                           | Depends on |
+| ------------------ | ------------------------------------------------------ | ---------- |
+| `ci-drift`         | `npm run ci:check`                                     | —          |
+| `vendor`           | `npm run vendor:check`                                 | —          |
+| `format`           | `npm run format` (Prettier `--check`)                  | —          |
+| `lint`             | `npm run lint` (ESLint only)                           | —          |
+| `typecheck`        | `npm run typecheck` (`tsc` in checkJs mode)            | —          |
+| `test-node`        | `npm run test:node`                                    | `vendor`   |
+| `test-browser`     | `npm run test:browser` (Playwright headless Chromium)  | `vendor`   |
+| `test262-fixtures` | `npm run test262:fixtures` (local fixture tree)        | `vendor`   |
+| `benchmark-smoke`  | `npm run benchmark:smoke` (correctness-only smoke run) | `vendor`   |
+| `test262-upstream` | `npm run test262:upstream` (pinned upstream subset)    | `vendor`   |
 
 Each job runs on `ubuntu-latest` with Node 20 (via `actions/setup-node` with the
 built-in npm cache) and `npm ci`.
+
+`benchmark-smoke` does not upload timing artifacts and does not enforce
+thresholds, baselines, or regression decisions; those semantics are intentionally
+out of CI scope. See [`docs/benchmarking.md`](benchmarking.md).
 
 ### Security properties
 
