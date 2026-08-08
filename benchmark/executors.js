@@ -45,17 +45,18 @@ export function createJsjsExecutors(engine, workload) {
     throw new TypeError('jsjs steady setup must complete normally');
   }
 
-  const guestFunction =
-    /** @type {{ callFunction?: unknown } | null} */ (
-      readGlobalBinding(steadyRealm.globalObject, functionName)
-    );
+  const guestFunction = /** @type {{ callFunction?: unknown } | null} */ (
+    readGlobalBinding(steadyRealm.globalObject, functionName)
+  );
 
   if (
     typeof guestFunction !== 'object' ||
     guestFunction === null ||
     typeof guestFunction.callFunction !== 'function'
   ) {
-    throw new TypeError('jsjs steady setup must define a callable guest function');
+    throw new TypeError(
+      'jsjs steady setup must define a callable guest function',
+    );
   }
 
   const callableGuestFunction =
@@ -109,7 +110,9 @@ function bodyForIife(source) {
   const match = /^\(function\s*\(\)\s*\{([\s\S]*)\}\(\)\)$/.exec(source);
 
   if (match === null) {
-    throw new TypeError('Benchmark workload source must be a zero-argument IIFE');
+    throw new TypeError(
+      'Benchmark workload source must be a zero-argument IIFE',
+    );
   }
 
   return match[1];

@@ -135,7 +135,9 @@ function validateLane(value, path, expectedSamples) {
   );
 
   if (samplesMs.length !== expectedSamples) {
-    throw new TypeError(`${path}.samplesMs must contain ${expectedSamples} entries`);
+    throw new TypeError(
+      `${path}.samplesMs must contain ${expectedSamples} entries`,
+    );
   }
 
   if (normalizedSamplesMs.length !== expectedSamples) {

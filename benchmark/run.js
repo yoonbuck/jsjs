@@ -1,8 +1,5 @@
 import { calibrateBatchSize } from './calibration.js';
-import {
-  createJsjsExecutors,
-  createNativeExecutors,
-} from './executors.js';
+import { createJsjsExecutors, createNativeExecutors } from './executors.js';
 import { REPORT_SCHEMA_VERSION } from './report.js';
 import { summarizeSamples } from './statistics.js';
 
@@ -170,10 +167,7 @@ function createExecutors(engine, workload) {
 
   return Object.freeze({
     native: createNativeExecutors(workload),
-    jsjs: createJsjsExecutors(
-      /** @type {any} */ (engine),
-      workload,
-    ),
+    jsjs: createJsjsExecutors(/** @type {any} */ (engine), workload),
   });
 }
 

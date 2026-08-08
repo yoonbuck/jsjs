@@ -103,7 +103,8 @@ function percentile95FromSorted(values) {
  * @returns {number}
  */
 function coefficientOfVariationFromValues(values) {
-  const mean = values.reduce((total, value) => total + value, 0) / values.length;
+  const mean =
+    values.reduce((total, value) => total + value, 0) / values.length;
 
   if (mean <= 0) {
     throw new RangeError('Expected a positive mean');

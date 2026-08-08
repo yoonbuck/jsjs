@@ -64,7 +64,9 @@ function clampBatchSize(value, maxBatchSize) {
  */
 function checkedBatchResult(result, expectedChecksum, context) {
   if (!Number.isFinite(result.elapsedMs) || result.elapsedMs <= 0) {
-    throw new RangeError(`${context} elapsedMs must be a positive finite number`);
+    throw new RangeError(
+      `${context} elapsedMs must be a positive finite number`,
+    );
   }
 
   if (result.checksum !== expectedChecksum) {

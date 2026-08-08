@@ -13,7 +13,7 @@ writes `vendor/acorn/` from the version pinned in `package.json`. The vendor
 directory is generated and gitignored.
 
 Benchmark-specific CLI options, artifact schemas, reproducibility guidance, and
-interpretation caveats are in [docs/benchmarking.md](benchmarking.md).
+interpretation caveats are in [`docs/benchmarking.md`](benchmarking.md).
 
 ### Browser prerequisites
 
@@ -256,7 +256,7 @@ built-in npm cache) and `npm ci`.
 
 `benchmark-smoke` does not upload timing artifacts and does not enforce
 thresholds, baselines, or regression decisions; those semantics are intentionally
-out of CI scope. See [docs/benchmarking.md](benchmarking.md).
+out of CI scope. See [`docs/benchmarking.md`](benchmarking.md).
 
 ### Security properties
 

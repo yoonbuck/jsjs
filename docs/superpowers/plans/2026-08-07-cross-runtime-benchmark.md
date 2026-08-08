@@ -24,6 +24,7 @@
 ### Task 1: Portable workloads, profiles, calibration, and statistics
 
 **Files:**
+
 - Create: `benchmark/workloads.js`
 - Create: `benchmark/config.js`
 - Create: `benchmark/statistics.js`
@@ -32,6 +33,7 @@
 - Modify: `test/suites.js`
 
 **Interfaces:**
+
 - Produces: `WORKLOADS`, `workloadsForProfile(profile)`, and workload records `{ name, source, expectedChecksum }`.
 - Produces: `PROFILES`, `resolveBenchmarkConfig(options)` returning frozen `{ profile, warmups, samples, targetSampleMs, maxBatchSize, workloads }`.
 - Produces: `median(values)`, `percentile95(values)`, `coefficientOfVariation(values)`, `geometricMean(values)`, and `summarizeSamples(values)`.
@@ -45,22 +47,16 @@ configuration validation:
 
 ```js
 import { assertSame, assertThrows } from './harness/assert.js';
-import {
-  PROFILES,
-  resolveBenchmarkConfig,
-} from '../benchmark/config.js';
-import {
-  WORKLOADS,
-  workloadsForProfile,
-} from '../benchmark/workloads.js';
+import { PROFILES, resolveBenchmarkConfig } from '../benchmark/config.js';
+import { WORKLOADS, workloadsForProfile } from '../benchmark/workloads.js';
 
 const tests = [
   {
     name: 'benchmark workloads have committed checksums',
     run() {
       assertSame(
-        WORKLOADS.map(({ name, expectedChecksum }) =>
-          `${name}:${expectedChecksum}`,
+        WORKLOADS.map(
+          ({ name, expectedChecksum }) => `${name}:${expectedChecksum}`,
         ).join(','),
         [
           'arithmetic-loops:1397312734',
@@ -81,9 +77,18 @@ const tests = [
     run() {
       const smoke = workloadsForProfile('smoke');
       assertSame(smoke.length, WORKLOADS.length);
-      assertSame(smoke.every((entry) => entry.source.length > 0), true);
-      assertSame(smoke.every((entry) => Number.isInteger(entry.expectedChecksum)), true);
-      assertSame(smoke.some((entry, index) => entry.source !== WORKLOADS[index].source), true);
+      assertSame(
+        smoke.every((entry) => entry.source.length > 0),
+        true,
+      );
+      assertSame(
+        smoke.every((entry) => Number.isInteger(entry.expectedChecksum)),
+        true,
+      );
+      assertSame(
+        smoke.some((entry, index) => entry.source !== WORKLOADS[index].source),
+        true,
+      );
     },
   },
   {
@@ -91,10 +96,7 @@ const tests = [
     run() {
       assertSame(PROFILES.default.samples, 9);
       assertSame(PROFILES.smoke.samples, 3);
-      assertThrows(
-        () => resolveBenchmarkConfig({ samples: 0 }),
-        RangeError,
-      );
+      assertThrows(() => resolveBenchmarkConfig({ samples: 0 }), RangeError);
       assertThrows(
         () => resolveBenchmarkConfig({ profile: 'missing' }),
         RangeError,
@@ -233,12 +235,14 @@ git commit -m "feat: add portable benchmark foundations"
 ### Task 2: Portable execution and report schema
 
 **Files:**
+
 - Create: `benchmark/executors.js`
 - Create: `benchmark/run.js`
 - Create: `benchmark/report.js`
 - Modify: `test/benchmark-core.test.js`
 
 **Interfaces:**
+
 - Consumes: Task 1 workload, configuration, calibration, and statistics exports.
 - Produces: `createNativeExecutors(workload)` and `createJsjsExecutors(engine, workload)` records with `cold()` and `steady()` checksum-returning functions.
 - Produces: `runHostBenchmark({ host, version, now, engine, config, generatedAt })`.
@@ -349,6 +353,7 @@ git commit -m "feat: measure cold and steady benchmark modes"
 ### Task 3: Node, Chromium, and JSC host runners
 
 **Files:**
+
 - Create: `benchmark/host.js`
 - Create: `benchmark/run-node.js`
 - Create: `benchmark/run-browser-page.js`
@@ -359,6 +364,7 @@ git commit -m "feat: measure cold and steady benchmark modes"
 - Modify: `test/run-node.js`
 
 **Interfaces:**
+
 - Consumes: `runHostBenchmark` and `validateHostReport`.
 - Produces: `runNodeBenchmark(config)`, `runChromiumBenchmark(config)`, and `runJscBenchmark(config)` returning validated host reports.
 - Produces: `runtimeEngine` containing the imported `createRealm` and `evaluateScript`.
@@ -444,6 +450,7 @@ git commit -m "feat: add cross-runtime benchmark hosts"
 ### Task 4: CLI, output lifecycle, and all-host orchestration
 
 **Files:**
+
 - Create: `benchmark/cli.js`
 - Create: `benchmark/output.js`
 - Create: `test/node/benchmark-cli.test.js`
@@ -452,6 +459,7 @@ git commit -m "feat: add cross-runtime benchmark hosts"
 - Modify: `package.json`
 
 **Interfaces:**
+
 - Consumes: all host runner functions and `resolveBenchmarkConfig`.
 - Produces: `parseBenchmarkArguments(argv)` and `main(argv)` supporting `run` and host selection.
 - Produces: `writeHostReport(outputDirectory, report)` with atomic rename after validation.
@@ -525,6 +533,7 @@ git commit -m "feat: add benchmark command line interface"
 ### Task 5: Cross-host JSON and CSV aggregation
 
 **Files:**
+
 - Create: `benchmark/summarize.js`
 - Create: `test/node/benchmark-summary.test.js`
 - Modify: `test/run-node.js`
@@ -532,6 +541,7 @@ git commit -m "feat: add benchmark command line interface"
 - Modify: `package.json`
 
 **Interfaces:**
+
 - Consumes: validated host report JSON from Tasks 2-4 and `geometricMean`.
 - Produces: `summarizeReports(reports)` and `summaryToCsv(summary)`.
 - Adds CLI command `summary --input=<directory> --output=<directory>`.
@@ -603,6 +613,7 @@ git commit -m "feat: summarize cross-runtime benchmark reports"
 ### Task 6: CI correctness contract and documentation
 
 **Files:**
+
 - Modify: `tools/ci/pipeline.js`
 - Modify: `.github/workflows/ci.yml` via `npm run ci:generate`
 - Modify: `test/node/workflow-contract.test.js`
@@ -612,6 +623,7 @@ git commit -m "feat: summarize cross-runtime benchmark reports"
 - Modify: `README.md`
 
 **Interfaces:**
+
 - Consumes: `npm run benchmark:smoke`.
 - Produces: generated `benchmark-smoke` CI job depending on `vendor`.
 - Produces: user-facing benchmark setup, execution, schema, statistics, and interpretation documentation.
@@ -696,9 +708,11 @@ git commit -m "docs: integrate benchmark harness with CI"
 ### Task 7: Portable validation and final review
 
 **Files:**
+
 - Modify only files identified by failures or reviewer findings.
 
 **Interfaces:**
+
 - Consumes: the complete harness from Tasks 1-6.
 - Produces: a clean, reviewed branch ready for pull request.
 

@@ -70,16 +70,16 @@ node benchmark/cli.js run \
 
 Options:
 
-| Option                                        | Meaning                                                                      |
-| --------------------------------------------- | ---------------------------------------------------------------------------- |
-| `--host=<node                                 | chromium                                                                     | jsc                              | all>` | Required. Repeat `--host` to select multiple concrete hosts, or use `--host=all` by itself. Duplicate hosts are rejected. |
-| `--profile=<default                           | smoke>`                                                                      | Optional. Defaults to `default`. |
-| `--workload=<name>`                           | Optional and repeatable. Defaults to every workload in the selected profile. |
-| `--warmups=<positive integer>`                | Optional override for warmup batch count.                                    |
-| `--samples=<positive integer>`                | Optional override for measured batch count.                                  |
-| `--target-sample-ms=<positive finite number>` | Optional calibration target for one measured batch.                          |
-| `--max-batch-size=<positive integer>`         | Optional hard cap on calibrated batch size.                                  |
-| `--output=<repo-relative directory>`          | Optional output directory. Defaults to `.benchmark-results`.                 |
+| Option                                        | Meaning                                                                                                                                                                    |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--host=<host>`                               | Required. `<host>` is `node`, `chromium`, `jsc`, or `all`. Repeat `--host` to select multiple concrete hosts, or use `--host=all` by itself. Duplicate hosts are rejected. |
+| `--profile=<profile>`                         | Optional. `<profile>` is `default` or `smoke`. Defaults to `default`.                                                                                                      |
+| `--workload=<name>`                           | Optional and repeatable. Defaults to every workload in the selected profile.                                                                                               |
+| `--warmups=<positive integer>`                | Optional override for warmup batch count.                                                                                                                                  |
+| `--samples=<positive integer>`                | Optional override for measured batch count.                                                                                                                                |
+| `--target-sample-ms=<positive finite number>` | Optional calibration target for one measured batch.                                                                                                                        |
+| `--max-batch-size=<positive integer>`         | Optional hard cap on calibrated batch size.                                                                                                                                |
+| `--output=<repo-relative directory>`          | Optional output directory. Defaults to `.benchmark-results`.                                                                                                               |
 
 Unknown options, missing option values, invalid numbers, unknown profiles,
 unknown workloads, duplicate hosts, and unsafe output directories fail fast.
