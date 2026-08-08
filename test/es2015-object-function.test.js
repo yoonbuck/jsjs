@@ -62,6 +62,31 @@ const tests = [
       assertSame(run('(new Function("return 1;")).name;'), 'anonymous');
     },
   },
+  {
+    name: 'NamedEvaluation infers a name for an anonymous function assigned to a variable',
+    run() {
+      assertSame(run('var f = function () {}; f.name;'), 'f');
+      assertSame(run('var g = function named() {}; g.name;'), 'named');
+    },
+  },
+  {
+    name: 'NamedEvaluation infers a name for an anonymous function in a simple assignment',
+    run() {
+      assertSame(run('var f; f = function () {}; f.name;'), 'f');
+      assertSame(
+        run('var target; function assignIt() { target = function () {}; } assignIt(); target.name;'),
+        'target',
+      );
+    },
+  },
+  {
+    name: 'NamedEvaluation infers a name for an anonymous function used as an object literal property value',
+    run() {
+      assertSame(run('({foo: function () {}}).foo.name;'), 'foo');
+      assertSame(run('({foo: function named() {}}).foo.name;'), 'named');
+      assertSame(run('var o = {1: function () {}}; o[1].name;'), '1');
+    },
+  },
 ];
 
 export default tests;

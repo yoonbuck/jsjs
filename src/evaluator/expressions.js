@@ -41,7 +41,7 @@ import {
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
-import { createFunctionObject } from './declarations.js';
+import { createFunctionObject, isAnonymousFunctionExpression } from './declarations.js';
 // Direct-eval interception (see isDirectEvalCall) calls into the eval
 // implementation. This closes a loop through the pre-existing intra-evaluator
 // cycle expressions <-> declarations <-> statements; performEval is a
@@ -481,7 +481,12 @@ function evaluateAssignmentExpression(node, context) {
   );
 
   if (node.operator === '=') {
-    const value = evaluateExpressionValue(node.right, context);
+    const value =
+      node.left.type === 'Identifier' && isAnonymousFunctionExpression(node.right)
+        ? createFunctionObject(node.right, context.env, context, {
+            name: node.left.name,
+          })
+        : evaluateExpressionValue(node.right, context);
     putValue(reference, value);
     return value;
   }
@@ -834,8 +839,14 @@ function evaluateObjectExpression(node, context) {
     const key = evaluatePropertyKey(property.key);
 
     if (property.kind === 'init') {
+      const value = isAnonymousFunctionExpression(property.value)
+        ? createFunctionObject(property.value, context.env, context, {
+            name: key,
+          })
+        : evaluateExpressionValue(property.value, context);
+
       object.defineOwnProperty(key, {
-        value: evaluateExpressionValue(property.value, context),
+        value,
         writable: true,
         enumerable: true,
         configurable: true,
