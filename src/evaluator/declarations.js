@@ -367,6 +367,15 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
  * @returns {{ type: 'normal', value: unknown }}
  */
 export function evaluateVariableDeclaration(node, context) {
+  // Task 3 scaffold, removed by Task 4: raising the parser to ES2015 makes
+  // Acorn emit `let`/`const` `VariableDeclaration` nodes, but their evaluation
+  // (block-scoped bindings, TDZ, `const` immutability) is not implemented until
+  // Task 4. Refusing a non-`var` declaration here keeps the parser change from
+  // silently mis-evaluating a lexical declaration as a `var` in the meantime.
+  if (node.kind !== 'var') {
+    throw createUnsupportedNodeError(node);
+  }
+
   for (const declarator of node.declarations) {
     if (declarator.init) {
       // ES5.1 §12.2.1: evaluate the Identifier to a Reference *before* the
