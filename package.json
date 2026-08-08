@@ -20,6 +20,7 @@
     "benchmark:browser": "node benchmark/cli.js run --host=chromium",
     "benchmark:jsc": "node benchmark/cli.js run --host=jsc",
     "benchmark:smoke": "node benchmark/cli.js run --host=node --profile=smoke --output=.benchmark-results/smoke",
+    "benchmark:summary": "node benchmark/cli.js summary",
     "vendor:sync": "node tools/vendor/sync.js",
     "vendor:check": "node tools/vendor/sync.js --check",
     "prepare": "node tools/vendor/sync.js",

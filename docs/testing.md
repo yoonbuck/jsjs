@@ -54,6 +54,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run benchmark:browser`         | Run only the Chromium host benchmark and write `chromium.json` under the default ignored benchmark output directory                                      |
 | `npm run benchmark:jsc`             | Run only the `jsc` host benchmark and write `jsc.json` under the default ignored benchmark output directory                                              |
 | `npm run benchmark:smoke`           | Run the smoke profile under Node and write a seven-workload validated report to `.benchmark-results/smoke/node.json`                                     |
+| `npm run benchmark:summary`         | Read compatible host reports from an ignored benchmark output directory and atomically write deterministic `summary.json` plus `summary.csv`             |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
 | `npm run format`                    | Prettier `--check` over the entire repository                                                                                                            |
@@ -88,8 +89,10 @@ URI globals, JSON parse, and JSON stringify.
 
 ### Node-only suites (`test/node/`)
 
-Two suites that need a filesystem and cannot run in the browser or `jsc`:
+Three suites that need a filesystem and cannot run in the browser or `jsc`:
 
+- `test/node/benchmark-summary.test.js` — validates cross-host compatibility
+  checks, deterministic CSV output, and summary CLI file I/O.
 - `test/node/repository-invariants.test.js` — architecture checks: vendor
   invariants, parser dependency isolation, suite registration, Markdown link
   contracts, documentation command validity, reference doc existence.

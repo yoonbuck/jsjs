@@ -50,23 +50,38 @@ export function resolveOutputDirectory(outputDirectory) {
  */
 export async function writeHostReport(outputDirectory, report, options = {}) {
   const validate = options.validate ?? validateHostReport;
-  const directoryUrl = resolveOutputDirectory(outputDirectory);
   const validatedReport = validate(report);
-  const host = safeHostFileStem(validatedReport.host);
-  const finalReportUrl = new URL(`${host}.json`, directoryUrl);
+
+  return writeOutputFile(
+    outputDirectory,
+    `${safeHostFileStem(validatedReport.host)}.json`,
+    `${JSON.stringify(validatedReport, null, 2)}\n`,
+  );
+}
+
+/**
+ * @param {string} outputDirectory
+ * @param {string} fileName
+ * @param {string} contents
+ * @returns {Promise<URL>}
+ */
+export async function writeOutputFile(outputDirectory, fileName, contents) {
+  const directoryUrl = resolveOutputDirectory(outputDirectory);
+  const safeFileName = safeOutputFileName(fileName);
+  const finalReportUrl = new URL(safeFileName, directoryUrl);
   const temporaryReportUrl = new URL(
-    `${host}.json.tmp-${process.pid}-${nextTemporaryFileCounter()}`,
+    `${safeFileName}.tmp-${process.pid}-${nextTemporaryFileCounter()}`,
     directoryUrl,
   );
+
+  if (typeof contents !== 'string') {
+    throw new TypeError('Benchmark output contents must be a string');
+  }
 
   await mkdir(directoryUrl, { recursive: true });
 
   try {
-    await writeFile(
-      temporaryReportUrl,
-      `${JSON.stringify(validatedReport, null, 2)}\n`,
-      'utf8',
-    );
+    await writeFile(temporaryReportUrl, contents, 'utf8');
     await rename(temporaryReportUrl, finalReportUrl);
   } catch (error) {
     await cleanupTemporaryFile(temporaryReportUrl);
@@ -104,6 +119,18 @@ function safeHostFileStem(host) {
   }
 
   return host;
+}
+
+/**
+ * @param {string} fileName
+ * @returns {string}
+ */
+function safeOutputFileName(fileName) {
+  if (typeof fileName !== 'string' || !/^[a-z0-9-]+\.(json|csv)$/u.test(fileName)) {
+    throw new RangeError(`Benchmark output file name is not safe: ${fileName}`);
+  }
+
+  return fileName;
 }
 
 /**

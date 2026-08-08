@@ -4,10 +4,11 @@ import { writeHostReport, resolveOutputDirectory } from './output.js';
 import { runChromiumBenchmark } from './run-browser.js';
 import { runJscBenchmark } from './spawn-jsc.js';
 import { runNodeBenchmark } from './run-node.js';
+import { summarizeReportDirectory } from './summarize.js';
 
 const DEFAULT_OUTPUT_DIRECTORY = '.benchmark-results';
 const ALL_HOSTS = Object.freeze(['node', 'chromium', 'jsc']);
-const SUPPORTED_OPTIONS = new Set([
+const RUN_OPTIONS = new Set([
   'host',
   'profile',
   'workload',
@@ -17,6 +18,7 @@ const SUPPORTED_OPTIONS = new Set([
   'max-batch-size',
   'output',
 ]);
+const SUMMARY_OPTIONS = new Set(['input', 'output']);
 
 const DEFAULT_RUNNERS = Object.freeze({
   node: runNodeBenchmark,
@@ -45,6 +47,10 @@ if (isMain(process.argv[1])) {
  *     targetSampleMs?: number,
  *     maxBatchSize?: number,
  *   },
+ * } | {
+ *   command: 'summary',
+ *   inputDirectory: string,
+ *   outputDirectory: string,
  * }}
  */
 export function parseBenchmarkArguments(argv) {
@@ -54,10 +60,33 @@ export function parseBenchmarkArguments(argv) {
 
   const [command, ...argumentsList] = argv;
 
-  if (command !== 'run') {
-    throw new Error(`Unknown benchmark command: ${command}`);
+  switch (command) {
+    case 'run':
+      return parseRunArguments(argumentsList);
+    case 'summary':
+      return parseSummaryArguments(argumentsList);
+    default:
+      throw new Error(`Unknown benchmark command: ${command}`);
   }
+}
 
+/**
+ * @param {readonly string[]} argumentsList
+ * @returns {{
+ *   command: 'run',
+ *   hosts: readonly ('node' | 'chromium' | 'jsc')[],
+ *   outputDirectory: string,
+ *   config: {
+ *     profile?: string,
+ *     workloads?: string[],
+ *     warmups?: number,
+ *     samples?: number,
+ *     targetSampleMs?: number,
+ *     maxBatchSize?: number,
+ *   },
+ * }}
+ */
+function parseRunArguments(argumentsList) {
   /** @type {('node' | 'chromium' | 'jsc' | 'all')[]} */
   const selectedHosts = [];
   /** @type {{
@@ -81,7 +110,7 @@ export function parseBenchmarkArguments(argv) {
 
     const optionName = optionNameOf(argument);
 
-    if (!SUPPORTED_OPTIONS.has(optionName)) {
+    if (!RUN_OPTIONS.has(optionName)) {
       throw new Error(`Unknown option: --${optionName}`);
     }
 
@@ -144,37 +173,101 @@ export function parseBenchmarkArguments(argv) {
 }
 
 /**
+ * @param {readonly string[]} argumentsList
+ * @returns {{
+ *   command: 'summary',
+ *   inputDirectory: string,
+ *   outputDirectory: string,
+ * }}
+ */
+function parseSummaryArguments(argumentsList) {
+ let inputDirectory;
+ /** @type {string | undefined} */
+ let outputDirectory;
+
+ for (let index = 0; index < argumentsList.length; index += 1) {
+   const argument = argumentsList[index];
+
+   if (!argument.startsWith('--')) {
+     throw new Error(`Unknown positional argument: ${argument}`);
+   }
+
+   const optionName = optionNameOf(argument);
+
+   if (!SUMMARY_OPTIONS.has(optionName)) {
+     throw new Error(`Unknown option: --${optionName}`);
+   }
+
+   const option = readOption(argumentsList, index);
+
+   index = option.nextIndex;
+
+   switch (option.name) {
+     case 'input':
+       inputDirectory = option.value;
+       break;
+     case 'output':
+       outputDirectory = option.value;
+       break;
+     default:
+       throw new Error(`Unknown option: --${option.name}`);
+   }
+ }
+
+ if (inputDirectory === undefined) {
+   throw new Error('At least one --input option is required');
+ }
+
+ resolveOutputDirectory(inputDirectory);
+ resolveOutputDirectory(outputDirectory ?? inputDirectory);
+
+ return {
+   command: 'summary',
+   inputDirectory,
+   outputDirectory: outputDirectory ?? inputDirectory,
+ };
+}
+
+/**
  * @param {readonly string[]} argv
  * @param {{
  *   resolveConfig?: typeof resolveBenchmarkConfig,
  *   runners?: Readonly<Record<'node' | 'chromium' | 'jsc', (config: ReturnType<typeof resolveBenchmarkConfig>) => Promise<unknown>>>,
  *   writeReport?: typeof writeHostReport,
+ *   summarizeDirectory?: typeof summarizeReportDirectory,
  * }} [options]
- * @returns {Promise<unknown[]>}
+ * @returns {Promise<unknown[] | Awaited<ReturnType<typeof summarizeReportDirectory>>>}
  */
 export async function main(argv, options = {}) {
-  const parsed = parseBenchmarkArguments(argv);
-  const resolveConfig = options.resolveConfig ?? resolveBenchmarkConfig;
-  const runners = options.runners ?? DEFAULT_RUNNERS;
-  const writeReport = options.writeReport ?? writeHostReport;
-  const config = resolveConfig(parsed.config);
-  /** @type {unknown[]} */
-  const reports = [];
+ const parsed = parseBenchmarkArguments(argv);
+ if (parsed.command === 'summary') {
+   const summarizeDirectory =
+     options.summarizeDirectory ?? summarizeReportDirectory;
 
-  for (const host of parsed.hosts) {
-    const runHost = runners[host];
+   return summarizeDirectory(parsed.inputDirectory, parsed.outputDirectory);
+ }
 
-    if (typeof runHost !== 'function') {
-      throw new Error(`Missing benchmark host runner: ${host}`);
-    }
+ const resolveConfig = options.resolveConfig ?? resolveBenchmarkConfig;
+ const runners = options.runners ?? DEFAULT_RUNNERS;
+ const writeReport = options.writeReport ?? writeHostReport;
+ const config = resolveConfig(parsed.config);
+ /** @type {unknown[]} */
+ const reports = [];
 
-    const report = await runHost(config);
+ for (const host of parsed.hosts) {
+   const runHost = runners[host];
 
-    await writeReport(parsed.outputDirectory, report);
-    reports.push(report);
-  }
+   if (typeof runHost !== 'function') {
+     throw new Error(`Missing benchmark host runner: ${host}`);
+   }
 
-  return reports;
+   const report = await runHost(config);
+
+   await writeReport(parsed.outputDirectory, report);
+   reports.push(report);
+ }
+
+ return reports;
 }
 
 /**
