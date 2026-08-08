@@ -85,17 +85,17 @@ npm run profile:analyze
 The analyzer requires exactly one CPU and one allocation sidecar for every
 host/workload/mode observation. Pair members must have the same run ID, clean
 source commit, runtime identity, warmup/iteration settings, and both
-metric-specific interval settings. It writes checksum correlation and aggregate
+metric-specific interval settings. Each member must also have a non-`host`
+interpreter denominator; a zero-denominator sidecar rejects its matched pair
+with a recapture-required error. It writes checksum correlation and aggregate
 files only beneath `.benchmark-results/`.
 
 Hotspot percentages are interpreter-only: each metric sidecar first excludes
 `host` frames (including GC, idle, inspector, and harness frames), then the
-analyzer arithmetic-means those per-observation shares with a nonzero
-interpreter denominator. `interpreter.observationCount` reports that
-sample-bearing denominator; a host-only or zero-sample sidecar remains a valid
-pair and raw diagnostic, but cannot contribute an invented interpreter share.
-Raw sampled totals and profile elapsed times remain diagnostics; they are not
-aggregation weights.
+analyzer arithmetic-means those per-observation shares. Therefore
+`interpreter.observationCount` equals the paired observation count for each
+metric. Raw sampled totals and profile elapsed times remain diagnostics; they
+are not aggregation weights.
 
 See [profiling.md](profiling.md) for the reproducible evidence run, its
 checksum-correlation method, and how to interpret cold versus steady captures.

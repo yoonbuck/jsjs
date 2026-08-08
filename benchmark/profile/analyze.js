@@ -352,6 +352,7 @@ function pairMetricSidecars(sidecars) {
     }
 
     validatePairedMetadata(pair.cpu, pair.allocation);
+    validatePairedInterpreterDenominators(pair.cpu, pair.allocation);
     observations.push(
       Object.freeze({
         host: pair.cpu.host,
@@ -400,6 +401,29 @@ function validatePairedMetadata(cpu, allocation) {
   ]) {
     if (left !== right) {
       throw new TypeError(`Incompatible paired ${property} for ${key}`);
+    }
+  }
+}
+
+/**
+ * @param {MetricSidecar} cpu
+ * @param {MetricSidecar} allocation
+ * @returns {void}
+ */
+function validatePairedInterpreterDenominators(cpu, allocation) {
+  for (const sidecar of [cpu, allocation]) {
+    const valueField =
+      sidecar.capture.metric === 'cpu' ? 'selfTime' : 'selfSize';
+    const interpreterTotal = sidecar.summary.frames.reduce(
+      (total, frame) =>
+        frame.category === 'host' ? total : total + frame[valueField],
+      0,
+    );
+
+    if (interpreterTotal === 0) {
+      throw new Error(
+        `Recapture required: ${sidecar.capture.metric} sidecar for ${sidecarKey(sidecar)} has no non-host interpreter samples`,
+      );
     }
   }
 }
@@ -791,7 +815,6 @@ function summarizeMetricObservations(observations, metric) {
   let sampledTotal = 0;
   let interpreterTotal = 0;
   let overheadTotal = 0;
-  let interpreterObservationCount = 0;
 
   for (const observation of observations) {
     const summary = observation[metric].summary;
@@ -810,14 +833,10 @@ function summarizeMetricObservations(observations, metric) {
       }
     }
 
-    if (observationInterpreterTotal > 0) {
-      interpreterObservationCount += 1;
-    }
-
     for (const category of summary.categories) {
       if (category.category === 'host') {
         addSummary(overheadCategories, category.category, category[valueField]);
-      } else if (observationInterpreterTotal > 0) {
+      } else {
         addSummary(
           interpreterCategoryShares,
           category.category,
@@ -826,31 +845,26 @@ function summarizeMetricObservations(observations, metric) {
       }
     }
 
-    if (observationInterpreterTotal > 0) {
-      for (const frame of summary.frames) {
-        if (frame.category !== 'host') {
-          const key = `${frame.category}|${frame.url}#${frame.functionName}`;
-          addSummary(
-            interpreterFrameShares,
-            key,
-            (frame[valueField] / observationInterpreterTotal) * 100,
-          );
-        }
+    for (const frame of summary.frames) {
+      if (frame.category !== 'host') {
+        const key = `${frame.category}|${frame.url}#${frame.functionName}`;
+        addSummary(
+          interpreterFrameShares,
+          key,
+          (frame[valueField] / observationInterpreterTotal) * 100,
+        );
       }
     }
   }
 
   return Object.freeze({
     interpreter: Object.freeze({
-      observationCount: interpreterObservationCount,
+      observationCount: observations.length,
       categories: Object.freeze(
-        meanShareEntries(
-          interpreterCategoryShares,
-          interpreterObservationCount,
-        ),
+        meanShareEntries(interpreterCategoryShares, observations.length),
       ),
       frames: Object.freeze(
-        meanShareEntries(interpreterFrameShares, interpreterObservationCount),
+        meanShareEntries(interpreterFrameShares, observations.length),
       ),
     }),
     overhead: Object.freeze({

@@ -108,48 +108,41 @@ const tests = [
     },
   },
   {
-    name: 'profile analysis normalizes interpreter shares over sample-bearing observations',
+    name: 'profile analysis requires recapture when either paired metric lacks interpreter samples',
     async run() {
-      const fixture = await createFixture();
+      for (const metric of METRICS) {
+        const fixture = await createFixture();
 
-      try {
-        for (const host of HOSTS) {
+        try {
           const sidecarUrl = new URL(
-            `profiles/${host}/arithmetic-loops-cold-allocation.json`,
+            `profiles/node/arithmetic-loops-cold-${metric}.json`,
             fixture.profileUrl,
           );
           const sidecar = JSON.parse(await readFile(sidecarUrl, 'utf8'));
-          sidecar.summaries.allocation = createSummary(
+          const valueField = metric === 'cpu' ? 'selfTime' : 'selfSize';
+          sidecar.summaries[metric] = createSummary(
             [
               {
                 category: 'host',
                 url: '',
                 functionName: '(idle)',
-                selfSize: 100,
+                [valueField]: 100,
               },
             ],
-            'selfSize',
+            valueField,
           );
           await writeJson(sidecarUrl, sidecar);
+
+          const error = await captureRejection(() =>
+            analyzeProfileArtifacts(fixture),
+          );
+          assertSame(
+            error.message,
+            `Recapture required: ${metric} sidecar for node:arithmetic-loops:cold has no non-host interpreter samples`,
+          );
+        } finally {
+          await removeFixture();
         }
-
-        const result = await analyzeProfileArtifacts(fixture);
-        const group = result.analysis.groups.all;
-        const aggregate = group.allocation;
-        const evaluator = aggregate.interpreter.categories.find(
-          (entry) => entry.key === 'evaluator',
-        );
-        const categoryTotal = aggregate.interpreter.categories.reduce(
-          (total, entry) => total + (entry.percentage ?? 0),
-          0,
-        );
-
-        assertSame(group.profileCount, 4);
-        assertSame(aggregate.interpreter.observationCount, 2);
-        assertSame(evaluator?.percentage, 10);
-        assertSame(categoryTotal, 100);
-      } finally {
-        await removeFixture();
       }
     },
   },
