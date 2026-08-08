@@ -76,10 +76,22 @@ node benchmark/profile/cli.js \
   --output=.benchmark-results/profiles
 ```
 
-Task 2 must migrate the analyzer before schema-2 metric-specific sidecars can
-produce checksum-correlation or aggregate hotspot files. Do not run
-`npm run profile:analyze` with these captures until that migration restores the
-command's compatibility.
+Analyze a matched baseline and schema-2 sidecar set with:
+
+```sh
+npm run profile:analyze
+```
+
+The analyzer requires exactly one CPU and one allocation sidecar for every
+host/workload/mode observation. Pair members must have the same run ID, clean
+source commit, runtime identity, warmup/iteration settings, and both
+metric-specific interval settings. It writes checksum correlation and aggregate
+files only beneath `.benchmark-results/`.
+
+Hotspot percentages are interpreter-only: each metric sidecar first excludes
+`host` frames (including GC, idle, inspector, and harness frames), then the
+analyzer arithmetic-means those per-observation shares. Raw sampled totals and
+profile elapsed times remain diagnostics; they are not aggregation weights.
 
 See [profiling.md](profiling.md) for the reproducible evidence run, its
 checksum-correlation method, and how to interpret cold versus steady captures.

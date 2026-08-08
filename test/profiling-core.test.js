@@ -8,6 +8,7 @@ import {
   summarizeCpuProfile,
   summarizeAllocationProfile,
   classifyProfileFrame,
+  normalizeProfileUrl,
 } from '../benchmark/profile/summarize.js';
 
 /**
@@ -336,12 +337,39 @@ const tests = [
     },
   },
   {
-    name: 'classifyProfileFrame maps object.js to object-property',
+    name: 'normalizeProfileUrl selects the last path-bounded repository src segment',
+    run() {
+      assertSame(
+        normalizeProfileUrl('src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('file:///repo/src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('http://jsjs.localhost/src/builtins/object.js'),
+        'src/builtins/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl(
+          'file:///earlier/src/ignored/src/runtime/descriptors.js',
+        ),
+        'src/runtime/descriptors.js',
+      );
+      assertSame(
+        normalizeProfileUrl('/node_modules/pkg/src/index.js'),
+        '/node_modules/pkg/src/index.js',
+      );
+    },
+  },
+  {
+    name: 'classifyProfileFrame maps descriptor helpers to object-property',
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/runtime/object.js',
-          functionName: 'getProperty',
+          url: 'src/runtime/descriptors.js',
+          functionName: 'copyDescriptorFields',
         }),
         'object-property',
       );
@@ -354,6 +382,30 @@ const tests = [
         classifyProfileFrame({
           url: 'src/runtime/array-object.js',
           functionName: 'push',
+        }),
+        'arrays',
+      );
+    },
+  },
+  {
+    name: 'classifyProfileFrame maps Object builtin helpers to object-property',
+    run() {
+      assertSame(
+        classifyProfileFrame({
+          url: 'src/builtins/object.js',
+          functionName: 'createObjectIntrinsics',
+        }),
+        'object-property',
+      );
+    },
+  },
+  {
+    name: 'classifyProfileFrame maps Array builtin helpers to arrays',
+    run() {
+      assertSame(
+        classifyProfileFrame({
+          url: 'src/builtins/array.js',
+          functionName: 'createArrayIntrinsics',
         }),
         'arrays',
       );
@@ -376,7 +428,7 @@ const tests = [
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/parser/parser.js',
+          url: 'src/parser.js',
           functionName: 'parseStatement',
         }),
         'parser',
@@ -388,7 +440,7 @@ const tests = [
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/evaluator/evaluator.js',
+          url: 'src/evaluator/expressions.js',
           functionName: 'evaluate',
         }),
         'evaluator',
@@ -400,7 +452,7 @@ const tests = [
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/realm.js',
+          url: 'src/runtime/realm.js',
           functionName: 'createRealm',
         }),
         'realm-setup',
@@ -412,7 +464,7 @@ const tests = [
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/completion.js',
+          url: 'src/runtime/completion.js',
           functionName: 'normalCompletion',
         }),
         'completions',
@@ -424,7 +476,7 @@ const tests = [
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/runtime/arithmetic.js',
+          url: 'src/runtime/operators.js',
           functionName: 'addValues',
         }),
         'arithmetic',
@@ -436,7 +488,7 @@ const tests = [
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/runtime/call.js',
+          url: 'src/runtime/function-object.js',
           functionName: 'callFunction',
         }),
         'calls',
@@ -444,22 +496,13 @@ const tests = [
     },
   },
   {
-    name: 'classifyProfileFrame maps unknown src/ files to other-runtime',
+    name: 'classifyProfileFrame keeps node module sources as host',
     run() {
       assertSame(
         classifyProfileFrame({
-          url: 'src/util/some-util.js',
-          functionName: 'helper',
+          url: '/node_modules/pkg/src/index.js',
+          functionName: 'run',
         }),
-        'other-runtime',
-      );
-    },
-  },
-  {
-    name: 'classifyProfileFrame maps non-src files to host',
-    run() {
-      assertSame(
-        classifyProfileFrame({ url: 'benchmark/run.js', functionName: 'run' }),
         'host',
       );
     },

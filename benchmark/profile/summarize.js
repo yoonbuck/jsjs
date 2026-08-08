@@ -96,17 +96,24 @@ const STABLE_CATEGORIES = Object.freeze([
  * @returns {string}
  */
 export function classifyProfileFrame(frame) {
-  const url = normalizeUrl(frame.url ?? '');
+  const url = normalizeProfileUrl(frame.url ?? '');
 
   if (!url.startsWith('src/')) {
     return 'host';
   }
 
-  if (url === 'src/runtime/object.js' || url.endsWith('/runtime/object.js')) {
+  if (
+    url === 'src/runtime/descriptors.js' ||
+    url === 'src/runtime/object.js' ||
+    url === 'src/builtins/object.js'
+  ) {
     return 'object-property';
   }
 
-  if (url.includes('runtime/array')) {
+  if (
+    url === 'src/runtime/array-object.js' ||
+    url === 'src/builtins/array.js'
+  ) {
     return 'arrays';
   }
 
@@ -176,7 +183,7 @@ export function summarizeCpuProfile(profile) {
       continue;
     }
 
-    const url = normalizeUrl(node.callFrame.url ?? '');
+    const url = normalizeProfileUrl(node.callFrame.url ?? '');
     const { functionName } = node.callFrame;
     const key = `${url}#${functionName}`;
 
@@ -255,7 +262,7 @@ export function summarizeAllocationProfile(profile) {
  * @returns {void}
  */
 function walkAllocationNode(node, totals) {
-  const url = normalizeUrl(node.callFrame.url ?? '');
+  const url = normalizeProfileUrl(node.callFrame.url ?? '');
   const { functionName } = node.callFrame;
   const key = `${url}#${functionName}`;
 
@@ -336,24 +343,33 @@ function buildAllocationCategories(frames, total) {
 
 /**
  * Normalize a profiler URL to a repository-relative path starting with `src/`.
- * Strips `file://` prefixes, absolute path prefixes up to `src/`, and leaves
- * paths that are already repository-relative unchanged.
+ * Selects the last path-segment-bounded `src/` path and leaves host URLs
+ * unchanged. A `src/` segment below `node_modules` is always host code.
  *
  * @param {string} url
  * @returns {string}
  */
-function normalizeUrl(url) {
+export function normalizeProfileUrl(url) {
   if (url === '') {
     return '';
   }
 
-  const srcIndex = url.indexOf('src/');
+  let srcIndex = url.startsWith('src/') ? 0 : -1;
+  let nextIndex = url.indexOf('/src/');
 
-  if (srcIndex !== -1) {
-    return url.slice(srcIndex);
+  while (nextIndex !== -1) {
+    srcIndex = nextIndex + 1;
+    nextIndex = url.indexOf('/src/', srcIndex + 4);
   }
 
-  return url;
+  if (
+    srcIndex === -1 ||
+    /(^|\/)node_modules(?:\/|$)/u.test(url.slice(0, srcIndex))
+  ) {
+    return url;
+  }
+
+  return url.slice(srcIndex);
 }
 
 /**

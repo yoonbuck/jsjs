@@ -60,10 +60,20 @@ for host in node chromium; do
 done
 ```
 
-These metric-specific sidecars are the capture contract for follow-on analysis
-work. Task 2 must migrate the analyzer to schema-2 metric-specific sidecars
-before analysis can be run. Do not run `npm run profile:analyze` or regenerate
-the published derived evidence from these captures until that migration lands.
+These metric-specific sidecars are the analysis contract. Run:
+
+```sh
+npm run profile:analyze
+```
+
+The analyzer pairs exactly one CPU and one allocation sidecar for each
+host/workload/mode key and requires matching run ID, clean source commit,
+runtime identity, capture settings, and metric-specific intervals. It keeps the
+two profiler elapsed times and sampled totals as diagnostics only. For every
+metric sidecar, it excludes `host` category frames (including GC, idle,
+inspector, and harness frames), computes interpreter-only category/frame
+shares, then arithmetic-means those shares across observations. Output remains
+under `.benchmark-results/`.
 
 The measured profiler durations ranged from 293.0 ms to 12,944.5 ms, so every
 row exceeds the 250 ms target without changing a workload source. Profile
@@ -107,9 +117,10 @@ by the profiler, **not** retained heap, live-object size, or heap growth.
 
 ## Checksum-correlated timing
 
-The published analysis below was generated before the schema-2 metric-specific
-sidecar migration. Task 2 must restore compatible analyzer validation before
-new captures can produce an updated checksum correlation.
+The historical tables below predate the paired schema-2, interpreter-normalized
+analysis method. They remain an unrecomputed record only; do not treat their
+raw-total shares as current hotspot rankings. This task does not regenerate
+local profiling evidence.
 
 `jsjs median` is the baseline's unprofiled jsjs median. `CPU` is
 `sample-count / sampled self-time total`; allocation is sampled bytes. These
@@ -154,12 +165,14 @@ than inferred from the Node or Chromium captures.
 
 This is timing and checksum evidence only, subject to the JSC limitation above.
 
-## Ranked sampled evidence
+## Historical raw-total sampled evidence
 
-The following totals aggregate all 16 captured profiles: 66,267,236 µs of
-sampled CPU self time and 1,134,336 sampled allocation bytes. CPU percentages
-are shares of that CPU total; allocation percentages are shares of that sampled
-allocation total, not retained-memory shares.
+The following unrecomputed totals aggregate all 16 captured profiles:
+66,267,236 µs of sampled CPU self time and 1,134,336 sampled allocation bytes.
+They use the superseded raw-total weighting and are retained only to document
+the earlier run. Corrected hotspot shares are equal-observation,
+interpreter-only percentages; allocation remains sampled bytes rather than
+retained-memory size.
 
 | Rank | CPU category             |     Self time | Share | Allocation category      | Sampled bytes | Share |
 | ---: | ------------------------ | ------------: | ----: | ------------------------ | ------------: | ----: |

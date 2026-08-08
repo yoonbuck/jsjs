@@ -133,15 +133,16 @@ export async function analyzeProfileArtifacts(options, operations = {}) {
     profileDirectory,
     fileOperations,
   );
+  const observations = pairMetricSidecars(sidecars);
   const reports = await readBaselineReports(
     baselineDirectory,
-    sidecars,
+    observations,
     fileOperations,
   );
   validateCompatibleBaselineReports(reports);
-  validateCompatibleSidecars(sidecars, reports);
-  const correlation = createChecksumCorrelation(sidecars, reports);
-  const analysis = createProfileAnalysis(sidecars);
+  validateCompatibleSidecars(observations, reports);
+  const correlation = createChecksumCorrelation(observations, reports);
+  const analysis = createProfileAnalysis(observations);
 
   await writeProfileAnalysisOutputsAtomically(
     profileDirectory,
@@ -247,10 +248,10 @@ export async function writeProfileAnalysisOutputsAtomically(
 /**
  * @param {string} profileDirectory
  * @param {ReturnType<typeof fileOperationsFrom>} operations
- * @returns {Promise<readonly ProfileSidecar[]>}
+ * @returns {Promise<readonly MetricSidecar[]>}
  */
 async function discoverProfileSidecars(profileDirectory, operations) {
-  /** @type {ProfileSidecar[]} */
+  /** @type {MetricSidecar[]} */
   const sidecars = [];
 
   for (const host of PROFILE_HOSTS) {
@@ -288,16 +289,8 @@ async function discoverProfileSidecars(profileDirectory, operations) {
 
       const cpuSampleCount = await requireDeclaredArtifact(
         hostUrl,
-        sidecar.artifacts.cpu,
-        'cpu',
-        filePath,
-        operations.readFile,
-      );
-
-      await requireDeclaredArtifact(
-        hostUrl,
-        sidecar.artifacts.allocation,
-        'allocation',
+        sidecar.artifact,
+        sidecar.capture.metric,
         filePath,
         operations.readFile,
       );
@@ -310,10 +303,12 @@ async function discoverProfileSidecars(profileDirectory, operations) {
   const seen = new Set();
 
   for (const sidecar of sidecars) {
-    const key = sidecarKey(sidecar);
+    const key = metricSidecarKey(sidecar);
 
     if (seen.has(key)) {
-      throw new Error(`duplicate sidecar for ${key}`);
+      throw new Error(
+        `duplicate ${sidecar.capture.metric} sidecar for ${sidecarKey(sidecar)}`,
+      );
     }
 
     seen.add(key);
@@ -323,14 +318,107 @@ async function discoverProfileSidecars(profileDirectory, operations) {
 }
 
 /**
+ * @param {readonly MetricSidecar[]} sidecars
+ * @returns {readonly ProfileObservation[]}
+ */
+function pairMetricSidecars(sidecars) {
+  /** @type {Map<string, { cpu?: MetricSidecar, allocation?: MetricSidecar }>} */
+  const byPair = new Map();
+
+  for (const sidecar of sidecars) {
+    const key = sidecarKey(sidecar);
+    const pair = byPair.get(key) ?? {};
+
+    if (pair[sidecar.capture.metric] !== undefined) {
+      throw new Error(`duplicate ${sidecar.capture.metric} sidecar for ${key}`);
+    }
+
+    pair[sidecar.capture.metric] = sidecar;
+    byPair.set(key, pair);
+  }
+
+  /** @type {ProfileObservation[]} */
+  const observations = [];
+
+  for (const [key, pair] of [...byPair.entries()].sort(([left], [right]) =>
+    compareCodeUnits(left, right),
+  )) {
+    if (pair.cpu === undefined) {
+      throw new Error(`missing cpu sidecar for ${key}`);
+    }
+
+    if (pair.allocation === undefined) {
+      throw new Error(`missing allocation sidecar for ${key}`);
+    }
+
+    validatePairedMetadata(pair.cpu, pair.allocation);
+    observations.push(
+      Object.freeze({
+        host: pair.cpu.host,
+        runtime: pair.cpu.runtime,
+        source: pair.cpu.source,
+        capture: pair.cpu.capture,
+        cpu: pair.cpu,
+        allocation: pair.allocation,
+      }),
+    );
+  }
+
+  return Object.freeze(observations);
+}
+
+/**
+ * @param {MetricSidecar} cpu
+ * @param {MetricSidecar} allocation
+ * @returns {void}
+ */
+function validatePairedMetadata(cpu, allocation) {
+  const key = sidecarKey(cpu);
+
+  for (const [property, left, right] of [
+    ['runtime.name', cpu.runtime.name, allocation.runtime.name],
+    ['runtime.version', cpu.runtime.version, allocation.runtime.version],
+    ['source.gitCommit', cpu.source.gitCommit, allocation.source.gitCommit],
+    ['source.gitDirty', cpu.source.gitDirty, allocation.source.gitDirty],
+    ['capture.runId', cpu.capture.runId, allocation.capture.runId],
+    ['capture.warmups', cpu.capture.warmups, allocation.capture.warmups],
+    [
+      'capture.iterations',
+      cpu.capture.iterations,
+      allocation.capture.iterations,
+    ],
+    [
+      'capture.cpuSamplingIntervalMicroseconds',
+      cpu.capture.cpuSamplingIntervalMicroseconds,
+      allocation.capture.cpuSamplingIntervalMicroseconds,
+    ],
+    [
+      'capture.allocationSamplingIntervalBytes',
+      cpu.capture.allocationSamplingIntervalBytes,
+      allocation.capture.allocationSamplingIntervalBytes,
+    ],
+  ]) {
+    if (left !== right) {
+      throw new TypeError(`Incompatible paired ${property} for ${key}`);
+    }
+  }
+}
+
+/**
  * @param {string} baselineDirectory
- * @param {readonly ProfileSidecar[]} sidecars
+ * @param {readonly ProfileObservation[]} observations
  * @param {ReturnType<typeof fileOperationsFrom>} operations
  * @returns {Promise<ReadonlyMap<string, Record<string, any>>>}
  */
-async function readBaselineReports(baselineDirectory, sidecars, operations) {
+async function readBaselineReports(
+  baselineDirectory,
+  observations,
+  operations,
+) {
   /** @type {Set<'node' | 'chromium'>} */
-  const requiredHosts = new Set(sidecars.map((sidecar) => sidecar.host));
+  const requiredHosts = new Set(
+    observations.map((observation) => observation.host),
+  );
   /** @type {Map<string, Record<string, any>>} */
   const reports = new Map();
 
@@ -396,6 +484,20 @@ function validateCompatibleBaselineReports(reports) {
     compareMetadata(reference, report, 'runId', referenceHost, host);
     compareMetadata(reference, report, 'generatedAt', referenceHost, host);
     compareMetadata(
+      reference.source,
+      report.source,
+      'gitCommit',
+      referenceHost,
+      host,
+    );
+    compareMetadata(
+      reference.source,
+      report.source,
+      'gitDirty',
+      referenceHost,
+      host,
+    );
+    compareMetadata(
       reference.config,
       report.config,
       'profile',
@@ -455,51 +557,38 @@ function validateCompatibleBaselineReports(reports) {
 }
 
 /**
- * @param {readonly ProfileSidecar[]} sidecars
+ * @param {readonly ProfileObservation[]} observations
  * @param {ReadonlyMap<string, Record<string, any>>} reports
  * @returns {void}
  */
-function validateCompatibleSidecars(sidecars, reports) {
-  const reference = sidecars[0];
-
-  for (const sidecar of sidecars) {
-    const report = reports.get(sidecar.host);
+function validateCompatibleSidecars(observations, reports) {
+  for (const observation of observations) {
+    const report = reports.get(observation.host);
 
     if (report === undefined) {
-      throw new Error(`missing baseline report for ${sidecar.host}`);
+      throw new Error(`missing baseline report for ${observation.host}`);
     }
 
-    if (sidecar.runtime.version !== report.version) {
+    if (observation.runtime.version !== report.version) {
       throw new TypeError(
-        `Runtime version mismatch for ${sidecarKey(sidecar)}: ${sidecar.runtime.version} !== ${report.version}`,
+        `Runtime version mismatch for ${sidecarKey(observation.cpu)}: ${observation.runtime.version} !== ${report.version}`,
       );
     }
 
-    if (sidecar.gitCommit !== reference.gitCommit) {
+    if (observation.source.gitCommit !== report.source.gitCommit) {
       throw new TypeError(
-        `Incompatible sidecar gitCommit for ${sidecarKey(sidecar)}: ${sidecar.gitCommit} !== ${reference.gitCommit}`,
-      );
-    }
-
-    if (
-      sidecar.capture.warmups !== reference.capture.warmups ||
-      sidecar.capture.iterations !== reference.capture.iterations ||
-      sidecar.capture.samplingInterval !== reference.capture.samplingInterval ||
-      sidecar.capture.metrics.join(',') !== reference.capture.metrics.join(',')
-    ) {
-      throw new TypeError(
-        `Incompatible capture metadata for ${sidecarKey(sidecar)}`,
+        `Source commit mismatch for ${sidecarKey(observation.cpu)}: ${observation.source.gitCommit} !== ${report.source.gitCommit}`,
       );
     }
   }
 }
 
 /**
- * @param {readonly ProfileSidecar[]} sidecars
+ * @param {readonly ProfileObservation[]} observations
  * @param {ReadonlyMap<string, Record<string, any>>} reports
  * @returns {ChecksumCorrelation}
  */
-function createChecksumCorrelation(sidecars, reports) {
+function createChecksumCorrelation(observations, reports) {
   const referenceReport = reports.values().next().value;
 
   if (referenceReport === undefined) {
@@ -518,65 +607,83 @@ function createChecksumCorrelation(sidecars, reports) {
     };
   }
 
-  const profiles = sidecars.map((sidecar) => {
+  const profiles = observations.map((observation) => {
     const report = /** @type {Record<string, any>} */ (
-      reports.get(sidecar.host)
+      reports.get(observation.host)
     );
     const workload = report.config.workloads.find(
       /** @param {any} candidate */
-      (candidate) => candidate.name === sidecar.capture.workload,
+      (candidate) => candidate.name === observation.capture.workload,
     );
 
     if (workload === undefined) {
       throw new Error(
-        `missing baseline workload for ${sidecarKey(sidecar)} in ${sidecar.host}.json`,
+        `missing baseline workload for ${sidecarKey(observation.cpu)} in ${observation.host}.json`,
       );
     }
 
     const benchmarkResult = report.results.find(
       /** @param {any} candidate */
       (candidate) =>
-        candidate.workload === sidecar.capture.workload &&
-        candidate.mode === sidecar.capture.mode,
+        candidate.workload === observation.capture.workload &&
+        candidate.mode === observation.capture.mode,
     );
 
     if (benchmarkResult === undefined) {
       throw new Error(
-        `missing baseline row for ${sidecarKey(sidecar)} in ${sidecar.host}.json`,
+        `missing baseline row for ${sidecarKey(observation.cpu)} in ${observation.host}.json`,
       );
     }
 
     const checksums = [
       workload.expectedChecksum,
       benchmarkResult.checksum,
-      sidecar.result.expectedChecksum,
-      sidecar.result.checksum,
+      observation.cpu.result.expectedChecksum,
+      observation.cpu.result.checksum,
+      observation.allocation.result.expectedChecksum,
+      observation.allocation.result.checksum,
     ];
 
     if (!checksums.every((checksum) => checksum === checksums[0])) {
       throw new Error(
-        `checksum mismatch for ${sidecarKey(sidecar)}: baseline expected=${workload.expectedChecksum}, baseline observed=${benchmarkResult.checksum}, sidecar expected=${sidecar.result.expectedChecksum}, sidecar observed=${sidecar.result.checksum}`,
+        `checksum mismatch for ${sidecarKey(observation.cpu)}: baseline expected=${workload.expectedChecksum}, baseline observed=${benchmarkResult.checksum}, cpu expected=${observation.cpu.result.expectedChecksum}, cpu observed=${observation.cpu.result.checksum}, allocation expected=${observation.allocation.result.expectedChecksum}, allocation observed=${observation.allocation.result.checksum}`,
       );
     }
 
     return Object.freeze({
-      host: sidecar.host,
-      workload: sidecar.capture.workload,
-      mode: sidecar.capture.mode,
-      sidecarExpectedChecksum: sidecar.result.expectedChecksum,
-      sidecarChecksum: sidecar.result.checksum,
+      host: observation.host,
+      workload: observation.capture.workload,
+      mode: observation.capture.mode,
+      profileRunId: observation.capture.runId,
+      sourceGitCommit: observation.source.gitCommit,
+      cpuSamplingIntervalMicroseconds:
+        observation.capture.cpuSamplingIntervalMicroseconds,
+      allocationSamplingIntervalBytes:
+        observation.capture.allocationSamplingIntervalBytes,
+      cpuExpectedChecksum: observation.cpu.result.expectedChecksum,
+      cpuChecksum: observation.cpu.result.checksum,
+      allocationExpectedChecksum:
+        observation.allocation.result.expectedChecksum,
+      allocationChecksum: observation.allocation.result.checksum,
       benchmarkExpectedChecksum: workload.expectedChecksum,
       benchmarkChecksum: benchmarkResult.checksum,
       nativeMedianMs: benchmarkResult.lanes.native.summary.median,
       jsjsMedianMs: benchmarkResult.lanes.jsjs.summary.median,
-      profileElapsedMilliseconds: sidecar.result.elapsedMilliseconds,
-      profileIterations: sidecar.result.iterations,
-      profileElapsedPerIterationMilliseconds:
-        sidecar.result.elapsedMilliseconds / sidecar.result.iterations,
-      cpuSampleTotalMicroseconds: sidecar.summaries.cpu.total,
-      cpuSampleCount: sidecar.cpuSampleCount,
-      allocationSampledBytes: sidecar.summaries.allocation.total,
-      allocationFrameCount: sidecar.summaries.allocation.frames.length,
+      cpuProfileElapsedMilliseconds: observation.cpu.result.elapsedMilliseconds,
+      cpuProfileIterations: observation.cpu.result.iterations,
+      cpuProfileElapsedPerIterationMilliseconds:
+        observation.cpu.result.elapsedMilliseconds /
+        observation.cpu.result.iterations,
+      cpuSampleTotalMicroseconds: observation.cpu.summary.total,
+      cpuSampleCount: observation.cpu.cpuSampleCount,
+      allocationProfileElapsedMilliseconds:
+        observation.allocation.result.elapsedMilliseconds,
+      allocationProfileIterations: observation.allocation.result.iterations,
+      allocationProfileElapsedPerIterationMilliseconds:
+        observation.allocation.result.elapsedMilliseconds /
+        observation.allocation.result.iterations,
+      allocationSampledBytes: observation.allocation.summary.total,
+      allocationFrameCount: observation.allocation.summary.frames.length,
       valid: true,
     });
   });
@@ -593,17 +700,17 @@ function createChecksumCorrelation(sidecars, reports) {
 }
 
 /**
- * @param {readonly ProfileSidecar[]} sidecars
+ * @param {readonly ProfileObservation[]} observations
  * @returns {ProfileAnalysis}
  */
-function createProfileAnalysis(sidecars) {
-  /** @type {Map<string, ProfileSidecar[]>} */
-  const groups = new Map([['all', [...sidecars]]]);
+function createProfileAnalysis(observations) {
+  /** @type {Map<string, ProfileObservation[]>} */
+  const groups = new Map([['all', [...observations]]]);
 
-  for (const sidecar of sidecars) {
-    const groupName = `${sidecar.host}-${sidecar.capture.mode}`;
+  for (const observation of observations) {
+    const groupName = `${observation.host}-${observation.capture.mode}`;
     const group = groups.get(groupName) ?? [];
-    group.push(sidecar);
+    group.push(observation);
     groups.set(groupName, group);
   }
 
@@ -623,17 +730,17 @@ function createProfileAnalysis(sidecars) {
     }
   }
 
-  /** @type {Map<string, ProfileSidecar[]>} */
+  /** @type {Map<string, ProfileObservation[]>} */
   const steadyByWorkload = new Map();
 
-  for (const sidecar of sidecars) {
-    if (sidecar.capture.mode !== 'steady') {
+  for (const observation of observations) {
+    if (observation.capture.mode !== 'steady') {
       continue;
     }
 
-    const workload = sidecar.capture.workload;
+    const workload = observation.capture.workload;
     const group = steadyByWorkload.get(workload) ?? [];
-    group.push(sidecar);
+    group.push(observation);
     steadyByWorkload.set(workload, group);
   }
 
@@ -642,102 +749,113 @@ function createProfileAnalysis(sidecars) {
 
   for (const workload of [...steadyByWorkload.keys()].sort(compareCodeUnits)) {
     steadyOutput[workload] = summarizeSidecars(
-      /** @type {ProfileSidecar[]} */ (steadyByWorkload.get(workload)),
+      /** @type {ProfileObservation[]} */ (steadyByWorkload.get(workload)),
     );
   }
 
   return Object.freeze({
+    weighting: 'equal-observation',
     groups: Object.freeze(groupOutput),
     steadyByWorkload: Object.freeze(steadyOutput),
   });
 }
 
 /**
- * @param {readonly ProfileSidecar[]} sidecars
+ * @param {readonly ProfileObservation[]} observations
  * @returns {ProfileAggregate}
  */
-function summarizeSidecars(sidecars) {
-  /** @type {Map<string, number>} */
-  const cpuCategories = new Map();
-  /** @type {Map<string, number>} */
-  const cpuFrames = new Map();
-  /** @type {Map<string, number>} */
-  const allocationCategories = new Map();
-  /** @type {Map<string, number>} */
-  const allocationFrames = new Map();
-  let cpuTotal = 0;
-  let allocationTotal = 0;
-
-  for (const sidecar of sidecars) {
-    cpuTotal += sidecar.summaries.cpu.total;
-    allocationTotal += sidecar.summaries.allocation.total;
-    addCategorySummaries(
-      cpuCategories,
-      sidecar.summaries.cpu.categories,
-      'selfTime',
-    );
-    addFrameSummaries(cpuFrames, sidecar.summaries.cpu.frames, 'selfTime');
-    addCategorySummaries(
-      allocationCategories,
-      sidecar.summaries.allocation.categories,
-      'selfSize',
-    );
-    addFrameSummaries(
-      allocationFrames,
-      sidecar.summaries.allocation.frames,
-      'selfSize',
-    );
-  }
-
+function summarizeSidecars(observations) {
   return Object.freeze({
-    profileCount: sidecars.length,
-    cpu: Object.freeze({
-      totalMicroseconds: cpuTotal,
-      categories: Object.freeze(
-        summaryEntries(cpuCategories, cpuTotal, 'microseconds'),
-      ),
-      frames: Object.freeze(
-        summaryEntries(cpuFrames, cpuTotal, 'microseconds'),
-      ),
-    }),
-    allocation: Object.freeze({
-      totalBytes: allocationTotal,
-      categories: Object.freeze(
-        summaryEntries(allocationCategories, allocationTotal, 'bytes'),
-      ),
-      frames: Object.freeze(
-        summaryEntries(allocationFrames, allocationTotal, 'bytes'),
-      ),
-    }),
+    profileCount: observations.length,
+    cpu: summarizeMetricObservations(observations, 'cpu'),
+    allocation: summarizeMetricObservations(observations, 'allocation'),
   });
 }
 
 /**
- * @param {Map<string, number>} destination
- * @param {readonly Record<string, any>[]} summaries
- * @param {'selfTime' | 'selfSize'} totalField
- * @returns {void}
+ * @param {readonly ProfileObservation[]} observations
+ * @param {'cpu' | 'allocation'} metric
+ * @returns {MetricAggregate}
  */
-function addCategorySummaries(destination, summaries, totalField) {
-  for (const summary of summaries) {
-    addSummary(destination, summary.category, summary[totalField]);
-  }
-}
+function summarizeMetricObservations(observations, metric) {
+  const valueField = metric === 'cpu' ? 'selfTime' : 'selfSize';
+  const valueName = metric === 'cpu' ? 'microseconds' : 'bytes';
+  /** @type {Map<string, number>} */
+  const interpreterCategoryShares = new Map();
+  /** @type {Map<string, number>} */
+  const interpreterFrameShares = new Map();
+  /** @type {Map<string, number>} */
+  const overheadCategories = new Map();
+  /** @type {Map<string, number>} */
+  const overheadFrames = new Map();
+  let sampledTotal = 0;
+  let interpreterTotal = 0;
+  let overheadTotal = 0;
 
-/**
- * @param {Map<string, number>} destination
- * @param {readonly Record<string, any>[]} summaries
- * @param {'selfTime' | 'selfSize'} totalField
- * @returns {void}
- */
-function addFrameSummaries(destination, summaries, totalField) {
-  for (const summary of summaries) {
-    addSummary(
-      destination,
-      `${summary.category}|${summary.url}#${summary.functionName}`,
-      summary[totalField],
-    );
+  for (const observation of observations) {
+    const summary = observation[metric].summary;
+    let observationInterpreterTotal = 0;
+
+    sampledTotal += summary.total;
+
+    for (const frame of summary.frames) {
+      if (frame.category === 'host') {
+        const key = `${frame.category}|${frame.url}#${frame.functionName}`;
+        addSummary(overheadFrames, key, frame[valueField]);
+        overheadTotal += frame[valueField];
+      } else {
+        observationInterpreterTotal += frame[valueField];
+        interpreterTotal += frame[valueField];
+      }
+    }
+
+    for (const category of summary.categories) {
+      if (category.category === 'host') {
+        addSummary(overheadCategories, category.category, category[valueField]);
+      } else if (observationInterpreterTotal > 0) {
+        addSummary(
+          interpreterCategoryShares,
+          category.category,
+          (category[valueField] / observationInterpreterTotal) * 100,
+        );
+      }
+    }
+
+    if (observationInterpreterTotal > 0) {
+      for (const frame of summary.frames) {
+        if (frame.category !== 'host') {
+          const key = `${frame.category}|${frame.url}#${frame.functionName}`;
+          addSummary(
+            interpreterFrameShares,
+            key,
+            (frame[valueField] / observationInterpreterTotal) * 100,
+          );
+        }
+      }
+    }
   }
+
+  return Object.freeze({
+    interpreter: Object.freeze({
+      categories: Object.freeze(
+        meanShareEntries(interpreterCategoryShares, observations.length),
+      ),
+      frames: Object.freeze(
+        meanShareEntries(interpreterFrameShares, observations.length),
+      ),
+    }),
+    overhead: Object.freeze({
+      [`total${metric === 'cpu' ? 'Microseconds' : 'Bytes'}`]: overheadTotal,
+      categories: Object.freeze(rawEntries(overheadCategories, valueName)),
+      frames: Object.freeze(rawEntries(overheadFrames, valueName)),
+    }),
+    diagnostics: Object.freeze({
+      [`sampledTotal${metric === 'cpu' ? 'Microseconds' : 'Bytes'}`]:
+        sampledTotal,
+      [`interpreterTotal${metric === 'cpu' ? 'Microseconds' : 'Bytes'}`]:
+        interpreterTotal,
+    }),
+  });
 }
 
 /**
@@ -751,41 +869,70 @@ function addSummary(destination, key, value) {
 }
 
 /**
+ * @param {Map<string, number>} shares
+ * @param {number} observationCount
+ * @returns {readonly AnalysisEntry[]}
+ */
+function meanShareEntries(shares, observationCount) {
+  return /** @type {AnalysisEntry[]} */ (
+    [...shares.entries()].map(([key, share]) =>
+      Object.freeze({
+        key,
+        percentage: observationCount === 0 ? 0 : share / observationCount,
+      }),
+    )
+  ).sort(compareAnalysisEntries);
+}
+
+/**
  * @param {Map<string, number>} totals
- * @param {number} total
  * @param {'microseconds' | 'bytes'} valueName
  * @returns {readonly AnalysisEntry[]}
  */
-function summaryEntries(totals, total, valueName) {
+function rawEntries(totals, valueName) {
   return /** @type {AnalysisEntry[]} */ (
     [...totals.entries()].map(([key, value]) =>
       Object.freeze({
         key,
         [valueName]: value,
-        percentage: total === 0 ? 0 : (value / total) * 100,
       }),
     )
-  ).sort((left, right) => {
-    const leftValue = /** @type {number} */ (left[valueName]);
-    const rightValue = /** @type {number} */ (right[valueName]);
+  ).sort(compareAnalysisEntries);
+}
 
-    if (rightValue !== leftValue) {
-      return rightValue - leftValue;
-    }
+/**
+ * @param {AnalysisEntry} left
+ * @param {AnalysisEntry} right
+ * @returns {number}
+ */
+function compareAnalysisEntries(left, right) {
+  const leftValue =
+    left.percentage ??
+    left.microseconds ??
+    left.bytes ??
+    Number.NEGATIVE_INFINITY;
+  const rightValue =
+    right.percentage ??
+    right.microseconds ??
+    right.bytes ??
+    Number.NEGATIVE_INFINITY;
 
-    return compareCodeUnits(left.key, right.key);
-  });
+  if (rightValue !== leftValue) {
+    return rightValue - leftValue;
+  }
+
+  return compareCodeUnits(left.key, right.key);
 }
 
 /**
  * @param {unknown} value
  * @param {'node' | 'chromium'} directoryHost
  * @param {string} filePath
- * @returns {ProfileSidecar}
+ * @returns {MetricSidecar}
  */
 function validateProfileSidecar(value, directoryHost, filePath) {
   const sidecar = objectAt(value, `Profile sidecar ${filePath}`);
-  exactNumberAt(sidecar.schemaVersion, `${filePath}.schemaVersion`, 1);
+  exactNumberAt(sidecar.schemaVersion, `${filePath}.schemaVersion`, 2);
   exactStringAt(sidecar.host, `${filePath}.host`);
 
   if (sidecar.host !== directoryHost) {
@@ -804,7 +951,9 @@ function validateProfileSidecar(value, directoryHost, filePath) {
     );
   }
 
-  exactStringAt(sidecar.gitCommit, `${filePath}.gitCommit`);
+  const source = objectAt(sidecar.source, `${filePath}.source`);
+  exactStringAt(source.gitCommit, `${filePath}.source.gitCommit`);
+  exactBooleanAt(source.gitDirty, `${filePath}.source.gitDirty`, false);
   const capture = objectAt(sidecar.capture, `${filePath}.capture`);
   exactStringAt(capture.workload, `${filePath}.capture.workload`);
 
@@ -816,23 +965,22 @@ function validateProfileSidecar(value, directoryHost, filePath) {
     throw new TypeError(`${filePath}.capture.mode must be "cold" or "steady"`);
   }
 
-  const metrics = stringArrayAt(capture.metrics, `${filePath}.capture.metrics`);
-
-  if (
-    metrics.length !== 2 ||
-    metrics[0] !== 'cpu' ||
-    metrics[1] !== 'allocation'
-  ) {
+  if (capture.metric !== 'cpu' && capture.metric !== 'allocation') {
     throw new TypeError(
-      `${filePath}.capture.metrics must be exactly cpu,allocation`,
+      `${filePath}.capture.metric must be "cpu" or "allocation"`,
     );
   }
 
+  exactStringAt(capture.runId, `${filePath}.capture.runId`);
   positiveIntegerAt(capture.warmups, `${filePath}.capture.warmups`);
   positiveIntegerAt(capture.iterations, `${filePath}.capture.iterations`);
   positiveIntegerAt(
-    capture.samplingInterval,
-    `${filePath}.capture.samplingInterval`,
+    capture.cpuSamplingIntervalMicroseconds,
+    `${filePath}.capture.cpuSamplingIntervalMicroseconds`,
+  );
+  positiveIntegerAt(
+    capture.allocationSamplingIntervalBytes,
+    `${filePath}.capture.allocationSamplingIntervalBytes`,
   );
   const result = objectAt(sidecar.result, `${filePath}.result`);
   integerAt(result.expectedChecksum, `${filePath}.result.expectedChecksum`);
@@ -850,27 +998,32 @@ function validateProfileSidecar(value, directoryHost, filePath) {
     `${filePath}.result.elapsedMilliseconds`,
   );
   const summaries = objectAt(sidecar.summaries, `${filePath}.summaries`);
-  const cpu = validateProfileSummary(
-    summaries.cpu,
-    `${filePath}.summaries.cpu`,
-    'selfTime',
+  const metric = /** @type {'cpu' | 'allocation'} */ (capture.metric);
+  const otherMetric = metric === 'cpu' ? 'allocation' : 'cpu';
+  const summary = validateProfileSummary(
+    summaries[metric],
+    `${filePath}.summaries.${metric}`,
+    metric === 'cpu' ? 'selfTime' : 'selfSize',
   );
-  const allocation = validateProfileSummary(
-    summaries.allocation,
-    `${filePath}.summaries.allocation`,
-    'selfSize',
-  );
+
+  if (summaries[otherMetric] !== undefined) {
+    throw new TypeError(
+      `${filePath}.summaries must contain only the ${metric} metric`,
+    );
+  }
+
   const artifacts = objectAt(sidecar.artifacts, `${filePath}.artifacts`);
-  const cpuArtifact = safeArtifactName(
-    artifacts.cpu,
-    'cpuprofile',
-    `${filePath}.artifacts.cpu`,
+  const artifact = safeArtifactName(
+    artifacts[metric],
+    metric === 'cpu' ? 'cpuprofile' : 'heapprofile',
+    `${filePath}.artifacts.${metric}`,
   );
-  const allocationArtifact = safeArtifactName(
-    artifacts.allocation,
-    'heapprofile',
-    `${filePath}.artifacts.allocation`,
-  );
+
+  if (artifacts[otherMetric] !== undefined) {
+    throw new TypeError(
+      `${filePath}.artifacts must contain only the ${metric} metric`,
+    );
+  }
 
   return Object.freeze({
     host: directoryHost,
@@ -878,14 +1031,19 @@ function validateProfileSidecar(value, directoryHost, filePath) {
       name: directoryHost,
       version: runtime.version,
     }),
-    gitCommit: sidecar.gitCommit,
+    source: Object.freeze({
+      gitCommit: source.gitCommit,
+      gitDirty: false,
+    }),
     capture: Object.freeze({
       workload: capture.workload,
       mode: /** @type {'cold' | 'steady'} */ (capture.mode),
-      metrics: Object.freeze(metrics),
+      metric,
+      runId: capture.runId,
       warmups: capture.warmups,
       iterations: capture.iterations,
-      samplingInterval: capture.samplingInterval,
+      cpuSamplingIntervalMicroseconds: capture.cpuSamplingIntervalMicroseconds,
+      allocationSamplingIntervalBytes: capture.allocationSamplingIntervalBytes,
     }),
     result: Object.freeze({
       expectedChecksum: result.expectedChecksum,
@@ -893,11 +1051,8 @@ function validateProfileSidecar(value, directoryHost, filePath) {
       iterations: result.iterations,
       elapsedMilliseconds: result.elapsedMilliseconds,
     }),
-    summaries: Object.freeze({ cpu, allocation }),
-    artifacts: Object.freeze({
-      cpu: cpuArtifact,
-      allocation: allocationArtifact,
-    }),
+    summary,
+    artifact,
     cpuSampleCount: 0,
   });
 }
@@ -1123,8 +1278,19 @@ function validateRepositoryRelativeDirectory(value, label) {
     throw new RangeError(`${label} must not escape the repository: ${value}`);
   }
 
-  resolveOutputDirectory(value);
-  return value.replace(/\/+$/u, '');
+  const normalized = value.replace(/\\/g, '/').replace(/\/+$/u, '');
+
+  if (
+    normalized !== '.benchmark-results' &&
+    !normalized.startsWith('.benchmark-results/')
+  ) {
+    throw new RangeError(
+      `${label} must stay under .benchmark-results/: ${value}`,
+    );
+  }
+
+  resolveOutputDirectory(normalized);
+  return normalized;
 }
 
 /**
@@ -1212,7 +1378,7 @@ function compareMetadata(left, right, property, leftHost, rightHost) {
 }
 
 /**
- * @param {ProfileSidecar} sidecar
+ * @param {MetricSidecar} sidecar
  * @returns {string}
  */
 function sidecarKey(sidecar) {
@@ -1220,12 +1386,20 @@ function sidecarKey(sidecar) {
 }
 
 /**
- * @param {ProfileSidecar} left
- * @param {ProfileSidecar} right
+ * @param {MetricSidecar} sidecar
+ * @returns {string}
+ */
+function metricSidecarKey(sidecar) {
+  return `${sidecarKey(sidecar)}:${sidecar.capture.metric}`;
+}
+
+/**
+ * @param {MetricSidecar} left
+ * @param {MetricSidecar} right
  * @returns {number}
  */
 function compareSidecars(left, right) {
-  return compareCodeUnits(sidecarKey(left), sidecarKey(right));
+  return compareCodeUnits(metricSidecarKey(left), metricSidecarKey(right));
 }
 
 /**
@@ -1268,23 +1442,23 @@ function arrayAt(value, valuePath) {
 /**
  * @param {unknown} value
  * @param {string} valuePath
- * @returns {string[]}
- */
-function stringArrayAt(value, valuePath) {
-  return arrayAt(value, valuePath).map((entry, index) => {
-    exactStringAt(entry, `${valuePath}[${index}]`);
-    return entry;
-  });
-}
-
-/**
- * @param {unknown} value
- * @param {string} valuePath
  * @returns {void}
  */
 function exactStringAt(value, valuePath) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError(`${valuePath} must be a non-empty string`);
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} valuePath
+ * @param {boolean} expected
+ * @returns {void}
+ */
+function exactBooleanAt(value, valuePath, expected) {
+  if (typeof value !== 'boolean' || value !== expected) {
+    throw new TypeError(`${valuePath} must equal ${expected}`);
   }
 }
 
@@ -1392,7 +1566,7 @@ function formatCause(error) {
 /**
  * @typedef {{
  *   key: string,
- *   percentage: number,
+ *   percentage?: number,
  *   microseconds?: number,
  *   bytes?: number,
  * }} AnalysisEntry
@@ -1400,30 +1574,36 @@ function formatCause(error) {
 
 /**
  * @typedef {{
- *   totalMicroseconds: number,
- *   categories: readonly AnalysisEntry[],
- *   frames: readonly AnalysisEntry[],
- * }} CpuAggregate
- */
-
-/**
- * @typedef {{
- *   totalBytes: number,
- *   categories: readonly AnalysisEntry[],
- *   frames: readonly AnalysisEntry[],
- * }} AllocationAggregate
+ *   interpreter: {
+ *     categories: readonly AnalysisEntry[],
+ *     frames: readonly AnalysisEntry[],
+ *   },
+ *   overhead: {
+ *     totalMicroseconds?: number,
+ *     totalBytes?: number,
+ *     categories: readonly AnalysisEntry[],
+ *     frames: readonly AnalysisEntry[],
+ *   },
+ *   diagnostics: {
+ *     sampledTotalMicroseconds?: number,
+ *     sampledTotalBytes?: number,
+ *     interpreterTotalMicroseconds?: number,
+ *     interpreterTotalBytes?: number,
+ *   },
+ * }} MetricAggregate
  */
 
 /**
  * @typedef {{
  *   profileCount: number,
- *   cpu: CpuAggregate,
- *   allocation: AllocationAggregate,
+ *   cpu: MetricAggregate,
+ *   allocation: MetricAggregate,
  * }} ProfileAggregate
  */
 
 /**
  * @typedef {{
+ *   weighting: 'equal-observation',
  *   groups: Record<string, ProfileAggregate>,
  *   steadyByWorkload: Record<string, ProfileAggregate>,
  * }} ProfileAnalysis
@@ -1434,17 +1614,26 @@ function formatCause(error) {
  *   host: 'node' | 'chromium',
  *   workload: string,
  *   mode: 'cold' | 'steady',
- *   sidecarExpectedChecksum: number,
- *   sidecarChecksum: number,
+ *   profileRunId: string,
+ *   sourceGitCommit: string,
+ *   cpuSamplingIntervalMicroseconds: number,
+ *   allocationSamplingIntervalBytes: number,
+ *   cpuExpectedChecksum: number,
+ *   cpuChecksum: number,
+ *   allocationExpectedChecksum: number,
+ *   allocationChecksum: number,
  *   benchmarkExpectedChecksum: number,
  *   benchmarkChecksum: number,
  *   nativeMedianMs: number,
  *   jsjsMedianMs: number,
- *   profileElapsedMilliseconds: number,
- *   profileIterations: number,
- *   profileElapsedPerIterationMilliseconds: number,
+ *   cpuProfileElapsedMilliseconds: number,
+ *   cpuProfileIterations: number,
+ *   cpuProfileElapsedPerIterationMilliseconds: number,
  *   cpuSampleTotalMicroseconds: number,
  *   cpuSampleCount: number,
+ *   allocationProfileElapsedMilliseconds: number,
+ *   allocationProfileIterations: number,
+ *   allocationProfileElapsedPerIterationMilliseconds: number,
  *   allocationSampledBytes: number,
  *   allocationFrameCount: number,
  *   valid: true,
@@ -1471,14 +1660,16 @@ function formatCause(error) {
  * @typedef {{
  *   host: 'node' | 'chromium',
  *   runtime: { name: 'node' | 'chromium', version: string },
- *   gitCommit: string,
+ *   source: { gitCommit: string, gitDirty: false },
  *   capture: {
  *     workload: string,
  *     mode: 'cold' | 'steady',
- *     metrics: readonly string[],
+ *     metric: 'cpu' | 'allocation',
+ *     runId: string,
  *     warmups: number,
  *     iterations: number,
- *     samplingInterval: number,
+ *     cpuSamplingIntervalMicroseconds: number,
+ *     allocationSamplingIntervalBytes: number,
  *   },
  *   result: {
  *     expectedChecksum: number,
@@ -1486,19 +1677,23 @@ function formatCause(error) {
  *     iterations: number,
  *     elapsedMilliseconds: number,
  *   },
- *   summaries: {
- *     cpu: {
- *       total: number,
- *       frames: readonly Record<string, any>[],
- *       categories: readonly Record<string, any>[],
- *     },
- *     allocation: {
- *       total: number,
- *       frames: readonly Record<string, any>[],
- *       categories: readonly Record<string, any>[],
- *     },
+ *   summary: {
+ *     total: number,
+ *     frames: readonly Record<string, any>[],
+ *     categories: readonly Record<string, any>[],
  *   },
- *   artifacts: { cpu: string, allocation: string },
+ *   artifact: string,
  *   cpuSampleCount: number,
- * }} ProfileSidecar
+ * }} MetricSidecar
+ */
+
+/**
+ * @typedef {{
+ *   host: 'node' | 'chromium',
+ *   runtime: { name: 'node' | 'chromium', version: string },
+ *   source: { gitCommit: string, gitDirty: false },
+ *   capture: MetricSidecar['capture'],
+ *   cpu: MetricSidecar,
+ *   allocation: MetricSidecar,
+ * }} ProfileObservation
  */
