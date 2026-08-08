@@ -245,13 +245,18 @@ export function measureBatch(execute, count, options) {
     );
   }
 
-  /** @type {number | undefined} */
-  let checksum;
-  /** @type {{ invocation: number, checksum: number } | null} */
-  let mismatch = null;
   const startedAt = options.now();
+  let checksum = execute();
+  /** @type {{ invocation: number, checksum: number } | null} */
+  let mismatch =
+    checksum !== options.expectedChecksum
+      ? {
+          invocation: 1,
+          checksum,
+        }
+      : null;
 
-  for (let index = 0; index < count; index += 1) {
+  for (let index = 1; index < count && mismatch === null; index += 1) {
     checksum = execute();
 
     if (checksum !== options.expectedChecksum) {
@@ -274,12 +279,6 @@ export function measureBatch(execute, count, options) {
   if (mismatch !== null) {
     throw new Error(
       `${options.context} checksum mismatch at batch invocation ${mismatch.invocation} of ${count}: expected ${options.expectedChecksum}, got ${mismatch.checksum}`,
-    );
-  }
-
-  if (checksum === undefined) {
-    throw new RangeError(
-      `${options.context} batch count must be a positive integer`,
     );
   }
 
