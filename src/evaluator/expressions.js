@@ -5,6 +5,7 @@ import {
   isEnvironmentRecord,
 } from '../runtime/reference.js';
 import {
+  getIdentifierBindingValue,
   getIdentifierReference,
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
@@ -179,11 +180,45 @@ export function evaluateExpression(node, context) {
  * Evaluates an expression node to its dereferenced runtime value, applying
  * `GetValue` when `evaluateExpression` returns a `Reference`.
  *
+ * A bare `Identifier` read takes a fused fast path: it resolves the binding
+ * value directly with `getIdentifierBindingValue` instead of allocating a
+ * `Reference` only to call `GetValue` on it and discard it. Frame accounting is
+ * kept identical to routing the node through `evaluateExpression`: the node
+ * still costs exactly one stack-guard frame, and — this is the subtle part —
+ * that frame is entered and exited (a balanced bounds-check that counts the
+ * node) *before* the value is fetched, never held across the fetch. This
+ * matters because `evaluateExpression` returned from its guarded frame *before*
+ * the old `evaluateExpression`+`GetValue` path called `GetValue`, so a getter
+ * reached through an object/global environment record (a `with` scope or an
+ * accessor global) ran at the ambient depth, not one frame deeper. Doing the
+ * enter/exit before the fetch reproduces that exactly (the resolution walk
+ * cannot invoke guest code, so its position relative to the frame is
+ * immaterial), so the stack-overflow boundary is unchanged for accessor-backed
+ * reads too; the only difference from the reference path is the eliminated
+ * allocation. Every other identifier consumer (assignment, `delete`, `typeof`,
+ * `update`, method calls) still goes through `evaluateExpression` because it
+ * needs the `Reference` itself.
+ *
  * @param {any} node
  * @param {EvaluationContext} context
  * @returns {unknown}
  */
 export function evaluateExpressionValue(node, context) {
+  if (node.type === 'Identifier') {
+    const guard = context.realm.stackGuard;
+
+    // Count and bound-check the node's own frame exactly as walking it through
+    // `evaluateExpression` would, but do not hold that frame across the value
+    // fetch: an accessor getter reached by this read must run at the same depth
+    // it did when `GetValue` was called after `evaluateExpression` had already
+    // exited. `enter` throws before incrementing on overflow, so pairing it
+    // with `exit` needs no try/finally when nothing between them can throw.
+    guard.enter();
+    guard.exit();
+
+    return getIdentifierBindingValue(context.env, node.name, context.strict);
+  }
+
   const result = evaluateExpression(node, context);
   return result instanceof Reference ? getValue(result) : result;
 }
