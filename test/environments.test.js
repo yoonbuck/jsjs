@@ -384,46 +384,50 @@ const tests = [
     },
   },
   {
-    name: 'createImmutableBinding records the strict flag, covering the full strict/non-strict matrix against setMutableBinding',
+    name: 'a non-strict setMutableBinding reference against a non-strict (default) immutable binding leaves a silent no-op',
     run() {
-      // binding.strict === false, reference strict === false: silent no-op.
-      const sloppyBindingSloppyRef = new DeclarativeEnvironmentRecord();
-      sloppyBindingSloppyRef.createImmutableBinding('a');
-      sloppyBindingSloppyRef.initializeBinding('a', 1);
-      sloppyBindingSloppyRef.setMutableBinding('a', 2, false);
-      assertSame(sloppyBindingSloppyRef.getBindingValue('a', false), 1);
+      const env = new DeclarativeEnvironmentRecord();
+      env.createImmutableBinding('a');
+      env.initializeBinding('a', 1);
 
-      // binding.strict === false, reference strict === true: throws (the
-      // reference's strictness alone is sufficient).
-      const sloppyBindingStrictRef = new DeclarativeEnvironmentRecord();
-      sloppyBindingStrictRef.createImmutableBinding('b', false);
-      sloppyBindingStrictRef.initializeBinding('b', 1);
+      env.setMutableBinding('a', 2, false);
+      assertSame(env.getBindingValue('a', false), 1);
+    },
+  },
+  {
+    name: 'a strict setMutableBinding reference against a non-strict (default) immutable binding throws a guest TypeError',
+    run() {
+      const env = new DeclarativeEnvironmentRecord();
+      env.createImmutableBinding('b', false);
+      env.initializeBinding('b', 1);
+
+      assertThrows(() => env.setMutableBinding('b', 2, true), GuestErrorSignal);
+      assertSame(env.getBindingValue('b', false), 1);
+    },
+  },
+  {
+    name: 'a non-strict setMutableBinding reference against a strict immutable binding still throws a guest TypeError',
+    run() {
+      const env = new DeclarativeEnvironmentRecord();
+      env.createImmutableBinding('c', true);
+      env.initializeBinding('c', 1);
+
       assertThrows(
-        () => sloppyBindingStrictRef.setMutableBinding('b', 2, true),
+        () => env.setMutableBinding('c', 2, false),
         GuestErrorSignal,
       );
-      assertSame(sloppyBindingStrictRef.getBindingValue('b', false), 1);
+      assertSame(env.getBindingValue('c', false), 1);
+    },
+  },
+  {
+    name: 'a strict setMutableBinding reference against a strict immutable binding throws a guest TypeError',
+    run() {
+      const env = new DeclarativeEnvironmentRecord();
+      env.createImmutableBinding('d', true);
+      env.initializeBinding('d', 1);
 
-      // binding.strict === true, reference strict === false: throws (a
-      // `const` binding rejects sloppy writes too).
-      const strictBindingSloppyRef = new DeclarativeEnvironmentRecord();
-      strictBindingSloppyRef.createImmutableBinding('c', true);
-      strictBindingSloppyRef.initializeBinding('c', 1);
-      assertThrows(
-        () => strictBindingSloppyRef.setMutableBinding('c', 2, false),
-        GuestErrorSignal,
-      );
-      assertSame(strictBindingSloppyRef.getBindingValue('c', false), 1);
-
-      // binding.strict === true, reference strict === true: throws.
-      const strictBindingStrictRef = new DeclarativeEnvironmentRecord();
-      strictBindingStrictRef.createImmutableBinding('d', true);
-      strictBindingStrictRef.initializeBinding('d', 1);
-      assertThrows(
-        () => strictBindingStrictRef.setMutableBinding('d', 2, true),
-        GuestErrorSignal,
-      );
-      assertSame(strictBindingStrictRef.getBindingValue('d', false), 1);
+      assertThrows(() => env.setMutableBinding('d', 2, true), GuestErrorSignal);
+      assertSame(env.getBindingValue('d', false), 1);
     },
   },
   {
@@ -485,30 +489,169 @@ const tests = [
     },
   },
   {
-    name: 'hasVarDeclaration and hasLexicalDeclaration report var and lexical global names independently',
+    name: 'hasVarDeclaration and hasLexicalDeclaration report false before declaration and true after, for a name with no own global property',
     run() {
       const globalObject = new EngineObject(null);
       const env = new GlobalEnvironmentRecord(globalObject);
 
       assertSame(env.hasVarDeclaration('v'), false);
-      assertSame(env.hasLexicalDeclaration('v'), false);
-
       env.createGlobalVarBinding('v', false);
       assertSame(env.hasVarDeclaration('v'), true);
-      assertSame(env.hasLexicalDeclaration('v'), false);
 
+      assertSame(env.hasLexicalDeclaration('l'), false);
       env.createMutableBinding('l', false);
-      assertSame(env.hasVarDeclaration('l'), false);
       assertSame(env.hasLexicalDeclaration('l'), true);
     },
   },
   {
-    name: 'hasRestrictedGlobalProperty is true only for a non-configurable own property',
+    name: 'hasVarDeclaration and hasLexicalDeclaration report false before declaration and true after, when the name already has a configurable own global property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('v', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(env.hasVarDeclaration('v'), false);
+      env.createGlobalVarBinding('v', false);
+      assertSame(env.hasVarDeclaration('v'), true);
+
+      globalObject.defineOwnProperty('l', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(env.hasLexicalDeclaration('l'), false);
+      env.createMutableBinding('l', false);
+      assertSame(env.hasLexicalDeclaration('l'), true);
+    },
+  },
+  {
+    name: 'hasVarDeclaration and hasLexicalDeclaration report false before declaration and true after, when the name already has a non-configurable writable and enumerable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('v', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasVarDeclaration('v'), false);
+      env.createGlobalVarBinding('v', false);
+      assertSame(env.hasVarDeclaration('v'), true);
+
+      globalObject.defineOwnProperty('l', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasLexicalDeclaration('l'), false);
+      env.createMutableBinding('l', false);
+      assertSame(env.hasLexicalDeclaration('l'), true);
+    },
+  },
+  {
+    name: 'hasVarDeclaration and hasLexicalDeclaration report false before declaration and true after, when the name already has a non-configurable non-writable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('v', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasVarDeclaration('v'), false);
+      env.createGlobalVarBinding('v', false);
+      assertSame(env.hasVarDeclaration('v'), true);
+
+      globalObject.defineOwnProperty('l', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasLexicalDeclaration('l'), false);
+      env.createMutableBinding('l', false);
+      assertSame(env.hasLexicalDeclaration('l'), true);
+    },
+  },
+  {
+    name: 'hasVarDeclaration and hasLexicalDeclaration report false before declaration and true after, when the name already has a non-configurable own global accessor property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('v', {
+        get: () => 1,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasVarDeclaration('v'), false);
+      env.createGlobalVarBinding('v', false);
+      assertSame(env.hasVarDeclaration('v'), true);
+
+      globalObject.defineOwnProperty('l', {
+        get: () => 1,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasLexicalDeclaration('l'), false);
+      env.createMutableBinding('l', false);
+      assertSame(env.hasLexicalDeclaration('l'), true);
+    },
+  },
+  {
+    name: 'hasVarDeclaration and hasLexicalDeclaration report false before declaration and true after, on a non-extensible global object, given the declared name already has an own property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('v', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      globalObject.defineOwnProperty('l', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      globalObject.preventExtensions();
+
+      assertSame(env.hasVarDeclaration('v'), false);
+      env.createGlobalVarBinding('v', false);
+      assertSame(env.hasVarDeclaration('v'), true);
+
+      assertSame(env.hasLexicalDeclaration('l'), false);
+      env.createMutableBinding('l', false);
+      assertSame(env.hasLexicalDeclaration('l'), true);
+    },
+  },
+  {
+    name: 'hasRestrictedGlobalProperty is false for a name with no own global property',
     run() {
       const globalObject = new EngineObject(null);
       const env = new GlobalEnvironmentRecord(globalObject);
 
       assertSame(env.hasRestrictedGlobalProperty('absent'), false);
+    },
+  },
+  {
+    name: 'hasRestrictedGlobalProperty is false for a configurable own global property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
 
       globalObject.defineOwnProperty('configurableProp', {
         value: 1,
@@ -517,6 +660,28 @@ const tests = [
         configurable: true,
       });
       assertSame(env.hasRestrictedGlobalProperty('configurableProp'), false);
+    },
+  },
+  {
+    name: 'hasRestrictedGlobalProperty is true for a non-configurable writable and enumerable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('writableEnumerable', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasRestrictedGlobalProperty('writableEnumerable'), true);
+    },
+  },
+  {
+    name: 'hasRestrictedGlobalProperty is true for a non-configurable non-writable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
 
       globalObject.defineOwnProperty('undefined', {
         value: undefined,
@@ -528,12 +693,105 @@ const tests = [
     },
   },
   {
-    name: 'canDeclareGlobalVar is true for an existing own property or an extensible global, false otherwise',
+    name: 'hasRestrictedGlobalProperty is true for a non-configurable own global accessor property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('accessor', {
+        get: () => 1,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.hasRestrictedGlobalProperty('accessor'), true);
+    },
+  },
+  {
+    name: "hasRestrictedGlobalProperty is unaffected by the global object's extensibility, for both an absent property and an existing non-configurable property",
+    run() {
+      const globalObject = new EngineObject(null);
+      globalObject.defineOwnProperty('locked', {
+        value: 1,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      });
+      globalObject.preventExtensions();
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      assertSame(env.hasRestrictedGlobalProperty('absent'), false);
+      assertSame(env.hasRestrictedGlobalProperty('locked'), true);
+    },
+  },
+  {
+    name: "hasRestrictedGlobalProperty is false for a name that only exists on the global object's prototype (toString), unlike a non-configurable own property (undefined)",
+    run() {
+      const globalPrototype = new EngineObject(null);
+      globalPrototype.defineOwnProperty('toString', {
+        value: 'inherited',
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const globalObject = new EngineObject(globalPrototype);
+      globalObject.defineOwnProperty('undefined', {
+        value: undefined,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      });
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      assertSame(globalObject.getOwnProperty('toString'), undefined);
+      assertSame(globalObject.hasProperty('toString'), true);
+      assertSame(env.hasRestrictedGlobalProperty('toString'), false);
+      assertSame(env.hasRestrictedGlobalProperty('undefined'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalVar is true for a name with no own global property on an extensible global',
     run() {
       const globalObject = new EngineObject(null);
       const env = new GlobalEnvironmentRecord(globalObject);
 
       assertSame(env.canDeclareGlobalVar('fresh'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalVar is true when the name already has a configurable own global property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('configurableProp', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(env.canDeclareGlobalVar('configurableProp'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalVar is true when the name already has a non-configurable writable and enumerable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      globalObject.defineOwnProperty('writableEnumerable', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.canDeclareGlobalVar('writableEnumerable'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalVar is true when the name already has a non-configurable non-writable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
 
       globalObject.defineOwnProperty('nonConfigNonWritable', {
         value: 1,
@@ -542,22 +800,58 @@ const tests = [
         configurable: false,
       });
       assertSame(env.canDeclareGlobalVar('nonConfigNonWritable'), true);
-
-      globalObject.preventExtensions();
-      assertSame(env.canDeclareGlobalVar('stillNoOwnProperty'), false);
-      assertSame(env.canDeclareGlobalVar('nonConfigNonWritable'), true);
     },
   },
   {
-    name: 'canDeclareGlobalFunction covers the own-property attribute matrix from the spec',
+    name: 'canDeclareGlobalVar is true when the name already has a non-configurable own global accessor property',
     run() {
       const globalObject = new EngineObject(null);
       const env = new GlobalEnvironmentRecord(globalObject);
 
-      // No own property, extensible global: true.
-      assertSame(env.canDeclareGlobalFunction('fresh'), true);
+      globalObject.defineOwnProperty('accessor', {
+        get: () => 1,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.canDeclareGlobalVar('accessor'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalVar is false for a name with no own global property on a non-extensible global',
+    run() {
+      const globalObject = new EngineObject(null);
+      globalObject.preventExtensions();
+      const env = new GlobalEnvironmentRecord(globalObject);
 
-      // Configurable own property: true regardless of its other attributes.
+      assertSame(env.canDeclareGlobalVar('stillNoOwnProperty'), false);
+    },
+  },
+  {
+    name: 'canDeclareGlobalVar remains true for an existing own property even on a non-extensible global',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+      env.createGlobalVarBinding('present', true);
+      globalObject.preventExtensions();
+
+      assertSame(env.canDeclareGlobalVar('present'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalFunction is true for a name with no own global property on an extensible global',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      assertSame(env.canDeclareGlobalFunction('fresh'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalFunction is true for a configurable own global property regardless of its other attributes',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
       globalObject.defineOwnProperty('configurableProp', {
         value: 1,
         writable: false,
@@ -565,8 +859,14 @@ const tests = [
         configurable: true,
       });
       assertSame(env.canDeclareGlobalFunction('configurableProp'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalFunction is true for a non-configurable writable and enumerable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
 
-      // Non-configurable, writable and enumerable data property: true.
       globalObject.defineOwnProperty('writableEnumerable', {
         value: 1,
         writable: true,
@@ -574,8 +874,14 @@ const tests = [
         configurable: false,
       });
       assertSame(env.canDeclareGlobalFunction('writableEnumerable'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalFunction is false for a non-configurable non-writable own global data property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
 
-      // Non-configurable, non-writable data property: false.
       globalObject.defineOwnProperty('nonWritable', {
         value: 1,
         writable: false,
@@ -583,17 +889,29 @@ const tests = [
         configurable: false,
       });
       assertSame(env.canDeclareGlobalFunction('nonWritable'), false);
+    },
+  },
+  {
+    name: 'canDeclareGlobalFunction is false for a non-configurable own global accessor property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
 
-      // Non-configurable accessor property: false (not a data descriptor).
       globalObject.defineOwnProperty('accessor', {
         get: () => 1,
         enumerable: true,
         configurable: false,
       });
       assertSame(env.canDeclareGlobalFunction('accessor'), false);
-
-      // No own property, non-extensible global: false.
+    },
+  },
+  {
+    name: 'canDeclareGlobalFunction is false for a name with no own global property on a non-extensible global',
+    run() {
+      const globalObject = new EngineObject(null);
       globalObject.preventExtensions();
+      const env = new GlobalEnvironmentRecord(globalObject);
+
       assertSame(env.canDeclareGlobalFunction('stillNoOwnProperty'), false);
     },
   },

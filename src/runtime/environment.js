@@ -380,7 +380,7 @@ export class GlobalEnvironmentRecord {
   }
 
   /**
-   * ECMA-262 6th edition §8.1.1.4.4 `CreateImmutableBinding`: forwards to
+   * ECMA-262 6th edition §8.1.1.4.3 `CreateImmutableBinding`: forwards to
    * the global environment's declarative record, carrying the `strict`
    * flag through (see `DeclarativeEnvironmentRecord#createImmutableBinding`).
    *
