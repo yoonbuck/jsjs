@@ -86,9 +86,9 @@ allocation measured in sampled bytes.
 | Garbage collector                                                     |     1,065,655 |              0 |
 | Host program                                                          |       784,572 |              0 |
 | Idle                                                                  |        16,660 |              0 |
-| Capture/browser harness (`run`, `runBrowserProfilePage`, target)      |         6,616 |        198,656 |
+| Capture/browser harness (`run`, `runBrowserProfilePage`, target)      |         6,890 |        198,656 |
 | Host built-ins (`set`, `keys`, `RegExp`, `String`, `Map`, `evaluate`) |             0 |        306,696 |
-| Other host frames                                                     |        31,849 |         98,480 |
+| Other host frames                                                     |        31,575 |         98,480 |
 | **All host overhead**                                                 | **2,658,860** |  **1,033,656** |
 
 The harness and host values are intentionally visible rather than attributed
