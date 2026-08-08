@@ -77,17 +77,14 @@ export async function runJscBenchmark(config, options = {}) {
       }
 
       if (code !== 0) {
-        const detail = stderr.trim() || stdout.trim();
         reject(
-          new Error(
-            detail.length > 0 ? detail : `jsc exited with status ${code}`,
-          ),
+          jscProcessError(stdout, stderr, `jsc exited with status ${code}`),
         );
         return;
       }
 
       try {
-        resolve(parseJscReport(stdout));
+        resolve(parseJscReport(stdout, undefined, stderr));
       } catch (error) {
         reject(error);
       }
@@ -119,20 +116,61 @@ export async function discoverJscRuntimeIdentity(command, options = {}) {
  * @template T
  * @param {unknown} stdout
  * @param {(value: unknown) => T} [validate]
+ * @param {unknown} [stderr]
  * @returns {T}
  */
-export function parseJscReport(stdout, validate) {
+export function parseJscReport(stdout, validate, stderr = '') {
   const parse =
     validate ?? /** @type {(value: unknown) => T} */ (validateHostReport);
-  const lines = String(stdout)
+  const stdoutText = String(stdout);
+  const stderrText = String(stderr);
+  const lines = stdoutText
     .split(/\r?\n/u)
     .filter((line) => line.trim().length > 0);
 
-  if (lines.length !== 1) {
-    throw new Error('jsc stdout must contain exactly one JSON report');
+  if (stderrText.trim().length > 0) {
+    throw jscProcessError(stdoutText, stderrText, 'jsc emitted stderr');
   }
 
-  return parse(JSON.parse(lines[0]));
+  if (lines.length !== 1) {
+    throw jscProcessError(
+      stdoutText,
+      stderrText,
+      'jsc stdout must contain exactly one JSON report',
+    );
+  }
+
+  let report;
+
+  try {
+    report = JSON.parse(lines[0]);
+  } catch {
+    throw jscProcessError(stdoutText, stderrText, 'jsc emitted invalid JSON');
+  }
+
+  return parse(report);
+}
+
+/**
+ * @param {unknown} stdout
+ * @param {unknown} stderr
+ * @param {string} fallback
+ * @returns {Error}
+ */
+function jscProcessError(stdout, stderr, fallback) {
+  const details = [];
+  const stderrText = String(stderr).trim();
+  const stdoutText = String(stdout).trim();
+
+  if (stderrText.length > 0) {
+    details.push(`jsc stderr: ${stderrText}`);
+  }
+
+  if (stdoutText.length > 0) {
+    details.push(`jsc stdout: ${stdoutText}`);
+  }
+
+  return new Error(details.length > 0 ? details.join('\n') : fallback);
 }
 
 /**

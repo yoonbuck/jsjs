@@ -13,6 +13,7 @@ import {
   discoverJscRuntimeIdentity,
   jscSetupError,
   parseJscReport,
+  runJscBenchmark,
 } from '../../benchmark/spawn-jsc.js';
 
 /**
@@ -135,6 +136,23 @@ const tests = [
     },
   },
   {
+    name: 'host error formatting preserves messages when stacks omit them',
+    run() {
+      const error = new Error(
+        'jsc cold native arithmetic-loops checksum mismatch',
+      );
+      error.stack = 'measureBatch@benchmark/run.js:299:20';
+      const formatHostError = /** @type {(error: unknown) => string} */ (
+        /** @type {any} */ (benchmarkHost).formatHostError
+      );
+
+      assertSame(typeof formatHostError, 'function');
+      const formatted = formatHostError(error);
+      assertSame(formatted.includes(error.message), true);
+      assertSame(formatted.includes(error.stack), true);
+    },
+  },
+  {
     name: 'host monotonic clock wrapper advances even when the raw clock stalls',
     run() {
       const values = [7, 7, 7];
@@ -187,14 +205,115 @@ const tests = [
     },
   },
   {
+    name: 'jsc adapter surfaces stderr when a zero-exit child emits no report',
+    async run() {
+      const config = resolveBenchmarkConfig({
+        profile: 'smoke',
+        warmups: 1,
+        samples: 1,
+        workloads: ['arithmetic-loops'],
+      });
+      let error;
+
+      try {
+        await runJscBenchmark(config, {
+          command: '/fake/jsc',
+          version: 'fake-jsc',
+          spawnProcess: createFakeJscProcess({
+            stdout: '',
+            stderr:
+              'RangeError: jsc cold native arithmetic-loops clock did not advance measurably',
+            code: 0,
+          }),
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(
+        error instanceof Error &&
+          error.message.includes('RangeError') &&
+          error.message.includes('jsc') &&
+          error.message.includes('cold') &&
+          error.message.includes('native') &&
+          error.message.includes('arithmetic-loops') &&
+          error.message.includes('clock'),
+        true,
+      );
+    },
+  },
+  {
+    name: 'jsc adapter surfaces non-json stdout context from a zero-exit child',
+    async run() {
+      const config = resolveBenchmarkConfig({
+        profile: 'smoke',
+        warmups: 1,
+        samples: 1,
+        workloads: ['arithmetic-loops'],
+      });
+      let error;
+
+      try {
+        await runJscBenchmark(config, {
+          command: '/fake/jsc',
+          version: 'fake-jsc',
+          spawnProcess: createFakeJscProcess({
+            stdout: 'Error: jsc cold native arithmetic-loops checksum mismatch',
+            stderr: '',
+            code: 0,
+          }),
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(
+        error instanceof Error &&
+          error.message.includes('checksum mismatch') &&
+          !error.message.includes('exactly one JSON report'),
+        true,
+      );
+    },
+  },
+  {
+    name: 'jsc adapter rejects malformed reports from a zero-exit child',
+    async run() {
+      const config = resolveBenchmarkConfig({
+        profile: 'smoke',
+        warmups: 1,
+        samples: 1,
+        workloads: ['arithmetic-loops'],
+      });
+      let error;
+
+      try {
+        await runJscBenchmark(config, {
+          command: '/fake/jsc',
+          version: 'fake-jsc',
+          spawnProcess: createFakeJscProcess({
+            stdout: '{"host":"jsc"}\n',
+            stderr: '',
+            code: 0,
+          }),
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(
+        error instanceof TypeError && error.message.includes('schemaVersion'),
+        true,
+      );
+    },
+  },
+  {
     name: 'jsc adapter rejects invalid stdout and validates parsed reports',
     run() {
       let validated = 0;
 
       assertSame(
-        assertThrows(() => parseJscReport('not json\n'), SyntaxError).message
-          .length > 0,
-        true,
+        assertThrows(() => parseJscReport('not json\n'), Error).message,
+        'jsc stdout: not json',
       );
       assertSame(
         assertThrows(
@@ -252,5 +371,67 @@ const tests = [
     },
   },
 ];
+
+/**
+ * @param {{ stdout: string, stderr: string, code: number }} result
+ * @returns {typeof import('node:child_process').spawn}
+ */
+function createFakeJscProcess(result) {
+  return /** @type {typeof import('node:child_process').spawn} */ (
+    () => {
+      /** @type {Record<string, ((...args: any[]) => void)[]>} */
+      const childListeners = {};
+      /** @type {Record<string, ((...args: any[]) => void)[]>} */
+      const stdoutListeners = {};
+      /** @type {Record<string, ((...args: any[]) => void)[]>} */
+      const stderrListeners = {};
+      /**
+       * @param {Record<string, ((...args: any[]) => void)[]>} listeners
+       */
+      const stream = (listeners) => ({
+        setEncoding() {},
+        /**
+         * @param {string} event
+         * @param {(...args: any[]) => void} listener
+         */
+        on(event, listener) {
+          if (listeners[event] === undefined) {
+            listeners[event] = [];
+          }
+          listeners[event].push(listener);
+          return this;
+        },
+      });
+      const child = {
+        stdout: stream(stdoutListeners),
+        stderr: stream(stderrListeners),
+        /**
+         * @param {string} event
+         * @param {(...args: any[]) => void} listener
+         */
+        on(event, listener) {
+          if (childListeners[event] === undefined) {
+            childListeners[event] = [];
+          }
+          childListeners[event].push(listener);
+          if (event === 'close') {
+            Promise.resolve().then(() => {
+              for (const dataListener of stdoutListeners.data ?? []) {
+                dataListener(result.stdout);
+              }
+              for (const dataListener of stderrListeners.data ?? []) {
+                dataListener(result.stderr);
+              }
+              listener(result.code, null);
+            });
+          }
+          return this;
+        },
+      };
+
+      return child;
+    }
+  );
+}
 
 export default tests;

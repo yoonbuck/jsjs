@@ -1,7 +1,11 @@
-import { monotonicNowFrom, runtimeEngine } from './host.js';
+import { formatHostError, monotonicNowFrom, runtimeEngine } from './host.js';
 import { runHostBenchmark } from './run.js';
 
 const print = /** @type {(text: string) => void} */ (globalThis.print);
+const printError =
+  typeof globalThis.printErr === 'function'
+    ? globalThis.printErr.bind(globalThis)
+    : print;
 const quit = /** @type {((code?: number) => void) | undefined} */ (
   globalThis.quit
 );
@@ -11,7 +15,7 @@ main().then(
     print(JSON.stringify(report));
   },
   (error) => {
-    print(String((error && error.stack) || error));
+    printError(formatHostError(error));
 
     if (typeof quit === 'function') {
       quit(1);

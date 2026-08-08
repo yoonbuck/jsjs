@@ -137,6 +137,7 @@ declare module 'js-yaml' {
 declare var readFile: ((path: string) => string) | undefined;
 declare var read: ((path: string) => string) | undefined;
 declare var print: ((text: string) => void) | undefined;
+declare var printErr: ((text: string) => void) | undefined;
 declare var quit: ((code?: number) => void) | undefined;
 
 // Optional launcher configuration for the JavaScriptCore adapter.

@@ -226,6 +226,11 @@ context. Invalid reports never replace the final `*.json` output file.
 An unmeasurable cold invocation likewise aborts rather than recording an
 epsilon-sized duration that would corrupt its median and slowdown.
 
+The JSC module writes failures through `printErr` when the shell provides it,
+with `print` only as a compatibility fallback. The Node launcher treats any
+stderr or non-JSON stdout as a failed run and preserves that raw output in the
+reported error even on JSC shells where `quit(1)` returns process status `0`.
+
 ## Artifact layout and schema
 
 The default output tree is ignored by git:

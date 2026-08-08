@@ -47,3 +47,24 @@ export function monotonicNowFrom(readNow) {
 export function syntheticClockTicksFrom(clock) {
   return CLOCK_STATES.get(clock)?.syntheticTicks ?? 0;
 }
+
+/**
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function formatHostError(error) {
+  const description = String(error);
+  const stack =
+    typeof error === 'object' &&
+    error !== null &&
+    'stack' in error &&
+    typeof error.stack === 'string'
+      ? error.stack
+      : '';
+
+  if (stack.length === 0 || stack.includes(description)) {
+    return stack || description;
+  }
+
+  return `${description}\n${stack}`;
+}
