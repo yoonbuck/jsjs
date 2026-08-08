@@ -23,8 +23,9 @@ npm install
 ```
 
 This populates `vendor/` through the `prepare` script. For browser and JSC
-prerequisites (Playwright, `jsc` on PATH), see
-[docs/testing.md](docs/testing.md).
+prerequisites (Playwright, `jsc` on PATH), see [docs/testing.md](docs/testing.md).
+For benchmark-specific setup, CLI options, artifact schemas, and caveats, see
+[docs/benchmarking.md](docs/benchmarking.md).
 
 ## Usage
 
@@ -43,20 +44,28 @@ console.log(result); // { type: 'normal', value: 3 }
 
 ## Commands
 
-| Command                | What it does                                                   |
-| ---------------------- | -------------------------------------------------------------- |
-| `npm test`             | The Node suites, then the Test262 fixture suite                |
-| `npm run test:node`    | Every portable suite plus the Node-only suites in `test/node/` |
-| `npm run test:browser` | Every portable suite in headless Chromium via Playwright       |
-| `npm run test:jsc`     | Every portable suite in the `jsc` shell                        |
-| `npm run typecheck`    | `tsc` in checkJs mode                                          |
-| `npm run format`       | Prettier `--check` over the repository                         |
-| `npm run lint`         | ESLint only                                                    |
-| `npm run vendor:sync`  | Refresh `vendor/` from pinned dependencies                     |
-| `npm run ci:contract`  | Full local CI contract: every command CI runs, for real        |
+| Command                     | What it does                                                   |
+| --------------------------- | -------------------------------------------------------------- |
+| `npm test`                  | The Node suites, then the Test262 fixture suite                |
+| `npm run test:node`         | Every portable suite plus the Node-only suites in `test/node/` |
+| `npm run test:browser`      | Every portable suite in headless Chromium via Playwright       |
+| `npm run test:jsc`          | Every portable suite in the `jsc` shell                        |
+| `npm run typecheck`         | `tsc` in checkJs mode                                          |
+| `npm run format`            | Prettier `--check` over the repository                         |
+| `npm run lint`              | ESLint only                                                    |
+| `npm run vendor:sync`       | Refresh `vendor/` from pinned dependencies                     |
+| `npm run ci:contract`       | Full local CI contract: every command CI runs, for real        |
+| `npm run benchmark`         | Cross-runtime benchmark CLI across Node, Chromium, and `jsc`   |
+| `npm run benchmark:node`    | Benchmark only the Node host                                   |
+| `npm run benchmark:browser` | Benchmark only the Chromium host                               |
+| `npm run benchmark:jsc`     | Benchmark only the `jsc` host                                  |
+| `npm run benchmark:smoke`   | Correctness-only Node smoke benchmark                          |
+| `npm run benchmark:summary` | Aggregate compatible host reports into JSON and CSV            |
 
 The full command list, Test262 runner options, suite organization, CI jobs, and
-troubleshooting are in [docs/testing.md](docs/testing.md).
+troubleshooting are in [docs/testing.md](docs/testing.md). Benchmark
+methodology, prerequisites, CLI options, schema details, reproducibility
+guidance, and caveats are in [docs/benchmarking.md](docs/benchmarking.md).
 
 ## Test262
 
