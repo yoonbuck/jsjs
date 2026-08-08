@@ -188,7 +188,7 @@ export class EngineObject {
       const own = current._peekOwnDescriptor(name);
 
       if (own !== undefined) {
-        return own;
+        return copyPropertyDescriptor(own);
       }
 
       current = current._prototype;
@@ -320,7 +320,10 @@ export class EngineObject {
     // Fast path: a {value}-only update on an existing writable data descriptor
     // avoids validatePropertyDescriptor, completePropertyDescriptor, and the
     // full branching logic below. This is the hottest path from `put`.
-    if (isValueOnlyDescriptor(descriptor)) {
+    // Guard: only enter fast-path if descriptor is a non-null object, so that
+    // invalid inputs (null, numbers, etc.) still reach validatePropertyDescriptor
+    // with its canonical error message.
+    if (descriptor !== null && typeof descriptor === 'object' && isValueOnlyDescriptor(descriptor)) {
       const stored = this._properties.get(name);
       if (stored !== undefined && 'value' in stored) {
         if (stored.writable === true) {
