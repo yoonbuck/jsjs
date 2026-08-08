@@ -593,7 +593,11 @@ export default [
         false,
       );
       assertSame(
-        isCandidatePath(path, { ...tagged, parsesAtEs5: false }, policy),
+        isCandidatePath(
+          path,
+          { ...tagged, parsesUnderEngineGrammar: false },
+          policy,
+        ),
         false,
       );
       assertSame(
