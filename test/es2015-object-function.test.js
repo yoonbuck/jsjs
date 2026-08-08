@@ -150,6 +150,41 @@ const tests = [
     },
   },
   {
+    name: 'super.method() calls bind this to the original receiver',
+    run() {
+      assertSame(
+        run(
+          'var proto = { greet: function () { return this.tag; } }; ' +
+            "var o = { tag: 'o', get g() { return super.greet(); } }; " +
+            'Object.setPrototypeOf(o, proto); o.g;',
+        ),
+        'o',
+      );
+    },
+  },
+  {
+    name: 'delete super.prop throws a guest ReferenceError',
+    run() {
+      assertSame(
+        run(
+          'var o = { get x() { var name; try { delete super.x; } catch (e) { name = e.name; } return name; } }; o.x;',
+        ),
+        'ReferenceError',
+      );
+    },
+  },
+  {
+    name: 'super assignment does not overwrite an existing receiver accessor when lookup misses',
+    run() {
+      assertSame(
+        run(
+          'var o = { get a() { return 1; }, set b(v) { super.a = v; } }; o.b = 5; o.a;',
+        ),
+        1,
+      );
+    },
+  },
+  {
     name: 'super[expr] resolves a computed key the same way super.prop does',
     run() {
       assertSame(
@@ -182,6 +217,7 @@ const tests = [
         ),
         null,
       );
+      assertSame(run('Object.setPrototypeOf(1, null);'), 1);
       assertSame(
         run(
           'var a = {}; var b = {}; Object.setPrototypeOf(b, a); ' +

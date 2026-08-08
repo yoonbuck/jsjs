@@ -28,16 +28,25 @@ import {
 
 /**
  * Repository-relative paths, sorted, matching `docs/conformance.md`. All
- * twelve were confirmed present in the pinned checkout
+ * twenty-one were confirmed present in the pinned checkout
  * (`b363f29d3c43c626dc852744ad64a0b48a003693`) before this suite was written.
  */
 const FOCUSED_PATHS = Object.freeze([
   'test/built-ins/Function/prototype/bind/length.js',
   'test/built-ins/Function/prototype/bind/name.js',
   'test/built-ins/Object/getOwnPropertyNames/order-after-define-property.js',
+  'test/built-ins/Object/is/length.js',
+  'test/built-ins/Object/is/name.js',
+  'test/built-ins/Object/is/not-same-value-x-y-number.js',
   'test/built-ins/Object/is/not-same-value-x-y-object.js',
+  'test/built-ins/Object/is/object-is.js',
+  'test/built-ins/Object/is/same-value-x-y-number.js',
   'test/built-ins/Object/keys/return-order.js',
+  'test/built-ins/Object/setPrototypeOf/o-not-obj-coercible.js',
   'test/built-ins/Object/setPrototypeOf/property-descriptor.js',
+  'test/built-ins/Object/setPrototypeOf/set-failure-cycle.js',
+  'test/built-ins/Object/setPrototypeOf/set-failure-non-extensible.js',
+  'test/built-ins/Object/setPrototypeOf/success.js',
   'test/language/expressions/function/name.js',
   'test/language/expressions/object/getter-prop-desc.js',
   'test/language/expressions/object/getter-super-prop.js',

@@ -274,7 +274,9 @@ scoped to the ES5.1 engine and shared with the parallel lexical-declarations
   ES2015 own-property-key order
 - `vendor/test262/test/language/expressions/object/{getter,setter}-prop-desc.js`,
   `vendor/test262/test/language/expressions/object/{getter,setter}-super-prop.js` — method `[[HomeObject]]`/`super`
-- `vendor/test262/test/built-ins/Object/setPrototypeOf/**`, `vendor/test262/test/built-ins/Object/is/**` — the two new `Object` statics
+- `vendor/test262/test/built-ins/Object/setPrototypeOf/{o-not-obj-coercible,property-descriptor,set-failure-cycle,set-failure-non-extensible,success}.js`,
+  `vendor/test262/test/built-ins/Object/is/{length,name,not-same-value-x-y-number,not-same-value-x-y-object,object-is,same-value-x-y-number}.js` —
+  the two new `Object` statics
 
 Reproduce locally: `node test/run-ci-contract.js` (requires the pinned
 upstream checkout at `vendor/test262`; see the Test262 section above).

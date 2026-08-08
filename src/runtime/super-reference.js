@@ -71,6 +71,17 @@ export class SuperReferenceBase {
       strict,
     );
   }
+
+  /**
+   * @param {PropertyKey} _name
+   * @returns {never}
+   */
+  delete(_name) {
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      'Unsupported reference to a super property',
+    );
+  }
 }
 
 /**
@@ -116,7 +127,7 @@ export function setPropertyWithReceiver(
       name,
       value,
       throwOnError,
-      false,
+      true,
     );
   }
 

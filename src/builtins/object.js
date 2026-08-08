@@ -215,14 +215,25 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     'setPrototypeOf',
     2,
     (_this, args) => {
-      const target = requireObjectArgument(args[0]);
+      const target = args[0];
       const proto = args[1];
+
+      if (target === null || target === undefined) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          'Cannot convert undefined or null to object',
+        );
+      }
 
       if (proto !== null && !(proto instanceof EngineObject)) {
         throw new GuestErrorSignal(
           'TypeError',
           'Object prototype may only be an object or null',
         );
+      }
+
+      if (!(target instanceof EngineObject)) {
+        return target;
       }
 
       if (!target.setPrototypeOf(proto)) {

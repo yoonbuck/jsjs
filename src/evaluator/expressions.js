@@ -673,13 +673,14 @@ function evaluateNewExpression(node, context) {
  * @returns {unknown}
  */
 function referenceThisValue(reference) {
-  if (
-    reference instanceof Reference &&
-    reference.base instanceof EngineObject
-  ) {
-    return reference.thisValue === undefined
-      ? reference.base
-      : reference.thisValue;
+  if (reference instanceof Reference) {
+    if (reference.thisValue !== undefined) {
+      return reference.thisValue;
+    }
+
+    if (reference.base instanceof EngineObject) {
+      return reference.base;
+    }
   }
 
   // ECMA-262 5.1 §11.2.3 step 7 / §10.3.1: when the callee resolves through an
