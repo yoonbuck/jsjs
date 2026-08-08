@@ -268,13 +268,13 @@ hand-picked set of upstream Test262 files, run via `test/ci/es2015-object-functi
 scoped to the ES5.1 engine and shared with the parallel lexical-declarations
 (#41) and Symbols (#43) branches:
 
-- `test/language/expressions/function/name.js`, `test/language/statements/function/name.js`,
-  `test/built-ins/Function/prototype/bind/{name,length}.js` — function `name`/`length` semantics
-- `test/built-ins/Object/keys/return-order.js`, `test/built-ins/Object/getOwnPropertyNames/order-after-define-property.js` —
+- `vendor/test262/test/language/expressions/function/name.js`, `vendor/test262/test/language/statements/function/name.js`,
+  `vendor/test262/test/built-ins/Function/prototype/bind/{name,length}.js` — function `name`/`length` semantics
+- `vendor/test262/test/built-ins/Object/keys/return-order.js`, `vendor/test262/test/built-ins/Object/getOwnPropertyNames/order-after-define-property.js` —
   ES2015 own-property-key order
-- `test/language/expressions/object/{getter,setter}-prop-desc.js`,
-  `test/language/expressions/object/{getter,setter}-super-prop.js` — method `[[HomeObject]]`/`super`
-- `test/built-ins/Object/setPrototypeOf/**`, `test/built-ins/Object/is/**` — the two new `Object` statics
+- `vendor/test262/test/language/expressions/object/{getter,setter}-prop-desc.js`,
+  `vendor/test262/test/language/expressions/object/{getter,setter}-super-prop.js` — method `[[HomeObject]]`/`super`
+- `vendor/test262/test/built-ins/Object/setPrototypeOf/**`, `vendor/test262/test/built-ins/Object/is/**` — the two new `Object` statics
 
 Reproduce locally: `node test/run-ci-contract.js` (requires the pinned
 upstream checkout at `vendor/test262`; see the Test262 section above).
