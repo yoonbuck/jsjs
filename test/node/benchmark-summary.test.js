@@ -219,6 +219,11 @@ const tests = [
           'Expected benchmark summary command to return one summary',
         );
       }
+      if ('acceptance' in summaryResult) {
+        throw new Error(
+          'Expected benchmark summary command to return a summary, not a comparison',
+        );
+      }
 
       const persistedSummary = JSON.parse(
         await readFile(new URL('summary.json', directoryUrl), 'utf8'),

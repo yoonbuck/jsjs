@@ -21,6 +21,7 @@
     "benchmark:jsc": "node benchmark/cli.js run --host=jsc",
     "benchmark:smoke": "node benchmark/cli.js run --host=node --profile=smoke --output=.benchmark-results/smoke",
     "benchmark:summary": "node benchmark/cli.js summary",
+    "benchmark:compare": "node benchmark/cli.js compare",
     "profile:node": "node benchmark/profile/cli.js --host=node",
     "profile:browser": "node benchmark/profile/cli.js --host=chromium",
     "profile:smoke": "node benchmark/profile/cli.js --host=node --workload=arithmetic-loops --mode=steady --metric=cpu --run-id=profile-smoke --warmups=1 --iterations=1 --output=.benchmark-results/profile-smoke",

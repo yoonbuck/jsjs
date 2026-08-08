@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { compareManifestFile, splitOutputBase } from './compare.js';
 import { resolveBenchmarkConfig } from './config.js';
 import {
   writeHostReportsAtomically,
   resolveOutputDirectory,
+  resolveRepositoryFile,
 } from './output.js';
 import { runChromiumBenchmark } from './run-browser.js';
 import { runJscBenchmark } from './spawn-jsc.js';
@@ -29,6 +31,7 @@ const RUN_OPTIONS = new Set([
   'output',
 ]);
 const SUMMARY_OPTIONS = new Set(['input', 'output']);
+const COMPARE_OPTIONS = new Set(['manifest', 'output', 'seed', 'resamples']);
 
 const DEFAULT_RUNNERS = Object.freeze({
   node: runNodeBenchmark,
@@ -61,6 +64,12 @@ if (isMain(process.argv[1])) {
  *   command: 'summary',
  *   inputDirectory: string,
  *   outputDirectory: string,
+ * } | {
+ *   command: 'compare',
+ *   manifestPath: string,
+ *   outputBase: string,
+ *   seed?: number,
+ *   resamples?: number,
  * }}
  */
 export function parseBenchmarkArguments(argv) {
@@ -75,6 +84,8 @@ export function parseBenchmarkArguments(argv) {
       return parseRunArguments(argumentsList);
     case 'summary':
       return parseSummaryArguments(argumentsList);
+    case 'compare':
+      return parseCompareArguments(argumentsList);
     default:
       throw new Error(`Unknown benchmark command: ${command}`);
   }
@@ -240,6 +251,81 @@ function parseSummaryArguments(argumentsList) {
 }
 
 /**
+ * @param {readonly string[]} argumentsList
+ * @returns {{
+ *   command: 'compare',
+ *   manifestPath: string,
+ *   outputBase: string,
+ *   seed?: number,
+ *   resamples?: number,
+ * }}
+ */
+function parseCompareArguments(argumentsList) {
+  /** @type {string | undefined} */
+  let manifestPath;
+  /** @type {string | undefined} */
+  let outputBase;
+  /** @type {number | undefined} */
+  let seed;
+  /** @type {number | undefined} */
+  let resamples;
+
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    const argument = argumentsList[index];
+
+    if (!argument.startsWith('--')) {
+      throw new Error(`Unknown positional argument: ${argument}`);
+    }
+
+    const optionName = optionNameOf(argument);
+
+    if (!COMPARE_OPTIONS.has(optionName)) {
+      throw new Error(`Unknown option: --${optionName}`);
+    }
+
+    const option = readOption(argumentsList, index);
+
+    index = option.nextIndex;
+
+    switch (option.name) {
+      case 'manifest':
+        manifestPath = option.value;
+        break;
+      case 'output':
+        outputBase = option.value;
+        break;
+      case 'seed':
+        seed = integerOptionValue(option.value, 'seed');
+        break;
+      case 'resamples':
+        resamples = integerOptionValue(option.value, 'resamples');
+        break;
+      default:
+        throw new Error(`Unknown option: --${option.name}`);
+    }
+  }
+
+  if (manifestPath === undefined) {
+    throw new Error('At least one --manifest option is required');
+  }
+
+  if (outputBase === undefined) {
+    throw new Error('At least one --output option is required');
+  }
+
+  resolveRepositoryFile(manifestPath);
+  splitOutputBase(outputBase);
+
+  return {
+    command: 'compare',
+    manifestPath,
+    outputBase,
+    ...(seed === undefined ? {} : { seed }),
+    ...(resamples === undefined ? {} : { resamples }),
+  };
+}
+
+/**
  * @param {readonly string[]} argv
  * @param {{
  *   resolveConfig?: typeof resolveBenchmarkConfig,
@@ -248,8 +334,9 @@ function parseSummaryArguments(argumentsList) {
  *   runners?: Readonly<Record<BenchmarkHost, (config: ReturnType<typeof resolveBenchmarkConfig>, metadata: { generatedAt: string, runId: string, source: Readonly<{ gitCommit: string, gitDirty: false }> }) => Promise<unknown>>>,
  *   writeReports?: typeof writeHostReportsAtomically,
  *   summarizeDirectory?: typeof summarizeReportDirectory,
+ *   compareManifest?: typeof compareManifestFile,
  * }} [options]
- * @returns {Promise<unknown[] | Awaited<ReturnType<typeof summarizeReportDirectory>>>}
+ * @returns {Promise<unknown[] | Awaited<ReturnType<typeof summarizeReportDirectory>> | Awaited<ReturnType<typeof compareManifestFile>>>}
  */
 export async function main(argv, options = {}) {
   const parsed = parseBenchmarkArguments(argv);
@@ -258,6 +345,16 @@ export async function main(argv, options = {}) {
       options.summarizeDirectory ?? summarizeReportDirectory;
 
     return summarizeDirectory(parsed.inputDirectory, parsed.outputDirectory);
+  }
+
+  if (parsed.command === 'compare') {
+    const compareManifest = options.compareManifest ?? compareManifestFile;
+
+    return compareManifest(parsed.manifestPath, parsed.outputBase, {
+      seed: parsed.seed,
+      resamples: parsed.resamples,
+      generatedAt: new Date().toISOString(),
+    });
   }
 
   const resolveConfig = options.resolveConfig ?? resolveBenchmarkConfig;
@@ -392,6 +489,21 @@ function numericOptionValue(value, field) {
 
   if (!Number.isFinite(number)) {
     throw new RangeError(`${field} must be a finite number`);
+  }
+
+  return number;
+}
+
+/**
+ * @param {string} value
+ * @param {string} field
+ * @returns {number}
+ */
+function integerOptionValue(value, field) {
+  const number = Number(value);
+
+  if (!Number.isInteger(number)) {
+    throw new RangeError(`${field} must be an integer`);
   }
 
   return number;

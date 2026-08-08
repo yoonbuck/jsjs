@@ -44,14 +44,15 @@ paths that escape the repository are rejected.
 
 Pass extra benchmark CLI flags through npm with `--`.
 
-| Command                     | Behavior                                                                                                                                                                         |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run benchmark`         | Runs `node benchmark/cli.js run --host=all`, producing `node.json`, `chromium.json`, and `jsc.json` under `.benchmark-results/`.                                                 |
-| `npm run benchmark:node`    | Runs only the Node host and writes `.benchmark-results/node.json`.                                                                                                               |
-| `npm run benchmark:browser` | Runs only the Chromium host and writes `.benchmark-results/chromium.json`.                                                                                                       |
-| `npm run benchmark:jsc`     | Runs only the `jsc` host and writes `.benchmark-results/jsc.json`.                                                                                                               |
-| `npm run benchmark:smoke`   | Runs the Node-only smoke profile and writes `.benchmark-results/smoke/node.json`. This is the exact correctness-only command CI runs.                                            |
-| `npm run benchmark:summary` | Runs `node benchmark/cli.js summary`. Pass `--input` and optional `--output`, for example `npm run benchmark:summary -- --input=.benchmark-results --output=.benchmark-results`. |
+| Command                     | Behavior                                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run benchmark`         | Runs `node benchmark/cli.js run --host=all`, producing `node.json`, `chromium.json`, and `jsc.json` under `.benchmark-results/`.                                                                                         |
+| `npm run benchmark:node`    | Runs only the Node host and writes `.benchmark-results/node.json`.                                                                                                                                                       |
+| `npm run benchmark:browser` | Runs only the Chromium host and writes `.benchmark-results/chromium.json`.                                                                                                                                               |
+| `npm run benchmark:jsc`     | Runs only the `jsc` host and writes `.benchmark-results/jsc.json`.                                                                                                                                                       |
+| `npm run benchmark:smoke`   | Runs the Node-only smoke profile and writes `.benchmark-results/smoke/node.json`. This is the exact correctness-only command CI runs.                                                                                    |
+| `npm run benchmark:summary` | Runs `node benchmark/cli.js summary`. Pass `--input` and optional `--output`, for example `npm run benchmark:summary -- --input=.benchmark-results --output=.benchmark-results`.                                         |
+| `npm run benchmark:compare` | Runs `node benchmark/cli.js compare`. Pass `--manifest` and `--output`, for example `npm run benchmark:compare -- --manifest=.benchmark-results/issue-42/manifest.json --output=.benchmark-results/issue-42/comparison`. |
 
 Host-specific scripts already pass `--host`, and `benchmark:smoke` already passes
 `--host=node --profile=smoke --output=.benchmark-results/smoke`, so do not add a
@@ -159,6 +160,148 @@ Options:
 rejects reports from different `runId` or `generatedAt` values, including stale
 host JSON left from another run, then writes `summary.json` and `summary.csv`
 atomically.
+
+### `compare`
+
+```sh
+node benchmark/cli.js compare \
+  --manifest=.benchmark-results/issue-42/manifest.json \
+  --output=.benchmark-results/issue-42/comparison
+```
+
+Options:
+
+| Option                            | Meaning                                                                      |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| `--manifest=<repo-relative file>` | Required. Schema-versioned manifest naming targets and ordered pairs.        |
+| `--output=<repo-relative base>`   | Required. Writes `<base>.json` and `<base>.md`; needs an explicit directory. |
+| `--seed=<integer>`                | Optional. Bootstrap PRNG seed. Defaults to `420042`.                         |
+| `--resamples=<integer>`           | Optional. Bootstrap resamples. Defaults to `20000`.                          |
+
+`compare` never invents a threshold. It reads unmodified `run` capture roots,
+audits them, and decides whether a difference is real using repeated measurements
+alone. See [Comparing two revisions](#comparing-two-revisions) for the capture
+protocol and the statistical rule.
+
+## Comparing two revisions
+
+A single benchmark run cannot separate a code change from the machine's own
+drift. On this repository's own hardware, repeated captures of the _same_ commit
+have produced apparent per-cell deltas of up to ±8%, and a three-round capture
+once reported Node `arithmetic-loops` cold as +11.41% when twelve rounds put the
+same cell at +1.88% with a confidence interval spanning zero. `compare` exists so
+that number can never be read as a regression again.
+
+### Counterbalanced capture protocol
+
+1. Build and capture each revision with the ordinary `run` command, one output
+   root per revision per round, on an otherwise idle machine.
+2. Capture in rounds. Within a round, capture baseline and candidate back to
+   back so both see the same thermal and scheduler conditions.
+3. Alternate the order between rounds: baseline first in one round, candidate
+   first in the next. This counterbalancing is what stops the time slot inside a
+   round from aliasing the revision contrast.
+4. Collect at least six pairs. Fewer than six nonzero paired deltas cannot reach
+   an exact two-sided sign-test `p < 0.05` at any effect size, so smaller designs
+   are reported as `underpowered` by construction.
+5. Never edit the capture roots. `compare` re-validates every report and rejects
+   dirty sources, mixed commits, mixed configurations, and altered checksums.
+
+```sh
+# round 1: baseline first
+node benchmark/cli.js run --host=all --output=.benchmark-results/cmp/base-1
+node benchmark/cli.js run --host=all --output=.benchmark-results/cmp/cand-1
+# round 2: candidate first
+node benchmark/cli.js run --host=all --output=.benchmark-results/cmp/cand-2
+node benchmark/cli.js run --host=all --output=.benchmark-results/cmp/base-2
+```
+
+### Manifest
+
+```json
+{
+  "schemaVersion": 1,
+  "label": "issue-42 object and array hot paths",
+  "targets": [{ "workload": "object-properties" }, { "workload": "arrays" }],
+  "pairs": [
+    {
+      "round": 1,
+      "order": "baseline-candidate",
+      "baseline": ".benchmark-results/cmp/base-1",
+      "candidate": ".benchmark-results/cmp/cand-1"
+    },
+    {
+      "round": 2,
+      "order": "candidate-baseline",
+      "baseline": ".benchmark-results/cmp/base-2",
+      "candidate": ".benchmark-results/cmp/cand-2"
+    }
+  ]
+}
+```
+
+`targets` names the workloads the change is meant to speed up; each entry may
+narrow to a `host` or a `mode`. Every other cell is a non-target. `pairs` must
+list at least two pairs, and every capture root may appear only once.
+
+### Statistical rule
+
+A cell is one host, workload, and mode. Its per-run value is the median of
+`lanes.jsjs.normalizedSamplesMs`.
+
+- **Paired statistic.** Each round contributes one relative log ratio,
+  `log(candidate) - log(baseline)`. Pairing inside a round removes round-level
+  host drift, which was the dominant error in earlier analyses. The point
+  estimate is `exp(median(log ratios)) - 1`.
+- **Interval.** A deterministic paired bootstrap resamples whole pairs with
+  replacement from a seeded PRNG, so the same inputs always give the same
+  interval.
+- **Significance.** An exact two-sided sign test over the nonzero paired deltas.
+  No normal approximation, and no assumption that timings are symmetric.
+- **Measured noise envelope.** Within each revision, `compare` takes every
+  pairwise absolute log difference among that revision's repeated run medians,
+  pools the baseline and candidate self-differences, and reports the 95th
+  percentile as a relative percentage. This is the machine's own reproducibility
+  for that cell, measured from the same captures. It is never a configured
+  percentage.
+
+The verdict follows directly:
+
+| Verdict        | Condition                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `regression`   | Point estimate above zero, bootstrap interval entirely above zero, exact sign `p < 0.05`, magnitude beyond the measured noise envelope, both capture orders present, and enough pairs for exact significance. |
+| `improvement`  | The same conditions with the signs reversed.                                                                                                                                                                  |
+| `underpowered` | The interval excludes zero, but the sign test or the design cannot support a verdict.                                                                                                                         |
+| `within-noise` | Anything else.                                                                                                                                                                                                |
+
+An `underpowered` cell is never reported as a regression. That distinction is the
+whole point of the gate: an interval that excludes zero is not evidence when
+three pairs cannot produce a `p` below 0.25.
+
+### Aggregates and acceptance
+
+For each run, `compare` takes the geometric mean of the jsjs medians across every
+workload and mode of a host, then applies the identical paired statistic, noise
+envelope, and verdict. It repeats this across all hosts together. The acceptance
+block reports explicit booleans: whether every host geomean point estimate
+improves, whether every host geomean verdict is an improvement or within noise,
+how many non-target regressions were found, and whether the targets move beyond
+their own measured noise.
+
+Non-target workloads are expected to stay within measured noise. A statistically
+significant non-target regression is exceptional and is never approved by this
+tool. When one is found, the report emits an `exceptionalReview` block listing
+every condition that would have to hold: target gains materially larger than the
+regression, all-host aggregate geomeans improving, the tradeoff and root cause
+documented, conformance green, and final review approving. The tool answers only
+the two conditions it can measure and marks the rest as requiring a human.
+
+### Artifacts
+
+`compare` writes `<output>.json` and `<output>.md`. The JSON carries
+`schemaVersion`, the methodology block, the audit, warnings, per-run medians,
+every cell, non-target regressions, targets, host and all-host aggregates, and
+the acceptance summary. The Markdown is the same content in review form.
 
 ## Workloads and profiles
 

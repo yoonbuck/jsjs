@@ -68,6 +68,7 @@ declarations. See
 | `npm run benchmark:jsc`     | Benchmark only the `jsc` host                                  |
 | `npm run benchmark:smoke`   | Correctness-only Node smoke benchmark                          |
 | `npm run benchmark:summary` | Aggregate compatible host reports into JSON and CSV            |
+| `npm run benchmark:compare` | Gate repeated counterbalanced captures for a real difference   |
 
 The full command list, Test262 runner options, suite organization, CI jobs, and
 troubleshooting are in [docs/testing.md](docs/testing.md). Benchmark
