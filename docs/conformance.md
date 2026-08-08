@@ -343,8 +343,8 @@ upstream checkout at `vendor/test262`; see the Test262 section above).
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 12,033   | 12,033    | 12,033 | 22.46%  |
-| (file, variant) | 102,906     | 22,900   | 22,900    | 22,900 | 22.253% |
+| Files           | 53,575      | 12,092   | 12,092    | 12,092 | 22.57%  |
+| (file, variant) | 102,906     | 23,013   | 23,013    | 23,013 | 22.363% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).

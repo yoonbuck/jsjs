@@ -69,16 +69,6 @@
   ],
   "exclusions": [
     {
-      "path": "test/annexB/built-ins/RegExp/incomplete_hex_unicode_escape.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.10.1 requires `HexEscapeSequence :: x HexDigit HexDigit` and `UnicodeEscapeSequence :: u HexDigit HexDigit HexDigit HexDigit`, and `IdentityEscape` cannot rescue `/\\x/` or `/\\u/` because `x` and `u` are IdentifierPart, so no ES5.1 parse exists. ES2015 Annex B B.1.4 lets an incomplete escape fall back to an identity escape; ES5.1 has no Annex B RegExp grammar at all."
-    },
-    {
-      "prefix": "test/annexB/built-ins/RegExp/prototype/compile",
-      "category": "post-es5-semantics",
-      "reason": "`RegExp.prototype.compile` is an ES2015 Annex B addition (ES2015 §B.2.5.1); ES5.1 §15.10 defines no such method."
-    },
-    {
       "path": "test/annexB/built-ins/RegExp/RegExp-decimal-escape-class-range.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.2.19 `ClassEscape :: DecimalEscape` evaluates the escape and throws a SyntaxError unless the result is a single character, so `/[\\d][\\12-\\14]{1,}/`'s `\\12` (a backreference with no 12th group) is a mandatory ES5.1 SyntaxError. ES2015 Annex B B.1.4 added `ClassAtomNoDashInRange :: \\ ClassEscape` leniency that reinterprets it as a legacy octal; ES5.1 has no Annex B RegExp grammar at all."
@@ -107,6 +97,16 @@
       "path": "test/annexB/built-ins/RegExp/RegExp-trailing-escape.js",
       "category": "post-es5-semantics",
       "reason": "Identical to `RegExp-leading-escape.js` with a leading literal character: `/a\\1/` is §15.10.2.9 and `/a\\a/` is §15.10.1 `IdentityEscape`, both mandatory ES5.1 SyntaxErrors. ES2015 Annex B B.1.4 added the leniency; ES5.1 has no Annex B RegExp grammar at all."
+    },
+    {
+      "path": "test/annexB/built-ins/RegExp/incomplete_hex_unicode_escape.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.10.1 requires `HexEscapeSequence :: x HexDigit HexDigit` and `UnicodeEscapeSequence :: u HexDigit HexDigit HexDigit HexDigit`, and `IdentityEscape` cannot rescue `/\\x/` or `/\\u/` because `x` and `u` are IdentifierPart, so no ES5.1 parse exists. ES2015 Annex B B.1.4 lets an incomplete escape fall back to an identity escape; ES5.1 has no Annex B RegExp grammar at all."
+    },
+    {
+      "prefix": "test/annexB/built-ins/RegExp/prototype/compile",
+      "category": "post-es5-semantics",
+      "reason": "`RegExp.prototype.compile` is an ES2015 Annex B addition (ES2015 §B.2.5.1); ES5.1 §15.10 defines no such method."
     },
     {
       "prefix": "test/annexB/built-ins/String/prototype/anchor",
@@ -459,11 +459,6 @@
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
-      "path": "test/built-ins/Array/prototype/push/length-near-integer-limit-set-failure.js",
-      "category": "post-es5-semantics",
-      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
       "path": "test/built-ins/Array/prototype/push/S15.4.4.7_A2_T2.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
@@ -477,6 +472,11 @@
       "path": "test/built-ins/Array/prototype/push/S15.4.4.7_A4_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
+    },
+    {
+      "path": "test/built-ins/Array/prototype/push/length-near-integer-limit-set-failure.js",
+      "category": "post-es5-semantics",
+      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
     },
     {
       "path": "test/built-ins/Array/prototype/reduce/15.4.4.21-3-12.js",
@@ -524,6 +524,11 @@
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
+      "path": "test/built-ins/Array/prototype/slice/S15.4.4.10_A3_T3.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
+    },
+    {
       "path": "test/built-ins/Array/prototype/slice/create-ctor-non-object.js",
       "category": "post-es5-semantics",
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
@@ -537,11 +542,6 @@
       "path": "test/built-ins/Array/prototype/slice/create-non-array-invalid-len.js",
       "category": "post-es5-semantics",
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/slice/S15.4.4.10_A3_T3.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
       "path": "test/built-ins/Array/prototype/some/15.4.4.17-3-12.js",
@@ -584,6 +584,16 @@
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
     },
     {
+      "path": "test/built-ins/Array/prototype/splice/S15.4.4.12_A3_T1.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/S15.4.4.12_A3_T3.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
+    },
+    {
       "path": "test/built-ins/Array/prototype/splice/create-ctor-non-object.js",
       "category": "post-es5-semantics",
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
@@ -599,22 +609,12 @@
       "reason": "Uses ES2015 `ArraySpeciesCreate`/`@@species` (ES2015 §7.3.20, §22.1.3); ES5.1 §15.4.4 constructs a plain Array with no species hook."
     },
     {
-      "path": "test/built-ins/Array/prototype/splice/S15.4.4.12_A3_T1.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/splice/S15.4.4.12_A3_T3.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js",
+      "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.4.4.3 steps 8.a-8.d (and 10.d.i-10.d.iv for the tail) box each element with `ToObject` and invokes `toLocaleString` on that wrapper, so a strict override observes an object `this` (\"object,object\"); ES2015 §22.1.3.26 dropped the boxing and invokes on the raw primitive (\"boolean,boolean\"), which the test pins via `es6id: 22.1.3.26`. This engine implements the ES5.1 algorithm, so the expectation is unreachable by any ES5.1-compliant engine."
     },
     {
-      "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js",
+      "path": "test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.4.4.3 steps 8.a-8.d (and 10.d.i-10.d.iv for the tail) box each element with `ToObject` and invokes `toLocaleString` on that wrapper, so a strict override observes an object `this` (\"object,object\"); ES2015 §22.1.3.26 dropped the boxing and invokes on the raw primitive (\"boolean,boolean\"), which the test pins via `es6id: 22.1.3.26`. This engine implements the ES5.1 algorithm, so the expectation is unreachable by any ES5.1-compliant engine."
     },
@@ -627,6 +627,11 @@
       "prefix": "test/built-ins/Array/prototype/values",
       "category": "post-es5-builtin",
       "reason": "`Array.prototype.values` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "path": "test/built-ins/Date/UTC/return-value.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.9.4.3 defines `Date.UTC(year, month [, date [, hours [, minutes [, seconds [, ms]]]]])`, so `month` is required and `Date.UTC(1970)` computes `ToNumber(undefined)` = NaN; ES2015 §20.3.3.4 made every argument after `year` optional. The test asserts the ES2015 default of `Date.UTC(1970) === 0`."
     },
     {
       "path": "test/built-ins/Date/construct_with_date.js",
@@ -644,14 +649,14 @@
       "reason": "ES5.1 §15.9.5 makes `Date.prototype` itself a Date object, so `Date.prototype.setFullYear(2012)` sets its [[PrimitiveValue]] and returns a time value; ES2015 §20.3.4 made it an ordinary object, so the method throws TypeError. Despite the ES5-style filename the assertion encodes the ES2015 rule."
     },
     {
-      "path": "test/built-ins/Date/UTC/return-value.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.9.4.3 defines `Date.UTC(year, month [, date [, hours [, minutes [, seconds [, ms]]]]])`, so `month` is required and `Date.UTC(1970)` computes `ToNumber(undefined)` = NaN; ES2015 §20.3.3.4 made every argument after `year` optional. The test asserts the ES2015 default of `Date.UTC(1970) === 0`."
-    },
-    {
       "path": "test/built-ins/Error/prototype/S15.11.4_A2.js",
       "category": "post-es5-builtin",
       "reason": "`Error.prototype.S15.11.4_A2` is a built-in ES5.1 does not define; ES5.1 §15.11.4 enumerates the complete Error.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "path": "test/built-ins/Function/StrictFunction_restricted-properties.js",
+      "category": "post-es5-builtin",
+      "reason": "`Function.StrictFunction_restricted-properties` is a built-in ES5.1 does not define; ES5.1 §15.3.3 enumerates the complete Function member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
       "path": "test/built-ins/Function/prototype/bind/BoundFunction_restricted-properties.js",
@@ -672,11 +677,6 @@
       "path": "test/built-ins/Function/prototype/name.js",
       "category": "post-es5-builtin",
       "reason": "`Function.prototype.name` is a built-in ES5.1 does not define; ES5.1 §15.3.4 enumerates the complete Function.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/Function/StrictFunction_restricted-properties.js",
-      "category": "post-es5-builtin",
-      "reason": "`Function.StrictFunction_restricted-properties` is a built-in ES5.1 does not define; ES5.1 §15.3.3 enumerates the complete Function member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
       "prefix": "test/built-ins/Math/acosh",
@@ -834,26 +834,6 @@
       "reason": "`Number.EPSILON` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "prefix": "test/built-ins/Number/isFinite",
-      "category": "post-es5-builtin",
-      "reason": "`Number.isFinite` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "prefix": "test/built-ins/Number/isInteger",
-      "category": "post-es5-builtin",
-      "reason": "`Number.isInteger` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "prefix": "test/built-ins/Number/isNaN",
-      "category": "post-es5-builtin",
-      "reason": "`Number.isNaN` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "prefix": "test/built-ins/Number/isSafeInteger",
-      "category": "post-es5-builtin",
-      "reason": "`Number.isSafeInteger` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
       "path": "test/built-ins/Number/MAX_SAFE_INTEGER.js",
       "category": "post-es5-builtin",
       "reason": "`Number.MAX_SAFE_INTEGER` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
@@ -872,6 +852,26 @@
       "path": "test/built-ins/Number/MIN_VALUE/value.js",
       "category": "post-es5-semantics",
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
+    },
+    {
+      "prefix": "test/built-ins/Number/isFinite",
+      "category": "post-es5-builtin",
+      "reason": "`Number.isFinite` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "prefix": "test/built-ins/Number/isInteger",
+      "category": "post-es5-builtin",
+      "reason": "`Number.isInteger` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "prefix": "test/built-ins/Number/isNaN",
+      "category": "post-es5-builtin",
+      "reason": "`Number.isNaN` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "prefix": "test/built-ins/Number/isSafeInteger",
+      "category": "post-es5-builtin",
+      "reason": "`Number.isSafeInteger` is a built-in ES5.1 does not define; ES5.1 §15.7.3 enumerates the complete Number member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
       "path": "test/built-ins/Number/parseFloat.js",
@@ -1164,12 +1164,12 @@
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
     },
     {
-      "path": "test/built-ins/Object/prototype/toLocaleString/primitive_this_value_getter.js",
+      "path": "test/built-ins/Object/prototype/toLocaleString/primitive_this_value.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.2.4.3 `Object.prototype.toLocaleString` does `ToObject(this)` (step 1) and calls `toString` on that wrapper, so a strict `toString` override observes an object `this` (\"object\"); ES2015 §19.1.3.5 removed the `ToObject` and passes the primitive through (\"boolean\"). This engine returns the ES5.1 \"object\"."
     },
     {
-      "path": "test/built-ins/Object/prototype/toLocaleString/primitive_this_value.js",
+      "path": "test/built-ins/Object/prototype/toLocaleString/primitive_this_value_getter.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.2.4.3 `Object.prototype.toLocaleString` does `ToObject(this)` (step 1) and calls `toString` on that wrapper, so a strict `toString` override observes an object `this` (\"object\"); ES2015 §19.1.3.5 removed the `ToObject` and passes the primitive through (\"boolean\"). This engine returns the ES5.1 \"object\"."
     },
@@ -1309,6 +1309,26 @@
       "reason": "`RegExp.15.10.4.1-1` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
+      "path": "test/built-ins/RegExp/S15.10.3.1_A2_T1.js",
+      "category": "post-es5-builtin",
+      "reason": "`RegExp.S15.10.3.1_A2_T1` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "path": "test/built-ins/RegExp/S15.10.3.1_A2_T2.js",
+      "category": "post-es5-builtin",
+      "reason": "`RegExp.S15.10.3.1_A2_T2` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "path": "test/built-ins/RegExp/S15.10.4.1_A2_T1.js",
+      "category": "post-es5-builtin",
+      "reason": "`RegExp.S15.10.4.1_A2_T1` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "path": "test/built-ins/RegExp/S15.10.4.1_A2_T2.js",
+      "category": "post-es5-builtin",
+      "reason": "`RegExp.S15.10.4.1_A2_T2` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
       "path": "test/built-ins/RegExp/call_with_regexp_not_same_constructor.js",
       "category": "post-es5-builtin",
       "reason": "`RegExp.call_with_regexp_not_same_constructor` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
@@ -1319,12 +1339,12 @@
       "reason": "`RegExp.prototype.15.10.6` is a built-in ES5.1 does not define; ES5.1 §15.10.6 enumerates the complete RegExp.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/RegExp/prototype/exec/failure-lastindex-access.js",
+      "path": "test/built-ins/RegExp/prototype/exec/S15.10.6.2_A5_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.6.2 coerces `lastIndex` with `ToInteger` and returns null when the index is negative or past the input; ES2015 §21.2.5.2.2 uses `ToLength`, clamping a negative `lastIndex` to 0."
     },
     {
-      "path": "test/built-ins/RegExp/prototype/exec/S15.10.6.2_A5_T3.js",
+      "path": "test/built-ins/RegExp/prototype/exec/failure-lastindex-access.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.6.2 coerces `lastIndex` with `ToInteger` and returns null when the index is negative or past the input; ES2015 §21.2.5.2.2 uses `ToLength`, clamping a negative `lastIndex` to 0."
     },
@@ -1354,17 +1374,17 @@
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
     {
+      "path": "test/built-ins/RegExp/prototype/global/S15.10.7.2_A9.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
+    },
+    {
       "path": "test/built-ins/RegExp/prototype/global/length.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
     {
       "path": "test/built-ins/RegExp/prototype/global/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
-    },
-    {
-      "path": "test/built-ins/RegExp/prototype/global/S15.10.7.2_A9.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
@@ -1379,17 +1399,17 @@
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
     {
+      "path": "test/built-ins/RegExp/prototype/ignoreCase/S15.10.7.3_A9.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
+    },
+    {
       "path": "test/built-ins/RegExp/prototype/ignoreCase/length.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
     {
       "path": "test/built-ins/RegExp/prototype/ignoreCase/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
-    },
-    {
-      "path": "test/built-ins/RegExp/prototype/ignoreCase/S15.10.7.3_A9.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
@@ -1404,17 +1424,17 @@
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
     {
+      "path": "test/built-ins/RegExp/prototype/multiline/S15.10.7.4_A9.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
+    },
+    {
       "path": "test/built-ins/RegExp/prototype/multiline/length.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
     {
       "path": "test/built-ins/RegExp/prototype/multiline/name.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
-    },
-    {
-      "path": "test/built-ins/RegExp/prototype/multiline/S15.10.7.4_A9.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.10.7 defines `source`/`global`/`ignoreCase`/`multiline`/`lastIndex` as own data properties of each RegExp instance; ES2015 §21.2.5 moved them to `RegExp.prototype` accessor properties."
     },
@@ -1497,26 +1517,6 @@
       "path": "test/built-ins/RegExp/quantifier-integer-limit.js",
       "category": "post-es5-builtin",
       "reason": "`RegExp.quantifier-integer-limit` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/RegExp/S15.10.3.1_A2_T1.js",
-      "category": "post-es5-builtin",
-      "reason": "`RegExp.S15.10.3.1_A2_T1` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/RegExp/S15.10.3.1_A2_T2.js",
-      "category": "post-es5-builtin",
-      "reason": "`RegExp.S15.10.3.1_A2_T2` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/RegExp/S15.10.4.1_A2_T1.js",
-      "category": "post-es5-builtin",
-      "reason": "`RegExp.S15.10.4.1_A2_T1` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
-      "path": "test/built-ins/RegExp/S15.10.4.1_A2_T2.js",
-      "category": "post-es5-builtin",
-      "reason": "`RegExp.S15.10.4.1_A2_T2` is a built-in ES5.1 does not define; ES5.1 §15.10 enumerates the complete RegExp member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
       "path": "test/built-ins/RegExp/valid-flags-y.js",
@@ -1604,11 +1604,6 @@
       "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
     },
     {
-      "path": "test/built-ins/Symbol/prototype/intrinsic.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
-    },
-    {
       "path": "test/built-ins/Symbol/prototype/Symbol.toPrimitive/length.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
@@ -1617,6 +1612,11 @@
       "path": "test/built-ins/Symbol/prototype/Symbol.toPrimitive/name.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
+    },
+    {
+      "path": "test/built-ins/Symbol/prototype/intrinsic.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
     },
     {
       "path": "test/built-ins/Symbol/prototype/toString/length.js",
@@ -1734,6 +1734,21 @@
       "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
     },
     {
+      "path": "test/language/expressions/object/11.1.5-2gs.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §11.1.5 rule 4 makes duplicate data/accessor property names in an object literal a `SyntaxError` (data+accessor and, in strict mode, data+data); ES2015 §12.2.6 removed those restrictions."
+    },
+    {
+      "path": "test/language/expressions/object/11.1.5_4-4-a-3.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §11.1.5 rule 4 makes duplicate data/accessor property names in an object literal a `SyntaxError` (data+accessor and, in strict mode, data+data); ES2015 §12.2.6 removed those restrictions."
+    },
+    {
+      "path": "test/language/expressions/object/11.1.5_4-4-b-1.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §11.1.5 rule 4 makes duplicate data/accessor property names in an object literal a `SyntaxError` (data+accessor and, in strict mode, data+data); ES2015 §12.2.6 removed those restrictions."
+    },
+    {
       "path": "test/language/expressions/object/__proto__-duplicate.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 Annex B B.3.1 gives `__proto__:` in an object literal prototype-mutation semantics; ES5.1 §11.1.5 treats `__proto__` as an ordinary own property, which is what this engine does."
@@ -1752,21 +1767,6 @@
       "path": "test/language/expressions/object/__proto__-value-obj.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 Annex B B.3.1 gives `__proto__:` in an object literal prototype-mutation semantics; ES5.1 §11.1.5 treats `__proto__` as an ordinary own property, which is what this engine does."
-    },
-    {
-      "path": "test/language/expressions/object/11.1.5_4-4-a-3.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §11.1.5 rule 4 makes duplicate data/accessor property names in an object literal a `SyntaxError` (data+accessor and, in strict mode, data+data); ES2015 §12.2.6 removed those restrictions."
-    },
-    {
-      "path": "test/language/expressions/object/11.1.5_4-4-b-1.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §11.1.5 rule 4 makes duplicate data/accessor property names in an object literal a `SyntaxError` (data+accessor and, in strict mode, data+data); ES2015 §12.2.6 removed those restrictions."
-    },
-    {
-      "path": "test/language/expressions/object/11.1.5-2gs.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §11.1.5 rule 4 makes duplicate data/accessor property names in an object literal a `SyntaxError` (data+accessor and, in strict mode, data+data); ES2015 §12.2.6 removed those restrictions."
     },
     {
       "path": "test/language/expressions/object/prop-dup-data-data.js",
@@ -2334,11 +2334,6 @@
       "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
     },
     {
-      "path": "test/staging/sm/class/newTargetProxyNative.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
-    },
-    {
       "path": "test/staging/sm/DataView/getter-name.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `DataView`, an ES2015 builtin absent from ES5.1."
@@ -2357,6 +2352,346 @@
       "path": "test/staging/sm/Date/prototype-is-not-a-date.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
+    },
+    {
+      "path": "test/staging/sm/Function/10.2.1.1.6.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 Annex B B.3.3 block-level function-declaration semantics (Web-compat hoisting/scoping); ES5.1 §12/§10.5 has no such semantics."
+    },
+    {
+      "path": "test/staging/sm/Function/arguments-caller-callee.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts the ES2017+ restricted-property (\"poison pill\") wording change for `arguments.callee`/`.caller` in strict mode; the underlying restriction is already ES5.1 §10.6, but this test's exact error-message/attribute expectations track post-ES5 spec refinements to that mechanism."
+    },
+    {
+      "path": "test/staging/sm/Function/arguments-property-attributes.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts ES2017+ refinements to the `arguments.callee`/`.caller` poison-pill accessor's exact property attributes; ES5.1 §10.6 defines the poison pill but with different attribute details than later editions."
+    },
+    {
+      "path": "test/staging/sm/Function/builtin-no-construct.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Function/configurable-length.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.3.5.1 gives every built-in/user function a `length` that is {writable:false, enumerable:false, configurable:false}; ES2015 §19.2.4 made `length` configurable, so `delete fn.length` succeeding is post-ES5."
+    },
+    {
+      "path": "test/staging/sm/Function/function-toString-builtin-name.js",
+      "category": "host-dependent",
+      "reason": "Asserts an exact `Function.prototype.toString` decompilation format (source-text reproduction down to whitespace/comment/directive placement); ES5.1 §15.3.4.2 leaves the returned string wholly implementation-defined, so the exact textual format is a host/engine detail, not an ES5.1-mandated behavior."
+    },
+    {
+      "path": "test/staging/sm/JSON/stringify-special-escapes.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2019's \"well-formed JSON.stringify\" proposal added `\\uXXXX` escaping of lone/unpaired surrogates; ES5.1 §15.12.3's `Quote` algorithm only escapes control characters, `\"`, and `\\`, passing an unpaired surrogate through unescaped -- this engine already implements the ES5.1-faithful (pre-ES2019) behavior, which this test does not expect."
+    },
+    {
+      "path": "test/staging/sm/Map/NaN-as-key.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Map/forEach-selfhosted-behavior.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Map/getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/acosh-exact.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/asinh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.asinh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/atanh-exact.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/cbrt-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.cbrt`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/clz32.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.clz32`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/cosh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.cosh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/expm1-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.expm1`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/expm1-monotonicity.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.expm1`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/fround.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.fround`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/log10-approx.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/log10-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.log10`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/log1p-exact.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/log2-approx.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Math/log2-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.log2`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/sign.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.sign`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/sinh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.sinh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/tanh-exact.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Math.tanh`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Math/trunc.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/Number/15.7.3.7-EPSILON.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.EPSILON`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/20.1.2.10-MIN_SAFE_INTEGER.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.MIN_SAFE_INTEGER`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/20.1.2.6-MAX_SAFE_INTEGER.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.MAX_SAFE_INTEGER`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/isSafeInteger-01.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.isSafeInteger`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Number/parseFloat-01.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.parseFloat`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseFloat`)."
+    },
+    {
+      "path": "test/staging/sm/Number/parseInt-01.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.parseInt`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseInt`)."
+    },
+    {
+      "path": "test/staging/sm/Number/parseInt-default-to-decimal.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Number.parseInt`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseInt`)."
+    },
+    {
+      "path": "test/staging/sm/Promise/bug-1287334.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Promise/bug-1289040.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Promise/methods-non-enumerable.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/proxy-__proto__.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/proxy-constructNonObject.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/regress-bug950407.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/revoke-no-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/exec.js",
+      "category": "post-es5-semantics",
+      "reason": "Asserts that a non-global regexp's failed `exec` call leaves an out-of-range `lastIndex` untouched (e.g. `lastIndex = -17` stays `-17` after a failed match). ES5.1 §15.10.6.2 step 9.a.i unconditionally resets `lastIndex` to 0 on total match failure -- the algorithm's `Repeat` loop performs `[[Put]](\"lastIndex\", 0, true)` and returns `null` whenever the search index runs out of range, with no `global` guard on that step; only the *success* path's `lastIndex` update (step 11, \"If global is true ... [[Put]] ... e\") is conditioned on `global`. This test's own embedded copy of the ES5.1 algorithm (in its header comment) confirms step 9.a.i is unconditional, yet its assertions expect the reset to be skipped for non-global regexps -- a SpiderMonkey-specific behavior (bugzilla.mozilla.org/show_bug.cgi?id=646490) that predates and diverges from the ES5.1-mandated algorithm this engine implements."
+    },
+    {
+      "path": "test/staging/sm/RegExp/getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/match.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace-compile-elembase.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace-compile.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace-sticky.js",
+      "category": "post-es5-syntax",
+      "reason": "Uses the `y` (sticky) RegExp flag, added by ES2015; ES5.1 §15.10.4.1 defines only the `g`/`i`/`m` flags."
+    },
+    {
+      "path": "test/staging/sm/RegExp/replace.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/RegExp/search.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/codePointAt.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.prototype.codePointAt`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/fromCodePoint.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.fromCodePoint`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/match-forward-lookahead.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.5.4.10 step 8.f.iii.2's global-match loop bumps `lastIndex` only by comparing the post-match `lastIndex` against the value it held before the current `exec()` call (`thisIndex === previousLastIndex`), not by checking whether the match itself was empty; ES2015+ replaced this with an `AdvanceStringIndex`-based check that behaves differently for adjacent zero-width matches. This engine already implements the ES5.1-faithful algorithm (see `test/string-regexp.test.js`), which yields 4 matches for `/(?=x)/g` here rather than the ES2015+ count of 2 this test expects."
+    },
+    {
+      "path": "test/staging/sm/String/raw.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.raw`, an ES2015 builtin (introduced for tagged templates) absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/replace-math.js",
+      "category": "host-dependent",
+      "reason": "Constructs a replacement string large enough to overflow this engine's maximum string length, throwing a host `RangeError`; ES5.1 imposes no maximum string length, so exactly how large a string an implementation can allocate before failing is implementation-defined."
+    },
+    {
+      "path": "test/staging/sm/String/replace-updates-global-lastIndex.js",
+      "category": "post-es5-semantics",
+      "reason": "ES5.1 §15.5.4.11's RegExp branch does the search \"in the same manner as in String.prototype.match, including the update of `lastIndex`\" (this engine's `replaceWithRegExp` implements exactly that, see `src/builtins/string-regexp.js`), so `lastIndex` is updated to each match's end position before every replacer-callback invocation, per the ES5.1-mandated algorithm. This test instead expects `lastIndex` to stay whatever the replacer callback itself last set it to, unaffected by the engine's internal search progress -- a SpiderMonkey-specific internal-search optimization that later editions' spec text does not require either, but that this ES5.1-faithful implementation does not reproduce."
+    },
+    {
+      "path": "test/staging/sm/String/string-code-point-upper-lower-mapping.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `String.fromCodePoint`/`String.prototype.codePointAt`, ES2015 builtins absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/String/string-upper-lower-mapping.js",
+      "category": "host-dependent",
+      "reason": "A 40,000+ case, machine-generated `toUpperCase`/`toLowerCase` table sourced from a specific, recent Unicode Character Database version (the file's own header records \"Unicode version: 17.0.0\"); ES5.1 §15.5.4.16-18 requires following \"the Unicode Character Database\" without pinning a version, so the exact case-mapping table is host/engine-specific and tracks whichever Unicode version an implementation ships."
+    },
+    {
+      "path": "test/staging/sm/Symbol/equality.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Symbol/realms.js",
+      "category": "host-dependent",
+      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/constructor-undefined-args.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/element-setting-converts-using-ToNumber.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/indexOf-never-returns-negative-zero.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/lastIndexOf-never-returns-negative-zero.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/prototype-constructor-identity.js",
+      "category": "post-es5-syntax",
+      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/set-negative-offset.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (`ArrayBuffer`/typed arrays), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/TypedArray/set-same-buffer-different-source-target-types.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/class/newTargetProxyNative.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/eval/line-terminator-paragraph-terminator.js",
@@ -2392,6 +2727,16 @@
       "path": "test/staging/sm/expressions/object-literal-__proto__.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 Annex B B.3.1 gives `__proto__:` in an object literal prototype-mutation semantics; ES5.1 §11.1.5 treats `__proto__` as an ordinary own property, which is what this engine does."
+    },
+    {
+      "path": "test/staging/sm/extensions/TypedArray-set-object-funky-length-detaches.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/extensions/TypedArray-subarray-arguments-detaching.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/extensions/__proto__.js",
@@ -2534,59 +2879,14 @@
       "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
     },
     {
-      "path": "test/staging/sm/extensions/TypedArray-set-object-funky-length-detaches.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/extensions/TypedArray-subarray-arguments-detaching.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
-    },
-    {
       "path": "test/staging/sm/extensions/typedarray-subarray-of-subarray.js",
       "category": "post-es5-builtin",
       "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
     },
     {
-      "path": "test/staging/sm/Function/10.2.1.1.6.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 Annex B B.3.3 block-level function-declaration semantics (Web-compat hoisting/scoping); ES5.1 §12/§10.5 has no such semantics."
-    },
-    {
-      "path": "test/staging/sm/Function/arguments-caller-callee.js",
-      "category": "post-es5-semantics",
-      "reason": "Asserts the ES2017+ restricted-property (\"poison pill\") wording change for `arguments.callee`/`.caller` in strict mode; the underlying restriction is already ES5.1 §10.6, but this test's exact error-message/attribute expectations track post-ES5 spec refinements to that mechanism."
-    },
-    {
-      "path": "test/staging/sm/Function/arguments-property-attributes.js",
-      "category": "post-es5-semantics",
-      "reason": "Asserts ES2017+ refinements to the `arguments.callee`/`.caller` poison-pill accessor's exact property attributes; ES5.1 §10.6 defines the poison pill but with different attribute details than later editions."
-    },
-    {
-      "path": "test/staging/sm/Function/builtin-no-construct.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Function/configurable-length.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.3.5.1 gives every built-in/user function a `length` that is {writable:false, enumerable:false, configurable:false}; ES2015 §19.2.4 made `length` configurable, so `delete fn.length` succeeding is post-ES5."
-    },
-    {
-      "path": "test/staging/sm/Function/function-toString-builtin-name.js",
-      "category": "host-dependent",
-      "reason": "Asserts an exact `Function.prototype.toString` decompilation format (source-text reproduction down to whitespace/comment/directive placement); ES5.1 §15.3.4.2 leaves the returned string wholly implementation-defined, so the exact textual format is a host/engine detail, not an ES5.1-mandated behavior."
-    },
-    {
       "path": "test/staging/sm/global/globalThis-enumeration.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `globalThis`, an ES2020 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/JSON/stringify-special-escapes.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2019's \"well-formed JSON.stringify\" proposal added `\\uXXXX` escaping of lone/unpaired surrogates; ES5.1 §15.12.3's `Quote` algorithm only escapes control characters, `\"`, and `\\`, passing an unpaired surrogate through unescaped -- this engine already implements the ES5.1-faithful (pre-ES2019) behavior, which this test does not expect."
     },
     {
       "path": "test/staging/sm/lexical-environment/block-scoped-functions-annex-b-arguments.js",
@@ -2614,111 +2914,6 @@
       "reason": "ES2015+ §13.2.14 gives strict-mode block-scoped function declarations their own per-block lexical binding, shadowing the enclosing binding on block exit/re-entry; ES5.1 has no block-scoped declarations at all, so a strict `FunctionDeclaration` nested in a `Block` is outside ES5.1's grammar as a nested statement."
     },
     {
-      "path": "test/staging/sm/Map/forEach-selfhosted-behavior.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Map/getter-name.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Map/NaN-as-key.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Map`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/acosh-exact.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/Math/asinh-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.asinh`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/atanh-exact.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/Math/cbrt-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.cbrt`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/clz32.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.clz32`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/cosh-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.cosh`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/expm1-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.expm1`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/expm1-monotonicity.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.expm1`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/fround.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.fround`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/log10-approx.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/Math/log10-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.log10`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/log1p-exact.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/Math/log2-approx.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/Math/log2-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.log2`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/sign.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.sign`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/sinh-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.sinh`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/tanh-exact.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Math.tanh`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Math/trunc.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-Math-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
       "path": "test/staging/sm/misc/future-reserved-words.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Array.prototype.includes`, an ES2016 builtin absent from ES5.1, to search its reserved-word list."
@@ -2734,41 +2929,6 @@
       "reason": "Uses `import`/`export` module syntax (flagged `module` in the test's frontmatter); ES6 modules do not exist in ES5.1, and this file cannot be parsed as a `Program` (only as a `Module`), so it is unrunnable as an ES5.1 script."
     },
     {
-      "path": "test/staging/sm/Number/15.7.3.7-EPSILON.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Number.EPSILON`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Number/20.1.2.10-MIN_SAFE_INTEGER.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Number.MIN_SAFE_INTEGER`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Number/20.1.2.6-MAX_SAFE_INTEGER.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Number.MAX_SAFE_INTEGER`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Number/isSafeInteger-01.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Number.isSafeInteger`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Number/parseFloat-01.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Number.parseFloat`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseFloat`)."
-    },
-    {
-      "path": "test/staging/sm/Number/parseInt-01.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Number.parseInt`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseInt`)."
-    },
-    {
-      "path": "test/staging/sm/Number/parseInt-default-to-decimal.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Number.parseInt`, an ES2015 builtin absent from ES5.1 (ES5.1 only defines the global `parseInt`)."
-    },
-    {
       "path": "test/staging/sm/object/15.2.3.14-01.js",
       "category": "post-es5-builtin",
       "reason": "Asserts a `groups` property on `RegExp.prototype.exec`'s result array, added by ES2018 named capture groups (`(?<name>...)`); ES5.1 §15.10.6.2 defines no such property."
@@ -2782,81 +2942,6 @@
       "path": "test/staging/sm/object/getter-name.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 Annex B B.2.2.1 gives `Object.prototype.__proto__` an accessor property backed by `[[Prototype]]`; ES5.1 §15.2.4 defines no such property, so `__proto__` here is an ordinary (absent) own property rather than a live prototype view."
-    },
-    {
-      "path": "test/staging/sm/Promise/bug-1287334.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Promise/bug-1289040.js",
-      "category": "host-dependent",
-      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Promise/methods-non-enumerable.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Proxy/proxy-__proto__.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Proxy/proxy-constructNonObject.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Proxy/regress-bug950407.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Proxy/revoke-no-name.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/RegExp/exec.js",
-      "category": "post-es5-semantics",
-      "reason": "Asserts that a non-global regexp's failed `exec` call leaves an out-of-range `lastIndex` untouched (e.g. `lastIndex = -17` stays `-17` after a failed match). ES5.1 §15.10.6.2 step 9.a.i unconditionally resets `lastIndex` to 0 on total match failure -- the algorithm's `Repeat` loop performs `[[Put]](\"lastIndex\", 0, true)` and returns `null` whenever the search index runs out of range, with no `global` guard on that step; only the *success* path's `lastIndex` update (step 11, \"If global is true ... [[Put]] ... e\") is conditioned on `global`. This test's own embedded copy of the ES5.1 algorithm (in its header comment) confirms step 9.a.i is unconditional, yet its assertions expect the reset to be skipped for non-global regexps -- a SpiderMonkey-specific behavior (bugzilla.mozilla.org/show_bug.cgi?id=646490) that predates and diverges from the ES5.1-mandated algorithm this engine implements."
-    },
-    {
-      "path": "test/staging/sm/RegExp/getter-name.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/RegExp/match.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/RegExp/replace-compile-elembase.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/RegExp/replace-compile.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/RegExp/replace-sticky.js",
-      "category": "post-es5-syntax",
-      "reason": "Uses the `y` (sticky) RegExp flag, added by ES2015; ES5.1 §15.10.4.1 defines only the `g`/`i`/`m` flags."
-    },
-    {
-      "path": "test/staging/sm/RegExp/replace.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/RegExp/search.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/regress/regress-428366.js",
@@ -3122,91 +3207,6 @@
       "path": "test/staging/sm/strict/strict-function-statements.js",
       "category": "post-es5-builtin",
       "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/String/codePointAt.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `String.prototype.codePointAt`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/String/fromCodePoint.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `String.fromCodePoint`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/String/match-forward-lookahead.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.5.4.10 step 8.f.iii.2's global-match loop bumps `lastIndex` only by comparing the post-match `lastIndex` against the value it held before the current `exec()` call (`thisIndex === previousLastIndex`), not by checking whether the match itself was empty; ES2015+ replaced this with an `AdvanceStringIndex`-based check that behaves differently for adjacent zero-width matches. This engine already implements the ES5.1-faithful algorithm (see `test/string-regexp.test.js`), which yields 4 matches for `/(?=x)/g` here rather than the ES2015+ count of 2 this test expects."
-    },
-    {
-      "path": "test/staging/sm/String/raw.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `String.raw`, an ES2015 builtin (introduced for tagged templates) absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/String/replace-math.js",
-      "category": "host-dependent",
-      "reason": "Constructs a replacement string large enough to overflow this engine's maximum string length, throwing a host `RangeError`; ES5.1 imposes no maximum string length, so exactly how large a string an implementation can allocate before failing is implementation-defined."
-    },
-    {
-      "path": "test/staging/sm/String/replace-updates-global-lastIndex.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §15.5.4.11's RegExp branch does the search \"in the same manner as in String.prototype.match, including the update of `lastIndex`\" (this engine's `replaceWithRegExp` implements exactly that, see `src/builtins/string-regexp.js`), so `lastIndex` is updated to each match's end position before every replacer-callback invocation, per the ES5.1-mandated algorithm. This test instead expects `lastIndex` to stay whatever the replacer callback itself last set it to, unaffected by the engine's internal search progress -- a SpiderMonkey-specific internal-search optimization that later editions' spec text does not require either, but that this ES5.1-faithful implementation does not reproduce."
-    },
-    {
-      "path": "test/staging/sm/String/string-code-point-upper-lower-mapping.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `String.fromCodePoint`/`String.prototype.codePointAt`, ES2015 builtins absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/String/string-upper-lower-mapping.js",
-      "category": "host-dependent",
-      "reason": "A 40,000+ case, machine-generated `toUpperCase`/`toLowerCase` table sourced from a specific, recent Unicode Character Database version (the file's own header records \"Unicode version: 17.0.0\"); ES5.1 §15.5.4.16-18 requires following \"the Unicode Character Database\" without pinning a version, so the exact case-mapping table is host/engine-specific and tracks whichever Unicode version an implementation ships."
-    },
-    {
-      "path": "test/staging/sm/Symbol/equality.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/realms.js",
-      "category": "host-dependent",
-      "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/TypedArray/constructor-undefined-args.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/TypedArray/element-setting-converts-using-ToNumber.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/TypedArray/indexOf-never-returns-negative-zero.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/TypedArray/lastIndexOf-never-returns-negative-zero.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/TypedArray/prototype-constructor-identity.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-TypedArray-shell.js` this test includes uses `const`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/TypedArray/set-negative-offset.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on the typed array family (`ArrayBuffer`/typed arrays), an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/TypedArray/set-same-buffer-different-source-target-types.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on the typed array family (e.g. `Int8Array`/`Uint8Array`), an ES2015 builtin absent from ES5.1."
     }
   ]
 }
