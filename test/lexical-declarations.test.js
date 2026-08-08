@@ -47,6 +47,42 @@ function assertThrows(source, constructorName) {
 
 /**
  * @param {string} source
+ * @param {string} constructorName
+ * @param {string} message
+ */
+function assertThrowsMessage(source, constructorName, message) {
+  const realm = createRealm();
+  const completion = evaluateScript(realm, source);
+  assertSame(completion.type, 'throw');
+  if (!(completion.value instanceof EngineObject)) {
+    throw new Error(
+      `Expected EngineObject throw value, got ${typeof completion.value}`,
+    );
+  }
+  const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
+  const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
+  let cur = /** @type {EngineObject | null} */ (
+    /** @type {EngineObject} */ (completion.value).getPrototype()
+  );
+  let isInstance = false;
+  while (cur !== null) {
+    if (cur === proto) {
+      isInstance = true;
+      break;
+    }
+    cur = cur.getPrototype();
+  }
+  if (!isInstance) {
+    throw new Error(`Thrown value is not an instance of ${constructorName}`);
+  }
+  assertSame(
+    /** @type {EngineObject} */ (completion.value).get('message'),
+    message,
+  );
+}
+
+/**
+ * @param {string} source
  * @param {string} name
  * @returns {unknown}
  */
@@ -339,9 +375,13 @@ const tests = [
     },
   },
   {
-    name: 'reading a function-body let before its declaration throws a ReferenceError',
+    name: 'a function-body let in its TDZ shadows a same-named outer binding, throwing with the TDZ message rather than reading the outer value',
     run() {
-      assertThrows('function f() { a; let a = 1; } f()', 'ReferenceError');
+      assertThrowsMessage(
+        "var a = 'outer'; function f() { a; let a = 1; return a; } f()",
+        'ReferenceError',
+        "Cannot access 'a' before initialization",
+      );
     },
   },
   {
@@ -400,11 +440,32 @@ const tests = [
     },
   },
   {
-    name: 'reading a strict function-body let before its declaration throws a ReferenceError',
+    name: 'a strict function-body let in its TDZ shadows a same-named outer binding, throwing with the TDZ message rather than reading the outer value',
     run() {
-      assertThrows(
-        "function f() { 'use strict'; a; let a = 1; } f()",
+      assertThrowsMessage(
+        "var a = 'outer'; function f() { 'use strict'; a; let a = 1; return a; } f()",
         'ReferenceError',
+        "Cannot access 'a' before initialization",
+      );
+    },
+  },
+  {
+    name: 'a strict parameter is visible to the function body alongside body lexicals',
+    run() {
+      assertNormal(
+        run("function f(p) { 'use strict'; let a = p + 1; return a; } f(10)"),
+        11,
+      );
+    },
+  },
+  {
+    name: 'a strict function-body let shadows a same-named outer binding without mutating it',
+    run() {
+      assertNormal(
+        run(
+          'var x = 1; function f() { \'use strict\'; let x = 2; return x; } "" + f() + x',
+        ),
+        '21',
       );
     },
   },
