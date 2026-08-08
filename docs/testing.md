@@ -83,16 +83,17 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 default work from it. `test/node/repository-invariants.test.js` fails if a suite
 file exists that no runner registers.
 
-The registry currently lists 46 portable suites covering: foundation, parser,
-runtime records, objects, abstract operations, environments, realms, evaluator
-expressions and statements, `with` statements, functions, object/array literals,
-Test262 runner, ES5 selection, errors, try statements, switch/labels,
-update/assignment, `in`/`instanceof`, strict mode, `eval`, dynamic `Function`,
-`delete`, date arithmetic, date built-ins, native built-ins, object built-ins,
-function built-ins, array built-ins, primitive wrappers, boolean/number/string
-built-ins, number formatting, string built-ins, string search/case/pattern,
-regexp syntax/built-ins/exec, string-regexp, math built-ins, numeric globals,
-URI globals, JSON parse, and JSON stringify.
+The registry currently lists 49 portable suites covering: foundation, static
+semantics, parser, runtime records, objects, abstract operations, environments,
+realms, evaluator expressions and statements, `with` statements, functions,
+object/array literals, Test262 runner, ES5 selection, errors, try statements,
+switch/labels, lexical declarations, stack overflow, update/assignment,
+`in`/`instanceof`, strict mode, `eval`, dynamic `Function`, `delete`, date
+arithmetic, date built-ins, native built-ins, object built-ins, function
+built-ins, array built-ins, primitive wrappers, boolean/number/string built-ins,
+number formatting, string built-ins, string search/case/pattern, regexp
+syntax/built-ins/exec, string-regexp, math built-ins, numeric globals, URI
+globals, JSON parse, and JSON stringify.
 
 ### Node-only suites (`test/node/`)
 

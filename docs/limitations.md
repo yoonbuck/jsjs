@@ -11,8 +11,10 @@ engines happen to do, and the two are not the same thing: several entries below
 describe places where this engine follows ES5.1 exactly and therefore differs
 from every browser. Any `engine-deviation` exclusion in
 [`tools/test262/es5-selection.json`](../tools/test262/es5-selection.json) must
-name one of the headings below; only two exclusions still do, because every
-other one filed under it turned out to be ES5.1-mandated behaviour. See
+name one of the headings below; six exclusions do — two name the
+`IdentifierName` heading below and four name the `Lexical-binding
+NamedEvaluation` heading — because every other one once filed under the category
+turned out to be ES5.1-mandated behaviour. See
 [docs/conformance.md](conformance.md) for the exclusion categories and counts.
 
 ## Intentional deviations
@@ -374,6 +376,31 @@ never throws, passing malformed sequences through unchanged.
 **Backing code:** `src/builtins/global-uri.js`.
 **Verification:** `evaluateScript(realm, 'escape("\\u0100")')` → `"%u0100"`.
 
+### Strict-mode duplicate object property names are no longer an early error
+
+ES5.1 §11.1.5 makes a duplicate data-property name in an object literal a
+SyntaxError in strict code (`"use strict"; ({ a: 1, a: 2 })`). ES2015 removed
+that early error on purpose — duplicate property names are legal in every
+context, the later definition simply wins — and this engine follows ES2015 here
+because raising the parser to `ecmaVersion: 6` is what enables lexical
+declarations, and Acorn drops the ES5 strict duplicate-property check at that
+edition. So `"use strict"; ({ a: 1, a: 2 }).a` evaluates to `2` rather than
+throwing.
+
+This is the one place the ES2015 lexical-declarations milestone deliberately
+changes an existing ES5.1 behaviour: an ES5.1 engine would reject the strict
+form, and this engine now accepts it. It is a knowing divergence from ES5.1's
+letter that adopting the ES2015 grammar carried along, listed here rather than
+under known limitations because it is a deliberate choice, not a shortfall. The
+Test262 tests that assert the ES5.1 early error (`11.1.5-2gs.js`,
+`prop-dup-data-data.js`, `__proto__-duplicate.js`, and the `11.1.5_4-4-*` files)
+are excluded as `post-es5-semantics`, since ES5.1 and ES2015 genuinely disagree.
+
+**Backing code:** `src/parser.js` (`ecmaVersion: 6` in `PARSER_OPTIONS`).
+**Verification:**
+`evaluateScript(realm, '(function(){ "use strict"; return ({ a: 1, a: 2 }).a; })()')`
+→ `{ type: 'normal', value: 2 }`.
+
 ## Known limitations
 
 Distinct from the deviations above: these are not choices, they are places the
@@ -490,9 +517,9 @@ host `RangeError` for a pattern that is merely too deep.
 
 The **hoisting passes** that follow a successful parse
 (`globalDeclarationInstantiation`, `functionDeclarationInstantiation`, and
-`evalDeclarationInstantiation`, all through `collectVarNames` and
-`collectFunctionDeclarations`) keep an explicit stack instead of the host's,
-and push their children one at a time rather than spreading them as call
+`evalDeclarationInstantiation`, all through the declaration-name walks in
+`src/evaluator/static-semantics.js`) keep an explicit worklist instead of the
+host's, and push their children one at a time rather than spreading them as call
 arguments. Between them those two make the walk's cost independent of the
 program's shape: neither its depth nor the width of any statement list can
 reach a host limit. Both matter, because the parser accepts programs that
@@ -515,6 +542,55 @@ defects behind a guest error.
 (`src/runtime/regexp-syntax.js`); the parse-time conversion is `asParseFailure`
 in `src/parser.js`; the iterative walks are `EngineObject#getProperty`
 (`src/runtime/object.js`), `BoundFunction#hasInstance`
-(`src/builtins/function.js`), and `collectVarNames` /
-`collectFunctionDeclarations` (`src/evaluator/declarations.js`).
+(`src/builtins/function.js`), and the declaration-name walks in
+`src/evaluator/static-semantics.js`.
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.
+
+### Lexical-binding NamedEvaluation does not set a function name
+
+ES2015 §13.3.1.4 evaluates `let`/`const foo = <anonymous function>` with a step 6
+that calls `SetFunctionName` (§9.2.11) so the binding name becomes the function's
+`name` own property. This engine implements ES2015 lexical declarations but not
+the ES2015 function-object `name` own property that `SetFunctionName` writes — no
+function form here has a `name` own property at all — so that one step is a known
+gap in this milestone's coverage of §13.3.1.4. The four upstream tests
+`fn-name-cover.js` and `fn-name-fn.js` under `test/language/statements/let/` and
+the matching `.../const/` directory assert it and are excluded for this reason. Adding function `name` (with its `writable: false,
+enumerable: false, configurable: true` attributes across every function form)
+belongs to the separate ES2015 object/property-key/function-semantics issue, not
+to lexical declarations; doing it only for `let`/`const` initializers would leave
+`let f = function(){}` with a `name` that `function f(){}` lacks.
+
+**Backing code:** `src/evaluator/declarations.js` (`evaluateVariableDeclaration`,
+which initializes a lexical binding without a `SetFunctionName` step).
+**Verification:**
+`evaluateScript(realm, 'let f = function(){}; f.hasOwnProperty("name")')` →
+`{ type: 'normal', value: false }`.
+
+### ES2015 syntax outside lexical declarations is rejected at parse time
+
+The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
+but no other ES2015 feature, so its parser accepts the lexical-declaration
+grammar and rejects every other ES2015 construct as a parse-time early error.
+The rejected constructs are classes, arrow functions, template and tagged
+template literals, `for`-`of`, generators and `yield`, `async`/`await`,
+destructuring patterns (object, array, and default/rest/assignment patterns),
+spread elements, `super`, `new.target`, `import`/`export` (module syntax),
+computed/shorthand/method object properties, binary (`0b`) and octal (`0o`)
+numeric literals, and `\u{…}` code-point escapes in strings and identifiers.
+
+This is a limitation rather than a deviation: a full ES2015 engine accepts all
+of them, and the engine rejects them only because the evaluator does not yet
+implement them. Rejecting at the parser keeps the grammar the engine parses
+identical to the grammar it runs — a construct that would misbehave at runtime
+is refused up front with a message naming what is missing — rather than parsing
+a form the evaluator would then mishandle. A top-level `evaluateScript` call
+surfaces the rejection as the host `SyntaxError` that every parse failure
+raises; guest code that reaches the parser through `eval` or `Function` gets a
+catchable guest `SyntaxError`.
+
+**Backing code:** `src/parser.js` (`checkUnsupportedEs2015Node` and
+`UNSUPPORTED_ES2015_NODE_MESSAGES`).
+**Verification:**
+`evaluateScript(realm, 'try { eval("class C {}"); "ok" } catch (e) { e.constructor.name }')`
+→ `{ type: 'normal', value: 'SyntaxError' }`.

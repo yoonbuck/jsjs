@@ -1,23 +1,42 @@
 # Architecture
 
-jsjs is an ES5.1 JavaScript engine written in plain ES2020 JavaScript with JSDoc
-types. The same source runs in Node, in a browser, and in the JavaScriptCore
-(`jsc`) shell: nothing in `src/` imports a host module, and guest behaviour never
-leans on host `eval`, `Function`, or host objects.
+jsjs is an ES5.1 JavaScript engine — extended with ES2015 lexical declarations
+(`let`/`const`, block scope, the temporal dead zone, and per-iteration
+bindings) — written in plain ES2020 JavaScript with JSDoc types. The same source
+runs in Node, in a browser, and in the JavaScriptCore (`jsc`) shell: nothing in
+`src/` imports a host module, and guest behaviour never leans on host `eval`,
+`Function`, or host objects.
 
 ## Source flow
 
 Source enters through `evaluateScript(realm, source)`, which:
 
-1. **Parses** via `src/parser.js` — Acorn configured at `ecmaVersion: 5`,
-   `sourceType: 'script'`, with an Acorn plugin that restores the ES5.1 §7.6
-   escaped-identifier rule Acorn relaxes for `ecmaVersion < 6`.
+1. **Parses** via `src/parser.js` — Acorn configured at `ecmaVersion: 6`,
+   `sourceType: 'script'`. The grammar the engine accepts is ES5.1 plus the
+   ES2015 lexical-declaration syntax (`let`, `const`, and block scope) and
+   nothing else. Raising `ecmaVersion` to 6 hands Acorn's own ES2015 scope
+   analysis the static redeclaration early errors (a `let` colliding with a
+   `var`, two `let`s of the same name in a block) and re-applies the reserved-word
+   rule to escaped identifiers itself, so the hand-written `ecmaVersion < 6`
+   escaped-identifier plugin was deleted as obsolete. A parse-time early-error
+   pass then walks the tree and rejects every other ES2015 construct the
+   evaluator does not implement — classes, arrow functions, template literals,
+   `for`-`of`, generators, `async`/`await`, destructuring patterns, rest/spread,
+   `super`, `new.target`, modules, computed/shorthand/method properties, binary
+   and octal numeric literals, and `\u{…}` code-point escapes — as a guest
+   `SyntaxError`, so the grammar the parser bounds is exactly the grammar the
+   evaluator runs.
 2. **Hoists** via `src/evaluator/declarations.js` —
-   `globalDeclarationInstantiation` walks the AST and binds every reachable
-   function declaration and `var` name onto the realm's global object.
+   `globalDeclarationInstantiation` (ES2015 §15.1.8) walks the AST, using the
+   spec's static-semantics name walks in `src/evaluator/static-semantics.js` to
+   bind every top-level function declaration and `var` name onto the realm's
+   global object and every top-level `let`/`const` name into the global
+   environment's declarative record, checking all names before creating any
+   binding so a conflict leaves the global scope untouched.
 3. **Evaluates** via `src/evaluator/statements.js` —
    `evaluateStatementList` walks the body left to right with explicit completion
-   propagation.
+   propagation, entering a fresh lexical environment for each block, `switch`
+   case block, `try` part, and loop iteration that declares `let`/`const`.
 
 A well-formed script produces either a `'normal'` completion or a `'throw'`
 completion carrying the thrown guest value. Guest throws are values, not host
@@ -166,12 +185,33 @@ only valid in a derived class constructor, and classes are issue #25.
 ### Environment records (`src/runtime/environment.js`)
 
 - `DeclarativeEnvironmentRecord` — bindings from `var`, function parameters,
-  `catch` clauses. Each binding has `value`, `mutable`, `initialized`, and
-  `deletable` flags.
+  `catch` clauses, and now ES2015 `let`/`const`. Each binding has `value`,
+  `mutable`, `initialized`, and `deletable` flags. A binding created but not yet
+  initialized (`initialized: false`) is the ES2015 **temporal dead zone**:
+  reading or writing it throws a `ReferenceError` until its declaration runs and
+  `initializeBinding` sets its value. `createImmutableBinding(N, S)` backs
+  `const`; a `const` assignment throws a `TypeError` in sloppy code too, not
+  only under strict mode.
 - `ObjectEnvironmentRecord` — wraps an `EngineObject` (used for `with`
   statements and the global object).
-- `GlobalEnvironmentRecord` — the realm's outermost environment, wrapping the
-  global object.
+- `GlobalEnvironmentRecord` — the realm's outermost environment. It splits the
+  global scope in two the way ES2015 §8.1.1.4 does: an `ObjectEnvironmentRecord`
+  over the global object holds `var` and function-declaration bindings as own
+  properties, while a `DeclarativeEnvironmentRecord` holds top-level `let`/`const`
+  bindings that never become properties of the global object. Its
+  `hasVarDeclaration`, `hasLexicalDeclaration`, `hasRestrictedGlobalProperty`,
+  `canDeclareGlobalVar`, and `canDeclareGlobalFunction` queries are what
+  `globalDeclarationInstantiation` consults to detect a conflict before binding
+  anything.
+
+Block, `switch`, `try`, and loop bodies that declare `let`/`const` run in a
+fresh `DeclarativeEnvironmentRecord` chained onto the running execution
+context's environment; a `for` loop with a lexical head gets a **new binding
+environment per iteration** (and `for`-`in` a fresh one per enumerated name), so
+a closure created in one iteration captures that iteration's binding rather than
+a single shared one. A function body likewise runs in a lexical environment
+layered over its activation (variable) environment, keeping the body's
+`let`/`const` names distinct from its parameters and `var`s.
 
 ### References (`src/runtime/reference.js`)
 
@@ -230,13 +270,15 @@ Recursion whose depth guest code controls but which is _not_ a stack budget
 question is made iterative instead of counted, so that ordinary operations on
 long chains keep working: `EngineObject#getProperty` walks the prototype chain
 in a loop, and `BoundFunction#hasInstance` unwraps a bound chain in a loop.
-The hoisting walks (`collectVarNames` and `collectFunctionDeclarations` in
-`src/evaluator/declarations.js`, shared by all three declaration-instantiation
-passes) keep an explicit stack for a different reason: they run before
-evaluation begins, so the guard cannot count them, and the parser accepts
-programs that outgrow a recursive walk of the result. They also push children
-one at a time rather than spreading a statement list into a variadic call,
-which would swap the depth limit for a host argument-count one.
+The hoisting walks (the declaration-name walks in
+`src/evaluator/static-semantics.js` — `varDeclaredNames`,
+`lexicallyDeclaredNames`, `boundNames`, and the `topLevel*` and
+`annexBBlockFunctionDeclarations` variants — shared by all three
+declaration-instantiation passes) keep an explicit worklist for a different
+reason: they run before evaluation begins, so the guard cannot count them, and
+the parser accepts programs that outgrow a recursive walk of the result. They
+also push children one at a time rather than spreading a statement list into a
+variadic call, which would swap the depth limit for a host argument-count one.
 
 The guard cannot cover the recursion spent _before_ evaluation — the parser's
 own descent and the declaration-instantiation walks that precede a script — so
@@ -268,15 +310,28 @@ comparisons, `typeof`, `instanceof`, `in`.
 
 The evaluator lives in `src/evaluator/` and is split by concern:
 
-| Module                | Responsibility                                       |
-| --------------------- | ---------------------------------------------------- |
-| `expressions.js`      | Every expression form the engine supports            |
-| `statements.js`       | Every statement form (loops, if, switch, try, etc.)  |
-| `declarations.js`     | `globalDeclarationInstantiation` (ES5 10.5 hoisting) |
-| `directive.js`        | `hasUseStrictDirective` — `"use strict"` detection   |
-| `eval.js`             | Direct and indirect `eval` code evaluation           |
-| `dynamic-function.js` | The `Function` constructor's body parsing            |
-| `index.js`            | Re-exports for the evaluator's public surface        |
+| Module                | Responsibility                                                                                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `expressions.js`      | Every expression form the engine supports                                                                                                                                                           |
+| `statements.js`       | Every statement form (loops, if, switch, try, etc.), block/loop scoping                                                                                                                             |
+| `declarations.js`     | Declaration instantiation: global (§15.1.8), function (§9.2.12), eval (§18.2.1.2), and `blockDeclarationInstantiation`                                                                              |
+| `static-semantics.js` | The spec's declaration-name walks (`boundNames`, `varDeclaredNames`, `lexicallyDeclaredNames`, the `topLevel*` variants, `annexBBlockFunctionDeclarations`, `isConstantDeclaration`), all iterative |
+| `directive.js`        | `hasUseStrictDirective` — `"use strict"` detection                                                                                                                                                  |
+| `eval.js`             | Direct and indirect `eval` code evaluation                                                                                                                                                          |
+| `dynamic-function.js` | The `Function` constructor's body parsing                                                                                                                                                           |
+| `index.js`            | Re-exports for the evaluator's public surface                                                                                                                                                       |
+
+`declarations.js` drives four instantiation paths, all reading their names from
+`static-semantics.js`: `globalDeclarationInstantiation` for a script,
+`functionDeclarationInstantiation` when a function activates,
+`evalDeclarationInstantiation` for each `eval` (which runs in its own lexical
+environment, with the ES2015 §18.2.1.2 name checks and Annex B.3.3.3
+block-function aliases), and `blockDeclarationInstantiation` for the fresh
+lexical environment `statements.js` enters for every block, `switch` case block,
+`try` part, and per-iteration loop binding. In sloppy code, Annex B.3.3 block
+function declarations additionally alias a `var`-scoped binding, so
+`{ function f(){} } f()` still resolves while `if (false) { function f(){} }
+typeof f` is correctly `'undefined'`.
 
 Unsupported AST nodes throw an explicit `UnsupportedNodeError`,
 `UnsupportedOperatorError`, or `UnsupportedOperationError` naming what is
@@ -382,7 +437,7 @@ value }` when the script throws a guest error. The thrown value is a guest error
 object (an `EngineObject`), not a host exception.
 
 `parserOptions` is forwarded to Acorn and merged with the engine's defaults
-(`ecmaVersion: 5`, `sourceType: 'script'`).
+(`ecmaVersion: 6`, `sourceType: 'script'`).
 
 Multiple `evaluateScript` calls against the same realm share state:
 
@@ -397,8 +452,10 @@ console.log(result); // { type: 'normal', value: 42 }
 
 ### `parseScript(source, parserOptions?): Program`
 
-Parses `source` as an ES5 script and returns an Acorn AST. Throws a host
-`SyntaxError` (not a guest error) on invalid input.
+Parses `source` as a script and returns an Acorn AST. The grammar is ES5.1 plus
+ES2015 lexical declarations; the engine's unsupported-ES2015 early errors apply,
+so any other ES2015 construct is rejected. Throws a host `SyntaxError` (not a
+guest error) on invalid input.
 
 ### `createAgent(): Agent`
 

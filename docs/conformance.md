@@ -5,16 +5,29 @@ engine implements, and the live coverage numbers produced by the Test262 suite.
 
 ## Supported subset
 
+This engine implements the ES5.1 language and standard library **plus ES2015
+lexical declarations**: `let` and `const` bindings, block scope, the temporal
+dead zone (a `ReferenceError` on access before initialization), `const`
+assignment errors, per-iteration `for`/`for-in` loop bindings, and lexical
+scope for blocks, `switch` case blocks, `try` parts, function bodies, `eval`
+code, and the global environment. Nothing else from ES2015 is implemented: the
+parser accepts the ES2015 lexical-declaration syntax and rejects every other
+ES2015 construct — classes, arrow functions, template literals, `for`-`of`,
+generators, `async`/`await`, destructuring and default/rest patterns, spread,
+`super`, `new.target`, modules, computed/shorthand/method object properties,
+binary and octal numeric literals, and `\u{…}` code-point escapes — as a guest
+`SyntaxError`, so the grammar the engine parses is exactly the grammar it runs.
+
 Fixtures deliberately stay inside what the engine implements today: `var`,
-function declarations and expressions, object and array literals (including
-getter/setter syntax), member access and calls, `new`, arithmetic, comparison,
-logical and conditional operators, simple `=` assignment, all compound
-assignment operators (`+= -= *= /= %= <<= >>= >>>= &= ^= |=`), prefix and
+`let`, `const`, function declarations and expressions, object and array literals
+(including getter/setter syntax), member access and calls, `new`, arithmetic,
+comparison, logical and conditional operators, simple `=` assignment, all
+compound assignment operators (`+= -= *= /= %= <<= >>= >>>= &= ^= |=`), prefix and
 postfix `++`/`--`, bitwise operators (`& | ^ ~ << >> >>>`), the unary operators
 `typeof`, `void`, `!`, `+` and `-`, `in`, `instanceof`, `delete`,
 `if`/`while`/`do`/`for`/`for-in`/`return`/`throw`, `try`/`catch`/`finally`,
-`switch`, `with`, `debugger`, labelled statements with `break`/`continue`, and
-the `NaN`, `Infinity`, `undefined` globals.
+`switch`, `with`, `debugger`, block statements, labelled statements with
+`break`/`continue`, and the `NaN`, `Infinity`, `undefined` globals.
 
 `for-in` enumerates own-then-inherited enumerable string-keyed properties in
 insertion order, each name at most once and never a name shadowed earlier in
@@ -363,8 +376,9 @@ inventing one would describe something the run never measured.
 
 The selected subset is small by construction: every path in it was verified to
 pass with this engine, so the low whole-suite percentage is an honest statement
-of how much of Test262 an ES5-only engine has been pointed at, not a pass rate
-over tests it was never asked to run.
+of how much of Test262 an engine at this language level — ES5.1 plus ES2015
+lexical declarations — has been pointed at, not a pass rate over tests it was
+never asked to run.
 
 ## Policy artifacts
 
