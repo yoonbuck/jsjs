@@ -341,9 +341,22 @@ export function functionDeclarationInstantiation(
     // executes and `evaluateFunctionDeclaration` copies it across). Eligibility
     // is per declaration node — recorded as an identity set so an ineligible
     // same-name declaration does not alias.
+    // Annex B.3.3.1 restricts eligibility to a block function whose name would
+    // raise no early error if replaced by `var F` *and* that "is not an element
+    // of BoundNames of argumentsList" — i.e. does not collide with a formal
+    // parameter. Union the parameter names into the excluded set so an
+    // ineligible collision neither creates a var binding here nor copies at
+    // evaluation time; it falls back to plain block-scoped evaluation.
+    const excludedNames = new Set(
+      topLevelLexicallyDeclaredNames(functionNode.body.body),
+    );
+    for (const name of parameterNames) {
+      excludedNames.add(name);
+    }
+
     const aliasDeclarations = annexBBlockFunctionDeclarations(
       functionNode.body.body,
-      new Set(topLevelLexicallyDeclaredNames(functionNode.body.body)),
+      excludedNames,
     );
 
     for (const declaration of aliasDeclarations) {

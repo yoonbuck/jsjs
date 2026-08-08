@@ -653,9 +653,12 @@ function evaluateForInStatement(node, context, labelSet) {
  * step 6a "evaluate ... as if it were an AssignmentExpression"):
  *
  * - `VariableDeclaration` (`for (var k in obj)`): the single declarator's
- *   name was already hoisted as a `var` binding (see `collectVarNames`'s
- *   `ForInStatement` case), so this resolves that existing binding through
- *   the environment chain and assigns it directly — no re-declaration.
+ *   name was already hoisted as a `var` binding (the `ForInStatement`'s
+ *   declaration is a var-scoped declaration collected by
+ *   `varScopedDeclarations`/`topLevelVarDeclaredNames` in
+ *   `./static-semantics.js` during declaration instantiation), so this
+ *   resolves that existing binding through the environment chain and assigns
+ *   it directly — no re-declaration.
  * - Any other assignable expression (`Identifier` or `MemberExpression`,
  *   e.g. `for (k in obj)` or `for (a[i] in obj)`): evaluated to a fresh
  *   `Reference` every iteration, exactly like `AssignmentExpression`'s

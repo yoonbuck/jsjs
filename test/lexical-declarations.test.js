@@ -318,6 +318,52 @@ const tests = [
     },
   },
   {
+    name: 'Annex B.3.3.1: a block function whose name collides with a formal parameter gets no var alias',
+    run() {
+      assertNormal(
+        run(
+          'function f(q){ { function q(){return 7;} } return typeof q; } f(1)',
+        ),
+        'number',
+      );
+      assertNormal(
+        run('function f(q){ { function q(){return 7;} } return q; } f(1)'),
+        1,
+      );
+    },
+  },
+  {
+    name: 'Annex B.3.3.1: a block function named arguments still aliases as it does today',
+    run() {
+      assertNormal(
+        run(
+          'function f(){ { function arguments(){} } return typeof arguments; } f()',
+        ),
+        'function',
+      );
+    },
+  },
+  {
+    name: 'Annex B.3.3.1: a block function whose name does not collide with a parameter still aliases',
+    run() {
+      assertNormal(
+        run('function f(q){ { function g(){return 7;} } return g(); } f(1)'),
+        7,
+      );
+    },
+  },
+  {
+    name: 'Annex B.3.3.1: strict code gets no var alias when a block function collides with a parameter',
+    run() {
+      assertNormal(
+        run(
+          "function f(q){ 'use strict'; { function q(){return 7;} } return typeof q; } f(1)",
+        ),
+        'number',
+      );
+    },
+  },
+  {
     name: 'Annex B.3.3: a dead for-head let blocks the var alias for a same-named block function',
     run() {
       assertSame(
