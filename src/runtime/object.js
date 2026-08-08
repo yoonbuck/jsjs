@@ -323,6 +323,11 @@ export class EngineObject {
     // Guard: only enter fast-path if descriptor is a non-null object, so that
     // invalid inputs (null, numbers, etc.) still reach validatePropertyDescriptor
     // with its canonical error message.
+    // The `_properties` read is deliberately direct rather than through the
+    // virtual `_peekOwnDescriptor`: this branch is about to *write* the stored
+    // descriptor, so it needs the real stored object, not a subclass's
+    // synthesised stand-in (`ArgumentsObject` returns a fresh object for a
+    // mapped parameter, and mutating that would update nothing).
     if (
       descriptor !== null &&
       typeof descriptor === 'object' &&

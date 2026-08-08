@@ -439,6 +439,94 @@ const tests = [
     },
   },
   {
+    // A profiler emits frames from code this repository does not own under
+    // schemes the capture-origin gate knows nothing about: browser extensions,
+    // bundler-synthesised sources, `blob:` workers, and Node's own builtins.
+    // Their opaque paths often contain a `src/` segment, so lifting that
+    // segment out would file host frames under `object-property` or `arrays`
+    // and silently inflate every category the evidence rests on. An
+    // unrecognised scheme is therefore returned byte for byte.
+    name: 'normalizeProfileUrl leaves unknown absolute schemes unchanged',
+    run() {
+      assertSame(
+        normalizeProfileUrl('chrome-extension://abcdef/src/runtime/object.js'),
+        'chrome-extension://abcdef/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('webpack://app/./src/runtime/object.js'),
+        'webpack://app/./src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('blob:http://jsjs.localhost/src/x.js'),
+        'blob:http://jsjs.localhost/src/x.js',
+      );
+      assertSame(
+        normalizeProfileUrl('node:internal/modules/src/loader.js'),
+        'node:internal/modules/src/loader.js',
+      );
+      assertSame(
+        normalizeProfileUrl('WEBPACK://app/src/runtime/object.js'),
+        'WEBPACK://app/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('data:text/javascript,/src/runtime/object.js'),
+        'data:text/javascript,/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('http:/src/runtime/object.js'),
+        'http:/src/runtime/object.js',
+      );
+    },
+  },
+  {
+    // The counterpart to the rule above: anything without a scheme is a path,
+    // and a path is the only shape a `src/` segment may be lifted out of. A
+    // single-letter prefix is a Windows drive, not a scheme, so it stays a
+    // path too.
+    name: 'normalizeProfileUrl still normalizes scheme-less paths',
+    run() {
+      assertSame(
+        normalizeProfileUrl('/repo/src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('../src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('./src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('benchmark/a:b/src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('C:/repo/src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+    },
+  },
+  {
+    name: 'classifyProfileFrame files unknown-scheme frames under host',
+    run() {
+      assertSame(
+        classifyProfileFrame({
+          url: 'chrome-extension://abcdef/src/runtime/object.js',
+          functionName: 'defineOwnProperty',
+        }),
+        'host',
+      );
+      assertSame(
+        classifyProfileFrame({
+          url: 'node:internal/modules/src/loader.js',
+          functionName: 'compile',
+        }),
+        'host',
+      );
+    },
+  },
+  {
     name: 'normalizeProfileUrl keeps the origin gate when host URL support is unavailable',
     run() {
       for (const missingUrl of [

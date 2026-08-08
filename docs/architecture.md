@@ -160,6 +160,37 @@ Property descriptors are plain objects with the four ES5 fields (`value`,
 `configurable` for accessor). `isDataDescriptor`, `isAccessorDescriptor`, and
 the conversion/validation helpers live here.
 
+### Raw own-descriptor reads (`src/runtime/object.js`)
+
+`EngineObject` exposes own descriptors through two paired methods:
+
+- `getOwnProperty(name)` is the spec-visible `[[GetOwnProperty]]`. It returns a
+  **copy**, so a caller may keep it, hand it to guest code, or mutate it.
+- `_peekOwnDescriptor(name)` returns the **stored** descriptor with no copy. The
+  hot paths (`getProperty`, `canPut`, `put`, `defineOwnProperty`, `delete`,
+  `enumerableKeysForIn`) read through it, which is what keeps an ordinary
+  property read from allocating a descriptor object per access.
+
+Two rules come with that:
+
+1. **Paired override.** A subclass that synthesises or rewrites own properties
+   must override _both_ or neither: `ArgumentsObject`
+   (`src/runtime/function-object.js`) injects the live parameter binding in
+   each, and `EnginePrimitiveObject` (`src/runtime/primitive-object.js`)
+   synthesises string-index characters in each. Overriding only one makes
+   `Object.getOwnPropertyDescriptor` and a plain property read disagree for
+   exactly that subclass's virtual properties, which no behavioural test is
+   guaranteed to notice, so the pairing is enforced as a source-text invariant
+   in `test/node/repository-invariants.test.js`.
+2. **Do not retain across mutation.** The object `_peekOwnDescriptor` returns is
+   the engine's own storage. Treat it as read-only and never hold it across
+   anything that can mutate `_properties` — a define, a delete, or a put —
+   because the next write can change the fields under it. `getProperty` copies
+   immediately for this reason, and `defineOwnProperty`'s `{value}`-only fast
+   path deliberately reads `_properties` directly rather than through
+   `_peekOwnDescriptor`: it is about to _write_ the stored descriptor, so it
+   needs the real one and must not see a subclass's synthesised stand-in.
+
 ### Own-property-key order (`src/runtime/object.js`)
 
 `EngineObject#ownPropertyKeys()` returns keys in ECMA-262 9.1.12

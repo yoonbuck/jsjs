@@ -20,6 +20,12 @@ import { toArrayIndex } from '../src/runtime/array-object.js';
  * Replace `globalThis.Number` with a function that always throws, run `fn`,
  * then restore the original binding — even if `fn` throws.
  *
+ * `fn` must be synchronous. The restore happens in `finally`, which runs when
+ * `fn` *returns*, so an `async` callback (or one that defers work to a
+ * promise or a timer) would resume after `Number` was already restored: the
+ * poisoning would no longer be in effect and the assertions inside it would
+ * pass without proving anything.
+ *
  * @param {() => void} fn
  */
 function withPoisonedNumber(fn) {

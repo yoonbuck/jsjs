@@ -507,6 +507,14 @@ that `test262:select`/`test262:upstream` require, every command passed. The
 system-shell JSC validation now also passes: `PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run test:jsc`
 printed zero failed records and exited `0`.
 
+Both JSC commands below are load-bearing citations rather than decoration:
+`test:jsc` and `test262:jsc` now exit nonzero on a failing record or a
+rejected run, through the shared signalling in `tools/jsc/exit.js`. On the
+validated shell `quit(1)` from a promise reaction is inert, so
+`test/node/jsc-runner.test.js` spawns the real shell on deliberately failing
+fixtures for both entry points and asserts the nonzero status — without it, a
+zero exit from either command would mean nothing.
+
 ```sh
 npm run test:node
 PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run test:browser

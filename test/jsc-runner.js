@@ -1,3 +1,13 @@
+/**
+ * Shared control flow for running the portable suites in the `jsc` shell.
+ *
+ * The shell has no `process.exitCode`, so failure has to be signalled by the
+ * one mechanism that actually moves its exit status. That mechanism — and why
+ * the timer-thrown error is the only authoritative one on the validated shell
+ * — lives in `tools/jsc/exit.js`; this file only decides *when* to use it.
+ */
+
+import { formatJscError, signalJscFailure } from '../tools/jsc/exit.js';
 import { runTests } from './harness/runner.js';
 
 const print = /** @type {(text: string) => void} */ (globalThis.print);
@@ -16,12 +26,12 @@ export function startJscRun(run) {
     .then(
       (failed) => {
         if (failed > 0) {
-          exitJscFailure('JSC test run failed');
+          signalJscFailure('JSC test run failed');
         }
       },
       (error) => {
         print(formatJscError(error));
-        exitJscFailure('JSC test runner rejected');
+        signalJscFailure('JSC test runner rejected');
       },
     );
 }
@@ -42,44 +52,4 @@ export async function runJscSuites(suites) {
   }
 
   return failed;
-}
-
-/**
- * @param {string} message
- * @returns {never | void}
- */
-function exitJscFailure(message) {
-  if (typeof globalThis.setTimeout === 'function') {
-    globalThis.setTimeout(() => {
-      throw new Error(message);
-    }, 0);
-    return;
-  }
-
-  if (typeof globalThis.quit === 'function') {
-    globalThis.quit(1);
-    return;
-  }
-
-  throw new Error(message);
-}
-
-/**
- * @param {unknown} error
- * @returns {string}
- */
-function formatJscError(error) {
-  if (error instanceof Error) {
-    const header = `${error.name}: ${error.message}`;
-
-    if (typeof error.stack === 'string' && error.stack.length > 0) {
-      return error.stack.includes(header)
-        ? error.stack
-        : `${header}\n${error.stack}`;
-    }
-
-    return header;
-  }
-
-  return String(error);
 }

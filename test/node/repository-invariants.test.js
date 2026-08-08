@@ -84,6 +84,25 @@ function escapeForRegExp(literal) {
 }
 
 /**
+ * True when `code` *defines* `name` as a member rather than calling it.
+ *
+ * A definition is a class-body or object-literal method (`name(` at the start
+ * of a line) or a prototype assignment (`.prototype.name =`). A call always
+ * has a receiver expression in front of the dot, so it never starts a line
+ * with the bare member name.
+ *
+ * @param {string} code Source with comments already stripped.
+ * @param {string} name
+ * @returns {boolean}
+ */
+function definesMember(code, name) {
+  return (
+    new RegExp(String.raw`^\s*${name}\s*\(`, 'mu').test(code) ||
+    new RegExp(String.raw`\.prototype\.${name}\s*=`, 'u').test(code)
+  );
+}
+
+/**
  * @param {string} directory
  * @returns {Promise<Map<string, string>>}
  */
@@ -1012,6 +1031,68 @@ export default [
         matches.join(','),
         'src/runtime/regexp-compat.js',
         'the host RegExp constructor must stay isolated in src/runtime/regexp-compat.js, used exactly once',
+      );
+    },
+  },
+  {
+    // `EngineObject#getOwnProperty` copies the stored descriptor;
+    // `EngineObject#_peekOwnDescriptor` returns it raw, and the hot paths
+    // (`getProperty`, `canPut`, `put`, `defineOwnProperty`, `delete`,
+    // `enumerableKeysForIn`) read through the raw one. That makes the two a
+    // single protocol with two entry points: a class that synthesises or
+    // rewrites own properties in `getOwnProperty` and does not do the same in
+    // `_peekOwnDescriptor` would answer one way to `Object.getOwnPropertyDescriptor`
+    // and another way to a plain property read -- a split that no behavioural
+    // test is guaranteed to notice, because it only shows up for whichever
+    // virtual properties that subclass happens to invent.
+    //
+    // The rule is therefore enforced against the source text, in both
+    // directions, over every engine file: define one of the pair and you must
+    // define the other. `src/runtime/object.js` declares the protocol and
+    // defines both, so it satisfies the invariant rather than needing an
+    // exemption from it.
+    name: 'every class that overrides getOwnProperty also overrides _peekOwnDescriptor',
+    run: async () => {
+      const files = await listFiles('src/', (name) => name.endsWith('.js'));
+      /** @type {string[]} */
+      const definesGetOwnProperty = [];
+      /** @type {string[]} */
+      const definesPeek = [];
+
+      for (const file of files) {
+        const source = await readSource(file);
+        const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+
+        if (definesMember(code, 'getOwnProperty')) {
+          definesGetOwnProperty.push(file);
+        }
+
+        if (definesMember(code, '_peekOwnDescriptor')) {
+          definesPeek.push(file);
+        }
+      }
+
+      assertSame(files.length > 5, true, 'engine sources were found');
+      assertSame(
+        definesGetOwnProperty.includes('src/runtime/object.js') &&
+          definesGetOwnProperty.includes('src/runtime/function-object.js') &&
+          definesGetOwnProperty.includes('src/runtime/primitive-object.js'),
+        true,
+        `the known getOwnProperty definitions must be detected, found: ${definesGetOwnProperty.join(', ')}`,
+      );
+      assertSame(
+        definesGetOwnProperty
+          .filter((file) => !definesPeek.includes(file))
+          .join('\n'),
+        '',
+        'a class that overrides getOwnProperty must also override _peekOwnDescriptor, or the raw-descriptor hot paths will disagree with it',
+      );
+      assertSame(
+        definesPeek
+          .filter((file) => !definesGetOwnProperty.includes(file))
+          .join('\n'),
+        '',
+        'a class that overrides _peekOwnDescriptor must also override getOwnProperty, or Object.getOwnPropertyDescriptor will disagree with a plain property read',
       );
     },
   },
