@@ -3,6 +3,7 @@
   "excludedDirectories": [],
   "builtins": ["Array"],
   "excludedLanguageDirectories": [],
+  "featureAreas": [],
   "exclusions": [
     {
       "path": "test/built-ins/Array/missing-exclusion-fixture.js",

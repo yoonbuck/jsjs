@@ -26,10 +26,7 @@
     {
       "name": "Symbol.iterator",
       "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.iterator !== \"symbol\") { throw new Error(\"Symbol.iterator is not a symbol\"); }\nif (Symbol.iterator.toString() !== \"Symbol(Symbol.iterator)\") { throw new Error(\"Symbol.iterator has the wrong description\"); }\nvar holder = {};\nholder[Symbol.iterator] = 1;\nif (holder[Symbol.iterator] !== 1) { throw new Error(\"Symbol.iterator is not usable as a property key\"); }",
-      "tests": [
-        "test/built-ins/Symbol/iterator/prop-desc.js",
-        "test/built-ins/Symbol/keyFor/arg-symbol-registry-miss.js"
-      ]
+      "tests": ["test/built-ins/Symbol/iterator/prop-desc.js"]
     },
     {
       "name": "Symbol.match",
@@ -49,10 +46,7 @@
     {
       "name": "Symbol.species",
       "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.species !== \"symbol\") { throw new Error(\"Symbol.species is not a symbol\"); }\nif (Symbol.species.toString() !== \"Symbol(Symbol.species)\") { throw new Error(\"Symbol.species has the wrong description\"); }\nvar holder = {};\nholder[Symbol.species] = 1;\nif (holder[Symbol.species] !== 1) { throw new Error(\"Symbol.species is not usable as a property key\"); }",
-      "tests": [
-        "test/built-ins/Symbol/species/basic.js",
-        "test/built-ins/Symbol/species/builtin-getter-name.js"
-      ]
+      "tests": ["test/built-ins/Symbol/species/basic.js"]
     },
     {
       "name": "Symbol.split",
@@ -63,12 +57,12 @@
       "name": "Symbol.toPrimitive",
       "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.toPrimitive !== \"symbol\") { throw new Error(\"Symbol.toPrimitive is not a symbol\"); }\nif (Symbol.toPrimitive.toString() !== \"Symbol(Symbol.toPrimitive)\") { throw new Error(\"Symbol.toPrimitive has the wrong description\"); }\nvar holder = {};\nholder[Symbol.toPrimitive] = 1;\nif (holder[Symbol.toPrimitive] !== 1) { throw new Error(\"Symbol.toPrimitive is not usable as a property key\"); }",
       "tests": [
-        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/length.js",
-        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/name.js",
         "test/built-ins/Symbol/prototype/Symbol.toPrimitive/prop-desc.js",
         "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-non-obj.js",
         "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-obj-non-symbol-wrapper.js",
-        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-obj-symbol-wrapper.js"
+        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-obj-symbol-wrapper.js",
+        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-symbol.js",
+        "test/built-ins/Symbol/toPrimitive/prop-desc.js"
       ]
     },
     {

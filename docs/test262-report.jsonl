@@ -1,4 +1,4 @@
-{"stale":1,"type":"test","file":"test/annexB/built-ins/Date/prototype/getYear/B.2.4.js","variant":"non-strict","status":"passed"}
+{"type":"test","file":"test/annexB/built-ins/Date/prototype/getYear/B.2.4.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/annexB/built-ins/Date/prototype/getYear/B.2.4.js","variant":"strict","status":"passed"}
 {"type":"test","file":"test/annexB/built-ins/Date/prototype/getYear/length.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/annexB/built-ins/Date/prototype/getYear/length.js","variant":"strict","status":"passed"}
