@@ -428,26 +428,26 @@ const tests = [
       assertSame(result.total, 500);
       assertSame(result.frames.length > 0, true);
 
-      const objectFrame = /** @type {*} */ (result.frames.find((f) =>
-        f.url.includes('object.js'),
-      ));
+      /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary | undefined} */
+      const objectFrame = result.frames.find((f) => f.url.includes('object.js'));
       assertSame(objectFrame !== undefined, true);
-      assertSame(objectFrame.selfTime, 350);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (objectFrame).selfTime, 350);
 
-      const envFrame = /** @type {*} */ (result.frames.find((f) =>
-        f.url.includes('environment.js'),
-      ));
+      /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary | undefined} */
+      const envFrame = result.frames.find((f) => f.url.includes('environment.js'));
       assertSame(envFrame !== undefined, true);
-      assertSame(envFrame.selfTime, 150);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (envFrame).selfTime, 150);
 
       const categories = result.categories;
-      const objCat = /** @type {*} */ (categories.find((c) => c.category === 'object-property'));
+      /** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary | undefined} */
+      const objCat = categories.find((c) => c.category === 'object-property');
       assertSame(objCat !== undefined, true);
-      assertSame(objCat.selfTime, 350);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary} */ (objCat).selfTime, 350);
 
-      const envCat = /** @type {*} */ (categories.find((c) => c.category === 'references-environments'));
+      /** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary | undefined} */
+      const envCat = categories.find((c) => c.category === 'references-environments');
       assertSame(envCat !== undefined, true);
-      assertSame(envCat.selfTime, 150);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary} */ (envCat).selfTime, 150);
     },
   },
   {
@@ -523,20 +523,21 @@ const tests = [
 
       assertSame(result.total, 1536);
 
-      const arrayFrame = /** @type {*} */ (result.frames.find((f) =>
-        f.url.includes('array-object.js'),
-      ));
+      /** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary | undefined} */
+      const arrayFrame = result.frames.find((f) => f.url.includes('array-object.js'));
       assertSame(arrayFrame !== undefined, true);
-      assertSame(arrayFrame.selfSize, 1024);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary} */ (arrayFrame).selfSize, 1024);
 
       const categories = result.categories;
-      const arrayCat = /** @type {*} */ (categories.find((c) => c.category === 'arrays'));
+      /** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary | undefined} */
+      const arrayCat = categories.find((c) => c.category === 'arrays');
       assertSame(arrayCat !== undefined, true);
-      assertSame(arrayCat.selfSize, 1024);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary} */ (arrayCat).selfSize, 1024);
 
-      const envCat = /** @type {*} */ (categories.find((c) => c.category === 'references-environments'));
+      /** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary | undefined} */
+      const envCat = categories.find((c) => c.category === 'references-environments');
       assertSame(envCat !== undefined, true);
-      assertSame(envCat.selfSize, 512);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary} */ (envCat).selfSize, 512);
     },
   },
   {
@@ -586,9 +587,10 @@ const tests = [
         timeDeltas: [100, 100],
       };
       const result = summarizeCpuProfile(profile);
-      const frame = /** @type {*} */ (result.frames.find((f) => f.url.includes('object.js')));
+      /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary | undefined} */
+      const frame = result.frames.find((f) => f.url.includes('object.js'));
       assertSame(frame !== undefined, true);
-      assertSame(frame.percentage, 100);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (frame).percentage, 100);
     },
   },
   {
@@ -610,9 +612,10 @@ const tests = [
         },
       };
       const result = summarizeAllocationProfile(profile);
-      const frame = /** @type {*} */ (result.frames.find((f) => f.url.includes('array-object.js')));
+      /** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary | undefined} */
+      const frame = result.frames.find((f) => f.url.includes('array-object.js'));
       assertSame(frame !== undefined, true);
-      assertSame(frame.percentage, 100);
+      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary} */ (frame).percentage, 100);
     },
   },
 ];
