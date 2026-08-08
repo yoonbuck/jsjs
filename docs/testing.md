@@ -92,7 +92,14 @@ URI globals, JSON parse, and JSON stringify.
 
 ### Node-only suites (`test/node/`)
 
-Three suites that need a filesystem and cannot run in the browser or `jsc`:
+Five suites that need a filesystem and cannot run in the browser or `jsc`:
+
+- `test/node/benchmark-cli.test.js` — validates benchmark CLI argument
+  parsing, sequential all-host orchestration, and atomic validated report
+  writes.
+- `test/node/benchmark-hosts.test.js` — covers the real Node smoke host plus
+  the browser/JSC host adapters' parsing, path-guard, setup-error, and
+  monotonic-clock helpers.
 
 - `test/node/benchmark-summary.test.js` — validates cross-host compatibility
   checks, deterministic CSV output, and summary CLI file I/O.

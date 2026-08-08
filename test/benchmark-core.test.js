@@ -676,6 +676,32 @@ const tests = [
     },
   },
   {
+    name: 'calibration clears coarse clock granularity before extrapolating toward the target',
+    run() {
+      /** @type {number[]} */
+      const calls = [];
+      const result = calibrateBatchSize(
+        (count) => {
+          calls.push(count);
+          return {
+            elapsedMs: count < 4 ? Number.EPSILON : count * 2,
+            checksum: 17,
+          };
+        },
+        {
+          expectedChecksum: 17,
+          targetSampleMs: 10,
+          maxBatchSize: 128,
+          context: 'steady jsjs coarse fixture',
+        },
+      );
+      assertSame(result.batchSize, 5);
+      assertSame(result.elapsedMs, 10);
+      assertSame(result.checksum, 17);
+      assertSame(calls.join(','), '1,2,4,5');
+    },
+  },
+  {
     name: 'calibration grows toward the target without exceeding its bound',
     run() {
       /** @type {number[]} */
@@ -694,6 +720,58 @@ const tests = [
       );
       assertSame(result.batchSize, 4);
       assertSame(calls.join(','), '1,4');
+    },
+  },
+  {
+    name: 'calibration returns the max probe when clock granularity never clears before the bound',
+    run() {
+      /** @type {number[]} */
+      const calls = [];
+      const result = calibrateBatchSize(
+        (count) => {
+          calls.push(count);
+          return {
+            elapsedMs: Number.EPSILON,
+            checksum: 17,
+          };
+        },
+        {
+          expectedChecksum: 17,
+          targetSampleMs: 10,
+          maxBatchSize: 4,
+          context: 'steady native unresolved fixture',
+        },
+      );
+      assertSame(result.batchSize, 4);
+      assertSame(result.elapsedMs, Number.EPSILON);
+      assertSame(result.checksum, 17);
+      assertSame(calls.join(','), '1,2,4');
+    },
+  },
+  {
+    name: 'calibration confirmation never shrinks below the first measurable coarse-clock probe',
+    run() {
+      /** @type {number[]} */
+      const calls = [];
+      const result = calibrateBatchSize(
+        (count) => {
+          calls.push(count);
+          return {
+            elapsedMs: count === 4 ? 20 : Number.EPSILON,
+            checksum: 17,
+          };
+        },
+        {
+          expectedChecksum: 17,
+          targetSampleMs: 10,
+          maxBatchSize: 128,
+          context: 'cold native confirmation fixture',
+        },
+      );
+      assertSame(result.batchSize, 4);
+      assertSame(result.elapsedMs, 20);
+      assertSame(result.checksum, 17);
+      assertSame(calls.join(','), '1,2,4,4');
     },
   },
   {

@@ -17,13 +17,36 @@ export function calibrateBatchSize(runBatch, options) {
     options.maxBatchSize,
     'maxBatchSize',
   );
-  const initial = checkedBatchResult(
-    runBatch(1),
+  const probeFloorMs = measurableProbeFloorMs(targetSampleMs);
+  let probeCount = 1;
+  let probe = checkedBatchResult(
+    runBatch(probeCount),
     options.expectedChecksum,
     options.context,
   );
+
+  while (probe.elapsedMs < probeFloorMs && probeCount < maxBatchSize) {
+    probeCount = Math.min(maxBatchSize, probeCount * 2);
+    probe = checkedBatchResult(
+      runBatch(probeCount),
+      options.expectedChecksum,
+      options.context,
+    );
+  }
+
+  if (probe.elapsedMs < probeFloorMs) {
+    return Object.freeze({
+      batchSize: probeCount,
+      elapsedMs: probe.elapsedMs,
+      checksum: probe.checksum,
+    });
+  }
+
   const batchSize = clampBatchSize(
-    Math.ceil(targetSampleMs / initial.elapsedMs),
+    Math.max(
+      probeCount,
+      Math.ceil(targetSampleMs / (probe.elapsedMs / probeCount)),
+    ),
     maxBatchSize,
   );
   const confirmed = checkedBatchResult(
@@ -76,6 +99,18 @@ function checkedBatchResult(result, expectedChecksum, context) {
   }
 
   return result;
+}
+
+/**
+ * Treat a probe as measurable once it has accumulated a meaningful fraction of
+ * the requested target; anything smaller can still be dominated by a coarse
+ * clock's epsilon-sized positive delta.
+ *
+ * @param {number} targetSampleMs
+ * @returns {number}
+ */
+function measurableProbeFloorMs(targetSampleMs) {
+  return targetSampleMs / 8;
 }
 
 /**
