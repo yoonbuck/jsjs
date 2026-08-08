@@ -143,11 +143,26 @@ export class EngineObject {
   }
 
   /**
+   * Returns the stored `CompletePropertyDescriptor` directly — no copy.
+   * Callers must treat the returned object as read-only and must not retain
+   * it across any operation that could mutate `_properties` (define, delete,
+   * put). Subclasses that synthesise virtual properties (e.g. `ArgumentsObject`)
+   * override this to match their `getOwnProperty` semantics while still
+   * avoiding the copy on the common case.
+   *
+   * @param {PropertyKey} name
+   * @returns {CompletePropertyDescriptor | undefined}
+   */
+  _peekOwnDescriptor(name) {
+    return this._properties.get(name);
+  }
+
+  /**
    * @param {PropertyKey} name
    * @returns {CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
-    const descriptor = this._properties.get(name);
+    const descriptor = this._peekOwnDescriptor(name);
     return descriptor === undefined
       ? undefined
       : /** @type {CompletePropertyDescriptor} */ (
@@ -170,7 +185,7 @@ export class EngineObject {
     let current = this;
 
     while (current !== null) {
-      const own = current.getOwnProperty(name);
+      const own = current._peekOwnDescriptor(name);
 
       if (own !== undefined) {
         return own;
@@ -215,7 +230,7 @@ export class EngineObject {
    * @returns {boolean}
    */
   canPut(name) {
-    const own = this.getOwnProperty(name);
+    const own = this._peekOwnDescriptor(name);
 
     if (own !== undefined) {
       return isAccessorDescriptor(own)
@@ -251,7 +266,7 @@ export class EngineObject {
       return rejectOperation(throwOnError, 'Cannot assign to property');
     }
 
-    const own = this.getOwnProperty(name);
+    const own = this._peekOwnDescriptor(name);
     if (own !== undefined && isDataDescriptor(own)) {
       return this.defineOwnProperty(name, { value }, throwOnError);
     }
@@ -302,8 +317,30 @@ export class EngineObject {
    * @returns {boolean}
    */
   defineOwnProperty(name, descriptor, throwOnError = false) {
+    // Fast path: a {value}-only update on an existing writable data descriptor
+    // avoids validatePropertyDescriptor, completePropertyDescriptor, and the
+    // full branching logic below. This is the hottest path from `put`.
+    if (isValueOnlyDescriptor(descriptor)) {
+      const stored = this._properties.get(name);
+      if (stored !== undefined && 'value' in stored) {
+        if (stored.writable === true) {
+          stored.value = descriptor.value;
+          return true;
+        }
+        if (!stored.configurable) {
+          if (!Object.is(descriptor.value, stored.value)) {
+            return rejectOperation(
+              throwOnError,
+              'Cannot change value of a non-configurable non-writable property',
+            );
+          }
+          return true;
+        }
+      }
+    }
+
     const candidate = validatePropertyDescriptor(descriptor);
-    const current = this.getOwnProperty(name);
+    const current = this._peekOwnDescriptor(name);
 
     if (current === undefined) {
       if (!this._extensible) {
@@ -440,7 +477,7 @@ export class EngineObject {
    * @returns {boolean}
    */
   delete(name, throwOnError = false) {
-    const descriptor = this.getOwnProperty(name);
+    const descriptor = this._peekOwnDescriptor(name);
 
     if (descriptor === undefined) {
       return true;
@@ -537,7 +574,7 @@ export function enumerableKeysForIn(object) {
 
       seen.add(key);
 
-      const descriptor = current.getOwnProperty(key);
+      const descriptor = current._peekOwnDescriptor(key);
       if (descriptor !== undefined && descriptor.enumerable === true) {
         result.push(key);
       }
@@ -584,7 +621,7 @@ export function isEnumerableForIn(object, key) {
     current !== null;
     current = current.getPrototype()
   ) {
-    const descriptor = current.getOwnProperty(key);
+    const descriptor = current._peekOwnDescriptor(key);
 
     if (descriptor !== undefined) {
       return descriptor.enumerable === true;
@@ -691,6 +728,25 @@ function isDescriptorSubsetEqual(current, candidate) {
  */
 function isEmptyDescriptor(descriptor) {
   return Object.keys(descriptor).length === 0;
+}
+
+/**
+ * True when `descriptor` carries exactly a `value` field and nothing else.
+ * This identifies the fast path from `put` that only needs to update the
+ * stored value without touching writable/enumerable/configurable.
+ *
+ * @param {PropertyDescriptorRecord} descriptor
+ * @returns {boolean}
+ */
+function isValueOnlyDescriptor(descriptor) {
+  return (
+    'value' in descriptor &&
+    !('writable' in descriptor) &&
+    !('enumerable' in descriptor) &&
+    !('configurable' in descriptor) &&
+    !('get' in descriptor) &&
+    !('set' in descriptor)
+  );
 }
 
 /**

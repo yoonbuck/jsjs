@@ -35,6 +35,32 @@ export class EnginePrimitiveObject extends EngineObject {
   }
 
   /**
+   * Overrides `_peekOwnDescriptor` to expose virtual string-index character
+   * properties without copying the stored descriptor for the common case (an
+   * explicitly stored property such as `length`). Virtual index descriptors
+   * are constructed on demand; they are not stored and cannot be cached.
+   *
+   * @param {PropertyKey} name
+   * @returns {CompletePropertyDescriptor | undefined}
+   */
+  _peekOwnDescriptor(name) {
+    const stored = this._properties.get(name);
+    if (stored !== undefined) {
+      return stored;
+    }
+
+    const index = stringIndex(this.primitiveValue, name);
+    return index === undefined
+      ? undefined
+      : {
+          value: /** @type {string} */ (this.primitiveValue)[index],
+          writable: false,
+          enumerable: true,
+          configurable: false,
+        };
+  }
+
+  /**
    * @param {PropertyKey} name
    * @returns {CompletePropertyDescriptor | undefined}
    */

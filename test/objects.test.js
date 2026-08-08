@@ -12,6 +12,99 @@ import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 const tests = [
   {
+    name: '_peekOwnDescriptor returns the raw stored descriptor without copying',
+    run() {
+      const obj = new EngineObject();
+      obj.defineOwnProperty('x', {
+        value: 42,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const raw = obj._peekOwnDescriptor('x');
+      assertSame(raw !== undefined, true);
+      assertSame(raw.value, 42);
+      // Two calls must return the same object reference (no copy per call).
+      assertSame(obj._peekOwnDescriptor('x') === raw, true);
+      // Public getOwnProperty must still return a detached copy.
+      const pub = obj.getOwnProperty('x');
+      assertSame(pub === raw, false);
+    },
+  },
+  {
+    name: 'public getOwnProperty is detached: mutating the returned descriptor does not affect stored state',
+    run() {
+      const obj = new EngineObject();
+      obj.defineOwnProperty('x', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const pub = obj.getOwnProperty('x');
+      pub.value = 999;
+      // The stored value must remain 1.
+      assertSame(obj.get('x'), 1);
+    },
+  },
+  {
+    name: 'defineOwnProperty with value-only descriptor on writable data property updates in place',
+    run() {
+      const obj = new EngineObject();
+      obj.defineOwnProperty('x', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const before = obj._peekOwnDescriptor('x');
+      obj.defineOwnProperty('x', { value: 2 });
+      const after = obj._peekOwnDescriptor('x');
+      // In-place mutation: the stored descriptor object must be the same reference.
+      assertSame(before === after, true);
+      assertSame(after.value, 2);
+      assertSame(obj.get('x'), 2);
+    },
+  },
+  {
+    name: 'prototype mutation is immediately visible through getProperty after _peekOwnDescriptor optimization',
+    run() {
+      const proto = new EngineObject();
+      proto.defineOwnProperty('x', {
+        value: 'proto',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const obj = new EngineObject(proto);
+      // Must see inherited value before and after proto mutation.
+      assertSame(obj.get('x'), 'proto');
+      proto.defineOwnProperty('x', { value: 'updated' });
+      assertSame(obj.get('x'), 'updated');
+    },
+  },
+  {
+    name: 'non-configurable property semantics are preserved through fast-path defineOwnProperty',
+    run() {
+      const obj = new EngineObject();
+      obj.defineOwnProperty('locked', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      // Value change on non-writable non-configurable must be rejected.
+      assertSame(obj.defineOwnProperty('locked', { value: 2 }), false);
+      assertThrows(
+        () => obj.defineOwnProperty('locked', { value: 2 }, true),
+        GuestErrorSignal,
+      );
+      // Same-value is allowed.
+      assertSame(obj.defineOwnProperty('locked', { value: 1 }), true);
+      assertSame(obj.get('locked'), 1);
+    },
+  },
+  {
     name: 'descriptor helpers classify descriptors and reject mixed accessors',
     run() {
       const dataDescriptor = completePropertyDescriptor({ value: 1 });
