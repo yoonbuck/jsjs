@@ -1149,6 +1149,138 @@ const tests = [
       );
     },
   },
+  {
+    name: 'every object kind resolves the agent its conversions need',
+    run() {
+      // ToPrimitive finds `@@toPrimitive` through the agent an EngineObject
+      // inherits from its [[Prototype]]. The chain bottoms out at the realm's
+      // %Object.prototype%, so the only sites that must pass an agent
+      // explicitly are the two that build a null-prototype object. A site
+      // that forgot would fail *open* — the lookup silently skipped, the
+      // object falling through to OrdinaryToPrimitive, no error anywhere — so
+      // each kind is pinned here rather than trusted.
+      /** @type {[string, string, unknown][]} */
+      const cases = [
+        [
+          'Object.create(null)',
+          'var o = Object.create(null); o[Symbol.toPrimitive] = function () { return 7; }; o * 1;',
+          7,
+        ],
+        [
+          'an object derived from a null-prototype object',
+          'var p = Object.create(null); var o = Object.create(p);' +
+            'p[Symbol.toPrimitive] = function () { return 9; }; o * 1;',
+          9,
+        ],
+        [
+          'a deep null-prototype chain',
+          'var o = Object.create(null);' +
+            'for (var i = 0; i < 5; i += 1) { o = Object.create(o); }' +
+            'o[Symbol.toPrimitive] = function () { return 3; }; o * 1;',
+          3,
+        ],
+        [
+          'an ordinary object literal',
+          'var o = {}; o[Symbol.toPrimitive] = function () { return 1; }; o * 1;',
+          1,
+        ],
+        [
+          'an arguments object',
+          '(function () { arguments[Symbol.toPrimitive] = function () { return 5; };' +
+            'return arguments * 1; }());',
+          5,
+        ],
+        [
+          'a bound function',
+          'var f = (function () {}).bind(null);' +
+            'f[Symbol.toPrimitive] = function () { return 11; }; f * 1;',
+          11,
+        ],
+        [
+          'an error object',
+          'var e = new Error("x"); e[Symbol.toPrimitive] = function () { return 13; }; e * 1;',
+          13,
+        ],
+        [
+          'an array',
+          'var a = []; a[Symbol.toPrimitive] = function () { return 15; }; a * 1;',
+          15,
+        ],
+        [
+          'a RegExp',
+          'var r = /x/; r[Symbol.toPrimitive] = function () { return 17; }; r * 1;',
+          17,
+        ],
+        [
+          'a Date',
+          'var d = new Date(0); d[Symbol.toPrimitive] = function () { return 19; }; d * 1;',
+          19,
+        ],
+        [
+          'a boxed primitive',
+          'var s = new String("a"); s[Symbol.toPrimitive] = function () { return 21; }; s * 1;',
+          21,
+        ],
+        [
+          'a namespace object',
+          'JSON[Symbol.toPrimitive] = function () { return 23; }; JSON * 1;',
+          23,
+        ],
+        [
+          'the global object',
+          'this[Symbol.toPrimitive] = function () { return 25; }; this * 1;',
+          25,
+        ],
+        [
+          'a constructed instance',
+          'function F() {} var i = new F();' +
+            'i[Symbol.toPrimitive] = function () { return 27; }; i * 1;',
+          27,
+        ],
+      ];
+
+      for (const [label, source, expected] of cases) {
+        assertSame(run(source), expected, label);
+      }
+    },
+  },
+  {
+    name: 'a null-prototype object reports its own @@toStringTag',
+    run() {
+      assertSame(
+        run(
+          'var o = Object.create(null); o[Symbol.toStringTag] = "NP";' +
+            'Object.prototype.toString.call(o);',
+        ),
+        '[object NP]',
+      );
+      assertSame(
+        run(
+          'var o = Object.create(Object.create(null));' +
+            'Object.getPrototypeOf(o)[Symbol.toStringTag] = "Inherited";' +
+            'Object.prototype.toString.call(o);',
+        ),
+        '[object Inherited]',
+      );
+    },
+  },
+  {
+    name: 'a null-prototype object interns into its own realm\u2019s agent',
+    run() {
+      const agent = createAgent();
+      const realm = createRealm({ agent });
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var o = Object.create(null); o[Symbol.for("np")] = 1;' +
+            'Object.getOwnPropertySymbols(o)[0] === Symbol.for("np");',
+        ).value,
+        true,
+      );
+      assertSame(agent.registeredSymbolCount, 1);
+    },
+  },
 ];
 
 export default tests;

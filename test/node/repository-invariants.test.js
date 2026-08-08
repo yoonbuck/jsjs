@@ -11,6 +11,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
+import { parse } from '../../vendor/acorn/acorn.mjs';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
 import { UNICODE_VERSION } from '../../src/builtins/unicode-case-data.js';
@@ -1651,30 +1652,103 @@ export default [
       // `Symbol.for` interns a guest-controlled string. Holding that registry
       // in a module variable would retain guest data for the life of the
       // process, outliving every realm that produced it and reachable from no
-      // handle an embedder could drop. It belongs to an `Agent` instead, so a
-      // module-level `Map`/`Set`/array-or-object literal reappearing in these
-      // modules is a regression, not a style question.
-      const OWNERS = ['src/runtime/symbol.js', 'src/runtime/agent.js'];
+      // handle an embedder could drop. It belongs to an `Agent` instead.
+      //
+      // This parses rather than pattern-matches, because the regression is
+      // most likely to arrive in exactly the shape a regex misses: the code
+      // this replaced used `export const` for a module-level binding right
+      // beside the registry, and a wrapped initializer or an `Object.create`
+      // table would slip past a line-oriented check too.
+      const OWNERS = [
+        'src/runtime/symbol.js',
+        'src/runtime/agent.js',
+        'src/builtins/symbol.js',
+      ];
+      const MUTABLE_COLLECTIONS = ['Map', 'Set', 'WeakMap', 'WeakSet'];
       /** @type {string[]} */
       const violations = [];
 
-      for (const file of OWNERS) {
-        const source = await readSource(file);
+      /**
+       * Whether an initializer builds mutable state, anywhere inside it.
+       *
+       * @param {any} node
+       * @returns {boolean}
+       */
+      function buildsMutableState(node) {
+        if (node === null || typeof node !== 'object') {
+          return false;
+        }
 
-        for (const line of source.split('\n')) {
-          // Module scope is column zero: anything indented is inside a class
-          // body or a function, where per-instance state is exactly right.
-          if (!/^(?:const|let|var)\s/.test(line)) {
-            continue;
-          }
+        if (
+          node.type === 'NewExpression' &&
+          node.callee?.type === 'Identifier' &&
+          MUTABLE_COLLECTIONS.includes(node.callee.name)
+        ) {
+          return true;
+        }
 
-          if (/=\s*new\s+(?:Map|Set|WeakMap|WeakSet)\b/.test(line)) {
-            violations.push(`${file}: ${line.trim()}`);
+        if (
+          node.type === 'CallExpression' &&
+          node.callee?.type === 'MemberExpression' &&
+          node.callee.object?.name === 'Object' &&
+          node.callee.property?.name === 'create'
+        ) {
+          return true;
+        }
+
+        for (const key of Object.keys(node)) {
+          const child = node[key];
+
+          if (Array.isArray(child)) {
+            if (child.some((entry) => buildsMutableState(entry))) {
+              return true;
+            }
+          } else if (buildsMutableState(child)) {
+            return true;
           }
         }
 
-        if (/^let\s|^var\s/m.test(source)) {
-          violations.push(`${file}: module-scope mutable binding`);
+        return false;
+      }
+
+      for (const file of OWNERS) {
+        const program = parse(await readSource(file), {
+          ecmaVersion: 2020,
+          sourceType: 'module',
+        });
+
+        for (const statement of program.body) {
+          const declaration =
+            statement.type === 'ExportNamedDeclaration'
+              ? statement.declaration
+              : statement;
+
+          if (declaration?.type !== 'VariableDeclaration') {
+            continue;
+          }
+
+          if (declaration.kind !== 'const') {
+            violations.push(`${file}: module-scope ${declaration.kind}`);
+            continue;
+          }
+
+          for (const declarator of declaration.declarations) {
+            const init = declarator.init;
+
+            if (
+              init !== null &&
+              init !== undefined &&
+              (init.type === 'ObjectExpression' ||
+                init.type === 'ArrayExpression' ||
+                buildsMutableState(init))
+            ) {
+              const { id } = declarator;
+
+              violations.push(
+                `${file}: ${id.type === 'Identifier' ? id.name : 'binding'}`,
+              );
+            }
+          }
         }
       }
 
