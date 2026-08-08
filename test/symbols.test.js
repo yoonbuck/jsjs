@@ -932,6 +932,28 @@ const tests = [
     },
   },
   {
+    name: 'mixed own keys use index string and symbol bucket order everywhere',
+    run() {
+      assertSame(
+        run(
+          'var first = Symbol("first"); var second = Symbol("second"); var o = {};' +
+            'o.z = "z"; o[first] = 1; o[10] = "ten"; o.a = "a";' +
+            'o[2] = "two"; o[second] = 2; o[1] = "one";' +
+            'var own = Reflect.ownKeys(o);' +
+            'var symbols = Object.getOwnPropertySymbols(o);' +
+            'var loop = []; for (var key in o) { loop.push(key); }' +
+            'own.slice(0, 5).join(",") + "|" +' +
+            '(own[5] === first) + "," + (own[6] === second) + "|" +' +
+            'Object.getOwnPropertyNames(o).join(",") + "|" +' +
+            '(symbols[0] === first) + "," + (symbols[1] === second) + "|" +' +
+            'Object.keys(o).join(",") + "|" + loop.join(",") + "|" +' +
+            'JSON.stringify(o);',
+        ),
+        '1,2,10,z,a|true,true|1,2,10,z,a|true,true|1,2,10,z,a|1,2,10,z,a|{"1":"one","2":"two","10":"ten","z":"z","a":"a"}',
+      );
+    },
+  },
+  {
     name: 'descriptor and membership reflection accept symbol keys',
     run() {
       assertSame(
