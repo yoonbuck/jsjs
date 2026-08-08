@@ -67,10 +67,11 @@ The analyzer discovers Node and Chromium sidecars in code-unit lexical order,
 requires their declared CPU and allocation artifacts, and matches every
 `host`/`workload`/`mode` capture to its baseline row. It validates compatible
 baseline source/run metadata, runtime versions, capture settings, sidecar
-summary totals, and all four checksums before atomically replacing
-`checksum-correlation.json` and `profile-analysis.json`. A missing row or
-artifact, duplicate/malformed sidecar, or mismatch exits nonzero without
-writing fresh success-shaped output.
+summary totals, and all four checksums before replacing
+`checksum-correlation.json` and `profile-analysis.json`. Caught write failures
+roll back both files; process termination between the two file promotions is
+not pair-atomic. A missing row or artifact, duplicate/malformed sidecar, or
+mismatch exits nonzero without writing fresh success-shaped output.
 
 The measured profiler durations ranged from 293.0 ms to 12,944.5 ms, so every
 row exceeds the 250 ms target without changing a workload source. Profile
