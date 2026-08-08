@@ -326,6 +326,17 @@ is how the engine's own Date tests stay deterministic.
 **Backing code:** `src/runtime/date.js` (`createDateHost`).
 **Verification:** `evaluateScript(createRealm({ dateHost: { now: () => 1234567890123, timezoneOffset: () => 0 } }), 'new Date(0).toString()')` → `"Thu Jan 01 1970 00:00:00 GMT+0000 (Local)"` on every host and in every time zone.
 
+One consequence is worth knowing before running the upstream suite outside UTC.
+ES5.1 7.9.1.15 reads every offsetless ISO 8601 string as UTC, while ES2015
+20.3.1.15 rereads the offsetless date-_time_ form as local time; this engine
+implements ES5.1, so `Date.parse('1970-01-01T00:00:00')` is `0`. The upstream
+test for the ES2015 rule asserts that value equals the host's time-zone offset,
+so it passes in UTC — where the two editions agree — and fails everywhere else.
+It is therefore selected rather than excluded, because in the UTC environment CI
+validates in the engine genuinely satisfies it. A contributor running
+`npm run test262:upstream` from a non-UTC zone will see that one file fail; that
+is this deviation showing through, not a regression.
+
 ### Number-to-string and string-to-number use the host's algorithms
 
 After the engine has itself validated the ES5.1 grammar and handled every

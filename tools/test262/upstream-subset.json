@@ -2419,6 +2419,7 @@
         "test/built-ins/Date/parse/name.js",
         "test/built-ins/Date/parse/prop-desc.js",
         "test/built-ins/Date/parse/time-value-maximum-range.js",
+        "test/built-ins/Date/parse/without-utc-offset.js",
         "test/built-ins/Date/parse/zero.js",
         "test/built-ins/Date/prop-desc.js",
         "test/built-ins/Date/prototype/S15.9.5_A01_T1.js",
