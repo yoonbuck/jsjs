@@ -48,6 +48,16 @@ agent; protocol entry points assert that internal invariant rather than
 silently skipping the lookup. Primitive receivers are boxed by the executing
 realm as before, so their behaviour remains realm-local.
 
+`EngineObject#ownPropertyKeys()` implements ES2015
+`OrdinaryOwnPropertyKeys` for the combined object/function and Symbol runtime:
+array-index string keys in ascending numeric order, then remaining string keys
+in creation order, then symbol keys in creation order. `Reflect.ownKeys`
+exposes the complete list; `Object.getOwnPropertyNames`, `Object.keys`,
+`for-in`, and JSON keep only the string portion, while
+`Object.getOwnPropertySymbols` keeps only the symbol portion. All six surfaces
+therefore share one ordering algorithm even when strings and symbols were
+created in an interleaved order.
+
 ## Scope
 
 - Symbol creation, identity, descriptions, `SymbolDescriptiveString`
@@ -56,8 +66,9 @@ realm as before, so their behaviour remains realm-local.
 - The eleven ES2015 well-known symbols, shared across realms
 - `ToPropertyKey` at every guest property-key site; symbol-keyed get/put/
   define/delete/`in`/`hasOwnProperty`
-- Reflection: `Object.getOwnPropertySymbols`, string-only `Object.keys` and
-  `Object.getOwnPropertyNames`, symbol-free `for-in` and `JSON`
+- Reflection: `Reflect.ownKeys`, `Object.getOwnPropertySymbols`, string-only
+  `Object.keys` and `Object.getOwnPropertyNames`, symbol-free `for-in` and
+  `JSON`, all with ES2015 `OrdinaryOwnPropertyKeys` ordering
 - `typeof`, equality, `ToBoolean`/`ToObject` acceptance, and
   `ToNumber`/`ToString` rejection of symbols
 - Test262: a prefix-scoped feature-claim mechanism in the selection policy,

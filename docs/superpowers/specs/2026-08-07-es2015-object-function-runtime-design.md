@@ -23,8 +23,8 @@ to receive them.
 
 ES5 left enumeration order implementation-defined. ES2015 fixes it: integer
 array-index keys first in ascending numeric order, then remaining string keys
-in creation order, then symbol keys in creation order (symbols don't exist
-yet in this engine, so the third bucket stays empty until #43).
+in creation order, then symbol keys in creation order. The Symbol integration
+fills the third bucket and exposes the complete list through `Reflect.ownKeys`.
 
 - `EngineObject#ownPropertyKeys()` changes from raw `Map` insertion order to
   the ES2015-ordered result. The `Map` itself keeps insertion order for the
@@ -33,10 +33,10 @@ yet in this engine, so the third bucket stays empty until #43).
   a String that is a canonical numeric string in `[0, 2^32 - 2]` (i.e. not
   `4294967295`, which is a valid array index bound exclusion) with no
   leading zero other than `"0"` itself.
-- `Object.keys`, `Object.getOwnPropertyNames`, `for-in` (via
-  `enumerableKeysForIn`), and `JSON.stringify` all read through
-  `ownPropertyKeys()`, so they inherit the new order for free — no call site
-  changes needed there.
+- `Reflect.ownKeys`, `Object.keys`, `Object.getOwnPropertyNames`,
+  `Object.getOwnPropertySymbols`, `for-in` (via `enumerableKeysForIn`), and
+  `JSON.stringify` all read through `ownPropertyKeys()`, so they inherit the
+  shared order.
 - `EngineArray`'s own `length`/index properties already use string keys, so
   they fall out of the same helper without a special case.
 
@@ -153,8 +153,8 @@ formally calls these `MethodDefinition`s) get:
 - Concise/shorthand methods and computed property names in object literals,
   arrow functions, classes, `super(...)` calls, default/rest/destructured
   parameters (#25).
-- `Object.assign`, `Reflect.*` (not required by any ES2015 runtime
-  foundation, can follow later if ever needed).
+- `Object.assign` and `Reflect.*` other than `Reflect.ownKeys` (the Symbol
+  integration adds that method to expose `OrdinaryOwnPropertyKeys` ordering).
 
 ## Testing
 
