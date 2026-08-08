@@ -352,6 +352,7 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
     variableEnv: env,
     strict: functionObject.strict,
     thisValue,
+    homeObject: functionObject.homeObject,
   };
 
   functionDeclarationInstantiation(node, functionObject, args, context);

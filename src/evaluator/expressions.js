@@ -41,6 +41,7 @@ import {
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
+import { SuperReferenceBase } from '../runtime/super-reference.js';
 import { createFunctionObject, isAnonymousFunctionExpression } from './declarations.js';
 // Direct-eval interception (see isDirectEvalCall) calls into the eval
 // implementation. This closes a loop through the pre-existing intra-evaluator
@@ -746,6 +747,10 @@ function describeCallee(node) {
  * @returns {Reference}
  */
 function evaluateMemberExpression(node, context) {
+  if (node.object.type === 'Super') {
+    return evaluateSuperMemberExpression(node, context);
+  }
+
   const baseValue = evaluateExpressionValue(node.object, context);
   const propertyKey = node.computed
     ? evaluateExpressionValue(node.property, context)
@@ -758,6 +763,45 @@ function evaluateMemberExpression(node, context) {
     toString(propertyKey),
     context.strict,
     baseValue,
+  );
+}
+
+/**
+ * Evaluates a `super.prop`/`super[expr]` `MemberExpression` (ECMA-262
+ * 12.3.5): resolves ES2015 `GetSuperBase` off the currently executing
+ * method's `[[HomeObject]]` and builds a `SuperReferenceBase` so
+ * `GetValue`/`PutValue` read and write through the home object's
+ * *prototype* while keeping the method's own `this` as the receiver. A
+ * missing `homeObject` (an ordinary function, reached only if some future
+ * syntax addition parses `super` somewhere Acorn's own `allowSuper` check
+ * should have already rejected) is defense in depth: it throws the same
+ * guest `ReferenceError` a real engine's static early error would have
+ * produced, documented as an intentional runtime fallback for what the
+ * specification instead catches at parse time.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Reference}
+ */
+function evaluateSuperMemberExpression(node, context) {
+  const homeObject = context.homeObject;
+
+  if (!(homeObject instanceof EngineObject)) {
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      "'super' keyword is only valid inside a method",
+    );
+  }
+
+  const propertyKey = node.computed
+    ? toString(evaluateExpressionValue(node.property, context))
+    : node.property.name;
+
+  return new Reference(
+    new SuperReferenceBase(homeObject, context.thisValue),
+    propertyKey,
+    context.strict,
+    context.thisValue,
   );
 }
 

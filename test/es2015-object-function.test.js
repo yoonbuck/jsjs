@@ -120,6 +120,53 @@ const tests = [
       );
     },
   },
+  {
+    name: "super.prop reads through the home object's prototype with the receiver as this",
+    run() {
+      assertSame(
+        run(
+          'Object.defineProperty(Object.prototype, "x", { get: function () { return "proto" + this._x; }, configurable: true }); ' +
+            'Object.prototype._x = 42; ' +
+            'var object = { get x() { return super.x; } }; object.x;',
+        ),
+        'proto42',
+      );
+    },
+  },
+  {
+    name: "super.prop = value writes through the home object's prototype with the receiver as this",
+    run() {
+      assertSame(
+        run(
+          'Object.defineProperty(Object.prototype, "x", { set: function (v) { this._x = v; }, configurable: true }); ' +
+            'Object.prototype._x = 0; ' +
+            'var object = { set x(v) { super.x = v; } }; ' +
+            'object.x = 1; object._x + "," + Object.prototype._x;',
+        ),
+        '1,0',
+      );
+    },
+  },
+  {
+    name: 'super[expr] resolves a computed key the same way super.prop does',
+    run() {
+      assertSame(
+        run(
+          'Object.prototype.y = 7; var object = { get x() { return super["y"]; } }; object.x;',
+        ),
+        7,
+      );
+    },
+  },
+  {
+    name: "super.prop on an accessor whose home object's prototype lacks the key reads undefined",
+    run() {
+      assertSame(
+        run('var object = { get x() { return super.y; } }; object.x;'),
+        undefined,
+      );
+    },
+  },
 ];
 
 export default tests;

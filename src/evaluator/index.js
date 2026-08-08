@@ -21,6 +21,7 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  *   variableEnv: import('../runtime/environment.js').EnvironmentRecordLike,
  *   strict: boolean,
  *   thisValue: unknown,
+ *   homeObject?: import('../runtime/object.js').EngineObject | undefined,
  * }} EvaluationContext
  */
 
