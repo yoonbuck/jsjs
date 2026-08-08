@@ -575,7 +575,7 @@ which initializes a lexical binding without a `SetFunctionName` step).
 `evaluateScript(realm, 'let f = function(){}; f.hasOwnProperty("name")')` →
 `{ type: 'normal', value: false }`.
 
-### ES2015 syntax outside lexical declarations is rejected at parse time
+### ES2015 syntax beyond lexical and block-level function declarations is rejected at parse time
 
 The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
 and block-level function declarations, but no other ES2015 feature, so its
