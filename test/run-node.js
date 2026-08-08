@@ -17,6 +17,7 @@
 
 import { runTests } from './harness/runner.js';
 import { PORTABLE_SUITES } from './suites.js';
+import benchmarkHosts from './node/benchmark-hosts.test.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
 import workflowContract from './node/workflow-contract.test.js';
 
@@ -26,6 +27,10 @@ import workflowContract from './node/workflow-contract.test.js';
 
 /** @type {readonly TestSuite[]} */
 const NODE_ONLY_SUITES = Object.freeze([
+  Object.freeze({
+    file: 'test/node/benchmark-hosts.test.js',
+    tests: benchmarkHosts,
+  }),
   Object.freeze({
     file: 'test/node/repository-invariants.test.js',
     tests: repositoryInvariants,
