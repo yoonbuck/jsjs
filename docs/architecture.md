@@ -1,8 +1,9 @@
 # Architecture
 
 jsjs is an ES5.1 JavaScript engine — extended with ES2015 lexical declarations
-(`let`/`const`, block scope, the temporal dead zone, and per-iteration
-bindings) — written in plain ES2020 JavaScript with JSDoc types. The same source
+(`let`/`const`, block scope, the temporal dead zone, and per-iteration bindings)
+and block-level function declarations — written in plain ES2020 JavaScript with
+JSDoc types. The same source
 runs in Node, in a browser, and in the JavaScriptCore (`jsc`) shell: nothing in
 `src/` imports a host module, and guest behaviour never leans on host `eval`,
 `Function`, or host objects.
@@ -22,9 +23,12 @@ Source enters through `evaluateScript(realm, source)`, which:
    obsolete. A parse-time early-error pass then walks the tree and rejects every
    other ES2015 construct the evaluator does not implement — classes, arrow
    functions, template literals, `for`-`of`, generators, destructuring patterns,
-   rest/spread, `super`, `new.target`, modules, computed/shorthand/method
-   properties, binary and octal numeric literals, and `\u{…}` code-point escapes
-   (plus the ES2017 `async`/`await` forms) — so the grammar the parser bounds is
+   rest/spread, `super`, `new.target`, computed/shorthand/method properties,
+   binary and octal numeric literals, and `\u{…}` code-point escapes. Module
+   syntax (`import`/`export`) and the ES2017 `async`/`await` forms never reach
+   that pass — the vendored Acorn refuses them itself, `import`/`export` because
+   the parser runs with `sourceType: 'script'` and `async`/`await` because they
+   are not ES6 syntax at `ecmaVersion: 6` — so the grammar the parser bounds is
    exactly the grammar the evaluator runs. A rejection at the top level surfaces
    as the host `SyntaxError` every parse failure raises; source reaching the
    parser through `eval` or the dynamic `Function` constructor gets a catchable
@@ -459,8 +463,9 @@ console.log(result); // { type: 'normal', value: 42 }
 ### `parseScript(source, parserOptions?): Program`
 
 Parses `source` as a script and returns an Acorn AST. The grammar is ES5.1 plus
-ES2015 lexical declarations; the engine's unsupported-ES2015 early errors apply,
-so any other ES2015 construct is rejected. Throws a host `SyntaxError` (not a
+ES2015 lexical declarations and block-level function declarations; the engine's
+unsupported-ES2015 early errors apply, so any other ES2015 construct is
+rejected. Throws a host `SyntaxError` (not a
 guest error) on invalid input.
 
 ### `createAgent(): Agent`

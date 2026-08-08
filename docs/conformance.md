@@ -144,12 +144,16 @@ A file is a candidate only if it survives every filter:
   eleven well-known symbol tags — scoped to `test/built-ins/Symbol` and
   `test/built-ins/Object/getOwnPropertySymbols`.
 
-- **An `ecmaVersion: 5` parse filter.** Every remaining file — and every harness
-  file it `includes` — is parsed at ES5 with the vendored acorn. A file that
-  will not parse as ES5 is testing syntax this engine is not required to accept,
-  so it is excluded structurally rather than by name. This is what keeps the
-  policy honest as the pin moves: new upstream tests written in modern syntax
-  drop out automatically instead of appearing as failures.
+- **An engine-grammar parse filter.** Every remaining file — and every harness
+  file it `includes` — is parsed with the engine's own `parseScript` (the same
+  grammar the engine runs, currently ES5.1 plus ES2015 lexical declarations and
+  block-level function declarations). A file that will not parse under that
+  grammar is testing syntax this engine is not required to accept, so it is
+  excluded structurally rather than by name. Routing the filter through the
+  engine itself is what keeps the policy honest as both the pin and the grammar
+  move: new upstream tests written in still-unsupported syntax drop out
+  automatically, and each syntax milestone widens the selection by construction
+  rather than by a hand-tuned `ecmaVersion`.
 - **Classified exclusions.** What survives all of the above but still must not
   run is carved out one path (or prefix) at a time, each with a category and a
   written reason.
@@ -385,7 +389,7 @@ inventing one would describe something the run never measured.
 The selected subset is small by construction: every path in it was verified to
 pass with this engine, so the low whole-suite percentage is an honest statement
 of how much of Test262 an engine at this language level — ES5.1 plus ES2015
-lexical declarations — has been pointed at, not a pass rate over tests it was
+lexical declarations and block-level function declarations — has been pointed at, not a pass rate over tests it was
 never asked to run.
 
 ## Policy artifacts

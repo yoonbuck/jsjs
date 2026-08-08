@@ -579,16 +579,22 @@ which initializes a lexical binding without a `SetFunctionName` step).
 
 The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
 and block-level function declarations, but no other ES2015 feature, so its
-parser accepts that syntax and rejects every other ES2015 construct as a
-parse-time early error. The constructs rejected by that pass are classes, arrow
-functions, template and tagged template literals, `for`-`of`, generators and
-`yield`, destructuring patterns (object, array, and default/rest/assignment
-patterns), spread elements, `super`, `new.target`, `import`/`export` (module
-syntax), computed/shorthand/method object properties, binary (`0b`) and octal
-(`0o`) numeric literals, and `\u{…}` code-point escapes in strings and
-identifiers. The ES2017 `async`/`await` forms are rejected by the same pass. The
-ES2015 RegExp flags `u` and `y` are also rejected, but by the engine's existing
-ES5.1 flag validation in `src/runtime/regexp-syntax.js`, not by this pass.
+parser accepts that syntax and rejects every other ES2015 construct at parse
+time. Most are refused by the engine's own early-error pass
+(`checkUnsupportedEs2015Node`): classes, arrow functions, template and tagged
+template literals, `for`-`of`, generators and `yield`, destructuring patterns
+(object, array, and default/rest/assignment patterns), spread elements, `super`,
+`new.target`, computed/shorthand/method object properties, binary (`0b`) and
+octal (`0o`) numeric literals, and `\u{…}` code-point escapes in strings and
+identifiers. Two families never reach that pass, because the vendored Acorn
+refuses them itself before it runs: module syntax
+(`import`/`export`/`import()`), rejected because the parser is configured with
+`sourceType: 'script'`, and the ES2017 `async`/`await` forms, which are not ES6
+syntax at `ecmaVersion: 6`. Their entries in the pass's rejection table are
+defensive — kept so a later `sourceType`/`ecmaVersion` change cannot let one
+slip through silently — not reached on any accepted parse. The ES2015 RegExp
+flags `u` and `y` are likewise rejected, but by the engine's existing ES5.1 flag
+validation in `src/runtime/regexp-syntax.js`, not by either mechanism above.
 
 This is a limitation rather than a deviation: a full ES2015 engine accepts all
 of them, and the engine rejects them only because the evaluator does not yet
