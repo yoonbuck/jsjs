@@ -61,6 +61,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run profile:node`              | Invoke the Node CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                        |
 | `npm run profile:browser`           | Invoke the Chromium CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                    |
 | `npm run profile:smoke`             | Capture a checked one-iteration Node CPU profile of steady `arithmetic-loops` to `.benchmark-results/profile-smoke`                                      |
+| `npm run profile:analyze`           | Verify ignored Node/Chromium profiling sidecars against the shared ignored baseline, then atomically regenerate correlation and aggregate analysis JSON  |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
 | `npm run format`                    | Prettier `--check` over the entire repository                                                                                                            |
@@ -95,7 +96,7 @@ URI globals, JSON parse, and JSON stringify.
 
 ### Node-only suites (`test/node/`)
 
-Five suites that need a filesystem and cannot run in the browser or `jsc`:
+Seven suites that need a filesystem and cannot run in the browser or `jsc`:
 
 - `test/node/benchmark-cli.test.js` — validates benchmark CLI argument
   parsing, sequential all-host orchestration, and atomic validated report
@@ -105,6 +106,11 @@ Five suites that need a filesystem and cannot run in the browser or `jsc`:
   monotonic-clock helpers.
 - `test/node/benchmark-summary.test.js` — validates cross-host compatibility
   checks, deterministic CSV output, and summary CLI file I/O.
+- `test/node/profile-analysis.test.js` — covers deterministic profile-sidecar
+  discovery, checksum correlation, metadata/artifact validation, and paired
+  atomic analysis output replacement.
+- `test/node/profiling-cli.test.js` — covers protocol lifecycle cleanup, atomic
+  raw profile output, and Node/Chromium capture orchestration.
 - `test/node/repository-invariants.test.js` — architecture checks: vendor
   invariants, parser dependency isolation, suite registration, Markdown link
   contracts, documentation command validity, reference doc existence.

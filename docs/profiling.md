@@ -48,6 +48,30 @@ for host in node chromium; do
 done
 ```
 
+Correlate the captured sidecars with the shared baseline and regenerate both
+derived evidence files without rerunning profiles:
+
+```sh
+npm run profile:analyze
+```
+
+The package command is exactly:
+
+```sh
+node benchmark/profile/analyze.js \
+  --baseline=.benchmark-results/profiling-baseline \
+  --profiles=.benchmark-results/interpreter-profiling
+```
+
+The analyzer discovers Node and Chromium sidecars in code-unit lexical order,
+requires their declared CPU and allocation artifacts, and matches every
+`host`/`workload`/`mode` capture to its baseline row. It validates compatible
+baseline source/run metadata, runtime versions, capture settings, sidecar
+summary totals, and all four checksums before atomically replacing
+`checksum-correlation.json` and `profile-analysis.json`. A missing row or
+artifact, duplicate/malformed sidecar, or mismatch exits nonzero without
+writing fresh success-shaped output.
+
 The measured profiler durations ranged from 293.0 ms to 12,944.5 ms, so every
 row exceeds the 250 ms target without changing a workload source. Profile
 overhead is intentionally visible: capture duration is much larger than the

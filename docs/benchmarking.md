@@ -74,6 +74,26 @@ node benchmark/profile/cli.js \
   --output=.benchmark-results/profiles
 ```
 
+After capturing a shared baseline and the Node/Chromium sidecars, regenerate
+the deterministic checksum-correlation and aggregate hotspot files with:
+
+```sh
+npm run profile:analyze
+```
+
+The exact direct command is:
+
+```sh
+node benchmark/profile/analyze.js \
+  --baseline=.benchmark-results/profiling-baseline \
+  --profiles=.benchmark-results/interpreter-profiling
+```
+
+Both roots must be repository-relative and may not escape the repository. The
+analyzer rejects missing or duplicate sidecars, missing declared artifacts,
+metadata incompatibility, and any four-way checksum mismatch before atomically
+replacing either derived JSON file.
+
 See [profiling.md](profiling.md) for the reproducible evidence run, its
 checksum-correlation method, and how to interpret cold versus steady captures.
 Raw `.cpuprofile`, `.heapprofile`, sidecar, and benchmark-report artifacts under
