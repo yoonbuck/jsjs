@@ -468,5 +468,16 @@ export function createArgumentsObject(functionObject, args, env) {
     });
   }
 
+  // ES2015 §9.4.4.7 step 17 (mapped) / §9.4.4.6 step 15 (unmapped): every
+  // arguments object gets an `@@iterator` data property whose value is the
+  // intrinsic %Array.prototype.values%, so `for (x of arguments)` works.
+  const iteratorSymbol = functionObject.realm.agent.wellKnownSymbols.iterator;
+  argumentsObject.defineOwnProperty(iteratorSymbol, {
+    value: functionObject.realm.intrinsics.arrayPrototype.get(iteratorSymbol),
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+
   return argumentsObject;
 }

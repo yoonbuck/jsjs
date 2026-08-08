@@ -602,6 +602,10 @@ const tests = [
         '{ const y = 2; }',
         'for (let i = 0; i < 1; i = i + 1) {}',
         'for (const k in this) {}',
+        'for (var x of []) {}',
+        'for (let x of []) {}',
+        'for (const x of []) {}',
+        'for (x of []) {}',
         'l: { let x = 1; }',
       ];
 
@@ -620,7 +624,6 @@ const tests = [
         'var f = () => 1;',
         '`template`;',
         'tag`template`;',
-        'for (var x of []) {}',
         'function* g() { yield 1; }',
         'var d = { a };',
         'var d = { [k]: 1 };',
@@ -713,6 +716,7 @@ const tests = [
         '/x/u;',
         '/x/y;',
         'while (false) function f() {}',
+        'for (x of []) function f() {}',
       ];
 
       for (const source of rejected) {

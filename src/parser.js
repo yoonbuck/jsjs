@@ -201,6 +201,7 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
   ['DoWhileStatement', 'do-while statement'],
   ['ForStatement', 'for statement'],
   ['ForInStatement', 'for-in statement'],
+  ['ForOfStatement', 'for-of statement'],
 ]);
 
 /**
@@ -242,7 +243,7 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * *Reachable* — this pass is what rejects the construct, because the node is the
  * first unsupported one the walk visits on some accepted parse:
  * `ClassDeclaration`, `ClassExpression`, `ArrowFunctionExpression`,
- * `TemplateLiteral`, `TaggedTemplateExpression`, `ForOfStatement`,
+ * `TemplateLiteral`, `TaggedTemplateExpression`,
  * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`,
  * `SpreadElement`, and `MetaProperty` (via `new.target` inside a function).
  *
@@ -290,7 +291,6 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['TemplateLiteral', 'template literals are not supported'],
   ['TemplateElement', 'template literals are not supported'],
   ['TaggedTemplateExpression', 'tagged template literals are not supported'],
-  ['ForOfStatement', '`for`-`of` statements are not supported'],
   ['YieldExpression', 'generators and `yield` are not supported'],
   ['AwaitExpression', '`await` expressions are not supported'],
   ['ObjectPattern', 'destructuring patterns are not supported'],

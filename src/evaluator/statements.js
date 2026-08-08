@@ -18,6 +18,12 @@ import {
 } from '../runtime/environment.js';
 import { putValue, getValue } from '../runtime/reference.js';
 import { enumerableKeysForIn, isEnumerableForIn } from '../runtime/object.js';
+import {
+  getIterator,
+  iteratorClose,
+  iteratorStep,
+  iteratorValue,
+} from '../runtime/iterator.js';
 import { evaluateExpression, evaluateExpressionValue } from './expressions.js';
 import {
   blockDeclarationInstantiation,
@@ -51,6 +57,7 @@ export const STATEMENT_TYPES = new Set([
   'DoWhileStatement',
   'ForStatement',
   'ForInStatement',
+  'ForOfStatement',
   'BreakStatement',
   'ContinueStatement',
   'ReturnStatement',
@@ -103,6 +110,8 @@ export function evaluateStatement(node, context, labelSet = []) {
         return evaluateForStatement(node, context, labelSet);
       case 'ForInStatement':
         return evaluateForInStatement(node, context, labelSet);
+      case 'ForOfStatement':
+        return evaluateForOfStatement(node, context, labelSet);
       case 'BreakStatement':
         return evaluateBreakStatement(node);
       case 'ContinueStatement':
@@ -665,7 +674,7 @@ function evaluateForInStatement(node, context, labelSet) {
  *   left-hand side.
  *
  * @param {any} left
- * @param {string} key
+ * @param {unknown} key
  * @param {EvaluationContext} context
  * @returns {void}
  */
@@ -685,6 +694,145 @@ function assignForInTarget(left, key, context) {
     evaluateExpression(left, context)
   );
   putValue(reference, key);
+}
+
+/**
+ * ECMA-262 §13.7.5.13 `ForIn/OfBodyEvaluation` for the `iterate` kind (a
+ * `for`-`of` loop). Consumes `node.right`'s iterator per the iterator protocol,
+ * binds each yielded value to the loop's left-hand side, and runs the body.
+ *
+ * Closing semantics follow the spec's abrupt-completion handling exactly:
+ *
+ * - `IteratorStep`/`IteratorValue` throwing (the iterator's own `next` failing,
+ *   or a non-object/broken result) propagates *without* `IteratorClose` — the
+ *   iterator faulted, so there is nothing well-defined to close.
+ * - A throw out of binding the value or running the body closes the iterator
+ *   with the throw in hand, so any failure of `return` is swallowed and the
+ *   original throw is re-raised.
+ * - An owned `break`, a `return`, or a `break`/`continue` targeting an outer
+ *   label likewise closes the iterator; here `return`'s own abrupt outcome can
+ *   replace the completion (see `iteratorClose`).
+ * - A normal completion or an owned `continue` keeps iterating and never closes;
+ *   the iterator is closed only by exhausting it (`IteratorStep` returns
+ *   `false`) or by one of the abrupt exits above.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @param {string[]} labelSet
+ * @returns {Completion}
+ */
+function evaluateForOfStatement(node, context, labelSet) {
+  const isLexical =
+    node.left.type === 'VariableDeclaration' && node.left.kind !== 'var';
+
+  // ForIn/OfHeadEvaluation: a lexical head evaluates `right` under a TDZ
+  // environment whose bindings are uninitialized, so the iterable expression
+  // cannot observe the loop's own bindings.
+  /** @type {unknown} */
+  let rightValue;
+  if (isLexical) {
+    const tdzEnv = newDeclarativeEnvironment(context.env);
+    for (const name of boundNames(node.left)) {
+      tdzEnv.createMutableBinding(name, false);
+    }
+    rightValue = evaluateExpressionValue(node.right, {
+      ...context,
+      env: tdzEnv,
+    });
+  } else {
+    rightValue = evaluateExpressionValue(node.right, context);
+  }
+
+  const record = getIterator(context.realm, rightValue);
+  const isConst = isLexical && isConstantDeclaration(node.left);
+
+  /** @type {unknown} */
+  let value = EMPTY;
+
+  for (;;) {
+    // §7.4.5: a throw here is the iterator's own fault — propagate, no close.
+    const step = iteratorStep(record);
+    if (step === false) {
+      return createNormalCompletion(value);
+    }
+    const nextValue = iteratorValue(step);
+
+    /** @type {Completion} */
+    let bodyResult;
+    try {
+      const iterationContext = bindForOfIteration(
+        node.left,
+        nextValue,
+        context,
+        isLexical,
+        isConst,
+      );
+      bodyResult = evaluateStatement(node.body, iterationContext);
+    } catch (error) {
+      // A throw out of binding or the body: close with the throw in hand so the
+      // original throw always wins, then re-raise it.
+      iteratorClose(context.realm, record, true);
+      throw error;
+    }
+
+    const { value: nextValueResult, action } = applyLoopBodyResult(
+      bodyResult,
+      value,
+      labelSet,
+    );
+    value = nextValueResult;
+
+    if (action === 'continue') {
+      continue;
+    }
+
+    if (action === 'break') {
+      iteratorClose(context.realm, record, false);
+      return createNormalCompletion(value);
+    }
+
+    // action === 'propagate': a `return`, a `throw` completion record, or a
+    // `break`/`continue` bound for an enclosing label.
+    iteratorClose(context.realm, record, bodyResult.type === 'throw');
+    return { ...bodyResult, value };
+  }
+}
+
+/**
+ * Binds one value yielded by a `for`-`of` iterator to the loop's left-hand
+ * side, mirroring the three left-hand forms the parser emits:
+ *
+ * - A `let`/`const` head (`isLexical`): a fresh declarative environment is
+ *   created per iteration, its binding declared (immutable for `const`) and
+ *   initialized to `nextValue`, so each iteration captures its own binding.
+ * - A `var` head or a bare assignment target (`Identifier`/`MemberExpression`):
+ *   handled exactly like `for`-`in` via `assignForInTarget` — the `var` binding
+ *   was hoisted and is resolved through the chain, and an assignment target is
+ *   re-evaluated to a fresh `Reference` each iteration.
+ *
+ * @param {any} left
+ * @param {unknown} nextValue
+ * @param {EvaluationContext} context
+ * @param {boolean} isLexical
+ * @param {boolean} isConst
+ * @returns {EvaluationContext}
+ */
+function bindForOfIteration(left, nextValue, context, isLexical, isConst) {
+  if (!isLexical) {
+    assignForInTarget(left, nextValue, context);
+    return context;
+  }
+
+  const iterationEnv = newDeclarativeEnvironment(context.env);
+  for (const name of boundNames(left)) {
+    if (isConst) {
+      iterationEnv.createImmutableBinding(name, true);
+    } else {
+      iterationEnv.createMutableBinding(name, false);
+    }
+    iterationEnv.initializeBinding(name, nextValue);
+  }
+  return { ...context, env: iterationEnv };
 }
 
 /**
