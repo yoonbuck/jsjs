@@ -29,6 +29,39 @@ const tests = [
       );
     },
   },
+  {
+    name: 'function declarations and named expressions get a name property; anonymous expressions get ""',
+    run() {
+      assertSame(run('function f() {} f.name;'), 'f');
+      assertSame(run('(function g() {}).name;'), 'g');
+      assertSame(run('(function () {}).name;'), '');
+    },
+  },
+  {
+    name: 'name and length are configurable but not writable or enumerable',
+    run() {
+      assertSame(
+        run(
+          'function f(a, b) {} var d = Object.getOwnPropertyDescriptor(f, "name"); ' +
+            'd.writable + "," + d.enumerable + "," + d.configurable;',
+        ),
+        'false,false,true',
+      );
+      assertSame(
+        run(
+          'function f(a, b) {} var d = Object.getOwnPropertyDescriptor(f, "length"); ' +
+            'd.value + "," + d.writable + "," + d.enumerable + "," + d.configurable;',
+        ),
+        '2,false,false,true',
+      );
+    },
+  },
+  {
+    name: 'the dynamic Function constructor names its function "anonymous"',
+    run() {
+      assertSame(run('(new Function("return 1;")).name;'), 'anonymous');
+    },
+  },
 ];
 
 export default tests;

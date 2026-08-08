@@ -21,6 +21,8 @@ import { toObject } from './conversion.js';
  *   scope: EnvironmentRecordLike,
  *   strict: boolean,
  *   execute: FunctionBodyExecutor,
+ *   name?: string,
+ *   isMethod?: boolean,
  * }} EngineFunctionOptions
  */
 
@@ -38,7 +40,15 @@ export class EngineFunction extends EngineObject {
   /**
    * @param {EngineFunctionOptions} options
    */
-  constructor({ realm, parameterNames, scope, strict, execute }) {
+  constructor({
+    realm,
+    parameterNames,
+    scope,
+    strict,
+    execute,
+    name = '',
+    isMethod = false,
+  }) {
     super(realm.intrinsics.functionPrototype, 'Function');
 
     /** @type {Realm} */
@@ -50,15 +60,23 @@ export class EngineFunction extends EngineObject {
     /** @type {boolean} */
     this.strict = strict;
     /** @type {boolean} */
-    this._isConstructor = true;
+    this._isConstructor = !isMethod;
     /** @type {FunctionBodyExecutor} */
     this._execute = execute;
+    /** @type {EngineObject | undefined} */
+    this.homeObject = undefined;
 
     this.defineOwnProperty('length', {
       value: parameterNames.length,
       writable: false,
       enumerable: false,
-      configurable: false,
+      configurable: true,
+    });
+    this.defineOwnProperty('name', {
+      value: name,
+      writable: false,
+      enumerable: false,
+      configurable: true,
     });
 
     const prototype = new EngineObject(realm.intrinsics.objectPrototype);

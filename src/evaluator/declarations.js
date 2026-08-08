@@ -266,15 +266,21 @@ export function instantiateFunctionObject(node, context) {
 }
 
 /**
- * Shared "Creating Function Objects" path (ECMA-262 13.2) for function
- * declarations and function expressions.
- *
+ * @typedef {{
+ *   name?: string,
+ *   isMethod?: boolean,
+ *   homeObject?: import('../runtime/object.js').EngineObject,
+ * }} CreateFunctionObjectOptions
+ */
+
+/**
  * @param {any} node
  * @param {import('../runtime/environment.js').EnvironmentRecordLike} scope
  * @param {EvaluationContext} context
+ * @param {CreateFunctionObjectOptions} [options={}]
  * @returns {EngineFunction}
  */
-export function createFunctionObject(node, scope, context) {
+export function createFunctionObject(node, scope, context, options = {}) {
   /** @type {string[]} */
   const parameterNames = [];
 
@@ -293,15 +299,24 @@ export function createFunctionObject(node, scope, context) {
   // the function's own body opens with a "use strict" directive prologue
   // (ECMA-262 10.1.1 — "once strict, always strict" applies transitively).
   const strict = context.strict || hasUseStrictDirective(node.body.body);
+  const name = options.name ?? (node.id ? node.id.name : '');
 
-  return new EngineFunction({
+  const functionObject = new EngineFunction({
     realm: context.realm,
     parameterNames,
     scope,
     strict,
+    name,
+    isMethod: options.isMethod ?? false,
     execute: (functionObject, thisValue, args) =>
       executeFunctionBody(node, functionObject, thisValue, args),
   });
+
+  if (options.homeObject !== undefined) {
+    functionObject.homeObject = options.homeObject;
+  }
+
+  return functionObject;
 }
 
 /**

@@ -49,13 +49,13 @@ export class NativeFunction extends EngineObject {
       value: length,
       writable: false,
       enumerable: false,
-      configurable: false,
+      configurable: true,
     });
     this.defineOwnProperty('name', {
       value: name,
       writable: false,
       enumerable: false,
-      configurable: false,
+      configurable: true,
     });
 
     if (prototype instanceof EngineObject) {
