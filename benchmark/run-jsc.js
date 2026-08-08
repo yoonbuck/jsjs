@@ -48,5 +48,10 @@ async function main() {
       globalThis.__jsjsBenchmarkGeneratedAt.length > 0
         ? globalThis.__jsjsBenchmarkGeneratedAt
         : new Date().toISOString(),
+    runId:
+      typeof globalThis.__jsjsBenchmarkRunId === 'string' &&
+      globalThis.__jsjsBenchmarkRunId.length > 0
+        ? globalThis.__jsjsBenchmarkRunId
+        : `jsc-${new Date().toISOString()}`,
   });
 }

@@ -14,9 +14,10 @@ import { runHostBenchmark } from './run.js';
  *     expectedChecksum: number,
  *   }[],
  * }} config
- * @param {{ generatedAt?: string, version?: string }} [options]
+ * @param {{ generatedAt?: string, runId?: string, version?: string }} [options]
  */
 export function runBrowserPageBenchmark(config, options = {}) {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
   const rawNow =
     typeof globalThis.performance?.now === 'function'
       ? globalThis.performance.now.bind(globalThis.performance)
@@ -31,6 +32,7 @@ export function runBrowserPageBenchmark(config, options = {}) {
     now: monotonicNowFrom(rawNow),
     engine: runtimeEngine,
     config,
-    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    generatedAt,
+    runId: options.runId ?? `chromium-${generatedAt}`,
   });
 }

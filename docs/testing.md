@@ -52,12 +52,12 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:select:check`      | The same derivation, writing nothing: fails if the committed subset is stale                                                                             |
 | `npm run test262:exclusions:check`  | Runs every per-file exclusion; fails on stale exclusions, missing policy paths, or a missing/wrong pinned checkout                                       |
 | `npm run test262:jsc`               | The fixture suite under the `jsc` shell                                                                                                                  |
-| `npm run benchmark`                 | Run the cross-runtime benchmark CLI across Node, Chromium, and `jsc`, writing validated host reports to `.benchmark-results/`                            |
+| `npm run benchmark`                 | Run Node, Chromium, and `jsc` with shared run metadata, atomically promoting the validated report set to `.benchmark-results/`                           |
 | `npm run benchmark:node`            | Run only the Node host benchmark and write `node.json` under the default ignored benchmark output directory                                              |
 | `npm run benchmark:browser`         | Run only the Chromium host benchmark and write `chromium.json` under the default ignored benchmark output directory                                      |
 | `npm run benchmark:jsc`             | Run only the `jsc` host benchmark and write `jsc.json` under the default ignored benchmark output directory                                              |
 | `npm run benchmark:smoke`           | Run the smoke profile under Node and write a seven-workload validated report to `.benchmark-results/smoke/node.json`                                     |
-| `npm run benchmark:summary`         | Read compatible host reports from an ignored benchmark output directory and atomically write deterministic `summary.json` plus `summary.csv`             |
+| `npm run benchmark:summary`         | Reject mixed/stale host runs, then atomically write deterministic `summary.json` plus metadata-bearing `summary.csv`                                     |
 | `npm run ci:contract`               | The full local CI contract: every command CI runs, for real                                                                                              |
 | `npm run typecheck`                 | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                              |
 | `npm run format`                    | Prettier `--check` over the entire repository                                                                                                            |

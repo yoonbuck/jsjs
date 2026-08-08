@@ -51,8 +51,22 @@ const tests = [
       const chromiumReport = createFixtureReport({ host: 'chromium' });
       const summary = summarizeReports([nodeReport, chromiumReport]);
 
-      assertSame(summary.schemaVersion, 1);
+      assertSame(summary.schemaVersion, nodeReport.schemaVersion);
+      assertSame(summary.runId, 'fixture-run');
+      assertSame(summary.generatedAt, '2026-08-07T00:00:00.000Z');
       assertSame(summary.hosts.join(','), 'node,chromium');
+      assertSame(
+        summary.hostMetadata
+          .map(
+            ({ host, version, generatedAt, runId }) =>
+              `${host}:${version}:${generatedAt}:${runId}`,
+          )
+          .join(','),
+        [
+          'node:node-1.0.0:2026-08-07T00:00:00.000Z:fixture-run',
+          'chromium:chromium-1.0.0:2026-08-07T00:00:00.000Z:fixture-run',
+        ].join(','),
+      );
       assertSame(summary.aggregate.length, 4);
       assertSame(
         summary.aggregate.every((row) => row.geometricMeanSlowdown > 0),
@@ -91,15 +105,15 @@ const tests = [
       assertSame(
         summaryToCsv(summary),
         [
-          'host,mode,workload,geometricMeanSlowdown,slowdown,checksum,nativeMedianMs,nativeP95Ms,nativeCoefficientOfVariation,nativeBatchSize,jsjsMedianMs,jsjsP95Ms,jsjsCoefficientOfVariation,jsjsBatchSize,boundary',
-          '"node","cold","alpha",6,4,101,1,1,0,1,4,4,0,2,"Cold ""compile"", execute"',
-          '"node","steady","alpha",4,1,101,1,1,0,1,1,1,0,2,"Steady, execute"',
-          '"node","cold","beta",6,9,202,2,2,0,1,18,18,0,2,"Cold ""compile"", execute"',
-          '"node","steady","beta",4,16,202,2,2,0,1,32,32,0,2,"Steady, execute"',
-          '"chromium","cold","alpha",6,9,101,1,1,0,1,9,9,0,2,"Cold ""compile"", execute"',
-          '"chromium","steady","alpha",4,16,101,1,1,0,1,16,16,0,2,"Steady, execute"',
-          '"chromium","cold","beta",6,4,202,2,2,0,1,8,8,0,2,"Cold ""compile"", execute"',
-          '"chromium","steady","beta",4,1,202,2,2,0,1,2,2,0,2,"Steady, execute"',
+          'runId,generatedAt,host,version,mode,workload,geometricMeanSlowdown,slowdown,checksum,nativeMedianMs,nativeP95Ms,nativeCoefficientOfVariation,nativeBatchSize,jsjsMedianMs,jsjsP95Ms,jsjsCoefficientOfVariation,jsjsBatchSize,boundary',
+          '"fixture-run","2026-08-07T00:00:00.000Z","node","node-1.0.0","cold","alpha",6,4,101,1,1,0,1,4,4,0,2,"Cold ""compile"", execute"',
+          '"fixture-run","2026-08-07T00:00:00.000Z","node","node-1.0.0","steady","alpha",4,1,101,1,1,0,1,1,1,0,2,"Steady, execute"',
+          '"fixture-run","2026-08-07T00:00:00.000Z","node","node-1.0.0","cold","beta",6,9,202,2,2,0,1,18,18,0,2,"Cold ""compile"", execute"',
+          '"fixture-run","2026-08-07T00:00:00.000Z","node","node-1.0.0","steady","beta",4,16,202,2,2,0,1,32,32,0,2,"Steady, execute"',
+          '"fixture-run","2026-08-07T00:00:00.000Z","chromium","chromium-1.0.0","cold","alpha",6,9,101,1,1,0,1,9,9,0,2,"Cold ""compile"", execute"',
+          '"fixture-run","2026-08-07T00:00:00.000Z","chromium","chromium-1.0.0","steady","alpha",4,16,101,1,1,0,1,16,16,0,2,"Steady, execute"',
+          '"fixture-run","2026-08-07T00:00:00.000Z","chromium","chromium-1.0.0","cold","beta",6,4,202,2,2,0,1,8,8,0,2,"Cold ""compile"", execute"',
+          '"fixture-run","2026-08-07T00:00:00.000Z","chromium","chromium-1.0.0","steady","beta",4,1,202,2,2,0,1,2,2,0,2,"Steady, execute"',
           '',
         ].join('\n'),
       );
@@ -132,8 +146,20 @@ const tests = [
 
       expectIncompatible(
         nodeReport,
-        withChanges(chromiumReport, { schemaVersion: 2 }),
+        withChanges(chromiumReport, { schemaVersion: 3 }),
         'schemaVersion',
+      );
+      expectIncompatible(
+        nodeReport,
+        withChanges(chromiumReport, { runId: 'stale-run' }),
+        'runId',
+      );
+      expectIncompatible(
+        nodeReport,
+        withChanges(chromiumReport, {
+          generatedAt: '2026-08-07T01:00:00.000Z',
+        }),
+        'generatedAt',
       );
       expectIncompatible(
         nodeReport,
@@ -212,13 +238,60 @@ const tests = [
       await rm(directoryUrl, { recursive: true, force: true });
     },
   },
+  {
+    name: 'benchmark summary command rejects stale reports from a different run',
+    async run() {
+      const directoryUrl = new URL(
+        `${SUMMARY_DIRECTORY}-stale/`,
+        REPOSITORY_ROOT_URL,
+      );
+
+      await rm(directoryUrl, { recursive: true, force: true });
+      await mkdir(directoryUrl, { recursive: true });
+      await writeJsonFile(
+        new URL('node.json', directoryUrl),
+        createFixtureReport({ host: 'node' }),
+      );
+      await writeJsonFile(
+        new URL('chromium.json', directoryUrl),
+        createFixtureReport({ host: 'chromium', runId: 'stale-run' }),
+      );
+
+      let error;
+      try {
+        await main([
+          'summary',
+          `--input=${SUMMARY_DIRECTORY}-stale`,
+          `--output=${SUMMARY_DIRECTORY}-stale`,
+        ]);
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      assertSame(
+        error instanceof Error && error.message.includes('runId'),
+        true,
+      );
+      assertSame(
+        await fileExists(new URL('summary.json', directoryUrl)),
+        false,
+      );
+
+      await rm(directoryUrl, { recursive: true, force: true });
+    },
+  },
 ];
 
 /**
- * @param {{ host: string }} options
+ * @param {{ host: string, runId?: string, generatedAt?: string }} options
  * @returns {HostReport}
  */
-function createFixtureReport({ host }) {
+function createFixtureReport({
+  host,
+  runId = 'fixture-run',
+  generatedAt = '2026-08-07T00:00:00.000Z',
+}) {
   /** @type {HostReport['config']} */
   const config = {
     profile: 'smoke',
@@ -278,8 +351,9 @@ function createFixtureReport({ host }) {
 
   /** @type {HostReport} */
   const report = {
-    schemaVersion: 1,
-    generatedAt: '2026-08-07T00:00:00.000Z',
+    schemaVersion: 2,
+    generatedAt,
+    runId,
     host,
     version: `${host}-1.0.0`,
     config,
@@ -472,6 +546,28 @@ function withChecksum(report, workloadName, expectedChecksum) {
  */
 async function writeJsonFile(fileUrl, value) {
   await writeFile(fileUrl, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+/**
+ * @param {URL} fileUrl
+ * @returns {Promise<boolean>}
+ */
+async function fileExists(fileUrl) {
+  try {
+    await readFile(fileUrl, 'utf8');
+    return true;
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
 }
 
 export default tests;

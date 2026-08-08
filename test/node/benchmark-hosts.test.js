@@ -9,6 +9,7 @@ import {
 import { runNodeBenchmark } from '../../benchmark/run-node.js';
 import {
   createJscPrelude,
+  discoverJscRuntimeIdentity,
   jscSetupError,
   parseJscReport,
 } from '../../benchmark/spawn-jsc.js';
@@ -60,6 +61,8 @@ const tests = [
 
       assertSame(report.host, 'node');
       assertSame(report.version, process.version);
+      assertSame(typeof report.runId, 'string');
+      assertSame(report.runId.length > 0, true);
       assertSame(report.results.length, 2);
       assertSame(cold.workload, 'arithmetic-loops');
       assertSame(steady.workload, 'arithmetic-loops');
@@ -69,6 +72,34 @@ const tests = [
       assertSame(cold.lanes.jsjs.samplesMs.length, 3);
       assertSame(steady.lanes.native.samplesMs.length, 3);
       assertSame(steady.lanes.jsjs.samplesMs.length, 3);
+    },
+  },
+  {
+    name: 'node benchmark wraps stalled performance clocks monotonically',
+    async run() {
+      const config = resolveBenchmarkConfig({
+        profile: 'smoke',
+        warmups: 1,
+        samples: 1,
+        maxBatchSize: 1,
+        workloads: ['arithmetic-loops'],
+      });
+      const report = await runNodeBenchmark(config, {
+        generatedAt: '2026-08-07T00:00:00.000Z',
+        runId: 'node-clock-fixture',
+        now: () => 7,
+      });
+
+      assertSame(report.runId, 'node-clock-fixture');
+      assertSame(
+        report.results.every((result) =>
+          [
+            ...result.lanes.native.samplesMs,
+            ...result.lanes.jsjs.samplesMs,
+          ].every((sample) => sample > 0),
+        ),
+        true,
+      );
     },
   },
   {
@@ -110,6 +141,39 @@ const tests = [
     },
   },
   {
+    name: 'jsc runtime identity prefers a discovered version and falls back to binary metadata',
+    async run() {
+      assertSame(
+        await discoverJscRuntimeIdentity('jsc', {
+          readVersion: async () => 'JavaScriptCore 620.1.1',
+          readFallback: async () => '/opt/jsc mtimeMs=123',
+        }),
+        'JavaScriptCore 620.1.1',
+      );
+      assertSame(
+        await discoverJscRuntimeIdentity('/opt/jsc', {
+          readVersion: async () => '',
+          readFallback: async () => '/opt/jsc mtimeMs=123',
+        }),
+        '/opt/jsc mtimeMs=123',
+      );
+      assertSame(
+        await discoverJscRuntimeIdentity('/opt/jsc', {
+          readVersion: async () => 'ERROR: invalid option: --version',
+          readFallback: async () => '/opt/jsc mtimeMs=123',
+        }),
+        '/opt/jsc mtimeMs=123',
+      );
+      assertSame(
+        await discoverJscRuntimeIdentity('/opt/jsc', {
+          readVersion: async () => 'undefined',
+          readFallback: async () => '/opt/jsc mtimeMs=123',
+        }),
+        '/opt/jsc mtimeMs=123',
+      );
+    },
+  },
+  {
     name: 'jsc adapter rejects invalid stdout and validates parsed reports',
     run() {
       let validated = 0;
@@ -147,6 +211,7 @@ const tests = [
               },
               {
                 generatedAt: '2026-08-07T00:00:00.000Z',
+                runId: 'jsc-fixture',
                 version: 'jsc',
               },
             ),

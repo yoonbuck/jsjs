@@ -45,7 +45,9 @@ export const PROFILES = Object.freeze({
  */
 export function resolveBenchmarkConfig(options = {}) {
   const profileName = options.profile ?? 'default';
-  const profile = PROFILES[profileName];
+  const profile = Object.prototype.hasOwnProperty.call(PROFILES, profileName)
+    ? PROFILES[profileName]
+    : undefined;
 
   if (profile === undefined) {
     throw new RangeError(`Unknown benchmark profile: ${profileName}`);

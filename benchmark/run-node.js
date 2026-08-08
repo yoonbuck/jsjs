@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { runtimeEngine } from './host.js';
+import { monotonicNowFrom, runtimeEngine } from './host.js';
 import { validateHostReport } from './report.js';
 import { runHostBenchmark } from './run.js';
 
@@ -16,15 +16,18 @@ import { runHostBenchmark } from './run.js';
  *     expectedChecksum: number,
  *   }[],
  * }} config
+ * @param {{ generatedAt?: string, runId?: string, now?: () => number }} [options]
  */
-export async function runNodeBenchmark(config) {
+export async function runNodeBenchmark(config, options = {}) {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
   const report = runHostBenchmark({
     host: 'node',
     version: process.version,
-    now: performance.now.bind(performance),
+    now: monotonicNowFrom(options.now ?? performance.now.bind(performance)),
     engine: runtimeEngine,
     config,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
+    runId: options.runId ?? `node-${generatedAt}`,
   });
 
   return validateHostReport(report);

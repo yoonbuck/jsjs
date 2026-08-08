@@ -36,6 +36,9 @@ declare module 'node:fs/promises' {
     path: string | URL,
     options?: { force?: boolean; recursive?: boolean },
   ): Promise<void>;
+  export function access(path: string | URL, mode?: number): Promise<void>;
+  export function realpath(path: string | URL): Promise<string>;
+  export function stat(path: string | URL): Promise<{ mtimeMs: number }>;
 }
 
 declare module 'node:crypto' {
@@ -45,6 +48,7 @@ declare module 'node:crypto' {
   }
 
   export function createHash(algorithm: string): Hash;
+  export function randomUUID(): string;
 }
 
 declare module 'node:url' {
@@ -54,12 +58,19 @@ declare module 'node:url' {
 
 declare module 'node:path' {
   const path: {
+    delimiter: string;
+    sep: string;
     isAbsolute(path: string): boolean;
+    join(...paths: string[]): string;
+    resolve(...paths: string[]): string;
   };
   export default path;
 }
 
 declare module 'node:fs' {
+  export const constants: {
+    X_OK: number;
+  };
   export function existsSync(path: string | URL): boolean;
 }
 
@@ -135,6 +146,7 @@ declare var __jsjsBenchmarkConfig:
   | ReturnType<typeof import('../benchmark/config.js').resolveBenchmarkConfig>
   | undefined;
 declare var __jsjsBenchmarkGeneratedAt: string | undefined;
+declare var __jsjsBenchmarkRunId: string | undefined;
 declare var __jsjsBenchmarkVersion: string | undefined;
 
 declare module '/benchmark/run-browser-page.js' {
@@ -142,7 +154,7 @@ declare module '/benchmark/run-browser-page.js' {
     config: ReturnType<
       typeof import('../benchmark/config.js').resolveBenchmarkConfig
     >,
-    options?: { generatedAt?: string; version?: string },
+    options?: { generatedAt?: string; runId?: string; version?: string },
   ): ReturnType<typeof import('../benchmark/run.js').runHostBenchmark>;
 }
 

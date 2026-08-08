@@ -30,6 +30,8 @@ const CHROMIUM_SETUP_MESSAGE =
  * }} config
  * @param {{
  *   launch?: () => Promise<import('playwright').Browser>,
+ *   generatedAt?: string,
+ *   runId?: string,
  * }} [options]
  */
 export async function runChromiumBenchmark(config, options = {}) {
@@ -43,7 +45,8 @@ export async function runChromiumBenchmark(config, options = {}) {
   }
 
   try {
-    const generatedAt = new Date().toISOString();
+    const generatedAt = options.generatedAt ?? new Date().toISOString();
+    const runId = options.runId ?? `chromium-${generatedAt}`;
     const version =
       typeof browser.version === 'function' ? browser.version() : 'chromium';
     const page = await browser.newPage();
@@ -77,6 +80,7 @@ export async function runChromiumBenchmark(config, options = {}) {
       async ({
         benchmarkConfig,
         benchmarkGeneratedAt,
+        benchmarkRunId,
         benchmarkVersion,
         modulePath,
       }) => {
@@ -87,12 +91,14 @@ export async function runChromiumBenchmark(config, options = {}) {
 
         return runBrowserPageBenchmark(benchmarkConfig, {
           generatedAt: benchmarkGeneratedAt,
+          runId: benchmarkRunId,
           version: benchmarkVersion,
         });
       },
       {
         benchmarkConfig: config,
         benchmarkGeneratedAt: generatedAt,
+        benchmarkRunId: runId,
         benchmarkVersion: version,
         modulePath: '/benchmark/run-browser-page.js',
       },

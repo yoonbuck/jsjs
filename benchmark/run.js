@@ -5,7 +5,7 @@ import { summarizeSamples } from './statistics.js';
 
 /** @type {Readonly<Record<'cold' | 'steady', string>>} */
 const BOUNDARIES = Object.freeze({
-  cold: 'Native cold compiles workload source on every invocation; jsjs cold creates a fresh realm and evaluates workload source on every invocation.',
+  cold: 'Cold uses one unbatched invocation per sample: native constructs a unique Function source and invokes it; jsjs creates a fresh realm and evaluates the workload source.',
   steady:
     'Native steady invokes one precompiled host function; jsjs steady invokes one pre-created guest function in one pre-created realm.',
 });
@@ -41,10 +41,12 @@ const MODES = Object.freeze(['cold', 'steady']);
  *     }[],
  *   },
  *   generatedAt: string,
+ *   runId: string,
  * }} options
  * @returns {{
- *   schemaVersion: 1,
+ *   schemaVersion: 2,
  *   generatedAt: string,
+ *   runId: string,
  *   host: string,
  *   version: string,
  *   config: {
@@ -79,6 +81,7 @@ export function runHostBenchmark({
   engine,
   config,
   generatedAt,
+  runId,
 }) {
   const results = [];
 
@@ -91,12 +94,14 @@ export function runHostBenchmark({
         expectedChecksum: workload.expectedChecksum,
         now,
         context: `${mode} native ${workload.name}`,
+        mode,
       });
       const jsjs = sampleLane(executors.jsjs[mode], {
         config,
         expectedChecksum: workload.expectedChecksum,
         now,
         context: `${mode} jsjs ${workload.name}`,
+        mode,
       });
 
       results.push(
@@ -118,6 +123,7 @@ export function runHostBenchmark({
   return Object.freeze({
     schemaVersion: REPORT_SCHEMA_VERSION,
     generatedAt,
+    runId,
     host,
     version,
     config,
@@ -183,6 +189,7 @@ function createExecutors(engine, workload) {
  *   expectedChecksum: number,
  *   now: () => number,
  *   context: string,
+ *   mode: 'cold' | 'steady',
  * }} options
  * @returns {LaneResult}
  */
@@ -194,28 +201,31 @@ function sampleLane(execute, options) {
       expectedChecksum: options.expectedChecksum,
       context: options.context,
     });
-  const calibration = calibrateBatchSize(runBatch, {
-    expectedChecksum: options.expectedChecksum,
-    targetSampleMs: options.config.targetSampleMs,
-    maxBatchSize: options.config.maxBatchSize,
-    context: options.context,
-  });
+  const batchSize =
+    options.mode === 'cold'
+      ? 1
+      : calibrateBatchSize(runBatch, {
+          expectedChecksum: options.expectedChecksum,
+          targetSampleMs: options.config.targetSampleMs,
+          maxBatchSize: options.config.maxBatchSize,
+          context: options.context,
+        }).batchSize;
 
   for (let index = 0; index < options.config.warmups; index += 1) {
-    runBatch(calibration.batchSize);
+    runBatch(batchSize);
   }
 
   const samplesMs = [];
   const normalizedSamplesMs = [];
 
   for (let index = 0; index < options.config.samples; index += 1) {
-    const measurement = runBatch(calibration.batchSize);
+    const measurement = runBatch(batchSize);
     samplesMs.push(measurement.elapsedMs);
-    normalizedSamplesMs.push(measurement.elapsedMs / calibration.batchSize);
+    normalizedSamplesMs.push(measurement.elapsedMs / batchSize);
   }
 
   return Object.freeze({
-    batchSize: calibration.batchSize,
+    batchSize,
     samplesMs: Object.freeze(samplesMs),
     normalizedSamplesMs: Object.freeze(normalizedSamplesMs),
     summary: summarizeSamples(normalizedSamplesMs),

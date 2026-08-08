@@ -1,9 +1,13 @@
-import { readFile, rm } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { resolveBenchmarkConfig } from '../../benchmark/config.js';
 import { runNodeBenchmark } from '../../benchmark/run-node.js';
 import { parseBenchmarkArguments, main } from '../../benchmark/cli.js';
-import { writeHostReport } from '../../benchmark/output.js';
+import {
+  writeHostReport,
+  writeHostReportsAtomically,
+} from '../../benchmark/output.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const OUTPUT_DIRECTORY = '.benchmark-results/test-node-cli';
@@ -32,6 +36,23 @@ const tests = [
           },
         }),
       );
+    },
+  },
+  {
+    name: 'benchmark CLI writes failures to stderr without polluting stdout',
+    run() {
+      const result = spawnSync(
+        process.argv[0],
+        ['benchmark/cli.js', 'not-a-command'],
+        {
+          cwd: REPOSITORY_ROOT_URL.pathname,
+          encoding: 'utf8',
+        },
+      );
+
+      assertSame(result.status, 1);
+      assertSame(result.stdout, '');
+      assertSame(result.stderr.includes('Unknown benchmark command'), true);
     },
   },
   {
@@ -76,6 +97,43 @@ const tests = [
         ).message.includes('outside repository'),
         true,
       );
+    },
+  },
+  {
+    name: 'benchmark output atomically replaces stale host reports and cleans staging files',
+    async run() {
+      const config = resolveBenchmarkConfig({
+        profile: 'smoke',
+        warmups: 1,
+        samples: 1,
+        maxBatchSize: 1,
+        workloads: ['arrays'],
+      });
+      const report = await runNodeBenchmark(config, {
+        generatedAt: '2026-08-07T00:00:00.000Z',
+        runId: 'atomic-fixture',
+      });
+      const outputDirectory = `${OUTPUT_DIRECTORY}-atomic`;
+      const outputUrl = new URL(`${outputDirectory}/`, REPOSITORY_ROOT_URL);
+
+      await rm(outputUrl, { recursive: true, force: true });
+      await mkdir(outputUrl, { recursive: true });
+      await writeFile(
+        new URL('stale-host.json', outputUrl),
+        '{"runId":"stale"}\n',
+        'utf8',
+      );
+      await writeHostReportsAtomically(outputDirectory, [report]);
+
+      const fileNames = (await readdir(outputUrl)).sort();
+      assertSame(fileNames.join(','), 'node.json');
+      assertSame(
+        JSON.parse(await readFile(new URL('node.json', outputUrl), 'utf8'))
+          .runId,
+        'atomic-fixture',
+      );
+
+      await rm(outputUrl, { recursive: true, force: true });
     },
   },
   {
@@ -139,13 +197,24 @@ const tests = [
       const calls = [];
       let activeHosts = 0;
       let peakHosts = 0;
-      /** @type {typeof writeHostReport} */
-      const writeReport = async (outputDirectory, report) => {
-        calls.push(`write:${outputDirectory}:${report.host}`);
-        return new URL('write-report.json', REPOSITORY_ROOT_URL);
+      /**
+       * @param {string} outputDirectory
+       * @param {readonly { host: string }[]} reports
+       */
+      const writeReports = async (outputDirectory, reports) => {
+        calls.push(
+          `write:${outputDirectory}:${reports.map((report) => report.host).join(',')}`,
+        );
+        return [];
       };
 
       await main(['run', '--host=all', `--output=${OUTPUT_DIRECTORY}`], {
+        createRunMetadata() {
+          return {
+            generatedAt: '2026-08-07T00:00:00.000Z',
+            runId: 'all-host-fixture',
+          };
+        },
         resolveConfig(options) {
           calls.push(`config:${JSON.stringify(options)}`);
           return resolveBenchmarkConfig({
@@ -158,7 +227,7 @@ const tests = [
           chromium: createRunner('chromium'),
           jsc: createRunner('jsc'),
         },
-        writeReport,
+        writeReports,
       });
 
       assertSame(
@@ -167,30 +236,30 @@ const tests = [
           'config:{}',
           'start:node',
           'end:node',
-          `write:${OUTPUT_DIRECTORY}:node`,
           'start:chromium',
           'end:chromium',
-          `write:${OUTPUT_DIRECTORY}:chromium`,
           'start:jsc',
           'end:jsc',
-          `write:${OUTPUT_DIRECTORY}:jsc`,
+          `write:${OUTPUT_DIRECTORY}:node,chromium,jsc`,
         ]),
       );
       assertSame(peakHosts, 1);
 
       /**
        * @param {'node' | 'chromium' | 'jsc'} host
-       * @returns {() => Promise<{ host: 'node' | 'chromium' | 'jsc' }>}
+       * @returns {(config: unknown, metadata: { generatedAt: string, runId: string }) => Promise<{ host: 'node' | 'chromium' | 'jsc', generatedAt: string, runId: string }>}
        */
       function createRunner(host) {
-        return async () => {
+        return async (_config, metadata) => {
           calls.push(`start:${host}`);
           activeHosts += 1;
           peakHosts = Math.max(peakHosts, activeHosts);
           await Promise.resolve();
           calls.push(`end:${host}`);
           activeHosts -= 1;
-          return { host };
+          assertSame(metadata.generatedAt, '2026-08-07T00:00:00.000Z');
+          assertSame(metadata.runId, 'all-host-fixture');
+          return { host, ...metadata };
         };
       }
     },

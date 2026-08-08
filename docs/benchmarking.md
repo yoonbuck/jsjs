@@ -1,7 +1,7 @@
 # Benchmarking
 
 `benchmark/` compares native JavaScript with jsjs across the same deterministic
-ES5 workloads. It is a correctness-first harness: every batch verifies a
+ES5 workloads. It is a correctness-first harness: every invocation verifies a
 committed checksum, every written artifact is schema-validated, and CI smoke
 runs check only that the harness executes correctly. There are no committed
 latency baselines, thresholds, or regression decisions.
@@ -33,7 +33,9 @@ That runs `prepare`, which populates the generated `vendor/` tree.
   PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run benchmark:jsc
   ```
 
-  `benchmark/spawn-jsc.js` also honors `JSC=/path/to/jsc`.
+  `benchmark/spawn-jsc.js` also honors `JSC=/path/to/jsc`. Reports record the
+  version reported by `jsc --version`; if that is unavailable, they record the
+  resolved binary path and modification time.
 
 All benchmark output directories must be repository-relative. Absolute paths and
 paths that escape the repository are rejected.
@@ -75,14 +77,20 @@ Options:
 | `--host=<host>`                               | Required. `<host>` is `node`, `chromium`, `jsc`, or `all`. Repeat `--host` to select multiple concrete hosts, or use `--host=all` by itself. Duplicate hosts are rejected. |
 | `--profile=<profile>`                         | Optional. `<profile>` is `default` or `smoke`. Defaults to `default`.                                                                                                      |
 | `--workload=<name>`                           | Optional and repeatable. Defaults to every workload in the selected profile.                                                                                               |
-| `--warmups=<positive integer>`                | Optional override for warmup batch count.                                                                                                                                  |
-| `--samples=<positive integer>`                | Optional override for measured batch count.                                                                                                                                |
-| `--target-sample-ms=<positive finite number>` | Optional calibration target for one measured batch.                                                                                                                        |
-| `--max-batch-size=<positive integer>`         | Optional hard cap on calibrated batch size.                                                                                                                                |
+| `--warmups=<positive integer>`                | Optional override for warmup count: single invocations in cold mode, calibrated batches in steady mode.                                                                    |
+| `--samples=<positive integer>`                | Optional override for measured sample count: single invocations in cold mode, calibrated batches in steady mode.                                                           |
+| `--target-sample-ms=<positive finite number>` | Optional calibration target for one steady-mode measured batch. Cold samples are never batched.                                                                            |
+| `--max-batch-size=<positive integer>`         | Optional hard cap on steady-mode calibrated batch size.                                                                                                                    |
 | `--output=<repo-relative directory>`          | Optional output directory. Defaults to `.benchmark-results`.                                                                                                               |
 
 Unknown options, missing option values, invalid numbers, unknown profiles,
 unknown workloads, duplicate hosts, and unsafe output directories fail fast.
+CLI diagnostics are written to stderr.
+
+One `run` command creates a shared `runId` and `generatedAt` for every selected
+host. Host reports are written to a staging area and promoted together only
+after every selected host succeeds. Promotion removes stale host JSON from the
+output directory and cleans staging data on both success and failure.
 
 ### `summary`
 
@@ -100,7 +108,9 @@ Options:
 | `--output=<repo-relative directory>` | Optional. Defaults to the input directory.                 |
 
 `summary` sorts input file names lexically by code unit before reading them. It
-writes `summary.json` and `summary.csv` atomically.
+rejects reports from different `runId` or `generatedAt` values, including stale
+host JSON left from another run, then writes `summary.json` and `summary.csv`
+atomically.
 
 ## Workloads and profiles
 
@@ -128,12 +138,13 @@ Profile defaults come from `benchmark/config.js`:
 
 Each report stores the boundary string per result:
 
-- `cold`: `Native cold compiles workload source on every invocation; jsjs cold creates a fresh realm and evaluates workload source on every invocation.`
+- `cold`: `Cold uses one unbatched invocation per sample: native constructs a unique Function source and invokes it; jsjs creates a fresh realm and evaluates the workload source.`
 - `steady`: `Native steady invokes one precompiled host function; jsjs steady invokes one pre-created guest function in one pre-created realm.`
 
 In concrete terms:
 
-- **Native cold** measures `Function` construction plus one call.
+- **Native cold** measures construction of a source string unique to that
+  invocation plus one call, preventing host compile-cache reuse.
 - **jsjs cold** measures fresh realm creation plus `evaluateScript` of the
   workload source.
 - **Native steady** measures repeated calls to one precompiled function.
@@ -146,7 +157,14 @@ full host startup time.
 
 ## Calibration, warmups, and statistics
 
-Each host, workload, mode, and lane (`native` and `jsjs`) is calibrated
+Cold mode uses the fixed work encoded in the selected workload source. Every
+cold warmup and measured sample is exactly one invocation, so `batchSize` is
+always `1`, `samplesMs` equals `normalizedSamplesMs`, and both native and jsjs
+use symmetric one-source-to-result sample boundaries. The default sources are
+scaled for measurement; smoke sources are intentionally smaller and remain
+correctness-only.
+
+Steady mode calibrates each host, workload, and lane (`native` and `jsjs`)
 independently:
 
 1. Run a timed probe batch, starting at size `1`.
@@ -188,7 +206,7 @@ does not derive expected values from a native baseline run.
 
 Checksum validation happens during:
 
-- calibration
+- steady-mode calibration
 - warmups
 - measured sampling
 - report validation before write
@@ -212,12 +230,13 @@ The default output tree is ignored by git:
 
 ### Host report JSON (`<host>.json`)
 
-Every host report is validated against schema version `1` before it is written:
+Every host report is validated against schema version `2` before it is written:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedAt": "2026-08-07T00:00:00.000Z",
+  "runId": "shared UUID for one CLI run",
   "host": "node|chromium|jsc",
   "version": "host runtime version string",
   "config": {
@@ -243,9 +262,9 @@ Every host report is validated against schema version `1` before it is written:
       "slowdown": 1.23,
       "lanes": {
         "native": {
-          "batchSize": 128,
+          "batchSize": 1,
           "samplesMs": [12.1, 12.0, 12.3],
-          "normalizedSamplesMs": [0.0945, 0.0938, 0.0961],
+          "normalizedSamplesMs": [12.1, 12.0, 12.3],
           "summary": {
             "median": 0.0945,
             "p95": 0.0961,
@@ -276,12 +295,14 @@ There is one result row for every workload/mode pair, so the total row count is
 `benchmark/summarize.js` accepts only mutually compatible host reports. The
 summary schema is:
 
-- `schemaVersion: 1`
+- `schemaVersion: 2`
+- `runId` and `generatedAt`: shared run identity copied from the host reports
 - `hosts`: host names in the lexical file-read order used by the CLI
+- `hostMetadata`: `{ host, version, generatedAt, runId }[]`
 - `config`: the shared benchmark configuration
 - `methodology`: `{ mode, boundary }[]`
-- `aggregate`: `{ host, mode, geometricMeanSlowdown }[]`
-- `workloads`: rows with `host`, `mode`, `workload`,
+- `aggregate`: `{ runId, generatedAt, host, version, mode, geometricMeanSlowdown }[]`
+- `workloads`: rows with `runId`, `generatedAt`, `host`, `version`, `mode`, `workload`,
   `geometricMeanSlowdown`, `slowdown`, `checksum`, `nativeMedianMs`,
   `nativeP95Ms`, `nativeCoefficientOfVariation`, `nativeBatchSize`,
   `jsjsMedianMs`, `jsjsP95Ms`, `jsjsCoefficientOfVariation`,
@@ -292,7 +313,7 @@ summary schema is:
 `summary.csv` writes the same per-workload rows with this exact header order:
 
 ```text
-host,mode,workload,geometricMeanSlowdown,slowdown,checksum,nativeMedianMs,nativeP95Ms,nativeCoefficientOfVariation,nativeBatchSize,jsjsMedianMs,jsjsP95Ms,jsjsCoefficientOfVariation,jsjsBatchSize,boundary
+runId,generatedAt,host,version,mode,workload,geometricMeanSlowdown,slowdown,checksum,nativeMedianMs,nativeP95Ms,nativeCoefficientOfVariation,nativeBatchSize,jsjsMedianMs,jsjsP95Ms,jsjsCoefficientOfVariation,jsjsBatchSize,boundary
 ```
 
 ## Reproducibility guidance
@@ -308,9 +329,9 @@ For useful comparisons:
 - retain the raw host reports: `samplesMs` and `normalizedSamplesMs` are the
   evidence behind every summary statistic
 
-If you aggregate reports, aggregate only runs produced from the same committed
-workload set and the same configuration. `summary` enforces this by rejecting
-schema, configuration, workload-order, and checksum divergence.
+If you aggregate reports, produce them in one multi-host command. `summary`
+enforces this by rejecting run identity, timestamp, schema, configuration,
+workload-order, and checksum divergence.
 
 ## Interpretation caveats
 

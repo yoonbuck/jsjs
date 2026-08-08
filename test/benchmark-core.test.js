@@ -41,6 +41,7 @@ function cloneValue(value) {
 /**
  * @param {{
  *   results: readonly {
+ *     boundary: string,
  *     mode: 'cold' | 'steady',
  *     lanes: {
  *       native: {
@@ -59,6 +60,7 @@ function cloneValue(value) {
  * }} report
  * @param {'cold' | 'steady'} mode
  * @returns {{
+ *   boundary: string,
  *   mode: 'cold' | 'steady',
  *   lanes: {
  *     native: {
@@ -127,13 +129,16 @@ const tests = [
           workloads: ['arithmetic-loops'],
         }),
         generatedAt: '2026-08-07T00:00:00.000Z',
+        runId: 'fixture-run',
       });
       const badSchema = cloneValue(report);
+      const missingRunId = cloneValue(report);
       const badChecksum = cloneValue(report);
       const badSampleCount = cloneValue(report);
       const emptyWorkloads = cloneValue(report);
 
       badSchema.schemaVersion = REPORT_SCHEMA_VERSION + 1;
+      delete missingRunId.runId;
       badChecksum.results[0].checksum += 1;
       badSampleCount.results[0].lanes.native.samplesMs.pop();
       emptyWorkloads.config.workloads = [];
@@ -145,6 +150,13 @@ const tests = [
           () => validateHostReport(badSchema),
           TypeError,
         ).message.includes('schemaVersion'),
+        true,
+      );
+      assertSame(
+        assertThrows(
+          () => validateHostReport(missingRunId),
+          TypeError,
+        ).message.includes('runId'),
         true,
       );
       assertSame(
@@ -214,6 +226,7 @@ const tests = [
           workloads: ['arithmetic-loops'],
         }),
         generatedAt: '2026-08-07T00:00:00.000Z',
+        runId: 'fixture-run',
       });
       const coldResult = findResult(report, 'cold');
       const steadyResult = findResult(report, 'steady');
@@ -221,29 +234,32 @@ const tests = [
       assertSame(report.schemaVersion, REPORT_SCHEMA_VERSION);
       assertSame(report.results.length, 2);
       assertSame(executorFactories, 1);
-      assertSame(coldResult.lanes.native.batchSize, 5);
-      assertSame(coldResult.lanes.native.samplesMs.join(','), '5,5,5');
+      assertSame(coldResult.lanes.native.batchSize, 1);
+      assertSame(coldResult.lanes.native.samplesMs.join(','), '1,1,1');
       assertSame(
         coldResult.lanes.native.normalizedSamplesMs.join(','),
         '1,1,1',
       );
-      assertSame(coldResult.lanes.jsjs.batchSize, 3);
-      assertSame(coldResult.lanes.jsjs.samplesMs.join(','), '6,6,6');
+      assertSame(coldResult.lanes.jsjs.batchSize, 1);
+      assertSame(coldResult.lanes.jsjs.samplesMs.join(','), '2,2,2');
       assertSame(coldResult.lanes.jsjs.normalizedSamplesMs.join(','), '2,2,2');
       assertSame(steadyResult.lanes.native.batchSize, 5);
       assertSame(steadyResult.lanes.jsjs.batchSize, 3);
       assertSame(coldResult.slowdown, 2);
       assertSame(steadyResult.slowdown, 2);
+      assertSame(
+        coldResult.boundary.includes('one unbatched invocation'),
+        true,
+      );
     },
   },
   {
-    name: 'host benchmark rejects masked checksum mismatches from calibration warmup and measured batches',
+    name: 'host benchmark rejects cold checksum mismatches from unbatched warmup and measured invocations',
     run() {
       const expectedChecksum = 326514743;
       const badInvocations = Object.freeze({
-        calibration: 2,
-        warmup: 7,
-        measured: 12,
+        warmup: 1,
+        measured: 2,
       });
 
       for (const [, badInvocation] of Object.entries(badInvocations)) {
@@ -292,6 +308,7 @@ const tests = [
                 workloads: ['arithmetic-loops'],
               }),
               generatedAt: '2026-08-07T00:00:00.000Z',
+              runId: 'fixture-run',
             }),
           Error,
         );
@@ -384,7 +401,7 @@ const tests = [
     },
   },
   {
-    name: 'native executors compile cold calls each time and steady calls once',
+    name: 'native executors compile unique cold sources each time and steady source once',
     run() {
       /** @type {string[]} */
       const compileSources = [];
@@ -422,11 +439,14 @@ const tests = [
       assertSame(steadyCalls, 2);
       assertSame(compileSources.length, 3);
       assertSame(
-        compileSources.filter(
-          (source) => source === 'return (function () { return 17; }());',
-        ).length,
-        2,
+        compileSources[1].includes('return (function () { return 17; }());'),
+        true,
       );
+      assertSame(
+        compileSources[2].includes('return (function () { return 17; }());'),
+        true,
+      );
+      assertSame(compileSources[1] === compileSources[2], false);
       assertSame(
         compileSources.filter(
           (source) => source === 'return function () { return 17; };',
@@ -631,6 +651,11 @@ const tests = [
         () => resolveBenchmarkConfig({ profile: 'missing' }),
         RangeError,
       );
+      assertThrows(
+        () => resolveBenchmarkConfig({ profile: 'toString' }),
+        RangeError,
+      );
+      assertThrows(() => workloadsForProfile('toString'), RangeError);
       assertThrows(
         () =>
           resolveBenchmarkConfig({

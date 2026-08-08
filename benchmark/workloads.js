@@ -287,7 +287,12 @@ const PROFILE_WORKLOADS = Object.freeze({
  * @returns {readonly Workload[]}
  */
 export function workloadsForProfile(profile) {
-  const workloads = PROFILE_WORKLOADS[profile];
+  const workloads = Object.prototype.hasOwnProperty.call(
+    PROFILE_WORKLOADS,
+    profile,
+  )
+    ? PROFILE_WORKLOADS[profile]
+    : undefined;
 
   if (workloads === undefined) {
     throw new RangeError(`Unknown benchmark profile: ${profile}`);

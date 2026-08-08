@@ -7,12 +7,18 @@ import { geometricMean } from './statistics.js';
  * @typedef {ReturnType<typeof import('./run.js').runHostBenchmark>} HostReport
  * @typedef {HostReport['results'][number]} HostResult
  * @typedef {{
+ *   runId: string,
+ *   generatedAt: string,
  *   host: string,
+ *   version: string,
  *   mode: 'cold' | 'steady',
  *   geometricMeanSlowdown: number,
  * }} AggregateRow
  * @typedef {{
+ *   runId: string,
+ *   generatedAt: string,
  *   host: string,
+ *   version: string,
  *   mode: 'cold' | 'steady',
  *   workload: string,
  *   geometricMeanSlowdown: number,
@@ -30,8 +36,16 @@ import { geometricMean } from './statistics.js';
  * }} WorkloadRow
  * @typedef {keyof WorkloadRow} CsvColumn
  * @typedef {{
- *   schemaVersion: 1,
+ *   schemaVersion: 2,
+ *   runId: string,
+ *   generatedAt: string,
  *   hosts: readonly string[],
+ *   hostMetadata: readonly {
+ *     host: string,
+ *     version: string,
+ *     generatedAt: string,
+ *     runId: string,
+ *   }[],
  *   config: HostReport['config'],
  *   methodology: readonly { mode: 'cold' | 'steady', boundary: string }[],
  *   aggregate: readonly AggregateRow[],
@@ -41,7 +55,10 @@ import { geometricMean } from './statistics.js';
 
 /** @type {readonly CsvColumn[]} */
 const CSV_COLUMNS = Object.freeze([
+  'runId',
+  'generatedAt',
   'host',
+  'version',
   'mode',
   'workload',
   'geometricMeanSlowdown',
@@ -134,7 +151,10 @@ export function summarizeReports(reports) {
       );
       aggregate.push(
         Object.freeze({
+          runId: report.runId,
+          generatedAt: report.generatedAt,
           host: report.host,
+          version: report.version,
           mode,
           geometricMeanSlowdown,
         }),
@@ -159,7 +179,10 @@ export function summarizeReports(reports) {
 
         workloads.push(
           Object.freeze({
+            runId: report.runId,
+            generatedAt: report.generatedAt,
             host: report.host,
+            version: report.version,
             mode,
             workload: workload.name,
             geometricMeanSlowdown,
@@ -184,7 +207,19 @@ export function summarizeReports(reports) {
 
   return Object.freeze({
     schemaVersion: REPORT_SCHEMA_VERSION,
+    runId: reference.runId,
+    generatedAt: reference.generatedAt,
     hosts: Object.freeze(validatedReports.map((report) => report.host)),
+    hostMetadata: Object.freeze(
+      validatedReports.map((report) =>
+        Object.freeze({
+          host: report.host,
+          version: report.version,
+          generatedAt: report.generatedAt,
+          runId: report.runId,
+        }),
+      ),
+    ),
     config: reference.config,
     methodology,
     aggregate: Object.freeze(aggregate),
@@ -307,6 +342,20 @@ function boundaryForMode(report, mode, host) {
  * @returns {void}
  */
 function assertCompatible(reference, candidate) {
+  assertSameValue(
+    reference.host,
+    candidate.host,
+    'runId',
+    candidate.runId,
+    reference.runId,
+  );
+  assertSameValue(
+    reference.host,
+    candidate.host,
+    'generatedAt',
+    candidate.generatedAt,
+    reference.generatedAt,
+  );
   assertSameValue(
     reference.host,
     candidate.host,

@@ -1,4 +1,4 @@
-export const REPORT_SCHEMA_VERSION = 1;
+export const REPORT_SCHEMA_VERSION = 2;
 
 const MODES = Object.freeze(['cold', 'steady']);
 
@@ -12,6 +12,7 @@ export function validateHostReport(value) {
 
   exactNumberAt(report.schemaVersion, 'schemaVersion', REPORT_SCHEMA_VERSION);
   nonEmptyStringAt(report.generatedAt, 'generatedAt');
+  nonEmptyStringAt(report.runId, 'runId');
   nonEmptyStringAt(report.host, 'host');
   nonEmptyStringAt(report.version, 'version');
 

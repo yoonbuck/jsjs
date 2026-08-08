@@ -1,6 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { resolveBenchmarkConfig } from './config.js';
-import { writeHostReport, resolveOutputDirectory } from './output.js';
+import {
+  writeHostReportsAtomically,
+  resolveOutputDirectory,
+} from './output.js';
 import { runChromiumBenchmark } from './run-browser.js';
 import { runJscBenchmark } from './spawn-jsc.js';
 import { runNodeBenchmark } from './run-node.js';
@@ -34,7 +38,7 @@ const DEFAULT_RUNNERS = Object.freeze({
 if (isMain(process.argv[1])) {
   main(process.argv.slice(2)).catch((error) => {
     process.exitCode = 1;
-    process.stdout.write(`${formatError(error)}\n`);
+    process.stderr.write(`${formatError(error)}\n`);
   });
 }
 
@@ -238,8 +242,9 @@ function parseSummaryArguments(argumentsList) {
  * @param {readonly string[]} argv
  * @param {{
  *   resolveConfig?: typeof resolveBenchmarkConfig,
- *   runners?: Readonly<Record<BenchmarkHost, (config: ReturnType<typeof resolveBenchmarkConfig>) => Promise<unknown>>>,
- *   writeReport?: typeof writeHostReport,
+ *   createRunMetadata?: () => { generatedAt: string, runId: string },
+ *   runners?: Readonly<Record<BenchmarkHost, (config: ReturnType<typeof resolveBenchmarkConfig>, metadata: { generatedAt: string, runId: string }) => Promise<unknown>>>,
+ *   writeReports?: typeof writeHostReportsAtomically,
  *   summarizeDirectory?: typeof summarizeReportDirectory,
  * }} [options]
  * @returns {Promise<unknown[] | Awaited<ReturnType<typeof summarizeReportDirectory>>>}
@@ -255,8 +260,10 @@ export async function main(argv, options = {}) {
 
   const resolveConfig = options.resolveConfig ?? resolveBenchmarkConfig;
   const runners = options.runners ?? DEFAULT_RUNNERS;
-  const writeReport = options.writeReport ?? writeHostReport;
+  const writeReports = options.writeReports ?? writeHostReportsAtomically;
+  const createMetadata = options.createRunMetadata ?? createRunMetadata;
   const config = resolveConfig(parsed.config);
+  const metadata = createMetadata();
   /** @type {unknown[]} */
   const reports = [];
 
@@ -267,13 +274,23 @@ export async function main(argv, options = {}) {
       throw new Error(`Missing benchmark host runner: ${host}`);
     }
 
-    const report = await runHost(config);
+    const report = await runHost(config, metadata);
 
-    await writeReport(parsed.outputDirectory, report);
     reports.push(report);
   }
 
+  await writeReports(parsed.outputDirectory, /** @type {any} */ (reports));
   return reports;
+}
+
+/**
+ * @returns {{ generatedAt: string, runId: string }}
+ */
+function createRunMetadata() {
+  return {
+    generatedAt: new Date().toISOString(),
+    runId: randomUUID(),
+  };
 }
 
 /**

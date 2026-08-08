@@ -8,11 +8,15 @@ export function createNativeExecutors(workload, compile = Function) {
   const steadyFunction = /** @type {() => number} */ (
     compileFunction(`return ${functionSourceFor(workload.source)};`)()
   );
+  let coldInvocation = 0;
 
   return Object.freeze({
     cold() {
+      coldInvocation += 1;
       return /** @type {number} */ (
-        compileFunction(`return ${workload.source};`)()
+        compileFunction(
+          `/* jsjs-benchmark-cold:${coldInvocation} */\nreturn ${workload.source};`,
+        )()
       );
     },
     steady() {

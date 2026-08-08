@@ -43,8 +43,9 @@ baseline.
 
 ### Cold/end-to-end
 
-Each native invocation constructs a `Function` from the workload source and
-invokes it. Each jsjs invocation creates a fresh realm and calls
+Each native invocation constructs a `Function` from a source string made unique
+for that invocation and invokes it, preventing host compile-cache reuse. Each
+jsjs invocation creates a fresh realm and calls
 `evaluateScript`, so realm initialization, parsing, global declaration setup,
 and execution are timed.
 
@@ -66,10 +67,10 @@ the measurement core.
 
 ## Calibration and sampling
 
-Each host, mode, and lane calibrates independently. Timed probes estimate an
-invocation duration, then select a batch size toward a configurable target
-sample duration. Batch growth is bounded. If one invocation already exceeds
-the target, the batch remains one.
+Cold samples are single unbatched invocations, including warmups, with workload
+scale encoded in the deterministic source. Steady host lanes calibrate
+independently: timed probes estimate an invocation duration, then select a batch
+size toward a configurable target sample duration. Batch growth is bounded.
 
 Calibration never changes workload semantics. Every batch returns and verifies
 the checksum from its final invocation. Warmup batches run after calibration,
@@ -95,15 +96,16 @@ The cross-workload aggregate is the geometric mean of positive per-workload
 slowdowns. Statistical helpers reject empty, non-finite, or non-positive input
 where the requested statistic requires positive values.
 
-The summarizer validates schema versions, configurations, workload order, and
-checksums before combining host reports. Incompatible reports fail rather than
-silently producing a misleading aggregate.
+The summarizer validates run identifiers, generation timestamps, schema
+versions, configurations, workload order, and checksums before combining host
+reports. Incompatible or stale reports fail rather than silently producing a
+misleading aggregate.
 
 ## Artifacts and commands
 
 Each host writes versioned JSON containing:
 
-- generation timestamp and runtime metadata
+- shared run identifier, generation timestamp, and discovered runtime metadata
 - complete benchmark configuration
 - explicit execution-boundary descriptions
 - workload names and committed checksums
@@ -111,7 +113,10 @@ Each host writes versioned JSON containing:
 - raw and summarized samples
 - per-workload slowdowns
 
-The summarizer writes aggregate JSON and CSV. Timing artifacts go to a
+The orchestrator stages a complete selected-host report set, promotes it only
+after every host succeeds, removes stale host JSON, and cleans transaction
+directories. The summarizer writes aggregate JSON and CSV with host version,
+generation timestamp, and run identifier columns. Timing artifacts go to a
 user-selected or default ignored output directory and are not committed.
 
 Package commands provide Node, Chromium, JSC, all-host, summary, and smoke entry
