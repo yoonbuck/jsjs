@@ -936,6 +936,10 @@ function evaluateTryStatement(node, context) {
   if (node.handler !== null) {
     if (blockCompletion.type === 'throw') {
       const catchEnv = newDeclarativeEnvironment(context.env);
+      // ES2015 Annex B.3.5: mark this record so a non-strict direct `eval` in
+      // the catch body may hoist a `var` of the catch parameter's name without
+      // a redeclaration SyntaxError (see `hasEvalChainLexicalBinding`).
+      catchEnv.isCatchClauseEnvironment = true;
       const paramName = node.handler.param.name;
       catchEnv.createMutableBinding(paramName);
       catchEnv.initializeBinding(paramName, blockCompletion.value);

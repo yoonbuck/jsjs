@@ -28,6 +28,14 @@ export class DeclarativeEnvironmentRecord {
     this.outer = outer;
     /** @type {Map<PropertyKey, Binding>} */
     this._bindings = new Map();
+    // ES2015 Annex B.3.5: a non-strict direct `eval` may hoist a `var` over a
+    // `Catch` clause parameter of the same name (the `var` then binds the catch
+    // parameter). `EvalDeclarationInstantiation`'s var/lexical conflict walk
+    // (§18.2.1.2 step 5, as amended by Annex B.3.5) therefore exempts the
+    // record that holds a catch parameter from the "already declared"
+    // SyntaxError. Set by the `try`/`catch` evaluator on that one record only;
+    // an ordinary block/function/loop environment leaves it false.
+    this.isCatchClauseEnvironment = false;
   }
 
   /**

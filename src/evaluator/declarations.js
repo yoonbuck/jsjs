@@ -1,6 +1,7 @@
 import {
   getIdentifierReference,
   newDeclarativeEnvironment,
+  DeclarativeEnvironmentRecord,
   GlobalEnvironmentRecord,
 } from '../runtime/environment.js';
 import { putValue } from '../runtime/reference.js';
@@ -13,10 +14,7 @@ import {
   EngineFunction,
   createArgumentsObject,
 } from '../runtime/function-object.js';
-import {
-  createUnsupportedNodeError,
-  createUnsupportedOperationError,
-} from '../runtime/errors.js';
+import { createUnsupportedNodeError } from '../runtime/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateStatementList } from './statements.js';
 import { hasUseStrictDirective } from './directive.js';
@@ -77,8 +75,9 @@ import {
  *   `TypeError` if `CanDeclareGlobalVar` is false.
  *
  * Within a single script Acorn rejects the step 5/6 conflicts at parse time, so
- * those runtime checks only fire across scripts in the same realm (or, once
- * Task 8 installs it, for `eval`). The step 10/12 `TypeError`s (e.g. a new name
+ * those runtime checks only fire across scripts in the same realm (or for a
+ * global-scope `eval`, whose own §18.2.1.2 checks run against these same global
+ * lexical/var declarations). The step 10/12 `TypeError`s (e.g. a new name
  * on a non-extensible global) are surfaced by delegating to
  * `createGlobalFunctionBinding`/`createGlobalVarBinding`, which — by their
  * own-property model — are guaranteed to reject *before* mutating whenever the
@@ -360,24 +359,30 @@ export function functionDeclarationInstantiation(
 }
 
 /**
- * Performs Declaration Binding Instantiation for *eval code* (ECMA-262 10.5
- * with `configurableBindings = true`). Function declarations are instantiated
- * before `var` names, exactly as the global and per-call paths do, but every
- * binding eval creates is *configurable/deletable*: `eval("var x = 1")`
- * followed by `delete x` succeeds, where a script-level `var x` is
- * non-deletable.
+ * Performs ES2015 §18.2.1.2 `EvalDeclarationInstantiation` for *eval code*.
+ * Function declarations are instantiated before `var` names, exactly as the
+ * global and per-call paths do, but every var/function binding eval creates in
+ * `variableEnv` is *configurable/deletable*: `eval("var x = 1")` followed by
+ * `delete x` succeeds, where a script-level `var x` is non-deletable.
  *
- * The bindings are created in `variableEnv`, which is chosen by the caller in
- * `src/evaluator/eval.js` per 10.4.2: the caller's variable environment for a
- * direct eval (so the bindings outlive the eval call and are visible to the
- * caller — including when the direct eval sits inside a `catch`, whose lexical
- * scope is *not* the variable environment), the realm's global environment for
- * an indirect eval, or a fresh declarative environment for strict eval (so
- * nothing leaks). Hoisted function objects capture `variableEnv` as their
- * `[[Scope]]` (ES5 §13 uses the running context's VariableEnvironment), so a
- * function declared by a `catch`-nested eval closes over the enclosing
- * function rather than the catch scope. No `arguments` object is created for
- * eval code.
+ * The var/function bindings are created in `variableEnv`, chosen by
+ * `performEval` (`src/evaluator/eval.js`) per §18.2.1.1 steps 12-14: the
+ * caller's variable environment for a direct eval (so the bindings outlive the
+ * eval call and are visible to the caller — including when the direct eval sits
+ * inside a `catch`, whose lexical scope is *not* the variable environment), the
+ * realm's global environment for an indirect eval, or the eval's own fresh
+ * lexical environment for a strict eval (so nothing leaks). The eval body's
+ * `let`/`const`/`class` declarations are instead instantiated into
+ * `context.env`, the eval's *lexical* environment (§18.2.1.2 step 5's
+ * `lexDeclarations` loop), which `performEval` builds fresh over the caller's
+ * lexical scope and discards when the call returns, so they never leak. No
+ * `arguments` object is created for eval code.
+ *
+ * §18.2.1.2 step 5 also guards `var`/lexical conflicts for a non-strict eval:
+ * a top-level `var` name may not collide with a lexical binding anywhere on the
+ * chain between the eval's lexical environment and its variable environment,
+ * nor (at global scope) with a global lexical declaration. That is what makes
+ * `let x = 1; eval("var x = 2")` a guest `SyntaxError`.
  *
  * @param {any} program
  * @param {EvaluationContext} context
@@ -387,6 +392,34 @@ export function functionDeclarationInstantiation(
 export function evalDeclarationInstantiation(program, context, variableEnv) {
   const varScoped = topLevelVarScopedDeclarations(program.body);
   const varNames = new Set(topLevelVarDeclaredNames(program.body));
+
+  if (!context.strict) {
+    // §18.2.1.2 step 5: reject before mutating anything. A top-level `var` of
+    // the eval body may not shadow a lexical binding on the chain from the
+    // eval's lexical environment up to (but not including) its variable
+    // environment, and — when the variable environment is the global
+    // environment — may not collide with a global lexical declaration. Object
+    // (`with`) environment records on the chain hold no lexical declarations
+    // and are skipped (step 5.d.ii.1's NOTE).
+    for (const name of varNames) {
+      if (
+        variableEnv instanceof GlobalEnvironmentRecord &&
+        variableEnv.hasLexicalDeclaration(name)
+      ) {
+        throw new GuestErrorSignal(
+          'SyntaxError',
+          `Identifier '${name}' has already been declared`,
+        );
+      }
+
+      if (hasEvalChainLexicalBinding(context.env, variableEnv, name)) {
+        throw new GuestErrorSignal(
+          'SyntaxError',
+          `Identifier '${name}' has already been declared`,
+        );
+      }
+    }
+  }
 
   for (const declaration of varScoped) {
     if (declaration.type !== 'FunctionDeclaration') {
@@ -411,21 +444,23 @@ export function evalDeclarationInstantiation(program, context, variableEnv) {
     // environment. Eligibility is per declaration node, recorded as an identity
     // set so an ineligible same-name declaration does not alias.
     //
-    // KNOWN DEFECT, DEFERRED TO TASK 8: B.3.3.3 step 1.a.ii also rejects a name
-    // already lexically bound in the *running execution context's* lexical
-    // environment chain between the eval and its variable environment. That
-    // check needs the eval's own lexical environment, which does not exist
-    // until Task 8 installs it (ES2015 §18.2.1.1 steps 12-14, `PerformEval`).
-    // Until then `outerLexicalNames` sees only the eval body's own top-level
-    // lexical names, not the caller's, so:
+    // B.3.3.3 step 1.a.ii additionally suppresses the alias when the name is
+    // already bound by a lexical declaration in the running context's lexical
+    // environment chain between the eval and its variable environment — the
+    // same chain `hasEvalChainLexicalBinding` walks. That is why
     //     { let f = 1; eval("{ function f(){} }"); } typeof f
-    // wrongly yields "function" (the alias is created and copied) when it must
-    // yield "undefined" (the caller's `let f` makes `var f` an early error, so
-    // no alias). This cannot be fixed here without that lexical environment;
-    // Task 8 owns the fix.
+    // yields "undefined": the enclosing `let f` makes a var alias for `f` an
+    // early error, so no alias is created or copied.
     const aliasDeclarations = annexBBlockFunctionDeclarations(
       program.body,
       new Set(topLevelLexicallyDeclaredNames(program.body)),
+    ).filter(
+      (declaration) =>
+        !hasEvalChainLexicalBinding(
+          context.env,
+          variableEnv,
+          declaration.id.name,
+        ),
     );
 
     for (const declaration of aliasDeclarations) {
@@ -434,6 +469,51 @@ export function evalDeclarationInstantiation(program, context, variableEnv) {
 
     context.annexBFunctionDeclarations = new Set(aliasDeclarations);
   }
+
+  // §18.2.1.2 step 5's `lexDeclarations` loop: instantiate — but do not
+  // initialize — the eval body's top-level `let`/`const`/class into the eval's
+  // lexical environment (`context.env`) with a block's rules, so each name gets
+  // its TDZ binding that `evaluateVariableDeclaration` later initializes. This
+  // is what makes `eval("let x = 1")` resolve `x` without leaking it.
+  blockDeclarationInstantiation(
+    topLevelLexicallyScopedDeclarations(program.body),
+    /** @type {DeclarativeEnvironmentRecord} */ (context.env),
+    context,
+  );
+}
+
+/**
+ * ES2015 §18.2.1.2 step 5's var/lexical conflict walk (as amended by Annex
+ * B.3.5): reports whether any *declarative* environment record on the chain
+ * from `lexEnv` up to (but not including) `varEnv` has a binding for `name`.
+ * Object (`with`) environment records are skipped, since a `with` scope holds
+ * no lexical declarations (step 5.d.ii.1's NOTE), and a `Catch` clause's
+ * parameter environment is skipped too, since Annex B.3.5 lets a non-strict
+ * eval hoist a `var` over a like-named catch parameter. The walk stops at
+ * `varEnv` because var/function hoisting legitimately targets that environment.
+ *
+ * @param {import('../runtime/environment.js').EnvironmentRecordLike} lexEnv
+ * @param {EvalVariableEnvironment} varEnv
+ * @param {string} name
+ * @returns {boolean}
+ */
+function hasEvalChainLexicalBinding(lexEnv, varEnv, name) {
+  /** @type {import('../runtime/environment.js').EnvironmentRecordLike | null} */
+  let current = lexEnv;
+
+  while (current !== null && current !== varEnv) {
+    if (
+      current instanceof DeclarativeEnvironmentRecord &&
+      !current.isCatchClauseEnvironment &&
+      current.hasBinding(name)
+    ) {
+      return true;
+    }
+
+    current = current.outer;
+  }
+
+  return false;
 }
 
 /**
@@ -686,27 +766,16 @@ export function evaluateVariableDeclaration(node, context) {
 
     // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
     // way `ResolveBinding` does (through the environment chain) and initialize
-    // the record that holds it, lifting the name out of its TDZ.
+    // the record that holds it, lifting the name out of its TDZ. Every lexical
+    // scope — a script/global top level (§15.1.8), function body (§9.2.12),
+    // block/`switch`/`try` (§13.2.14), and now eval code (§18.2.1.2) — creates
+    // the uninitialized binding before its statements run, so this reference
+    // always resolves to the declarative record that holds it.
     const reference = getIdentifierReference(
       context.env,
       declarator.id.name,
       context.strict,
     );
-
-    if (reference.base === undefined) {
-      // The binding should have been created uninitialized by the enclosing
-      // scope's declaration instantiation. Now that
-      // `globalDeclarationInstantiation` installs script/global lexical
-      // bindings (ES2015 §15.1.8), the only remaining scope whose
-      // instantiation does not yet create them is the top level of eval code
-      // (Task 8 owns `EvalDeclarationInstantiation`'s lexical slice). Every
-      // other lexical scope — a script/global top level, function body, block,
-      // `switch`, or `try` — already resolves, so those never reach here. Fail
-      // loudly with an engine-level error rather than dereferencing `undefined`.
-      throw createUnsupportedOperationError(
-        `lexical declaration of '${declarator.id.name}' outside a block scope`,
-      );
-    }
 
     const environment =
       /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (

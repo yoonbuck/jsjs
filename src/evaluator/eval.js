@@ -1,6 +1,6 @@
 /**
- * The `eval` execution-context implementation (ECMA-262 15.1.2.1 "eval (x)"
- * and 10.4.2 "Entering Eval Code").
+ * The `eval` implementation (ECMA-262 2015 §18.2.1 "eval (x)", layered over
+ * §18.2.1.1 `PerformEval` and §18.2.1.2 `EvalDeclarationInstantiation`).
  *
  * `eval` *is* the evaluator exposed to guest code, so this module is the one
  * place under `src/evaluator/` that a builtin (`src/builtins/global-eval.js`)
@@ -27,27 +27,36 @@
  *
  * - **Direct** eval (`evaluateCallExpression` detected a bareword `eval(...)`
  *   resolving to this realm's `eval`) passes the *caller's* context, so eval
- *   code runs with the caller's LexicalEnvironment/VariableEnvironment, the
- *   caller's `this`, and the caller's strictness inherited (10.4.2 direct
- *   case).
+ *   code runs over the caller's LexicalEnvironment, hoists into the caller's
+ *   VariableEnvironment, and inherits the caller's `this` and strictness
+ *   (ES2015 §18.2.1.1 `PerformEval`, `direct` true).
  * - **Indirect** eval (any other call form) runs through the native `eval`
  *   function, which passes a context rooted at the realm's global environment
- *   with `this` = the global object and `strict` = false, so caller
- *   strictness is not inherited (10.4.2 indirect case).
+ *   with `this` = the global object and `strict` = false, so caller strictness
+ *   is not inherited (`PerformEval`, `direct` false).
  *
- * This engine threads ES5's two environments as separate context fields —
- * `env` (LexicalEnvironment) and `variableEnv` (VariableEnvironment). They are
- * equal on entering eval code in the ordinary case, but a direct eval nested in
- * a `catch` clause, a `with` statement, or a `let`/`const`-declaring block
- * inherits a caller whose lexical scope is that inner scope while its variable
- * scope is still the enclosing function or global. `performEval` therefore
- * parses and evaluates the body against the caller's LexicalEnvironment but
- * hoists the body's `var`s and function declarations into the caller's
- * VariableEnvironment (10.4.2 direct case), so a `catch`-nested `eval("var x")`
- * creates `x` in the enclosing function — where it is still visible after the
- * clause exits — rather than in the vanishing catch scope. Strict eval instead
- * runs in a single fresh declarative environment used as both, so nothing leaks
- * (10.4.2.1).
+ * Environment set-up (ES2015 §18.2.1.1 steps 12-14). `performEval` need not
+ * branch on direct/indirect: it always builds `lexEnv` as a *fresh*
+ * `NewDeclarativeEnvironment(callerContext.env)` and takes `varEnv` from
+ * `callerContext.variableEnv`. For a direct eval the caller's context carries
+ * the caller's own two environments; for an indirect eval `global-eval.js`
+ * already seeds both fields with the realm's global environment, so the same
+ * two lines produce `NewDeclarativeEnvironment(realm.[[globalEnv]])` over the
+ * global `varEnv` the spec's indirect branch asks for — the global-rooted seam
+ * stays in `global-eval.js` rather than being reconstructed here.
+ *
+ * The engine threads the two environments as separate context fields — `env`
+ * (LexicalEnvironment) and `variableEnv` (VariableEnvironment). The fresh
+ * `lexEnv` is where the eval body's `let`/`const`/`class` declarations are
+ * instantiated (`EvalDeclarationInstantiation`, §18.2.1.2), so they are visible
+ * to the eval body through the outer chain but discarded when the call returns
+ * and never leak to the caller. The body's `var`s and function declarations
+ * still hoist into `varEnv`, so a direct `eval("var x")` nested in a `catch`,
+ * `with`, or `let`-declaring block creates `x` in the enclosing function or
+ * global scope — where it survives the inner scope's exit — rather than in the
+ * vanishing lexical scope. When the eval is strict (§18.2.1.1 step 14) `varEnv`
+ * is `lexEnv`, so a strict eval runs in one fresh declarative environment used
+ * as both and nothing it declares leaks.
  */
 
 import { parseEval } from '../parser.js';
@@ -62,9 +71,10 @@ import { evalDeclarationInstantiation } from './declarations.js';
  */
 
 /**
- * Implements ECMA-262 15.1.2.1 `eval(x)` layered over 10.4.2/10.4.2.1.
+ * Implements ECMA-262 2015 §18.2.1 `eval(x)` layered over §18.2.1.1
+ * `PerformEval`.
  *
- * A non-String `x` is returned unchanged with no coercion (step 1). A String
+ * A non-String `x` is returned unchanged with no coercion (step 2). A String
  * `x` is parsed as a `Program`; a parse failure becomes a realm-local guest
  * `SyntaxError` (raised as a `GuestErrorSignal` the nearest realm-aware
  * boundary materializes). The program body is then evaluated as eval code and
@@ -99,19 +109,23 @@ export function performEval(x, callerContext) {
     throw error;
   }
 
-  // Strict when strictness is inherited (direct call from strict code) or the
-  // eval code opens with its own "use strict" directive (10.4.2.1).
+  // §18.2.1.1 steps 10-11: strict when strictness is inherited (direct call
+  // from strict code) or the eval code opens with its own "use strict"
+  // directive.
   const strict = inheritedStrict || hasUseStrictDirective(program.body);
 
-  // 10.4.2 / 10.4.2.1 environment set-up. Non-strict eval keeps the caller's
-  // LexicalEnvironment for identifier resolution but hoists declarations into
-  // the caller's VariableEnvironment (which differs from the lexical one when
-  // the direct eval sits inside a `catch`). Strict eval runs in one fresh
-  // declarative environment used as both, so its `var`s and functions never
-  // leak to the surrounding scope.
-  const lexicalEnv = strict
-    ? newDeclarativeEnvironment(callerContext.env)
-    : callerContext.env;
+  // §18.2.1.1 steps 12-14 environment set-up. The eval always runs in a *fresh*
+  // LexicalEnvironment over the caller's, so its `let`/`const`/`class` stay in
+  // the eval and never leak; identifier resolution still reaches the caller's
+  // bindings through that fresh environment's outer reference. `var`s and
+  // functions hoist into the caller's VariableEnvironment (the caller's
+  // *variable* scope, which differs from its lexical scope when the direct eval
+  // sits inside a `catch`, `with`, or `let`-declaring block). For an indirect
+  // eval `global-eval.js` seeds both context fields with the realm's global
+  // environment, so this same code yields a global-rooted `lexEnv`/`varEnv`
+  // without reconstructing the seam here. A strict eval uses `lexEnv` as its
+  // variable environment too (step 14), so nothing it declares leaks.
+  const lexicalEnv = newDeclarativeEnvironment(callerContext.env);
   const variableEnvBase = strict ? lexicalEnv : callerContext.variableEnv;
 
   // The variable environment is always a declarative or global environment
