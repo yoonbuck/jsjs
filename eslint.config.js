@@ -36,4 +36,20 @@ export default [
       globals: { ...globals, fetch: 'readonly' },
     },
   },
+  {
+    // Issue #40 evaluation prototypes: isolated benchmarks, never part of the
+    // engine. They time with the cross-host `performance` clock (available in
+    // Node, browsers, and JavaScriptCore), and the allocation bench yields
+    // through `setTimeout` so asynchronously-delivered GC `PerformanceObserver`
+    // callbacks arrive before a sample is judged. Both are allowed here and
+    // nowhere else.
+    files: ['tools/prototypes/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals,
+        performance: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+  },
 ];

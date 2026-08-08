@@ -19,6 +19,7 @@ import runtimeRecords from './runtime-records.test.js';
 import objects from './objects.test.js';
 import abstractOperations from './abstract-operations.test.js';
 import environments from './environments.test.js';
+import identifierReadFastPath from './identifier-read-fast-path.test.js';
 import realms from './realms.test.js';
 import evaluatorExpressions from './evaluator-expressions.test.js';
 import evaluatorStatements from './evaluator-statements.test.js';
@@ -83,6 +84,10 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: abstractOperations,
   }),
   Object.freeze({ file: 'test/environments.test.js', tests: environments }),
+  Object.freeze({
+    file: 'test/identifier-read-fast-path.test.js',
+    tests: identifierReadFastPath,
+  }),
   Object.freeze({ file: 'test/realms.test.js', tests: realms }),
   Object.freeze({
     file: 'test/evaluator-expressions.test.js',

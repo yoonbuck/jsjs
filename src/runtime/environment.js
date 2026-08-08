@@ -609,3 +609,47 @@ export function getIdentifierReference(env, name, strict) {
 function globalObjectOf(env) {
   return env instanceof GlobalEnvironmentRecord ? env.globalObject : null;
 }
+
+/**
+ * Resolves an identifier directly to its bound value — the fused equivalent of
+ * `getValue(getIdentifierReference(env, name, strict))` for the read path,
+ * without allocating the intermediate `Reference`.
+ *
+ * The walk is deliberately identical to `getIdentifierReference`'s: it finds
+ * the innermost record whose `hasBinding(name)` is true and returns that
+ * record's `getBindingValue(name, strict)`, and when no record in the chain
+ * binds the name it throws the same guest `ReferenceError` `GetValue` throws
+ * for an unresolvable reference (ECMA-262 8.7.1 via 8.7 `IsUnresolvableReference`
+ * / 8.7.2 step 3). Every observable of the reference path is preserved — the
+ * *same* record's `getBindingValue` (so declarative uninitialized-binding
+ * throws, object-record strict/non-strict handling, and the global record's
+ * declarative-over-object precedence all still apply) and the exact
+ * `"<name> is not defined"` message — so this is a pure allocation-elimination
+ * over the read path the profiling evidence ranks #1 (`reference.js#getValue`).
+ *
+ * Only reads may use this: `PutValue`, `delete`, and `typeof`'s
+ * unresolvable-to-`'undefined'` rule still need the `Reference` itself, so
+ * those callers keep using `getIdentifierReference`.
+ *
+ * @param {EnvironmentRecordLike | null} env
+ * @param {string | symbol} name
+ * @param {boolean} strict
+ * @returns {unknown}
+ */
+export function getIdentifierBindingValue(env, name, strict) {
+  /** @type {EnvironmentRecordLike | null} */
+  let record = env;
+
+  while (record !== null) {
+    if (record.hasBinding(name)) {
+      return record.getBindingValue(name, strict);
+    }
+
+    record = record.outer;
+  }
+
+  throw new GuestErrorSignal(
+    'ReferenceError',
+    `${String(name)} is not defined`,
+  );
+}
