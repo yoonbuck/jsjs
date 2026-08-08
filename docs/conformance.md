@@ -259,6 +259,26 @@ so no number here can outlive the run that produced it. The denominators are
 defined exactly under
 [What the coverage numbers count](#what-the-coverage-numbers-count).
 
+## ES2015 focused coverage
+
+Issue #38 (ES2015 object/function runtime updates) is covered by a small,
+hand-picked set of upstream Test262 files, run via `test/ci/es2015-object-function-test262.test.js`
+(part of `npm run ci:contract`) rather than folded into the ES5
+`upstream-subset.json`/`es5-selection.json` pipeline above, which stays
+scoped to the ES5.1 engine and shared with the parallel lexical-declarations
+(#41) and Symbols (#43) branches:
+
+- `test/language/expressions/function/name.js`, `test/language/statements/function/name.js`,
+  `test/built-ins/Function/prototype/bind/{name,length}.js` — function `name`/`length` semantics
+- `test/built-ins/Object/keys/return-order.js`, `test/built-ins/Object/getOwnPropertyNames/order-after-define-property.js` —
+  ES2015 own-property-key order
+- `test/language/expressions/object/{getter,setter}-prop-desc.js`,
+  `test/language/expressions/object/{getter,setter}-super-prop.js` — method `[[HomeObject]]`/`super`
+- `test/built-ins/Object/setPrototypeOf/**`, `test/built-ins/Object/is/**` — the two new `Object` statics
+
+Reproduce locally: `node test/run-ci-contract.js` (requires the pinned
+upstream checkout at `vendor/test262`; see the Test262 section above).
+
 <!-- test262-coverage:begin -->
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |

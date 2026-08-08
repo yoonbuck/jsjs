@@ -26,6 +26,7 @@
 import { runTests } from './harness/runner.js';
 import fullContract from './ci/full-contract.test.js';
 import exclusionsCheck from './ci/exclusions-check.test.js';
+import es2015ObjectFunctionTest262 from './ci/es2015-object-function-test262.test.js';
 
 /**
  * @typedef {import('./suites.js').TestSuite} TestSuite
@@ -40,6 +41,10 @@ const CI_CONTRACT_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/ci/exclusions-check.test.js',
     tests: exclusionsCheck,
+  }),
+  Object.freeze({
+    file: 'test/ci/es2015-object-function-test262.test.js',
+    tests: es2015ObjectFunctionTest262,
   }),
 ]);
 
