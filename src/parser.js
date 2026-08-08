@@ -232,31 +232,48 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * `checkUnsupportedEs2015Node` directly, since they turn on a flag rather than
  * on `node.type`.
  *
- * Several entries are *defensive*: no input to a `sourceType: 'script'` parser
- * at `ecmaVersion: 6` can make the pass reach them, because Acorn rejects the
- * only construct that would produce them earlier. They are kept so the table is
- * a complete statement of "unsupported ES2015 node types" rather than only the
- * currently-reachable ones, and so a later `sourceType`/`ecmaVersion` change
- * cannot let one slip through silently:
+ * Each entry is one of three kinds, by *why* it fires (or does not). This was
+ * established empirically: for every entry, a `sourceType: 'script'`,
+ * `ecmaVersion: 6` snippet that would produce the node was parsed against the
+ * vendored Acorn and the resulting AST inspected for the node type; the walk's
+ * parent-first order (see `checkStatementPositionFunctionDeclarations`) then
+ * determines which ancestor, if any, this pass rejects first.
  *
- * - `ClassBody` / `MethodDefinition` only occur inside a class, which is
- *   rejected first at `ClassDeclaration` / `ClassExpression`. (`{ m() {} }` is a
- *   `Property` with `method: true`, not a `MethodDefinition`.)
- * - `Super` only occurs inside a method; `super` anywhere else is a parse error
- *   Acorn raises itself ("'super' keyword outside a method").
+ * *Reachable* — this pass is what rejects the construct, because the node is the
+ * first unsupported one the walk visits on some accepted parse:
+ * `ClassDeclaration`, `ClassExpression`, `ArrowFunctionExpression`,
+ * `TemplateLiteral`, `TaggedTemplateExpression`, `ForOfStatement`,
+ * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`,
+ * `SpreadElement`, and `MetaProperty` (via `new.target` inside a function).
+ *
+ * *Parent-blocked* — the node genuinely appears in ASTs Acorn produces, but the
+ * walk always rejects an ancestor first, so this entry never fires on its own.
+ * These are defence-in-depth: were the walk order or a parent's flag ever to
+ * change, the node would still be refused rather than silently evaluated.
+ * - `ClassBody` / `MethodDefinition` occur only inside a class, rejected first
+ *   at `ClassDeclaration` / `ClassExpression`. (`{ m() {} }` is a `Property`
+ *   with `method: true`, not a `MethodDefinition`.)
+ * - `TemplateElement` is a child of `TemplateLiteral`, rejected first.
+ * - `YieldExpression` occurs only inside a generator, whose enclosing
+ *   `Function` is rejected first by the `generator: true` flag check in
+ *   `checkUnsupportedEs2015Node`.
+ * - `Super` in `({ m() { return super.x; } })` is a valid ES6 script AST node,
+ *   but its enclosing object-method `Property` (`method: true`) is rejected
+ *   first by that same flag check. (`super` outside any method is instead a
+ *   parse error Acorn raises itself.)
+ *
+ * *Acorn-blocked* — the parser refuses the source before any such node exists,
+ * so this pass never sees it. Kept so a later `sourceType`/`ecmaVersion` change
+ * cannot let one slip through silently.
  * - `AwaitExpression` is an ES2017 feature; at `ecmaVersion: 6` `await x` and
  *   `async function`/`async () =>` are parse errors Acorn raises itself, and the
  *   `async` flag is never set (see the flag check in `checkUnsupportedEs2015Node`).
- * - `ImportDeclaration` / `ImportExpression` / `ExportNamedDeclaration` /
- *   `ExportDefaultDeclaration` / `ExportAllDeclaration` require
- *   `sourceType: 'module'`; in a script Acorn rejects them itself ("'import' and
- *   'export' may appear only with 'sourceType: module'").
- *
- * The reachable entries are `ClassDeclaration`, `ClassExpression`,
- * `ArrowFunctionExpression`, `TemplateLiteral`, `TemplateElement`,
- * `TaggedTemplateExpression`, `ForOfStatement`, `YieldExpression`,
- * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`,
- * `SpreadElement`, and `MetaProperty` (via `new.target` inside a function).
+ * - `ImportDeclaration` / `ExportNamedDeclaration` / `ExportDefaultDeclaration` /
+ *   `ExportAllDeclaration` require `sourceType: 'module'`; in a script Acorn
+ *   rejects them itself ("'import' and 'export' may appear only with
+ *   'sourceType: module'"). `ImportExpression` (dynamic `import()`) is likewise
+ *   rejected in a script at `ecmaVersion: 6` — it only becomes a script node at
+ *   `ecmaVersion: 11`.
  *
  * @type {ReadonlyMap<string, string>}
  */
