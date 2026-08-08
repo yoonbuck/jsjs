@@ -88,6 +88,7 @@ const STABLE_CATEGORIES = Object.freeze([
   'other-runtime',
   'host',
 ]);
+const PROFILE_CAPTURE_ORIGIN = 'http://jsjs.localhost';
 
 /**
  * Classify a profile call frame into a stable category based on its source URL.
@@ -354,22 +355,46 @@ export function normalizeProfileUrl(url) {
     return '';
   }
 
-  let srcIndex = url.startsWith('src/') ? 0 : -1;
-  let nextIndex = url.indexOf('/src/');
+  if (url.startsWith('src/')) {
+    return url;
+  }
 
-  while (nextIndex !== -1) {
-    srcIndex = nextIndex + 1;
-    nextIndex = url.indexOf('/src/', srcIndex + 4);
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return normalizeProfilePathname(url, url);
   }
 
   if (
-    srcIndex === -1 ||
-    /(^|\/)node_modules(?:\/|$)/u.test(url.slice(0, srcIndex))
+    (parsedUrl.protocol === 'http:' &&
+      parsedUrl.origin !== PROFILE_CAPTURE_ORIGIN) ||
+    (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'file:')
   ) {
     return url;
   }
 
-  return url.slice(srcIndex);
+  return normalizeProfilePathname(parsedUrl.pathname, url);
+}
+
+/**
+ * @param {string} pathname
+ * @param {string} fallback
+ * @returns {string}
+ */
+function normalizeProfilePathname(pathname, fallback) {
+  const pathSegments = pathname.split('/');
+  const srcIndex = pathSegments.lastIndexOf('src');
+
+  if (
+    srcIndex === -1 ||
+    pathSegments.slice(0, srcIndex).includes('node_modules')
+  ) {
+    return fallback;
+  }
+
+  return pathSegments.slice(srcIndex).join('/');
 }
 
 /**

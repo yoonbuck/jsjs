@@ -337,7 +337,7 @@ const tests = [
     },
   },
   {
-    name: 'normalizeProfileUrl selects the last path-bounded repository src segment',
+    name: 'normalizeProfileUrl only normalizes repository sources from the capture origin',
     run() {
       assertSame(
         normalizeProfileUrl('src/runtime/object.js'),
@@ -352,6 +352,10 @@ const tests = [
         'src/builtins/object.js',
       );
       assertSame(
+        normalizeProfileUrl('http://jsjs.localhost:80/src/runtime/object.js'),
+        'src/runtime/object.js',
+      );
+      assertSame(
         normalizeProfileUrl(
           'file:///earlier/src/ignored/src/runtime/descriptors.js',
         ),
@@ -360,6 +364,32 @@ const tests = [
       assertSame(
         normalizeProfileUrl('/node_modules/pkg/src/index.js'),
         '/node_modules/pkg/src/index.js',
+      );
+      assertSame(
+        normalizeProfileUrl('http://example.test/src/runtime/object.js'),
+        'http://example.test/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl('https://jsjs.localhost/src/runtime/object.js'),
+        'https://jsjs.localhost/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl(
+          'http://example.test/node_modules/pkg/src/index.js?source=/src/runtime/object.js',
+        ),
+        'http://example.test/node_modules/pkg/src/index.js?source=/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl(
+          'http://jsjs.localhost/benchmark/run-browser.html?source=/src/runtime/object.js',
+        ),
+        'http://jsjs.localhost/benchmark/run-browser.html?source=/src/runtime/object.js',
+      );
+      assertSame(
+        normalizeProfileUrl(
+          'http://jsjs.localhost/node_modules/pkg/src/index.js',
+        ),
+        'http://jsjs.localhost/node_modules/pkg/src/index.js',
       );
     },
   },

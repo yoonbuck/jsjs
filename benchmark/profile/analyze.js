@@ -1269,16 +1269,22 @@ function validateRepositoryRelativeDirectory(value, label) {
     );
   }
 
-  if (
-    value
-      .replace(/\\/g, '/')
-      .split('/')
-      .some((part) => part === '..')
-  ) {
+  const normalized = value.replace(/\\/g, '/').replace(/\/+$/u, '');
+  const decodedParts = normalized.split('/').flatMap((part) => {
+    let decoded;
+
+    try {
+      decoded = decodeURIComponent(part);
+    } catch {
+      throw new RangeError(`${label} contains invalid URL encoding: ${value}`);
+    }
+
+    return decoded.replace(/\\/g, '/').split('/');
+  });
+
+  if (decodedParts.some((part) => part === '.' || part === '..')) {
     throw new RangeError(`${label} must not escape the repository: ${value}`);
   }
-
-  const normalized = value.replace(/\\/g, '/').replace(/\/+$/u, '');
 
   if (
     normalized !== '.benchmark-results' &&
@@ -1289,7 +1295,15 @@ function validateRepositoryRelativeDirectory(value, label) {
     );
   }
 
-  resolveOutputDirectory(normalized);
+  const benchmarkResultsUrl = resolveOutputDirectory('.benchmark-results');
+  const outputUrl = resolveOutputDirectory(normalized);
+
+  if (!outputUrl.href.startsWith(benchmarkResultsUrl.href)) {
+    throw new RangeError(
+      `${label} must stay under .benchmark-results/: ${value}`,
+    );
+  }
+
   return normalized;
 }
 

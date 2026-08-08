@@ -275,7 +275,7 @@ const tests = [
     },
   },
   {
-    name: 'profile analysis only writes beneath benchmark results',
+    name: 'profile analysis rejects output roots outside benchmark results',
     run() {
       assertSame(
         assertThrows(
@@ -299,6 +299,33 @@ const tests = [
         ).message.includes('.benchmark-results'),
         true,
       );
+    },
+  },
+  {
+    name: 'profile analysis rejects percent-encoded path traversal in output roots',
+    run() {
+      for (const directory of [
+        '.benchmark-results/%2e%2e/outside',
+        '.benchmark-results/%2E%2e/outside',
+        '.benchmark-results/%2e./outside',
+        '.benchmark-results/.%2E/outside',
+        '.benchmark-results/%2e%2e%2foutside',
+        '.benchmark-results/%2e%2e%5Coutside',
+      ]) {
+        const error = assertThrows(
+          () =>
+            parseProfileAnalysisArguments([
+              `--baseline=${directory}`,
+              '--profiles=.benchmark-results/profiles',
+            ]),
+          RangeError,
+        );
+        assertSame(
+          error.message.includes('must not escape the repository'),
+          true,
+          directory,
+        );
+      }
     },
   },
   {
