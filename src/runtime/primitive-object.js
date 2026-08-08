@@ -9,15 +9,16 @@ import { GuestErrorSignal } from './completion.js';
 
 /**
  * The guest-visible representation of a boxed primitive (`String`, `Number`,
- * or `Boolean` object). `ToObject` and property-access autoboxing use it
- * directly; `builtins/primitive-wrappers.js` wires the public `String`,
- * `Number`, and `Boolean` constructors and prototype methods on top of the
- * per-realm prototypes it boxes against (`createPrimitiveWrapper` below).
+ * `Boolean`, or `Symbol` object). `ToObject` and property-access autoboxing
+ * use it directly; `builtins/primitive-wrappers.js` wires the public
+ * `String`, `Number`, and `Boolean` constructors and prototype methods on top
+ * of the per-realm prototypes it boxes against (`createPrimitiveWrapper`
+ * below), and `builtins/symbol.js` does the same for `Symbol`.
  */
 export class EnginePrimitiveObject extends EngineObject {
   /**
    * @param {EngineObject} prototype
-   * @param {string | number | boolean} primitiveValue
+   * @param {string | number | boolean | symbol} primitiveValue
    */
   constructor(prototype, primitiveValue) {
     super(prototype, primitiveClassName(primitiveValue));
@@ -98,7 +99,7 @@ export class EnginePrimitiveObject extends EngineObject {
  * resolves to the correct per-realm prototype.
  *
  * @param {Realm} realm
- * @param {string | number | boolean} value
+ * @param {string | number | boolean | symbol} value
  * @returns {EnginePrimitiveObject}
  */
 export function createPrimitiveWrapper(realm, value) {
@@ -107,7 +108,7 @@ export function createPrimitiveWrapper(realm, value) {
 
 /**
  * @param {Realm} realm
- * @param {string | number | boolean} value
+ * @param {string | number | boolean | symbol} value
  * @returns {EngineObject}
  */
 function wrapperPrototypeFor(realm, value) {
@@ -116,6 +117,8 @@ function wrapperPrototypeFor(realm, value) {
       return realm.intrinsics.stringPrototype;
     case 'number':
       return realm.intrinsics.numberPrototype;
+    case 'symbol':
+      return realm.intrinsics.symbolPrototype;
     default:
       return realm.intrinsics.booleanPrototype;
   }
@@ -193,8 +196,37 @@ export function thisBooleanValue(value) {
 }
 
 /**
- * @param {string | number | boolean} value
- * @returns {'String' | 'Number' | 'Boolean'}
+ * Implements ES2015 §19.4.3's "this Symbol value" check, shared by
+ * `Symbol.prototype.toString`, `valueOf`, and `[@@toPrimitive]`: accepts a
+ * symbol primitive or a Symbol wrapper object (from *any* realm — receiver
+ * compatibility is judged by primitive type, not by realm identity) and
+ * rejects everything else, `%Symbol.prototype%` included, since that object
+ * has no `[[SymbolData]]` slot.
+ *
+ * @param {unknown} value
+ * @returns {symbol}
+ */
+export function thisSymbolValue(value) {
+  if (typeof value === 'symbol') {
+    return value;
+  }
+
+  if (
+    value instanceof EnginePrimitiveObject &&
+    typeof value.primitiveValue === 'symbol'
+  ) {
+    return value.primitiveValue;
+  }
+
+  throw new GuestErrorSignal(
+    'TypeError',
+    'this is not a Symbol primitive or Symbol object',
+  );
+}
+
+/**
+ * @param {string | number | boolean | symbol} value
+ * @returns {'String' | 'Number' | 'Boolean' | 'Symbol'}
  */
 function primitiveClassName(value) {
   switch (typeof value) {
@@ -202,13 +234,15 @@ function primitiveClassName(value) {
       return 'String';
     case 'number':
       return 'Number';
+    case 'symbol':
+      return 'Symbol';
     default:
       return 'Boolean';
   }
 }
 
 /**
- * @param {string | number | boolean} value
+ * @param {string | number | boolean | symbol} value
  * @param {PropertyKey} name
  * @returns {number | undefined}
  */

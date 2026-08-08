@@ -9,6 +9,40 @@ import {
   symbolFor,
   symbolKeyFor,
 } from '../src/runtime/symbol.js';
+import { createRealm } from '../src/runtime/realm.js';
+import { EngineObject } from '../src/runtime/object.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
+import {
+  toBoolean,
+  toNumber,
+  toObject,
+  toPropertyKey,
+  toString,
+} from '../src/runtime/conversion.js';
+import {
+  abstractEqualityComparison,
+  strictEqualityComparison,
+  typeOf,
+} from '../src/runtime/operators.js';
+import {
+  EnginePrimitiveObject,
+  thisSymbolValue,
+} from '../src/runtime/primitive-object.js';
+
+/**
+ * Asserts `body` throws the guest `TypeError` signal the engine raises for a
+ * specified guest throw, rather than a host `TypeError` escaping the engine.
+ *
+ * @param {() => unknown} body
+ * @returns {void}
+ */
+function assertGuestTypeError(body) {
+  const error = /** @type {GuestErrorSignal} */ (
+    assertThrows(body, GuestErrorSignal)
+  );
+
+  assertSame(error.typeName, 'TypeError');
+}
 
 const tests = [
   {
@@ -154,6 +188,158 @@ const tests = [
         () => symbolKeyFor(/** @type {any} */ ('not a symbol')),
         TypeError,
       );
+    },
+  },
+  {
+    name: 'typeof a symbol is "symbol"',
+    run() {
+      assertSame(typeOf(createSymbol('x')), 'symbol');
+      assertSame(typeOf(WELL_KNOWN_SYMBOLS.iterator), 'symbol');
+      assertSame(typeOf(createRealm().intrinsics.objectPrototype), 'object');
+    },
+  },
+  {
+    name: 'ToBoolean of any symbol is true',
+    run() {
+      assertSame(toBoolean(createSymbol('x')), true);
+      assertSame(toBoolean(createSymbol('')), true);
+      assertSame(toBoolean(createSymbol(undefined)), true);
+    },
+  },
+  {
+    name: 'ToNumber and ToString reject symbols with a guest TypeError',
+    run() {
+      const symbol = createSymbol('x');
+
+      assertGuestTypeError(() => toNumber(symbol));
+      assertGuestTypeError(() => toString(symbol));
+    },
+  },
+  {
+    name: 'ToPropertyKey passes a symbol through and stringifies everything else',
+    run() {
+      const symbol = createSymbol('x');
+
+      assertSame(toPropertyKey(symbol), symbol);
+      assertSame(toPropertyKey(62), '62');
+      assertSame(toPropertyKey('62'), '62');
+      assertSame(toPropertyKey(undefined), 'undefined');
+      assertSame(toPropertyKey(null), 'null');
+    },
+  },
+  {
+    name: 'ToPropertyKey converts an object through ToPrimitive with the string hint',
+    run() {
+      const realm = createRealm();
+      const object = new EngineObject(realm.intrinsics.objectPrototype);
+      /** @type {string[]} */
+      const calls = [];
+
+      object.defineOwnProperty('toString', {
+        value: realm.createNativeFunction({
+          name: 'toString',
+          length: 0,
+          call() {
+            calls.push('toString');
+            return 'from-toString';
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      object.defineOwnProperty('valueOf', {
+        value: realm.createNativeFunction({
+          name: 'valueOf',
+          length: 0,
+          call() {
+            calls.push('valueOf');
+            return 'from-valueOf';
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      assertSame(toPropertyKey(object), 'from-toString');
+      assertSame(calls.join(','), 'toString');
+    },
+  },
+  {
+    name: 'symbol identity drives both equality comparisons',
+    run() {
+      const symbol = createSymbol('x');
+
+      assertSame(strictEqualityComparison(symbol, symbol), true);
+      assertSame(
+        strictEqualityComparison(createSymbol('x'), createSymbol('x')),
+        false,
+      );
+      assertSame(strictEqualityComparison(symbol, 'Symbol(x)'), false);
+      assertSame(abstractEqualityComparison(symbol, symbol), true);
+      assertSame(abstractEqualityComparison(symbol, 'Symbol(x)'), false);
+      assertSame(abstractEqualityComparison(symbol, undefined), false);
+      assertSame(abstractEqualityComparison(symbol, null), false);
+      assertSame(abstractEqualityComparison(symbol, 0), false);
+    },
+  },
+  {
+    name: 'ToObject boxes a symbol against the realm’s %SymbolPrototype%',
+    run() {
+      const realm = createRealm();
+      const symbol = createSymbol('x');
+      const wrapper = toObject(realm, symbol);
+
+      assertSame(wrapper instanceof EnginePrimitiveObject, true);
+      assertSame(
+        /** @type {EnginePrimitiveObject} */ (wrapper).primitiveValue,
+        symbol,
+      );
+      assertSame(wrapper.getClassName(), 'Symbol');
+      assertSame(wrapper.getPrototype(), realm.intrinsics.symbolPrototype);
+      assertSame(toObject(realm, symbol) === wrapper, false);
+    },
+  },
+  {
+    name: '%SymbolPrototype% is an ordinary object, not a boxed symbol',
+    run() {
+      const realm = createRealm();
+      const prototype = realm.intrinsics.symbolPrototype;
+
+      assertSame(prototype instanceof EngineObject, true);
+      assertSame(prototype instanceof EnginePrimitiveObject, false);
+      assertSame(prototype.getPrototype(), realm.intrinsics.objectPrototype);
+    },
+  },
+  {
+    name: 'thisSymbolValue accepts a symbol or its wrapper and rejects the rest',
+    run() {
+      const realm = createRealm();
+      const symbol = createSymbol('x');
+
+      assertSame(thisSymbolValue(symbol), symbol);
+      assertSame(thisSymbolValue(toObject(realm, symbol)), symbol);
+      assertGuestTypeError(() => thisSymbolValue('Symbol(x)'));
+      assertGuestTypeError(() => thisSymbolValue(undefined));
+      assertGuestTypeError(() => thisSymbolValue(toObject(realm, 'x')));
+      assertGuestTypeError(() =>
+        thisSymbolValue(realm.intrinsics.symbolPrototype),
+      );
+    },
+  },
+  {
+    name: 'realms share symbol values but not their %SymbolPrototype%',
+    run() {
+      const first = createRealm();
+      const second = createRealm();
+
+      assertSame(
+        first.intrinsics.symbolPrototype === second.intrinsics.symbolPrototype,
+        false,
+      );
+      assertSame(symbolFor('shared') === symbolFor('shared'), true);
+      assertSame(WELL_KNOWN_SYMBOLS.iterator, WELL_KNOWN_SYMBOLS.iterator);
     },
   },
 ];

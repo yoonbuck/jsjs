@@ -332,7 +332,7 @@ export class EngineDate extends EngineObject {
    * Date is the sole ES5 built-in whose no-hint conversion uses String order.
    *
    * @param {'string' | 'number' | 'default'} [hint='default']
-   * @returns {string | number | boolean | null | undefined}
+   * @returns {string | number | boolean | symbol | null | undefined}
    */
   defaultValue(hint = 'default') {
     return super.defaultValue(hint === 'default' ? 'string' : hint);

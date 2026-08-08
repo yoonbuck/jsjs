@@ -449,7 +449,7 @@ export class EngineObject {
 
   /**
    * @param {'string' | 'number' | 'default'} [hint='number']
-   * @returns {string | number | boolean | null | undefined}
+   * @returns {string | number | boolean | symbol | null | undefined}
    */
   defaultValue(hint = 'number') {
     const methodNames =
@@ -685,7 +685,7 @@ function isEmptyDescriptor(descriptor) {
 
 /**
  * @param {unknown} value
- * @returns {value is string | number | boolean | null | undefined}
+ * @returns {value is string | number | boolean | symbol | null | undefined}
  */
 function isPrimitive(value) {
   return (

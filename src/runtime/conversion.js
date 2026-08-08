@@ -29,7 +29,8 @@ export function toObject(realm, value) {
   if (
     typeof value === 'string' ||
     typeof value === 'number' ||
-    typeof value === 'boolean'
+    typeof value === 'boolean' ||
+    typeof value === 'symbol'
   ) {
     return createPrimitiveWrapper(realm, value);
   }
@@ -40,7 +41,7 @@ export function toObject(realm, value) {
 /**
  * @param {unknown} value
  * @param {'string' | 'number' | 'default'} [preferredType='default']
- * @returns {string | number | boolean | null | undefined}
+ * @returns {string | number | boolean | symbol | null | undefined}
  */
 export function toPrimitive(value, preferredType = 'default') {
   if (isPrimitive(value)) {
@@ -52,6 +53,21 @@ export function toPrimitive(value, preferredType = 'default') {
   }
 
   throw new TypeError('Unsupported object coercion');
+}
+
+/**
+ * Implements ES2015 §7.1.14 `ToPropertyKey`: a symbol is already a property
+ * key and is passed through by identity, so a symbol key can never collide
+ * with the string `ToString` would have produced for it; everything else
+ * becomes a string, exactly as ES5.1 always did.
+ *
+ * @param {unknown} value
+ * @returns {string | symbol}
+ */
+export function toPropertyKey(value) {
+  const key = toPrimitive(value, 'string');
+
+  return typeof key === 'symbol' ? key : toString(key);
 }
 
 /**
@@ -97,6 +113,14 @@ export function toNumber(value) {
       return primitive;
     case 'string':
       return stringToNumber(primitive);
+    case 'symbol':
+      // ES2015 7.1.3: ToNumber of a Symbol is a TypeError, which must reach
+      // guest code as a catchable guest throw rather than as a host error
+      // escaping the engine.
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Cannot convert a Symbol to a number',
+      );
     default:
       throw new TypeError('Cannot convert value to number');
   }
@@ -175,6 +199,14 @@ export function toString(value) {
     case 'number':
     case 'string':
       return String(primitive);
+    case 'symbol':
+      // ES2015 7.1.12: ToString of a Symbol is a TypeError. Only the explicit
+      // `String(symbol)` and `Symbol.prototype.toString` paths render a
+      // symbol as text, through `SymbolDescriptiveString`.
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Cannot convert a Symbol to a string',
+      );
     default:
       throw new TypeError('Cannot convert value to string');
   }
@@ -182,7 +214,7 @@ export function toString(value) {
 
 /**
  * @param {unknown} value
- * @returns {value is string | number | boolean | null | undefined}
+ * @returns {value is string | number | boolean | symbol | null | undefined}
  */
 function isPrimitive(value) {
   return (
