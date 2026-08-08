@@ -227,7 +227,9 @@ export function toArrayIndex(name) {
   // Single-character fast path: '0'–'9' are valid single-digit indices.
   if (len === 1) {
     if (first >= '0' && first <= '9') {
-      return first - '0'; // arithmetic coercion, not a host String method
+      return /** @type {number} */ (
+        /** @type {any} */ (first) - /** @type {any} */ ('0')
+      );
     }
     return undefined;
   }
@@ -238,14 +240,18 @@ export function toArrayIndex(name) {
     return undefined;
   }
 
-  let val = first - '0';
+  let val = /** @type {number} */ (
+    /** @type {any} */ (first) - /** @type {any} */ ('0')
+  );
 
   for (let i = 1; i < len; i++) {
     const c = name[i];
     if (c < '0' || c > '9') {
       return undefined;
     }
-    val = val * 10 + (c - '0');
+    val =
+      val * 10 +
+      /** @type {number} */ (/** @type {any} */ (c) - /** @type {any} */ ('0'));
   }
 
   // Reject 4294967295 (2^32-1) and any overflow.

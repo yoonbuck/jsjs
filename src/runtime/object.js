@@ -323,7 +323,11 @@ export class EngineObject {
     // Guard: only enter fast-path if descriptor is a non-null object, so that
     // invalid inputs (null, numbers, etc.) still reach validatePropertyDescriptor
     // with its canonical error message.
-    if (descriptor !== null && typeof descriptor === 'object' && isValueOnlyDescriptor(descriptor)) {
+    if (
+      descriptor !== null &&
+      typeof descriptor === 'object' &&
+      isValueOnlyDescriptor(descriptor)
+    ) {
       const stored = this._properties.get(name);
       if (stored !== undefined && 'value' in stored) {
         if (stored.writable === true) {

@@ -24,6 +24,9 @@ const tests = [
       });
       const desc = obj.getProperty('x');
       assertSame(desc !== undefined, true);
+      if (desc === undefined) {
+        throw new Error('expected descriptor');
+      }
       assertSame(desc.value, 'original');
       // Mutating the returned descriptor must not affect stored state.
       desc.value = 'mutated';
@@ -43,6 +46,9 @@ const tests = [
       const child = new EngineObject(proto);
       const desc = child.getProperty('y');
       assertSame(desc !== undefined, true);
+      if (desc === undefined) {
+        throw new Error('expected descriptor');
+      }
       assertSame(desc.value, 'proto-val');
       desc.value = 'hacked';
       // Proto and child reads must still return original value.
@@ -64,7 +70,10 @@ const tests = [
       // null is not a valid descriptor — must throw TypeError from validatePropertyDescriptor
       // with the message "Property descriptor must be an object", not a host TypeError
       // from the 'in' operator ("Cannot use 'in' operator to search for 'value' in null").
-      const err = assertThrows(() => obj.defineOwnProperty('x', null), TypeError);
+      const err = assertThrows(
+        () => obj.defineOwnProperty('x', /** @type {any} */ (null)),
+        TypeError,
+      );
       assertSame(err.message, 'Property descriptor must be an object');
     },
   },
@@ -72,9 +81,15 @@ const tests = [
     name: 'defineOwnProperty with non-object descriptor on new property throws validation TypeError',
     run() {
       const obj = new EngineObject();
-      const nullErr = assertThrows(() => obj.defineOwnProperty('x', null), TypeError);
+      const nullErr = assertThrows(
+        () => obj.defineOwnProperty('x', /** @type {any} */ (null)),
+        TypeError,
+      );
       assertSame(nullErr.message, 'Property descriptor must be an object');
-      const numErr = assertThrows(() => obj.defineOwnProperty('x', 42), TypeError);
+      const numErr = assertThrows(
+        () => obj.defineOwnProperty('x', /** @type {any} */ (42)),
+        TypeError,
+      );
       assertSame(numErr.message, 'Property descriptor must be an object');
     },
   },
@@ -90,6 +105,9 @@ const tests = [
         configurable: true,
       });
       const pub = obj.getOwnProperty('x');
+      if (pub === undefined) {
+        throw new Error('expected descriptor');
+      }
       pub.value = 999;
       // The stored value must remain 1.
       assertSame(obj.get('x'), 1);
@@ -110,6 +128,9 @@ const tests = [
       assertSame(obj.get('x'), 2);
       // Other descriptor fields must be preserved.
       const d = obj.getOwnProperty('x');
+      if (d === undefined) {
+        throw new Error('expected descriptor');
+      }
       assertSame(d.writable, true);
       assertSame(d.enumerable, true);
       assertSame(d.configurable, true);

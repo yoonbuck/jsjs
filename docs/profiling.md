@@ -316,3 +316,219 @@ ef9a76da682f78e62d428920d750b288e3d114e0a1c6cc6bc63aa912fea7dd1f  checksum-corre
 - Cold and steady have different boundaries; their shares are attribution
   signals, not a precise setup-cost decomposition.
 - JSC is timing/checksum-only evidence in this pass.
+
+## Issue #42 optimization evidence
+
+This follow-up captures the post-optimization evidence for issue #42 on top of the baseline above. Timing claims come only from the unprofiled benchmark medians in `.benchmark-results/issue-42-before` and `.benchmark-results/issue-42-after`. CPU/allocation profiles are attribution-only samples; they explain where sampled interpreter work moved, not how much wall time was saved.
+
+### Source identities and artifact roots
+
+| Item                         | Before                                                                                                                                 | After                                        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Timing root                  | `.benchmark-results/issue-42-before`                                                                                                   | `.benchmark-results/issue-42-after`          |
+| Profile root                 | `.benchmark-results/issue-42-profiles-before`                                                                                          | `.benchmark-results/issue-42-profiles-after` |
+| Source commit                | `d9ed3e242b2e15ea3e47b4b63b80f459f017c77c`                                                                                             | `cf203aa7492ca23b8596bdf032b88a1a909884b9`   |
+| Timing run ID                | `abacc9b1-5400-415f-b1a1-561094261fbc`                                                                                                 | `acf06967-6f1f-4d4e-9d2f-9b080277fad1`       |
+| Timing generatedAt           | `2026-08-08T09:18:47.079Z`                                                                                                             | `2026-08-08T10:07:23.873Z`                   |
+| Profile run ID               | `issue42-before-d9ed3e2`                                                                                                               | `issue42-after-cf203aa`                      |
+| Node                         | `v26.5.1`                                                                                                                              | same                                         |
+| Chromium                     | `151.0.7922.34`                                                                                                                        | same                                         |
+| JSC                          | `/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc mtimeMs=1784736095000` | same                                         |
+| Timing warmups / samples     | `3 / 9`                                                                                                                                | `3 / 9`                                      |
+| Profile warmups              | `1`                                                                                                                                    | `1`                                          |
+| CPU sampling interval        | `100 microseconds`                                                                                                                     | `100 microseconds`                           |
+| Allocation sampling interval | `32768 bytes`                                                                                                                          | `32768 bytes`                                |
+| Clean source required        | `gitDirty: false` in every artifact                                                                                                    | `gitDirty: false` in every artifact          |
+
+### Exact commands
+
+Benchmark timing and summary:
+
+```sh
+rm -rf .benchmark-results/issue-42-after .benchmark-results/issue-42-profiles-after
+test -z "$(git status --porcelain --untracked-files=all | grep -v '^?? \\.benchmark-results/')"
+git rev-parse HEAD
+PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" \
+JSC=/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc \
+  node benchmark/cli.js run --host=all \
+    --workload=object-properties \
+    --workload=arrays \
+    --output=.benchmark-results/issue-42-after
+node benchmark/cli.js summary \
+  --input=.benchmark-results/issue-42-after \
+  --output=.benchmark-results/issue-42-after
+```
+
+CPU/allocation profile capture and analysis (separate metric invocations, one shared run ID):
+
+```sh
+run_id=issue42-after-cf203aa
+output=.benchmark-results/issue-42-profiles-after
+
+node benchmark/profile/cli.js --host=node --workload=object-properties --mode=cold --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=4 --output="$output"
+node benchmark/profile/cli.js --host=node --workload=object-properties --mode=cold --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=4 --output="$output"
+node benchmark/profile/cli.js --host=node --workload=object-properties --mode=steady --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=512 --output="$output"
+node benchmark/profile/cli.js --host=node --workload=object-properties --mode=steady --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=512 --output="$output"
+node benchmark/profile/cli.js --host=node --workload=arrays --mode=cold --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=4 --output="$output"
+node benchmark/profile/cli.js --host=node --workload=arrays --mode=cold --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=4 --output="$output"
+node benchmark/profile/cli.js --host=node --workload=arrays --mode=steady --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=5 --output="$output"
+node benchmark/profile/cli.js --host=node --workload=arrays --mode=steady --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=5 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=object-properties --mode=cold --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=5 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=object-properties --mode=cold --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=5 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=object-properties --mode=steady --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=5 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=object-properties --mode=steady --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=5 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=arrays --mode=cold --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=6 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=arrays --mode=cold --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=6 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=arrays --mode=steady --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=48 --output="$output"
+node benchmark/profile/cli.js --host=chromium --workload=arrays --mode=steady --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=48 --output="$output"
+node benchmark/profile/analyze.js --baseline=.benchmark-results/issue-42-after --profiles="$output"
+```
+
+### Unprofiled timing results (performance claims)
+
+| Host     | Workload          | Mode   |   Checksum | Native median before (ms) | Native median after (ms) | jsjs median before (ms) | jsjs median after (ms) |  jsjs Δ |
+| -------- | ----------------- | ------ | ---------: | ------------------------: | -----------------------: | ----------------------: | ---------------------: | ------: |
+| Chromium | arrays            | cold   |  778416596 |                     0.900 |                    0.800 |                  51.200 |                 46.500 |  -9.18% |
+| Chromium | arrays            | steady |  778416596 |                     0.083 |                    0.086 |                  50.550 |                 45.433 | -10.12% |
+| Chromium | object-properties | cold   | 1122746965 |                     0.500 |                    0.600 |                  68.700 |                 55.000 | -19.94% |
+| Chromium | object-properties | steady | 1122746965 |                     0.051 |                    0.052 |                  68.600 |                 54.850 | -20.04% |
+| JSC      | arrays            | cold   |  778416596 |                     0.400 |                    0.600 |                  86.760 |                 64.240 | -25.96% |
+| JSC      | arrays            | steady |  778416596 |                     0.081 |                    0.084 |                  76.100 |                 67.990 | -10.66% |
+| JSC      | object-properties | cold   | 1122746965 |                     1.280 |                    1.360 |                  88.100 |                 69.080 | -21.59% |
+| JSC      | object-properties | steady | 1122746965 |                     0.070 |                    0.072 |                  78.560 |                 64.780 | -17.54% |
+| Node     | arrays            | cold   |  778416596 |                     0.900 |                    0.645 |                  65.455 |                 52.409 | -19.93% |
+| Node     | arrays            | steady |  778416596 |                     0.090 |                    0.092 |                  57.416 |                 51.897 |  -9.61% |
+| Node     | object-properties | cold   | 1122746965 |                     0.828 |                    0.882 |                  80.942 |                 64.175 | -20.71% |
+| Node     | object-properties | steady | 1122746965 |                     0.033 |                    0.034 |                  74.644 |                 63.582 | -14.82% |
+
+All expected and observed checksums matched for every row in both timing roots, and each report recorded `gitDirty: false`. The post-change jsjs medians improved by **9.18% to 25.96%**, with the biggest gain on JSC cold arrays and the smallest gain on Chromium cold arrays.
+
+### Profile checksum correlation and capture windows
+
+The before run `issue42-before-d9ed3e2` and the after run `issue42-after-cf203aa` both produced eight valid CPU/allocation pairs. For every pair, the benchmark expected checksum, benchmark observed checksum, CPU expected checksum, CPU observed checksum, allocation expected checksum, and allocation observed checksum were all equal.
+
+| Host     | Workload          | Mode   | Iterations | Shared checksum | CPU window before (ms) | CPU window after (ms) | Allocation window before (ms) | Allocation window after (ms) |
+| -------- | ----------------- | ------ | ---------: | --------------: | ---------------------: | --------------------: | ----------------------------: | ---------------------------: |
+| Node     | arrays            | cold   |          4 |       778416596 |                264.972 |               244.385 |                       316.547 |                      275.479 |
+| Node     | arrays            | steady |          5 |       778416596 |                315.978 |               284.564 |                       366.393 |                      330.447 |
+| Node     | object-properties | cold   |          4 |      1122746965 |                315.639 |               256.172 |                       395.253 |                      322.883 |
+| Node     | object-properties | steady |        512 |      1122746965 |              36786.683 |             31446.963 |                     44350.274 |                    37434.747 |
+| Chromium | arrays            | cold   |          6 |       778416596 |                330.900 |               305.900 |                       349.600 |                      323.900 |
+| Chromium | arrays            | steady |         48 |       778416596 |               2539.100 |              2280.200 |                      2650.200 |                     2430.800 |
+| Chromium | object-properties | cold   |          5 |      1122746965 |                360.900 |               293.000 |                       388.800 |                      326.100 |
+| Chromium | object-properties | steady |          5 |      1122746965 |                356.200 |               298.900 |                       374.900 |                      313.100 |
+
+JSC remains timing-only evidence: there is still no compatible function-level CPU/allocation capture path for the system shell.
+
+### Interpreter-normalized attribution deltas
+
+The all-observation view keeps all eight Node/Chromium cold+steady pairs equally weighted. The steady-by-workload views below keep the two steady observations for each workload equally weighted; they are the closest attribution match to the hot-path timing improvements above.
+
+#### All observations (8 equal-weighted pairs)
+
+| Metric     | Category        | Before (%) | After (%) |    Δ pts |
+| ---------- | --------------- | ---------: | --------: | -------: |
+| CPU        | object-property |    20.3096 |    8.3051 | -12.0045 |
+| CPU        | arrays          |     1.4835 |    1.6630 |  +0.1796 |
+| Allocation | object-property |    15.0505 |    0.0000 | -15.0505 |
+| Allocation | arrays          |     5.6389 |    0.0000 |  -5.6389 |
+
+#### Steady object-properties workload (2 equal-weighted pairs)
+
+| Metric     | Category        | Before (%) | After (%) |    Δ pts |
+| ---------- | --------------- | ---------: | --------: | -------: |
+| CPU        | object-property |    20.2577 |    7.2400 | -13.0178 |
+| CPU        | arrays          |     0.0000 |    0.0000 |  +0.0000 |
+| Allocation | object-property |     0.0000 |    0.0000 |  +0.0000 |
+| Allocation | arrays          |     0.0000 |    0.0000 |  +0.0000 |
+
+#### Steady object-properties key frames
+
+| Frame                                               | CPU before (%) | CPU after (%) | CPU Δ pts | Allocation before (%) | Allocation after (%) | Allocation Δ pts |
+| --------------------------------------------------- | -------------: | ------------: | --------: | --------------------: | -------------------: | ---------------: |
+| `src/runtime/object.js#defineOwnProperty`           |         7.8095 |        1.5545 |   -6.2550 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/object.js#_peekOwnDescriptor`          |         0.0000 |        3.7512 |   +3.7512 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/descriptors.js#copyDescriptorFields`   |         2.4326 |        0.6744 |   -1.7582 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/descriptors.js#copyPropertyDescriptor` |         2.5358 |        0.0305 |   -2.5053 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/object.js#getOwnProperty`              |         3.4282 |        0.0000 |   -3.4282 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/object.js#isValueOnlyDescriptor`       |         0.0000 |        0.2679 |   +0.2679 |                0.0000 |               0.0000 |          +0.0000 |
+
+#### Steady arrays workload (2 equal-weighted pairs)
+
+| Metric     | Category        | Before (%) | After (%) |    Δ pts |
+| ---------- | --------------- | ---------: | --------: | -------: |
+| CPU        | object-property |    18.3654 |    7.9051 | -10.4603 |
+| CPU        | arrays          |     2.9422 |    2.9014 |  -0.0408 |
+| Allocation | object-property |    16.8263 |    0.0000 | -16.8263 |
+| Allocation | arrays          |    16.4072 |    0.0000 | -16.4072 |
+
+#### Steady arrays key frames
+
+| Frame                                               | CPU before (%) | CPU after (%) | CPU Δ pts | Allocation before (%) | Allocation after (%) | Allocation Δ pts |
+| --------------------------------------------------- | -------------: | ------------: | --------: | --------------------: | -------------------: | ---------------: |
+| `src/runtime/array-object.js#defineOwnProperty`     |         1.4858 |        0.6305 |   -0.8552 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/array-object.js#toArrayIndex`          |         0.2293 |        0.8885 |   +0.6592 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/object.js#_peekOwnDescriptor`          |         0.0000 |        2.9322 |   +2.9322 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/descriptors.js#copyDescriptorFields`   |         1.8742 |        0.6946 |   -1.1796 |                0.0000 |               0.0000 |          +0.0000 |
+| `src/runtime/descriptors.js#copyPropertyDescriptor` |         1.6978 |        0.0000 |   -1.6978 |               16.8263 |               0.0000 |         -16.8263 |
+| `src/runtime/object.js#getOwnProperty`              |         5.8654 |        0.3339 |   -5.5315 |                0.0000 |               0.0000 |          +0.0000 |
+
+Sampling highlights:
+
+- The object-property CPU share dropped from **20.3096%** to **8.3051%** across all eight observations.
+- In steady object-properties, `src/runtime/object.js#defineOwnProperty` fell from **7.8095%** to **1.5545%** CPU share while the new raw-descriptor read path `src/runtime/object.js#_peekOwnDescriptor` appeared at **3.7512%**.
+- In steady arrays, `src/runtime/array-object.js#defineOwnProperty` fell from **1.4858%** to **0.6305%** CPU share. `src/runtime/array-object.js#toArrayIndex` rose from **0.2293%** to **0.8885%**, consistent with the host-independent digit scan doing more explicit interpreter work while still reducing elapsed benchmark time.
+- Several sampled-allocation shares for object/array helper frames fell to **0.0000%** after the change. Treat that as a sampling result, not proof that allocation became impossible or free.
+
+### Mutation evidence
+
+Each boundary was mutated locally, tested with the smallest covering command, and then restored with `git restore --source=HEAD -- ...` before the next mutation. The final source tree returned to the clean optimized code before documentation work began.
+
+1. **Descriptor detachment / raw-record leak** — changed `return copyPropertyDescriptor(own);` to `return own;` in `src/runtime/object.js`, ran `node test/run-node.js test/objects.test.js`, and reproduced the expected failures:
+   - `getProperty returns a detached copy: mutating it does not affect future reads`
+   - `getProperty on inherited property returns detached copy: mutating it does not affect prototype`
+2. **Invalid descriptor guard semantics** — removed the non-null/object guard from the value-only fast path in `src/runtime/object.js`, ran `node test/run-node.js test/objects.test.js`, and reproduced the intended validation regression:
+   - expected `Property descriptor must be an object`, observed host error `Cannot use 'in' operator to search for 'value' in null`
+3. **Canonical array-index boundary / host Number independence** — changed the single-digit fast path from arithmetic coercion to `Number(first)` in `src/runtime/array-object.js`, ran `node test/run-node.js test/array-index.test.js`, and reproduced the intended failure:
+   - `toArrayIndex survives poisoned globalThis.Number for single-digit index` failed with `host Number was called`
+
+### Validation commands
+
+The full validation pass for this evidence update ran the repository's
+existing commands below. After cloning the pinned `vendor/test262` checkout
+that `test262:select`/`test262:upstream` require, every command passed except
+for one existing JSC concern: `npm run test:jsc` still exits `0` but emits the
+failing profiling-core assertion
+`normalizeProfileUrl only normalizes repository sources from the capture origin`
+under the system shell.
+
+```sh
+npm run test:node
+PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run test:browser
+PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run test:jsc
+PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run test262:jsc
+npm run test262:fixtures
+npm run test262:select
+npm run test262:select:check
+npm run test262:upstream
+npm run test262:upstream:check
+npm run test262:exclusions:check
+npm run typecheck
+npm run lint
+npm run format
+npm run vendor:check
+npm run unicode:check
+npm run ci:generate
+npm run ci:check
+npm run ci:contract
+node benchmark/cli.js summary --input=.benchmark-results/issue-42-after --output=.benchmark-results/issue-42-after
+node benchmark/profile/analyze.js --baseline=.benchmark-results/issue-42-after --profiles=.benchmark-results/issue-42-profiles-after
+```
+
+### Limits and no-overclaim guardrails
+
+- Use the timing table above for any performance claim. The profile windows and sampled totals are attribution diagnostics only.
+- CPU shares are sampled self time inside the interpreter after excluding host/GC/idle/harness frames; they are not inclusive cost, not a causal proof, and not a speedup forecast.
+- Sampled allocation shares are sampled bytes, not retained heap, object lifetime, or heap-growth measurements.
+- Cold and steady have different execution boundaries, so a before/after change in one mode does not decompose directly into startup cost versus steady-state cost.
+- This is one machine, one Node build, one Chromium shell build, and one system JSC shell. Re-run on a quiet fixed-power machine before making broader claims.
