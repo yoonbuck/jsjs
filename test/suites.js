@@ -46,6 +46,7 @@ import nativeBuiltins from './native-builtins.test.js';
 import objectBuiltins from './object-builtins.test.js';
 import functionBuiltins from './function-builtins.test.js';
 import arrayBuiltins from './array-builtins.test.js';
+import arrayIndex from './array-index.test.js';
 import primitiveWrappers from './primitive-wrappers.test.js';
 import symbols from './symbols.test.js';
 import booleanBuiltins from './boolean-builtins.test.js';
@@ -187,6 +188,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/array-builtins.test.js',
     tests: arrayBuiltins,
+  }),
+  Object.freeze({
+    file: 'test/array-index.test.js',
+    tests: arrayIndex,
   }),
   Object.freeze({
     file: 'test/primitive-wrappers.test.js',
