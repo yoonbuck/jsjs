@@ -110,34 +110,36 @@ export class EngineObject {
   /**
    * Implements ECMA-262 9.1.12 `OrdinaryOwnPropertyKeys`'s key order: every
    * array-index string key first, in ascending numeric order, then every
-   * other key (this engine has no symbols yet, so that is exactly the
-   * remaining string keys) in the order they were created. ES5 left this
-   * order implementation-defined; ES2015 fixed it, and `Object.keys`,
-   * `Object.getOwnPropertyNames`, `for-in` (via `enumerableKeysForIn`), and
-   * `JSON.stringify` all read through this method, so they inherit the new
-   * order without any change of their own. The non-index bucket needs no
-   * extra sort: a `Map` already iterates in insertion order, so filtering it
-   * preserves the relative creation order of the keys kept.
+   * remaining string key in creation order, then every symbol key in creation
+   * order. ES5 left this order implementation-defined; ES2015 fixed it, and
+   * reflection, `for-in`, and `JSON.stringify` all read through this method.
+   * The latter two buckets need no extra sort: a `Map` already iterates in
+   * insertion order, so filtering it preserves each key kind's relative
+   * creation order.
    *
    * @returns {PropertyKey[]}
    */
   ownPropertyKeys() {
-    /** @type {PropertyKey[]} */
+    /** @type {string[]} */
     const indexKeys = [];
-    /** @type {PropertyKey[]} */
-    const otherKeys = [];
+    /** @type {string[]} */
+    const stringKeys = [];
+    /** @type {symbol[]} */
+    const symbolKeys = [];
 
     for (const key of this._properties.keys()) {
-      if (isArrayIndexKey(key)) {
+      if (typeof key === 'symbol') {
+        symbolKeys.push(key);
+      } else if (isArrayIndexKey(key)) {
         indexKeys.push(key);
       } else {
-        otherKeys.push(key);
+        stringKeys.push(key);
       }
     }
 
     indexKeys.sort((left, right) => Number(left) - Number(right));
 
-    return [...indexKeys, ...otherKeys];
+    return [...indexKeys, ...stringKeys, ...symbolKeys];
   }
 
   /**

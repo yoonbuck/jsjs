@@ -15,6 +15,10 @@ import {
   installObjectConstructor,
 } from '../builtins/object.js';
 import {
+  createReflectIntrinsics,
+  installReflectObject,
+} from '../builtins/reflect.js';
+import {
   createFunctionIntrinsics,
   installFunctionConstructor,
 } from '../builtins/function.js';
@@ -155,6 +159,10 @@ export class Realm {
     const objectIntrinsics = createObjectIntrinsics(this);
     Object.assign(this.intrinsics, objectIntrinsics);
     installObjectConstructor(this.globalObject, objectIntrinsics);
+
+    const reflectIntrinsics = createReflectIntrinsics(this);
+    Object.assign(this.intrinsics, reflectIntrinsics);
+    installReflectObject(this.globalObject, reflectIntrinsics);
 
     const functionIntrinsics = createFunctionIntrinsics(this);
     Object.assign(this.intrinsics, functionIntrinsics);
