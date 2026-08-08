@@ -1062,9 +1062,10 @@ const tests = [
       const ownerRealm = createRealm({ agent: ownerAgent });
       const callerRealm = createRealm({ agent: callerAgent });
       const object = new EngineObject(ownerRealm.intrinsics.objectPrototype);
-      const toStringMethod = /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
-        callerRealm.intrinsics.objectPrototype.get('toString')
-      );
+      const toStringMethod =
+        /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
+          callerRealm.intrinsics.objectPrototype.get('toString')
+        );
 
       object.defineOwnProperty(callerAgent.wellKnownSymbols.toStringTag, {
         value: 'Caller',

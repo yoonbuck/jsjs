@@ -70,12 +70,18 @@ export function createObjectIntrinsics(realm) {
         }
 
         const object = toObject(realm, thisValue);
+        const agent = object.agent;
+
+        if (agent === null) {
+          throw new TypeError('EngineObject protocol lookup requires an agent');
+        }
+
         // ES2015 19.1.3.6 steps 15-16 layered onto ES5.1 15.2.4.2's
         // [[Class]] tag: an own or inherited `@@toStringTag` wins, but only
         // when it is a String, so every ES5 tag is unchanged (no ES5 object
         // carries the property) and a non-string tag falls back rather than
         // being coerced.
-        const tag = object.get(realm.agent.wellKnownSymbols.toStringTag);
+        const tag = object.get(agent.wellKnownSymbols.toStringTag);
 
         return `[object ${typeof tag === 'string' ? tag : object.getClassName()}]`;
       },

@@ -21,9 +21,11 @@
 ### Task 1: Pin receiver-owned protocol lookup
 
 **Files:**
+
 - Modify: `test/symbols.test.js`
 
 **Interfaces:**
+
 - Consumes: `createAgent(): Agent`, `createRealm({ agent }): Realm`, `EngineObject#defineOwnProperty(PropertyKey, PropertyDescriptorRecord): boolean`, `NativeFunction#callFunction(unknown, unknown[]): unknown`, and `toPrimitive(unknown, PreferredType?): primitive`
 - Produces: portable regression coverage for cross-agent `@@toStringTag` and `@@toPrimitive`
 
@@ -127,12 +129,14 @@ git commit -m "test: pin cross-agent symbol protocol ownership"
 ### Task 2: Enforce object ownership at both protocol entry points
 
 **Files:**
+
 - Modify: `src/builtins/object.js:72-80`
 - Modify: `src/runtime/conversion.js:63-65`
 - Modify: `docs/architecture.md`
 - Test: `test/symbols.test.js`
 
 **Interfaces:**
+
 - Consumes: `EngineObject#agent: Agent | null` and `Agent#wellKnownSymbols`
 - Produces: receiver-owned `@@toStringTag` and `@@toPrimitive` lookup with an explicit non-null internal invariant
 

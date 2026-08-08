@@ -7,6 +7,7 @@ import {
   toUint16,
 } from '../src/runtime/conversion.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { createAgent } from '../src/runtime/agent.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import {
   abstractEqualityComparison,
@@ -19,13 +20,22 @@ import {
   subtract,
 } from '../src/runtime/operators.js';
 
+const AGENT = createAgent();
+
+/**
+ * @returns {EngineObject}
+ */
+function createConversionObject() {
+  return new EngineObject(null, 'Object', AGENT);
+}
+
 const tests = [
   {
     name: 'toPrimitive honors preferred types and rejects non-primitive results',
     run() {
       /** @type {string[]} */
       const trace = [];
-      const object = new EngineObject();
+      const object = createConversionObject();
       object.defineOwnProperty(
         'toString',
         {
@@ -57,7 +67,7 @@ const tests = [
       assertSame(toPrimitive(object, 'number'), 3);
       assertSame(JSON.stringify(trace), '["toString","valueOf"]');
 
-      const invalid = new EngineObject();
+      const invalid = createConversionObject();
       invalid.defineOwnProperty(
         'toString',
         {
@@ -138,7 +148,7 @@ const tests = [
   {
     name: 'equality operations follow strict and abstract comparison rules',
     run() {
-      const numericObject = new EngineObject();
+      const numericObject = createConversionObject();
       numericObject.defineOwnProperty(
         'valueOf',
         {
@@ -164,7 +174,7 @@ const tests = [
   {
     name: 'arithmetic operators use primitive coercion rules',
     run() {
-      const stringObject = new EngineObject();
+      const stringObject = createConversionObject();
       stringObject.defineOwnProperty(
         'toString',
         {
@@ -192,7 +202,7 @@ const tests = [
     run() {
       /** @type {string[]} */
       const trace = [];
-      const left = new EngineObject();
+      const left = createConversionObject();
       left.defineOwnProperty(
         'valueOf',
         {
@@ -206,7 +216,7 @@ const tests = [
         },
         true,
       );
-      const right = new EngineObject();
+      const right = createConversionObject();
       right.defineOwnProperty(
         'valueOf',
         {
@@ -230,7 +240,7 @@ const tests = [
     run() {
       /** @type {string[]} */
       const trace = [];
-      const left = new EngineObject();
+      const left = createConversionObject();
       left.defineOwnProperty(
         'valueOf',
         {
@@ -244,7 +254,7 @@ const tests = [
         },
         true,
       );
-      const right = new EngineObject();
+      const right = createConversionObject();
       right.defineOwnProperty(
         'valueOf',
         {
@@ -324,7 +334,7 @@ const tests = [
 
       /** @type {string[]} */
       const trace = [];
-      const object = new EngineObject();
+      const object = createConversionObject();
       object.defineOwnProperty(
         'valueOf',
         {
@@ -356,7 +366,7 @@ const tests = [
       assertSame(JSON.stringify(trace), '["valueOf"]');
 
       const thrown = new Error('boom');
-      const bad = new EngineObject();
+      const bad = createConversionObject();
       bad.defineOwnProperty(
         'valueOf',
         {

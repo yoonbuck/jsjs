@@ -61,8 +61,12 @@ export function toPrimitive(value, preferredType = 'default') {
   }
 
   const agent = value.agent;
-  const exoticToPrimitive =
-    agent === null ? undefined : value.get(agent.wellKnownSymbols.toPrimitive);
+
+  if (agent === null) {
+    throw new TypeError('EngineObject protocol lookup requires an agent');
+  }
+
+  const exoticToPrimitive = value.get(agent.wellKnownSymbols.toPrimitive);
 
   if (exoticToPrimitive !== undefined && exoticToPrimitive !== null) {
     if (!isCallable(exoticToPrimitive)) {

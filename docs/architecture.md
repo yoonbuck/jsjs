@@ -64,6 +64,13 @@ const c = createRealm(); //  its own agent; shares nothing, GCs with the realm
 default — isolation unless the embedder asks for sharing — and it means a host
 that creates and discards realms in a loop retains nothing.
 
+When an `EngineObject` crosses a realm or agent boundary, well-known-symbol
+protocols follow the receiver, not the currently executing realm:
+`@@toPrimitive` and `@@toStringTag` use `object.agent.wellKnownSymbols`. A
+same-named well-known symbol minted by another agent is therefore only an
+ordinary symbol property. Primitive receivers have no owner object yet, so the
+executing realm boxes them first and that wrapper supplies the owner.
+
 A `Realm` (`src/runtime/realm.js`) owns a fresh intrinsic graph and a fresh
 global object/environment, keeping every script execution isolated from the host
 and from other realms. The global object is a plain `EngineObject` whose
