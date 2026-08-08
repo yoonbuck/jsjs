@@ -20,6 +20,10 @@ export async function captureProtocolProfiles({
 }) {
   const captureCpu = metrics.includes('cpu');
   const captureAllocation = metrics.includes('allocation');
+  let cpuEnabled = false;
+  let cpuStarted = false;
+  let allocationEnabled = false;
+  let allocationStarted = false;
   /** @type {TResult | undefined} */
   let result;
   /** @type {unknown} */
@@ -29,55 +33,57 @@ export async function captureProtocolProfiles({
   /** @type {unknown} */
   let failure;
 
-  if (captureCpu) {
-    await post('Profiler.enable');
-    await post('Profiler.setSamplingInterval', { interval: samplingInterval });
-    await post('Profiler.start');
-  }
-
-  if (captureAllocation) {
-    await post('HeapProfiler.enable');
-    await post('HeapProfiler.startSampling', {
-      samplingInterval,
-    });
-  }
-
   try {
+    if (captureCpu) {
+      await post('Profiler.enable');
+      cpuEnabled = true;
+      await post('Profiler.setSamplingInterval', { interval: samplingInterval });
+      await post('Profiler.start');
+      cpuStarted = true;
+    }
+
+    if (captureAllocation) {
+      await post('HeapProfiler.enable');
+      allocationEnabled = true;
+      await post('HeapProfiler.startSampling', {
+        samplingInterval,
+      });
+      allocationStarted = true;
+    }
+
     result = await run();
   } catch (error) {
-    failure = error;
-  }
-
-  try {
-    if (captureAllocation) {
-      allocationProfile = (await post('HeapProfiler.stopSampling')).profile;
-    }
-
-    if (captureCpu) {
-      cpuProfile = (await post('Profiler.stop')).profile;
-    }
-  } catch (error) {
-    if (failure === undefined) {
-      failure = error;
-    }
+    rememberFailure(error);
   } finally {
-    if (captureAllocation) {
+    if (allocationStarted) {
       try {
-        await post('HeapProfiler.disable');
+        allocationProfile = (await post('HeapProfiler.stopSampling')).profile;
       } catch (error) {
-        if (failure === undefined) {
-          failure = error;
-        }
+        rememberFailure(error);
       }
     }
 
-    if (captureCpu) {
+    if (cpuStarted) {
+      try {
+        cpuProfile = (await post('Profiler.stop')).profile;
+      } catch (error) {
+        rememberFailure(error);
+      }
+    }
+
+    if (allocationEnabled) {
+      try {
+        await post('HeapProfiler.disable');
+      } catch (error) {
+        rememberFailure(error);
+      }
+    }
+
+    if (cpuEnabled) {
       try {
         await post('Profiler.disable');
       } catch (error) {
-        if (failure === undefined) {
-          failure = error;
-        }
+        rememberFailure(error);
       }
     }
   }
@@ -95,4 +101,14 @@ export async function captureProtocolProfiles({
     ...(captureCpu ? { cpuProfile } : {}),
     ...(captureAllocation ? { allocationProfile } : {}),
   });
+
+  /**
+   * @param {unknown} error
+   * @returns {void}
+   */
+  function rememberFailure(error) {
+    if (failure === undefined) {
+      failure = error;
+    }
+  }
 }

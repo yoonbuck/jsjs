@@ -1,14 +1,20 @@
 import { spawnSync } from 'node:child_process';
-import { readFile, rm } from 'node:fs/promises';
+import { access, readFile, rename as renameFile, rm } from 'node:fs/promises';
 import { assertSame } from '../harness/assert.js';
 import { captureProtocolProfiles } from '../../benchmark/profile/protocol.js';
-import { runNodeProfile } from '../../benchmark/profile/run-node.js';
+import {
+  runNodeProfile,
+  writeProfileArtifactsAtomically,
+} from '../../benchmark/profile/run-node.js';
 import { runChromiumProfile } from '../../benchmark/profile/run-browser.js';
 import { main as profileCliMain } from '../../benchmark/profile/cli.js';
 import { workloadsForProfile } from '../../benchmark/workloads.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const TEST_OUTPUT_DIRECTORY = '.benchmark-results/test-profile-cli';
+const ARITHMETIC_LOOPS_CHECKSUM = workloadsForProfile('default').find(
+  (workload) => workload.name === 'arithmetic-loops',
+)?.expectedChecksum;
 const CPU_PROFILE_FIXTURE = Object.freeze({
   nodes: [
     {
@@ -107,6 +113,63 @@ const tests = [
     },
   },
   {
+    name: 'captureProtocolProfiles cleans up partially started domains when setup fails',
+    async run() {
+      /** @type {string[]} */
+      const methods = [];
+      let runCalls = 0;
+      let error;
+
+      try {
+        await captureProtocolProfiles({
+          metrics: ['cpu', 'allocation'],
+          samplingInterval: 512,
+          async post(method) {
+            methods.push(method);
+
+            if (method === 'HeapProfiler.startSampling') {
+              throw new Error('allocation start failed');
+            }
+
+            if (method === 'Profiler.stop') {
+              return {
+                profile: { nodes: [], samples: [], timeDeltas: [] },
+              };
+            }
+
+            return {};
+          },
+          async run() {
+            runCalls += 1;
+            return { checksum: 1 };
+          },
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(runCalls, 0);
+      assertSame(error instanceof Error, true);
+      if (!(error instanceof Error)) {
+        throw new Error('Expected setup failure to propagate');
+      }
+      assertSame(error.message, 'allocation start failed');
+      assertSame(
+        methods.join(','),
+        [
+          'Profiler.enable',
+          'Profiler.setSamplingInterval',
+          'Profiler.start',
+          'HeapProfiler.enable',
+          'HeapProfiler.startSampling',
+          'Profiler.stop',
+          'HeapProfiler.disable',
+          'Profiler.disable',
+        ].join(','),
+      );
+    },
+  },
+  {
     name: 'captureProtocolProfiles disables domains when the measured run throws',
     async run() {
       /** @type {{ method: string, params: unknown }[]} */
@@ -154,6 +217,61 @@ const tests = [
     },
   },
   {
+    name: 'captureProtocolProfiles preserves the first stop failure and still cleans up remaining domains',
+    async run() {
+      /** @type {string[]} */
+      const methods = [];
+      let error;
+
+      try {
+        await captureProtocolProfiles({
+          metrics: ['cpu', 'allocation'],
+          samplingInterval: 64,
+          async post(method) {
+            methods.push(method);
+
+            if (method === 'HeapProfiler.stopSampling') {
+              throw new Error('allocation stop failed');
+            }
+
+            if (method === 'Profiler.stop') {
+              return {
+                profile: { nodes: [], samples: [], timeDeltas: [] },
+              };
+            }
+
+            return {};
+          },
+          async run() {
+            return { checksum: 99 };
+          },
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      if (!(error instanceof Error)) {
+        throw new Error('Expected stop failure to propagate');
+      }
+      assertSame(error.message, 'allocation stop failed');
+      assertSame(
+        methods.join(','),
+        [
+          'Profiler.enable',
+          'Profiler.setSamplingInterval',
+          'Profiler.start',
+          'HeapProfiler.enable',
+          'HeapProfiler.startSampling',
+          'HeapProfiler.stopSampling',
+          'Profiler.stop',
+          'HeapProfiler.disable',
+          'Profiler.disable',
+        ].join(','),
+      );
+    },
+  },
+  {
     name: 'captureProtocolProfiles propagates stop failures after cleanup',
     async run() {
       /** @type {string[]} */
@@ -195,6 +313,151 @@ const tests = [
           'HeapProfiler.disable',
         ].join(','),
       );
+    },
+  },
+  {
+    name: 'writeProfileArtifactsAtomically removes stale sibling artifacts when metrics shrink',
+    async run() {
+      const outputDirectory = `${TEST_OUTPUT_DIRECTORY}-artifacts/profiles/node`;
+      const outputUrl = new URL(`${TEST_OUTPUT_DIRECTORY}-artifacts/`, REPOSITORY_ROOT_URL);
+      await rm(outputUrl, { recursive: true, force: true });
+
+      await writeProfileArtifactsAtomically(outputDirectory, [
+        {
+          fileName: 'arithmetic-loops-steady.cpuprofile',
+          contents: '{"version":1}\n',
+        },
+        {
+          fileName: 'arithmetic-loops-steady.heapprofile',
+          contents: '{"heap":1}\n',
+        },
+        {
+          fileName: 'arithmetic-loops-steady.json',
+          contents: '{"metrics":["cpu","allocation"]}\n',
+        },
+      ]);
+      await writeProfileArtifactsAtomically(outputDirectory, [
+        {
+          fileName: 'arithmetic-loops-steady.cpuprofile',
+          contents: '{"version":2}\n',
+        },
+        {
+          fileName: 'arithmetic-loops-steady.json',
+          contents: '{"metrics":["cpu"]}\n',
+        },
+      ]);
+
+      const profileDirectoryUrl = new URL('profiles/node/', outputUrl);
+      const staleHeapUrl = new URL(
+        'arithmetic-loops-steady.heapprofile',
+        profileDirectoryUrl,
+      );
+      let staleHeapExists = true;
+
+      try {
+        await access(staleHeapUrl);
+      } catch {
+        staleHeapExists = false;
+      }
+
+      assertSame(staleHeapExists, false);
+      assertSame(
+        await readFile(
+          new URL('arithmetic-loops-steady.cpuprofile', profileDirectoryUrl),
+          'utf8',
+        ),
+        '{"version":2}\n',
+      );
+      assertSame(
+        await readFile(new URL('arithmetic-loops-steady.json', profileDirectoryUrl), 'utf8'),
+        '{"metrics":["cpu"]}\n',
+      );
+
+      await rm(outputUrl, { recursive: true, force: true });
+    },
+  },
+  {
+    name: 'writeProfileArtifactsAtomically restores the previous stem set when promotion fails',
+    async run() {
+      const outputDirectory = `${TEST_OUTPUT_DIRECTORY}-rollback/profiles/node`;
+      const outputUrl = new URL(`${TEST_OUTPUT_DIRECTORY}-rollback/`, REPOSITORY_ROOT_URL);
+      await rm(outputUrl, { recursive: true, force: true });
+
+      await writeProfileArtifactsAtomically(outputDirectory, [
+        {
+          fileName: 'arithmetic-loops-steady.cpuprofile',
+          contents: '{"version":1}\n',
+        },
+        {
+          fileName: 'arithmetic-loops-steady.heapprofile',
+          contents: '{"heap":1}\n',
+        },
+        {
+          fileName: 'arithmetic-loops-steady.json',
+          contents: '{"metrics":["cpu","allocation"]}\n',
+        },
+      ]);
+
+      let error;
+      try {
+        await writeProfileArtifactsAtomically(
+          outputDirectory,
+          [
+            {
+              fileName: 'arithmetic-loops-steady.cpuprofile',
+              contents: '{"version":2}\n',
+            },
+            {
+              fileName: 'arithmetic-loops-steady.json',
+              contents: '{"metrics":["cpu"]}\n',
+            },
+          ],
+          {
+            async rename(from, to) {
+              if (
+                from instanceof URL &&
+                to instanceof URL &&
+                from.pathname.includes('/.staging-') &&
+                to.pathname.endsWith('/arithmetic-loops-steady.json')
+              ) {
+                throw new Error('promote failed');
+              }
+
+              await renameFile(from, to);
+            },
+          },
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      if (!(error instanceof Error)) {
+        throw new Error('Expected promotion failure');
+      }
+      assertSame(error.message, 'promote failed');
+
+      const profileDirectoryUrl = new URL('profiles/node/', outputUrl);
+      assertSame(
+        await readFile(
+          new URL('arithmetic-loops-steady.cpuprofile', profileDirectoryUrl),
+          'utf8',
+        ),
+        '{"version":1}\n',
+      );
+      assertSame(
+        await readFile(
+          new URL('arithmetic-loops-steady.heapprofile', profileDirectoryUrl),
+          'utf8',
+        ),
+        '{"heap":1}\n',
+      );
+      assertSame(
+        await readFile(new URL('arithmetic-loops-steady.json', profileDirectoryUrl), 'utf8'),
+        '{"metrics":["cpu","allocation"]}\n',
+      );
+
+      await rm(outputUrl, { recursive: true, force: true });
     },
   },
   {
@@ -266,13 +529,14 @@ const tests = [
     },
   },
   {
-    name: 'runChromiumProfile creates a CDP session routes the benchmark page and writes a sidecar',
+    name: 'runChromiumProfile warms the page before capture and measures on the same page state',
     async run() {
       const outputUrl = new URL(`${TEST_OUTPUT_DIRECTORY}-browser/`, REPOSITORY_ROOT_URL);
       await rm(outputUrl, { recursive: true, force: true });
       const workload = workloadsForProfile('default')[0];
       /** @type {string[]} */
       const calls = [];
+      let prepared = false;
       /** @type {((route: unknown, request: unknown) => Promise<void>) | undefined} */
       let routeHandler;
       const page = /** @type {any} */ ({
@@ -292,10 +556,25 @@ const tests = [
         },
         /**
          * @param {unknown} _fn
-         * @param {{ modulePath: string, workload: unknown, mode: string, warmups: number, iterations: number }} args
+         * @param {{ modulePath: string, phase?: string, workload: unknown, mode: string, warmups?: number, iterations?: number }} args
          */
         async evaluate(_fn, args) {
-          calls.push(`evaluate:${args.modulePath}`);
+          calls.push(`evaluate:${args.phase ?? 'unknown'}:${args.modulePath}`);
+          if (args.phase === 'warmup') {
+            prepared = true;
+            return {
+              expectedChecksum: workload.expectedChecksum,
+            };
+          }
+
+          if (args.phase !== 'measure') {
+            throw new Error(`Unexpected evaluation phase: ${args.phase}`);
+          }
+
+          if (!prepared) {
+            throw new Error('measurement ran before warmups');
+          }
+
           return {
             runtimeVersion: 'Browser UA',
             expectedChecksum: workload.expectedChecksum,
@@ -354,10 +633,11 @@ const tests = [
           'newPage',
           'route:http://jsjs.localhost/**/*',
           'goto:http://jsjs.localhost/benchmark/run-browser.html',
+          'evaluate:warmup:/benchmark/profile/run-browser-page.js',
           'cdp:Profiler.enable',
           'cdp:Profiler.setSamplingInterval',
           'cdp:Profiler.start',
-          'evaluate:/benchmark/profile/run-browser-page.js',
+          'evaluate:measure:/benchmark/profile/run-browser-page.js',
           'cdp:Profiler.stop',
           'cdp:Profiler.disable',
           'close',
@@ -408,6 +688,7 @@ const tests = [
   {
     name: 'profile smoke script writes a sidecar with checksum and CPU samples',
     async run() {
+      assertSame(typeof ARITHMETIC_LOOPS_CHECKSUM, 'number');
       const outputUrl = new URL('.benchmark-results/profile-smoke/', REPOSITORY_ROOT_URL);
       await rm(outputUrl, { recursive: true, force: true });
 
@@ -430,7 +711,8 @@ const tests = [
         ),
       );
 
-      assertSame(sidecar.result.expectedChecksum, sidecar.result.checksum);
+      assertSame(sidecar.result.expectedChecksum, ARITHMETIC_LOOPS_CHECKSUM);
+      assertSame(sidecar.result.checksum, ARITHMETIC_LOOPS_CHECKSUM);
       assertSame(sidecar.result.elapsedMilliseconds > 0, true);
       assertSame(Array.isArray(cpuProfile.samples), true);
       assertSame(cpuProfile.samples.length > 0, true);

@@ -307,13 +307,31 @@ export function profileArtifactContents(
 /**
  * @param {string} outputDirectory
  * @param {readonly { fileName: string, contents: string }[]} files
+ * @param {{
+ *   mkdir?: typeof mkdir,
+ *   rename?: typeof rename,
+ *   rm?: typeof rm,
+ *   stat?: typeof stat,
+ *   writeFile?: typeof writeFile,
+ * }} [operations]
  * @returns {Promise<void>}
  */
-export async function writeProfileArtifactsAtomically(outputDirectory, files) {
+export async function writeProfileArtifactsAtomically(
+  outputDirectory,
+  files,
+  operations = {},
+) {
   if (!Array.isArray(files) || files.length === 0) {
     throw new RangeError('Expected at least one profile artifact to write');
   }
 
+  const fileOperations = {
+    mkdir: operations.mkdir ?? mkdir,
+    rename: operations.rename ?? rename,
+    rm: operations.rm ?? rm,
+    stat: operations.stat ?? stat,
+    writeFile: operations.writeFile ?? writeFile,
+  };
   const validatedFiles = files.map((file) => {
     if (typeof file.contents !== 'string') {
       throw new TypeError(`Profile artifact ${file.fileName} must be a string`);
@@ -324,6 +342,8 @@ export async function writeProfileArtifactsAtomically(outputDirectory, files) {
       contents: file.contents,
     };
   });
+  const stem = uniqueProfileStem(validatedFiles);
+  const reconciledFileNames = stemArtifactFileNames(stem);
   const outputUrl = resolveOutputDirectory(outputDirectory);
   const transactionId = `${process.pid}-${nextProfileTransactionId()}`;
   const stagingUrl = resolveOutputDirectory(
@@ -337,29 +357,33 @@ export async function writeProfileArtifactsAtomically(outputDirectory, files) {
   /** @type {string[]} */
   const promotedFiles = [];
 
-  await mkdir(outputUrl, { recursive: true });
+  await fileOperations.mkdir(outputUrl, { recursive: true });
 
   try {
-    await mkdir(stagingUrl, { recursive: true });
+    await fileOperations.mkdir(stagingUrl, { recursive: true });
 
     for (const file of validatedFiles) {
-      await writeFile(new URL(file.fileName, stagingUrl), file.contents, 'utf8');
+      await fileOperations.writeFile(
+        new URL(file.fileName, stagingUrl),
+        file.contents,
+        'utf8',
+      );
     }
 
-    await mkdir(backupUrl, { recursive: true });
+    await fileOperations.mkdir(backupUrl, { recursive: true });
 
-    for (const file of validatedFiles) {
-      const finalUrl = new URL(file.fileName, outputUrl);
-      const backupFileUrl = new URL(file.fileName, backupUrl);
+    for (const fileName of reconciledFileNames) {
+      const finalUrl = new URL(fileName, outputUrl);
+      const backupFileUrl = new URL(fileName, backupUrl);
 
-      if (await exists(finalUrl)) {
-        await rename(finalUrl, backupFileUrl);
-        backedUpFiles.push(file.fileName);
+      if (await exists(finalUrl, fileOperations.stat)) {
+        await fileOperations.rename(finalUrl, backupFileUrl);
+        backedUpFiles.push(fileName);
       }
     }
 
     for (const file of validatedFiles) {
-      await rename(
+      await fileOperations.rename(
         new URL(file.fileName, stagingUrl),
         new URL(file.fileName, outputUrl),
       );
@@ -367,17 +391,20 @@ export async function writeProfileArtifactsAtomically(outputDirectory, files) {
     }
   } catch (error) {
     for (const fileName of promotedFiles) {
-      await rm(new URL(fileName, outputUrl), { force: true });
+      await fileOperations.rm(new URL(fileName, outputUrl), { force: true });
     }
 
     for (const fileName of backedUpFiles) {
-      await rename(new URL(fileName, backupUrl), new URL(fileName, outputUrl));
+      await fileOperations.rename(
+        new URL(fileName, backupUrl),
+        new URL(fileName, outputUrl),
+      );
     }
 
     throw error;
   } finally {
-    await rm(stagingUrl, { recursive: true, force: true });
-    await rm(backupUrl, { recursive: true, force: true });
+    await fileOperations.rm(stagingUrl, { recursive: true, force: true });
+    await fileOperations.rm(backupUrl, { recursive: true, force: true });
   }
 }
 
@@ -425,11 +452,12 @@ function inspectorPost(session) {
 
 /**
  * @param {URL} fileUrl
+ * @param {typeof stat} statOperation
  * @returns {Promise<boolean>}
  */
-async function exists(fileUrl) {
+async function exists(fileUrl, statOperation) {
   try {
-    await stat(fileUrl);
+    await statOperation(fileUrl);
     return true;
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'code' in error) {
@@ -440,6 +468,40 @@ async function exists(fileUrl) {
   }
 
   throw new Error(`Could not stat profile artifact: ${fileUrl.href}`);
+}
+
+/**
+ * @param {readonly { fileName: string }[]} files
+ * @returns {string}
+ */
+function uniqueProfileStem(files) {
+  const stems = new Set(files.map((file) => profileStemFromFileName(file.fileName)));
+
+  if (stems.size !== 1) {
+    throw new RangeError('Expected profile artifacts to share a single workload stem');
+  }
+
+  return /** @type {string} */ (stems.values().next().value);
+}
+
+/**
+ * @param {string} fileName
+ * @returns {string}
+ */
+function profileStemFromFileName(fileName) {
+  return fileName.replace(/\.(cpuprofile|heapprofile|json)$/u, '');
+}
+
+/**
+ * @param {string} stem
+ * @returns {readonly string[]}
+ */
+function stemArtifactFileNames(stem) {
+  return Object.freeze([
+    `${stem}.cpuprofile`,
+    `${stem}.heapprofile`,
+    `${stem}.json`,
+  ]);
 }
 
 /**

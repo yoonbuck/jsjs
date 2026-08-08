@@ -18,15 +18,17 @@ const CHROMIUM_SETUP_MESSAGE =
 /**
  * @typedef {{
  *   route: (pattern: string, handler: (route: any, request: any) => Promise<void>) => Promise<unknown>,
- *   goto: (url: string) => Promise<void>,
- *   evaluate: (fn: (...args: any[]) => unknown, args: Record<string, unknown>) => Promise<{
- *     runtimeVersion: string,
- *     expectedChecksum: number,
- *     elapsedMilliseconds: number,
- *     result: { checksum: number, iterations: number },
- *   }>,
+ *   goto: (url: string) => Promise<unknown>,
+ *   evaluate: (fn: (...args: any[]) => unknown, args: Record<string, unknown>) => Promise<unknown>,
  *   context: () => { newCDPSession: (page: unknown) => Promise<{ send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>> }> },
  * }} ProfileBrowserPage
+ *
+ * @typedef {{
+ *   runtimeVersion: string,
+ *   expectedChecksum: number,
+ *   elapsedMilliseconds: number,
+ *   result: { checksum: number, iterations: number },
+ * }} BrowserProfileCaptureResult
  *
  * @typedef {{
  *   version?: () => string,
@@ -68,9 +70,10 @@ export async function runChromiumProfile(options, dependencies = {}) {
   }
 
   try {
-    const page = await browser.newPage();
+    const page = /** @type {ProfileBrowserPage} */ (await browser.newPage());
     await page.route(`${ORIGIN}/**/*`, createRepositoryRouteHandler());
     await page.goto(`${ORIGIN}/benchmark/run-browser.html`);
+    await prepareBrowserProfilePage(page, workload, options);
 
     const session = await (
       dependencies.createCDPSession ??
@@ -82,38 +85,7 @@ export async function runChromiumProfile(options, dependencies = {}) {
       metrics: options.metrics,
       samplingInterval: options.samplingInterval,
       run() {
-        return page.evaluate(
-          /**
-           * @param {{
-           *   modulePath: string,
-           *   workload: { name?: string, source: string, expectedChecksum: number },
-           *   mode: 'cold' | 'steady',
-           *   warmups: number,
-           *   iterations: number,
-           * }} args
-           */
-          async (args) => {
-            const { modulePath, workload, mode, warmups, iterations } = args;
-            const module =
-              /** @type {{ runBrowserProfilePage: typeof import('./run-browser-page.js').runBrowserProfilePage }} */ (
-                await import(modulePath)
-              );
-
-            return module.runBrowserProfilePage({
-              workload,
-              mode,
-              warmups,
-              iterations,
-            });
-          },
-          {
-            modulePath: '/benchmark/profile/run-browser-page.js',
-            workload,
-            mode: options.mode,
-            warmups: options.warmups,
-            iterations: options.iterations,
-          },
-        );
+        return measureBrowserProfilePage(page, workload, options);
       },
     });
     const version =
@@ -145,6 +117,102 @@ export async function runChromiumProfile(options, dependencies = {}) {
   } finally {
     await browser.close();
   }
+}
+
+/**
+ * @param {ProfileBrowserPage} page
+ * @param {{ name?: string, source: string, expectedChecksum: number }} workload
+ * @param {{
+ *   mode: 'cold' | 'steady',
+ *   warmups: number,
+ *   iterations: number,
+ * }} options
+ * @returns {Promise<void>}
+ */
+async function prepareBrowserProfilePage(page, workload, options) {
+  await page.evaluate(
+    /**
+     * @param {{
+     *   modulePath: string,
+     *   phase: 'warmup',
+     *   workload: { name?: string, source: string, expectedChecksum: number },
+     *   mode: 'cold' | 'steady',
+     *   warmups: number,
+     *   iterations: number,
+     * }} args
+     */
+    async (args) => {
+      const { modulePath, workload, mode, warmups, iterations } = args;
+      const module =
+        /** @type {{ prepareBrowserProfilePage: typeof import('./run-browser-page.js').prepareBrowserProfilePage }} */ (
+          await import(modulePath)
+        );
+
+      return module.prepareBrowserProfilePage({
+        workload,
+        mode,
+        warmups,
+        iterations,
+      });
+    },
+    {
+      modulePath: '/benchmark/profile/run-browser-page.js',
+      phase: 'warmup',
+      workload,
+      mode: options.mode,
+      warmups: options.warmups,
+      iterations: options.iterations,
+    },
+  );
+}
+
+/**
+ * @param {ProfileBrowserPage} page
+ * @param {{ name?: string, source: string, expectedChecksum: number }} workload
+ * @param {{
+ *   mode: 'cold' | 'steady',
+ *   warmups: number,
+ *   iterations: number,
+ * }} options
+ * @returns {Promise<BrowserProfileCaptureResult>}
+ */
+async function measureBrowserProfilePage(page, workload, options) {
+  const measured = await page.evaluate(
+    /**
+     * @param {{
+     *   modulePath: string,
+     *   phase: 'measure',
+     *   workload: { name?: string, source: string, expectedChecksum: number },
+     *   mode: 'cold' | 'steady',
+     *   warmups: number,
+     *   iterations: number,
+     * }} args
+     */
+    async (args) => {
+      const { modulePath, workload, mode, warmups, iterations } = args;
+      const module =
+        /** @type {{ runBrowserProfilePage: typeof import('./run-browser-page.js').runBrowserProfilePage }} */ (
+          await import(modulePath)
+        );
+
+      return module.runBrowserProfilePage({
+        workload,
+        mode,
+        warmups,
+        iterations,
+      });
+    },
+    {
+      modulePath: '/benchmark/profile/run-browser-page.js',
+      phase: 'measure',
+      workload,
+      mode: options.mode,
+      warmups: options.warmups,
+      iterations: options.iterations,
+    },
+  );
+
+  return /** @type {BrowserProfileCaptureResult} */ (measured);
 }
 
 /**
