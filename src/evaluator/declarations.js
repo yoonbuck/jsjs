@@ -4,7 +4,11 @@ import {
   GlobalEnvironmentRecord,
 } from '../runtime/environment.js';
 import { putValue } from '../runtime/reference.js';
-import { EMPTY, createNormalCompletion } from '../runtime/completion.js';
+import {
+  EMPTY,
+  createNormalCompletion,
+  GuestErrorSignal,
+} from '../runtime/completion.js';
 import {
   EngineFunction,
   createArgumentsObject,
@@ -43,35 +47,48 @@ import {
  */
 
 /**
- * Performs (a deliberately ES5-shaped slice of) Global Declaration
- * Instantiation (ECMA-262 10.5 with `configurableBindings = false`): walks the
- * program body for every function and `var` declaration reachable without
- * crossing a function boundary and creates a *non-configurable* global binding
- * for each name. Function declarations are instantiated first and bound to
- * their function object; `var` names are created afterwards and initialized to
- * `undefined` only when no binding of that name exists yet, so `var f;` never
- * clobbers a `function f() {}` of the same name (10.5 steps 5 and 8).
+ * Performs ES2015 `GlobalDeclarationInstantiation` (ECMA-262 6th edition
+ * §15.1.8) for the script's `ScriptBody`, creating the bindings a script's
+ * top-level declarations require in the realm's global environment before any
+ * statement runs, so identifier references and hoisted reads/calls resolve even
+ * before a declaration statement executes.
  *
- * The 10.5 global checks apply here just as they do to eval code (only the
- * `configurableBindings` differs): declaring a new global name on a
- * non-extensible global object throws a guest `TypeError`, a function
- * declaration redefines a configurable colliding property and takes the value
- * of a writable+enumerable non-configurable one, and any other
- * non-configurable collision (e.g. `function undefined() {}`) throws.
+ * (The plan cited §15.1.11; the real ES2015 clause is §15.1.8 — the later-
+ * edition number leaked into the plan, as it did for
+ * `FunctionDeclarationInstantiation`, which is §9.2.12 in ES2015.)
+ *
+ * The algorithm first performs its cross-script early checks against the global
+ * environment record (§15.1.8 steps 5-6), which never mutate it: for every
+ * lexically declared name a guest `SyntaxError` if it collides with an existing
+ * global `var`, an existing global lexical binding, or a restricted global
+ * property (`undefined`/`NaN`/`Infinity`); for every `var` name a guest
+ * `SyntaxError` if it collides with an existing global lexical binding. Within a
+ * single script Acorn rejects such conflicts at parse time, so these runtime
+ * checks only fire across scripts in the same realm (or, once Task 8 installs
+ * it, for `eval`). Because they run before any binding is created, a script
+ * that fails a check leaves the global environment unmodified.
+ *
+ * It then instantiates bindings (§15.1.8 steps 16-18): lexically scoped
+ * `let`/`const` names get *uninitialized* declarative bindings —
+ * `createImmutableBinding(name, true)` for a `const`, `createMutableBinding(
+ * name, false)` for a `let` — which is their temporal dead zone until the
+ * declarator runs; a top-level `FunctionDeclaration` is var-scoped, not lexical,
+ * so it is not in this list. Function declarations are then instantiated and
+ * bound with `createGlobalFunctionBinding(name, fo, false)`, and `var` names
+ * with `createGlobalVarBinding(name, false)`. These two helpers keep their
+ * deliberate own-property model on the global object (see their JSDoc): a
+ * `var`/function name that cannot be declared — e.g. a new name on a
+ * non-extensible global — raises a guest `TypeError` from `[[DefineOwnProperty]]`
+ * (§15.1.8's `CanDeclareGlobalVar`/`CanDeclareGlobalFunction` are checked
+ * implicitly there), while a global *lexical* binding lives only in the
+ * declarative record and is therefore invisible on the global object.
  *
  * For non-strict scripts this also performs ES2015 Annex B.3.3.2's global slice:
  * a block-level function declaration whose name can legally be declared as a
  * global `var` gets an `undefined`-initialized global var binding here, and the
  * declaration node is recorded on `context.annexBFunctionDeclarations` so the
  * function's own evaluation copies its value into the global scope in source
- * order (see `evaluateFunctionDeclaration`, `./statements.js`). Script-level
- * `let`/`const`
- * bindings themselves are still not instantiated — the global environment's
- * declarative record fills in when Task 7 rewrites this function as §15.1.11.
- *
- * This must run before the program's statement list is evaluated so
- * identifier references and hoisted reads/calls see the binding even
- * before its declaration statement executes.
+ * order (see `evaluateFunctionDeclaration`, `./statements.js`).
  *
  * @param {any} program
  * @param {EvaluationContext} context
@@ -80,9 +97,60 @@ import {
 export function globalDeclarationInstantiation(program, context) {
   const globalEnvironment = context.realm.globalEnvironment;
 
-  const varScoped = topLevelVarScopedDeclarations(program.body);
-  const varNames = new Set(topLevelVarDeclaredNames(program.body));
+  // §15.1.8 steps 3-4: LexicallyDeclaredNames and VarDeclaredNames of the
+  // ScriptBody are the *top-level* variants, because a top-level function
+  // declaration is var-scoped rather than lexical.
+  const lexNames = topLevelLexicallyDeclaredNames(program.body);
+  const varNames = topLevelVarDeclaredNames(program.body);
 
+  // §15.1.8 step 5: reject a lexical name that conflicts with an existing
+  // global var, an existing global lexical binding, or a restricted global
+  // property. Pure checks — no binding is created before they all pass.
+  for (const name of lexNames) {
+    if (
+      globalEnvironment.hasVarDeclaration(name) ||
+      globalEnvironment.hasLexicalDeclaration(name) ||
+      globalEnvironment.hasRestrictedGlobalProperty(name)
+    ) {
+      throw new GuestErrorSignal(
+        'SyntaxError',
+        `Identifier '${name}' has already been declared`,
+      );
+    }
+  }
+
+  // §15.1.8 step 6: reject a var name that conflicts with an existing global
+  // lexical binding.
+  for (const name of varNames) {
+    if (globalEnvironment.hasLexicalDeclaration(name)) {
+      throw new GuestErrorSignal(
+        'SyntaxError',
+        `Identifier '${name}' has already been declared`,
+      );
+    }
+  }
+
+  // §15.1.8 step 16: instantiate — but do not initialize — the lexically scoped
+  // declarations. `topLevelLexicallyScopedDeclarations` yields only
+  // `let`/`const` (function declarations are var-scoped), so each name gets an
+  // uninitialized binding (its TDZ) that `evaluateVariableDeclaration` later
+  // initializes.
+  for (const declaration of topLevelLexicallyScopedDeclarations(program.body)) {
+    for (const name of boundNames(declaration)) {
+      if (isConstantDeclaration(declaration)) {
+        globalEnvironment.createImmutableBinding(name, true);
+      } else {
+        globalEnvironment.createMutableBinding(name, false);
+      }
+    }
+  }
+
+  const varScoped = topLevelVarScopedDeclarations(program.body);
+
+  // §15.1.8 step 17: instantiate the top-level function declarations, binding
+  // each to its function object (non-configurable, `configurableBindings`
+  // false). `createGlobalFunctionBinding` applies the 10.5 redefinition rules
+  // and raises a guest `TypeError` for an undeclarable function name.
   for (const declaration of varScoped) {
     if (declaration.type !== 'FunctionDeclaration') {
       continue;
@@ -96,6 +164,9 @@ export function globalDeclarationInstantiation(program, context) {
     );
   }
 
+  // §15.1.8 step 18: create the `undefined`-initialized global var bindings.
+  // `createGlobalVarBinding` raises a guest `TypeError` for an undeclarable var
+  // name (e.g. a new name on a non-extensible global).
   for (const name of varNames) {
     globalEnvironment.createGlobalVarBinding(name, false);
   }
@@ -103,7 +174,7 @@ export function globalDeclarationInstantiation(program, context) {
   if (!context.strict) {
     const aliasDeclarations = annexBBlockFunctionDeclarations(
       program.body,
-      new Set(topLevelLexicallyDeclaredNames(program.body)),
+      new Set(lexNames),
     );
     /** @type {Set<any>} */
     const aliased = new Set();
@@ -558,13 +629,14 @@ export function evaluateVariableDeclaration(node, context) {
 
     if (reference.base === undefined) {
       // The binding should have been created uninitialized by the enclosing
-      // scope's declaration instantiation. Reaching an unresolvable reference
-      // here means the lexical declaration sits at a scope whose instantiation
-      // does not yet create lexical bindings: the top level of a script/global
-      // (Task 7) or of eval code (Task 8). Every other lexical scope — a
-      // function body, block, `switch`, or `try` — already resolves, so those
-      // never reach here. Fail loudly with an engine-level error rather than
-      // dereferencing `undefined`.
+      // scope's declaration instantiation. Now that
+      // `globalDeclarationInstantiation` installs script/global lexical
+      // bindings (ES2015 §15.1.8), the only remaining scope whose
+      // instantiation does not yet create them is the top level of eval code
+      // (Task 8 owns `EvalDeclarationInstantiation`'s lexical slice). Every
+      // other lexical scope — a script/global top level, function body, block,
+      // `switch`, or `try` — already resolves, so those never reach here. Fail
+      // loudly with an engine-level error rather than dereferencing `undefined`.
       throw createUnsupportedOperationError(
         `lexical declaration of '${declarator.id.name}' outside a block scope`,
       );

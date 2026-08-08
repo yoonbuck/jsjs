@@ -744,11 +744,11 @@ const tests = [
     },
   },
   {
-    name: 'a top-level lexical declaration raises a controlled UnsupportedOperationError pending Tasks 6-8',
+    name: 'a top-level lexical declaration in eval raises a controlled UnsupportedOperationError pending Task 8',
     run() {
       const realm = createRealm();
       const error = /** @type {any} */ (
-        assertThrows(() => evaluateScript(realm, 'let y = 1;'), Error)
+        assertThrows(() => evaluateScript(realm, 'eval("let y = 1;")'), Error)
       );
       assertSame(error.name, 'UnsupportedOperationError');
     },

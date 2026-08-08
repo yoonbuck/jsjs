@@ -144,6 +144,32 @@ const tests = [
       assertThrows(() => evaluateScript(realm, '{'), SyntaxError);
     },
   },
+  {
+    name: 'a script-level lexical binding stays off the realm global object',
+    run() {
+      const realm = createRealm();
+
+      evaluateScript(realm, 'let scriptLexical = 1; const scriptConst = 2;');
+
+      assertSame(realm.globalObject.get('scriptLexical'), undefined);
+      assertSame(realm.globalObject.hasProperty('scriptLexical'), false);
+      assertSame(realm.globalObject.get('scriptConst'), undefined);
+      assertSame(realm.globalObject.hasProperty('scriptConst'), false);
+      assertSame(evaluateScript(realm, 'scriptLexical + scriptConst').value, 3);
+    },
+  },
+  {
+    name: 'lexical bindings from one script are visible to a later script in the same realm',
+    run() {
+      const realm = createRealm();
+
+      evaluateScript(realm, 'let shared = 41;');
+      const completion = evaluateScript(realm, 'shared + 1');
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 42);
+    },
+  },
 ];
 
 export default tests;

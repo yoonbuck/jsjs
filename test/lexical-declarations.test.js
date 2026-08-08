@@ -96,6 +96,44 @@ function globalHasBindingAfter(source, name) {
   return evaluateScript(realm, `'${name}' in this`).value;
 }
 
+/**
+ * @param {any} realm
+ * @param {{ type: string, value: unknown }} completion
+ * @param {string} constructorName
+ */
+function assertCompletionThrows(realm, completion, constructorName) {
+  assertSame(completion.type, 'throw');
+  if (!(completion.value instanceof EngineObject)) {
+    throw new Error(
+      `Expected EngineObject throw value, got ${typeof completion.value}`,
+    );
+  }
+  const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
+  const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
+  let cur = /** @type {EngineObject | null} */ (
+    /** @type {EngineObject} */ (completion.value).getPrototype()
+  );
+  while (cur !== null) {
+    if (cur === proto) return;
+    cur = cur.getPrototype();
+  }
+  throw new Error(`Thrown value is not an instance of ${constructorName}`);
+}
+
+/**
+ * @param {string} source
+ */
+function assertParseRejects(source) {
+  const realm = createRealm();
+  let threw = false;
+  try {
+    evaluateScript(realm, source);
+  } catch (error) {
+    threw = error instanceof SyntaxError;
+  }
+  assertSame(threw, true);
+}
+
 /** @type {import('./harness/runner.js').TestCase[]} */
 const tests = [
   {
@@ -500,6 +538,151 @@ const tests = [
         ),
         10,
       );
+    },
+  },
+  {
+    name: 'a script-level let binding resolves to its initialized value',
+    run() {
+      assertNormal(run('let a = 5; a'), 5);
+    },
+  },
+  {
+    name: 'a script-level const binding resolves to its initialized value',
+    run() {
+      assertNormal(run('const a = 7; a'), 7);
+    },
+  },
+  {
+    name: 'reading a script-level let in its TDZ throws before initialization',
+    run() {
+      assertThrowsMessage(
+        'a; let a = 1;',
+        'ReferenceError',
+        "Cannot access 'a' before initialization",
+      );
+    },
+  },
+  {
+    name: 'a script-level let is invisible on the global object yet resolvable in guest code',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'let x = 1;');
+      assertSame(realm.globalObject.get('x'), undefined);
+      assertSame(realm.globalObject.hasProperty('x'), false);
+      assertSame(evaluateScript(realm, 'this.x').value, undefined);
+      assertSame(evaluateScript(realm, 'x').value, 1);
+    },
+  },
+  {
+    name: 'let undefined throws a SyntaxError because undefined is a restricted global property',
+    run() {
+      assertThrows('let undefined = 1;', 'SyntaxError');
+    },
+  },
+  {
+    name: 'let NaN throws a SyntaxError because NaN is a restricted global property',
+    run() {
+      assertThrows('let NaN = 1;', 'SyntaxError');
+    },
+  },
+  {
+    name: 'var undefined still completes normally and leaves undefined unchanged',
+    run() {
+      assertNormal(run('var undefined = 5;'), undefined);
+      assertNormal(run('var undefined = 5; undefined'), undefined);
+    },
+  },
+  {
+    name: 'a second script in the same realm sees the first script lexical bindings',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'let a = 5; const b = 6;');
+      assertNormal(evaluateScript(realm, 'a + b'), 11);
+    },
+  },
+  {
+    name: 'a second script redeclaring a lexical binding throws a SyntaxError',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'let a = 5;');
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'let a = 6;'),
+        'SyntaxError',
+      );
+    },
+  },
+  {
+    name: 'var after let across two scripts throws a SyntaxError',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'let x = 1;');
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'var x = 2;'),
+        'SyntaxError',
+      );
+    },
+  },
+  {
+    name: 'let after var across two scripts throws a SyntaxError',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'var x = 1;');
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'let x = 2;'),
+        'SyntaxError',
+      );
+    },
+  },
+  {
+    name: 'let x after var x within one script is rejected at parse time',
+    run() {
+      assertParseRejects('var x = 1; let x = 2;');
+    },
+  },
+  {
+    name: 'var x after let x within one script is rejected at parse time',
+    run() {
+      assertParseRejects('let x = 1; var x = 2;');
+    },
+  },
+  {
+    name: 'a failed cross-script check leaves the global environment unmodified',
+    run() {
+      const realm = createRealm();
+      evaluateScript(realm, 'let a = 1;');
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'var b = 2; let a = 3;'),
+        'SyntaxError',
+      );
+      assertNormal(evaluateScript(realm, 'typeof b'), 'undefined');
+    },
+  },
+  {
+    name: 'a new var on a non-extensible global throws a TypeError',
+    run() {
+      const realm = createRealm();
+      realm.globalObject.preventExtensions();
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'var brandNewVarName;'),
+        'TypeError',
+      );
+    },
+  },
+  {
+    name: 'a let on a non-extensible global succeeds where a var cannot',
+    run() {
+      const realm = createRealm();
+      realm.globalObject.preventExtensions();
+      assertNormal(
+        evaluateScript(realm, 'let brandNewLetName = 3;'),
+        undefined,
+      );
+      assertNormal(evaluateScript(realm, 'brandNewLetName'), 3);
     },
   },
 ];
