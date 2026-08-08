@@ -8,7 +8,7 @@ import {
   REPORT_SCHEMA_VERSION,
   validateHostReport,
 } from '../benchmark/report.js';
-import { runHostBenchmark } from '../benchmark/run.js';
+import { measureBatch, runHostBenchmark } from '../benchmark/run.js';
 import { PROFILES, resolveBenchmarkConfig } from '../benchmark/config.js';
 import { calibrateBatchSize } from '../benchmark/calibration.js';
 import {
@@ -296,6 +296,71 @@ const tests = [
         assertSame(error.message.includes('native'), true);
         assertSame(nativeColdCalls, badInvocation);
       }
+    },
+  },
+  {
+    name: 'measured batches reject non-positive and non-integer counts before timing or execution',
+    run() {
+      for (const count of [0, -1, 1.5]) {
+        let executeCalls = 0;
+        let nowCalls = 0;
+        const error = assertThrows(
+          () =>
+            measureBatch(
+              () => {
+                executeCalls += 1;
+                return 17;
+              },
+              count,
+              {
+                now: () => {
+                  nowCalls += 1;
+                  return nowCalls;
+                },
+                expectedChecksum: 17,
+                context: 'fixture lane',
+              },
+            ),
+          RangeError,
+        );
+
+        assertSame(error.message, 'fixture lane batch count must be a positive integer');
+        assertSame(executeCalls, 0);
+        assertSame(nowCalls, 0);
+      }
+    },
+  },
+  {
+    name: 'measured batches report invalid elapsed time before checksum mismatch on aborting batches',
+    run() {
+      let nowCalls = 0;
+      let executeCalls = 0;
+      const error = assertThrows(
+        () =>
+          measureBatch(
+            () => {
+              executeCalls += 1;
+              return 9;
+            },
+            1,
+            {
+              now: () => {
+                nowCalls += 1;
+                return nowCalls === 1 ? 5 : Number.NaN;
+              },
+              expectedChecksum: 17,
+              context: 'fixture lane',
+            },
+          ),
+        RangeError,
+      );
+
+      assertSame(
+        error.message,
+        'fixture lane elapsedMs must be a positive finite number',
+      );
+      assertSame(executeCalls, 1);
+      assertSame(nowCalls, 2);
     },
   },
   {

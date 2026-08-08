@@ -238,17 +238,28 @@ function sampleLane(execute, options) {
  * }} options
  * @returns {{ elapsedMs: number, checksum: number }}
  */
-function measureBatch(execute, count, options) {
-  let checksum = options.expectedChecksum;
+export function measureBatch(execute, count, options) {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new RangeError(
+      `${options.context} batch count must be a positive integer`,
+    );
+  }
+
+  /** @type {number | undefined} */
+  let checksum;
+  /** @type {{ invocation: number, checksum: number } | null} */
+  let mismatch = null;
   const startedAt = options.now();
 
   for (let index = 0; index < count; index += 1) {
     checksum = execute();
 
     if (checksum !== options.expectedChecksum) {
-      throw new Error(
-        `${options.context} checksum mismatch at batch invocation ${index + 1} of ${count}: expected ${options.expectedChecksum}, got ${checksum}`,
-      );
+      mismatch = {
+        invocation: index + 1,
+        checksum,
+      };
+      break;
     }
   }
 
@@ -257,6 +268,18 @@ function measureBatch(execute, count, options) {
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
     throw new RangeError(
       `${options.context} elapsedMs must be a positive finite number`,
+    );
+  }
+
+  if (mismatch !== null) {
+    throw new Error(
+      `${options.context} checksum mismatch at batch invocation ${mismatch.invocation} of ${count}: expected ${options.expectedChecksum}, got ${mismatch.checksum}`,
+    );
+  }
+
+  if (checksum === undefined) {
+    throw new RangeError(
+      `${options.context} batch count must be a positive integer`,
     );
   }
 
