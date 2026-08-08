@@ -41,12 +41,47 @@ The implemented ES5 core built-in families are:
 | `String`   | Call converts with `ToString`, construct boxes with lazy index properties and a non-writable `length`; `fromCharCode`; all ES5 prototype methods, including `match`/`replace`/`search`/`split` dispatching through real `RegExp` values.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `RegExp`   | The ES5 15.10.1 `Pattern` grammar, validated strictly with no Annex B extensions; call coerces or copies a pattern, construct always allocates; the ES5 15.10.7 own properties `source`/`global`/`ignoreCase`/`multiline`/`lastIndex`; `exec`, `test`, `toString`; regular expression literals. `RegExp.prototype` is itself a RegExp object with source `(?:)` and all flags `false`, per ES5 15.10.6, not the ES2015 ordinary-object rule.                                                                                                                                                                                                                                                                                                                                                                                           |
 | `Math`     | The eight constants (`E`, `LN10`, `LN2`, `LOG10E`, `LOG2E`, `PI`, `SQRT1_2`, `SQRT2`) and all eighteen ES5 functions: `abs`, `acos`, `asin`, `atan`, `atan2`, `ceil`, `cos`, `exp`, `floor`, `log`, `max`, `min`, `pow`, `random`, `round`, `sin`, `sqrt`, `tan`. `Math` is an ordinary object with `[[Class]]` `"Math"` and no `[[Call]]`/`[[Construct]]`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `Symbol`   | The one implemented family from a later edition (ES2015 §19.4). Call creates a unique symbol from a `ToString`-coerced description; `new Symbol()` throws. `Symbol.for`/`Symbol.keyFor` over the global symbol registry; `Symbol.prototype`'s `constructor`, `toString`, `valueOf`, `@@toPrimitive`, and `@@toStringTag`. All eleven ES2015 well-known symbols are defined. The well-known symbols and the registry are shared by every realm on one **agent**, as ECMA-262 §6.1.5.1 and §19.4.2.1 require, while `Symbol` and `Symbol.prototype` are per-realm like every other intrinsic. `createRealm({ agent })` opts realms into sharing; a realm given no agent gets its own, so a guest-interned `Symbol.for` key never outlives the realm that interned it. See [Symbols and property keys](#symbols-and-property-keys) below. |
 | `JSON`     | `JSON.parse` with the full JSON grammar and reviver traversal, and `JSON.stringify` with replacer functions, replacer property lists, `toJSON`, numeric and string `space` gaps, and cycle detection. Neither delegates to the host `JSON`. `JSON` is an ordinary object with `[[Class]]` `"JSON"`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Globals    | `eval`, `parseInt`, `parseFloat`, `isNaN`, `isFinite`; the URI functions `encodeURI`, `encodeURIComponent`, `decodeURI`, `decodeURIComponent`; and Annex B's `escape`/`unescape`. The URI functions throw a realm-local `URIError`. A **direct** `eval` call runs in the caller's variable and lexical environment and inherits its strictness, so it reads the caller's locals and its `var` declarations land in the caller's scope; strict eval code gets its own variable environment instead, so those declarations do not leak. Any other reference to `eval` is an **indirect** call and runs in the realm's global scope regardless of where it was called from. A malformed program raises the realm's own `SyntaxError`, never the host's.                                                                                   |
 
 The error constructors (`Error`, `EvalError`, `TypeError`, `ReferenceError`,
 `SyntaxError`, `RangeError`, `URIError`) are all available on every realm's
 global object.
+
+### Symbols and property keys
+
+`Symbol` is the one place this engine implements a later edition on purpose,
+because ES2015's runtime protocols are keyed by symbols and nothing else can be
+built without them. Its reach into the rest of the engine is deliberately
+narrow.
+
+A property key is now a String **or** a Symbol, and the two never meet: a
+symbol key is carried by identity through `ToPropertyKey`, so `obj[sym]` and
+`obj["Symbol(desc)"]` name different properties no matter what the description
+is. Computed member access, the `in` operator, `delete`, `Object.defineProperty`,
+`Object.getOwnPropertyDescriptor`, `hasOwnProperty`, and `propertyIsEnumerable`
+all accept either kind.
+
+Every ES5 enumeration stays string-only, so no existing behaviour moves:
+`for-in`, `Object.keys`, and `Object.getOwnPropertyNames` skip symbol keys, and
+`JSON.stringify` never sees one (a symbol _value_ serializes as `undefined`,
+and a replacer is never called with a symbol key). `Object.getOwnPropertySymbols`
+is the sole way to reach them, and it reports them in the same own-key order.
+
+Symbols resist implicit coercion exactly as ES2015 asks. `ToNumber` and
+`ToString` of a symbol are `TypeError`s, so `sym + ''`, `+sym`, and `sym < sym`
+all throw; `ToBoolean` is `true`; `ToObject` boxes against `%SymbolPrototype%`.
+`String(sym)` is the single explicit rendering and returns `SymbolDescriptiveString`,
+while `new String(sym)` still throws. `typeof` answers `"symbol"`.
+
+Two well-known symbols are wired into real protocols, because `Symbol` itself
+needs them: `@@toPrimitive` is consulted by `ToPrimitive` ahead of
+`valueOf`/`toString`, and `Object.prototype.toString` prefers a **string**
+`@@toStringTag` over the ES5.1 `[[Class]]` tag. No ES5 object carries either
+property, so every ES5 tag and conversion is unchanged. The other nine
+well-known symbols are defined values whose protocols are not yet honoured —
+see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only-toprimitive-and-tostringtag-are-honoured).
 
 ## How the ES5 selection is derived
 
@@ -69,12 +104,25 @@ A file is a candidate only if it survives every filter:
   ES5.1-era regression tests inherited from SpiderMonkey, so it is a normal
   candidate directory and anything in it that must not run is carved out by
   the classified exclusions below like any other file. Under `test/built-ins`, an
-  allow-list of 26 constructors and namespace objects names exactly the ES5.1
-  standard library, so a post-ES5 global like `Proxy` or `Symbol` is out of
-  scope by construction rather than by 500 individual entries.
-- **Metadata.** A test that declares any `features:` tag is out, because this
-  engine claims no feature tags (see the [Feature manifest](#feature-manifest) section below), as is anything
-  flagged `module`.
+  allow-list of 27 constructors and namespace objects names the ES5.1 standard
+  library plus `Symbol`, so a post-ES5 global like `Proxy` is out of scope by
+  construction rather than by 500 individual entries.
+- **Metadata.** Anything flagged `module` is out. A test that declares a
+  `features:` tag is out too, unless a **feature area** claims it: an entry in
+  the policy's `featureAreas` naming a directory prefix and the exact tags the
+  engine implements there. A tagged test is a candidate only when an area
+  covers its path _and_ claims every tag the test declares, so claiming
+  `Symbol` earns coverage under `test/built-ins/Symbol` without dragging in
+  the thousands of `Symbol`-tagged tests elsewhere in the tree, and a test
+  under that prefix that also needs `cross-realm` or `Symbol.matchAll` stays
+  out. Every claimed tag also carries an executable probe in the
+  [Feature manifest](#feature-manifest), so a claim the engine cannot back is
+  a failing test rather than a comment.
+
+  The only claims today are the twelve ES2015 Symbol tags — `Symbol` and the
+  eleven well-known symbol tags — scoped to `test/built-ins/Symbol` and
+  `test/built-ins/Object/getOwnPropertySymbols`.
+
 - **An `ecmaVersion: 5` parse filter.** Every remaining file — and every harness
   file it `includes` — is parsed at ES5 with the vendored acorn. A file that
   will not parse as ES5 is testing syntax this engine is not required to accept,
@@ -93,12 +141,12 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 623 classified exclusions break down as:
+editions deliberately changed. The 612 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 350   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
-| `post-es5-builtin`   | 196   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
+| `post-es5-semantics` | 347   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
+| `post-es5-builtin`   | 188   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
 | `post-es5-syntax`    | 47    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
 | `host-dependent`     | 28    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
 | `engine-deviation`   | 2     | This engine knowingly differs from what ES5.1 asks. Each entry names a heading in [docs/limitations.md](limitations.md) that documents the choice — a deviation that is not written down is indistinguishable from a bug. Both remaining entries are the same cause: the vendored parser lexes `IdentifierName` with the modern `ID_Continue` property instead of ES5.1 7.6's general categories. |
@@ -149,16 +197,26 @@ exercised end to end. `tests` names upstream tests that really carry the tag;
 is really there, and asserts the test really passes once the feature is allowed.
 A feature therefore cannot be claimed by editing a list.
 
-The manifest currently holds no features. The engine is ES5-only today, so no
-Test262 `features` tag is claimed as supported, and any test that declares one is
-skipped rather than run. The baseline upstream subset is intentionally untagged —
-none of its tests declare a `features` tag — so today's run skips nothing and the
-report says exactly that: a `{"type":"features"}` line whose `supported` and
-`tagged` lists are both empty and whose `untagged` count is the whole run.
+The manifest currently claims the twelve ES2015 Symbol tags: `Symbol` and the
+eleven well-known symbol tags (`Symbol.hasInstance`,
+`Symbol.isConcatSpreadable`, `Symbol.iterator`, `Symbol.match`,
+`Symbol.replace`, `Symbol.search`, `Symbol.species`, `Symbol.split`,
+`Symbol.toPrimitive`, `Symbol.toStringTag`, `Symbol.unscopables`). Everything
+else the engine does is ES5.1, so every other tag is unclaimed and a test that
+declares one is skipped rather than run.
+
+The manifest and the selection policy's feature areas are deliberately two
+different gates. The manifest decides which tags may _run_; a feature area
+decides where a tagged test is _selected_ from. A tag has to clear both, which
+is what keeps `Symbol` from admitting the thousands of `Symbol`-tagged tests
+that live outside `test/built-ins/Symbol` and would fail on features this
+engine has not implemented.
+
 The schema, the probe execution, and the upstream correspondence check are all
-exercised regardless, by a synthetic feature in
+exercised beyond the real entries, by a synthetic feature in
 `test/node/workflow-contract.test.js` and a known feature-tagged upstream test in
-`test/ci/full-contract.test.js`, so an empty manifest is never a vacuous check.
+`test/ci/full-contract.test.js`, so the checks would still be meaningful if the
+manifest were emptied.
 
 ## Reading the report
 
@@ -285,8 +343,8 @@ upstream checkout at `vendor/test262`; see the Test262 section above).
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 12,033   | 12,033    | 12,033 | 22.46%  |
-| (file, variant) | 102,906     | 22,900   | 22,900    | 22,900 | 22.253% |
+| Files           | 53,575      | 12,108   | 12,108    | 12,108 | 22.6%   |
+| (file, variant) | 102,906     | 23,045   | 23,045    | 23,045 | 22.394% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).

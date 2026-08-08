@@ -39,7 +39,10 @@ const result = evaluateScript(realm, '1 + 2');
 console.log(result); // { type: 'normal', value: 3 }
 ```
 
-`createRealm()` returns an initialized ES5.1 realm with all built-in objects.
+`createRealm()` returns an initialized realm with all built-in objects: the
+full ES5.1 standard library plus ES2015 `Symbol`. Each realm gets its own
+agent — the owner of the well-known symbols and the global symbol registry —
+unless `createRealm({ agent })` opts several realms into sharing one.
 `evaluateScript(realm, source)` parses and evaluates a script, returning
 `{ type: 'normal' | 'throw', value }`. See
 [docs/architecture.md](docs/architecture.md) for the full embedding API.
@@ -74,7 +77,7 @@ guidance, and caveats are in [docs/benchmarking.md](docs/benchmarking.md).
 The engine is tested against the upstream [tc39/test262](https://github.com/tc39/test262)
 suite, pinned to revision `b363f29d3c43c626dc852744ad64a0b48a003693` (2026-07-31).
 Every selected record passes. Conformance methodology, the supported ES5.1
-surface, denominator semantics, the live coverage table, and the detailed report
+surface and the ES2015 Symbol surface on top of it, denominator semantics, the live coverage table, and the detailed report
 are in [docs/conformance.md](docs/conformance.md).
 
 ## Architecture

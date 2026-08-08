@@ -381,6 +381,38 @@ implementation falls short of what a hosted engine should do. They are written
 down for the same reason the deviations are — an undocumented shortfall is
 indistinguishable from a bug.
 
+### Well-known symbols are defined but only @@toPrimitive and @@toStringTag are honoured
+
+The engine implements ES2015 Symbols (see
+[docs/conformance.md](conformance.md#symbols-and-property-keys)) and defines all
+eleven of ECMA-262 §6.1.5.1's well-known symbols as own properties of `Symbol`,
+with the specified attributes and shared across realms. Two of them do
+something: `@@toPrimitive` is a real step of `ToPrimitive`, and a string
+`@@toStringTag` is preferred by `Object.prototype.toString`.
+
+The other nine — `@@hasInstance`, `@@isConcatSpreadable`, `@@iterator`,
+`@@match`, `@@replace`, `@@search`, `@@species`, `@@split`, and
+`@@unscopables` — are values with no behaviour behind them. Setting
+`obj[Symbol.iterator]` does not make `obj` iterable, `instanceof` does not
+consult `@@hasInstance`, `Array.prototype.concat` does not consult
+`@@isConcatSpreadable`, `String.prototype.match` and friends do not dispatch
+through `@@match`/`@@replace`/`@@search`/`@@split`, no built-in reads
+`@@species`, and `with` does not consult `@@unscopables`.
+
+This is a deliberate staging boundary rather than an oversight: those protocols
+belong to the issues that introduce the machinery they need — iterators and
+`for-of` (yoonbuck/jsjs#47) and the ES2015 object and function runtime updates
+(yoonbuck/jsjs#38) — and defining the keys first is what lets those land
+without re-opening this one. The values have to exist now regardless, because
+they are the extension points every later protocol is keyed by.
+
+**Observable example:** `var o = {}; o[Symbol.iterator] = function () {};` then
+`typeof o[Symbol.iterator]` is `"function"` and
+`Object.getOwnPropertySymbols(o)[0] === Symbol.iterator` is `true`, but no
+built-in ever calls it.
+**Backing code:** `src/runtime/symbol.js`, `src/runtime/agent.js`,
+`src/builtins/symbol.js`.
+
 ### Guest recursion depth is the engine's, and it is shallow
 
 The engine evaluates guest code by recursing on the host stack, so guest

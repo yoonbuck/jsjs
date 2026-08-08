@@ -613,6 +613,14 @@ function* arrayIndexKeys(array) {
 }
 
 /**
+ * The own enumerable **string** keys `SerializeJSONObject` walks. ES5.1
+ * 15.12.3's `EnumerableOwnNames` had only string keys to return; ES2015
+ * 24.3.2 keeps the same answer once symbols exist by enumerating String-typed
+ * keys alone. Skipping a symbol key is not the same as rendering it: coercing
+ * one with `String(key)` would fabricate the string key its description
+ * happens to spell, which can already exist on the same object — emitting
+ * that key twice and running its getter twice.
+ *
  * @param {EngineObject} object
  * @returns {string[]}
  */
@@ -621,8 +629,12 @@ function enumerableOwnNames(object) {
   const names = [];
 
   for (const key of object.ownPropertyKeys()) {
+    if (typeof key !== 'string') {
+      continue;
+    }
+
     if (object.getOwnProperty(key)?.enumerable === true) {
-      names.push(String(key));
+      names.push(key);
     }
   }
 

@@ -11,6 +11,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
+import { parse } from '../../vendor/acorn/acorn.mjs';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
 import { UNICODE_VERSION } from '../../src/builtins/unicode-case-data.js';
@@ -23,6 +24,10 @@ import {
   UPSTREAM_SUBSET_FILE,
   parseUpstreamSubset,
 } from '../../tools/test262/upstream.js';
+import {
+  FEATURES_MANIFEST_FILE,
+  parseFeatureManifest,
+} from '../../tools/test262/features.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 
@@ -1638,6 +1643,150 @@ export default [
         violations.join(', '),
         '',
         `test:node transitively imports checkout-dependent modules: ${violations.join(', ')}`,
+      );
+    },
+  },
+  {
+    name: 'no engine module keeps guest-reachable state at module scope',
+    run: async () => {
+      // `Symbol.for` interns a guest-controlled string. Holding that registry
+      // in a module variable would retain guest data for the life of the
+      // process, outliving every realm that produced it and reachable from no
+      // handle an embedder could drop. It belongs to an `Agent` instead.
+      //
+      // This parses rather than pattern-matches, because the regression is
+      // most likely to arrive in exactly the shape a regex misses: the code
+      // this replaced used `export const` for a module-level binding right
+      // beside the registry, and a wrapped initializer or an `Object.create`
+      // table would slip past a line-oriented check too.
+      const OWNERS = [
+        'src/runtime/symbol.js',
+        'src/runtime/agent.js',
+        'src/builtins/symbol.js',
+      ];
+      const MUTABLE_COLLECTIONS = ['Map', 'Set', 'WeakMap', 'WeakSet'];
+      /** @type {string[]} */
+      const violations = [];
+
+      /**
+       * Whether an initializer builds mutable state, anywhere inside it.
+       *
+       * @param {any} node
+       * @returns {boolean}
+       */
+      function buildsMutableState(node) {
+        if (node === null || typeof node !== 'object') {
+          return false;
+        }
+
+        if (
+          node.type === 'NewExpression' &&
+          node.callee?.type === 'Identifier' &&
+          MUTABLE_COLLECTIONS.includes(node.callee.name)
+        ) {
+          return true;
+        }
+
+        if (
+          node.type === 'CallExpression' &&
+          node.callee?.type === 'MemberExpression' &&
+          node.callee.object?.name === 'Object' &&
+          node.callee.property?.name === 'create'
+        ) {
+          return true;
+        }
+
+        for (const key of Object.keys(node)) {
+          const child = node[key];
+
+          if (Array.isArray(child)) {
+            if (child.some((entry) => buildsMutableState(entry))) {
+              return true;
+            }
+          } else if (buildsMutableState(child)) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      for (const file of OWNERS) {
+        const program = parse(await readSource(file), {
+          ecmaVersion: 2020,
+          sourceType: 'module',
+        });
+
+        for (const statement of program.body) {
+          const declaration =
+            statement.type === 'ExportNamedDeclaration'
+              ? statement.declaration
+              : statement;
+
+          if (declaration?.type !== 'VariableDeclaration') {
+            continue;
+          }
+
+          if (declaration.kind !== 'const') {
+            violations.push(`${file}: module-scope ${declaration.kind}`);
+            continue;
+          }
+
+          for (const declarator of declaration.declarations) {
+            const init = declarator.init;
+
+            if (
+              init !== null &&
+              init !== undefined &&
+              (init.type === 'ObjectExpression' ||
+                init.type === 'ArrayExpression' ||
+                buildsMutableState(init))
+            ) {
+              const { id } = declarator;
+
+              violations.push(
+                `${file}: ${id.type === 'Identifier' ? id.name : 'binding'}`,
+              );
+            }
+          }
+        }
+      }
+
+      assertSame(violations.join(' | '), '');
+    },
+  },
+  {
+    name: 'every feature area the selection policy claims is backed by a probed feature',
+    run: async () => {
+      // The two gates are independent: `featureAreas` decides where a tagged
+      // test is selected from, `features.json` decides whether it may run.
+      // A tag claimed by an area but missing from the manifest would select
+      // tests the runner then silently skips, which reads as coverage the
+      // engine does not have.
+      const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
+      const manifest = parseFeatureManifest(
+        await readSource(FEATURES_MANIFEST_FILE),
+      );
+      const probed = new Set(
+        manifest.features
+          .filter((feature) => feature.probe.trim() !== '')
+          .map((feature) => feature.name),
+      );
+      /** @type {string[]} */
+      const unbacked = [];
+
+      for (const area of policy.featureAreas) {
+        for (const name of area.features) {
+          if (!probed.has(name)) {
+            unbacked.push(`${area.prefix} claims ${name}`);
+          }
+        }
+      }
+
+      assertSame(
+        unbacked.join(', '),
+        '',
+        `feature areas claim tags with no probed feature: ${unbacked.join(', ')}`,
       );
     },
   },

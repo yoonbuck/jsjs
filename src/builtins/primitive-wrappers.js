@@ -19,6 +19,7 @@ import {
   codeUnitsBetween,
 } from '../runtime/code-units.js';
 import { isCallable } from '../runtime/descriptors.js';
+import { isSymbol, symbolDescriptiveString } from '../runtime/symbol.js';
 import { EngineObject } from '../runtime/object.js';
 import { toLowerCaseString, toUpperCaseString } from './string-case.js';
 import {
@@ -96,6 +97,13 @@ export function createPrimitiveWrapperIntrinsics(realm) {
     name: 'String',
     prototype: stringPrototype,
     convert: toString,
+    // ES2015 21.1.1.1 step 2: called as a function (never with `new`),
+    // `String` renders a Symbol argument through SymbolDescriptiveString
+    // instead of letting ToString reject it. This is the single explicit
+    // symbol-to-text conversion the language offers; `new String(sym)` still
+    // goes through ToString and throws.
+    callConvert: (value) =>
+      isSymbol(value) ? symbolDescriptiveString(value) : toString(value),
     defaultValue: '',
   });
   const numberConstructor = createWrapperConstructor(realm, {
@@ -810,25 +818,31 @@ export function installPrimitiveWrapperConstructors(globalObject, intrinsics) {
  * `new` it boxes that same primitive as a wrapper object against this
  * realm's prototype for the type.
  *
+ * `callConvert` exists for the one place the two paths must differ:
+ * `String(symbol)` renders the symbol's description while
+ * `new String(symbol)` throws (ES2015 §21.1.1.1 steps 2–3).
+ *
  * @param {Realm} realm
  * @param {{
  *   name: string,
  *   prototype: EngineObject,
  *   convert: (value: unknown) => string | number | boolean,
+ *   callConvert?: (value: unknown) => string | number | boolean,
  *   defaultValue: string | number | boolean,
  * }} options
  * @returns {import('./shared.js').NativeFunction}
  */
 function createWrapperConstructor(
   realm,
-  { name, prototype, convert, defaultValue },
+  { name, prototype, convert, callConvert, defaultValue },
 ) {
+  const convertForCall = callConvert ?? convert;
   const constructor = realm.createNativeFunction({
     name,
     length: 1,
     prototype,
     call(_thisValue, args) {
-      return args.length === 0 ? defaultValue : convert(args[0]);
+      return args.length === 0 ? defaultValue : convertForCall(args[0]);
     },
     construct(args) {
       const value = args.length === 0 ? defaultValue : convert(args[0]);

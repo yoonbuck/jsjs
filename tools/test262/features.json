@@ -1,4 +1,82 @@
 {
   "version": 1,
-  "features": []
+  "features": [
+    {
+      "name": "Symbol",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nvar probe = Symbol(\"probe\");\nif (typeof probe !== \"symbol\") { throw new Error(\"Symbol() is not a symbol\"); }\nif (Symbol(\"probe\") === probe) { throw new Error(\"symbols are not unique\"); }\nvar holder = {};\nholder[probe] = 1;\nholder[String(probe)] = 2;\nif (holder[probe] !== 1) { throw new Error(\"symbol key does not round-trip\"); }\nif (Object.getOwnPropertySymbols(holder)[0] !== probe) { throw new Error(\"symbol key is not reflected\"); }\nif (Object.keys(holder).length !== 1) { throw new Error(\"symbol key leaked into Object.keys\"); }\nif (Symbol.for(\"probe\") !== Symbol.for(\"probe\")) { throw new Error(\"registry does not intern\"); }\nif (Symbol.keyFor(Symbol.for(\"probe\")) !== \"probe\") { throw new Error(\"registry does not round-trip\"); }",
+      "tests": [
+        "test/built-ins/Object/getOwnPropertySymbols/non-object-argument-valid.js",
+        "test/built-ins/Object/getOwnPropertySymbols/object-contains-symbol-property-with-description.js",
+        "test/built-ins/Object/getOwnPropertySymbols/object-contains-symbol-property-without-description.js",
+        "test/built-ins/Object/getOwnPropertySymbols/order-after-define-property.js",
+        "test/built-ins/Symbol/auto-boxing-non-strict.js",
+        "test/built-ins/Symbol/auto-boxing-strict.js"
+      ]
+    },
+    {
+      "name": "Symbol.hasInstance",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.hasInstance !== \"symbol\") { throw new Error(\"Symbol.hasInstance is not a symbol\"); }\nif (Symbol.hasInstance.toString() !== \"Symbol(Symbol.hasInstance)\") { throw new Error(\"Symbol.hasInstance has the wrong description\"); }\nvar holder = {};\nholder[Symbol.hasInstance] = 1;\nif (holder[Symbol.hasInstance] !== 1) { throw new Error(\"Symbol.hasInstance is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/hasInstance/prop-desc.js"]
+    },
+    {
+      "name": "Symbol.isConcatSpreadable",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.isConcatSpreadable !== \"symbol\") { throw new Error(\"Symbol.isConcatSpreadable is not a symbol\"); }\nif (Symbol.isConcatSpreadable.toString() !== \"Symbol(Symbol.isConcatSpreadable)\") { throw new Error(\"Symbol.isConcatSpreadable has the wrong description\"); }\nvar holder = {};\nholder[Symbol.isConcatSpreadable] = 1;\nif (holder[Symbol.isConcatSpreadable] !== 1) { throw new Error(\"Symbol.isConcatSpreadable is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/isConcatSpreadable/prop-desc.js"]
+    },
+    {
+      "name": "Symbol.iterator",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.iterator !== \"symbol\") { throw new Error(\"Symbol.iterator is not a symbol\"); }\nif (Symbol.iterator.toString() !== \"Symbol(Symbol.iterator)\") { throw new Error(\"Symbol.iterator has the wrong description\"); }\nvar holder = {};\nholder[Symbol.iterator] = 1;\nif (holder[Symbol.iterator] !== 1) { throw new Error(\"Symbol.iterator is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/iterator/prop-desc.js"]
+    },
+    {
+      "name": "Symbol.match",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.match !== \"symbol\") { throw new Error(\"Symbol.match is not a symbol\"); }\nif (Symbol.match.toString() !== \"Symbol(Symbol.match)\") { throw new Error(\"Symbol.match has the wrong description\"); }\nvar holder = {};\nholder[Symbol.match] = 1;\nif (holder[Symbol.match] !== 1) { throw new Error(\"Symbol.match is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/match/prop-desc.js"]
+    },
+    {
+      "name": "Symbol.replace",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.replace !== \"symbol\") { throw new Error(\"Symbol.replace is not a symbol\"); }\nif (Symbol.replace.toString() !== \"Symbol(Symbol.replace)\") { throw new Error(\"Symbol.replace has the wrong description\"); }\nvar holder = {};\nholder[Symbol.replace] = 1;\nif (holder[Symbol.replace] !== 1) { throw new Error(\"Symbol.replace is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/replace/prop-desc.js"]
+    },
+    {
+      "name": "Symbol.search",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.search !== \"symbol\") { throw new Error(\"Symbol.search is not a symbol\"); }\nif (Symbol.search.toString() !== \"Symbol(Symbol.search)\") { throw new Error(\"Symbol.search has the wrong description\"); }\nvar holder = {};\nholder[Symbol.search] = 1;\nif (holder[Symbol.search] !== 1) { throw new Error(\"Symbol.search is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/search/prop-desc.js"]
+    },
+    {
+      "name": "Symbol.species",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.species !== \"symbol\") { throw new Error(\"Symbol.species is not a symbol\"); }\nif (Symbol.species.toString() !== \"Symbol(Symbol.species)\") { throw new Error(\"Symbol.species has the wrong description\"); }\nvar holder = {};\nholder[Symbol.species] = 1;\nif (holder[Symbol.species] !== 1) { throw new Error(\"Symbol.species is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/species/basic.js"]
+    },
+    {
+      "name": "Symbol.split",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.split !== \"symbol\") { throw new Error(\"Symbol.split is not a symbol\"); }\nif (Symbol.split.toString() !== \"Symbol(Symbol.split)\") { throw new Error(\"Symbol.split has the wrong description\"); }\nvar holder = {};\nholder[Symbol.split] = 1;\nif (holder[Symbol.split] !== 1) { throw new Error(\"Symbol.split is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/split/prop-desc.js"]
+    },
+    {
+      "name": "Symbol.toPrimitive",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.toPrimitive !== \"symbol\") { throw new Error(\"Symbol.toPrimitive is not a symbol\"); }\nif (Symbol.toPrimitive.toString() !== \"Symbol(Symbol.toPrimitive)\") { throw new Error(\"Symbol.toPrimitive has the wrong description\"); }\nvar holder = {};\nholder[Symbol.toPrimitive] = 1;\nif (holder[Symbol.toPrimitive] !== 1) { throw new Error(\"Symbol.toPrimitive is not usable as a property key\"); }",
+      "tests": [
+        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/prop-desc.js",
+        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-non-obj.js",
+        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-obj-non-symbol-wrapper.js",
+        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-obj-symbol-wrapper.js",
+        "test/built-ins/Symbol/prototype/Symbol.toPrimitive/this-val-symbol.js",
+        "test/built-ins/Symbol/toPrimitive/prop-desc.js"
+      ]
+    },
+    {
+      "name": "Symbol.toStringTag",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.toStringTag !== \"symbol\") { throw new Error(\"Symbol.toStringTag is not a symbol\"); }\nif (Symbol.toStringTag.toString() !== \"Symbol(Symbol.toStringTag)\") { throw new Error(\"Symbol.toStringTag has the wrong description\"); }\nvar holder = {};\nholder[Symbol.toStringTag] = 1;\nif (holder[Symbol.toStringTag] !== 1) { throw new Error(\"Symbol.toStringTag is not usable as a property key\"); }",
+      "tests": [
+        "test/built-ins/Symbol/prototype/Symbol.toStringTag.js",
+        "test/built-ins/Symbol/toStringTag/prop-desc.js"
+      ]
+    },
+    {
+      "name": "Symbol.unscopables",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.unscopables !== \"symbol\") { throw new Error(\"Symbol.unscopables is not a symbol\"); }\nif (Symbol.unscopables.toString() !== \"Symbol(Symbol.unscopables)\") { throw new Error(\"Symbol.unscopables has the wrong description\"); }\nvar holder = {};\nholder[Symbol.unscopables] = 1;\nif (holder[Symbol.unscopables] !== 1) { throw new Error(\"Symbol.unscopables is not usable as a property key\"); }",
+      "tests": ["test/built-ins/Symbol/unscopables/prop-desc.js"]
+    }
+  ]
 }

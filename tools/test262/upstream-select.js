@@ -5,10 +5,11 @@
  * this command is what *writes* that file. Rather than hand-curating thousands
  * of paths, it walks the pinned tree once and keeps every test that the ES5.1
  * selection policy (`tools/test262/es5-selection.js` + `es5-selection.json`)
- * says is in scope: a script (not a module) with no `features:` tag, that parses
- * as ES5 code, lives under an in-scope directory, and is not carved out by a
- * classified exclusion. Everything host-specific — reading the tree, parsing at
- * ES5, and writing the manifest — lives here; the policy itself is pure and
+ * says is in scope: a script (not a module) that parses as ES5 code, lives
+ * under an in-scope directory, declares no `features:` tag outside what a
+ * `featureAreas` claim covers for its path, and is not carved out by a
+ * classified exclusion. Everything host-specific — reading the tree, parsing
+ * at ES5, and writing the manifest — lives here; the policy itself is pure and
  * host-free so the same decisions can be tested without a checkout.
  *
  * The same three guards `test262:upstream` uses protect this command, because a
@@ -53,7 +54,8 @@ const HARNESS_DIRECTORY = 'harness';
  * @type {import('./es5-selection.js').Es5CandidateInfo}
  */
 const READABLE_CANDIDATE = Object.freeze({
-  hasFeatures: false,
+  declaresFeatures: false,
+  features: Object.freeze([]),
   isModule: false,
   parsesAtEs5: true,
   includesParseAtEs5: true,
@@ -186,7 +188,8 @@ async function selectPaths(options) {
     const source = await readRepositoryFile(`${checkoutPath}/${path}`);
     const frontmatter = scanFrontmatter(source);
     const info = {
-      hasFeatures: frontmatter.hasFeatures,
+      declaresFeatures: frontmatter.hasFeatures,
+      features: frontmatter.features,
       isModule: frontmatter.isModule,
       parsesAtEs5: parsesAsEs5(source),
       includesParseAtEs5: frontmatter.includes.every(

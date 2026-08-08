@@ -22,6 +22,7 @@ import { parseUpstreamSubset } from '../tools/test262/upstream.js';
  *   excludedDirectories: string[],
  *   builtins: string[],
  *   excludedLanguageDirectories: string[],
+ *   featureAreas: object[],
  *   exclusions: object[],
  * }>} [overrides]
  * @returns {string}
@@ -38,16 +39,36 @@ function policyText(overrides = {}) {
       'export',
       'module-code',
     ],
+    featureAreas: overrides.featureAreas ?? [],
     exclusions: overrides.exclusions ?? [],
   });
 }
 
 const CANDIDATE_INFO = Object.freeze({
-  hasFeatures: false,
+  declaresFeatures: false,
+  features: Object.freeze([]),
   isModule: false,
   parsesAtEs5: true,
   includesParseAtEs5: true,
 });
+
+/**
+ * A policy that claims one feature area, for the feature-gate tests.
+ *
+ * @returns {string}
+ */
+function featureAreaPolicyText() {
+  return policyText({
+    builtins: ['Array', 'Object', 'String', 'Symbol'],
+    featureAreas: [
+      {
+        prefix: 'test/built-ins/Symbol',
+        features: ['Symbol', 'Symbol.iterator'],
+        reason: 'ES2015 Symbols are implemented; see docs/conformance.md.',
+      },
+    ],
+  });
+}
 
 export default [
   {
@@ -336,11 +357,37 @@ export default [
       );
 
       assertSame(scan.hasFeatures, true);
+      assertSame(JSON.stringify(scan.features), JSON.stringify(['Symbol']));
       assertSame(scan.isModule, true);
       assertSame(
         JSON.stringify(scan.includes),
         JSON.stringify(['assert.js', 'propertyHelper.js']),
       );
+    },
+  },
+  {
+    name: 'scanFrontmatter lists a flow-sequence feature tag but not a block-style one',
+    run: () => {
+      const flow = scanFrontmatter(
+        ['/*---', 'features: [Symbol, Symbol.iterator]', '---*/'].join('\n'),
+      );
+
+      assertSame(flow.hasFeatures, true);
+      assertSame(
+        JSON.stringify(flow.features),
+        JSON.stringify(['Symbol', 'Symbol.iterator']),
+      );
+
+      // Block-style frontmatter is real YAML this textual scanner does not
+      // read, so it must report the tag is present while listing nothing:
+      // an unlisted tag can never be matched by a claim, which keeps the
+      // pre-existing "excluded" answer for those files.
+      const block = scanFrontmatter(
+        ['/*---', 'features:', '  - Symbol', '---*/'].join('\n'),
+      );
+
+      assertSame(block.hasFeatures, true);
+      assertSame(JSON.stringify(block.features), JSON.stringify([]));
     },
   },
   {
@@ -353,6 +400,7 @@ export default [
       );
 
       assertSame(scan.hasFeatures, false);
+      assertSame(JSON.stringify(scan.features), JSON.stringify([]));
       assertSame(scan.isModule, false);
       assertSame(JSON.stringify(scan.includes), JSON.stringify([]));
     },
@@ -417,7 +465,11 @@ export default [
       const path = 'test/built-ins/Array/x.js';
 
       assertSame(
-        isCandidatePath(path, { ...CANDIDATE_INFO, hasFeatures: true }, policy),
+        isCandidatePath(
+          path,
+          { ...CANDIDATE_INFO, declaresFeatures: true, features: ['Symbol'] },
+          policy,
+        ),
         false,
       );
       assertSame(
@@ -440,6 +492,176 @@ export default [
         ),
         false,
       );
+    },
+  },
+  {
+    name: 'a feature area admits a tagged test whose every tag it claims',
+    run: () => {
+      const policy = parseEs5Selection(featureAreaPolicyText());
+
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/Symbol/symbol.js',
+          { ...CANDIDATE_INFO, declaresFeatures: true, features: ['Symbol'] },
+          policy,
+        ),
+        true,
+      );
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/Symbol/iterator/prop-desc.js',
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['Symbol.iterator', 'Symbol'],
+          },
+          policy,
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'a feature area rejects a tag it does not claim, even inside its prefix',
+    run: () => {
+      const policy = parseEs5Selection(featureAreaPolicyText());
+
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/Symbol/iterator/cross-realm.js',
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['cross-realm', 'Symbol.iterator'],
+          },
+          policy,
+        ),
+        false,
+      );
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/Symbol/matchAll/prop-desc.js',
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['Symbol.matchAll'],
+          },
+          policy,
+        ),
+        false,
+      );
+    },
+  },
+  {
+    name: 'a claimed feature unlocks nothing outside the area that claims it',
+    run: () => {
+      const policy = parseEs5Selection(featureAreaPolicyText());
+
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/Array/prototype/concat/Symbol.isConcatSpreadable.js',
+          { ...CANDIDATE_INFO, declaresFeatures: true, features: ['Symbol'] },
+          policy,
+        ),
+        false,
+      );
+      // The prefix must match on a directory boundary, exactly like an
+      // exclusion prefix, so a sibling directory is never swallowed.
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/SymbolOther/x.js',
+          { ...CANDIDATE_INFO, declaresFeatures: true, features: ['Symbol'] },
+          policy,
+        ),
+        false,
+      );
+    },
+  },
+  {
+    name: 'a feature area never rescues a module, an unparsable file, or a block-style tag',
+    run: () => {
+      const policy = parseEs5Selection(featureAreaPolicyText());
+      const path = 'test/built-ins/Symbol/symbol.js';
+      const tagged = {
+        ...CANDIDATE_INFO,
+        declaresFeatures: true,
+        features: ['Symbol'],
+      };
+
+      assertSame(
+        isCandidatePath(path, { ...tagged, isModule: true }, policy),
+        false,
+      );
+      assertSame(
+        isCandidatePath(path, { ...tagged, parsesAtEs5: false }, policy),
+        false,
+      );
+      assertSame(
+        isCandidatePath(path, { ...tagged, features: [] }, policy),
+        false,
+      );
+    },
+  },
+  {
+    name: 'a feature area still leaves an untagged test in scope',
+    run: () => {
+      const policy = parseEs5Selection(featureAreaPolicyText());
+
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/Array/prototype/push/S15.4.4.7_A1.js',
+          CANDIDATE_INFO,
+          policy,
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'parseEs5Selection rejects every malformed feature area',
+    run: () => {
+      /** @type {[string, object[]][]} */
+      const malformed = [
+        ['unknown key', [{ prefix: 'test/x', features: ['A'], why: 'no' }]],
+        ['missing reason', [{ prefix: 'test/x', features: ['A'] }]],
+        ['empty reason', [{ prefix: 'test/x', features: ['A'], reason: ' ' }]],
+        ['missing prefix', [{ features: ['A'], reason: 'r' }]],
+        [
+          'prefix outside test/',
+          [{ prefix: 'x', features: ['A'], reason: 'r' }],
+        ],
+        ['no features', [{ prefix: 'test/x', features: [], reason: 'r' }]],
+        [
+          'unsorted features',
+          [{ prefix: 'test/x', features: ['B', 'A'], reason: 'r' }],
+        ],
+        [
+          'duplicate features',
+          [{ prefix: 'test/x', features: ['A', 'A'], reason: 'r' }],
+        ],
+        [
+          'unsorted areas',
+          [
+            { prefix: 'test/y', features: ['A'], reason: 'r' },
+            { prefix: 'test/x', features: ['A'], reason: 'r' },
+          ],
+        ],
+        [
+          'duplicate areas',
+          [
+            { prefix: 'test/x', features: ['A'], reason: 'r' },
+            { prefix: 'test/x', features: ['B'], reason: 'r' },
+          ],
+        ],
+      ];
+
+      for (const [label, featureAreas] of malformed) {
+        assertThrows(
+          () => parseEs5Selection(policyText({ featureAreas })),
+          Es5SelectionError,
+        );
+        assertSame(typeof label, 'string');
+      }
     },
   },
   {

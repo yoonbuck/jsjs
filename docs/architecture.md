@@ -37,7 +37,39 @@ browsers would need an import map, and the `jsc` shell supports neither.
 `vendor/` is generated rather than committed; `npm install` populates it through
 `prepare`.
 
-## Realms and intrinsics
+## Agents and realms
+
+An `Agent` (`src/runtime/agent.js`) owns the only state ECMA-262 shares
+_between_ realms rather than within one: the well-known symbols (§6.1.5.1) and
+the `GlobalSymbolRegistry` (§19.4.2.1). Realms handed the same agent
+interoperate through those — `@@iterator` matches, `Symbol.for('x')` agrees —
+and realms on different agents share nothing at all.
+
+That boundary is an ownership decision, not just a spec one. `Symbol.for`
+interns a **guest-controlled** string, so a process-global registry would
+accumulate guest data for the lifetime of the process, outliving every realm
+that produced it and reachable from no handle the embedder could drop. An
+agent is an ordinary object: drop it and the registry becomes garbage.
+
+```js
+import { createAgent, createRealm } from './src/index.js';
+
+const agent = createAgent();
+const a = createRealm({ agent }); //  these two interoperate
+const b = createRealm({ agent });
+const c = createRealm(); //  its own agent; shares nothing, GCs with the realm
+```
+
+`createRealm()` with no agent makes one for that realm alone. That is the safe
+default — isolation unless the embedder asks for sharing — and it means a host
+that creates and discards realms in a loop retains nothing.
+
+When an `EngineObject` crosses a realm or agent boundary, well-known-symbol
+protocols follow the receiver, not the currently executing realm:
+`@@toPrimitive` and `@@toStringTag` use `object.agent.wellKnownSymbols`. A
+same-named well-known symbol minted by another agent is therefore only an
+ordinary symbol property. Primitive receivers have no owner object yet, so the
+executing realm boxes them first and that wrapper supplies the owner.
 
 A `Realm` (`src/runtime/realm.js`) owns a fresh intrinsic graph and a fresh
 global object/environment, keeping every script execution isolated from the host
@@ -46,7 +78,9 @@ properties are installed during construction, never from host globals.
 
 Construction order in the `Realm` constructor:
 
-1. `createFundamentalIntrinsics()` — `Object.prototype`, `Function.prototype`
+0. The agent — `options.agent`, or a fresh one
+1. `createFundamentalIntrinsics(agent)` — `Object.prototype`,
+   `Function.prototype`, `Symbol.prototype`
 2. `defineGlobalValueProperties()` — `NaN`, `Infinity`, `undefined`
 3. `GlobalEnvironmentRecord` wrapping the global object
 4. `createDateHost()` — deterministic clock/timezone adapters
@@ -59,13 +93,14 @@ Construction order in the `Realm` constructor:
 9. Array constructor and prototype methods
 10. Primitive wrapper constructors (`Boolean`, `Number`, `String`)
 11. RegExp constructor and prototype methods
-12. `Math` object
-13. Numeric globals (`parseInt`, `parseFloat`, `isNaN`, `isFinite`)
-14. URI globals (`encodeURI`, `encodeURIComponent`, `decodeURI`,
+12. `Symbol` constructor, prototype, registry methods, and well-known symbols
+13. `Math` object
+14. Numeric globals (`parseInt`, `parseFloat`, `isNaN`, `isFinite`)
+15. URI globals (`encodeURI`, `encodeURIComponent`, `decodeURI`,
     `decodeURIComponent`, `escape`, `unescape`)
-15. `eval` global
-16. `JSON` object (`parse`, `stringify`)
-17. `Date` constructor
+16. `eval` global
+17. `JSON` object (`parse`, `stringify`)
+18. `Date` constructor
 
 Each family follows the same pattern: a `create*Intrinsics(realm)` function
 builds the prototype and constructor objects, and an `install*` function
@@ -79,7 +114,18 @@ Every guest object is an `EngineObject`. It implements the ES5 internal methods
 (`[[Get]]`, `[[Put]]`, `[[GetOwnProperty]]`, `[[DefineOwnProperty]]`,
 `[[Delete]]`, `[[HasProperty]]`, `[[Enumerate]]`, `[[DefaultValue]]`) and
 tracks `[[Prototype]]`, `[[Class]]`, `[[Extensible]]`, and own properties as a
-`Map` of property descriptors.
+`Map` of property descriptors keyed by a String **or** a Symbol.
+
+### Symbols (`src/runtime/symbol.js`)
+
+Symbol values, their descriptions, `SymbolDescriptiveString`, and the global
+symbol registry. This is the engine's one piece of _agent-level_ state rather
+than realm-level state: ECMA-262 §6.1.5.1 and §19.4.2.1 make the well-known
+symbols and the registry shared by all realms, so two realms agree on
+`Symbol.iterator` and on `Symbol.for('x')` while `Symbol` and
+`Symbol.prototype` stay per-realm like every other intrinsic. A guest Symbol
+is a host `symbol` primitive, so identity is the host's and a symbol key can
+never collide with a string key.
 
 ### Descriptors (`src/runtime/descriptors.js`)
 
@@ -209,7 +255,9 @@ the host stack still escapes as the host error it is.
 ### Conversion (`src/runtime/conversion.js`)
 
 The ES5 abstract operations: `ToPrimitive`, `ToBoolean`, `ToNumber`, `ToInteger`,
-`ToString`, `ToObject`, `ToInt32`, `ToUint32`, `ToUint16`, `CheckObjectCoercible`.
+`ToString`, `ToObject`, `ToInt32`, `ToUint32`, `ToUint16`, `CheckObjectCoercible`,
+plus ES2015's `ToPropertyKey`. `ToPrimitive` consults `@@toPrimitive` before
+`OrdinaryToPrimitive`; `ToNumber` and `ToString` reject symbols.
 
 ### Operators (`src/runtime/operators.js`)
 
@@ -248,6 +296,8 @@ Each built-in family is a module under `src/builtins/` that exports a
 | `array.js`              | `Array` constructor and prototype methods                                                                                                                                                                                                                                                                                                                                                                  |
 | `primitive-wrappers.js` | `Boolean`, `Number`, `String` constructors and prototypes                                                                                                                                                                                                                                                                                                                                                  |
 | `regexp.js`             | `RegExp` constructor and prototype methods                                                                                                                                                                                                                                                                                                                                                                 |
+| `symbol.js`             | `Symbol` constructor, prototype, registry, well-known symbols                                                                                                                                                                                                                                                                                                                                              |
+| `reflect.js`            | `Reflect.ownKeys` exposing complete string/symbol own-key order                                                                                                                                                                                                                                                                                                                                            |
 | `math.js`               | `Math` object (constants and functions)                                                                                                                                                                                                                                                                                                                                                                    |
 | `global-numeric.js`     | `parseInt`, `parseFloat`, `isNaN`, `isFinite`                                                                                                                                                                                                                                                                                                                                                              |
 | `global-uri.js`         | URI encoding/decoding, `escape`/`unescape`                                                                                                                                                                                                                                                                                                                                                                 |
@@ -350,13 +400,27 @@ console.log(result); // { type: 'normal', value: 42 }
 Parses `source` as an ES5 script and returns an Acorn AST. Throws a host
 `SyntaxError` (not a guest error) on invalid input.
 
+### `createAgent(): Agent`
+
+Creates an agent: the owner of the well-known symbols and the global symbol
+registry. Pass one as `createRealm({ agent })` to make several realms
+interoperate; omit it and each realm gets its own, so nothing guest code
+interns outlives the realm that interned it.
+
 ### `Realm` class
 
 The `Realm` class itself. Exported for `instanceof` checks and type annotations.
+
+### `Agent` class
+
+The `Agent` class itself. Exported for `instanceof` checks and type
+annotations.
 Instances expose:
 
 - `realm.globalObject` — the global `EngineObject`
 - `realm.globalEnvironment` — the `GlobalEnvironmentRecord`
+- `realm.agent` — the agent owning the well-known symbols and the global
+  symbol registry
 - `realm.intrinsics` — the intrinsic graph (prototypes, constructors)
 - `realm.dateHost` — the resolved `DateHost` adapter
 - `realm.stackGuard` — the realm's recursion budget (`StackGuard`)

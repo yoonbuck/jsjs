@@ -16,6 +16,7 @@
     "Object",
     "RegExp",
     "String",
+    "Symbol",
     "ThrowTypeError",
     "decodeURI",
     "decodeURIComponent",
@@ -36,6 +37,31 @@
     "import",
     "module-code",
     "rest-parameters"
+  ],
+  "featureAreas": [
+    {
+      "prefix": "test/built-ins/Object/getOwnPropertySymbols",
+      "features": ["Symbol"],
+      "reason": "ES2015 §19.1.2.8 `Object.getOwnPropertySymbols` is implemented (issue #43); the engine claims the `Symbol` tag in `tools/test262/features.json`."
+    },
+    {
+      "prefix": "test/built-ins/Symbol",
+      "features": [
+        "Symbol",
+        "Symbol.hasInstance",
+        "Symbol.isConcatSpreadable",
+        "Symbol.iterator",
+        "Symbol.match",
+        "Symbol.replace",
+        "Symbol.search",
+        "Symbol.species",
+        "Symbol.split",
+        "Symbol.toPrimitive",
+        "Symbol.toStringTag",
+        "Symbol.unscopables"
+      ],
+      "reason": "ES2015 §19.4 Symbols and the eleven §6.1.5.1 well-known symbol values are implemented (issue #43). Tags outside this list — `cross-realm`, `Symbol.asyncIterator`, `Symbol.matchAll`, `Symbol.prototype.description`, `Reflect.construct`, `explicit-resource-management` — are not claimed, so the tests that need them stay out of scope."
+    }
   ],
   "exclusions": [
     {
@@ -629,11 +655,6 @@
       "reason": "`Function.StrictFunction_restricted-properties` is a built-in ES5.1 does not define; ES5.1 §15.3.3 enumerates the complete Function member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/Function/prototype/apply/argarray-not-object.js",
-      "category": "post-es5-semantics",
-      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
       "path": "test/built-ins/Function/prototype/bind/BoundFunction_restricted-properties.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
@@ -962,11 +983,6 @@
       "path": "test/built-ins/Object/getOwnPropertyNames/15.2.3.4-1.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
-    },
-    {
-      "prefix": "test/built-ins/Object/getOwnPropertySymbols",
-      "category": "post-es5-builtin",
-      "reason": "`Object.getOwnPropertySymbols` is a built-in ES5.1 does not define; ES5.1 §15.2.3/§15.2.4 enumerates the complete Object member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
       "path": "test/built-ins/Object/getPrototypeOf/15.2.3.2-1-3.js",
@@ -1524,11 +1540,6 @@
       "reason": "`String.prototype.repeat` is a built-in ES5.1 does not define; ES5.1 §15.5.4 enumerates the complete String.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/String/prototype/replace/tostring-this-throws-symbol.js",
-      "category": "post-es5-semantics",
-      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
       "path": "test/built-ins/String/prototype/split/separator-regexp.js",
       "category": "post-es5-semantics",
       "reason": "The failing line is `\"x\".split(/\\k<x>/)`. ES5.1 §15.10.1's `IdentityEscape :: SourceCharacter but not IdentifierPart` rejects `\\k` because `k` is an IdentifierPart, so this is a mandatory ES5.1 SyntaxError. `\\k<name>` is an ES2018 named backreference, and ES2018 Annex B only reinterprets it as an identity escape when the pattern has no named groups; ES5.1 has neither construct."
@@ -1539,19 +1550,24 @@
       "reason": "`String.prototype.startsWith` is a built-in ES5.1 does not define; ES5.1 §15.5.4 enumerates the complete String.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "path": "test/built-ins/String/prototype/toString/non-generic.js",
-      "category": "post-es5-semantics",
-      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
-      "path": "test/built-ins/String/prototype/valueOf/non-generic.js",
-      "category": "post-es5-semantics",
-      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
-    },
-    {
       "prefix": "test/built-ins/String/raw",
       "category": "post-es5-builtin",
       "reason": "`String.raw` is a built-in ES5.1 does not define; ES5.1 §15.5.3 enumerates the complete String member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
+    },
+    {
+      "path": "test/built-ins/Symbol/constructor.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
+    },
+    {
+      "path": "test/built-ins/Symbol/prototype/intrinsic.js",
+      "category": "post-es5-semantics",
+      "reason": "ES2015 §19.1.2 made the `Object.*` statics coerce a primitive argument via `ToObject`; ES5.1 §15.2.3 throws `TypeError` for a non-object argument, which is what this engine does."
+    },
+    {
+      "path": "test/built-ins/Symbol/species/builtin-getter-name.js",
+      "category": "post-es5-builtin",
+      "reason": "ES2015 §21.2.4.2/§22.1.2.5/§23.1.2.2/§23.2.2.2 define `get [Symbol.species]` accessors on `Array`, `Map`, `Promise`, `RegExp`, and `Set`. This engine defines the `@@species` value (issue #43) but neither the accessors nor the `Map`/`Promise`/`Set` constructors the test reads."
     },
     {
       "path": "test/built-ins/ThrowTypeError/unique-per-realm-function-proto.js",
@@ -1682,11 +1698,6 @@
       "path": "test/language/expressions/object/prop-dup-data-data.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §11.1.5 rule 4 makes duplicate data/accessor property names in an object literal a `SyntaxError` (data+accessor and, in strict mode, data+data); ES2015 §12.2.6 removed those restrictions."
-    },
-    {
-      "path": "test/language/expressions/typeof/built-in-ordinary-objects-no-call.js",
-      "category": "post-es5-semantics",
-      "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
     },
     {
       "path": "test/language/function-code/block-decl-onlystrict.js",
@@ -2554,49 +2565,9 @@
       "reason": "A 40,000+ case, machine-generated `toUpperCase`/`toLowerCase` table sourced from a specific, recent Unicode Character Database version (the file's own header records \"Unicode version: 17.0.0\"); ES5.1 §15.5.4.16-18 requires following \"the Unicode Character Database\" without pinning a version, so the exact case-mapping table is host/engine-specific and tracks whichever Unicode version an implementation ships."
     },
     {
-      "path": "test/staging/sm/Symbol/equality.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/for.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/json-stringify-keys.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/property-accessor.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/property-inheritance.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/property-nonwritable.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
       "path": "test/staging/sm/Symbol/realms.js",
       "category": "host-dependent",
       "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/surfaces.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Symbol/typeof.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Symbol`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/TypedArray/constructor-undefined-args.js",

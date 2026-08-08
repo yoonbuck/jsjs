@@ -11,32 +11,48 @@ import { GuestErrorSignal } from '../runtime/completion.js';
  *   stringPrototype: EnginePrimitiveObject,
  *   numberPrototype: EnginePrimitiveObject,
  *   booleanPrototype: EnginePrimitiveObject,
+ *   symbolPrototype: EngineObject,
  * }} FundamentalIntrinsics
  */
 
 /**
  * Builds the minimal, per-realm intrinsic graph this milestone needs: the
  * root `%Object.prototype%` (whose own `[[Prototype]]` is `null`) plus
- * `%Function.prototype%`, `%Array.prototype%`, and the boxed-primitive
+ * `%Function.prototype%`, `%Array.prototype%`, the boxed-primitive
  * wrapper prototypes `%String.prototype%`, `%Number.prototype%`, and
- * `%Boolean.prototype%` — ordinary objects inheriting from
- * `%Object.prototype%` that give each specialization a distinct per-realm
- * prototype identity. None of them carries its standard methods yet (the
- * wrapper prototypes are created here, ahead of their constructors, so
- * `ToObject` and autoboxing can resolve `realm.intrinsics.stringPrototype`
- * etc. before `builtins/primitive-wrappers.js` finishes wiring the
- * constructors and methods onto them). Every call returns brand-new
- * `EngineObject` instances so realms never share intrinsic identity.
+ * `%Boolean.prototype%`, and `%Symbol.prototype%` — ordinary objects
+ * inheriting from `%Object.prototype%` that give each specialization a
+ * distinct per-realm prototype identity. None of them carries its standard
+ * methods yet (the wrapper prototypes are created here, ahead of their
+ * constructors, so `ToObject` and autoboxing can resolve
+ * `realm.intrinsics.stringPrototype` etc. before
+ * `builtins/primitive-wrappers.js` finishes wiring the constructors and
+ * methods onto them). Every call returns brand-new `EngineObject` instances
+ * so realms never share intrinsic identity.
  *
+ * `%Symbol.prototype%` is the one wrapper prototype that is *not* itself a
+ * boxed primitive: ES2015 §19.4.3 says it "is not a Symbol instance and does
+ * not have a [[SymbolData]] internal slot", unlike ES5.1's
+ * §15.5.4/§15.6.4/§15.7.4 rule for the three older wrappers, so
+ * `Symbol.prototype.valueOf.call(Symbol.prototype)` must throw.
+ *
+ * `agent` is stamped onto `%Object.prototype%`, the one object here with a
+ * null `[[Prototype]]`. Every other object in the realm inherits it through
+ * the prototype it is built with, so conversions can find the agent's
+ * well-known symbols without the whole conversion layer having to carry a
+ * realm parameter.
+ *
+ * @param {import('../runtime/agent.js').Agent} agent
  * @returns {FundamentalIntrinsics}
  */
-export function createFundamentalIntrinsics() {
-  const objectPrototype = new EngineObject(null);
+export function createFundamentalIntrinsics(agent) {
+  const objectPrototype = new EngineObject(null, 'Object', agent);
   const functionPrototype = new IntrinsicFunctionPrototype(objectPrototype);
   const arrayPrototype = new EngineArray(objectPrototype);
   const stringPrototype = new EnginePrimitiveObject(objectPrototype, '');
   const numberPrototype = new EnginePrimitiveObject(objectPrototype, 0);
   const booleanPrototype = new EnginePrimitiveObject(objectPrototype, false);
+  const symbolPrototype = new EngineObject(objectPrototype);
 
   return {
     objectPrototype,
@@ -45,6 +61,7 @@ export function createFundamentalIntrinsics() {
     stringPrototype,
     numberPrototype,
     booleanPrototype,
+    symbolPrototype,
   };
 }
 

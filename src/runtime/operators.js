@@ -74,7 +74,7 @@ export function abstractEqualityComparison(left, right) {
   }
 
   if (
-    (leftType === 'String' || leftType === 'Number') &&
+    (leftType === 'String' || leftType === 'Number' || leftType === 'Symbol') &&
     rightType === 'Object'
   ) {
     return abstractEqualityComparison(left, toPrimitive(right));
@@ -82,7 +82,7 @@ export function abstractEqualityComparison(left, right) {
 
   if (
     leftType === 'Object' &&
-    (rightType === 'String' || rightType === 'Number')
+    (rightType === 'String' || rightType === 'Number' || rightType === 'Symbol')
   ) {
     return abstractEqualityComparison(toPrimitive(left), right);
   }
@@ -247,7 +247,7 @@ export function bitwiseOR(left, right) {
  * other non-primitive value reports `'object'`.
  *
  * @param {unknown} value
- * @returns {'undefined' | 'object' | 'boolean' | 'number' | 'string' | 'function'}
+ * @returns {'undefined' | 'object' | 'boolean' | 'number' | 'string' | 'symbol' | 'function'}
  */
 export function typeOf(value) {
   if (value === undefined) {
@@ -265,6 +265,8 @@ export function typeOf(value) {
       return 'number';
     case 'string':
       return 'string';
+    case 'symbol':
+      return 'symbol';
     case 'function':
       return 'function';
     default:
@@ -274,7 +276,7 @@ export function typeOf(value) {
 
 /**
  * @param {unknown} value
- * @returns {'Undefined' | 'Null' | 'Boolean' | 'Number' | 'String' | 'Object'}
+ * @returns {'Undefined' | 'Null' | 'Boolean' | 'Number' | 'String' | 'Symbol' | 'Object'}
  */
 function getSpecificationType(value) {
   if (value === undefined) {
@@ -292,6 +294,8 @@ function getSpecificationType(value) {
       return 'Number';
     case 'string':
       return 'String';
+    case 'symbol':
+      return 'Symbol';
     default:
       return 'Object';
   }

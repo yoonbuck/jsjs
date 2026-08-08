@@ -2,7 +2,7 @@ import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isDataDescriptor } from '../runtime/descriptors.js';
-import { toObject, toString } from '../runtime/conversion.js';
+import { toObject, toPropertyKey } from '../runtime/conversion.js';
 import {
   fromPropertyDescriptor,
   requireCallable,
@@ -69,7 +69,21 @@ export function createObjectIntrinsics(realm) {
           return '[object Null]';
         }
 
-        return `[object ${toObject(realm, thisValue).getClassName()}]`;
+        const object = toObject(realm, thisValue);
+        const agent = object.agent;
+
+        if (agent === null) {
+          throw new TypeError('EngineObject protocol lookup requires an agent');
+        }
+
+        // ES2015 19.1.3.6 steps 15-16 layered onto ES5.1 15.2.4.2's
+        // [[Class]] tag: an own or inherited `@@toStringTag` wins, but only
+        // when it is a String, so every ES5 tag is unchanged (no ES5 object
+        // carries the property) and a non-string tag falls back rather than
+        // being coerced.
+        const tag = object.get(agent.wellKnownSymbols.toStringTag);
+
+        return `[object ${typeof tag === 'string' ? tag : object.getClassName()}]`;
       },
     }),
   );
@@ -107,9 +121,11 @@ export function createObjectIntrinsics(realm) {
       name: 'hasOwnProperty',
       length: 1,
       call(thisValue, args) {
-        // ES5.1 15.2.4.5 steps 1-2: ToString(V) runs before ToObject(this),
-        // so a throwing V-coercion must pre-empt a throwing/absent `this`.
-        const propertyKey = toString(args[0]);
+        // ES5.1 15.2.4.5 steps 1-2 (ES2015 19.1.3.2 steps 1-2): the key
+        // coercion runs before ToObject(this), so a throwing V-coercion must
+        // pre-empt a throwing/absent `this`. ES2015 replaced ToString with
+        // ToPropertyKey so a symbol key is looked up by identity.
+        const propertyKey = toPropertyKey(args[0]);
         return (
           toObject(realm, thisValue).getOwnProperty(propertyKey) !== undefined
         );
@@ -151,10 +167,10 @@ export function createObjectIntrinsics(realm) {
       name: 'propertyIsEnumerable',
       length: 1,
       call(thisValue, args) {
-        // ES5.1 15.2.4.7 steps 1-2: P = ToString(V) runs before O =
-        // ToObject(this), so a throwing V-coercion must pre-empt a
-        // throwing/absent `this` (e.g. a bare, unbound call).
-        const propertyKey = toString(args[0]);
+        // ES5.1 15.2.4.7 steps 1-2 (ES2015 19.1.3.4 steps 1-2): P is derived
+        // from V before O = ToObject(this), so a throwing V-coercion must
+        // pre-empt a throwing/absent `this` (e.g. a bare, unbound call).
+        const propertyKey = toPropertyKey(args[0]);
         const descriptor = toObject(realm, thisValue).getOwnProperty(
           propertyKey,
         );
@@ -257,7 +273,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     (_this, args) =>
       fromPropertyDescriptor(
         realm,
-        requireObjectArgument(args[0]).getOwnProperty(toString(args[1])),
+        requireObjectArgument(args[0]).getOwnProperty(toPropertyKey(args[1])),
       ),
   );
   defineNativeMethod(
@@ -268,7 +284,26 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     (_this, args) =>
       createArrayFromList(
         realm,
-        requireObjectArgument(args[0]).ownPropertyKeys(),
+        requireObjectArgument(args[0])
+          .ownPropertyKeys()
+          .filter((key) => typeof key === 'string'),
+      ),
+  );
+  // ES2015 19.1.2.8. The string/symbol split is the whole point of the two
+  // methods: `getOwnPropertyNames` keeps ES5.1's string-only answer and this
+  // one reports exactly the keys that answer now omits, each in the same
+  // own-key order.
+  defineNativeMethod(
+    realm,
+    objectConstructor,
+    'getOwnPropertySymbols',
+    1,
+    (_this, args) =>
+      createArrayFromList(
+        realm,
+        toObject(realm, args[0])
+          .ownPropertyKeys()
+          .filter((key) => typeof key === 'symbol'),
       ),
   );
   defineNativeMethod(realm, objectConstructor, 'create', 2, (_this, args) => {
@@ -281,7 +316,9 @@ function installObjectReflectionMethods(realm, objectConstructor) {
       );
     }
 
-    const object = new EngineObject(prototype);
+    // `Object.create(null)` is one of only two places a null-prototype
+    // object is built, so the agent has to be passed rather than inherited.
+    const object = new EngineObject(prototype, 'Object', realm.agent);
 
     if (args.length > 1 && args[1] !== undefined) {
       defineProperties(realm, object, args[1]);
@@ -296,7 +333,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     3,
     (_this, args) => {
       const object = requireObjectArgument(args[0]);
-      const name = toString(args[1]);
+      const name = toPropertyKey(args[1]);
       const descriptor = toPropertyDescriptor(args[2]);
       object.defineOwnProperty(name, descriptor, true);
       return object;
@@ -391,7 +428,12 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     const names = [];
 
     for (const name of object.ownPropertyKeys()) {
-      if (object.getOwnProperty(name)?.enumerable === true) {
+      // ES2015 19.1.2.14 keeps `Object.keys` string-only: symbol keys are
+      // reported by `getOwnPropertySymbols` alone.
+      if (
+        typeof name === 'string' &&
+        object.getOwnProperty(name)?.enumerable === true
+      ) {
         names.push(name);
       }
     }
