@@ -342,12 +342,17 @@ This follow-up captures the post-optimization evidence for issue #42 on top of t
 
 ### Exact commands
 
+The timing and profile artifacts in this section were captured from the clean
+optimized source commit `cf203aa7492ca23b8596bdf032b88a1a909884b9`. The
+documentation and validation fixes in this branch landed later, so rerunning
+these commands at a later `HEAD` would not reproduce the same source identity.
+
 Benchmark timing and summary:
 
 ```sh
 rm -rf .benchmark-results/issue-42-after .benchmark-results/issue-42-profiles-after
 test -z "$(git status --porcelain --untracked-files=all | grep -v '^?? \\.benchmark-results/')"
-git rev-parse HEAD
+test "$(git rev-parse HEAD)" = "cf203aa7492ca23b8596bdf032b88a1a909884b9"
 PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" \
 JSC=/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc \
   node benchmark/cli.js run --host=all \
@@ -364,6 +369,8 @@ CPU/allocation profile capture and analysis (separate metric invocations, one sh
 ```sh
 run_id=issue42-after-cf203aa
 output=.benchmark-results/issue-42-profiles-after
+test -z "$(git status --porcelain --untracked-files=all | grep -v '^?? \\.benchmark-results/')"
+test "$(git rev-parse HEAD)" = "cf203aa7492ca23b8596bdf032b88a1a909884b9"
 
 node benchmark/profile/cli.js --host=node --workload=object-properties --mode=cold --metric=cpu --run-id="$run_id" --cpu-sampling-interval-microseconds=100 --warmups=1 --iterations=4 --output="$output"
 node benchmark/profile/cli.js --host=node --workload=object-properties --mode=cold --metric=allocation --run-id="$run_id" --allocation-sampling-interval-bytes=32768 --warmups=1 --iterations=4 --output="$output"
@@ -496,11 +503,9 @@ Each boundary was mutated locally, tested with the smallest covering command, an
 
 The full validation pass for this evidence update ran the repository's
 existing commands below. After cloning the pinned `vendor/test262` checkout
-that `test262:select`/`test262:upstream` require, every command passed except
-for one existing JSC concern: `npm run test:jsc` still exits `0` but emits the
-failing profiling-core assertion
-`normalizeProfileUrl only normalizes repository sources from the capture origin`
-under the system shell.
+that `test262:select`/`test262:upstream` require, every command passed. The
+system-shell JSC validation now also passes: `PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" npm run test:jsc`
+printed zero failed records and exited `0`.
 
 ```sh
 npm run test:node

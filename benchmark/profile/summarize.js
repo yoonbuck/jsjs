@@ -359,12 +359,16 @@ export function normalizeProfileUrl(url) {
     return url;
   }
 
-  let parsedUrl;
+  const protocol = absoluteProfileUrlProtocol(url);
 
-  try {
-    parsedUrl = new URL(url);
-  } catch {
+  if (protocol === null) {
     return normalizeProfilePathname(url, url);
+  }
+
+  const parsedUrl = parseAbsoluteProfileUrl(url, protocol);
+
+  if (parsedUrl === null) {
+    return url;
   }
 
   if (
@@ -376,6 +380,123 @@ export function normalizeProfileUrl(url) {
   }
 
   return normalizeProfilePathname(parsedUrl.pathname, url);
+}
+
+/**
+ * @param {string} url
+ * @returns {'file:' | 'http:' | 'https:' | null}
+ */
+function absoluteProfileUrlProtocol(url) {
+  if (url.startsWith('http://')) {
+    return 'http:';
+  }
+
+  if (url.startsWith('https://')) {
+    return 'https:';
+  }
+
+  if (url.startsWith('file://')) {
+    return 'file:';
+  }
+
+  return null;
+}
+
+/**
+ * @param {string} url
+ * @param {'file:' | 'http:' | 'https:'} protocol
+ * @returns {{ protocol: string, origin: string, pathname: string } | null}
+ */
+function parseAbsoluteProfileUrl(url, protocol) {
+  if (protocol === 'file:') {
+    return {
+      protocol,
+      origin: 'null',
+      pathname: readFileUrlPathname(url),
+    };
+  }
+
+  return readHttpUrlParts(url, protocol);
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+function readFileUrlPathname(url) {
+  const pathStart = 'file://'.length;
+  const queryStart = url.indexOf('?');
+  const hashStart = url.indexOf('#');
+  let pathEnd = url.length;
+
+  if (queryStart !== -1) {
+    pathEnd = queryStart;
+  }
+
+  if (hashStart !== -1 && hashStart < pathEnd) {
+    pathEnd = hashStart;
+  }
+
+  return url.slice(pathStart, pathEnd);
+}
+
+/**
+ * @param {string} url
+ * @param {'http:' | 'https:'} protocol
+ * @returns {{ protocol: string, origin: string, pathname: string } | null}
+ */
+function readHttpUrlParts(url, protocol) {
+  const authorityStart = protocol.length + 2;
+  const suffix = url.slice(authorityStart);
+  const pathOffset = suffix.search(/[/?#]/u);
+  const authority =
+    pathOffset === -1 ? suffix : suffix.slice(0, Math.max(pathOffset, 0));
+
+  if (authority.length === 0) {
+    return null;
+  }
+
+  const delimiter = pathOffset === -1 ? '' : suffix[pathOffset];
+  const remainder = pathOffset === -1 ? '' : suffix.slice(pathOffset);
+  let pathname = '/';
+
+  if (delimiter === '/') {
+    const queryStart = remainder.indexOf('?');
+    const hashStart = remainder.indexOf('#');
+    let pathEnd = remainder.length;
+
+    if (queryStart !== -1) {
+      pathEnd = queryStart;
+    }
+
+    if (hashStart !== -1 && hashStart < pathEnd) {
+      pathEnd = hashStart;
+    }
+
+    pathname = remainder.slice(0, pathEnd);
+  }
+
+  return {
+    protocol,
+    origin: `${protocol}//${normalizeHttpAuthority(authority, protocol)}`,
+    pathname,
+  };
+}
+
+/**
+ * @param {string} authority
+ * @param {'http:' | 'https:'} protocol
+ * @returns {string}
+ */
+function normalizeHttpAuthority(authority, protocol) {
+  if (
+    (protocol === 'http:' && authority.endsWith(':80')) ||
+    (protocol === 'https:' && authority.endsWith(':443'))
+  ) {
+    return authority.slice(0, authority.lastIndexOf(':'));
+  }
+
+  return authority;
 }
 
 /**

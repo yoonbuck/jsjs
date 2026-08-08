@@ -53,6 +53,30 @@ function fixtureEngine(calls, checksumValue) {
   };
 }
 
+/**
+ * @param {typeof globalThis.URL | undefined} value
+ * @param {() => void} callback
+ * @returns {void}
+ */
+function withTemporaryGlobalUrl(value, callback) {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'URL');
+
+  try {
+    Object.defineProperty(globalThis, 'URL', {
+      configurable: true,
+      writable: true,
+      value,
+    });
+    callback();
+  } finally {
+    if (descriptor === undefined) {
+      delete (/** @type {{ URL?: typeof globalThis.URL }} */ (globalThis).URL);
+    } else {
+      Object.defineProperty(globalThis, 'URL', descriptor);
+    }
+  }
+}
+
 /** @type {import('./harness/runner.js').TestCase[]} */
 const tests = [
   {
@@ -391,6 +415,42 @@ const tests = [
         ),
         'http://jsjs.localhost/node_modules/pkg/src/index.js',
       );
+    },
+  },
+  {
+    name: 'normalizeProfileUrl keeps the origin gate when host URL support is unavailable',
+    run() {
+      for (const missingUrl of [
+        undefined,
+        /** @type {typeof globalThis.URL | undefined} */ (
+          /** @type {unknown} */ (
+            function BrokenUrl() {
+              throw new Error('host URL unavailable');
+            }
+          )
+        ),
+      ]) {
+        withTemporaryGlobalUrl(missingUrl, () => {
+          assertSame(
+            normalizeProfileUrl('http://example.test/src/runtime/object.js'),
+            'http://example.test/src/runtime/object.js',
+          );
+          assertSame(
+            normalizeProfileUrl('http://jsjs.localhost/src/runtime/object.js'),
+            'src/runtime/object.js',
+          );
+          assertSame(
+            normalizeProfileUrl(
+              'http://jsjs.localhost:80/src/runtime/object.js',
+            ),
+            'src/runtime/object.js',
+          );
+          assertSame(
+            normalizeProfileUrl('file:///repo/src/runtime/object.js'),
+            'src/runtime/object.js',
+          );
+        });
+      }
     },
   },
   {
