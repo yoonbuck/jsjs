@@ -59,7 +59,11 @@ const tests = [
     async run() {
       /** @type {{ method: string, params: unknown }[]} */
       const calls = [];
-      const cpuProfile = Object.freeze({ nodes: [], samples: [], timeDeltas: [] });
+      const cpuProfile = Object.freeze({
+        nodes: [],
+        samples: [],
+        timeDeltas: [],
+      });
       const allocationProfile = Object.freeze({
         head: {
           id: 1,
@@ -100,7 +104,10 @@ const tests = [
           { method: 'Profiler.setSamplingInterval', params: { interval: 100 } },
           { method: 'Profiler.start', params: null },
           { method: 'HeapProfiler.enable', params: null },
-          { method: 'HeapProfiler.startSampling', params: { samplingInterval: 100 } },
+          {
+            method: 'HeapProfiler.startSampling',
+            params: { samplingInterval: 100 },
+          },
           { method: 'HeapProfiler.stopSampling', params: null },
           { method: 'Profiler.stop', params: null },
           { method: 'HeapProfiler.disable', params: null },
@@ -319,7 +326,10 @@ const tests = [
     name: 'writeProfileArtifactsAtomically removes stale sibling artifacts when metrics shrink',
     async run() {
       const outputDirectory = `${TEST_OUTPUT_DIRECTORY}-artifacts/profiles/node`;
-      const outputUrl = new URL(`${TEST_OUTPUT_DIRECTORY}-artifacts/`, REPOSITORY_ROOT_URL);
+      const outputUrl = new URL(
+        `${TEST_OUTPUT_DIRECTORY}-artifacts/`,
+        REPOSITORY_ROOT_URL,
+      );
       await rm(outputUrl, { recursive: true, force: true });
 
       await writeProfileArtifactsAtomically(outputDirectory, [
@@ -369,7 +379,10 @@ const tests = [
         '{"version":2}\n',
       );
       assertSame(
-        await readFile(new URL('arithmetic-loops-steady.json', profileDirectoryUrl), 'utf8'),
+        await readFile(
+          new URL('arithmetic-loops-steady.json', profileDirectoryUrl),
+          'utf8',
+        ),
         '{"metrics":["cpu"]}\n',
       );
 
@@ -380,7 +393,10 @@ const tests = [
     name: 'writeProfileArtifactsAtomically restores the previous stem set when promotion fails',
     async run() {
       const outputDirectory = `${TEST_OUTPUT_DIRECTORY}-rollback/profiles/node`;
-      const outputUrl = new URL(`${TEST_OUTPUT_DIRECTORY}-rollback/`, REPOSITORY_ROOT_URL);
+      const outputUrl = new URL(
+        `${TEST_OUTPUT_DIRECTORY}-rollback/`,
+        REPOSITORY_ROOT_URL,
+      );
       await rm(outputUrl, { recursive: true, force: true });
 
       await writeProfileArtifactsAtomically(outputDirectory, [
@@ -453,7 +469,10 @@ const tests = [
         '{"heap":1}\n',
       );
       assertSame(
-        await readFile(new URL('arithmetic-loops-steady.json', profileDirectoryUrl), 'utf8'),
+        await readFile(
+          new URL('arithmetic-loops-steady.json', profileDirectoryUrl),
+          'utf8',
+        ),
         '{"metrics":["cpu","allocation"]}\n',
       );
 
@@ -463,7 +482,10 @@ const tests = [
   {
     name: 'runNodeProfile writes raw artifacts and a sidecar with summaries',
     async run() {
-      const outputUrl = new URL(`${TEST_OUTPUT_DIRECTORY}/`, REPOSITORY_ROOT_URL);
+      const outputUrl = new URL(
+        `${TEST_OUTPUT_DIRECTORY}/`,
+        REPOSITORY_ROOT_URL,
+      );
       await rm(outputUrl, { recursive: true, force: true });
       const workload = workloadsForProfile('default')[0];
       /** @type {{ metrics?: readonly string[], samplingInterval?: number }} */
@@ -497,9 +519,18 @@ const tests = [
       );
 
       const profileDirectoryUrl = new URL('profiles/node/', outputUrl);
-      const sidecarUrl = new URL(`${workload.name}-steady.json`, profileDirectoryUrl);
-      const cpuUrl = new URL(`${workload.name}-steady.cpuprofile`, profileDirectoryUrl);
-      const heapUrl = new URL(`${workload.name}-steady.heapprofile`, profileDirectoryUrl);
+      const sidecarUrl = new URL(
+        `${workload.name}-steady.json`,
+        profileDirectoryUrl,
+      );
+      const cpuUrl = new URL(
+        `${workload.name}-steady.cpuprofile`,
+        profileDirectoryUrl,
+      );
+      const heapUrl = new URL(
+        `${workload.name}-steady.heapprofile`,
+        profileDirectoryUrl,
+      );
       const persisted = JSON.parse(await readFile(sidecarUrl, 'utf8'));
 
       assertSame(captureOptions.metrics?.join(','), 'cpu,allocation');
@@ -531,7 +562,10 @@ const tests = [
   {
     name: 'runChromiumProfile warms the page before capture and measures on the same page state',
     async run() {
-      const outputUrl = new URL(`${TEST_OUTPUT_DIRECTORY}-browser/`, REPOSITORY_ROOT_URL);
+      const outputUrl = new URL(
+        `${TEST_OUTPUT_DIRECTORY}-browser/`,
+        REPOSITORY_ROOT_URL,
+      );
       await rm(outputUrl, { recursive: true, force: true });
       const workload = workloadsForProfile('default')[0];
       /** @type {string[]} */
@@ -682,14 +716,17 @@ const tests = [
       );
 
       assertSame(calls.join(','), 'node:arithmetic-loops:steady');
-      assertSame((/** @type {{ host: string }} */ (result)).host, 'node');
+      assertSame(/** @type {{ host: string }} */ (result).host, 'node');
     },
   },
   {
     name: 'profile smoke script writes a sidecar with checksum and CPU samples',
     async run() {
       assertSame(typeof ARITHMETIC_LOOPS_CHECKSUM, 'number');
-      const outputUrl = new URL('.benchmark-results/profile-smoke/', REPOSITORY_ROOT_URL);
+      const outputUrl = new URL(
+        '.benchmark-results/profile-smoke/',
+        REPOSITORY_ROOT_URL,
+      );
       await rm(outputUrl, { recursive: true, force: true });
 
       const result = spawnSync('npm', ['run', 'profile:smoke'], {
@@ -706,7 +743,10 @@ const tests = [
       );
       const cpuProfile = JSON.parse(
         await readFile(
-          new URL('profiles/node/arithmetic-loops-steady.cpuprofile', outputUrl),
+          new URL(
+            'profiles/node/arithmetic-loops-steady.cpuprofile',
+            outputUrl,
+          ),
           'utf8',
         ),
       );

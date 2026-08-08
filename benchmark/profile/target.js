@@ -38,7 +38,14 @@ function invokeChecked(execute, expectedChecksum, context) {
  *   expectedChecksum: number,
  * }}
  */
-export function createProfileTarget({ workload, mode, warmups, iterations, now, engine }) {
+export function createProfileTarget({
+  workload,
+  mode,
+  warmups,
+  iterations,
+  now,
+  engine,
+}) {
   const executors = createJsjsExecutors(engine, workload);
   const execute = executors[mode];
   const workloadChecksum = workload.expectedChecksum;
@@ -57,7 +64,11 @@ export function createProfileTarget({ workload, mode, warmups, iterations, now, 
 
       for (let i = 0; i < iterations; i += 1) {
         const start = now();
-        checksum = invokeChecked(execute, workloadChecksum, `iteration ${i + 1}`);
+        checksum = invokeChecked(
+          execute,
+          workloadChecksum,
+          `iteration ${i + 1}`,
+        );
         const end = now();
         void start;
         void end;

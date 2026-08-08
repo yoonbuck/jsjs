@@ -17,27 +17,27 @@ const PROFILE_TARGET_STATE_KEY = '__jsjsProfileTargetState';
  * @returns {{ expectedChecksum: number }}
  */
 export function prepareBrowserProfilePage({
- workload,
- mode,
- warmups,
- iterations,
+  workload,
+  mode,
+  warmups,
+  iterations,
 }) {
- const stateHolder = browserProfileStateHolder();
- const target = createBrowserProfileTarget({
-   workload,
-   mode,
-   warmups,
-   iterations,
- });
+  const stateHolder = browserProfileStateHolder();
+  const target = createBrowserProfileTarget({
+    workload,
+    mode,
+    warmups,
+    iterations,
+  });
 
- target.runWarmups();
- stateHolder[PROFILE_TARGET_STATE_KEY] = Object.freeze({
-   target,
- });
+  target.runWarmups();
+  stateHolder[PROFILE_TARGET_STATE_KEY] = Object.freeze({
+    target,
+  });
 
- return Object.freeze({
-   expectedChecksum: target.expectedChecksum,
- });
+  return Object.freeze({
+    expectedChecksum: target.expectedChecksum,
+  });
 }
 
 /**
@@ -54,12 +54,7 @@ export function prepareBrowserProfilePage({
  *   result: { iterations: number, checksum: number },
  * }}
  */
-export function runBrowserProfilePage({
-  workload,
-  mode,
-  warmups,
-  iterations,
-}) {
+export function runBrowserProfilePage({ workload, mode, warmups, iterations }) {
   void workload;
   void mode;
   void warmups;
@@ -70,7 +65,9 @@ export function runBrowserProfilePage({
   const target = state?.target;
 
   if (target === undefined) {
-    throw new Error('Browser profile target was not prepared before measurement');
+    throw new Error(
+      'Browser profile target was not prepared before measurement',
+    );
   }
 
   const startedAt = now();

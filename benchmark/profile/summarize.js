@@ -110,7 +110,10 @@ export function classifyProfileFrame(frame) {
     return 'arrays';
   }
 
-  if (url.includes('runtime/environment') || url.includes('runtime/reference')) {
+  if (
+    url.includes('runtime/environment') ||
+    url.includes('runtime/reference')
+  ) {
     return 'references-environments';
   }
 
@@ -118,7 +121,11 @@ export function classifyProfileFrame(frame) {
     return 'completions';
   }
 
-  if (url.includes('/arithmetic') || url.includes('/operators') || url.includes('/conversion')) {
+  if (
+    url.includes('/arithmetic') ||
+    url.includes('/operators') ||
+    url.includes('/conversion')
+  ) {
     return 'arithmetic';
   }
 

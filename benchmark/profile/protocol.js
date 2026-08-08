@@ -37,7 +37,9 @@ export async function captureProtocolProfiles({
     if (captureCpu) {
       await post('Profiler.enable');
       cpuEnabled = true;
-      await post('Profiler.setSamplingInterval', { interval: samplingInterval });
+      await post('Profiler.setSamplingInterval', {
+        interval: samplingInterval,
+      });
       await post('Profiler.start');
       cpuStarted = true;
     }

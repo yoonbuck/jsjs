@@ -184,9 +184,7 @@ function validateWorkloadName(name) {
  */
 function validateOutputDirectory(outputDirectory) {
   if (typeof outputDirectory !== 'string' || outputDirectory.length === 0) {
-    throw new TypeError(
-      'Profile output directory must be a non-empty string',
-    );
+    throw new TypeError('Profile output directory must be a non-empty string');
   }
 
   if (

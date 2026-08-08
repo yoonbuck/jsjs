@@ -287,7 +287,10 @@ const tests = [
     name: 'classifyProfileFrame maps object.js to object-property',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/runtime/object.js', functionName: 'getProperty' }),
+        classifyProfileFrame({
+          url: 'src/runtime/object.js',
+          functionName: 'getProperty',
+        }),
         'object-property',
       );
     },
@@ -296,7 +299,10 @@ const tests = [
     name: 'classifyProfileFrame maps array-object.js to arrays',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/runtime/array-object.js', functionName: 'push' }),
+        classifyProfileFrame({
+          url: 'src/runtime/array-object.js',
+          functionName: 'push',
+        }),
         'arrays',
       );
     },
@@ -305,7 +311,10 @@ const tests = [
     name: 'classifyProfileFrame maps environment.js to references-environments',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/runtime/environment.js', functionName: 'getBinding' }),
+        classifyProfileFrame({
+          url: 'src/runtime/environment.js',
+          functionName: 'getBinding',
+        }),
         'references-environments',
       );
     },
@@ -314,7 +323,10 @@ const tests = [
     name: 'classifyProfileFrame maps parser files to parser',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/parser/parser.js', functionName: 'parseStatement' }),
+        classifyProfileFrame({
+          url: 'src/parser/parser.js',
+          functionName: 'parseStatement',
+        }),
         'parser',
       );
     },
@@ -323,7 +335,10 @@ const tests = [
     name: 'classifyProfileFrame maps evaluator files to evaluator',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/evaluator/evaluator.js', functionName: 'evaluate' }),
+        classifyProfileFrame({
+          url: 'src/evaluator/evaluator.js',
+          functionName: 'evaluate',
+        }),
         'evaluator',
       );
     },
@@ -332,7 +347,10 @@ const tests = [
     name: 'classifyProfileFrame maps realm setup to realm-setup',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/realm.js', functionName: 'createRealm' }),
+        classifyProfileFrame({
+          url: 'src/realm.js',
+          functionName: 'createRealm',
+        }),
         'realm-setup',
       );
     },
@@ -341,7 +359,10 @@ const tests = [
     name: 'classifyProfileFrame maps completions to completions',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/completion.js', functionName: 'normalCompletion' }),
+        classifyProfileFrame({
+          url: 'src/completion.js',
+          functionName: 'normalCompletion',
+        }),
         'completions',
       );
     },
@@ -350,7 +371,10 @@ const tests = [
     name: 'classifyProfileFrame maps arithmetic helpers to arithmetic',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/runtime/arithmetic.js', functionName: 'addValues' }),
+        classifyProfileFrame({
+          url: 'src/runtime/arithmetic.js',
+          functionName: 'addValues',
+        }),
         'arithmetic',
       );
     },
@@ -359,7 +383,10 @@ const tests = [
     name: 'classifyProfileFrame maps call helpers to calls',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/runtime/call.js', functionName: 'callFunction' }),
+        classifyProfileFrame({
+          url: 'src/runtime/call.js',
+          functionName: 'callFunction',
+        }),
         'calls',
       );
     },
@@ -368,7 +395,10 @@ const tests = [
     name: 'classifyProfileFrame maps unknown src/ files to other-runtime',
     run() {
       assertSame(
-        classifyProfileFrame({ url: 'src/util/some-util.js', functionName: 'helper' }),
+        classifyProfileFrame({
+          url: 'src/util/some-util.js',
+          functionName: 'helper',
+        }),
         'other-runtime',
       );
     },
@@ -429,25 +459,51 @@ const tests = [
       assertSame(result.frames.length > 0, true);
 
       /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary | undefined} */
-      const objectFrame = result.frames.find((f) => f.url.includes('object.js'));
+      const objectFrame = result.frames.find((f) =>
+        f.url.includes('object.js'),
+      );
       assertSame(objectFrame !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (objectFrame).selfTime, 350);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (
+          objectFrame
+        ).selfTime,
+        350,
+      );
 
       /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary | undefined} */
-      const envFrame = result.frames.find((f) => f.url.includes('environment.js'));
+      const envFrame = result.frames.find((f) =>
+        f.url.includes('environment.js'),
+      );
       assertSame(envFrame !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (envFrame).selfTime, 150);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (
+          envFrame
+        ).selfTime,
+        150,
+      );
 
       const categories = result.categories;
       /** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary | undefined} */
       const objCat = categories.find((c) => c.category === 'object-property');
       assertSame(objCat !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary} */ (objCat).selfTime, 350);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary} */ (
+          objCat
+        ).selfTime,
+        350,
+      );
 
       /** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary | undefined} */
-      const envCat = categories.find((c) => c.category === 'references-environments');
+      const envCat = categories.find(
+        (c) => c.category === 'references-environments',
+      );
       assertSame(envCat !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary} */ (envCat).selfTime, 150);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').CpuCategorySummary} */ (
+          envCat
+        ).selfTime,
+        150,
+      );
     },
   },
   {
@@ -457,16 +513,34 @@ const tests = [
         nodes: [
           {
             id: 1,
-            callFrame: { functionName: '(root)', url: '', scriptId: '0', lineNumber: -1, columnNumber: -1 },
+            callFrame: {
+              functionName: '(root)',
+              url: '',
+              scriptId: '0',
+              lineNumber: -1,
+              columnNumber: -1,
+            },
             children: [2, 3],
           },
           {
             id: 2,
-            callFrame: { functionName: 'fast', url: 'src/runtime/object.js', scriptId: '1', lineNumber: 1, columnNumber: 0 },
+            callFrame: {
+              functionName: 'fast',
+              url: 'src/runtime/object.js',
+              scriptId: '1',
+              lineNumber: 1,
+              columnNumber: 0,
+            },
           },
           {
             id: 3,
-            callFrame: { functionName: 'slow', url: 'src/runtime/environment.js', scriptId: '2', lineNumber: 2, columnNumber: 0 },
+            callFrame: {
+              functionName: 'slow',
+              url: 'src/runtime/environment.js',
+              scriptId: '2',
+              lineNumber: 2,
+              columnNumber: 0,
+            },
           },
         ],
         samples: [3, 3, 3, 2],
@@ -524,20 +598,39 @@ const tests = [
       assertSame(result.total, 1536);
 
       /** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary | undefined} */
-      const arrayFrame = result.frames.find((f) => f.url.includes('array-object.js'));
+      const arrayFrame = result.frames.find((f) =>
+        f.url.includes('array-object.js'),
+      );
       assertSame(arrayFrame !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary} */ (arrayFrame).selfSize, 1024);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary} */ (
+          arrayFrame
+        ).selfSize,
+        1024,
+      );
 
       const categories = result.categories;
       /** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary | undefined} */
       const arrayCat = categories.find((c) => c.category === 'arrays');
       assertSame(arrayCat !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary} */ (arrayCat).selfSize, 1024);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary} */ (
+          arrayCat
+        ).selfSize,
+        1024,
+      );
 
       /** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary | undefined} */
-      const envCat = categories.find((c) => c.category === 'references-environments');
+      const envCat = categories.find(
+        (c) => c.category === 'references-environments',
+      );
       assertSame(envCat !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary} */ (envCat).selfSize, 512);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').AllocationCategorySummary} */ (
+          envCat
+        ).selfSize,
+        512,
+      );
     },
   },
   {
@@ -546,18 +639,36 @@ const tests = [
       const profile = {
         head: {
           id: 1,
-          callFrame: { functionName: '(root)', url: '', scriptId: '0', lineNumber: -1, columnNumber: -1 },
+          callFrame: {
+            functionName: '(root)',
+            url: '',
+            scriptId: '0',
+            lineNumber: -1,
+            columnNumber: -1,
+          },
           selfSize: 0,
           children: [
             {
               id: 2,
-              callFrame: { functionName: 'a', url: 'src/runtime/object.js', scriptId: '1', lineNumber: 1, columnNumber: 0 },
+              callFrame: {
+                functionName: 'a',
+                url: 'src/runtime/object.js',
+                scriptId: '1',
+                lineNumber: 1,
+                columnNumber: 0,
+              },
               selfSize: 100,
               children: [],
             },
             {
               id: 3,
-              callFrame: { functionName: 'b', url: 'src/runtime/environment.js', scriptId: '2', lineNumber: 2, columnNumber: 0 },
+              callFrame: {
+                functionName: 'b',
+                url: 'src/runtime/environment.js',
+                scriptId: '2',
+                lineNumber: 2,
+                columnNumber: 0,
+              },
               selfSize: 500,
               children: [],
             },
@@ -575,12 +686,24 @@ const tests = [
         nodes: [
           {
             id: 1,
-            callFrame: { functionName: '(root)', url: '', scriptId: '0', lineNumber: -1, columnNumber: -1 },
+            callFrame: {
+              functionName: '(root)',
+              url: '',
+              scriptId: '0',
+              lineNumber: -1,
+              columnNumber: -1,
+            },
             children: [2],
           },
           {
             id: 2,
-            callFrame: { functionName: 'doWork', url: 'src/runtime/object.js', scriptId: '1', lineNumber: 1, columnNumber: 0 },
+            callFrame: {
+              functionName: 'doWork',
+              url: 'src/runtime/object.js',
+              scriptId: '1',
+              lineNumber: 1,
+              columnNumber: 0,
+            },
           },
         ],
         samples: [2, 2],
@@ -590,7 +713,12 @@ const tests = [
       /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary | undefined} */
       const frame = result.frames.find((f) => f.url.includes('object.js'));
       assertSame(frame !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (frame).percentage, 100);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').CpuFrameSummary} */ (
+          frame
+        ).percentage,
+        100,
+      );
     },
   },
   {
@@ -599,12 +727,24 @@ const tests = [
       const profile = {
         head: {
           id: 1,
-          callFrame: { functionName: '(root)', url: '', scriptId: '0', lineNumber: -1, columnNumber: -1 },
+          callFrame: {
+            functionName: '(root)',
+            url: '',
+            scriptId: '0',
+            lineNumber: -1,
+            columnNumber: -1,
+          },
           selfSize: 0,
           children: [
             {
               id: 2,
-              callFrame: { functionName: 'a', url: 'src/runtime/array-object.js', scriptId: '1', lineNumber: 1, columnNumber: 0 },
+              callFrame: {
+                functionName: 'a',
+                url: 'src/runtime/array-object.js',
+                scriptId: '1',
+                lineNumber: 1,
+                columnNumber: 0,
+              },
               selfSize: 200,
               children: [],
             },
@@ -613,9 +753,16 @@ const tests = [
       };
       const result = summarizeAllocationProfile(profile);
       /** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary | undefined} */
-      const frame = result.frames.find((f) => f.url.includes('array-object.js'));
+      const frame = result.frames.find((f) =>
+        f.url.includes('array-object.js'),
+      );
       assertSame(frame !== undefined, true);
-      assertSame(/** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary} */ (frame).percentage, 100);
+      assertSame(
+        /** @type {import('../benchmark/profile/summarize.js').AllocationFrameSummary} */ (
+          frame
+        ).percentage,
+        100,
+      );
     },
   },
 ];

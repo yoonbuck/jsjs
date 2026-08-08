@@ -6,14 +6,20 @@ import { monotonicNowFrom, runtimeEngine } from '../host.js';
 import { resolveOutputDirectory } from '../output.js';
 import { resolveBenchmarkConfig } from '../config.js';
 import { captureProtocolProfiles } from './protocol.js';
-import { summarizeAllocationProfile, summarizeCpuProfile } from './summarize.js';
+import {
+  summarizeAllocationProfile,
+  summarizeCpuProfile,
+} from './summarize.js';
 import { createProfileTarget } from './target.js';
 // @ts-expect-error Node ships this runtime module; the repo's TS config lacks its types.
 import inspector from 'node:inspector';
 
 const PROFILE_SCHEMA_VERSION = 1;
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
-const BENCHMARK_RESULTS_URL = new URL('.benchmark-results/', REPOSITORY_ROOT_URL);
+const BENCHMARK_RESULTS_URL = new URL(
+  '.benchmark-results/',
+  REPOSITORY_ROOT_URL,
+);
 let profileTransactionCounter = 0;
 
 /**
@@ -70,7 +76,8 @@ export async function runNodeProfile(options, dependencies = {}) {
       dependencies.engine ?? runtimeEngine
     ),
   });
-  const captureProfiles = dependencies.captureProfiles ?? captureProtocolProfiles;
+  const captureProfiles =
+    dependencies.captureProfiles ?? captureProtocolProfiles;
   const session =
     dependencies.createInspectorSession?.() ?? createInspectorSession();
   const post = inspectorPost(session);
@@ -110,7 +117,11 @@ export async function runNodeProfile(options, dependencies = {}) {
 
     await writeProfileArtifactsAtomically(
       profileOutputDirectory(options.outputDirectory, 'node'),
-      profileArtifactContents(sidecar, capture.cpuProfile, capture.allocationProfile),
+      profileArtifactContents(
+        sidecar,
+        capture.cpuProfile,
+        capture.allocationProfile,
+      ),
     );
 
     return sidecar;
@@ -208,7 +219,9 @@ export function buildProfileSidecar({
         ? {}
         : {
             cpu: summarizeCpuProfile(
-              /** @type {Parameters<typeof summarizeCpuProfile>[0]} */ (cpuProfile),
+              /** @type {Parameters<typeof summarizeCpuProfile>[0]} */ (
+                cpuProfile
+              ),
             ),
           }),
       ...(allocationProfile === undefined
@@ -439,12 +452,12 @@ function inspectorPost(session) {
         params ?? {},
         /** @param {Error | null} error @param {Record<string, unknown>} [result] */
         (error, result = {}) => {
-        if (error) {
-          reject(error);
-          return;
-        }
+          if (error) {
+            reject(error);
+            return;
+          }
 
-        resolve(result);
+          resolve(result);
         },
       );
     });
@@ -475,10 +488,14 @@ async function exists(fileUrl, statOperation) {
  * @returns {string}
  */
 function uniqueProfileStem(files) {
-  const stems = new Set(files.map((file) => profileStemFromFileName(file.fileName)));
+  const stems = new Set(
+    files.map((file) => profileStemFromFileName(file.fileName)),
+  );
 
   if (stems.size !== 1) {
-    throw new RangeError('Expected profile artifacts to share a single workload stem');
+    throw new RangeError(
+      'Expected profile artifacts to share a single workload stem',
+    );
   }
 
   return /** @type {string} */ (stems.values().next().value);

@@ -65,9 +65,10 @@ main().catch((error) => {
 
 async function main() {
   const testPaths = process.argv.slice(2);
-  const suites = testPaths.length > 0
-    ? await Promise.all(testPaths.map((testPath) => loadSuite(testPath)))
-    : [...PORTABLE_SUITES, ...NODE_ONLY_SUITES];
+  const suites =
+    testPaths.length > 0
+      ? await Promise.all(testPaths.map((testPath) => loadSuite(testPath)))
+      : [...PORTABLE_SUITES, ...NODE_ONLY_SUITES];
   let failed = 0;
 
   for (const suite of suites) {

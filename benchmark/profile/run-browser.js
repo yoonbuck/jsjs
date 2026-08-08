@@ -79,9 +79,11 @@ export async function runChromiumProfile(options, dependencies = {}) {
       dependencies.createCDPSession ??
       ((targetPage) => targetPage.context().newCDPSession(targetPage))
     )(/** @type {ProfileBrowserPage} */ (page));
-    const captureProfiles = dependencies.captureProfiles ?? captureProtocolProfiles;
+    const captureProfiles =
+      dependencies.captureProfiles ?? captureProtocolProfiles;
     const capture = await captureProfiles({
-      post: (method, params) => /** @type {any} */ (session).send(method, params),
+      post: (method, params) =>
+        /** @type {any} */ (session).send(method, params),
       metrics: options.metrics,
       samplingInterval: options.samplingInterval,
       run() {
@@ -110,7 +112,11 @@ export async function runChromiumProfile(options, dependencies = {}) {
 
     await writeProfileArtifactsAtomically(
       profileOutputDirectory(options.outputDirectory, 'chromium'),
-      profileArtifactContents(sidecar, capture.cpuProfile, capture.allocationProfile),
+      profileArtifactContents(
+        sidecar,
+        capture.cpuProfile,
+        capture.allocationProfile,
+      ),
     );
 
     return sidecar;
