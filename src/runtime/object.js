@@ -63,10 +63,36 @@ export class EngineObject {
   }
 
   /**
+   * Implements ECMA-262 9.1.12 `OrdinaryOwnPropertyKeys`'s key order: every
+   * array-index string key first, in ascending numeric order, then every
+   * other key (this engine has no symbols yet, so that is exactly the
+   * remaining string keys) in the order they were created. ES5 left this
+   * order implementation-defined; ES2015 fixed it, and `Object.keys`,
+   * `Object.getOwnPropertyNames`, `for-in` (via `enumerableKeysForIn`), and
+   * `JSON.stringify` all read through this method, so they inherit the new
+   * order without any change of their own. The non-index bucket needs no
+   * extra sort: a `Map` already iterates in insertion order, so filtering it
+   * preserves the relative creation order of the keys kept.
+   *
    * @returns {PropertyKey[]}
    */
   ownPropertyKeys() {
-    return [...this._properties.keys()];
+    /** @type {PropertyKey[]} */
+    const indexKeys = [];
+    /** @type {PropertyKey[]} */
+    const otherKeys = [];
+
+    for (const key of this._properties.keys()) {
+      if (isArrayIndexKey(key)) {
+        indexKeys.push(key);
+      } else {
+        otherKeys.push(key);
+      }
+    }
+
+    indexKeys.sort((left, right) => Number(left) - Number(right));
+
+    return [...indexKeys, ...otherKeys];
   }
 
   /**
@@ -627,5 +653,32 @@ function isEmptyDescriptor(descriptor) {
 function isPrimitive(value) {
   return (
     value === null || (typeof value !== 'object' && typeof value !== 'function')
+  );
+}
+
+/**
+ * Whether `key` is an ES2015 6.1.7 "array index": a String that is the
+ * canonical decimal representation of an integer in `[0, 2^32 - 2]` (the
+ * upper bound is exclusive of `4294967295`, which is a valid `length` value
+ * but not a valid index). `String(index) === key` rejects non-canonical
+ * forms — leading zeros other than `"0"` itself, `"1.0"`, `"-1"` — the same
+ * way `toArrayIndex` in `array-object.js` does; this engine has no symbols
+ * yet, so a non-string key is never an array index.
+ *
+ * @param {PropertyKey} key
+ * @returns {boolean}
+ */
+function isArrayIndexKey(key) {
+  if (typeof key !== 'string') {
+    return false;
+  }
+
+  const index = Number(key);
+
+  return (
+    Number.isInteger(index) &&
+    index >= 0 &&
+    index < 4294967295 &&
+    String(index) === key
   );
 }
