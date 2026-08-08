@@ -11,6 +11,7 @@ import { isDataDescriptor } from './descriptors.js';
  *   mutable: boolean,
  *   initialized: boolean,
  *   deletable: boolean,
+ *   strict: boolean,
  * }} Binding
  */
 
@@ -59,20 +60,31 @@ export class DeclarativeEnvironmentRecord {
       mutable: true,
       initialized: false,
       deletable,
+      strict: false,
     });
   }
 
   /**
+   * ECMA-262 6th edition §8.1.1.1.3 `CreateImmutableBinding`. `strict`
+   * records whether a later `SetMutableBinding` on this name must throw
+   * even for a non-strict reference — the distinction between `const`
+   * (`S = true`) and the ES5.1 named-function-expression binding created at
+   * `evaluateFunctionExpression` (`S = false`, so a sloppy reassignment of
+   * the function's own name stays a silent no-op while a strict one still
+   * throws).
+   *
    * @param {PropertyKey} name
+   * @param {boolean} [strict=false]
    * @returns {void}
    */
-  createImmutableBinding(name) {
+  createImmutableBinding(name, strict = false) {
     this._rejectExisting(name);
     this._bindings.set(name, {
       value: undefined,
       mutable: false,
       initialized: false,
       deletable: false,
+      strict,
     });
   }
 
@@ -88,6 +100,13 @@ export class DeclarativeEnvironmentRecord {
   }
 
   /**
+   * ECMA-262 6th edition §8.1.1.1.5 `SetMutableBinding`. An immutable
+   * binding throws when *either* the binding itself was created strict
+   * (`const`, §13.3.1) or the reference performing the assignment is
+   * strict (`S` in the abstract operation's step 5) — only a non-strict
+   * reference to a non-strict immutable binding (the ES5.1 named-function-
+   * expression binding) stays a silent no-op.
+   *
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} strict
@@ -111,7 +130,7 @@ export class DeclarativeEnvironmentRecord {
     }
 
     if (!binding.mutable) {
-      if (strict) {
+      if (strict || binding.strict) {
         throw new GuestErrorSignal(
           'TypeError',
           `Assignment to constant variable.`,
@@ -361,11 +380,16 @@ export class GlobalEnvironmentRecord {
   }
 
   /**
+   * ECMA-262 6th edition §8.1.1.4.4 `CreateImmutableBinding`: forwards to
+   * the global environment's declarative record, carrying the `strict`
+   * flag through (see `DeclarativeEnvironmentRecord#createImmutableBinding`).
+   *
    * @param {PropertyKey} name
+   * @param {boolean} [strict=false]
    * @returns {void}
    */
-  createImmutableBinding(name) {
-    this.declarativeRecord.createImmutableBinding(name);
+  createImmutableBinding(name, strict = false) {
+    this.declarativeRecord.createImmutableBinding(name, strict);
   }
 
   /**
@@ -475,6 +499,87 @@ export class GlobalEnvironmentRecord {
     }
 
     this.varNames.add(name);
+  }
+
+  /**
+   * ECMA-262 6th edition §8.1.1.4.12 `HasVarDeclaration`.
+   *
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  hasVarDeclaration(name) {
+    return this.varNames.has(name);
+  }
+
+  /**
+   * ECMA-262 6th edition §8.1.1.4.13 `HasLexicalDeclaration`.
+   *
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  hasLexicalDeclaration(name) {
+    return this.declarativeRecord.hasBinding(name);
+  }
+
+  /**
+   * ECMA-262 6th edition §8.1.1.4.14 `HasRestrictedGlobalProperty`. Looks
+   * only at the global object's *own* property (matching the deliberate
+   * own-property model documented on `createGlobalVarBinding` above): a
+   * name with no own property is never restricted, even if one is
+   * inherited. `undefined`, `NaN`, and `Infinity` are non-configurable own
+   * properties of the realm's global object, so this is what makes
+   * `let undefined;` a `SyntaxError`-worthy redeclaration while
+   * `let toString;` (only inherited) stays allowed.
+   *
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  hasRestrictedGlobalProperty(name) {
+    const existing = this.globalObject.getOwnProperty(name);
+
+    if (existing === undefined) {
+      return false;
+    }
+
+    return existing.configurable === false;
+  }
+
+  /**
+   * ECMA-262 6th edition §8.1.1.4.15 `CanDeclareGlobalVar`.
+   *
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  canDeclareGlobalVar(name) {
+    if (this.objectRecord.hasOwnBinding(name)) {
+      return true;
+    }
+
+    return this.objectRecord.isExtensible();
+  }
+
+  /**
+   * ECMA-262 6th edition §8.1.1.4.16 `CanDeclareGlobalFunction`.
+   *
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  canDeclareGlobalFunction(name) {
+    const existing = this.globalObject.getOwnProperty(name);
+
+    if (existing === undefined) {
+      return this.objectRecord.isExtensible();
+    }
+
+    if (existing.configurable === true) {
+      return true;
+    }
+
+    return (
+      isDataDescriptor(existing) &&
+      existing.writable === true &&
+      existing.enumerable === true
+    );
   }
 
   /**

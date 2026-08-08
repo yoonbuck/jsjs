@@ -383,6 +383,220 @@ const tests = [
       );
     },
   },
+  {
+    name: 'createImmutableBinding records the strict flag, covering the full strict/non-strict matrix against setMutableBinding',
+    run() {
+      // binding.strict === false, reference strict === false: silent no-op.
+      const sloppyBindingSloppyRef = new DeclarativeEnvironmentRecord();
+      sloppyBindingSloppyRef.createImmutableBinding('a');
+      sloppyBindingSloppyRef.initializeBinding('a', 1);
+      sloppyBindingSloppyRef.setMutableBinding('a', 2, false);
+      assertSame(sloppyBindingSloppyRef.getBindingValue('a', false), 1);
+
+      // binding.strict === false, reference strict === true: throws (the
+      // reference's strictness alone is sufficient).
+      const sloppyBindingStrictRef = new DeclarativeEnvironmentRecord();
+      sloppyBindingStrictRef.createImmutableBinding('b', false);
+      sloppyBindingStrictRef.initializeBinding('b', 1);
+      assertThrows(
+        () => sloppyBindingStrictRef.setMutableBinding('b', 2, true),
+        GuestErrorSignal,
+      );
+      assertSame(sloppyBindingStrictRef.getBindingValue('b', false), 1);
+
+      // binding.strict === true, reference strict === false: throws (a
+      // `const` binding rejects sloppy writes too).
+      const strictBindingSloppyRef = new DeclarativeEnvironmentRecord();
+      strictBindingSloppyRef.createImmutableBinding('c', true);
+      strictBindingSloppyRef.initializeBinding('c', 1);
+      assertThrows(
+        () => strictBindingSloppyRef.setMutableBinding('c', 2, false),
+        GuestErrorSignal,
+      );
+      assertSame(strictBindingSloppyRef.getBindingValue('c', false), 1);
+
+      // binding.strict === true, reference strict === true: throws.
+      const strictBindingStrictRef = new DeclarativeEnvironmentRecord();
+      strictBindingStrictRef.createImmutableBinding('d', true);
+      strictBindingStrictRef.initializeBinding('d', 1);
+      assertThrows(
+        () => strictBindingStrictRef.setMutableBinding('d', 2, true),
+        GuestErrorSignal,
+      );
+      assertSame(strictBindingStrictRef.getBindingValue('d', false), 1);
+    },
+  },
+  {
+    name: 'the guest TypeError raised for assignment to an immutable binding keeps the V8 message text verbatim',
+    run() {
+      const env = new DeclarativeEnvironmentRecord();
+      env.createImmutableBinding('e', true);
+      env.initializeBinding('e', 1);
+
+      const error = assertThrows(
+        () => env.setMutableBinding('e', 2, true),
+        GuestErrorSignal,
+      );
+      assertSame(/** @type {GuestErrorSignal} */ (error).typeName, 'TypeError');
+      assertSame(
+        /** @type {GuestErrorSignal} */ (error).guestMessage,
+        'Assignment to constant variable.',
+      );
+    },
+  },
+  {
+    name: 'reading or writing an uninitialized declarative binding throws a guest ReferenceError',
+    run() {
+      const env = new DeclarativeEnvironmentRecord();
+      env.createMutableBinding('tdz');
+
+      const readError = assertThrows(
+        () => env.getBindingValue('tdz', true),
+        GuestErrorSignal,
+      );
+      assertSame(
+        /** @type {GuestErrorSignal} */ (readError).typeName,
+        'ReferenceError',
+      );
+
+      const writeError = assertThrows(
+        () => env.setMutableBinding('tdz', 1, true),
+        GuestErrorSignal,
+      );
+      assertSame(
+        /** @type {GuestErrorSignal} */ (writeError).typeName,
+        'ReferenceError',
+      );
+    },
+  },
+  {
+    name: "GlobalEnvironmentRecord's createImmutableBinding forwards the strict flag to the declarative record",
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      env.createImmutableBinding('PI', true);
+      env.initializeBinding('PI', 3.14);
+
+      assertThrows(
+        () => env.setMutableBinding('PI', 4, false),
+        GuestErrorSignal,
+      );
+    },
+  },
+  {
+    name: 'hasVarDeclaration and hasLexicalDeclaration report var and lexical global names independently',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      assertSame(env.hasVarDeclaration('v'), false);
+      assertSame(env.hasLexicalDeclaration('v'), false);
+
+      env.createGlobalVarBinding('v', false);
+      assertSame(env.hasVarDeclaration('v'), true);
+      assertSame(env.hasLexicalDeclaration('v'), false);
+
+      env.createMutableBinding('l', false);
+      assertSame(env.hasVarDeclaration('l'), false);
+      assertSame(env.hasLexicalDeclaration('l'), true);
+    },
+  },
+  {
+    name: 'hasRestrictedGlobalProperty is true only for a non-configurable own property',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      assertSame(env.hasRestrictedGlobalProperty('absent'), false);
+
+      globalObject.defineOwnProperty('configurableProp', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(env.hasRestrictedGlobalProperty('configurableProp'), false);
+
+      globalObject.defineOwnProperty('undefined', {
+        value: undefined,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      });
+      assertSame(env.hasRestrictedGlobalProperty('undefined'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalVar is true for an existing own property or an extensible global, false otherwise',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      assertSame(env.canDeclareGlobalVar('fresh'), true);
+
+      globalObject.defineOwnProperty('nonConfigNonWritable', {
+        value: 1,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      });
+      assertSame(env.canDeclareGlobalVar('nonConfigNonWritable'), true);
+
+      globalObject.preventExtensions();
+      assertSame(env.canDeclareGlobalVar('stillNoOwnProperty'), false);
+      assertSame(env.canDeclareGlobalVar('nonConfigNonWritable'), true);
+    },
+  },
+  {
+    name: 'canDeclareGlobalFunction covers the own-property attribute matrix from the spec',
+    run() {
+      const globalObject = new EngineObject(null);
+      const env = new GlobalEnvironmentRecord(globalObject);
+
+      // No own property, extensible global: true.
+      assertSame(env.canDeclareGlobalFunction('fresh'), true);
+
+      // Configurable own property: true regardless of its other attributes.
+      globalObject.defineOwnProperty('configurableProp', {
+        value: 1,
+        writable: false,
+        enumerable: false,
+        configurable: true,
+      });
+      assertSame(env.canDeclareGlobalFunction('configurableProp'), true);
+
+      // Non-configurable, writable and enumerable data property: true.
+      globalObject.defineOwnProperty('writableEnumerable', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.canDeclareGlobalFunction('writableEnumerable'), true);
+
+      // Non-configurable, non-writable data property: false.
+      globalObject.defineOwnProperty('nonWritable', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.canDeclareGlobalFunction('nonWritable'), false);
+
+      // Non-configurable accessor property: false (not a data descriptor).
+      globalObject.defineOwnProperty('accessor', {
+        get: () => 1,
+        enumerable: true,
+        configurable: false,
+      });
+      assertSame(env.canDeclareGlobalFunction('accessor'), false);
+
+      // No own property, non-extensible global: false.
+      globalObject.preventExtensions();
+      assertSame(env.canDeclareGlobalFunction('stillNoOwnProperty'), false);
+    },
+  },
 ];
 
 export default tests;
