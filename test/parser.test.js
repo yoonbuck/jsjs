@@ -414,6 +414,34 @@ const tests = [
     },
   },
   {
+    name: 'super.prop parses inside an object literal accessor as a Super-based MemberExpression',
+    run() {
+      const program = parseScript('var o = { get x() { return super.y; } };');
+      const getter = program.body[0].declarations[0].init.properties[0].value;
+      const returnArgument = getter.body.body[0].argument;
+
+      assertSame(returnArgument.type, 'MemberExpression');
+      assertSame(returnArgument.object.type, 'Super');
+      assertSame(returnArgument.property.name, 'y');
+    },
+  },
+  {
+    name: 'super outside a method still raises a SyntaxError',
+    run() {
+      assertThrows(() => parseScript('super.x;'), SyntaxError);
+      assertThrows(() => parseScript('function f() { return super.x; }'), SyntaxError);
+    },
+  },
+  {
+    name: 'super not followed by . or [ still raises a SyntaxError',
+    run() {
+      assertThrows(
+        () => parseScript('var o = { get x() { return super; } };'),
+        SyntaxError,
+      );
+    },
+  },
+  {
     name: 'a RegularExpressionLiteral the ES5 pattern grammar rejects is an early error',
     run() {
       // ES5.1 §7.8.5: the [[Value]] of a RegularExpressionLiteral is the

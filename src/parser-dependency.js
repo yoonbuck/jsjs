@@ -15,4 +15,4 @@
  * again.
  */
 
-export { parse, Parser } from '../vendor/acorn/acorn.mjs';
+export { parse, Parser, tokTypes } from '../vendor/acorn/acorn.mjs';
