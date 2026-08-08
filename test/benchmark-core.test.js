@@ -233,6 +233,72 @@ const tests = [
     },
   },
   {
+    name: 'host benchmark rejects masked checksum mismatches from calibration warmup and measured batches',
+    run() {
+      const expectedChecksum = 326514743;
+      const badInvocations = Object.freeze({
+        calibration: 2,
+        warmup: 7,
+        measured: 12,
+      });
+
+      for (const [, badInvocation] of Object.entries(badInvocations)) {
+        let nowMs = 0;
+        let nativeColdCalls = 0;
+        const error = assertThrows(
+          () =>
+            runHostBenchmark({
+              host: 'fixture',
+              version: '1',
+              now: () => nowMs,
+              engine: {
+                createExecutors() {
+                  return {
+                    native: {
+                      cold() {
+                        nativeColdCalls += 1;
+                        nowMs += 1;
+                        if (nativeColdCalls === badInvocation) {
+                          return expectedChecksum + 1;
+                        }
+                        return expectedChecksum;
+                      },
+                      steady() {
+                        nowMs += 1;
+                        return expectedChecksum;
+                      },
+                    },
+                    jsjs: {
+                      cold() {
+                        nowMs += 1;
+                        return expectedChecksum;
+                      },
+                      steady() {
+                        nowMs += 1;
+                        return expectedChecksum;
+                      },
+                    },
+                  };
+                },
+              },
+              config: resolveBenchmarkConfig({
+                profile: 'smoke',
+                warmups: 1,
+                samples: 1,
+                workloads: ['arithmetic-loops'],
+              }),
+              generatedAt: '2026-08-07T00:00:00.000Z',
+            }),
+          Error,
+        );
+        assertSame(error.message.includes('arithmetic-loops'), true);
+        assertSame(error.message.includes('cold'), true);
+        assertSame(error.message.includes('native'), true);
+        assertSame(nativeColdCalls, badInvocation);
+      }
+    },
+  },
+  {
     name: 'native steady executors preserve plain function this binding',
     run() {
       const executors = createNativeExecutors({
@@ -311,6 +377,63 @@ const tests = [
 
       assertSame(executors.steady(), 17);
       assertSame(executors.steady(), 17);
+    },
+  },
+  {
+    name: 'jsjs cold executors preserve negative int32 checksums and reject invalid ones with context',
+    run() {
+      /**
+       * @param {unknown} coldValue
+       * @returns {{
+       *   createRealm: () => { globalObject: Record<string, unknown> },
+       *   evaluateScript: (
+       *     realm: { globalObject: Record<string, unknown> },
+       *     source: string,
+       *   ) => { type: 'normal', value: unknown },
+       * }}
+       */
+      function createEngine(coldValue) {
+        return {
+          createRealm() {
+            return { globalObject: {} };
+          },
+          evaluateScript(realm, source) {
+            if (source.includes('__jsjsBenchmark')) {
+              realm.globalObject.__jsjsBenchmark = {
+                callFunction() {
+                  return 17;
+                },
+              };
+              return { type: 'normal', value: undefined };
+            }
+
+            return { type: 'normal', value: coldValue };
+          },
+        };
+      }
+
+      const workload = {
+        name: 'calls-recursion',
+        source: '(function () { return 17; }())',
+        expectedChecksum: -1100296460,
+      };
+      const validExecutors = createJsjsExecutors(
+        createEngine(workload.expectedChecksum),
+        workload,
+      );
+
+      assertSame(validExecutors.cold(), workload.expectedChecksum);
+
+      for (const invalidValue of [17.5, 2_147_483_648]) {
+        const invalidExecutors = createJsjsExecutors(
+          createEngine(invalidValue),
+          workload,
+        );
+        const error = assertThrows(() => invalidExecutors.cold(), RangeError);
+
+        assertSame(error.message.includes('calls-recursion'), true);
+        assertSame(error.message.includes('cold jsjs'), true);
+      }
     },
   },
   {

@@ -194,7 +194,12 @@ function createExecutors(engine, workload) {
  */
 function sampleLane(execute, options) {
   /** @param {number} count */
-  const runBatch = (count) => measureBatch(execute, count, options.now);
+  const runBatch = (count) =>
+    measureBatch(execute, count, {
+      now: options.now,
+      expectedChecksum: options.expectedChecksum,
+      context: options.context,
+    });
   const calibration = calibrateBatchSize(runBatch, {
     expectedChecksum: options.expectedChecksum,
     targetSampleMs: options.config.targetSampleMs,
@@ -203,22 +208,14 @@ function sampleLane(execute, options) {
   });
 
   for (let index = 0; index < options.config.warmups; index += 1) {
-    checkedMeasurement(
-      runBatch(calibration.batchSize),
-      options.expectedChecksum,
-      options.context,
-    );
+    runBatch(calibration.batchSize);
   }
 
   const samplesMs = [];
   const normalizedSamplesMs = [];
 
   for (let index = 0; index < options.config.samples; index += 1) {
-    const measurement = checkedMeasurement(
-      runBatch(calibration.batchSize),
-      options.expectedChecksum,
-      options.context,
-    );
+    const measurement = runBatch(calibration.batchSize);
     samplesMs.push(measurement.elapsedMs);
     normalizedSamplesMs.push(measurement.elapsedMs / calibration.batchSize);
   }
@@ -234,39 +231,37 @@ function sampleLane(execute, options) {
 /**
  * @param {() => number} execute
  * @param {number} count
- * @param {() => number} now
+ * @param {{
+ *   now: () => number,
+ *   expectedChecksum: number,
+ *   context: string,
+ * }} options
  * @returns {{ elapsedMs: number, checksum: number }}
  */
-function measureBatch(execute, count, now) {
-  let checksum = 0;
-  const startedAt = now();
+function measureBatch(execute, count, options) {
+  let checksum = options.expectedChecksum;
+  const startedAt = options.now();
 
   for (let index = 0; index < count; index += 1) {
     checksum = execute();
+
+    if (checksum !== options.expectedChecksum) {
+      throw new Error(
+        `${options.context} checksum mismatch at batch invocation ${index + 1} of ${count}: expected ${options.expectedChecksum}, got ${checksum}`,
+      );
+    }
   }
 
-  return {
-    elapsedMs: now() - startedAt,
-    checksum,
-  };
-}
+  const elapsedMs = options.now() - startedAt;
 
-/**
- * @param {{ elapsedMs: number, checksum: number }} measurement
- * @param {number} expectedChecksum
- * @param {string} context
- * @returns {{ elapsedMs: number, checksum: number }}
- */
-function checkedMeasurement(measurement, expectedChecksum, context) {
-  if (!Number.isFinite(measurement.elapsedMs) || measurement.elapsedMs <= 0) {
-    throw new RangeError(`${context} elapsedMs must be a positive finite number`);
-  }
-
-  if (measurement.checksum !== expectedChecksum) {
-    throw new Error(
-      `${context} checksum mismatch: expected ${expectedChecksum}, got ${measurement.checksum}`,
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+    throw new RangeError(
+      `${options.context} elapsedMs must be a positive finite number`,
     );
   }
 
-  return measurement;
+  return {
+    elapsedMs,
+    checksum,
+  };
 }

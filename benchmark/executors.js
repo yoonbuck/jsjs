@@ -72,7 +72,10 @@ export function createJsjsExecutors(engine, workload) {
         throw new TypeError('jsjs cold executor must complete normally');
       }
 
-      return /** @type {number} */ (completion.value);
+      return signedInt32Checksum(
+        completion.value,
+        `${workload.name ?? 'benchmark workload'} cold jsjs`,
+      );
     },
     steady() {
       return callableGuestFunction.callFunction(undefined, []);
@@ -128,4 +131,25 @@ function readGlobalBinding(globalObject, name) {
   }
 
   return /** @type {Record<string, unknown>} */ (globalObject)[name];
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} context
+ * @returns {number}
+ */
+function signedInt32Checksum(value, context) {
+  const checksum = /** @type {number} */ (value);
+
+  if (
+    !Number.isInteger(checksum) ||
+    checksum < -0x80000000 ||
+    checksum > 0x7fffffff
+  ) {
+    throw new RangeError(
+      `${context} checksum must be a signed 32-bit integer, got ${value}`,
+    );
+  }
+
+  return checksum;
 }
