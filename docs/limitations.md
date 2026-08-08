@@ -410,7 +410,8 @@ they are the extension points every later protocol is keyed by.
 `typeof o[Symbol.iterator]` is `"function"` and
 `Object.getOwnPropertySymbols(o)[0] === Symbol.iterator` is `true`, but no
 built-in ever calls it.
-**Backing code:** `src/runtime/symbol.js`, `src/builtins/symbol.js`.
+**Backing code:** `src/runtime/symbol.js`, `src/runtime/agent.js`,
+`src/builtins/symbol.js`.
 
 ### Guest recursion depth is the engine's, and it is shallow
 

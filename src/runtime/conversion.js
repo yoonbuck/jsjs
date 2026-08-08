@@ -2,7 +2,6 @@ import { EngineObject } from './object.js';
 import { createPrimitiveWrapper } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
-import { WELL_KNOWN_SYMBOLS } from './symbol.js';
 
 /**
  * @param {unknown} value
@@ -61,7 +60,9 @@ export function toPrimitive(value, preferredType = 'default') {
     throw new TypeError('Unsupported object coercion');
   }
 
-  const exoticToPrimitive = value.get(WELL_KNOWN_SYMBOLS.toPrimitive);
+  const agent = value.agent;
+  const exoticToPrimitive =
+    agent === null ? undefined : value.get(agent.wellKnownSymbols.toPrimitive);
 
   if (exoticToPrimitive !== undefined && exoticToPrimitive !== null) {
     if (!isCallable(exoticToPrimitive)) {

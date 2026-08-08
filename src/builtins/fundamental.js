@@ -36,10 +36,17 @@ import { GuestErrorSignal } from '../runtime/completion.js';
  * §15.5.4/§15.6.4/§15.7.4 rule for the three older wrappers, so
  * `Symbol.prototype.valueOf.call(Symbol.prototype)` must throw.
  *
+ * `agent` is stamped onto `%Object.prototype%`, the one object here with a
+ * null `[[Prototype]]`. Every other object in the realm inherits it through
+ * the prototype it is built with, so conversions can find the agent's
+ * well-known symbols without the whole conversion layer having to carry a
+ * realm parameter.
+ *
+ * @param {import('../runtime/agent.js').Agent} agent
  * @returns {FundamentalIntrinsics}
  */
-export function createFundamentalIntrinsics() {
-  const objectPrototype = new EngineObject(null);
+export function createFundamentalIntrinsics(agent) {
+  const objectPrototype = new EngineObject(null, 'Object', agent);
   const functionPrototype = new IntrinsicFunctionPrototype(objectPrototype);
   const arrayPrototype = new EngineArray(objectPrototype);
   const stringPrototype = new EnginePrimitiveObject(objectPrototype, '');

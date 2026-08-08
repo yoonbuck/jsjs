@@ -54,12 +54,14 @@ import {
 } from '../builtins/date.js';
 import { GuestErrorSignal } from './completion.js';
 import { StackGuard } from './stack-guard.js';
+import { createAgent } from './agent.js';
 import { createDateHost } from './date.js';
 
 /**
  * @typedef {import('../builtins/fundamental.js').FundamentalIntrinsics} FundamentalIntrinsics
  * @typedef {import('../builtins/errors.js').ErrorIntrinsics} ErrorIntrinsics
  * @typedef {{
+ *   agent?: import('./agent.js').Agent,
  *   maxStackDepth?: number,
  *   dateHost?: Partial<import('./date.js').DateHost>,
  *   now?: () => number,
@@ -84,8 +86,16 @@ export class Realm {
    * @param {RealmOptions} [options]
    */
   constructor(options = {}) {
+    // The agent owns the symbol state ECMA-262 shares between realms: the
+    // well-known symbols and the GlobalSymbolRegistry. Realms passed the same
+    // agent interoperate through those; a realm given none gets its own, so
+    // nothing a guest interns can outlive the realm that interned it.
+    /** @type {import('./agent.js').Agent} */
+    this.agent = options.agent ?? createAgent();
     /** @type {FundamentalIntrinsics & Partial<ErrorIntrinsics> & Record<string, unknown>} */
-    this.intrinsics = /** @type {any} */ (createFundamentalIntrinsics());
+    this.intrinsics = /** @type {any} */ (
+      createFundamentalIntrinsics(this.agent)
+    );
     this.globalObject = new EngineObject(this.intrinsics.objectPrototype);
     defineGlobalValueProperties(this.globalObject);
     this.globalEnvironment = new GlobalEnvironmentRecord(this.globalObject);

@@ -2,13 +2,10 @@ import { GuestErrorSignal } from '../runtime/completion.js';
 import { thisSymbolValue } from '../runtime/primitive-object.js';
 import { toString } from '../runtime/conversion.js';
 import {
-  WELL_KNOWN_SYMBOLS,
   WELL_KNOWN_SYMBOL_NAMES,
   createSymbol,
   isSymbol,
   symbolDescriptiveString,
-  symbolFor,
-  symbolKeyFor,
 } from '../runtime/symbol.js';
 
 /**
@@ -43,6 +40,8 @@ import {
  */
 export function createSymbolIntrinsics(realm) {
   const { symbolPrototype } = realm.intrinsics;
+  const { agent } = realm;
+  const wellKnown = agent.wellKnownSymbols;
 
   const symbolConstructor = realm.createNativeFunction({
     name: 'Symbol',
@@ -69,7 +68,7 @@ export function createSymbolIntrinsics(realm) {
 
   for (const name of WELL_KNOWN_SYMBOL_NAMES) {
     symbolConstructor.defineOwnProperty(name, {
-      value: WELL_KNOWN_SYMBOLS[name],
+      value: wellKnown[name],
       writable: false,
       enumerable: false,
       configurable: false,
@@ -83,7 +82,7 @@ export function createSymbolIntrinsics(realm) {
       name: 'for',
       length: 1,
       call(_thisValue, args) {
-        return symbolFor(toString(args[0]));
+        return agent.symbolFor(toString(args[0]));
       },
     }),
   );
@@ -103,7 +102,7 @@ export function createSymbolIntrinsics(realm) {
           );
         }
 
-        return symbolKeyFor(symbol);
+        return agent.symbolKeyFor(symbol);
       },
     }),
   );
@@ -135,7 +134,7 @@ export function createSymbolIntrinsics(realm) {
   // returns the symbol itself, which is what keeps `sym + ''` a TypeError
   // (ToString of the resulting symbol throws) instead of silently rendering
   // the description the way `String(sym)` deliberately does.
-  symbolPrototype.defineOwnProperty(WELL_KNOWN_SYMBOLS.toPrimitive, {
+  symbolPrototype.defineOwnProperty(wellKnown.toPrimitive, {
     value: realm.createNativeFunction({
       name: '[Symbol.toPrimitive]',
       length: 1,
@@ -148,7 +147,7 @@ export function createSymbolIntrinsics(realm) {
     configurable: true,
   });
 
-  symbolPrototype.defineOwnProperty(WELL_KNOWN_SYMBOLS.toStringTag, {
+  symbolPrototype.defineOwnProperty(wellKnown.toStringTag, {
     value: 'Symbol',
     writable: false,
     enumerable: false,

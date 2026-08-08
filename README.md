@@ -40,7 +40,9 @@ console.log(result); // { type: 'normal', value: 3 }
 ```
 
 `createRealm()` returns an initialized realm with all built-in objects: the
-full ES5.1 standard library plus ES2015 `Symbol`.
+full ES5.1 standard library plus ES2015 `Symbol`. Each realm gets its own
+agent — the owner of the well-known symbols and the global symbol registry —
+unless `createRealm({ agent })` opts several realms into sharing one.
 `evaluateScript(realm, source)` parses and evaluates a script, returning
 `{ type: 'normal' | 'throw', value }`. See
 [docs/architecture.md](docs/architecture.md) for the full embedding API.

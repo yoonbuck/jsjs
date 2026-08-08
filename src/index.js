@@ -1,1 +1,8 @@
-export { createRealm, evaluateScript, parseScript, Realm } from './api.js';
+export {
+  Agent,
+  createAgent,
+  createRealm,
+  evaluateScript,
+  parseScript,
+  Realm,
+} from './api.js';

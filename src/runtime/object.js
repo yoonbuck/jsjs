@@ -18,8 +18,14 @@ export class EngineObject {
   /**
    * @param {EngineObject | null} [prototype=null]
    * @param {string} [className='Object']
+   * @param {import('./agent.js').Agent | null} [agent=null] The agent whose
+   *   well-known symbols this object's conversions use. Left unset it is
+   *   inherited from `prototype`, which is how every ordinary object gets one:
+   *   the chain bottoms out at a realm's `%Object.prototype%`. Only the two
+   *   places that build a null-prototype object — `createFundamentalIntrinsics`
+   *   and `Object.create(null)` — have to pass it, and both know their realm.
    */
-  constructor(prototype = null, className = 'Object') {
+  constructor(prototype = null, className = 'Object', agent = null) {
     if (prototype !== null && !(prototype instanceof EngineObject)) {
       throw new TypeError(
         'EngineObject prototype must be an EngineObject or null',
@@ -29,6 +35,8 @@ export class EngineObject {
     this._prototype = prototype;
     this._className = className;
     this._extensible = true;
+    /** @type {import('./agent.js').Agent | null} */
+    this.agent = agent ?? (prototype === null ? null : prototype.agent);
     /** @type {Map<PropertyKey, CompletePropertyDescriptor>} */
     this._properties = new Map();
   }

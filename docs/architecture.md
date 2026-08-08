@@ -37,7 +37,32 @@ browsers would need an import map, and the `jsc` shell supports neither.
 `vendor/` is generated rather than committed; `npm install` populates it through
 `prepare`.
 
-## Realms and intrinsics
+## Agents and realms
+
+An `Agent` (`src/runtime/agent.js`) owns the only state ECMA-262 shares
+_between_ realms rather than within one: the well-known symbols (§6.1.5.1) and
+the `GlobalSymbolRegistry` (§19.4.2.1). Realms handed the same agent
+interoperate through those — `@@iterator` matches, `Symbol.for('x')` agrees —
+and realms on different agents share nothing at all.
+
+That boundary is an ownership decision, not just a spec one. `Symbol.for`
+interns a **guest-controlled** string, so a process-global registry would
+accumulate guest data for the lifetime of the process, outliving every realm
+that produced it and reachable from no handle the embedder could drop. An
+agent is an ordinary object: drop it and the registry becomes garbage.
+
+```js
+import { createAgent, createRealm } from './src/index.js';
+
+const agent = createAgent();
+const a = createRealm({ agent }); //  these two interoperate
+const b = createRealm({ agent });
+const c = createRealm(); //  its own agent; shares nothing, GCs with the realm
+```
+
+`createRealm()` with no agent makes one for that realm alone. That is the safe
+default — isolation unless the embedder asks for sharing — and it means a host
+that creates and discards realms in a loop retains nothing.
 
 A `Realm` (`src/runtime/realm.js`) owns a fresh intrinsic graph and a fresh
 global object/environment, keeping every script execution isolated from the host
@@ -46,8 +71,9 @@ properties are installed during construction, never from host globals.
 
 Construction order in the `Realm` constructor:
 
-1. `createFundamentalIntrinsics()` — `Object.prototype`, `Function.prototype`,
-   `Symbol.prototype`
+0. The agent — `options.agent`, or a fresh one
+1. `createFundamentalIntrinsics(agent)` — `Object.prototype`,
+   `Function.prototype`, `Symbol.prototype`
 2. `defineGlobalValueProperties()` — `NaN`, `Infinity`, `undefined`
 3. `GlobalEnvironmentRecord` wrapping the global object
 4. `createDateHost()` — deterministic clock/timezone adapters
@@ -366,13 +392,27 @@ console.log(result); // { type: 'normal', value: 42 }
 Parses `source` as an ES5 script and returns an Acorn AST. Throws a host
 `SyntaxError` (not a guest error) on invalid input.
 
+### `createAgent(): Agent`
+
+Creates an agent: the owner of the well-known symbols and the global symbol
+registry. Pass one as `createRealm({ agent })` to make several realms
+interoperate; omit it and each realm gets its own, so nothing guest code
+interns outlives the realm that interned it.
+
 ### `Realm` class
 
 The `Realm` class itself. Exported for `instanceof` checks and type annotations.
+
+### `Agent` class
+
+The `Agent` class itself. Exported for `instanceof` checks and type
+annotations.
 Instances expose:
 
 - `realm.globalObject` — the global `EngineObject`
 - `realm.globalEnvironment` — the `GlobalEnvironmentRecord`
+- `realm.agent` — the agent owning the well-known symbols and the global
+  symbol registry
 - `realm.intrinsics` — the intrinsic graph (prototypes, constructors)
 - `realm.dateHost` — the resolved `DateHost` adapter
 - `realm.stackGuard` — the realm's recursion budget (`StackGuard`)

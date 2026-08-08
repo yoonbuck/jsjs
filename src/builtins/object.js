@@ -3,7 +3,6 @@ import { EngineArray } from '../runtime/array-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isDataDescriptor } from '../runtime/descriptors.js';
 import { toObject, toPropertyKey } from '../runtime/conversion.js';
-import { WELL_KNOWN_SYMBOLS } from '../runtime/symbol.js';
 import {
   fromPropertyDescriptor,
   requireCallable,
@@ -76,7 +75,7 @@ export function createObjectIntrinsics(realm) {
         // when it is a String, so every ES5 tag is unchanged (no ES5 object
         // carries the property) and a non-string tag falls back rather than
         // being coerced.
-        const tag = object.get(WELL_KNOWN_SYMBOLS.toStringTag);
+        const tag = object.get(realm.agent.wellKnownSymbols.toStringTag);
 
         return `[object ${typeof tag === 'string' ? tag : object.getClassName()}]`;
       },
@@ -311,7 +310,9 @@ function installObjectReflectionMethods(realm, objectConstructor) {
       );
     }
 
-    const object = new EngineObject(prototype);
+    // `Object.create(null)` is one of only two places a null-prototype
+    // object is built, so the agent has to be passed rather than inherited.
+    const object = new EngineObject(prototype, 'Object', realm.agent);
 
     if (args.length > 1 && args[1] !== undefined) {
       defineProperties(realm, object, args[1]);

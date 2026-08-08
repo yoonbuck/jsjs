@@ -23,6 +23,10 @@ import {
   UPSTREAM_SUBSET_FILE,
   parseUpstreamSubset,
 } from '../../tools/test262/upstream.js';
+import {
+  FEATURES_MANIFEST_FILE,
+  parseFeatureManifest,
+} from '../../tools/test262/features.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 
@@ -1638,6 +1642,77 @@ export default [
         violations.join(', '),
         '',
         `test:node transitively imports checkout-dependent modules: ${violations.join(', ')}`,
+      );
+    },
+  },
+  {
+    name: 'no engine module keeps guest-reachable state at module scope',
+    run: async () => {
+      // `Symbol.for` interns a guest-controlled string. Holding that registry
+      // in a module variable would retain guest data for the life of the
+      // process, outliving every realm that produced it and reachable from no
+      // handle an embedder could drop. It belongs to an `Agent` instead, so a
+      // module-level `Map`/`Set`/array-or-object literal reappearing in these
+      // modules is a regression, not a style question.
+      const OWNERS = ['src/runtime/symbol.js', 'src/runtime/agent.js'];
+      /** @type {string[]} */
+      const violations = [];
+
+      for (const file of OWNERS) {
+        const source = await readSource(file);
+
+        for (const line of source.split('\n')) {
+          // Module scope is column zero: anything indented is inside a class
+          // body or a function, where per-instance state is exactly right.
+          if (!/^(?:const|let|var)\s/.test(line)) {
+            continue;
+          }
+
+          if (/=\s*new\s+(?:Map|Set|WeakMap|WeakSet)\b/.test(line)) {
+            violations.push(`${file}: ${line.trim()}`);
+          }
+        }
+
+        if (/^let\s|^var\s/m.test(source)) {
+          violations.push(`${file}: module-scope mutable binding`);
+        }
+      }
+
+      assertSame(violations.join(' | '), '');
+    },
+  },
+  {
+    name: 'every feature area the selection policy claims is backed by a probed feature',
+    run: async () => {
+      // The two gates are independent: `featureAreas` decides where a tagged
+      // test is selected from, `features.json` decides whether it may run.
+      // A tag claimed by an area but missing from the manifest would select
+      // tests the runner then silently skips, which reads as coverage the
+      // engine does not have.
+      const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
+      const manifest = parseFeatureManifest(
+        await readSource(FEATURES_MANIFEST_FILE),
+      );
+      const probed = new Set(
+        manifest.features
+          .filter((feature) => feature.probe.trim() !== '')
+          .map((feature) => feature.name),
+      );
+      /** @type {string[]} */
+      const unbacked = [];
+
+      for (const area of policy.featureAreas) {
+        for (const name of area.features) {
+          if (!probed.has(name)) {
+            unbacked.push(`${area.prefix} claims ${name}`);
+          }
+        }
+      }
+
+      assertSame(
+        unbacked.join(', '),
+        '',
+        `feature areas claim tags with no probed feature: ${unbacked.join(', ')}`,
       );
     },
   },

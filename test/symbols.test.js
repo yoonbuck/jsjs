@@ -1,14 +1,16 @@
 import { assertSame, assertThrows } from './harness/assert.js';
 import {
-  WELL_KNOWN_SYMBOLS,
   WELL_KNOWN_SYMBOL_NAMES,
   createSymbol,
   isSymbol,
   symbolDescription,
   symbolDescriptiveString,
-  symbolFor,
-  symbolKeyFor,
 } from '../src/runtime/symbol.js';
+import {
+  Agent,
+  createAgent,
+  createWellKnownSymbols,
+} from '../src/runtime/agent.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
@@ -29,6 +31,28 @@ import {
   EnginePrimitiveObject,
   thisSymbolValue,
 } from '../src/runtime/primitive-object.js';
+
+/** A shared agent for the tests that only need one realm's worth of state. */
+const AGENT = createAgent();
+
+/** @type {Readonly<Record<import('../src/runtime/symbol.js').WellKnownSymbolName, symbol>>} */
+const WELL_KNOWN_SYMBOLS = AGENT.wellKnownSymbols;
+
+/**
+ * @param {string} key
+ * @returns {symbol}
+ */
+function symbolFor(key) {
+  return AGENT.symbolFor(key);
+}
+
+/**
+ * @param {symbol} symbol
+ * @returns {string | undefined}
+ */
+function symbolKeyFor(symbol) {
+  return AGENT.symbolKeyFor(symbol);
+}
 
 /**
  * Asserts `body` throws the guest `TypeError` signal the engine raises for a
@@ -183,10 +207,63 @@ const tests = [
     },
   },
   {
-    name: 'the well-known symbol record is frozen against guest-reachable edits',
+    name: 'an agent’s well-known symbol record is frozen against edits',
     run() {
       assertSame(Object.isFrozen(WELL_KNOWN_SYMBOLS), true);
       assertSame(Object.isFrozen(WELL_KNOWN_SYMBOL_NAMES), true);
+      assertSame(Object.isFrozen(createWellKnownSymbols()), true);
+    },
+  },
+  {
+    name: 'each agent mints its own well-known symbols',
+    run() {
+      const first = createAgent();
+      const second = createAgent();
+
+      for (const name of WELL_KNOWN_SYMBOL_NAMES) {
+        assertSame(
+          first.wellKnownSymbols[name] === second.wellKnownSymbols[name],
+          false,
+          name,
+        );
+        assertSame(
+          symbolDescription(second.wellKnownSymbols[name]),
+          `Symbol.${name}`,
+          name,
+        );
+      }
+    },
+  },
+  {
+    name: 'an agent owns its registry, so no entry outlives it',
+    run() {
+      const first = createAgent();
+      const second = createAgent();
+
+      assertSame(first.registeredSymbolCount, 0);
+
+      const shared = first.symbolFor('leak-probe');
+
+      assertSame(first.registeredSymbolCount, 1);
+      assertSame(first.symbolFor('leak-probe') === shared, true);
+
+      // A second agent starts empty and never sees the first agent's entry:
+      // the registry is reachable only through the agent that owns it, so
+      // dropping that agent drops every key guest code interned in it.
+      assertSame(second.registeredSymbolCount, 0);
+      assertSame(second.symbolFor('leak-probe') === shared, false);
+      assertSame(second.registeredSymbolCount, 1);
+      assertSame(first.registeredSymbolCount, 1);
+      assertSame(first.symbolKeyFor(second.symbolFor('leak-probe')), undefined);
+    },
+  },
+  {
+    name: 'createAgent produces a distinct Agent every time',
+    run() {
+      const agent = createAgent();
+
+      assertSame(agent instanceof Agent, true);
+      assertSame(createAgent() === agent, false);
     },
   },
   {
@@ -402,17 +479,30 @@ const tests = [
     },
   },
   {
-    name: 'realms share symbol values but not their %SymbolPrototype%',
+    name: 'realms share symbol values only when they share an agent',
     run() {
-      const first = createRealm();
-      const second = createRealm();
+      const agent = createAgent();
+      const first = createRealm({ agent });
+      const second = createRealm({ agent });
+      const isolated = createRealm();
 
+      assertSame(first.agent, agent);
+      assertSame(second.agent, agent);
+      assertSame(isolated.agent === agent, false);
       assertSame(
         first.intrinsics.symbolPrototype === second.intrinsics.symbolPrototype,
         false,
       );
-      assertSame(symbolFor('shared') === symbolFor('shared'), true);
-      assertSame(WELL_KNOWN_SYMBOLS.iterator, WELL_KNOWN_SYMBOLS.iterator);
+      assertSame(agent.symbolFor('shared') === agent.symbolFor('shared'), true);
+      assertSame(
+        agent.wellKnownSymbols.iterator === agent.wellKnownSymbols.iterator,
+        true,
+      );
+      assertSame(
+        isolated.agent.wellKnownSymbols.iterator ===
+          agent.wellKnownSymbols.iterator,
+        false,
+      );
     },
   },
   {
@@ -719,10 +809,12 @@ const tests = [
     },
   },
   {
-    name: 'symbol values are shared across realms while Symbol itself is not',
+    name: 'symbol values are shared across realms on one agent, and never across agents',
     run() {
-      const first = createRealm();
-      const second = createRealm();
+      const agent = createAgent();
+      const first = createRealm({ agent });
+      const second = createRealm({ agent });
+      const foreign = createRealm();
       const symbolOf = (
         /** @type {import('../src/runtime/realm.js').Realm} */ realm,
       ) => realm.globalObject.get('Symbol');
@@ -746,6 +838,60 @@ const tests = [
           evaluateScript(second, 'Symbol.prototype;').value,
         false,
       );
+
+      // A realm on its own agent shares nothing: this is what keeps one
+      // embedding's interned keys out of another's registry.
+      assertSame(
+        evaluateScript(foreign, 'Symbol.iterator;').value ===
+          evaluateScript(first, 'Symbol.iterator;').value,
+        false,
+      );
+      assertSame(
+        evaluateScript(foreign, 'Symbol.for("cross-realm");').value ===
+          evaluateScript(first, 'Symbol.for("cross-realm");').value,
+        false,
+      );
+      assertSame(
+        evaluateScript(foreign, 'Symbol.keyFor(Symbol.for("cross-realm"));')
+          .value,
+        'cross-realm',
+      );
+    },
+  },
+  {
+    name: 'guest Symbol.for interns into its own realm’s agent and nowhere else',
+    run() {
+      const agent = createAgent();
+      const realm = createRealm({ agent });
+      const other = createAgent();
+
+      assertSame(agent.registeredSymbolCount, 0);
+      evaluateScript(realm, 'Symbol.for("guest-key");');
+      assertSame(agent.registeredSymbolCount, 1);
+      assertSame(other.registeredSymbolCount, 0);
+      assertSame(
+        agent.symbolKeyFor(
+          /** @type {symbol} */ (
+            evaluateScript(realm, 'Symbol.for("guest-key");').value
+          ),
+        ),
+        'guest-key',
+      );
+      assertSame(agent.registeredSymbolCount, 1);
+    },
+  },
+  {
+    name: 'a realm created without an agent gets a fresh one it alone owns',
+    run() {
+      const realm = createRealm();
+
+      assertSame(realm.agent instanceof Agent, true);
+      assertSame(realm.agent.registeredSymbolCount, 0);
+      evaluateScript(realm, 'Symbol.for("owned");');
+      assertSame(realm.agent.registeredSymbolCount, 1);
+      // Nothing outside the realm can observe that entry, so the realm going
+      // away takes the whole registry with it.
+      assertSame(createRealm().agent.registeredSymbolCount, 0);
     },
   },
   {
