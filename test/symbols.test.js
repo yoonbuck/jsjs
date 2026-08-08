@@ -19,6 +19,7 @@ import {
   toBoolean,
   toNumber,
   toObject,
+  toPrimitive,
   toPropertyKey,
   toString,
 } from '../src/runtime/conversion.js';
@@ -1054,6 +1055,39 @@ const tests = [
     },
   },
   {
+    name: 'Object.prototype.toString uses the receiver object’s agent',
+    run() {
+      const ownerAgent = createAgent();
+      const callerAgent = createAgent();
+      const ownerRealm = createRealm({ agent: ownerAgent });
+      const callerRealm = createRealm({ agent: callerAgent });
+      const object = new EngineObject(ownerRealm.intrinsics.objectPrototype);
+      const toStringMethod = /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
+        callerRealm.intrinsics.objectPrototype.get('toString')
+      );
+
+      object.defineOwnProperty(callerAgent.wellKnownSymbols.toStringTag, {
+        value: 'Caller',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(toStringMethod.callFunction(object, []), '[object Object]');
+
+      object.defineOwnProperty(ownerAgent.wellKnownSymbols.toStringTag, {
+        value: 'Owner',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(toStringMethod.callFunction(object, []), '[object Owner]');
+      assertSame(
+        toStringMethod.callFunction(ownerAgent.wellKnownSymbols.iterator, []),
+        '[object Symbol]',
+      );
+    },
+  },
+  {
     name: 'the ES5 [[Class]] tags survive the @@toStringTag addition',
     run() {
       assertSame(run('Object.prototype.toString.call([]);'), '[object Array]');
@@ -1147,6 +1181,56 @@ const tests = [
         ),
         'symbol',
       );
+    },
+  },
+  {
+    name: 'ToPrimitive uses the receiver object’s agent',
+    run() {
+      const ownerAgent = createAgent();
+      const callerAgent = createAgent();
+      const ownerRealm = createRealm({ agent: ownerAgent });
+      const callerRealm = createRealm({ agent: callerAgent });
+      const object = new EngineObject(ownerRealm.intrinsics.objectPrototype);
+
+      object.defineOwnProperty(callerAgent.wellKnownSymbols.toPrimitive, {
+        value: callerRealm.createNativeFunction({
+          name: 'callerToPrimitive',
+          length: 1,
+          call() {
+            return 'caller';
+          },
+        }),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      object.defineOwnProperty('valueOf', {
+        value: ownerRealm.createNativeFunction({
+          name: 'valueOf',
+          length: 0,
+          call() {
+            return 'ordinary';
+          },
+        }),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(toPrimitive(object), 'ordinary');
+
+      object.defineOwnProperty(ownerAgent.wellKnownSymbols.toPrimitive, {
+        value: ownerRealm.createNativeFunction({
+          name: 'ownerToPrimitive',
+          length: 1,
+          call() {
+            return 'owner';
+          },
+        }),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(toPrimitive(object), 'owner');
     },
   },
   {
