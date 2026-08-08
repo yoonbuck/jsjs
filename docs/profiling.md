@@ -545,3 +545,229 @@ node benchmark/profile/analyze.js --baseline=.benchmark-results/issue-42-after -
 - Sampled allocation shares are sampled bytes, not retained heap, object lifetime, or heap-growth measurements.
 - Cold and steady have different execution boundaries, so a before/after change in one mode does not decompose directly into startup cost versus steady-state cost.
 - This is one machine, one Node build, one Chromium shell build, and one system JSC shell. Re-run on a quiet fixed-power machine before making broader claims.
+
+## Issue #42 current-main rebaseline (2026-08-08)
+
+This section replaces the performance decision evidence for the rebased issue
+#42 branch. The earlier `d9ed3e2` evidence above is retained as historical
+context only; it is not evidence for the current-main comparison. Timing claims
+below come only from the six paired, unprofiled full-workload captures.
+CPU/allocation profiles are sampled interpreter-attribution diagnostics, not
+wall-time measurements or proof of an isolated implementation contribution.
+
+### Exact revisions, roots, and commands
+
+| Item                      | Baseline                                                                                                        | Candidate                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Source commit             | `7132f03fa28de824879894a815be6e2087ed9fb2`                                                                      | `3f26148841096c75822bddee709a4ee766a89aa9`                                                                           |
+| Detached capture worktree | `/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main/main-wt` | `/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main/candidate-wt` |
+| Preserved timing roots    | `.benchmark-results/issue-42-current-main/baseline-1` … `baseline-6`                                            | `.benchmark-results/issue-42-current-main/candidate-1` … `candidate-6`                                               |
+| Preserved profile root    | `.benchmark-results/issue-42-current-main/profiles-baseline`                                                    | `.benchmark-results/issue-42-current-main/profiles-candidate`                                                        |
+
+Both worktrees were fresh detached checkouts. Their `node_modules` and generated
+`vendor/acorn` directories were symlinked to the existing active-worktree
+copies; no tracked source was changed. Before and after every capture,
+`git status --porcelain --untracked-files=all` was empty in the source
+worktree and active branch. Each host report records `gitDirty: false`.
+
+```sh
+ARTIFACT_ROOT=/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main
+BASELINE_SHA=7132f03fa28de824879894a815be6e2087ed9fb2
+CANDIDATE_SHA=3f26148841096c75822bddee709a4ee766a89aa9
+JSC_DIR=/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers
+JSC_BIN=/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc
+
+git worktree add --detach "$ARTIFACT_ROOT/main-wt" "$BASELINE_SHA"
+git worktree add --detach "$ARTIFACT_ROOT/candidate-wt" "$CANDIDATE_SHA"
+
+PATH="$JSC_DIR:$PATH" JSC="$JSC_BIN" \
+  node benchmark/cli.js run --host=all \
+  --output=.benchmark-results/issue-42-current-main/<side>-<round>
+```
+
+Every timing root used the default full workload: `arithmetic-loops`,
+`calls-recursion`, `object-properties`, `arrays`, `strings`, `json`, and
+`regexp`; both cold and steady modes; warmups `3`; samples `9`; target sample
+time `100 ms`; and maximum batch size `1000000`. The host versions were Node
+`v26.5.1`, Chromium `151.0.7922.34`, and system JSC
+`/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc mtimeMs=1784736095000`.
+
+### Six-pair counterbalanced timing methodology and audit
+
+The captures were adjacent within a round. Rounds 1, 3, and 5 ran
+baseline→candidate; rounds 2, 4, and 6 ran candidate→baseline. Each root has
+one all-host run ID shared by its Node, Chromium, and JSC reports.
+
+| Round | Order              | Baseline run ID / generatedAt                                       | Candidate run ID / generatedAt                                      |
+| ----: | ------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+|     1 | baseline→candidate | `c5099075-f01f-45c3-b114-b8d0c571fef1` / `2026-08-08T17:58:03.179Z` | `f3b647a2-3333-406f-a8d9-2cc0044bb1a5` / `2026-08-08T17:59:23.987Z` |
+|     2 | candidate→baseline | `a2d144f0-039f-429c-b2df-f0aaf66dc60b` / `2026-08-08T18:01:58.075Z` | `c87eb37e-aef4-4b74-84dd-e881c316413a` / `2026-08-08T18:00:40.214Z` |
+|     3 | baseline→candidate | `5a4a02bd-d43d-4d94-9c36-ad6b3b1c14b5` / `2026-08-08T18:03:19.290Z` | `1e071860-7f14-4f7d-8a36-e930e2842825` / `2026-08-08T18:04:40.141Z` |
+|     4 | candidate→baseline | `307214df-8d28-4596-8d59-1b613ecc9c34` / `2026-08-08T18:07:14.090Z` | `3dfa765e-48f3-4080-ad4a-9ddf7f659e7c` / `2026-08-08T18:05:58.014Z` |
+|     5 | baseline→candidate | `44cd20ee-c244-4b07-9061-cfb21a8c54ba` / `2026-08-08T18:08:34.070Z` | `ee7d438a-26b7-44c5-a14a-430eac342c8e` / `2026-08-08T18:09:56.026Z` |
+|     6 | candidate→baseline | `bdef0e5a-8452-4950-b9df-bd659eb6319b` / `2026-08-08T18:12:31.493Z` | `a5f85fde-9233-43c4-9290-e3eefd4328ab` / `2026-08-08T18:11:13.471Z` |
+
+The manifest at
+`.benchmark-results/issue-42-current-main/comparison-manifest.json` declares
+both target workloads, seed `420042`, and `20000` paired-bootstrap resamples.
+For each cell, it compares the median normalized jsjs samples per root with a
+paired log ratio `log(candidate) - log(baseline)`, uses a deterministic paired
+bootstrap confidence interval and exact two-sided sign test, and compares the
+point estimate against the empirical 95th-percentile self-difference noise
+envelope. Per-host and all-host aggregates are geometric means across the full
+workload cell set, paired by round.
+
+```sh
+node benchmark/cli.js compare \
+  --manifest=.benchmark-results/issue-42-current-main/comparison-manifest.json \
+  --output=.benchmark-results/issue-42-current-main/comparison
+```
+
+The command was run twice. Its JSON and Markdown outputs were byte-identical
+after excluding their generated-at timestamp. The audit verified 6 pairs, 12
+roots, 12 unique run IDs, a 3/3 counterbalance, 504 report-result checksums,
+the exact source SHA for every side, stable full-workload configuration and
+host versions, and timestamp order for every pair.
+
+### Target cells, noise, and gate verdict
+
+Negative values are candidate improvements. Every target had six negative
+nonzero paired deltas and exact sign-test `p = 0.03125`.
+
+| Host     | Workload          | Mode   | Point Δ | 95% CI            | Empirical noise | Verdict      |
+| -------- | ----------------- | ------ | ------: | ----------------- | --------------: | ------------ |
+| Chromium | object-properties | cold   | -19.88% | -20.51% … -18.33% |          ±2.19% | improvement  |
+| Chromium | object-properties | steady | -21.01% | -21.90% … -18.70% |          ±2.92% | improvement  |
+| Chromium | arrays            | cold   | -12.99% | -14.13% … -10.44% |          ±2.90% | improvement  |
+| Chromium | arrays            | steady | -13.15% | -14.04% … -11.54% |          ±1.98% | improvement  |
+| JSC      | object-properties | cold   | -21.97% | -29.13% … -19.54% |         ±11.96% | improvement  |
+| JSC      | object-properties | steady | -24.66% | -27.57% … -20.59% |          ±8.43% | improvement  |
+| JSC      | arrays            | cold   | -14.82% | -16.80% … -12.27% |          ±4.98% | improvement  |
+| JSC      | arrays            | steady | -14.57% | -16.36% … -11.97% |          ±5.70% | improvement  |
+| Node     | object-properties | cold   | -22.02% | -24.73% … -17.05% |         ±11.07% | improvement  |
+| Node     | object-properties | steady | -21.35% | -25.17% … -17.62% |          ±9.20% | improvement  |
+| Node     | arrays            | cold   | -10.68% | -16.68% … -8.83%  |         ±10.41% | improvement  |
+| Node     | arrays            | steady | -10.55% | -17.56% … -7.84%  |         ±12.09% | within-noise |
+
+| Aggregate        | Point Δ | 95% CI            | Empirical noise | Verdict     |
+| ---------------- | ------: | ----------------- | --------------: | ----------- |
+| Chromium geomean | -12.19% | -12.47% … -11.01% |          ±2.12% | improvement |
+| JSC geomean      | -15.82% | -17.35% … -13.49% |          ±5.21% | improvement |
+| Node geomean     | -10.96% | -15.61% … -7.38%  |         ±10.88% | improvement |
+| All-host geomean | -13.46% | -14.28% … -11.12% |          ±4.02% | improvement |
+
+There were **zero non-target regressions**. All three host geomean point
+estimates and the all-host geomean improve. The gate is nevertheless **not
+accepted**: `acceptance.accepted === false`. Its only blocking target is
+`node/arrays/steady`: the -10.55% point estimate and confidence interval are
+negative, but the magnitude is inside its ±12.09% measured self-noise
+envelope. Thus 11 of 12 target cells have `improvement` verdicts, while that
+cell is `within-noise`; aggregation does not override the blocking cell.
+
+### Matched CPU and allocation profiles
+
+The candidate's corrected `benchmark/profile/analyze.js` validated each
+revision independently against its matching timing root:
+
+```sh
+node benchmark/profile/analyze.js \
+  --baseline=.benchmark-results/issue-42-current-main/baseline-1 \
+  --profiles=.benchmark-results/issue-42-current-main/profiles-baseline
+node benchmark/profile/analyze.js \
+  --baseline=.benchmark-results/issue-42-current-main/candidate-1 \
+  --profiles=.benchmark-results/issue-42-current-main/profiles-candidate
+```
+
+Each cell used `--warmups=1`,
+`--cpu-sampling-interval-microseconds=100`, and
+`--allocation-sampling-interval-bytes=32768`; CPU and allocation use the same
+cell-specific run ID. The capture command for each metric was:
+
+```sh
+node benchmark/profile/cli.js \
+  --host="$host" --workload="$workload" --mode="$mode" --metric=cpu \
+  --run-id="$run_id" --cpu-sampling-interval-microseconds=100 \
+  --warmups=1 --iterations="$iterations" --output="$output"
+node benchmark/profile/cli.js \
+  --host="$host" --workload="$workload" --mode="$mode" --metric=allocation \
+  --run-id="$run_id" --allocation-sampling-interval-bytes=32768 \
+  --warmups=1 --iterations="$iterations" --output="$output"
+```
+
+| Host     | Workload          | Mode   | Iterations |   Checksum | CPU baseline/candidate (ms) | Allocation baseline/candidate (ms) |
+| -------- | ----------------- | ------ | ---------: | ---------: | --------------------------: | ---------------------------------: |
+| Node     | object-properties | cold   |          4 | 1122746965 |           333.913 / 259.078 |                  373.564 / 297.030 |
+| Node     | object-properties | steady |        512 | 1122746965 |       36378.051 / 30489.777 |              47164.180 / 33217.840 |
+| Node     | arrays            | cold   |          4 |  778416596 |           269.919 / 219.775 |                  287.679 / 240.989 |
+| Node     | arrays            | steady |          5 |  778416596 |           293.713 / 270.191 |                  315.747 / 274.372 |
+| Chromium | object-properties | cold   |          5 | 1122746965 |           351.200 / 285.700 |                  368.900 / 298.700 |
+| Chromium | object-properties | steady |          5 | 1122746965 |           344.300 / 276.300 |                  350.400 / 276.400 |
+| Chromium | arrays            | cold   |          6 |  778416596 |           323.300 / 285.300 |                  329.700 / 289.800 |
+| Chromium | arrays            | steady |         48 |  778416596 |         2408.900 / 2143.600 |                2464.700 / 2165.700 |
+
+| Host     | Workload          | Mode   | Baseline profile run ID                                           | Candidate profile run ID                                                            |
+| -------- | ----------------- | ------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Node     | object-properties | cold   | `issue42-current-main-baseline-node-object-properties-cold`       | `issue42-current-main-diagnostic-candidate-node-object-properties-cold-retry-1`     |
+| Node     | object-properties | steady | `issue42-current-main-baseline-node-object-properties-steady`     | `issue42-current-main-candidate-node-object-properties-steady`                      |
+| Node     | arrays            | cold   | `issue42-current-main-baseline-node-arrays-cold`                  | `issue42-current-main-candidate-node-arrays-cold`                                   |
+| Node     | arrays            | steady | `issue42-current-main-baseline-node-arrays-steady`                | `issue42-current-main-candidate-node-arrays-steady`                                 |
+| Chromium | object-properties | cold   | `issue42-current-main-baseline-chromium-object-properties-cold`   | `issue42-current-main-diagnostic-candidate-chromium-object-properties-cold-retry-1` |
+| Chromium | object-properties | steady | `issue42-current-main-baseline-chromium-object-properties-steady` | `issue42-current-main-candidate-chromium-object-properties-steady`                  |
+| Chromium | arrays            | cold   | `issue42-current-main-baseline-chromium-arrays-cold`              | `issue42-current-main-candidate-chromium-arrays-cold`                               |
+| Chromium | arrays            | steady | `issue42-current-main-baseline-chromium-arrays-steady`            | `issue42-current-main-candidate-chromium-arrays-steady`                             |
+
+The analyzer accepted 8 paired observations per revision. For every
+observation, the timing workload expected checksum, timing observed checksum,
+CPU expected/observed checksum, and allocation expected/observed checksum were
+equal. It also verified source SHA, `gitDirty: false`, host/runtime version,
+run ID pairing, warmups, iterations, sampling intervals, raw artifact
+existence, and a nonzero non-host interpreter denominator. The copied active
+profile artifacts hash-identically to their detached-worktree capture sources.
+
+The initial candidate allocation captures for
+`chromium/object-properties/cold` and `node/object-properties/cold` had no
+non-host sampled bytes at the mandated 32768-byte interval, so the corrected
+analyzer rejected them rather than silently treating them as zeros. Those
+invalid raw artifacts are retained under the external artifact root. Exact
+same-configuration allocation retries produced nonzero interpreter samples and
+were paired with CPU captures using the same retried run IDs; the final
+analyzer validation above is over those replacement pairs. No interval,
+warmup, iteration, source SHA, or workload checksum was changed.
+
+### Interpreter-normalized attribution deltas
+
+Shares below normalize each observation to non-host interpreter samples before
+equal-observation aggregation. They are descriptive sampling attribution, not
+an isolated parser or method-level causal decomposition.
+
+| Scope                    | Metric     | Category        | Baseline | Candidate | Δ points |
+| ------------------------ | ---------- | --------------- | -------: | --------: | -------: |
+| All 8 observations       | CPU        | object-property | 20.7203% |   7.7809% | -12.9394 |
+| All 8 observations       | CPU        | arrays          |  1.6778% |   1.8258% |  +0.1480 |
+| All 8 observations       | Allocation | object-property | 38.0455% |   3.1951% | -34.8504 |
+| All 8 observations       | Allocation | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+| Steady object-properties | CPU        | object-property | 20.7068% |   5.8180% | -14.8887 |
+| Steady object-properties | CPU        | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+| Steady object-properties | Allocation | object-property |  0.0000% |   0.0000% |  +0.0000 |
+| Steady object-properties | Allocation | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+| Steady arrays            | CPU        | object-property | 16.7388% |   7.7398% |  -8.9990 |
+| Steady arrays            | CPU        | arrays          |  3.3784% |   3.5278% |  +0.1494 |
+| Steady arrays            | Allocation | object-property | 76.7196% |  12.7806% | -63.9390 |
+| Steady arrays            | Allocation | arrays          |  0.0000% |   0.0000% |  +0.0000 |
+
+The whole-branch `arrays` target has a consistent timing improvement on all
+three hosts, but this profile evidence does **not** isolate the array parser's
+contribution from the other branch changes. Use the paired timing table and
+its per-cell verdicts for performance decisions; specifically, do not claim a
+gate acceptance while `node/arrays/steady` remains inside empirical noise.
+
+### Current-main validation artifacts
+
+Ignored raw captures, the manifest, comparison output, analyzer output, and
+metadata/determinism audits are preserved under
+`.benchmark-results/issue-42-current-main/` in the active worktree and under
+`/Users/jordan/.copilot/session-state/03dae814-f5a5-452d-8b90-649aec2b4e89/files/issue-42-current-main/`
+for capture logs, metadata audits, and archives created alongside the temporary
+detached worktrees. The comparison output is
+`.benchmark-results/issue-42-current-main/comparison.json` and
+`.benchmark-results/issue-42-current-main/comparison.md`.
