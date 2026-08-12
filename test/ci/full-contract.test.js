@@ -710,6 +710,7 @@ export default [
         await readRepositoryFile(FEATURES_MANIFEST_FILE),
       );
       const host = createNodeTest262Host({ root: checkoutPath });
+      const supportedFeatures = featureNames(manifest);
 
       for (const feature of manifest.features) {
         for (const file of feature.tests) {
@@ -725,7 +726,11 @@ export default [
             engine,
             host,
             file,
-            supportedFeatures: [feature.name],
+            // A backing test may declare another implemented prerequisite
+            // (the pinned `for-of` example also needs `Symbol.iterator`).
+            // The metadata assertion above still proves this test backs the
+            // feature currently being checked.
+            supportedFeatures,
           });
 
           assertSame(

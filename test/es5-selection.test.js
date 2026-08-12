@@ -622,6 +622,50 @@ export default [
     },
   },
   {
+    name: 'a feature area cannot be hidden by an exclusion with the same prefix',
+    run: () => {
+      const prefix = 'test/built-ins/Array/prototype/values';
+      const path = `${prefix}/returns-iterator.js`;
+      const featureAreas = [
+        {
+          prefix,
+          features: ['Symbol.iterator'],
+          reason: 'ES2015 Array iterators are implemented.',
+        },
+      ];
+      const policy = parseEs5Selection(policyText({ featureAreas }));
+      const info = {
+        ...CANDIDATE_INFO,
+        declaresFeatures: true,
+        features: ['Symbol.iterator'],
+      };
+
+      assertSame(isCandidatePath(path, info, policy), true);
+      const error = assertThrows(
+        () =>
+          parseEs5Selection(
+            policyText({
+              featureAreas,
+              exclusions: [
+                {
+                  prefix,
+                  category: 'post-es5-builtin',
+                  reason:
+                    'Obsolete ES5-only exclusion for Array.prototype.values.',
+                },
+              ],
+            }),
+          ),
+        Es5SelectionError,
+      );
+      assertSame(
+        error.message.includes(prefix),
+        true,
+        `${path} with feature tag Symbol.iterator must be included because Array.prototype.values is implemented, not excluded as post-es5-builtin`,
+      );
+    },
+  },
+  {
     name: 'parseEs5Selection rejects every malformed feature area',
     run: () => {
       /** @type {[string, object[]][]} */

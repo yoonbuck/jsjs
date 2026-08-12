@@ -1,12 +1,12 @@
 /**
  * Focused upstream Test262 coverage for issue #38 (ES2015 object/function
  * runtime updates). This is a hand-picked file list, not the ES5
- * `upstream-subset.json`/`es5-selection.json` pipeline — that pipeline is
- * scoped to an ES5.1 engine and is shared with the parallel lexical-
- * declarations (#41) and Symbols (#43) branches, so this suite stays
- * separate until #45 integrates all three. It lives in `test/ci/` rather
- * than `test/node/` because, like `exclusions-check.test.js`, it needs a
- * real upstream Test262 checkout at `vendor/test262` (see `docs/testing.md`).
+ * `upstream-subset.json`/`es5-selection.json` pipeline. Some picked files now
+ * also satisfy the broad integrated policy, while the Object statics and
+ * property-order cases remain intentionally focused coverage. It lives in
+ * `test/ci/` rather than `test/node/` because, like
+ * `exclusions-check.test.js`, it needs a real upstream Test262 checkout at
+ * `vendor/test262` (see `docs/testing.md`).
  *
  * Two of the picked files carry a Test262 `features` tag that does not
  * match anything this engine implements broadly (`arrow-function` on the

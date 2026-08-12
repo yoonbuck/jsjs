@@ -98,6 +98,11 @@
         "Symbol.unscopables"
       ],
       "reason": "ES2015 §19.4 Symbols and the eleven §6.1.5.1 well-known symbol values are implemented (issue #43). Tags outside this list — `cross-realm`, `Symbol.asyncIterator`, `Symbol.matchAll`, `Symbol.prototype.description`, `Reflect.construct`, `explicit-resource-management` — are not claimed, so the tests that need them stay out of scope."
+    },
+    {
+      "prefix": "test/language",
+      "features": ["Symbol.iterator", "const", "for-of", "let"],
+      "reason": "ES2015 lexical declarations and `for`-`of` are implemented (issues #41 and #47), including iteration through `Symbol.iterator`; the engine claims these exact tags in `tools/test262/features.json`. Tests with any additional tag, modules, or unsupported neighboring syntax stay out of scope."
     }
   ],
   "exclusions": [
@@ -252,11 +257,6 @@
       "reason": "`Array.prototype.copyWithin` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
-      "prefix": "test/built-ins/Array/prototype/entries",
-      "category": "post-es5-builtin",
-      "reason": "`Array.prototype.entries` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
-    },
-    {
       "path": "test/built-ins/Array/prototype/every/15.4.4.16-3-12.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
@@ -390,11 +390,6 @@
       "path": "test/built-ins/Array/prototype/join/S15.4.4.5_A4_T3.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "prefix": "test/built-ins/Array/prototype/keys",
-      "category": "post-es5-builtin",
-      "reason": "`Array.prototype.keys` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
       "path": "test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-3-12.js",
@@ -655,11 +650,6 @@
       "path": "test/built-ins/Array/prototype/unshift/S15.4.4.13_A3_T2.js",
       "category": "post-es5-semantics",
       "reason": "ES2015 §7.1.15 `ToLength` replaced ES5.1's `ToUint32`/`ToInteger` handling of `length`/index values (ES5.1 §15.4.5.1, §15.4.4); this engine follows the ES5.1 clamping and RangeError behaviour."
-    },
-    {
-      "prefix": "test/built-ins/Array/prototype/values",
-      "category": "post-es5-builtin",
-      "reason": "`Array.prototype.values` is a built-in ES5.1 does not define; ES5.1 §15.4.4 enumerates the complete Array.prototype member set and includes no such member (introduced in ES2015+). The per-constructor `builtins` allow-list cannot drop an individual post-ES5 member, so the member directory is excluded here."
     },
     {
       "path": "test/built-ins/Date/UTC/return-value.js",
@@ -1920,6 +1910,11 @@
       "path": "test/language/statements/for-of/head-lhs-async-invalid.js",
       "category": "post-es5-syntax",
       "reason": "Asserts a parse-phase SyntaxError for `for (async of ...)`, an ES2017 lookahead restriction added to disambiguate `for-await`; ES2015's grammar has no such restriction, so `async` is an ordinary identifier LHS at `ecmaVersion` 6 and the loop runs."
+    },
+    {
+      "path": "test/language/statements/for-of/iterator-next-result-type.js",
+      "category": "post-es5-builtin",
+      "reason": "The test constructs a `Proxy` to observe IteratorValue ordering but declares only `Symbol.iterator`; `Proxy` is an ES2015 built-in this runtime foundation does not implement, so the otherwise-supported tag is insufficient to run it."
     },
     {
       "path": "test/language/statements/for/cptn-decl-expr-iter.js",
