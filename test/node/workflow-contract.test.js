@@ -521,6 +521,182 @@ export default [
     },
   },
   {
+    name: 'the Symbol.iterator probe rejects a realm missing the Array iterator protocol',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const feature = manifest.features.find(
+        (candidate) => candidate.name === 'Symbol.iterator',
+      );
+
+      if (feature === undefined) {
+        throw new Error('features.json must claim Symbol.iterator');
+      }
+
+      const probe = runFeatureProbe({
+        engine: {
+          createRealm() {
+            const realm = createRealm();
+
+            evaluateScript(realm, 'delete Array.prototype[Symbol.iterator];');
+
+            return realm;
+          },
+          evaluateScript,
+        },
+        feature,
+      });
+
+      assertSame(
+        probe.outcome === 'completed',
+        false,
+        'Symbol.iterator guards Array iterator feature areas and must probe Array.prototype[@@iterator]',
+      );
+    },
+  },
+  {
+    name: 'the Symbol.iterator probe rejects a realm missing Array.prototype.keys',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const feature = manifest.features.find(
+        (candidate) => candidate.name === 'Symbol.iterator',
+      );
+
+      if (feature === undefined) {
+        throw new Error('features.json must claim Symbol.iterator');
+      }
+
+      const probe = runFeatureProbe({
+        engine: {
+          createRealm() {
+            const realm = createRealm();
+
+            evaluateScript(realm, 'delete Array.prototype.keys;');
+
+            return realm;
+          },
+          evaluateScript,
+        },
+        feature,
+      });
+
+      assertSame(
+        probe.outcome === 'completed',
+        false,
+        'Symbol.iterator guards Array.prototype.keys and must probe its iterator wiring',
+      );
+    },
+  },
+  {
+    name: 'the Symbol.toStringTag probe rejects a realm missing the Array iterator tag',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const feature = manifest.features.find(
+        (candidate) => candidate.name === 'Symbol.toStringTag',
+      );
+
+      if (feature === undefined) {
+        throw new Error('features.json must claim Symbol.toStringTag');
+      }
+
+      const probe = runFeatureProbe({
+        engine: {
+          createRealm() {
+            const realm = createRealm();
+
+            evaluateScript(
+              realm,
+              'delete Object.getPrototypeOf([][Symbol.iterator]())[Symbol.toStringTag];',
+            );
+
+            return realm;
+          },
+          evaluateScript,
+        },
+        feature,
+      });
+
+      assertSame(
+        probe.outcome === 'completed',
+        false,
+        'Symbol.toStringTag guards %ArrayIteratorPrototype% and must probe its @@toStringTag',
+      );
+    },
+  },
+  {
+    name: 'the Symbol.toStringTag probe rejects a realm missing the String iterator tag',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const feature = manifest.features.find(
+        (candidate) => candidate.name === 'Symbol.toStringTag',
+      );
+
+      if (feature === undefined) {
+        throw new Error('features.json must claim Symbol.toStringTag');
+      }
+
+      const probe = runFeatureProbe({
+        engine: {
+          createRealm() {
+            const realm = createRealm();
+
+            evaluateScript(
+              realm,
+              "delete Object.getPrototypeOf(''[Symbol.iterator]())[Symbol.toStringTag];",
+            );
+
+            return realm;
+          },
+          evaluateScript,
+        },
+        feature,
+      });
+
+      assertSame(
+        probe.outcome === 'completed',
+        false,
+        'Symbol.toStringTag guards %StringIteratorPrototype% and must probe its @@toStringTag',
+      );
+    },
+  },
+  {
+    name: 'the feature manifest probes every supported runtime-foundation grammar feature',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+
+      for (const name of ['const', 'for-of', 'let']) {
+        const feature = manifest.features.find(
+          (candidate) => candidate.name === name,
+        );
+
+        assertSame(
+          feature !== undefined,
+          true,
+          `${name} is implemented and must have an executable feature probe`,
+        );
+
+        if (feature !== undefined) {
+          const probe = runFeatureProbe({ engine, feature });
+
+          assertSame(
+            probe.outcome,
+            'completed',
+            `${name}'s probe must exercise the implemented grammar: ${probe.message}`,
+          );
+        }
+      }
+    },
+  },
+  {
     name: 'the probe machinery is exercised by a synthetic feature, so an empty manifest is never a vacuous check',
     run: async () => {
       const manifest = parseFeatureManifest(SYNTHETIC_MANIFEST_TEXT);
