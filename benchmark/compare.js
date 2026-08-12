@@ -304,6 +304,7 @@ export function compareCaptureRoots(manifest, roots, options = {}) {
   const baselineByPair = indexBySide(roots, 'baseline');
   const candidateByPair = indexBySide(roots, 'candidate');
   const counterbalanced = audit.counterbalanced;
+  const distinctRevisions = audit.baselineCommit !== audit.candidateCommit;
   const exactSignificancePossibleByDesign =
     manifest.pairs.length >= MINIMUM_NONZERO_PAIRS_FOR_EXACT_SIGNIFICANCE;
   /** @type {string[]} */
@@ -321,14 +322,15 @@ export function compareCaptureRoots(manifest, roots, options = {}) {
     );
   }
 
-  if (audit.baselineCommit === audit.candidateCommit) {
+  if (!distinctRevisions) {
     warnings.push(
-      `Baseline and candidate captures share commit ${audit.baselineCommit}; this is a control comparison, not a revision contrast.`,
+      `Baseline and candidate captures share commit ${audit.baselineCommit}; this is a control comparison, not a revision contrast, and gate readiness requires distinct baseline and candidate Git commits.`,
     );
   }
 
   const design = Object.freeze({
     counterbalanced,
+    distinctRevisions,
     exactSignificancePossibleByDesign,
   });
   /** @type {Record<string, any>[]} */
@@ -1432,7 +1434,7 @@ function verdictFor(statistic, design) {
  * @param {readonly Record<string, any>[]} cells
  * @param {readonly Record<string, any>[]} hostAggregates
  * @param {Record<string, any>} allHostAggregate
- * @param {{ counterbalanced: boolean, exactSignificancePossibleByDesign: boolean }} design
+ * @param {{ counterbalanced: boolean, distinctRevisions: boolean, exactSignificancePossibleByDesign: boolean }} design
  * @param {ComparisonManifest} manifest
  * @returns {Record<string, any>}
  */
@@ -1452,6 +1454,7 @@ function summarizeAcceptance(
   );
   const gateReady =
     design.counterbalanced &&
+    design.distinctRevisions &&
     design.exactSignificancePossibleByDesign &&
     manifest.pairs.length >= MINIMUM_PAIRS;
   const allHostGeomeanPointEstimatesImprove = hostAggregates.every(

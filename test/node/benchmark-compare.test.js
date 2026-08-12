@@ -278,7 +278,7 @@ const tests = [
       assertSame(comparison.acceptance.nonTargetRegressionCount, 0);
       assertSame(comparison.acceptance.targetVerdictsImprove, false);
       assertSame(comparison.acceptance.targetsMateriallyExceedNoise, false);
-      assertSame(comparison.acceptance.gateReady, true);
+      assertSame(comparison.acceptance.gateReady, false);
       assertSame(comparison.acceptance.accepted, false);
       assertSame(
         comparison.warnings.some((warning) =>
@@ -305,6 +305,58 @@ const tests = [
         recursive: true,
         force: true,
       });
+    },
+  },
+  {
+    name: 'benchmark compare refuses gate readiness and acceptance for the same Git commit',
+    async run() {
+      const directory = `${COMPARE_DIRECTORY}-same-commit`;
+      const pairs = await writeCapturePairs(directory, {
+        hosts: ['node'],
+        rounds: 6,
+        baselineCommit: BASE_COMMIT,
+        candidateCommit: BASE_COMMIT,
+        baselineMedian: (cell) => BASE_MEDIANS[cell],
+        candidateMedian: (cell) => BASE_MEDIANS[cell] * 0.8,
+      });
+
+      try {
+        const comparison = await runCompare(directory, {
+          targets: [
+            { workload: 'object-properties' },
+            { workload: 'arrays' },
+            { workload: 'arithmetic-loops' },
+          ],
+          pairs,
+        });
+
+        assertSame(
+          comparison.acceptance.gateReady,
+          false,
+          'same-commit controls must not be gate-ready',
+        );
+        assertSame(
+          comparison.acceptance.accepted,
+          false,
+          'same-commit controls must not be accepted',
+        );
+        assertSame(
+          comparison.warnings.some(
+            (warning) =>
+              warning.includes(`share commit ${BASE_COMMIT}`) &&
+              warning.includes('control comparison') &&
+              warning.includes('distinct') &&
+              warning.includes('gate readiness'),
+          ),
+          true,
+          'same-commit diagnostic must identify the commit, control status, and distinct-revision gate requirement',
+        );
+      } finally {
+        await rm(new URL(`${directory}/`, REPOSITORY_ROOT_URL), {
+          recursive: true,
+          force: true,
+        });
+      }
     },
   },
   {
