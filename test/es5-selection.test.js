@@ -6,6 +6,7 @@ import {
   buildUpstreamSubset,
   deriveGroupName,
   isCandidatePath,
+  isSelectedPath,
   matchExclusion,
   parseEs5Selection,
   scanFrontmatter,
@@ -662,6 +663,67 @@ export default [
         error.message.includes(prefix),
         true,
         `${path} with feature tag Symbol.iterator must be included because Array.prototype.values is implemented, not excluded as post-es5-builtin`,
+      );
+    },
+  },
+  {
+    name: 'the Proxy-dependent for-of fixture needs an exact classified exclusion',
+    run: () => {
+      const path =
+        'test/language/statements/for-of/iterator-next-result-type.js';
+      const feature = 'Symbol.iterator';
+      const reason =
+        'The test constructs a `Proxy` to observe IteratorValue ordering but declares only `Symbol.iterator`; `Proxy` is an ES2015 built-in this runtime foundation does not implement, so the otherwise-supported tag is insufficient to run it.';
+      const featureAreas = [
+        {
+          prefix: 'test/language',
+          features: [feature],
+          reason: 'ES2015 Symbol.iterator language tests are implemented.',
+        },
+      ];
+      const info = {
+        ...CANDIDATE_INFO,
+        declaresFeatures: true,
+        features: [feature],
+      };
+      const policyWithoutExclusion = parseEs5Selection(
+        policyText({ featureAreas }),
+      );
+
+      assertSame(
+        isCandidatePath(path, info, policyWithoutExclusion),
+        true,
+        `${path} declares only ${feature} and is included by the feature area before its unsupported Proxy dependency is classified`,
+      );
+
+      const policy = parseEs5Selection(
+        policyText({
+          featureAreas,
+          exclusions: [
+            {
+              path,
+              category: 'post-es5-builtin',
+              reason,
+            },
+          ],
+        }),
+      );
+      const exclusion = matchExclusion(path, policy.exclusions);
+
+      assertSame(
+        isSelectedPath(path, info, policy),
+        false,
+        `${path} declares only ${feature} and would be included by the feature area, but must be excluded as post-es5-builtin because it constructs unsupported Proxy`,
+      );
+      assertSame(
+        exclusion?.category,
+        'post-es5-builtin',
+        `${path} must use the unsupported Proxy builtin exclusion category`,
+      );
+      assertSame(
+        exclusion?.reason,
+        reason,
+        `${path} must record unsupported Proxy as its exact exclusion reason`,
       );
     },
   },
