@@ -172,6 +172,8 @@ export function parseEs5Selection(text) {
   const featureAreas = parseFeatureAreas(record.featureAreas);
   const exclusions = parseExclusions(record.exclusions);
 
+  rejectDeadFeatureAreas(featureAreas, exclusions);
+
   return Object.freeze({
     version: ES5_SELECTION_VERSION,
     excludedDirectories: Object.freeze(excludedDirectories),
@@ -180,6 +182,32 @@ export function parseEs5Selection(text) {
     featureAreas: Object.freeze(featureAreas),
     exclusions: Object.freeze(exclusions),
   });
+}
+
+/**
+ * A prefix exclusion identical to a feature-area prefix makes the claim
+ * unreachable: selection admits the tagged candidate and immediately removes
+ * every file under it. Reject that contradiction while still allowing narrower
+ * exclusions for individual unsupported tests inside an otherwise valid area.
+ *
+ * @param {readonly Es5FeatureArea[]} featureAreas
+ * @param {readonly Es5Exclusion[]} exclusions
+ * @returns {void}
+ */
+function rejectDeadFeatureAreas(featureAreas, exclusions) {
+  const excludedPrefixes = new Set(
+    exclusions
+      .filter((exclusion) => exclusion.prefix !== undefined)
+      .map((exclusion) => exclusion.prefix),
+  );
+
+  for (const area of featureAreas) {
+    if (excludedPrefixes.has(area.prefix)) {
+      throw new Es5SelectionError(
+        `${ES5_SELECTION_FILE} feature area ${area.prefix} is hidden by an exclusion with the same prefix`,
+      );
+    }
+  }
 }
 
 /**

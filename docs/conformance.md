@@ -132,9 +132,10 @@ A file is a candidate only if it survives every filter:
   ES5.1-era regression tests inherited from SpiderMonkey, so it is a normal
   candidate directory and anything in it that must not run is carved out by
   the classified exclusions below like any other file. Under `test/built-ins`, an
-  allow-list of 27 constructors and namespace objects names the ES5.1 standard
-  library plus `Symbol`, so a post-ES5 global like `Proxy` is out of scope by
-  construction rather than by 500 individual entries.
+  allow-list of 29 constructors and namespace objects names the ES5.1 standard
+  library plus `Symbol` and the Array/String iterator prototypes, so a post-ES5
+  global like `Proxy` is out of scope by construction rather than by 500
+  individual entries.
 - **Metadata.** Anything flagged `module` is out. A test that declares a
   `features:` tag is out too, unless a **feature area** claims it: an entry in
   the policy's `featureAreas` naming a directory prefix and the exact tags the
@@ -147,16 +148,18 @@ A file is a candidate only if it survives every filter:
   [Feature manifest](#feature-manifest), so a claim the engine cannot back is
   a failing test rather than a comment.
 
-  The only claims today are the twelve ES2015 Symbol tags — `Symbol` and the
-  eleven well-known symbol tags — scoped to `test/built-ins/Symbol` and
-  `test/built-ins/Object/getOwnPropertySymbols`.
+  The claims today are the twelve ES2015 Symbol tags — `Symbol` and the eleven
+  well-known symbol tags — plus `const`, `for-of`, and `let`. Symbol claims are
+  scoped to the implemented Symbol and iterator built-ins; the grammar claims
+  are scoped to `test/language`. Every tag declared by a test must still be
+  claimed, so neighboring syntax such as destructuring remains excluded.
 
 - **An engine-grammar parse filter.** Every remaining file — and every harness
   file it `includes` — is parsed with the engine's own `parseScript` (the same
-  grammar the engine runs, currently ES5.1 plus ES2015 lexical declarations and
-  block-level function declarations). A file that will not parse under that
-  grammar is testing syntax this engine is not required to accept, so it is
-  excluded structurally rather than by name. Routing the filter through the
+  grammar the engine runs, currently ES5.1 plus ES2015 lexical declarations,
+  block-level function declarations, and `for`-`of`). A file that will not parse
+  under that grammar is testing syntax this engine is not required to accept, so
+  it is excluded structurally rather than by name. Routing the filter through the
   engine itself is what keeps the policy honest as both the pin and the grammar
   move: new upstream tests written in still-unsupported syntax drop out
   automatically, and each syntax milestone widens the selection by construction
@@ -173,12 +176,12 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 613 classified exclusions break down as:
+editions deliberately changed. The 611 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `post-es5-semantics` | 344   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
-| `post-es5-builtin`   | 203   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
+| `post-es5-builtin`   | 201   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
 | `post-es5-syntax`    | 31    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
 | `host-dependent`     | 33    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
 | `engine-deviation`   | 2     | This engine knowingly differs from what ES5.1 asks. Each entry names a heading in [docs/limitations.md](limitations.md) that documents the choice — a deviation that is not written down is indistinguishable from a bug. Both remaining entries are the same cause: the vendored parser lexes `IdentifierName` with the modern `ID_Continue` property instead of ES5.1 7.6's general categories. |
@@ -229,13 +232,12 @@ exercised end to end. `tests` names upstream tests that really carry the tag;
 is really there, and asserts the test really passes once the feature is allowed.
 A feature therefore cannot be claimed by editing a list.
 
-The manifest currently claims the twelve ES2015 Symbol tags: `Symbol` and the
-eleven well-known symbol tags (`Symbol.hasInstance`,
+The manifest currently claims fifteen ES2015 tags: `const`, `for-of`, `let`,
+`Symbol`, and the eleven well-known symbol tags (`Symbol.hasInstance`,
 `Symbol.isConcatSpreadable`, `Symbol.iterator`, `Symbol.match`,
 `Symbol.replace`, `Symbol.search`, `Symbol.species`, `Symbol.split`,
-`Symbol.toPrimitive`, `Symbol.toStringTag`, `Symbol.unscopables`). Everything
-else the engine does is ES5.1, so every other tag is unclaimed and a test that
-declares one is skipped rather than run.
+`Symbol.toPrimitive`, `Symbol.toStringTag`, `Symbol.unscopables`). Every other
+tag is unclaimed and a test that declares one is skipped rather than run.
 
 The manifest and the selection policy's feature areas are deliberately two
 different gates. The manifest decides which tags may _run_; a feature area
@@ -358,11 +360,12 @@ defined exactly under
 ## ES2015 focused coverage
 
 Issue #38 (ES2015 object/function runtime updates) is covered by a small,
-hand-picked set of upstream Test262 files, run via `test/ci/es2015-object-function-test262.test.js`
-(part of `npm run ci:contract`) rather than folded into the ES5
-`upstream-subset.json`/`es5-selection.json` pipeline above, which stays
-scoped to the ES5.1 engine and shared with the parallel lexical-declarations
-(#41) and Symbols (#43) branches:
+hand-picked set of upstream Test262 files, run via
+`test/ci/es2015-object-function-test262.test.js` (part of
+`npm run ci:contract`). Tests that satisfy the broad selection also run there;
+the focused suite deliberately retains the Object statics and property-order
+cases whose metadata or post-ES5 built-in paths keep them outside that baseline,
+so none of the issue's upstream coverage is silently lost:
 
 - `vendor/test262/test/language/expressions/function/name.js`, `vendor/test262/test/language/statements/function/name.js`,
   `vendor/test262/test/built-ins/Function/prototype/bind/{name,length}.js` — function `name`/`length` semantics
@@ -381,8 +384,8 @@ upstream checkout at `vendor/test262`; see the Test262 section above).
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 12,350   | 12,350    | 12,350 | 23.052% |
-| (file, variant) | 102,906     | 23,485   | 23,485    | 23,485 | 22.822% |
+| Files           | 53,575      | 12,434   | 12,434    | 12,434 | 23.209% |
+| (file, variant) | 102,906     | 23,643   | 23,643    | 23,643 | 22.975% |
 
 4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
@@ -393,17 +396,17 @@ The detailed report is JSON lines: one `test` record per (file, variant) pair,
 then the `baseline` lines that summarize the run per subset group, a `features`
 line, the `inventory` and `coverage` records, and the `summary`. The `features`
 line is what the run can honestly say about optional features: `supported` is
-what the manifest claims (nothing yet), `tagged` is the feature tags actually
-seen on the tests that ran (none — the ES5 baseline is intentionally untagged),
-and `untagged` counts the records that carried no tag at all. There is no
-per-feature progress table because there are no features to report on yet;
-inventing one would describe something the run never measured.
+what the manifest claims, `tagged` is the subset of those feature tags actually
+seen on tests that ran, and `untagged` counts records that carried no tag at all.
+The baseline and feature lines provide the measured totals without inventing a
+per-feature pass table the runner does not produce.
 
 The selected subset is small by construction: every path in it was verified to
 pass with this engine, so the low whole-suite percentage is an honest statement
 of how much of Test262 an engine at this language level — ES5.1 plus ES2015
-lexical declarations and block-level function declarations — has been pointed at, not a pass rate over tests it was
-never asked to run.
+lexical declarations, block-level function declarations, Symbols, iterators, and
+`for`-`of` — has been pointed at, not a pass rate over tests it was never asked
+to run.
 
 ## Policy artifacts
 

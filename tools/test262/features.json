@@ -25,8 +25,17 @@
     },
     {
       "name": "Symbol.iterator",
-      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.iterator !== \"symbol\") { throw new Error(\"Symbol.iterator is not a symbol\"); }\nif (Symbol.iterator.toString() !== \"Symbol(Symbol.iterator)\") { throw new Error(\"Symbol.iterator has the wrong description\"); }\nvar holder = {};\nholder[Symbol.iterator] = 1;\nif (holder[Symbol.iterator] !== 1) { throw new Error(\"Symbol.iterator is not usable as a property key\"); }",
-      "tests": ["test/built-ins/Symbol/iterator/prop-desc.js"]
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.iterator !== \"symbol\") { throw new Error(\"Symbol.iterator is not a symbol\"); }\nif (Symbol.iterator.toString() !== \"Symbol(Symbol.iterator)\") { throw new Error(\"Symbol.iterator has the wrong description\"); }\nvar holder = {};\nholder[Symbol.iterator] = 1;\nif (holder[Symbol.iterator] !== 1) { throw new Error(\"Symbol.iterator is not usable as a property key\"); }\nif (typeof Array.prototype[Symbol.iterator] !== \"function\") { throw new Error(\"Array has no iterator method\"); }\nif (Array.prototype[Symbol.iterator] !== Array.prototype.values) { throw new Error(\"Array @@iterator is not values\"); }\nvar arrayIterator = [10, 20].entries();\nif (arrayIterator[Symbol.iterator]() !== arrayIterator) { throw new Error(\"Array iterator is not iterable\"); }\nvar arrayStep = arrayIterator.next();\nif (arrayStep.done || arrayStep.value[0] !== 0 || arrayStep.value[1] !== 10) { throw new Error(\"Array iterator produced the wrong first entry\"); }\nif (typeof Array.prototype.keys !== \"function\") { throw new Error(\"Array has no keys method\"); }\nvar arrayKeyIterator = [10, 20].keys();\nif (arrayKeyIterator[Symbol.iterator]() !== arrayKeyIterator) { throw new Error(\"Array keys iterator is not iterable\"); }\nvar arrayKeyStep = arrayKeyIterator.next();\nif (arrayKeyStep.done || arrayKeyStep.value !== 0) { throw new Error(\"Array keys iterator produced the wrong first key\"); }\nif (typeof String.prototype[Symbol.iterator] !== \"function\") { throw new Error(\"String has no iterator method\"); }\nvar stringIterator = \"A\\uD834\\uDF06B\"[Symbol.iterator]();\nif (stringIterator[Symbol.iterator]() !== stringIterator) { throw new Error(\"String iterator is not iterable\"); }\nif (stringIterator.next().value !== \"A\" || stringIterator.next().value !== \"\\uD834\\uDF06\" || stringIterator.next().value !== \"B\" || !stringIterator.next().done) { throw new Error(\"String iterator does not yield code points\"); }\n(function () { if (arguments[Symbol.iterator] !== Array.prototype.values) { throw new Error(\"arguments has the wrong iterator\"); } })(1);",
+      "tests": [
+        "test/built-ins/Array/prototype/entries/returns-iterator.js",
+        "test/built-ins/Array/prototype/keys/returns-iterator.js",
+        "test/built-ins/ArrayIteratorPrototype/next/iteration.js",
+        "test/built-ins/String/prototype/Symbol.iterator/prop-desc.js",
+        "test/built-ins/StringIteratorPrototype/next/next-iteration-surrogate-pairs.js",
+        "test/built-ins/Symbol/iterator/prop-desc.js",
+        "test/language/arguments-object/mapped/Symbol.iterator.js",
+        "test/language/arguments-object/unmapped/Symbol.iterator.js"
+      ]
     },
     {
       "name": "Symbol.match",
@@ -67,8 +76,10 @@
     },
     {
       "name": "Symbol.toStringTag",
-      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.toStringTag !== \"symbol\") { throw new Error(\"Symbol.toStringTag is not a symbol\"); }\nif (Symbol.toStringTag.toString() !== \"Symbol(Symbol.toStringTag)\") { throw new Error(\"Symbol.toStringTag has the wrong description\"); }\nvar holder = {};\nholder[Symbol.toStringTag] = 1;\nif (holder[Symbol.toStringTag] !== 1) { throw new Error(\"Symbol.toStringTag is not usable as a property key\"); }",
+      "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.toStringTag !== \"symbol\") { throw new Error(\"Symbol.toStringTag is not a symbol\"); }\nif (Symbol.toStringTag.toString() !== \"Symbol(Symbol.toStringTag)\") { throw new Error(\"Symbol.toStringTag has the wrong description\"); }\nvar holder = {};\nholder[Symbol.toStringTag] = 1;\nif (holder[Symbol.toStringTag] !== 1) { throw new Error(\"Symbol.toStringTag is not usable as a property key\"); }\nfunction checkIteratorTag(iterator, expected) {\n  var prototype = Object.getPrototypeOf(iterator);\n  var descriptor = Object.getOwnPropertyDescriptor(prototype, Symbol.toStringTag);\n  if (!descriptor || descriptor.value !== expected || descriptor.writable || descriptor.enumerable || !descriptor.configurable) { throw new Error(expected + \" @@toStringTag has the wrong descriptor\"); }\n  if (Object.prototype.toString.call(iterator) !== \"[object \" + expected + \"]\") { throw new Error(expected + \" @@toStringTag is not observed by Object.prototype.toString\"); }\n}\ncheckIteratorTag([][Symbol.iterator](), \"Array Iterator\");\ncheckIteratorTag(\"\"[Symbol.iterator](), \"String Iterator\");",
       "tests": [
+        "test/built-ins/ArrayIteratorPrototype/Symbol.toStringTag/property-descriptor.js",
+        "test/built-ins/StringIteratorPrototype/Symbol.toStringTag.js",
         "test/built-ins/Symbol/prototype/Symbol.toStringTag.js",
         "test/built-ins/Symbol/toStringTag/prop-desc.js"
       ]
@@ -77,6 +88,28 @@
       "name": "Symbol.unscopables",
       "probe": "if (typeof Symbol !== \"function\") { throw new Error(\"no Symbol constructor\"); }\nif (typeof Symbol.unscopables !== \"symbol\") { throw new Error(\"Symbol.unscopables is not a symbol\"); }\nif (Symbol.unscopables.toString() !== \"Symbol(Symbol.unscopables)\") { throw new Error(\"Symbol.unscopables has the wrong description\"); }\nvar holder = {};\nholder[Symbol.unscopables] = 1;\nif (holder[Symbol.unscopables] !== 1) { throw new Error(\"Symbol.unscopables is not usable as a property key\"); }",
       "tests": ["test/built-ins/Symbol/unscopables/prop-desc.js"]
+    },
+    {
+      "name": "const",
+      "probe": "var outer = 1;\nvar sawTdz = false;\ntry { immutable; } catch (error) { sawTdz = error instanceof ReferenceError; }\nconst immutable = 2;\nif (!sawTdz || immutable !== 2) { throw new Error(\"const TDZ or initialization failed\"); }\nvar sawAssignmentError = false;\ntry { immutable = 3; } catch (error) { sawAssignmentError = error instanceof TypeError; }\nif (!sawAssignmentError || immutable !== 2) { throw new Error(\"const assignment did not fail\"); }\n{ const outer = 4; if (outer !== 4) { throw new Error(\"const block binding failed\"); } }\nif (outer !== 1) { throw new Error(\"const binding escaped its block\"); }",
+      "tests": [
+        "test/language/eval-code/direct/lex-env-distinct-const.js",
+        "test/language/eval-code/direct/lex-env-no-init-const.js"
+      ]
+    },
+    {
+      "name": "for-of",
+      "probe": "var closed = false;\nvar iterable = {};\niterable[Symbol.iterator] = function () {\n  var index = 0;\n  return {\n    next: function () { index += 1; return { value: index, done: index > 3 }; },\n    return: function () { closed = true; return { done: true }; }\n  };\n};\nvar seen = \"\";\nfor (var value of iterable) { seen += value; if (value === 2) { break; } }\nif (seen !== \"12\" || !closed) { throw new Error(\"for-of iteration or IteratorClose failed\"); }",
+      "tests": ["test/language/statements/for-of/body-put-error.js"]
+    },
+    {
+      "name": "let",
+      "probe": "var outer = 1;\nvar sawTdz = false;\ntry { lexical; } catch (error) { sawTdz = error instanceof ReferenceError; }\nlet lexical = 2;\nif (!sawTdz || lexical !== 2) { throw new Error(\"let TDZ or initialization failed\"); }\nlexical = 3;\nif (lexical !== 3) { throw new Error(\"let assignment failed\"); }\n{ let outer = 4; if (outer !== 4) { throw new Error(\"let block binding failed\"); } }\nif (outer !== 1) { throw new Error(\"let binding escaped its block\"); }",
+      "tests": [
+        "test/language/eval-code/direct/lex-env-distinct-let.js",
+        "test/language/statements/block/scope-lex-open.js",
+        "test/language/statements/for/scope-head-lex-open.js"
+      ]
     }
   ]
 }
