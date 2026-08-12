@@ -26,6 +26,10 @@ import { parseTest262Metadata } from '../../tools/test262/metadata.js';
 import { runTest262File } from '../../tools/test262/runner.js';
 import { TEST262_REPORT_FILE } from '../../tools/ci/pipeline.js';
 import {
+  ES5_SELECTION_FILE,
+  parseEs5Selection,
+} from '../../tools/test262/es5-selection.js';
+import {
   COVERAGE_MARKER_BEGIN,
   COVERAGE_MARKER_END,
   COVERAGE_DOCUMENT_FILE,
@@ -314,6 +318,54 @@ export default [
       const { revision } = await readTest262Pin();
 
       assertSame(await readUpstreamHead(), revision);
+    },
+  },
+  {
+    name: 'every feature area admits a tagged selected path from the pinned tree',
+    run: async () => {
+      await readUpstreamHead();
+
+      const { checkoutPath } = await readTest262Pin();
+      const host = createNodeTest262Host({ root: checkoutPath });
+      const policy = parseEs5Selection(
+        await readRepositoryFile(ES5_SELECTION_FILE),
+      );
+      const selected = upstreamSubsetPaths(
+        parseUpstreamSubset(await readRepositoryFile(UPSTREAM_SUBSET_FILE)),
+      );
+      /** @type {string[]} */
+      const dead = [];
+
+      for (const area of policy.featureAreas) {
+        const paths = selected.filter(
+          (path) => path === area.prefix || path.startsWith(`${area.prefix}/`),
+        );
+        let admitsTaggedPath = false;
+
+        for (const path of paths) {
+          const metadata = parseTest262Metadata(await host.readTest(path));
+
+          if (
+            metadata.features.length > 0 &&
+            metadata.features.every((feature) =>
+              area.features.includes(feature),
+            )
+          ) {
+            admitsTaggedPath = true;
+            break;
+          }
+        }
+
+        if (!admitsTaggedPath) {
+          dead.push(area.prefix);
+        }
+      }
+
+      assertSame(
+        dead.join('\n'),
+        '',
+        `feature areas with no tagged selected path:\n${dead.join('\n')}`,
+      );
     },
   },
   {

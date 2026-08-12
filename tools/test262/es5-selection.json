@@ -42,11 +42,6 @@
   ],
   "featureAreas": [
     {
-      "prefix": "test/built-ins/Array/prototype/Symbol.iterator",
-      "features": ["Symbol.iterator"],
-      "reason": "ES2015 §22.1.3.30 `Array.prototype[@@iterator]` is implemented as the same function object as `Array.prototype.values` (issue #47); the engine claims the `Symbol.iterator` tag in `tools/test262/features.json`."
-    },
-    {
       "prefix": "test/built-ins/Array/prototype/entries",
       "features": ["Symbol.iterator"],
       "reason": "ES2015 §22.1.3.4 `Array.prototype.entries` returns an Array Iterator (issue #47); the engine claims the `Symbol.iterator` tag in `tools/test262/features.json`."

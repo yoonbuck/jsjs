@@ -17,9 +17,9 @@
  * failures as `GuestErrorSignal`s the nearest realm-aware boundary materialises
  * into guest errors, exactly like the rest of the runtime. The one realm the
  * operations carry is for `CreateIterResultObject`'s prototype and for wrapping
- * a primitive receiver in `GetMethod`; the protocol keys they use
- * (`@@iterator`) come from the realm's agent, so two realms sharing an agent
- * agree on the key an iterable is asked for.
+ * a primitive receiver in `GetMethod`. An EngineObject's protocol key comes
+ * from its owning agent; primitives use the executing realm's agent while they
+ * are wrapped.
  */
 
 import { EngineObject } from './object.js';
@@ -113,10 +113,21 @@ export function createIterResultObject(realm, value, done) {
  * @returns {IteratorRecord}
  */
 export function getIterator(realm, obj, method) {
-  const iteratorMethod =
-    method === undefined
-      ? getMethod(realm, obj, realm.agent.wellKnownSymbols.iterator)
-      : method;
+  let iteratorMethod = method;
+
+  if (iteratorMethod === undefined) {
+    const iteratorAgent = obj instanceof EngineObject ? obj.agent : realm.agent;
+
+    if (iteratorAgent === null) {
+      throw new TypeError('EngineObject protocol lookup requires an agent');
+    }
+
+    iteratorMethod = getMethod(
+      realm,
+      obj,
+      iteratorAgent.wellKnownSymbols.iterator,
+    );
+  }
 
   if (iteratorMethod === undefined || !isCallable(iteratorMethod)) {
     throw new GuestErrorSignal(

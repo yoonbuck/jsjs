@@ -1,6 +1,11 @@
 import { assertSame } from './harness/assert.js';
 import { createAgent } from '../src/runtime/agent.js';
 import { createRealm } from '../src/runtime/realm.js';
+import {
+  getIterator,
+  iteratorStep,
+  iteratorValue,
+} from '../src/runtime/iterator.js';
 import { evaluateScript } from '../src/api.js';
 
 /**
@@ -50,6 +55,81 @@ const tests = [
         val(first, 'Symbol.for("shared")') ===
           val(other, 'Symbol.for("shared")'),
         false,
+      );
+    },
+  },
+  {
+    name: 'cross-Agent iteration uses only the iterable owner Agent protocol key',
+    run() {
+      const owner = createRealm({ agent: createAgent() });
+      const caller = createRealm({ agent: createAgent() });
+      const ownerOnly = val(owner, '[11]');
+      const withCallerKey =
+        /** @type {import('../src/runtime/object.js').EngineObject} */ (
+          val(owner, '[22]')
+        );
+      const callerIterator = val(caller, '[99][Symbol.iterator]()');
+      let callerKeyCalls = 0;
+
+      withCallerKey.defineOwnProperty(caller.agent.wellKnownSymbols.iterator, {
+        value: caller.createNativeFunction({
+          name: '[Symbol.iterator]',
+          length: 0,
+          call() {
+            callerKeyCalls += 1;
+            return callerIterator;
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      /** @param {unknown} value */
+      function inspect(value) {
+        try {
+          const record = getIterator(caller, value);
+          const result = iteratorStep(record);
+
+          return result === false
+            ? { done: true }
+            : {
+                value: iteratorValue(result),
+                iteratorOwned:
+                  record.iterator.getPrototype() ===
+                  owner.intrinsics.arrayIteratorPrototype,
+                resultOwned:
+                  result.getPrototype() === owner.intrinsics.objectPrototype,
+              };
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error && 'typeName' in error
+                ? error.typeName
+                : String(error),
+          };
+        }
+      }
+
+      assertSame(
+        JSON.stringify({
+          ownerOnly: inspect(ownerOnly),
+          withCallerKey: inspect(withCallerKey),
+          callerKeyCalls,
+        }),
+        JSON.stringify({
+          ownerOnly: {
+            value: 11,
+            iteratorOwned: true,
+            resultOwned: true,
+          },
+          withCallerKey: {
+            value: 22,
+            iteratorOwned: true,
+            resultOwned: true,
+          },
+          callerKeyCalls: 0,
+        }),
       );
     },
   },
