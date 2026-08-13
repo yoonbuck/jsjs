@@ -248,8 +248,11 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * first unsupported one the walk visits on some accepted parse:
  * `ClassDeclaration`, `ClassExpression`, `ArrowFunctionExpression`,
  * `TemplateLiteral`, `TaggedTemplateExpression`,
- * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`,
- * `SpreadElement`, and `MetaProperty` (via `new.target` inside a function).
+ * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`, and
+ * `MetaProperty` (via `new.target` inside a function). `SpreadElement` is
+ * handled shape-sensitively by `unsupportedEs2015Message`, because array
+ * elements and call/construction argument lists are implemented while all
+ * other placements remain unsupported.
  *
  * *Parent-blocked* — the node genuinely appears in ASTs Acorn produces, but the
  * walk always rejects an ancestor first, so this entry never fires on its own.
@@ -301,7 +304,6 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['ArrayPattern', 'destructuring patterns are not supported'],
   ['AssignmentPattern', 'default value patterns are not supported'],
   ['RestElement', 'rest elements are not supported'],
-  ['SpreadElement', 'spread elements are not supported'],
   ['MetaProperty', '`new.target` is not supported'],
   ['ImportDeclaration', 'import declarations are not supported'],
   ['ImportExpression', 'dynamic `import` is not supported'],
@@ -976,6 +978,18 @@ function unsupportedEs2015Message(
     return validArrayRest || validParameterRest
       ? undefined
       : 'rest elements are not supported in this context';
+  }
+
+  if (node.type === 'SpreadElement') {
+    const validPlacement =
+      parent &&
+      ((parent.type === 'ArrayExpression' && parentKey === 'elements') ||
+        (parent.type === 'CallExpression' && parentKey === 'arguments') ||
+        (parent.type === 'NewExpression' && parentKey === 'arguments'));
+
+    return validPlacement
+      ? undefined
+      : 'spread elements are not supported in this context';
   }
 
   return UNSUPPORTED_ES2015_NODE_MESSAGES.get(node.type);

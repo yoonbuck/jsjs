@@ -60,6 +60,7 @@ import {
 import { performEval } from './eval.js';
 import { createRegExpFromPattern } from '../builtins/regexp.js';
 import { assignPattern } from './patterns.js';
+import { iterableToList } from './iteration.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -765,7 +766,18 @@ function evaluateArguments(nodes, context) {
   const args = [];
 
   for (const argument of nodes) {
-    args.push(evaluateExpressionValue(argument, context));
+    if (argument.type === 'SpreadElement') {
+      const values = iterableToList(
+        context.realm,
+        evaluateExpressionValue(argument.argument, context),
+      );
+
+      for (const value of values) {
+        args.push(value);
+      }
+    } else {
+      args.push(evaluateExpressionValue(argument, context));
+    }
   }
 
   return args;
@@ -996,9 +1008,9 @@ function evaluatePropertyKey(node) {
 
 /**
  * Evaluates an array literal (ECMA-262 11.1.4). Elisions define no
- * property — leaving a hole the array still counts in `length` — so the
- * literal's `length` is set from the element list after the present
- * elements have been defined.
+ * property — leaving a hole the array still counts in `length`. Spread values
+ * are appended at a running guest index, so explicit holes and an iterable's
+ * materialized values compose without using the AST element count as length.
  *
  * @param {any} node
  * @param {EvaluationContext} context
@@ -1006,16 +1018,31 @@ function evaluatePropertyKey(node) {
  */
 function evaluateArrayExpression(node, context) {
   const array = new EngineArray(context.realm.intrinsics.arrayPrototype);
+  let index = 0;
 
-  for (let index = 0; index < node.elements.length; index += 1) {
-    const element = node.elements[index];
+  for (const element of node.elements) {
 
     if (element === null) {
+      index += 1;
       continue;
     }
 
     if (element.type === 'SpreadElement') {
-      throw createUnsupportedNodeError(element);
+      const values = iterableToList(
+        context.realm,
+        evaluateExpressionValue(element.argument, context),
+      );
+
+      for (const value of values) {
+        array.defineOwnProperty(String(index), {
+          value,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        index += 1;
+      }
+      continue;
     }
 
     array.defineOwnProperty(String(index), {
@@ -1024,9 +1051,10 @@ function evaluateArrayExpression(node, context) {
       enumerable: true,
       configurable: true,
     });
+    index += 1;
   }
 
-  array.defineOwnProperty('length', { value: node.elements.length });
+  array.defineOwnProperty('length', { value: index });
 
   return array;
 }

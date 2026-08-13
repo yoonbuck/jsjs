@@ -29,6 +29,7 @@ import withStatements from './with-statement.test.js';
 import functions from './functions.test.js';
 import functionParameters from './function-parameters.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
+import spread from './spread.test.js';
 import test262Runner from './test262-runner.test.js';
 import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
@@ -128,6 +129,7 @@ export const PORTABLE_SUITES = Object.freeze([
     file: 'test/object-array-literals.test.js',
     tests: objectArrayLiterals,
   }),
+  Object.freeze({ file: 'test/spread.test.js', tests: spread }),
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,

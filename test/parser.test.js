@@ -733,7 +733,6 @@ const tests = [
         'var d = { a };',
         'var d = { [k]: 1 };',
         'var d = { m() {} };',
-        'foo(...a);',
         'function withMeta() { return new.target; }',
         '0b101;',
         '0B101;',
@@ -911,18 +910,70 @@ const tests = [
     },
   },
   {
-    name: 'generator async arrow and spread forms remain unsupported around parameters',
+    name: 'generator async and arrow forms remain unsupported around parameters',
     run() {
       const rejected = [
         'function* g(a = 1) {}',
         'async function f(a = 1) {}',
         '(a = 1) => a',
-        'function f(a) {} f(...values);',
       ];
 
       for (const source of rejected) {
         assertThrows(() => parseScript(source), SyntaxError);
       }
+    },
+  },
+  {
+    name: 'spread is accepted only in array elements and call or construction arguments',
+    run() {
+      const accepted = [
+        'var list = [...values];',
+        'f(...values);',
+        'new C(...values);',
+      ];
+
+      for (const source of accepted) {
+        assertSame(parseScript(source).type, 'Program', source);
+        assertSame(parseEval(source).type, 'Program', source);
+      }
+
+      const spread = {
+        type: 'SpreadElement',
+        argument: { type: 'Identifier', name: 'values' },
+      };
+      const allowedProgram = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'CallExpression',
+              callee: { type: 'Identifier', name: 'f' },
+              arguments: [spread],
+            },
+          },
+        ],
+      };
+      parseScript('', { parse: () => allowedProgram });
+
+      const rejectedProgram = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'ObjectExpression',
+              properties: [spread],
+            },
+          },
+        ],
+      };
+      assertThrows(
+        () => parseScript('', { parse: () => rejectedProgram }),
+        SyntaxError,
+      );
     },
   },
   {
