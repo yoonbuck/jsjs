@@ -76,6 +76,7 @@ import iterators from './iterators.test.js';
 import forOf from './for-of.test.js';
 import destructuring from './destructuring.test.js';
 import es2015RuntimeIntegration from './es2015-runtime-integration.test.js';
+import es2015SyntaxIntegration from './es2015-syntax-integration.test.js';
 import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
 import arrayIndex from './array-index.test.js';
@@ -311,6 +312,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/es2015-runtime-integration.test.js',
     tests: es2015RuntimeIntegration,
+  }),
+  Object.freeze({
+    file: 'test/es2015-syntax-integration.test.js',
+    tests: es2015SyntaxIntegration,
   }),
   Object.freeze({
     file: 'test/benchmark-core.test.js',
