@@ -431,14 +431,14 @@ const tests = [
     },
   },
   {
-    name: 'inside strict function, arguments.caller throws TypeError',
+    name: 'inside strict function, arguments.caller is absent',
     run() {
       const realm = createRealm();
       const result = runIn(
         realm,
-        '(function() { "use strict"; return arguments.caller; })();',
+        '(function() { "use strict"; return "caller" in arguments; })();',
       );
-      assertGuestThrow(result, 'TypeError', realm);
+      assertNormal(result, false);
     },
   },
   {

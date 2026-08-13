@@ -226,6 +226,26 @@ const tests = [
     },
   },
   {
+    name: 'strict unmapped arguments omit caller and poison only callee',
+    run() {
+      assertSame(
+        run(`
+          (function (a) {
+            "use strict";
+            var calleeResult;
+            try {
+              arguments.callee;
+            } catch (error) {
+              calleeResult = error.name;
+            }
+            return ('caller' in arguments) + ':' + calleeResult;
+          })(1);
+        `),
+        'false:TypeError',
+      );
+    },
+  },
+  {
     name: 'sloppy duplicate simple parameters are accepted and map only the last occurrence',
     run() {
       assertSame(

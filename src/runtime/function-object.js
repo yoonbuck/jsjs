@@ -487,7 +487,7 @@ export function createArgumentsObject(functionObject, args, env, mapped) {
 
   if (!mapped) {
     // ES2015 §9.4.4.6: unmapped arguments objects use the realm's shared
-    // %ThrowTypeError% intrinsic for their legacy poison-pill properties.
+    // %ThrowTypeError% intrinsic for their `callee` poison-pill property.
     const thrower = /** @type {EngineFunction | undefined} */ (
       functionObject.realm.intrinsics.throwTypeErrorFunction
     );
@@ -508,12 +508,6 @@ export function createArgumentsObject(functionObject, args, env, mapped) {
       configurable: false,
     };
     argumentsObject.defineOwnProperty('callee', poisonPill);
-
-    // Preserve the engine's ES5 strict-arguments `caller` poison pill without
-    // adding that legacy property to sloppy non-simple arguments objects.
-    if (functionObject.strict) {
-      argumentsObject.defineOwnProperty('caller', poisonPill);
-    }
   } else {
     argumentsObject.defineOwnProperty('callee', {
       value: functionObject,
