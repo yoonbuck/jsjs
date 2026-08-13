@@ -12,6 +12,13 @@ between baseline
 were already integrated; this document only publishes the preserved release
 evidence.
 
+The integrated components were merged on these exact commits:
+
+- #44 / PR #48: `9e73ec76fb3b103208410040d3ed82eb0ecef58d`
+- #39 / PR #50: `d9ed3e242b2e15ea3e47b4b63b80f459f017c77c`
+- #40 / PR #52: `03a91bd6b137c7b188df15fb6a2c8b3b5ec56fac`
+- #42 / PR #54: `9ee337ac364b625195c21421f26d658b683c43dc`
+
 ## Architecture disposition
 
 [ADR 0001](adr/0001-execution-architecture.md) accepted the #40
