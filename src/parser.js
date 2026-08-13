@@ -1222,22 +1222,54 @@ function validateFunctionParameterList(node) {
     return 'function parameters must be an array';
   }
 
-  /** @type {any[]} */
-  const pending = [...node.params];
-  const visited = new WeakSet();
+  /** @type {{ node: any, binding: boolean }[]} */
+  const pending = /** @type {any[]} */ (node.params).map(
+    /** @param {any} parameter */
+    (parameter) => ({
+      node: parameter,
+      binding: true,
+    }),
+  );
+  const visitedBindings = new WeakSet();
+  const visitedExpressions = new WeakSet();
 
   while (pending.length > 0) {
-    const parameter = pending.pop();
+    const { node: parameter, binding } = /** @type {{ node: any, binding: boolean }} */ (
+      pending.pop()
+    );
 
-    if (!isBindingParameterNode(parameter)) {
+    if (
+      !parameter ||
+      typeof parameter !== 'object' ||
+      typeof parameter.type !== 'string'
+    ) {
+      return binding
+        ? 'unsupported function parameter'
+        : 'unsupported computed object parameter key';
+    }
+
+    if (binding && !isBindingParameterNode(parameter)) {
       return 'unsupported function parameter';
     }
+
+    const visited = binding ? visitedBindings : visitedExpressions;
 
     if (visited.has(parameter)) {
       continue;
     }
 
     visited.add(parameter);
+
+    if (!binding) {
+      if (
+        RECOGNIZED_AST_NODE_TYPES.has(parameter.type) &&
+        !isSupportedObjectPropertyExpression(parameter)
+      ) {
+        return 'unsupported computed object parameter key';
+      }
+
+      continue;
+    }
 
     switch (parameter.type) {
       case 'Identifier':
@@ -1256,9 +1288,16 @@ function validateFunctionParameterList(node) {
           }
 
           if (property.type === 'Property') {
-            pending.push(property.value);
+            const propertyMessage = validateObjectParameterProperty(
+              property,
+              pending,
+            );
+
+            if (propertyMessage !== undefined) {
+              return propertyMessage;
+            }
           } else if (property.type === 'RestElement') {
-            pending.push(property);
+            pending.push({ node: property, binding: true });
           } else {
             return 'unsupported object parameter pattern';
           }
@@ -1271,7 +1310,7 @@ function validateFunctionParameterList(node) {
 
         for (const element of parameter.elements) {
           if (element !== null) {
-            pending.push(element);
+            pending.push({ node: element, binding: true });
           }
         }
         break;
@@ -1284,12 +1323,69 @@ function validateFunctionParameterList(node) {
           return 'unsupported default parameter value';
         }
 
-        pending.push(parameter.left);
+        pending.push({ node: parameter.left, binding: true });
         break;
       case 'RestElement':
-        pending.push(parameter.argument);
+        pending.push({ node: parameter.argument, binding: true });
         break;
     }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} property
+ * @param {{ node: any, binding: boolean }[]} pending
+ * @returns {string | undefined}
+ */
+function validateObjectParameterProperty(property, pending) {
+  if (
+    property.kind !== 'init' ||
+    property.method !== false ||
+    typeof property.shorthand !== 'boolean' ||
+    typeof property.computed !== 'boolean' ||
+    !property.key ||
+    typeof property.key !== 'object' ||
+    typeof property.key.type !== 'string' ||
+    !property.value ||
+    typeof property.value !== 'object' ||
+    typeof property.value.type !== 'string'
+  ) {
+    return 'unsupported object parameter property';
+  }
+
+  if (
+    !property.computed &&
+    property.key.type !== 'Identifier' &&
+    (property.key.type !== 'Literal' || property.key.regex)
+  ) {
+    return 'unsupported noncomputed object parameter key';
+  }
+
+  if (property.shorthand) {
+    const valueIdentifier =
+      property.value.type === 'Identifier'
+        ? property.value
+        : property.value.type === 'AssignmentPattern'
+          ? property.value.left
+          : null;
+
+    if (
+      property.computed ||
+      property.key.type !== 'Identifier' ||
+      !valueIdentifier ||
+      valueIdentifier.type !== 'Identifier' ||
+      property.key.name !== valueIdentifier.name
+    ) {
+      return 'unsupported shorthand object parameter property';
+    }
+  }
+
+  pending.push({ node: property.value, binding: true });
+
+  if (property.computed) {
+    pending.push({ node: property.key, binding: false });
   }
 
   return undefined;
@@ -1700,7 +1796,33 @@ function isDirectSuperMemberObject(node, parent, parentKey) {
     !!parent &&
     parent.type === 'MemberExpression' &&
     parentKey === 'object' &&
-    parent.object === node
+    parent.object === node &&
+    typeof parent.computed === 'boolean' &&
+    isValidSuperMemberProperty(parent.property, parent.computed)
+  );
+}
+
+/**
+ * @param {any} property
+ * @param {boolean} computed
+ * @returns {boolean}
+ */
+function isValidSuperMemberProperty(property, computed) {
+  if (
+    !property ||
+    typeof property !== 'object' ||
+    typeof property.type !== 'string'
+  ) {
+    return false;
+  }
+
+  if (!computed) {
+    return property.type === 'Identifier' && typeof property.name === 'string';
+  }
+
+  return (
+    !RECOGNIZED_AST_NODE_TYPES.has(property.type) ||
+    isSupportedObjectPropertyExpression(property)
   );
 }
 

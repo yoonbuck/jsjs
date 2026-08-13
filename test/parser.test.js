@@ -1321,11 +1321,145 @@ const tests = [
     },
   },
   {
+    name: 'custom function parameter properties require exact destructuring shapes',
+    run() {
+      const arrow = parseScript('var fn = value => value;').body[0].declarations[0]
+        .init;
+      const functionExpression = parseScript(
+        '(function (value) { return value; });',
+      ).body[0].expression;
+
+      /** @param {any} expression */
+      function programFor(expression) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ExpressionStatement',
+              expression,
+            },
+          ],
+        };
+      }
+
+      const malformedProperties = [
+        {
+          type: 'Property',
+          kind: 'init',
+          computed: true,
+          method: false,
+          shorthand: false,
+          key: null,
+          value: { type: 'Identifier', name: 'value' },
+        },
+        {
+          type: 'Property',
+          kind: 'init',
+          computed: false,
+          method: false,
+          shorthand: true,
+          key: { type: 'Identifier', name: 'key' },
+          value: { type: 'Identifier', name: 'value' },
+        },
+        {
+          type: 'Property',
+          kind: 'init',
+          computed: null,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'key' },
+          value: { type: 'Identifier', name: 'value' },
+        },
+        {
+          type: 'Property',
+          kind: 'get',
+          computed: false,
+          method: true,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'key' },
+          value: { type: 'Identifier', name: 'value' },
+        },
+      ];
+
+      for (const property of malformedProperties) {
+        const params = [
+          {
+            type: 'ObjectPattern',
+            properties: [property],
+          },
+        ];
+
+        for (const expression of [arrow, functionExpression]) {
+          const error = /** @type {any} */ (
+            assertThrows(
+              () =>
+                parseScript('', {
+                  parse: () => programFor({ ...expression, params }),
+                }),
+              SyntaxError,
+            )
+          );
+
+          assertSame(error.name, 'SyntaxError');
+        }
+      }
+
+      const unknownKeyError = /** @type {any} */ (
+        assertThrows(
+          () =>
+            parseScript('', {
+              parse: () =>
+                programFor({
+                  ...arrow,
+                  params: [
+                    {
+                      type: 'ObjectPattern',
+                      properties: [
+                        {
+                          type: 'Property',
+                          kind: 'init',
+                          computed: true,
+                          method: false,
+                          shorthand: false,
+                          key: {
+                            type: 'BinaryExpression',
+                            operator: '+',
+                            left: { type: 'BogusExpression' },
+                            right: { type: 'Identifier', name: 'key' },
+                          },
+                          value: { type: 'Identifier', name: 'value' },
+                        },
+                      ],
+                    },
+                  ],
+                }),
+            }),
+          SyntaxError,
+        )
+      );
+
+      if (
+        !unknownKeyError.message.includes(
+          'unsupported AST node type BogusExpression',
+        )
+      ) {
+        throw new Error(
+          `Expected generic unknown-node rejection, got ${unknownKeyError.message}`,
+        );
+      }
+
+      parseScript('function ordinary({[key]: value}) {}');
+      parseScript('({[key]: value}) => value;');
+    },
+  },
+  {
     name: 'super is only the direct object of a member reference in methods and lexical arrows',
     run() {
       parseScript(
         'var object = { method() { return () => (() => super.value)(); } };',
       );
+      parseScript('var object = { method() { return super[key]; } };');
 
       /** @param {any} argument */
       function programForMethodReturn(argument) {
@@ -1389,14 +1523,44 @@ const tests = [
           property: { type: 'Super' },
           computed: false,
         },
+        {
+          type: 'MemberExpression',
+          object: { type: 'Super' },
+          property: null,
+          computed: false,
+        },
+        {
+          type: 'MemberExpression',
+          object: { type: 'Super' },
+          property: null,
+          computed: true,
+        },
+        {
+          type: 'MemberExpression',
+          object: { type: 'Super' },
+          property: { type: 'BogusExpression' },
+          computed: true,
+        },
       ]) {
-        assertThrows(
-          () =>
-            parseScript('', {
-              parse: () => programForMethodReturn(argument),
-            }),
-          SyntaxError,
+        const error = /** @type {any} */ (
+          assertThrows(
+            () =>
+              parseScript('', {
+                parse: () => programForMethodReturn(argument),
+              }),
+            SyntaxError,
+          )
         );
+
+        assertSame(error.name, 'SyntaxError');
+
+        if (argument.property?.type === 'BogusExpression') {
+          if (!error.message.includes('unsupported AST node type BogusExpression')) {
+            throw new Error(
+              `Expected generic unknown-node rejection, got ${error.message}`,
+            );
+          }
+        }
       }
     },
   },
