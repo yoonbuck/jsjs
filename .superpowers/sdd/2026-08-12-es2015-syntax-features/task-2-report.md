@@ -124,3 +124,83 @@ Output: 1564 passed, 0 failed; exit 0.
 - JavaScriptCore is not installed in this environment, so the optional JSC
   entry-point contract checks emitted availability warnings during the full Node
   suite. The required portable focused suite and all Node checks passed.
+
+## Fix Round 1
+
+### Changed Files
+
+- Modified `src/parser.js`
+- Modified `test/parser.test.js`
+- Modified
+  `.superpowers/sdd/2026-08-12-es2015-syntax-features/task-2-report.md`
+
+### RED
+
+Command:
+
+```text
+node test/run-node.js test/parser.test.js
+```
+
+Relevant output (exit 1):
+
+```text
+{"name":"custom object patterns reject a bare identifier property entry","status":"failed","error":{"name":"Error","message":"Expected function to throw SyntaxError"}}
+{"name":"custom object patterns reject a nested pattern property entry","status":"failed","error":{"name":"Error","message":"Expected function to throw SyntaxError"}}
+{"name":"custom object patterns reject a noncomputed expression key","status":"failed","error":{"name":"Error","message":"Expected function to throw SyntaxError"}}
+```
+
+### GREEN
+
+Command:
+
+```text
+node test/run-node.js test/parser.test.js test/destructuring.test.js
+```
+
+Output: 62 JSON test records with `"status":"passed"`, 0 failed; exit 0.
+
+```text
+npm run typecheck
+```
+
+Output (exit 0):
+
+```text
+> typecheck
+> tsc -p jsconfig.json
+```
+
+```text
+npm run lint -- --quiet
+```
+
+Output (exit 0):
+
+```text
+> lint
+> ESLINT_USE_FLAT_CONFIG=true eslint . --quiet
+```
+
+```text
+git diff --check
+```
+
+Output: empty; exit 0.
+
+### Commit
+
+- `fix: validate object pattern property shapes` (this commit)
+
+### Self-Review
+
+- Confirmed `ObjectPattern.properties` accepts only `Property` entries.
+- Confirmed noncomputed keys accept only identifier and literal property names,
+  while computed expression keys remain supported.
+- Confirmed ordinary object-expression property validation is unchanged.
+- Confirmed the existing real-syntax destructuring and computed-key regressions
+  remain green.
+
+### Concerns
+
+- None.

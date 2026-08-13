@@ -986,7 +986,86 @@ const tests = [
       );
     },
   },
+  {
+    name: 'custom object patterns reject a bare identifier property entry',
+    run() {
+      const program = objectPatternProgram({
+        type: 'Identifier',
+        name: 'bare',
+      });
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom object patterns reject a nested pattern property entry',
+    run() {
+      const program = objectPatternProgram({
+        type: 'ArrayPattern',
+        elements: [{ type: 'Identifier', name: 'nested' }],
+      });
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom object patterns reject a noncomputed expression key',
+    run() {
+      const program = objectPatternProgram({
+        type: 'Property',
+        kind: 'init',
+        computed: false,
+        method: false,
+        shorthand: false,
+        key: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: 'object' },
+          property: { type: 'Identifier', name: 'key' },
+          computed: false,
+        },
+        value: { type: 'Identifier', name: 'value' },
+      });
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
 ];
+
+/**
+ * @param {any} property
+ * @returns {any}
+ */
+function objectPatternProgram(property) {
+  return {
+    type: 'Program',
+    sourceType: 'script',
+    body: [
+      {
+        type: 'VariableDeclaration',
+        kind: 'var',
+        declarations: [
+          {
+            type: 'VariableDeclarator',
+            id: {
+              type: 'ObjectPattern',
+              properties: [property],
+            },
+            init: { type: 'Identifier', name: 'source' },
+          },
+        ],
+      },
+    ],
+  };
+}
 
 /**
  * Long enough to overflow a recursive AST walk on every host we run on,

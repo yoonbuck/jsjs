@@ -735,6 +735,25 @@ function unsupportedEs2015Message(
   patternContext,
   parentIndex,
 ) {
+  if (
+    parent &&
+    parent.type === 'ObjectPattern' &&
+    parentKey === 'properties'
+  ) {
+    if (
+      node.type !== 'Property' ||
+      node.kind !== 'init' ||
+      node.method ||
+      (!node.computed &&
+        (!node.key ||
+          (node.key.type !== 'Identifier' && node.key.type !== 'Literal')))
+    ) {
+      return 'unsupported destructuring property';
+    }
+
+    return undefined;
+  }
+
   if (patternContext !== undefined) {
     const validPatternNode =
       node.type === 'Identifier' ||
@@ -751,23 +770,6 @@ function unsupportedEs2015Message(
   }
 
   if (node.type === 'Property') {
-    if (
-      parent !== null &&
-      parent !== undefined &&
-      parent.type === 'ObjectPattern' &&
-      parentKey === 'properties'
-    ) {
-      if (
-        patternContext !== undefined &&
-        node.kind === 'init' &&
-        !node.method
-      ) {
-        return undefined;
-      }
-
-      return 'unsupported destructuring property';
-    }
-
     if (
       parent !== null &&
       (parent === undefined ||
