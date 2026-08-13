@@ -985,7 +985,13 @@ function unsupportedEs2015Message(
       parent &&
       ((parent.type === 'ArrayExpression' && parentKey === 'elements') ||
         (parent.type === 'CallExpression' && parentKey === 'arguments') ||
-        (parent.type === 'NewExpression' && parentKey === 'arguments'));
+        (parent.type === 'NewExpression' && parentKey === 'arguments')) &&
+      Array.isArray(parent[parentKey]) &&
+      typeof parentIndex === 'number' &&
+      Number.isInteger(parentIndex) &&
+      parentIndex >= 0 &&
+      parentIndex < parent[parentKey].length &&
+      parent[parentKey][parentIndex] === node;
 
     return validPlacement
       ? undefined

@@ -924,7 +924,7 @@ const tests = [
     },
   },
   {
-    name: 'spread is accepted only in array elements and call or construction arguments',
+    name: 'spread is accepted only as a direct array element or call or construction argument',
     run() {
       const accepted = [
         'var list = [...values];',
@@ -937,25 +937,65 @@ const tests = [
         assertSame(parseEval(source).type, 'Program', source);
       }
 
-      const spread = {
+      /** @type {{ type: string, key: string }[]} */
+      const supportedParents = [
+        { type: 'ArrayExpression', key: 'elements' },
+        { type: 'CallExpression', key: 'arguments' },
+        { type: 'NewExpression', key: 'arguments' },
+      ];
+      /** @type {{ name: string, value: (spread: any) => any }[]} */
+      const malformedValues = [
+        { name: 'a direct spread node', value: (spread) => spread },
+        { name: 'a nested array', value: (spread) => [[spread]] },
+      ];
+      /** @returns {any} */
+      const createSpread = () => ({
         type: 'SpreadElement',
         argument: { type: 'Identifier', name: 'values' },
-      };
-      const allowedProgram = {
-        type: 'Program',
-        sourceType: 'script',
-        body: [
-          {
-            type: 'ExpressionStatement',
-            expression: {
-              type: 'CallExpression',
-              callee: { type: 'Identifier', name: 'f' },
-              arguments: [spread],
+      });
+      /**
+       * @param {{ type: string, key: string }} parent
+       * @param {any} value
+       * @returns {any}
+       */
+      function createProgram(parent, value) {
+        const expression = {
+          type: parent.type,
+          callee: { type: 'Identifier', name: 'f' },
+          [parent.key]: value,
+        };
+
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ExpressionStatement',
+              expression,
             },
-          },
-        ],
-      };
-      parseScript('', { parse: () => allowedProgram });
+          ],
+        };
+      }
+
+      for (const parent of supportedParents) {
+        const allowedProgram = createProgram(parent, [createSpread()]);
+        assertSame(
+          parseScript('', { parse: () => allowedProgram }).type,
+          'Program',
+        );
+
+        for (const malformed of malformedValues) {
+          const program = createProgram(
+            parent,
+            malformed.value(createSpread()),
+          );
+
+          assertThrows(
+            () => parseScript('', { parse: () => program }),
+            SyntaxError,
+          );
+        }
+      }
 
       const rejectedProgram = {
         type: 'Program',
@@ -965,7 +1005,7 @@ const tests = [
             type: 'ExpressionStatement',
             expression: {
               type: 'ObjectExpression',
-              properties: [spread],
+              properties: [createSpread()],
             },
           },
         ],
