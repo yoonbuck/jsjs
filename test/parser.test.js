@@ -918,6 +918,93 @@ const tests = [
     },
   },
   {
+    name: 'custom parser rejects an unknown node nested in a computed object property key',
+    run() {
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'ObjectExpression',
+              properties: [
+                {
+                  type: 'Property',
+                  kind: 'init',
+                  computed: true,
+                  method: false,
+                  shorthand: false,
+                  key: {
+                    type: 'BinaryExpression',
+                    operator: '+',
+                    left: { type: 'Identifier', name: 'key' },
+                    right: { type: 'BogusExpression' },
+                  },
+                  value: { type: 'Literal', value: 1 },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+    },
+  },
+  {
+    name: 'custom parser rejects an unknown node nested in an object property value',
+    run() {
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'ObjectExpression',
+              properties: [
+                {
+                  type: 'Property',
+                  kind: 'init',
+                  computed: false,
+                  method: false,
+                  shorthand: false,
+                  key: { type: 'Identifier', name: 'value' },
+                  value: {
+                    type: 'BinaryExpression',
+                    operator: '+',
+                    left: { type: 'Literal', value: 1 },
+                    right: { type: 'BogusExpression' },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+    },
+  },
+  {
+    name: 'custom parser rejects an unknown expression outside an object literal',
+    run() {
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: { type: 'BogusExpression' },
+          },
+        ],
+      };
+
+      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+    },
+  },
+  {
     name: 'custom parser object expressions retain the duplicate __proto__ early error',
     run() {
       /** @returns {any} */

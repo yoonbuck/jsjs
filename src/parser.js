@@ -266,13 +266,12 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  *   `Function` is rejected first by the `generator: true` flag check in
  *   `checkUnsupportedEs2015Node`.
  *
- * `Super` is deliberately absent from the table: object-literal accessors carry
- * `super` property references, which the engine implements (see
- * `src/runtime/super-reference.js`). An accessor is a `Property` with
- * `kind: 'get'`/`'set'` and `method: false`, so it is not caught by the
- * object-method flag check either; `super` in an object *method* shorthand is
- * still refused, because that `Property` has `method: true`. `super` outside any
- * method or accessor is a parse error Acorn raises itself.
+ * `Super` is deliberately absent from the table: object-literal methods and
+ * accessors both carry a `[[HomeObject]]`, so their `super` property references
+ * are implemented (see `src/runtime/super-reference.js`). A concise method is a
+ * `Property` with `method: true`; an accessor has `kind: 'get'`/`'set'` and
+ * `method: false`. `super` outside either context is a parse error Acorn raises
+ * itself.
  *
  * *Acorn-blocked* — the parser refuses the source before any such node exists,
  * so this pass never sees it. Kept so a later `sourceType`/`ecmaVersion` change
@@ -329,6 +328,65 @@ const SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES = new Set([
   'ArrayExpression',
   'NewExpression',
   'SequenceExpression',
+]);
+
+/**
+ * Every AST node type this parser capability boundary recognizes. The direct
+ * statement and expression types match the evaluator dispatch tables; the
+ * remaining structural nodes are consumed by the evaluator or parser's
+ * context-sensitive gates. Explicitly blocked ES2015 types stay recognized so
+ * their dedicated early-error messages remain reachable.
+ *
+ * Objects without a string `type` are metadata rather than AST nodes and are
+ * intentionally skipped by the iterative walk below.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const RECOGNIZED_AST_NODE_TYPES = new Set([
+  'Program',
+  'ExpressionStatement',
+  'EmptyStatement',
+  'BlockStatement',
+  'VariableDeclaration',
+  'FunctionDeclaration',
+  'IfStatement',
+  'WhileStatement',
+  'DoWhileStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+  'BreakStatement',
+  'ContinueStatement',
+  'ReturnStatement',
+  'ThrowStatement',
+  'TryStatement',
+  'SwitchStatement',
+  'LabeledStatement',
+  'DebuggerStatement',
+  'WithStatement',
+  'Literal',
+  'Identifier',
+  'ThisExpression',
+  'UnaryExpression',
+  'BinaryExpression',
+  'LogicalExpression',
+  'ConditionalExpression',
+  'AssignmentExpression',
+  'UpdateExpression',
+  'CallExpression',
+  'MemberExpression',
+  'FunctionExpression',
+  'ObjectExpression',
+  'ArrayExpression',
+  'NewExpression',
+  'SequenceExpression',
+  'VariableDeclarator',
+  'SwitchCase',
+  'CatchClause',
+  'Property',
+  'Super',
+  'SpreadElement',
+  ...UNSUPPORTED_ES2015_NODE_MESSAGES.keys(),
 ]);
 
 /**
@@ -893,6 +951,10 @@ function unsupportedEs2015Message(
   patternContext,
   parentIndex,
 ) {
+  if (!RECOGNIZED_AST_NODE_TYPES.has(node.type)) {
+    return `unsupported AST node type ${node.type}`;
+  }
+
   if (
     parent &&
     parent.type === 'ObjectPattern' &&
