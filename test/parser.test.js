@@ -752,8 +752,6 @@ const tests = [
         'class C {}',
         'var c = class {};',
         'var f = () => 1;',
-        '`template`;',
-        'tag`template`;',
         'function* g() { yield 1; }',
         'var object = { *method() {} };',
         'var object = { async method() {} };',
@@ -765,6 +763,7 @@ const tests = [
         '0O17;',
         'var s = "\\u{41}";',
         'var \\u{63}at = 1;',
+        'tag`\\u{41}`;',
       ];
 
       for (const source of rejected) {
@@ -1495,7 +1494,137 @@ const tests = [
       );
     },
   },
+  {
+    name: 'template literals expose exact cooked, raw, and tail parser shapes',
+    run() {
+      const expression = parseScript('tag`a\\n${value}b`;').body[0].expression;
+
+      assertSame(expression.type, 'TaggedTemplateExpression');
+      assertSame(expression.tag.type, 'Identifier');
+      assertSame(expression.quasi.type, 'TemplateLiteral');
+      assertSame(expression.quasi.expressions.length, 1);
+      assertSame(expression.quasi.expressions[0].type, 'Identifier');
+      assertSame(expression.quasi.quasis.length, 2);
+      assertSame(expression.quasi.quasis[0].type, 'TemplateElement');
+      assertSame(expression.quasi.quasis[0].value.raw, 'a\\n');
+      assertSame(expression.quasi.quasis[0].value.cooked, 'a\n');
+      assertSame(expression.quasi.quasis[0].tail, false);
+      assertSame(expression.quasi.quasis[1].value.raw, 'b');
+      assertSame(expression.quasi.quasis[1].value.cooked, 'b');
+      assertSame(expression.quasi.quasis[1].tail, true);
+    },
+  },
+  {
+    name: 'custom parser template ASTs reject malformed structures and unsupported nested nodes',
+    run() {
+      const malformed = [
+        {
+          type: 'TemplateLiteral',
+          expressions: [],
+          quasis: [],
+        },
+        {
+          type: 'TemplateLiteral',
+          expressions: [{ type: 'Literal', value: 1 }],
+          quasis: [
+            {
+              type: 'TemplateElement',
+              value: { raw: 'a', cooked: 'a' },
+              tail: true,
+            },
+          ],
+        },
+        {
+          type: 'TemplateLiteral',
+          expressions: [],
+          quasis: [
+            {
+              type: 'TemplateElement',
+              value: { raw: 1, cooked: 'a' },
+              tail: true,
+            },
+          ],
+        },
+        {
+          type: 'TemplateLiteral',
+          expressions: [],
+          quasis: [
+            {
+              type: 'TemplateElement',
+              value: { raw: 'a', cooked: 1 },
+              tail: true,
+            },
+          ],
+        },
+        {
+          type: 'TemplateLiteral',
+          expressions: [{ type: 'BogusExpression' }],
+          quasis: [
+            {
+              type: 'TemplateElement',
+              value: { raw: 'a', cooked: 'a' },
+              tail: false,
+            },
+            {
+              type: 'TemplateElement',
+              value: { raw: 'b', cooked: 'b' },
+              tail: true,
+            },
+          ],
+        },
+        {
+          type: 'TemplateLiteral',
+          expressions: [],
+          quasis: [
+            {
+              type: 'TemplateElement',
+              value: { raw: 'a', cooked: 'a' },
+              tail: false,
+            },
+          ],
+        },
+      ];
+
+      for (const expression of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => expressionProgram(expression) }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'template AST nodes remain valid only in template positions while arrows and classes stay gated',
+    run() {
+      assertThrows(
+        () =>
+          parseScript('', {
+            parse: () =>
+              expressionProgram({
+                type: 'TemplateElement',
+                value: { raw: 'x', cooked: 'x' },
+                tail: true,
+              }),
+          }),
+        SyntaxError,
+      );
+      assertThrows(() => parseScript('() => `x`;'), SyntaxError);
+      assertThrows(() => parseScript('class Example {}'), SyntaxError);
+    },
+  },
 ];
+
+/**
+ * @param {any} expression
+ * @returns {any}
+ */
+function expressionProgram(expression) {
+  return {
+    type: 'Program',
+    sourceType: 'script',
+    body: [{ type: 'ExpressionStatement', expression }],
+  };
+}
 
 /**
  * @param {any} property

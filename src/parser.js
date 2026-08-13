@@ -247,7 +247,6 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * *Reachable* — this pass is what rejects the construct, because the node is the
  * first unsupported one the walk visits on some accepted parse:
  * `ClassDeclaration`, `ClassExpression`, `ArrowFunctionExpression`,
- * `TemplateLiteral`, `TaggedTemplateExpression`,
  * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`, and
  * `MetaProperty` (via `new.target` inside a function). `SpreadElement` is
  * handled shape-sensitively by `unsupportedEs2015Message`, because array
@@ -261,10 +260,14 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * - `ClassBody` / `MethodDefinition` occur only inside a class, rejected first
  *   at `ClassDeclaration` / `ClassExpression`. (`{ m() {} }` is a `Property`
  *   with `method: true`, not a `MethodDefinition`.)
- * - `TemplateElement` is a child of `TemplateLiteral`, rejected first.
  * - `YieldExpression` occurs only inside a generator, whose enclosing
  *   `Function` is rejected first by the `generator: true` flag check in
  *   `checkUnsupportedEs2015Node`.
+ *
+ * Template literals, elements, and tagged-template expressions are supported,
+ * but their dedicated validators still require the exact ESTree parent,
+ * quasi/expression count, raw/cooked value, and tail shapes before evaluator
+ * dispatch can reach them.
  *
  * `Super` is deliberately absent from the table: object-literal methods and
  * accessors both carry a `[[HomeObject]]`, so their `super` property references
@@ -294,9 +297,6 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['ClassBody', '`class` bodies are not supported'],
   ['MethodDefinition', 'class and object methods are not supported'],
   ['ArrowFunctionExpression', 'arrow functions are not supported'],
-  ['TemplateLiteral', 'template literals are not supported'],
-  ['TemplateElement', 'template literals are not supported'],
-  ['TaggedTemplateExpression', 'tagged template literals are not supported'],
   ['YieldExpression', 'generators and `yield` are not supported'],
   ['AwaitExpression', '`await` expressions are not supported'],
   ['ObjectPattern', 'destructuring patterns are not supported'],
@@ -328,6 +328,8 @@ const SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES = new Set([
   'ArrayExpression',
   'NewExpression',
   'SequenceExpression',
+  'TemplateLiteral',
+  'TaggedTemplateExpression',
 ]);
 
 /**
@@ -386,6 +388,9 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
   'Property',
   'Super',
   'SpreadElement',
+  'TemplateLiteral',
+  'TemplateElement',
+  'TaggedTemplateExpression',
   ...UNSUPPORTED_ES2015_NODE_MESSAGES.keys(),
 ]);
 
@@ -997,6 +1002,18 @@ function unsupportedEs2015Message(
     }
   }
 
+  if (node.type === 'TemplateLiteral') {
+    return validateTemplateLiteral(node, parent, parentKey);
+  }
+
+  if (node.type === 'TemplateElement') {
+    return validateTemplateElement(node, parent, parentKey, parentIndex);
+  }
+
+  if (node.type === 'TaggedTemplateExpression') {
+    return validateTaggedTemplateExpression(node);
+  }
+
   if (node.type === 'Property') {
     const propertyMessage = validateObjectExpressionProperty(
       node,
@@ -1091,6 +1108,116 @@ function unsupportedEs2015Message(
 function isFunctionNode(node) {
   return (
     node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression'
+  );
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {string | undefined}
+ */
+function validateTemplateLiteral(node, parent, parentKey) {
+  if (!Array.isArray(node.expressions) || !Array.isArray(node.quasis)) {
+    return 'template literal expressions and quasis must be arrays';
+  }
+
+  if (node.quasis.length !== node.expressions.length + 1) {
+    return 'template literal quasis must outnumber expressions by one';
+  }
+
+  if (node.quasis.length === 0) {
+    return 'template literal must have a quasi';
+  }
+
+  const tagged =
+    parent && parent.type === 'TaggedTemplateExpression' && parentKey === 'quasi';
+
+  for (const expression of node.expressions) {
+    if (!isSupportedObjectPropertyExpression(expression)) {
+      return 'unsupported template literal substitution';
+    }
+  }
+
+  for (let index = 0; index < node.quasis.length; index += 1) {
+    const element = node.quasis[index];
+
+    if (!isTemplateElementShape(element, index === node.quasis.length - 1)) {
+      return 'unsupported template element shape';
+    }
+
+    if (!tagged && typeof element.value.cooked !== 'string') {
+      return 'untagged template literals require cooked string values';
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @returns {string | undefined}
+ */
+function validateTemplateElement(node, parent, parentKey, parentIndex) {
+  if (
+    !parent ||
+    parent.type !== 'TemplateLiteral' ||
+    parentKey !== 'quasis' ||
+    !Array.isArray(parent.quasis) ||
+    typeof parentIndex !== 'number' ||
+    parentIndex < 0 ||
+    parentIndex >= parent.quasis.length ||
+    parent.quasis[parentIndex] !== node
+  ) {
+    return 'template elements are only supported in template literal quasis';
+  }
+
+  return isTemplateElementShape(node, parentIndex === parent.quasis.length - 1)
+    ? undefined
+    : 'unsupported template element shape';
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateTaggedTemplateExpression(node) {
+  if (!isSupportedObjectPropertyExpression(node.tag)) {
+    return 'tagged template expressions require a supported tag expression';
+  }
+
+  return node.quasi?.type === 'TemplateLiteral'
+    ? undefined
+    : 'tagged template expressions require a template literal quasi';
+}
+
+/**
+ * @param {any} node
+ * @param {boolean} tail
+ * @returns {boolean}
+ */
+function isTemplateElementShape(node, tail) {
+  if (
+    !node ||
+    typeof node !== 'object' ||
+    node.type !== 'TemplateElement' ||
+    typeof node.tail !== 'boolean' ||
+    node.tail !== tail ||
+    !node.value ||
+    typeof node.value !== 'object' ||
+    typeof node.value.raw !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(node.value, 'cooked')
+  ) {
+    return false;
+  }
+
+  return (
+    typeof node.value.cooked === 'string' ||
+    node.value.cooked === null ||
+    node.value.cooked === undefined
   );
 }
 
@@ -1325,6 +1452,17 @@ function checkUnsupportedEs2015Node(
     typeof node.start === 'number' &&
     typeof node.end === 'number' &&
     hasCodePointEscape(source.slice(node.start, node.end))
+  ) {
+    throw unsupportedEs2015Error(
+      'unicode code-point escapes (`\\u{...}`) are not supported',
+      node,
+    );
+  }
+
+  if (
+    node.type === 'TemplateElement' &&
+    typeof node.value?.raw === 'string' &&
+    hasCodePointEscape(node.value.raw)
   ) {
     throw unsupportedEs2015Error(
       'unicode code-point escapes (`\\u{...}`) are not supported',

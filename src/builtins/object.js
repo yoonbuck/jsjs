@@ -1,4 +1,4 @@
-import { EngineObject } from '../runtime/object.js';
+import { EngineObject, setIntegrityLevel } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isDataDescriptor } from '../runtime/descriptors.js';
@@ -350,29 +350,12 @@ function installObjectReflectionMethods(realm, objectConstructor) {
   defineNativeMethod(realm, objectConstructor, 'seal', 1, (_this, args) => {
     const object = requireObjectArgument(args[0]);
 
-    for (const name of object.ownPropertyKeys()) {
-      object.defineOwnProperty(name, { configurable: false }, true);
-    }
-
-    object.preventExtensions();
-    return object;
+    return setIntegrityLevel(object, 'sealed');
   });
   defineNativeMethod(realm, objectConstructor, 'freeze', 1, (_this, args) => {
     const object = requireObjectArgument(args[0]);
 
-    for (const name of object.ownPropertyKeys()) {
-      const descriptor = object.getOwnProperty(name);
-      object.defineOwnProperty(
-        name,
-        isDataDescriptor(descriptor)
-          ? { writable: false, configurable: false }
-          : { configurable: false },
-        true,
-      );
-    }
-
-    object.preventExtensions();
-    return object;
+    return setIntegrityLevel(object, 'frozen');
   });
   defineNativeMethod(
     realm,

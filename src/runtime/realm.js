@@ -1,4 +1,5 @@
-import { EngineObject } from './object.js';
+import { EngineObject, setIntegrityLevel } from './object.js';
+import { EngineArray } from './array-object.js';
 import { GlobalEnvironmentRecord } from './environment.js';
 import { createNativeFunction } from '../builtins/shared.js';
 import {
@@ -107,6 +108,8 @@ export class Realm {
     this.globalObject = new EngineObject(this.intrinsics.objectPrototype);
     defineGlobalValueProperties(this.globalObject);
     this.globalEnvironment = new GlobalEnvironmentRecord(this.globalObject);
+    /** @type {WeakMap<object, EngineArray>} */
+    this.templateObjects = new WeakMap();
     // The recursion boundary is built before any guest work can happen: every
     // activation and every evaluator frame in this realm consults it, so it
     // must outlive the intrinsic graph installed below.
@@ -239,6 +242,55 @@ export class Realm {
    */
   createGuestError(typeName, message) {
     return createGuestError(this, typeName, message);
+  }
+
+  /**
+   * Returns the frozen template object for one parsed template site. The AST
+   * node is intentionally the cache key: one parsed function body reuses its
+   * site object across calls, while another parse or realm cannot share it.
+   *
+   * @param {any} node
+   * @returns {EngineArray}
+   */
+  getTemplateObject(node) {
+    const cached = this.templateObjects.get(node);
+
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const cooked = new EngineArray(this.intrinsics.arrayPrototype);
+    const raw = new EngineArray(this.intrinsics.arrayPrototype);
+
+    for (let index = 0; index < node.quasis.length; index += 1) {
+      const element = node.quasis[index];
+      const cookedValue =
+        element.value.cooked === null ? undefined : element.value.cooked;
+
+      cooked.defineOwnProperty(String(index), {
+        value: cookedValue,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      raw.defineOwnProperty(String(index), {
+        value: element.value.raw,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+
+    cooked.defineOwnProperty('raw', {
+      value: raw,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    setIntegrityLevel(raw, 'frozen');
+    setIntegrityLevel(cooked, 'frozen');
+    this.templateObjects.set(node, cooked);
+    return cooked;
   }
 }
 

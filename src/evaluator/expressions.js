@@ -19,6 +19,7 @@ import {
   toNumber,
   toObject,
   toPropertyKey,
+  toString,
 } from '../runtime/conversion.js';
 import {
   abstractEqualityComparison,
@@ -116,6 +117,8 @@ export const EXPRESSION_TYPES = new Set([
   'ArrayExpression',
   'NewExpression',
   'SequenceExpression',
+  'TemplateLiteral',
+  'TaggedTemplateExpression',
 ]);
 
 /**
@@ -174,6 +177,10 @@ export function evaluateExpression(node, context) {
         return evaluateNewExpression(node, context);
       case 'SequenceExpression':
         return evaluateSequenceExpression(node, context);
+      case 'TemplateLiteral':
+        return evaluateTemplateLiteral(node, context);
+      case 'TaggedTemplateExpression':
+        return evaluateTaggedTemplateExpression(node, context);
       default:
         throw createUnsupportedNodeError(node);
     }
@@ -678,6 +685,76 @@ function evaluateSequenceExpression(node, context) {
   }
 
   return value;
+}
+
+/**
+ * Evaluates an untagged template literal. Invalid cooked values are only
+ * representable in tagged templates, but retain this check for custom parser
+ * output and to keep a malformed tree from being interpreted as "undefined".
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {string}
+ */
+function evaluateTemplateLiteral(node, context) {
+  let value = requiredCookedTemplateValue(node.quasis[0]);
+
+  for (let index = 0; index < node.expressions.length; index += 1) {
+    value += toString(evaluateExpressionValue(node.expressions[index], context));
+    value += requiredCookedTemplateValue(node.quasis[index + 1]);
+  }
+
+  return value;
+}
+
+/**
+ * Evaluates a tagged template expression. In particular, the callability
+ * check follows substitution evaluation, matching ordinary call argument
+ * ordering while retaining the tag reference receiver.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateTaggedTemplateExpression(node, context) {
+  const tagReference = evaluateExpression(node.tag, context);
+  const tag =
+    tagReference instanceof Reference ? getValue(tagReference) : tagReference;
+  const thisValue = referenceThisValue(tagReference);
+  /** @type {unknown[]} */
+  const args = [context.realm.getTemplateObject(node.quasi)];
+
+  for (const expression of node.quasi.expressions) {
+    args.push(evaluateExpressionValue(expression, context));
+  }
+
+  if (!isCallable(tag)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      `${describeCallee(node.tag)} is not a function`,
+    );
+  }
+
+  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
+    tag
+  ).callFunction(thisValue, args);
+}
+
+/**
+ * @param {any} element
+ * @returns {string}
+ */
+function requiredCookedTemplateValue(element) {
+  const cooked = element?.value?.cooked;
+
+  if (typeof cooked !== 'string') {
+    throw new GuestErrorSignal(
+      'SyntaxError',
+      'Invalid cooked value in untagged template literal',
+    );
+  }
+
+  return cooked;
 }
 
 /**
