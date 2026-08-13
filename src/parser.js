@@ -303,7 +303,14 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['ExportAllDeclaration', 'export declarations are not supported'],
 ]);
 
-const SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES = new Set([
+/**
+ * Every expression node the evaluator dispatches. The parser keeps this
+ * capability boundary explicit because custom parser hooks can attach a
+ * recognized expression-shaped object to arbitrary metadata fields.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const SUPPORTED_EXPRESSION_TYPES = new Set([
   'Literal',
   'Identifier',
   'ThisExpression',
@@ -1199,14 +1206,21 @@ function unsupportedEs2015Message(
     return `unsupported AST node type ${node.type}`;
   }
 
-  if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
-    return validateClassDefinition(
+  if (
+    isSupportedExpressionNode(node) &&
+    !isSupportedExpressionPosition(
       node,
       parent,
       parentKey,
       parentIndex,
       patternContext,
-    );
+    )
+  ) {
+    return 'expressions are not supported in this AST position';
+  }
+
+  if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
+    return validateClassDefinition(node, parent, parentKey, parentIndex);
   }
 
   if (node.type === 'ClassBody') {
@@ -1393,16 +1407,9 @@ function isFunctionNode(node) {
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {number | undefined} parentIndex
- * @param {'binding' | 'assignment' | undefined} patternContext
  * @returns {string | undefined}
  */
-function validateClassDefinition(
-  node,
-  parent,
-  parentKey,
-  parentIndex,
-  patternContext,
-) {
+function validateClassDefinition(node, parent, parentKey, parentIndex) {
   if (
     node.type === 'ClassDeclaration' &&
     !isClassDeclarationPosition(parent, parentKey, parentIndex)
@@ -1419,19 +1426,6 @@ function validateClassDefinition(
 
   if (
     node.type === 'ClassExpression' &&
-    !isSupportedExpressionPosition(
-      node,
-      parent,
-      parentKey,
-      parentIndex,
-      patternContext,
-    )
-  ) {
-    return 'class expressions are not supported in this AST position';
-  }
-
-  if (
-    node.type === 'ClassExpression' &&
     node.id !== null &&
     !isIdentifierNode(node.id)
   ) {
@@ -1441,7 +1435,7 @@ function validateClassDefinition(
   if (
     !Object.prototype.hasOwnProperty.call(node, 'superClass') ||
     (node.superClass !== null &&
-      !isSupportedObjectPropertyExpression(node.superClass))
+      !isSupportedExpressionNode(node.superClass))
   ) {
     return 'unsupported class heritage expression';
   }
@@ -1612,7 +1606,7 @@ function isValidClassMethodKey(node, computed) {
   }
 
   if (computed) {
-    return isSupportedObjectPropertyExpression(node);
+    return isSupportedExpressionNode(node);
   }
 
   return isIdentifierNode(node) || (node.type === 'Literal' && !node.regex);
@@ -1700,10 +1694,16 @@ function hasDefinedField(node, fields) {
 }
 
 /**
- * A class expression must occupy an expression-producing child edge that the
- * evaluator actually consumes. The generic parser walk intentionally visits
- * arbitrary custom-parser fields for defense in depth, so type validation alone
- * cannot establish that a ClassExpression is reachable through valid syntax.
+ * Recognized expression nodes must sit on an evaluator-consumed ESTree child
+ * edge. The iterative parser walk intentionally descends into arbitrary
+ * custom-parser object fields, so validating only a nested expression's local
+ * shape leaves an otherwise valid expression container able to hide it from
+ * the evaluator. Every accepted edge checks both the direct property identity
+ * and, for lists, its exact array member index.
+ *
+ * `Identifier` and `Literal` also appear in syntax-only roles such as binding
+ * names and noncomputed property keys. Those roles are listed explicitly so
+ * valid parser output remains accepted rather than being mistaken for metadata.
  *
  * @param {any} node
  * @param {any} parent
@@ -1735,6 +1735,38 @@ function isSupportedExpressionPosition(
     parentIndex < parent[key].length &&
     parent[key][parentIndex] === node;
 
+  if (patternContext !== undefined) {
+    if (
+      node.type !== 'Identifier' &&
+      node.type !== 'MemberExpression'
+    ) {
+      return false;
+    }
+
+    switch (parent.type) {
+      case 'VariableDeclarator':
+        return direct('id');
+      case 'FunctionDeclaration':
+      case 'FunctionExpression':
+      case 'ArrowFunctionExpression':
+        return member('params');
+      case 'ArrayPattern':
+        return member('elements');
+      case 'Property':
+        return direct('value');
+      case 'AssignmentPattern':
+        return direct('left');
+      case 'RestElement':
+        return direct('argument');
+      case 'AssignmentExpression':
+      case 'ForInStatement':
+      case 'ForOfStatement':
+        return direct('left');
+      default:
+        return false;
+    }
+  }
+
   switch (parent.type) {
     case 'ExpressionStatement':
       return direct('expression');
@@ -1751,7 +1783,10 @@ function isSupportedExpressionPosition(
       return direct('init') || direct('test') || direct('update');
     case 'ForInStatement':
     case 'ForOfStatement':
-      return direct('right');
+      return (
+        direct('right') ||
+        (isAssignmentTargetExpression(node) && direct('left'))
+      );
     case 'WithStatement':
       return direct('object');
     case 'SwitchStatement':
@@ -1768,19 +1803,25 @@ function isSupportedExpressionPosition(
         direct('test') || direct('consequent') || direct('alternate')
       );
     case 'AssignmentExpression':
-      return direct('right');
+      return (
+        direct('right') ||
+        (isAssignmentTargetExpression(node) && direct('left'))
+      );
+    case 'UpdateExpression':
+      return isAssignmentTargetExpression(node) && direct('argument');
     case 'CallExpression':
     case 'NewExpression':
       return direct('callee') || member('arguments');
     case 'MemberExpression':
       return (
         direct('object') ||
-        (parent.computed === true && direct('property'))
+        (parent.computed === true && direct('property')) ||
+        (parent.computed === false &&
+          node.type === 'Identifier' &&
+          direct('property'))
       );
     case 'SequenceExpression':
       return member('expressions');
-    case 'ObjectExpression':
-      return false;
     case 'ArrayExpression':
       return member('elements');
     case 'SpreadElement':
@@ -1788,31 +1829,72 @@ function isSupportedExpressionPosition(
     case 'TemplateLiteral':
       return member('expressions');
     case 'TaggedTemplateExpression':
-      return direct('tag');
+      return (
+        direct('tag') ||
+        (node.type === 'TemplateLiteral' && direct('quasi'))
+      );
     case 'AssignmentPattern':
       return direct('right');
     case 'ArrowFunctionExpression':
       return parent.expression === true && direct('body');
+    case 'FunctionDeclaration':
+    case 'FunctionExpression':
+      return node.type === 'Identifier' && direct('id');
     case 'ClassDeclaration':
     case 'ClassExpression':
-      return direct('superClass');
+      return (
+        direct('superClass') ||
+        (node.type === 'Identifier' && direct('id'))
+      );
     case 'MethodDefinition':
-      return parent.computed === true && direct('key');
+      return (
+        (parent.computed === true && direct('key')) ||
+        (parent.computed === false &&
+          (node.type === 'Identifier' || node.type === 'Literal') &&
+          direct('key')) ||
+        (node.type === 'FunctionExpression' && direct('value'))
+      );
     case 'Property':
       if (parent.computed === true && direct('key')) {
         return true;
       }
 
+      if (
+        parent.computed === false &&
+        (node.type === 'Identifier' || node.type === 'Literal') &&
+        direct('key')
+      ) {
+        return true;
+      }
+
+      if (!direct('value')) {
+        return false;
+      }
+
       return (
-        patternContext === undefined &&
-        parent.kind === 'init' &&
-        parent.method === false &&
-        parent.shorthand === false &&
-        direct('value')
+        (parent.kind === 'init' && parent.method === false) ||
+        (node.type === 'FunctionExpression' &&
+          ((parent.kind === 'init' && parent.method === true) ||
+            ((parent.kind === 'get' || parent.kind === 'set') &&
+              parent.method === false)))
       );
+    case 'CatchClause':
+      return node.type === 'Identifier' && direct('param');
+    case 'LabeledStatement':
+    case 'BreakStatement':
+    case 'ContinueStatement':
+      return node.type === 'Identifier' && direct('label');
     default:
       return false;
   }
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isAssignmentTargetExpression(node) {
+  return node.type === 'Identifier' || node.type === 'MemberExpression';
 }
 
 /**
@@ -1833,7 +1915,7 @@ function validateArrowFunctionExpression(node) {
   }
 
   if (node.expression) {
-    return isSupportedObjectPropertyExpression(node.body)
+    return isSupportedExpressionNode(node.body)
       ? undefined
       : 'unsupported arrow function expression body';
   }
@@ -1897,7 +1979,7 @@ function validateFunctionParameterList(node) {
     if (!binding) {
       if (
         RECOGNIZED_AST_NODE_TYPES.has(parameter.type) &&
-        !isSupportedObjectPropertyExpression(parameter)
+        !isSupportedExpressionNode(parameter)
       ) {
         return 'unsupported computed object parameter key';
       }
@@ -2064,7 +2146,7 @@ function validateTemplateLiteral(node, parent, parentKey) {
     parent && parent.type === 'TaggedTemplateExpression' && parentKey === 'quasi';
 
   for (const expression of node.expressions) {
-    if (!isSupportedObjectPropertyExpression(expression)) {
+    if (!isSupportedExpressionNode(expression)) {
       return 'unsupported template literal substitution';
     }
   }
@@ -2115,7 +2197,7 @@ function validateTemplateElement(node, parent, parentKey, parentIndex) {
  * @returns {string | undefined}
  */
 function validateTaggedTemplateExpression(node) {
-  if (!isSupportedObjectPropertyExpression(node.tag)) {
+  if (!isSupportedExpressionNode(node.tag)) {
     return 'tagged template expressions require a supported tag expression';
   }
 
@@ -2237,7 +2319,7 @@ function validateObjectExpressionProperty(node, parent, parentKey, parentIndex) 
 
   if (
     node.computed &&
-    !isSupportedObjectPropertyExpression(node.key)
+    !isSupportedExpressionNode(node.key)
   ) {
     return 'unsupported computed object property key';
   }
@@ -2260,7 +2342,7 @@ function validateObjectExpressionProperty(node, parent, parentKey, parentIndex) 
   }
 
   if (node.kind === 'init') {
-    return isSupportedObjectPropertyExpression(node.value)
+    return isSupportedExpressionNode(node.value)
       ? undefined
       : 'unsupported object property value';
   }
@@ -2305,12 +2387,12 @@ function isPrototypeSetterProperty(property) {
  * @param {any} node
  * @returns {boolean}
  */
-function isSupportedObjectPropertyExpression(node) {
+function isSupportedExpressionNode(node) {
   return (
     !!node &&
     typeof node === 'object' &&
     typeof node.type === 'string' &&
-    SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES.has(node.type)
+    SUPPORTED_EXPRESSION_TYPES.has(node.type)
   );
 }
 
@@ -2481,7 +2563,7 @@ function isValidSuperMemberProperty(property, computed) {
 
   return (
     !RECOGNIZED_AST_NODE_TYPES.has(property.type) ||
-    isSupportedObjectPropertyExpression(property)
+    isSupportedExpressionNode(property)
   );
 }
 

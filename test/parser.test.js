@@ -978,6 +978,16 @@ const tests = [
             nestedUnexpectedExpressions: [[classExpression()]],
           },
         ]),
+        programFor([
+          {
+            type: 'ExpressionStatement',
+            expression: { type: 'Literal', value: 0 },
+            unexpectedExpression: {
+              type: 'ArrayExpression',
+              elements: [classExpression()],
+            },
+          },
+        ]),
       ];
 
       for (const program of malformed) {
@@ -985,6 +995,48 @@ const tests = [
           () => parseScript('', { parse: () => program }),
           SyntaxError,
         );
+      }
+    },
+  },
+  {
+    name: 'custom parser rejects non-class expression wrappers under arbitrary AST fields',
+    run() {
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: { type: 'Literal', value: 0 },
+            unexpectedExpression: {
+              type: 'ArrayExpression',
+              elements: [
+                {
+                  type: 'CallExpression',
+                  callee: { type: 'Identifier', name: 'call' },
+                  arguments: [],
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+    },
+  },
+  {
+    name: 'nested class expressions remain valid on ordinary expression edges',
+    run() {
+      const valid = [
+        'var classes = [class {}];',
+        'call(class {});',
+        'condition ? class {} : class {};',
+        'target = class {};',
+      ];
+
+      for (const source of valid) {
+        assertSame(parseScript(source).type, 'Program', source);
       }
     },
   },
@@ -2123,11 +2175,14 @@ const tests = [
        * @returns {any}
        */
       function createProgram(parent, value) {
-        const expression = {
-          type: parent.type,
-          callee: { type: 'Identifier', name: 'f' },
-          [parent.key]: value,
-        };
+        const expression =
+          parent.type === 'ArrayExpression'
+            ? { type: parent.type, [parent.key]: value }
+            : {
+                type: parent.type,
+                callee: { type: 'Identifier', name: 'f' },
+                [parent.key]: value,
+              };
 
         return {
           type: 'Program',
