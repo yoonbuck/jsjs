@@ -6,12 +6,12 @@
  * of paths, it walks the pinned tree once and keeps every test that the ES5.1
  * selection policy (`tools/test262/es5-selection.js` + `es5-selection.json`)
  * says is in scope: a script (not a module) that parses under the engine's
- * supported grammar, lives under an in-scope directory, declares no `features:`
- * tag outside what a `featureAreas` claim covers for its path, and is not
- * carved out by a classified exclusion. Everything host-specific — reading the
- * tree, parsing with the engine, and writing the manifest — lives here; the
- * policy itself is pure and host-free so the same decisions can be tested
- * without a checkout.
+ * supported grammar, and, when untagged, under the ES5.1 baseline grammar too;
+ * it must live under an in-scope directory, declare no `features:` tag outside
+ * what a `featureAreas` claim covers for its path, and avoid classified
+ * exclusions. Everything host-specific — reading the tree, parsing with the
+ * engine, and writing the manifest — lives here; the policy itself is pure and
+ * host-free so the same decisions can be tested without a checkout.
  *
  * The same three guards `test262:upstream` uses protect this command, because a
  * subset derived from the wrong tree is worse than no subset at all: the
@@ -27,6 +27,7 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { parseScript } from '../../src/parser.js';
+import { Parser } from '../../src/parser-dependency.js';
 import {
   ES5_SELECTION_FILE,
   buildUpstreamSubset,
@@ -58,7 +59,9 @@ const READABLE_CANDIDATE = Object.freeze({
   declaresFeatures: false,
   features: Object.freeze([]),
   isModule: false,
+  parsesUnderBaselineGrammar: true,
   parsesUnderEngineGrammar: true,
+  includesParseUnderBaselineGrammar: true,
   includesParseUnderEngineGrammar: true,
 });
 
@@ -85,6 +88,35 @@ function readRepositoryFile(path) {
 function parsesUnderEngineGrammar(source) {
   try {
     parseScript(source);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a source is within the original ES5.1 grammar envelope. Untagged
+ * tests must satisfy this stricter gate: otherwise every newly parseable syntax
+ * form would silently enter the broad baseline just because the engine grew.
+ * Tagged ES2015 tests instead enter through a narrow `featureAreas` claim.
+ *
+ * This deliberately uses Acorn without the engine capability pass. The engine
+ * parse below remains the authoritative check that a selected source actually
+ * parses and runs; this is only a conservative provenance gate for untagged
+ * files.
+ *
+ * @param {string} source
+ * @returns {boolean}
+ */
+function parsesUnderBaselineGrammar(source) {
+  try {
+    Parser.parse(source, {
+      ecmaVersion: 5,
+      sourceType: 'script',
+      locations: true,
+      ranges: true,
+    });
 
     return true;
   } catch {
@@ -134,19 +166,20 @@ async function listTestFiles(checkoutPath) {
 }
 
 /**
- * Reads every harness include and records whether it parses under the engine's
- * supported grammar. A test that pulls in an include the grammar rejects cannot
- * itself run, so such a test is not in scope even when its own body parses.
+ * Reads every harness include and records whether it parses under both the
+ * engine and ES5.1 baseline grammars. A test that pulls in an include the
+ * engine rejects cannot run; an untagged test whose include needs newer syntax
+ * must not bypass the baseline gate through that helper.
  *
  * @param {string} checkoutPath
- * @returns {Promise<Map<string, boolean>>}
+ * @returns {Promise<Map<string, { engine: boolean, baseline: boolean }>>}
  */
 async function readHarnessParsing(checkoutPath) {
   const entries = await readdir(
     new URL(`${checkoutPath}/${HARNESS_DIRECTORY}`, REPOSITORY_ROOT_URL),
     { withFileTypes: true },
   );
-  /** @type {Map<string, boolean>} */
+  /** @type {Map<string, { engine: boolean, baseline: boolean }>} */
   const parsing = new Map();
 
   for (const entry of entries) {
@@ -158,7 +191,10 @@ async function readHarnessParsing(checkoutPath) {
       `${checkoutPath}/${HARNESS_DIRECTORY}/${entry.name}`,
     );
 
-    parsing.set(entry.name, parsesUnderEngineGrammar(source));
+    parsing.set(entry.name, {
+      engine: parsesUnderEngineGrammar(source),
+      baseline: parsesUnderBaselineGrammar(source),
+    });
   }
 
   return parsing;
@@ -197,9 +233,13 @@ async function selectPaths(options) {
       declaresFeatures: frontmatter.hasFeatures,
       features: frontmatter.features,
       isModule: frontmatter.isModule,
+      parsesUnderBaselineGrammar: parsesUnderBaselineGrammar(source),
       parsesUnderEngineGrammar: parsesUnderEngineGrammar(source),
+      includesParseUnderBaselineGrammar: frontmatter.includes.every(
+        (name) => harnessParsing.get(name)?.baseline !== false,
+      ),
       includesParseUnderEngineGrammar: frontmatter.includes.every(
-        (name) => harnessParsing.get(name) !== false,
+        (name) => harnessParsing.get(name)?.engine !== false,
       ),
     };
 

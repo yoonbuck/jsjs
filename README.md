@@ -47,9 +47,11 @@ agent — the owner of the well-known symbols and the global symbol registry —
 unless `createRealm({ agent })` opts several realms into sharing one.
 `evaluateScript(realm, source)` parses and evaluates a script, returning
 `{ type: 'normal' | 'throw', value }`. The engine implements ES5.1 plus ES2015
-lexical declarations (`let`/`const`, block scope) and block-level function
-declarations. See
-[docs/architecture.md](docs/architecture.md) for the full embedding API.
+lexical declarations, `for`-`of`, arrows, classes, computed object and class
+method names, destructuring, default/rest parameters, iterable spread, and
+template literals (including tagged-template caching). See
+[docs/architecture.md](docs/architecture.md) for the grammar boundary and full
+embedding API.
 
 ## Commands
 
@@ -81,9 +83,12 @@ guidance, and caveats are in [docs/benchmarking.md](docs/benchmarking.md).
 
 The engine is tested against the upstream [tc39/test262](https://github.com/tc39/test262)
 suite, pinned to revision `b363f29d3c43c626dc852744ad64a0b48a003693` (2026-07-31).
-Every selected record passes. Conformance methodology, the supported ES5.1
-surface and the ES2015 Symbol surface on top of it, denominator semantics, the live coverage table, and the detailed report
-are in [docs/conformance.md](docs/conformance.md).
+The Test262 feature manifest has executable probes for the supported ES2015
+syntax tags: arrows, classes, computed names, defaults, destructuring,
+rest parameters, spread, and templates. A small pinned suite in
+`test/ci/es2015-syntax-test262.test.js` covers their positive, negative, and
+classified-neighbor cases. Conformance methodology, live coverage, and the
+detailed report are in [docs/conformance.md](docs/conformance.md).
 
 ## Architecture
 
@@ -97,8 +102,9 @@ The engine has a small number of intentional deviations from the ES5.1 text
 (mostly following ES2015+ errata every engine ships, plus the ES2015 grammar's
 removal of the strict duplicate-property early error) and known limitations —
 guest recursion depth is bounded by an engine-owned budget of 500 engine frames,
-raising a catchable guest `RangeError` rather than by the host's stack, and
-ES2015 syntax beyond lexical and block-level function declarations is rejected
-at parse time. The full
+raising a catchable guest `RangeError` rather than by the host's stack. It still
+rejects generators/yield, async/await, modules, `new.target`, object
+rest/spread, later class forms, binary/octal literals, and Unicode code-point
+escapes. The full
 tables, spec citations, observable examples, and backing code references are in
 [docs/limitations.md](docs/limitations.md).

@@ -14,6 +14,41 @@ import {
 } from '../tools/test262/es5-selection.js';
 import { parseUpstreamSubset } from '../tools/test262/upstream.js';
 
+const ES2015_SYNTAX_FEATURES = Object.freeze([
+  'arrow-function',
+  'class',
+  'computed-property-names',
+  'default-parameters',
+  'destructuring-assignment',
+  'destructuring-binding',
+  'rest-parameters',
+  'spread-syntax',
+  'template',
+]);
+
+const SELECTION_SYNTAX_FEATURES = Object.freeze(
+  ES2015_SYNTAX_FEATURES.filter(
+    (feature) => feature !== 'spread-syntax' && feature !== 'template',
+  ),
+);
+
+const UNSUPPORTED_NEIGHBOR_FEATURES = Object.freeze([
+  'async-iteration',
+  'async-functions',
+  'class-fields-private',
+  'class-fields-public',
+  'class-methods-private',
+  'class-static-block',
+  'class-static-fields-private',
+  'class-static-fields-public',
+  'class-static-methods-private',
+  'decorators',
+  'generators',
+  'new.target',
+  'object-rest',
+  'object-spread',
+]);
+
 /**
  * A minimal, well-formed policy the predicate and grouping tests build on.
  * Constructed rather than read so the suite stays portable and needs no
@@ -49,7 +84,9 @@ const CANDIDATE_INFO = Object.freeze({
   declaresFeatures: false,
   features: Object.freeze([]),
   isModule: false,
+  parsesUnderBaselineGrammar: true,
   parsesUnderEngineGrammar: true,
+  includesParseUnderBaselineGrammar: true,
   includesParseUnderEngineGrammar: true,
 });
 
@@ -71,7 +108,122 @@ function featureAreaPolicyText() {
   });
 }
 
+/**
+ * A portable model of the exact syntax claim boundary. The Node-only CI
+ * contract separately asserts that the committed JSON policy has this shape.
+ *
+ * @returns {string}
+ */
+function es2015SyntaxPolicyText() {
+  return policyText({
+    excludedLanguageDirectories: ['export', 'import', 'module-code'],
+    featureAreas: [
+      {
+        prefix: 'test/language/expressions',
+        features: [...SELECTION_SYNTAX_FEATURES],
+        reason: 'The supported ES2015 expression syntax forms are implemented.',
+      },
+    ],
+  });
+}
+
 export default [
+  {
+    name: 'the ES2015 syntax policy contract claims only the supported surface',
+    run: () => {
+      const policy = parseEs5Selection(es2015SyntaxPolicyText());
+      const languageAreas = policy.featureAreas.filter((area) =>
+        area.prefix.startsWith('test/language/'),
+      );
+      const claimedSyntaxFeatures = [
+        ...new Set(
+          languageAreas.flatMap((area) =>
+            area.features.filter((feature) =>
+              SELECTION_SYNTAX_FEATURES.includes(feature),
+            ),
+          ),
+        ),
+      ].sort();
+
+      assertSame(
+        JSON.stringify(policy.excludedLanguageDirectories),
+        JSON.stringify(['export', 'import', 'module-code']),
+        'the policy must remove only the obsolete computed-property-names, destructuring, and rest-parameters directory exclusions',
+      );
+      assertSame(
+        JSON.stringify(claimedSyntaxFeatures),
+        JSON.stringify(SELECTION_SYNTAX_FEATURES),
+        'the policy must claim each selected ES2015 syntax tag exactly once through narrow language prefixes',
+      );
+      assertSame(
+        policy.featureAreas
+          .find((area) => area.prefix === 'test/language')
+          ?.features.some((feature) =>
+            SELECTION_SYNTAX_FEATURES.includes(feature),
+          ) ?? false,
+        false,
+        'the policy must not reopen all of test/language for the newly claimed ES2015 syntax',
+      );
+
+      for (const neighbor of UNSUPPORTED_NEIGHBOR_FEATURES) {
+        assertSame(
+          languageAreas.some((area) => area.features.includes(neighbor)),
+          false,
+          `the policy must not claim neighboring unsupported feature ${neighbor}`,
+        );
+      }
+
+      /** @type {readonly (readonly [string, readonly string[]])[]} */
+      const unsupportedCases = [
+        [
+          'test/language/expressions/arrow-function/neighbor.js',
+          ['arrow-function', 'new.target'],
+        ],
+        [
+          'test/language/expressions/class/neighbor.js',
+          ['class', 'class-static-fields-public'],
+        ],
+        [
+          'test/language/expressions/object/neighbor.js',
+          ['computed-property-names', 'object-spread'],
+        ],
+        [
+          'test/language/expressions/function/neighbor.js',
+          ['async-functions', 'default-parameters'],
+        ],
+        [
+          'test/language/expressions/class/neighbor-generator.js',
+          ['class', 'generators'],
+        ],
+      ];
+
+      for (const [path, features] of unsupportedCases) {
+        assertSame(
+          isCandidatePath(
+            path,
+            { ...CANDIDATE_INFO, declaresFeatures: true, features },
+            policy,
+          ),
+          false,
+          `the policy must exclude ${features.join(', ')} from ${path}`,
+        );
+      }
+      assertSame(
+        isCandidatePath(
+          'test/language/expressions/class/module-neighbor.js',
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['class'],
+            isModule: true,
+          },
+          policy,
+        ),
+        false,
+        'the policy must exclude module-flagged syntax even under a claimed prefix',
+      );
+    },
+  },
   {
     name: 'es5-selection parses a well-formed policy and freezes it',
     run: () => {
@@ -492,6 +644,56 @@ export default [
           policy,
         ),
         false,
+      );
+    },
+  },
+  {
+    name: 'an untagged post-ES5 syntax file cannot enter the broad baseline selection',
+    run: () => {
+      const policy = parseEs5Selection(
+        policyText({
+          featureAreas: [
+            {
+              prefix: 'test/language/expressions/arrow-function',
+              features: ['arrow-function'],
+              reason: 'Arrow functions are explicitly claimed here.',
+            },
+          ],
+        }),
+      );
+      const path = 'test/language/expressions/arrow-function/lexical-this.js';
+
+      assertSame(
+        isCandidatePath(
+          path,
+          { ...CANDIDATE_INFO, parsesUnderBaselineGrammar: false },
+          policy,
+        ),
+        false,
+        'an untagged ES2015 file must not bypass a narrow feature claim',
+      );
+      assertSame(
+        isCandidatePath(
+          path,
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['arrow-function'],
+            parsesUnderBaselineGrammar: false,
+          },
+          policy,
+        ),
+        true,
+        'a tagged ES2015 file may enter only through its claimed feature area',
+      );
+      assertSame(
+        isCandidatePath(
+          'test/language/expressions/arrow-function/harness-backed.js',
+          { ...CANDIDATE_INFO, includesParseUnderBaselineGrammar: false },
+          policy,
+        ),
+        false,
+        'an untagged test cannot bypass the baseline gate through an ES2015 harness helper',
       );
     },
   },

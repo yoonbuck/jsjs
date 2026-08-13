@@ -569,44 +569,25 @@ in `src/parser.js`; the iterative walks are `EngineObject#getProperty`
 `src/evaluator/static-semantics.js`.
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.
 
-### ES2015 syntax beyond lexical and block-level function declarations is rejected at parse time
+### Remaining unsupported syntax is rejected at parse time
 
-The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
-and block-level function declarations, but no other ES2015 feature, so its
-parser accepts that syntax and rejects every other ES2015 construct at parse
-time. Most are refused by the engine's own early-error pass
-(`checkUnsupportedEs2015Node`): classes, arrow functions, template and tagged
-template literals, `for`-`of`, generators and `yield`, destructuring patterns
-(object, array, and default/rest/assignment patterns), spread elements,
-`new.target`, computed/shorthand/method object properties, binary (`0b`) and
-octal (`0o`) numeric literals, and `\u{…}` code-point escapes in strings and
-identifiers. Two families never reach that pass, because the vendored Acorn
-refuses them itself before it runs: module syntax
-(`import`/`export`/`import()`), rejected because the parser is configured with
-`sourceType: 'script'`, and the ES2017 `async`/`await` forms, which are not ES6
-syntax at `ecmaVersion: 6`. Their entries in the pass's rejection table are
-defensive — kept so a later `sourceType`/`ecmaVersion` change cannot let one
-slip through silently — not reached on any accepted parse. The ES2015 RegExp
-flags `u` and `y` are likewise rejected, but by the engine's existing ES5.1 flag
-validation in `src/runtime/regexp-syntax.js`, not by either mechanism above.
-Annex B.3.4 direct `if`-body function declarations
-(`if (condition) function f() {}`) are also rejected in sloppy as well as strict
-code until their conditional var-scoped replacement semantics are implemented;
-accepting the syntax without those semantics would leave the declaration
-silently mis-scoped.
+The engine now accepts the issue #25 ES2015 syntax surface: arrows, classes and
+derived construction, computed object/class method names, destructuring,
+default/rest parameters, iterable array/call/construction spread, and template
+literals. The capability gate still rejects exactly these neighboring forms:
 
-This is a limitation rather than a deviation: a full ES2015 engine accepts all
-of them, and the engine rejects them only because the evaluator does not yet
-implement them. Rejecting at the parser keeps the grammar the engine parses
-identical to the grammar it runs — a construct that would misbehave at runtime
-is refused up front with a message naming what is missing — rather than parsing
-a form the evaluator would then mishandle. A top-level `evaluateScript` call
-surfaces the rejection as the host `SyntaxError` that every parse failure
-raises; guest code that reaches the parser through `eval` or `Function` gets a
-catchable guest `SyntaxError`.
+- generators and `yield`;
+- async functions and `await`;
+- modules, `import`, `export`, and dynamic `import()`;
+- `new.target`, including inside arrows;
+- object rest and object spread;
+- later class forms: public/private fields, private methods, static blocks, and
+  decorators;
+- binary (`0b`) and octal (`0o`) numeric literals; and
+- Unicode code-point escapes (`\u{…}`) in strings and identifiers.
 
-**Backing code:** `src/parser.js` (`checkUnsupportedEs2015Node` and
-`UNSUPPORTED_ES2015_NODE_MESSAGES`).
-**Verification:**
-`evaluateScript(realm, 'try { eval("class C {}"); "ok" } catch (e) { e.constructor.name }')`
-→ `{ type: 'normal', value: 'SyntaxError' }`.
+`sourceType: 'script'` makes modules fail in Acorn, and `ecmaVersion: 6` rejects
+async forms before the engine's capability pass. The remaining forms are guarded
+by `src/parser.js` shape validation, so the grammar it accepts is the grammar the
+evaluator can execute. A top-level parse failure is a host `SyntaxError`; code
+reached through `eval` or `Function` receives a catchable guest `SyntaxError`.
