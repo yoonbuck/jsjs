@@ -665,7 +665,7 @@ function evaluateSuperCallExpression(node, context) {
 
   if (
     functionEnvironment === undefined ||
-    functionEnvironment.superConstructor === undefined
+    functionEnvironment.activeConstructor === undefined
   ) {
     throw new GuestErrorSignal(
       'ReferenceError',

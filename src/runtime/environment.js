@@ -672,7 +672,7 @@ export class GlobalEnvironmentRecord {
  *   thisValue: unknown,
  *   homeObject?: EngineObject,
  *   newTarget?: unknown,
- *   superConstructor?: unknown,
+ *   activeConstructor?: import('./function-object.js').EngineFunction,
  * }} FunctionExecutionEnvironment
  */
 
@@ -683,7 +683,7 @@ export class GlobalEnvironmentRecord {
  *   thisValue?: unknown,
  *   homeObject?: EngineObject,
  *   newTarget?: unknown,
- *   superConstructor?: unknown,
+ *   activeConstructor?: import('./function-object.js').EngineFunction,
  * }} options
  * @returns {FunctionExecutionEnvironment}
  */
@@ -693,7 +693,7 @@ export function createFunctionExecutionEnvironment({
   thisValue = undefined,
   homeObject = undefined,
   newTarget = undefined,
-  superConstructor = undefined,
+  activeConstructor = undefined,
 }) {
   /** @type {FunctionExecutionEnvironment} */
   const environment = {
@@ -701,11 +701,14 @@ export function createFunctionExecutionEnvironment({
     thisStatus,
     thisValue,
     newTarget,
-    superConstructor,
   };
 
   if (homeObject !== undefined) {
     environment.homeObject = homeObject;
+  }
+
+  if (activeConstructor !== undefined) {
+    environment.activeConstructor = activeConstructor;
   }
 
   return environment;

@@ -38,7 +38,6 @@ import {
  *   enclosingFunctionEnvironment?: import('./environment.js').FunctionExecutionEnvironment,
  *   methodHomeObject?: EngineObject,
  *   constructorKind?: 'base' | 'derived' | undefined,
- *   superConstructor?: unknown,
  *   defaultDerivedConstructor?: boolean,
  * }} EngineFunctionOptions
  */
@@ -80,7 +79,6 @@ export class EngineFunction extends EngineObject {
     enclosingFunctionEnvironment = undefined,
     methodHomeObject = undefined,
     constructorKind = undefined,
-    superConstructor = undefined,
     defaultDerivedConstructor = false,
   }) {
     super(realm.intrinsics.functionPrototype, 'Function');
@@ -111,8 +109,6 @@ export class EngineFunction extends EngineObject {
     this._execute = execute;
     /** @type {'base' | 'derived' | undefined} */
     this.constructorKind = constructorKind;
-    /** @type {unknown} */
-    this.superConstructor = superConstructor;
     /** @type {boolean} */
     this.defaultDerivedConstructor = defaultDerivedConstructor;
 
@@ -327,7 +323,8 @@ export class EngineFunction extends EngineObject {
       thisStatus: derived ? 'uninitialized' : 'initialized',
       thisValue: instance,
       newTarget,
-      superConstructor: this.superConstructor,
+      homeObject: this.methodHomeObject,
+      activeConstructor: derived ? this : undefined,
     });
     const completion = this.defaultDerivedConstructor
       ? this.executeWithFunctionEnvironment(
@@ -468,16 +465,17 @@ function ordinaryCreateFromConstructor(newTarget, fallbackPrototype, agent) {
 
 /**
  * Implements the shared runtime portion of a derived constructor's `super(...)`
- * evaluation. The evaluator expands arguments first; this helper constructs the
- * active superclass with the current new target and binds the resulting `this`
- * exactly once.
+ * evaluation. The evaluator expands arguments first; this helper reads the
+ * currently executing derived constructor's current prototype, constructs it
+ * with the active new target, and binds the resulting `this` exactly once.
  *
  * @param {readonly unknown[]} args
  * @param {import('./environment.js').FunctionExecutionEnvironment} functionEnvironment
  * @returns {unknown}
  */
 export function constructSuper(args, functionEnvironment) {
-  const superConstructor = functionEnvironment.superConstructor;
+  const superConstructor =
+    functionEnvironment.activeConstructor?.getPrototype();
 
   if (!isConstructor(superConstructor)) {
     throw new GuestErrorSignal(

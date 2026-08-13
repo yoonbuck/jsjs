@@ -257,6 +257,84 @@ const tests = [
     },
   },
   {
+    name: 'class heritage expressions run strictly without leaking globals',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        `
+          var errorName;
+          try {
+            class C extends (heritageLeak = Object) {}
+          } catch (error) {
+            errorName = error.name;
+          }
+          errorName;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'ReferenceError');
+      assertSame(realm.globalObject.getOwnProperty('heritageLeak'), undefined);
+      assertSame(
+        run(`
+          var order = '';
+          class Base {}
+          function heritage() {
+            order = order + 'heritage';
+            return Base;
+          }
+          function key() {
+            order = order + ':key';
+            return 'method';
+          }
+          class C extends heritage() {
+            [key()]() {}
+          }
+          order;
+        `),
+        'heritage:key',
+      );
+    },
+  },
+  {
+    name: 'computed class names run strictly without leaking globals',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        `
+          var errorName;
+          try {
+            class C {
+              [computedLeak = 'method']() {}
+            }
+          } catch (error) {
+            errorName = error.name;
+          }
+          errorName;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'ReferenceError');
+      assertSame(realm.globalObject.getOwnProperty('computedLeak'), undefined);
+    },
+  },
+  {
+    name: 'computed special class keys retain ordinary instance definitions and reject static prototype replacement',
+    run() {
+      assertSame(
+        run('class C { ["constructor"]() { return 7; } } new C().constructor();'),
+        7,
+      );
+      assertSame(
+        thrownName('class C { static ["prototype"]() {} }'),
+        'TypeError',
+      );
+    },
+  },
+  {
     name: 'base constructors retain their allocated this unless they return an object',
     run() {
       assertSame(
@@ -344,6 +422,38 @@ const tests = [
     },
   },
   {
+    name: 'class constructors use their instance-side HomeObject for super properties',
+    run() {
+      assertSame(
+        run(`
+          Object.prototype.readBaseValue = function () {
+            return this.value + 1;
+          };
+          class Base {
+            constructor(value) {
+              this.value = value;
+              this.base = super.readBaseValue();
+            }
+            method() {
+              return this.value;
+            }
+          }
+          class Derived extends Base {
+            constructor(value) {
+              super(value);
+              this.direct = super.method();
+              this.computed = super['method']();
+              this.fromArrow = (() => super.method())();
+            }
+          }
+          var instance = new Derived(4);
+          [instance.base, instance.direct, instance.computed, instance.fromArrow].join(':');
+        `),
+        '5:4:4:4',
+      );
+    },
+  },
+  {
     name: 'derived construction enforces super initialization and supports lexical arrows',
     run() {
       assertSame(
@@ -398,6 +508,81 @@ const tests = [
           [new Arrow().result, beforeThis, beforeProperty, twice].join(':');
         `),
         '5:ReferenceError:ReferenceError:ReferenceError',
+      );
+    },
+  },
+  {
+    name: 'explicit derived super resolves the constructor current prototype',
+    run() {
+      assertSame(
+        run(`
+          class Initial {
+            constructor() {
+              this.value = 'initial';
+            }
+          }
+          class Replacement {
+            constructor() {
+              this.value = 'replacement';
+            }
+          }
+          class Derived extends Initial {
+            constructor() {
+              super();
+            }
+          }
+          Object.setPrototypeOf(Derived, Replacement);
+          var instance = new Derived();
+          [instance.value, instance instanceof Derived, instance instanceof Replacement].join(':');
+        `),
+        'replacement:true:false',
+      );
+    },
+  },
+  {
+    name: 'default derived super resolves the constructor current prototype',
+    run() {
+      assertSame(
+        run(`
+          class Initial {
+            constructor() {
+              this.value = 'initial';
+            }
+          }
+          class Replacement {
+            constructor() {
+              this.value = 'replacement';
+            }
+          }
+          class Derived extends Initial {}
+          Object.setPrototypeOf(Derived, Replacement);
+          new Derived().value;
+        `),
+        'replacement',
+      );
+    },
+  },
+  {
+    name: 'derived super rejects a current constructor prototype that is not constructible',
+    run() {
+      assertSame(
+        run(`
+          class Initial {}
+          class Derived extends Initial {
+            constructor() {
+              super();
+            }
+          }
+          Object.setPrototypeOf(Derived, {});
+          var errorName;
+          try {
+            new Derived();
+          } catch (error) {
+            errorName = error.name;
+          }
+          errorName;
+        `),
+        'TypeError',
       );
     },
   },

@@ -326,6 +326,41 @@ const SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES = new Set([
   'TaggedTemplateExpression',
 ]);
 
+const UNSUPPORTED_CLASS_DEFINITION_FIELDS = [
+  'decorators',
+  'typeParameters',
+  'typeArguments',
+  'superTypeParameters',
+  'superTypeArguments',
+  'implements',
+  'abstract',
+  'declare',
+];
+
+const UNSUPPORTED_CLASS_METHOD_FIELDS = [
+  'decorators',
+  'accessibility',
+  'abstract',
+  'declare',
+  'definite',
+  'optional',
+  'override',
+  'readonly',
+  'returnType',
+  'typeParameters',
+  'typeArguments',
+  'variance',
+];
+
+const UNSUPPORTED_CLASS_METHOD_FUNCTION_FIELDS = [
+  'decorators',
+  'typeParameters',
+  'typeArguments',
+  'returnType',
+  'predicate',
+  'declare',
+];
+
 /**
  * Every AST node type this parser capability boundary recognizes. The direct
  * statement and expression types match the evaluator dispatch tables; the
@@ -890,6 +925,10 @@ function superCallAllowedForChildren(
     return inherited;
   }
 
+  if (node.type === 'FunctionDeclaration') {
+    return false;
+  }
+
   if (node.type !== 'FunctionExpression') {
     return inherited;
   }
@@ -1161,7 +1200,13 @@ function unsupportedEs2015Message(
   }
 
   if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
-    return validateClassDefinition(node, parent, parentKey, parentIndex);
+    return validateClassDefinition(
+      node,
+      parent,
+      parentKey,
+      parentIndex,
+      patternContext,
+    );
   }
 
   if (node.type === 'ClassBody') {
@@ -1348,9 +1393,16 @@ function isFunctionNode(node) {
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {number | undefined} parentIndex
+ * @param {'binding' | 'assignment' | undefined} patternContext
  * @returns {string | undefined}
  */
-function validateClassDefinition(node, parent, parentKey, parentIndex) {
+function validateClassDefinition(
+  node,
+  parent,
+  parentKey,
+  parentIndex,
+  patternContext,
+) {
   if (
     node.type === 'ClassDeclaration' &&
     !isClassDeclarationPosition(parent, parentKey, parentIndex)
@@ -1363,6 +1415,19 @@ function validateClassDefinition(node, parent, parentKey, parentIndex) {
     (!isIdentifierNode(node.id) || typeof node.id.name !== 'string')
   ) {
     return 'class declarations require an identifier name';
+  }
+
+  if (
+    node.type === 'ClassExpression' &&
+    !isSupportedExpressionPosition(
+      node,
+      parent,
+      parentKey,
+      parentIndex,
+      patternContext,
+    )
+  ) {
+    return 'class expressions are not supported in this AST position';
   }
 
   if (
@@ -1390,12 +1455,7 @@ function validateClassDefinition(node, parent, parentKey, parentIndex) {
   }
 
   if (
-    node.decorators !== undefined ||
-    node.typeParameters !== undefined ||
-    node.superTypeParameters !== undefined ||
-    node.implements !== undefined ||
-    node.abstract === true ||
-    node.declare === true
+    hasDefinedField(node, UNSUPPORTED_CLASS_DEFINITION_FIELDS)
   ) {
     return 'class decorators and type annotations are not supported';
   }
@@ -1494,6 +1554,7 @@ function validateClassMethodDefinition(node, parent, parentKey, parentIndex) {
   }
 
   if (
+    hasDefinedField(node, UNSUPPORTED_CLASS_METHOD_FIELDS) ||
     typeof node.computed !== 'boolean' ||
     typeof node.static !== 'boolean' ||
     (node.kind !== 'constructor' &&
@@ -1616,6 +1677,7 @@ function isClassMethodFunction(definition, value) {
     !!definition &&
     definition.type === 'MethodDefinition' &&
     !!value &&
+    !hasDefinedField(value, UNSUPPORTED_CLASS_METHOD_FUNCTION_FIELDS) &&
     value.type === 'FunctionExpression' &&
     value.id === null &&
     Array.isArray(value.params) &&
@@ -1626,6 +1688,131 @@ function isClassMethodFunction(definition, value) {
     value.body.type === 'BlockStatement' &&
     Array.isArray(value.body.body)
   );
+}
+
+/**
+ * @param {any} node
+ * @param {readonly string[]} fields
+ * @returns {boolean}
+ */
+function hasDefinedField(node, fields) {
+  return fields.some((field) => node[field] !== undefined);
+}
+
+/**
+ * A class expression must occupy an expression-producing child edge that the
+ * evaluator actually consumes. The generic parser walk intentionally visits
+ * arbitrary custom-parser fields for defense in depth, so type validation alone
+ * cannot establish that a ClassExpression is reachable through valid syntax.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @returns {boolean}
+ */
+function isSupportedExpressionPosition(
+  node,
+  parent,
+  parentKey,
+  parentIndex,
+  patternContext,
+) {
+  if (!parent || typeof parentKey !== 'string') {
+    return false;
+  }
+
+  /** @param {string} key @returns {boolean} */
+  const direct = (key) => parentKey === key && parent[key] === node;
+  /** @param {string} key @returns {boolean} */
+  const member = (key) =>
+    parentKey === key &&
+    Array.isArray(parent[key]) &&
+    typeof parentIndex === 'number' &&
+    Number.isInteger(parentIndex) &&
+    parentIndex >= 0 &&
+    parentIndex < parent[key].length &&
+    parent[key][parentIndex] === node;
+
+  switch (parent.type) {
+    case 'ExpressionStatement':
+      return direct('expression');
+    case 'VariableDeclarator':
+      return direct('init');
+    case 'ReturnStatement':
+    case 'ThrowStatement':
+      return direct('argument');
+    case 'IfStatement':
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+      return direct('test');
+    case 'ForStatement':
+      return direct('init') || direct('test') || direct('update');
+    case 'ForInStatement':
+    case 'ForOfStatement':
+      return direct('right');
+    case 'WithStatement':
+      return direct('object');
+    case 'SwitchStatement':
+      return direct('discriminant');
+    case 'SwitchCase':
+      return direct('test');
+    case 'UnaryExpression':
+      return direct('argument');
+    case 'BinaryExpression':
+    case 'LogicalExpression':
+      return direct('left') || direct('right');
+    case 'ConditionalExpression':
+      return (
+        direct('test') || direct('consequent') || direct('alternate')
+      );
+    case 'AssignmentExpression':
+      return direct('right');
+    case 'CallExpression':
+    case 'NewExpression':
+      return direct('callee') || member('arguments');
+    case 'MemberExpression':
+      return (
+        direct('object') ||
+        (parent.computed === true && direct('property'))
+      );
+    case 'SequenceExpression':
+      return member('expressions');
+    case 'ObjectExpression':
+      return false;
+    case 'ArrayExpression':
+      return member('elements');
+    case 'SpreadElement':
+      return direct('argument');
+    case 'TemplateLiteral':
+      return member('expressions');
+    case 'TaggedTemplateExpression':
+      return direct('tag');
+    case 'AssignmentPattern':
+      return direct('right');
+    case 'ArrowFunctionExpression':
+      return parent.expression === true && direct('body');
+    case 'ClassDeclaration':
+    case 'ClassExpression':
+      return direct('superClass');
+    case 'MethodDefinition':
+      return parent.computed === true && direct('key');
+    case 'Property':
+      if (parent.computed === true && direct('key')) {
+        return true;
+      }
+
+      return (
+        patternContext === undefined &&
+        parent.kind === 'init' &&
+        parent.method === false &&
+        parent.shorthand === false &&
+        direct('value')
+      );
+    default:
+      return false;
+  }
 }
 
 /**

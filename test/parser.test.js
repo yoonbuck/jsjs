@@ -781,6 +781,13 @@ const tests = [
         'class C extends null { constructor() { return {}; } }',
         'class C extends null { constructor() { super(); } }',
         'class C extends Base { constructor() { return (() => super())(); } }',
+        'var assigned; assigned = class {};',
+        'var initialized = class {};',
+        '(class {});',
+        '(class {}).prototype;',
+        '(function (value) { return value; })(class {});',
+        '[class {}];',
+        'class Outer extends (class {}) {}',
       ];
 
       for (const source of accepted) {
@@ -810,6 +817,7 @@ const tests = [
         'class C { method() { super(); } }',
         'class C extends Base { method() { super(); } }',
         'class C extends Base { constructor() { function nested() { super(); } } }',
+        'class C extends Base { constructor() { function nested() { return () => super(); } } }',
         'class C { method(eval) {} }',
         'class C { method(arguments) {} }',
         'class C { method(value, value) {} }',
@@ -922,6 +930,251 @@ const tests = [
       cyclic.body.body.push(cyclic.body);
       assertThrows(
         () => parseScript('', { parse: () => programFor(cyclic) }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom parser class expressions require supported expression edges',
+    run() {
+      /** @returns {any} */
+      function classExpression() {
+        return {
+          type: 'ClassExpression',
+          id: null,
+          superClass: null,
+          body: { type: 'ClassBody', body: [] },
+        };
+      }
+
+      /** @param {readonly any[]} body */
+      function programFor(body) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body,
+        };
+      }
+
+      const malformed = [
+        programFor([classExpression()]),
+        programFor([
+          {
+            type: 'BlockStatement',
+            body: [classExpression()],
+          },
+        ]),
+        programFor([
+          {
+            type: 'ExpressionStatement',
+            expression: { type: 'Literal', value: 0 },
+            unexpectedExpression: classExpression(),
+          },
+        ]),
+        programFor([
+          {
+            type: 'ExpressionStatement',
+            expression: { type: 'Literal', value: 0 },
+            nestedUnexpectedExpressions: [[classExpression()]],
+          },
+        ]),
+      ];
+
+      for (const program of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom parser rejects post-ES2015 class metadata even when empty',
+    run() {
+      /** @returns {any} */
+      function functionValue() {
+        return {
+          type: 'FunctionExpression',
+          id: null,
+          params: [],
+          generator: false,
+          async: false,
+          expression: false,
+          body: { type: 'BlockStatement', body: [] },
+        };
+      }
+
+      /** @param {Record<string, unknown>} [extra={}] */
+      function method(extra = {}) {
+        return {
+          type: 'MethodDefinition',
+          key: { type: 'Identifier', name: 'method' },
+          computed: false,
+          static: false,
+          kind: 'method',
+          value: functionValue(),
+          ...extra,
+        };
+      }
+
+      /** @param {readonly any[]} [body=[method()]] */
+      function classExpression(body = [method()]) {
+        return {
+          type: 'ClassExpression',
+          id: null,
+          superClass: null,
+          body: { type: 'ClassBody', body },
+        };
+      }
+
+      /** @param {any} expression */
+      function programFor(expression) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [{ type: 'ExpressionStatement', expression }],
+        };
+      }
+
+      const accepted = {
+        ...classExpression([method({ decorators: undefined })]),
+        decorators: undefined,
+      };
+      assertSame(
+        parseScript('', { parse: () => programFor(accepted) }).type,
+        'Program',
+      );
+
+      const malformed = [
+        { ...classExpression(), decorators: [] },
+        { ...classExpression(), abstract: false },
+        { ...classExpression(), superTypeArguments: [] },
+        classExpression([method({ decorators: [] })]),
+        classExpression([method({ abstract: false })]),
+        classExpression([method({ typeParameters: [] })]),
+      ];
+
+      for (const expression of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => programFor(expression) }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'nested functions block derived super calls while constructor arrows retain them',
+    run() {
+      assertThrows(
+        () =>
+          parseScript(
+            'class Base {} class C extends Base { constructor() { function nested() { return () => super(); } } }',
+          ),
+        SyntaxError,
+      );
+      assertSame(
+        parseScript(
+          'class Base {} class C extends Base { constructor() { return (() => super())(); } }',
+        ).type,
+        'Program',
+      );
+
+      /** @param {readonly any[]} body */
+      function functionValue(body) {
+        return {
+          type: 'FunctionExpression',
+          id: null,
+          params: [],
+          generator: false,
+          async: false,
+          expression: false,
+          body: { type: 'BlockStatement', body },
+        };
+      }
+
+      /** @returns {any} */
+      function superArrow() {
+        return {
+          type: 'ArrowFunctionExpression',
+          id: null,
+          params: [],
+          generator: false,
+          async: false,
+          expression: true,
+          body: {
+            type: 'CallExpression',
+            callee: { type: 'Super' },
+            arguments: [],
+          },
+        };
+      }
+
+      /** @param {readonly any[]} body */
+      function derivedConstructor(body) {
+        return {
+          type: 'MethodDefinition',
+          key: { type: 'Identifier', name: 'constructor' },
+          computed: false,
+          static: false,
+          kind: 'constructor',
+          value: functionValue(body),
+        };
+      }
+
+      /** @param {readonly any[]} constructorBody */
+      function derivedClass(constructorBody) {
+        return {
+          type: 'ClassExpression',
+          id: null,
+          superClass: { type: 'Identifier', name: 'Base' },
+          body: {
+            type: 'ClassBody',
+            body: [derivedConstructor(constructorBody)],
+          },
+        };
+      }
+
+      /** @param {any} expression */
+      function programFor(expression) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [{ type: 'ExpressionStatement', expression }],
+        };
+      }
+
+      const directArrow = derivedClass([
+        {
+          type: 'ReturnStatement',
+          argument: superArrow(),
+        },
+      ]);
+      assertSame(
+        parseScript('', { parse: () => programFor(directArrow) }).type,
+        'Program',
+      );
+
+      const nestedFunctionArrow = derivedClass([
+        {
+          type: 'FunctionDeclaration',
+          id: { type: 'Identifier', name: 'nested' },
+          params: [],
+          generator: false,
+          async: false,
+          expression: false,
+          body: {
+            type: 'BlockStatement',
+            body: [
+              {
+                type: 'ReturnStatement',
+                argument: superArrow(),
+              },
+            ],
+          },
+        },
+      ]);
+      assertThrows(
+        () => parseScript('', { parse: () => programFor(nestedFunctionArrow) }),
         SyntaxError,
       );
     },

@@ -40,7 +40,6 @@ const DEFAULT_BASE_CONSTRUCTOR = Object.freeze({
 export function evaluateClassDefinition(node, context, bindingName = '') {
   const className = node.id ? node.id.name : bindingName;
   let classEnvironment = context.env;
-  let classContext = context;
   /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord | undefined} */
   let classNameEnvironment;
 
@@ -48,8 +47,8 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
     classNameEnvironment = newDeclarativeEnvironment(context.env);
     classNameEnvironment.createImmutableBinding(className, true);
     classEnvironment = classNameEnvironment;
-    classContext = { ...context, env: classNameEnvironment };
   }
+  const classContext = { ...context, env: classEnvironment, strict: true };
 
   const heritage =
     node.superClass === null
@@ -58,13 +57,10 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
   const derived = node.superClass !== null;
   /** @type {EngineObject | null} */
   let instancePrototype = context.realm.intrinsics.objectPrototype;
-  /** @type {unknown} */
-  let superConstructor;
 
   if (derived) {
     if (heritage === null) {
       instancePrototype = null;
-      superConstructor = null;
     } else {
       if (!(heritage instanceof EngineObject) || !isConstructor(heritage)) {
         throw new GuestErrorSignal(
@@ -84,9 +80,7 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
           'Class extends value has a non-object prototype property',
         );
       }
-
       instancePrototype = parentPrototype;
-      superConstructor = heritage;
     }
   }
 
@@ -95,6 +89,11 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
     constructorDefinition === undefined
       ? DEFAULT_BASE_CONSTRUCTOR
       : constructorDefinition.value;
+  const prototype = new EngineObject(
+    instancePrototype,
+    'Object',
+    context.realm.agent,
+  );
   const constructor = createFunctionObject(
     constructorNode,
     classEnvironment,
@@ -105,16 +104,11 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
       thisMode: 'strict',
       constructible: true,
       createPrototype: false,
+      homeObject: prototype,
       strict: true,
       constructorKind: derived ? 'derived' : 'base',
-      superConstructor,
       defaultDerivedConstructor: derived && constructorDefinition === undefined,
     },
-  );
-  const prototype = new EngineObject(
-    instancePrototype,
-    'Object',
-    context.realm.agent,
   );
 
   defineClassProperty(prototype, 'constructor', {

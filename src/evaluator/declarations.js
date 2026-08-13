@@ -705,7 +705,6 @@ export function instantiateFunctionObject(node, context) {
  *   homeObject?: import('../runtime/object.js').EngineObject,
  *   strict?: boolean,
  *   constructorKind?: 'base' | 'derived',
- *   superConstructor?: unknown,
  *   defaultDerivedConstructor?: boolean,
  * }} CreateFunctionObjectOptions
  */
@@ -812,7 +811,6 @@ export function createFunctionObject(node, scope, context, options = {}) {
     methodHomeObject:
       functionKind === 'arrow' ? undefined : options.homeObject,
     constructorKind: options.constructorKind,
-    superConstructor: options.superConstructor,
     defaultDerivedConstructor: options.defaultDerivedConstructor,
     execute: (functionObject, thisValue, args, functionEnvironment) =>
       executeFunctionBody(
