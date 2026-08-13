@@ -20,7 +20,7 @@ function run(source) {
 /**
  * @param {import('../src/runtime/realm.js').Realm} realm
  * @param {any} program
- * @returns {EngineArray}
+ * @returns {unknown}
  */
 function evaluateProgram(realm, program) {
   const result = evaluateScript(realm, '', { parse: () => program });
@@ -29,7 +29,7 @@ function evaluateProgram(realm, program) {
     throw new Error(`Guest script threw: ${JSON.stringify(result.value)}`);
   }
 
-  return /** @type {EngineArray} */ (result.value);
+  return result.value;
 }
 
 const tests = [
@@ -121,8 +121,8 @@ const tests = [
       assertSame(first === repeated, true);
       assertSame(first === second, false);
       assertSame(first instanceof EngineArray, true);
-      assertSame(first.getPrototype(), firstRealm.intrinsics.arrayPrototype);
-      assertSame(second.getPrototype(), secondRealm.intrinsics.arrayPrototype);
+      assertSame(/** @type {EngineArray} */ (first).getPrototype(), firstRealm.intrinsics.arrayPrototype);
+      assertSame(/** @type {EngineArray} */ (second).getPrototype(), secondRealm.intrinsics.arrayPrototype);
     },
   },
   {
