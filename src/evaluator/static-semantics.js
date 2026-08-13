@@ -49,29 +49,72 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  * @returns {string[]}
  */
 export function boundNames(node) {
-  switch (node.type) {
-    case 'Identifier':
-      return [node.name];
-    case 'FunctionDeclaration':
-      // ES2015 grammar allows an anonymous `export default function () {}`,
-      // whose BoundNames is the synthetic `"*default*"`, but this engine
-      // parses no module grammar, so `node.id` is always present here.
-      return [node.id.name];
-    case 'VariableDeclaration': {
-      /** @type {string[]} */
-      const names = [];
-      for (const declarator of node.declarations) {
-        // ES5/ES2015 destructuring patterns (`BindingPattern`) are a later
-        // grammar this engine's parser does not produce; `boundNames`
-        // recurses through `declarator.id` anyway so a future `Identifier`-
-        // only declarator keeps working unchanged.
-        names.push(...boundNames(declarator.id));
-      }
-      return names;
+  /** @type {string[]} */
+  const names = [];
+  /** @type {any[]} */
+  const pending = [node];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+
+    switch (current.type) {
+      case 'Identifier':
+        names.push(current.name);
+        break;
+      case 'FunctionDeclaration':
+        // ES2015 grammar allows an anonymous `export default function () {}`,
+        // whose BoundNames is the synthetic `"*default*"`, but this engine
+        // parses no module grammar, so `node.id` is always present here.
+        names.push(current.id.name);
+        break;
+      case 'ClassDeclaration':
+        names.push(current.id.name);
+        break;
+      case 'VariableDeclaration':
+        for (
+          let index = current.declarations.length - 1;
+          index >= 0;
+          index -= 1
+        ) {
+          pending.push(current.declarations[index].id);
+        }
+        break;
+      case 'AssignmentPattern':
+        pending.push(current.left);
+        break;
+      case 'RestElement':
+        pending.push(current.argument);
+        break;
+      case 'ArrayPattern':
+        for (let index = current.elements.length - 1; index >= 0; index -= 1) {
+          if (current.elements[index] !== null) {
+            pending.push(current.elements[index]);
+          }
+        }
+        break;
+      case 'ObjectPattern':
+        for (
+          let index = current.properties.length - 1;
+          index >= 0;
+          index -= 1
+        ) {
+          const property = current.properties[index];
+
+          if (property.type === 'Property') {
+            pending.push(property.value);
+          } else if (property.type === 'RestElement') {
+            pending.push(property);
+          } else {
+            throw createUnsupportedNodeError(property);
+          }
+        }
+        break;
+      default:
+        throw createUnsupportedNodeError(current);
     }
-    default:
-      throw createUnsupportedNodeError(node);
   }
+
+  return names;
 }
 
 /**

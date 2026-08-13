@@ -363,13 +363,18 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
-  /** @type {{ node: any, strict: boolean }[]} */
-  const pending = [{ node: root, strict: rootStrict }];
+  /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined }[]} */
+  const pending = [
+    { node: root, strict: rootStrict, parent: null, parentKey: undefined },
+  ];
   /** @type {WeakSet<object>} */
   const seen = new WeakSet();
 
   while (pending.length > 0) {
-    const item = /** @type {{ node: any, strict: boolean }} */ (pending.pop());
+    const item =
+      /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined }} */ (
+        pending.pop()
+      );
     const node = item.node;
     const strict = item.strict;
 
@@ -385,7 +390,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
 
     if (Array.isArray(node)) {
       for (let index = node.length - 1; index >= 0; index -= 1) {
-        pushChild(pending, node[index], strict);
+        pushChild(pending, node[index], strict, item.parent, item.parentKey);
       }
       continue;
     }
@@ -396,14 +401,19 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
 
     checkFunctionDeclarationPosition(node, strict);
     checkRegularExpressionLiteral(node);
-    checkUnsupportedEs2015Node(node, source);
+    checkUnsupportedEs2015Node(
+      node,
+      source,
+      item.parent,
+      item.parentKey,
+    );
 
     const childStrict = childScopeStrictness(node, strict);
     const keys = Object.keys(node);
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       if (!NODE_POSITION_KEYS.has(keys[index])) {
-        pushChild(pending, node[keys[index]], childStrict);
+        pushChild(pending, node[keys[index]], childStrict, node, keys[index]);
       }
     }
   }
@@ -498,14 +508,16 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean }[]} pending
+ * @param {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined }[]} pending
  * @param {unknown} value
  * @param {boolean} strict
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
  * @returns {void}
  */
-function pushChild(pending, value, strict) {
+function pushChild(pending, value, strict, parent, parentKey) {
   if (value && typeof value === 'object') {
-    pending.push({ node: value, strict });
+    pending.push({ node: value, strict, parent, parentKey });
   }
 }
 
@@ -585,37 +597,63 @@ function statementPositionFunctionError(context, node) {
  * no-op rather than a spurious rejection.
  *
  * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {string | undefined}
+ */
+function unsupportedEs2015Message(node, parent, parentKey) {
+  if (node.type === 'Property') {
+    if (
+      parent !== null &&
+      (parent === undefined ||
+        parent.type !== 'ObjectExpression' ||
+        parentKey !== 'properties')
+    ) {
+      return 'object properties are not supported in this AST position';
+    }
+
+    if (node.kind !== 'init' && node.kind !== 'get' && node.kind !== 'set') {
+      return 'unsupported object property kind';
+    }
+
+    if (node.method || node.computed || node.shorthand) {
+      return 'computed, shorthand, and method object properties are not supported';
+    }
+  }
+
+  if (isFunctionNode(node) && (node.generator || node.async)) {
+    return node.async
+      ? 'async functions are not supported'
+      : 'generators and `yield` are not supported';
+  }
+
+  if (isFunctionNode(node) && (!node.body || node.body.type !== 'BlockStatement')) {
+    return 'function bodies must be block statements';
+  }
+
+  return UNSUPPORTED_ES2015_NODE_MESSAGES.get(node.type);
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isFunctionNode(node) {
+  return node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression';
+}
+
+/**
+ * @param {any} node
  * @param {string} source
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
  * @returns {void}
  */
-function checkUnsupportedEs2015Node(node, source) {
-  const typeMessage = UNSUPPORTED_ES2015_NODE_MESSAGES.get(node.type);
+function checkUnsupportedEs2015Node(node, source, parent, parentKey) {
+  const typeMessage = unsupportedEs2015Message(node, parent, parentKey);
 
   if (typeMessage !== undefined) {
     throw unsupportedEs2015Error(typeMessage, node);
-  }
-
-  if (
-    node.type === 'Property' &&
-    (node.computed || node.shorthand || node.method)
-  ) {
-    throw unsupportedEs2015Error(
-      'computed, shorthand, and method object properties are not supported',
-      node,
-    );
-  }
-
-  if (
-    (node.type === 'FunctionDeclaration' ||
-      node.type === 'FunctionExpression') &&
-    (node.generator || node.async)
-  ) {
-    throw unsupportedEs2015Error(
-      node.async
-        ? 'async functions are not supported'
-        : 'generators and `yield` are not supported',
-      node,
-    );
   }
 
   if (node.type === 'Literal' && typeof node.raw === 'string') {

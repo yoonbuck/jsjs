@@ -67,6 +67,49 @@ const tests = [
     },
   },
   {
+    name: 'parseScript rejects unsupported familiar AST shapes from custom parsers',
+    run() {
+      const unsupportedProperties = [
+        {
+          type: 'Property',
+          kind: 'unsupported',
+          computed: false,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'x' },
+          value: { type: 'Literal', value: 1 },
+        },
+        {
+          type: 'FunctionExpression',
+          id: null,
+          params: [],
+          generator: false,
+          async: false,
+          expression: false,
+          body: { type: 'Literal', value: 1 },
+        },
+      ];
+
+      for (const node of unsupportedProperties) {
+        const program = {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ExpressionStatement',
+              expression: node,
+            },
+          ],
+        };
+
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
     name: 'parseScript rethrows non-syntax parser failures unchanged',
     run() {
       const error = /** @type {any} */ (

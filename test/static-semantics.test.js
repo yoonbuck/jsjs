@@ -91,6 +91,52 @@ const tests = [
       assertSame(JSON.stringify(boundNames(constNode)), '["c"]');
     },
   },
+  {
+    name: 'boundNames of nested binding patterns preserves source order',
+    run() {
+      assertSame(
+        boundNames({
+          type: 'ArrayPattern',
+          elements: [
+            { type: 'Identifier', name: 'a' },
+            {
+              type: 'AssignmentPattern',
+              left: {
+                type: 'ObjectPattern',
+                properties: [
+                  {
+                    type: 'Property',
+                    kind: 'init',
+                    computed: false,
+                    key: { type: 'Identifier', name: 'x' },
+                    value: { type: 'Identifier', name: 'b' },
+                  },
+                ],
+              },
+              right: { type: 'Literal', value: 1 },
+            },
+            {
+              type: 'RestElement',
+              argument: { type: 'Identifier', name: 'rest' },
+            },
+          ],
+        }).join(','),
+        'a,b,rest',
+      );
+    },
+  },
+  {
+    name: 'boundNames of a ClassDeclaration is its own name',
+    run() {
+      assertSame(
+        boundNames({
+          type: 'ClassDeclaration',
+          id: { type: 'Identifier', name: 'C' },
+        }).join(','),
+        'C',
+      );
+    },
+  },
 
   // ---------------------------------------------------------------------
   // isConstantDeclaration
