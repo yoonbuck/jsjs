@@ -18,7 +18,9 @@
 import { runTests } from './harness/runner.js';
 import { PORTABLE_SUITES } from './suites.js';
 import benchmarkCli from './node/benchmark-cli.test.js';
+import benchmarkCompare from './node/benchmark-compare.test.js';
 import benchmarkHosts from './node/benchmark-hosts.test.js';
+import jscRunner from './node/jsc-runner.test.js';
 import benchmarkSummary from './node/benchmark-summary.test.js';
 import profileAnalysis from './node/profile-analysis.test.js';
 import profilingCli from './node/profiling-cli.test.js';
@@ -36,8 +38,16 @@ const NODE_ONLY_SUITES = Object.freeze([
     tests: benchmarkCli,
   }),
   Object.freeze({
+    file: 'test/node/benchmark-compare.test.js',
+    tests: benchmarkCompare,
+  }),
+  Object.freeze({
     file: 'test/node/benchmark-hosts.test.js',
     tests: benchmarkHosts,
+  }),
+  Object.freeze({
+    file: 'test/node/jsc-runner.test.js',
+    tests: jscRunner,
   }),
   Object.freeze({
     file: 'test/node/benchmark-summary.test.js',

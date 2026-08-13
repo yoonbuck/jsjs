@@ -89,6 +89,13 @@ const STABLE_CATEGORIES = Object.freeze([
   'host',
 ]);
 const PROFILE_CAPTURE_ORIGIN = 'http://jsjs.localhost';
+/**
+ * Matches an RFC 3986 scheme prefix (`scheme ":"`) anchored at the start of a
+ * URL. Two or more scheme characters are required so a Windows drive prefix
+ * (`C:/repo/src/...`) stays a filesystem path instead of being read as a
+ * one-letter scheme.
+ */
+const PROFILE_URL_SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]+:/u;
 
 /**
  * Classify a profile call frame into a stable category based on its source URL.
@@ -344,8 +351,16 @@ function buildAllocationCategories(frames, total) {
 
 /**
  * Normalize a profiler URL to a repository-relative path starting with `src/`.
- * Selects the last path-segment-bounded `src/` path and leaves host URLs
- * unchanged. A `src/` segment below `node_modules` is always host code.
+ *
+ * Only two shapes may be normalized: a scheme-less path, and an absolute URL
+ * under a scheme this project actually captures from (`file:`, and `http:` at
+ * the capture origin). Everything else is host code — a browser extension, a
+ * bundler-synthesised `webpack:` source, a `blob:` worker, a Node builtin —
+ * whose path is opaque, so it is returned byte for byte rather than having a
+ * `src/` segment lifted out of it and misattributed to this repository.
+ *
+ * Within a normalizable path the last path-segment-bounded `src/` wins, and a
+ * `src/` segment below `node_modules` is always host code.
  *
  * @param {string} url
  * @returns {string}
@@ -359,12 +374,22 @@ export function normalizeProfileUrl(url) {
     return url;
   }
 
-  let parsedUrl;
+  const scheme = readProfileUrlScheme(url);
 
-  try {
-    parsedUrl = new URL(url);
-  } catch {
+  if (scheme === null) {
     return normalizeProfilePathname(url, url);
+  }
+
+  const protocol = recognizedProfileUrlProtocol(url, scheme);
+
+  if (protocol === null) {
+    return url;
+  }
+
+  const parsedUrl = parseAbsoluteProfileUrl(url, protocol);
+
+  if (parsedUrl === null) {
+    return url;
   }
 
   if (
@@ -376,6 +401,134 @@ export function normalizeProfileUrl(url) {
   }
 
   return normalizeProfilePathname(parsedUrl.pathname, url);
+}
+
+/**
+ * The lowercased `scheme:` prefix of an absolute URL, or `null` when the input
+ * carries no scheme at all and is therefore a path.
+ *
+ * @param {string} url
+ * @returns {string | null}
+ */
+function readProfileUrlScheme(url) {
+  const match = PROFILE_URL_SCHEME_PATTERN.exec(url);
+
+  return match === null ? null : match[0].toLowerCase();
+}
+
+/**
+ * @param {string} url
+ * @param {string} scheme The lowercased `scheme:` prefix of `url`.
+ * @returns {'file:' | 'http:' | 'https:' | null}
+ */
+function recognizedProfileUrlProtocol(url, scheme) {
+  if (scheme !== 'http:' && scheme !== 'https:' && scheme !== 'file:') {
+    return null;
+  }
+
+  // Every recognized capture scheme is authority-based in profiler output, so
+  // a missing `//` is a shape the parser below cannot read; treat it as
+  // unknown rather than guessing at a pathname.
+  return url.slice(scheme.length, scheme.length + 2) === '//' ? scheme : null;
+}
+
+/**
+ * @param {string} url
+ * @param {'file:' | 'http:' | 'https:'} protocol
+ * @returns {{ protocol: string, origin: string, pathname: string } | null}
+ */
+function parseAbsoluteProfileUrl(url, protocol) {
+  if (protocol === 'file:') {
+    return {
+      protocol,
+      origin: 'null',
+      pathname: readFileUrlPathname(url),
+    };
+  }
+
+  return readHttpUrlParts(url, protocol);
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+function readFileUrlPathname(url) {
+  const pathStart = 'file://'.length;
+  const queryStart = url.indexOf('?');
+  const hashStart = url.indexOf('#');
+  let pathEnd = url.length;
+
+  if (queryStart !== -1) {
+    pathEnd = queryStart;
+  }
+
+  if (hashStart !== -1 && hashStart < pathEnd) {
+    pathEnd = hashStart;
+  }
+
+  return url.slice(pathStart, pathEnd);
+}
+
+/**
+ * @param {string} url
+ * @param {'http:' | 'https:'} protocol
+ * @returns {{ protocol: string, origin: string, pathname: string } | null}
+ */
+function readHttpUrlParts(url, protocol) {
+  const authorityStart = protocol.length + 2;
+  const suffix = url.slice(authorityStart);
+  const pathOffset = suffix.search(/[/?#]/u);
+  const authority =
+    pathOffset === -1 ? suffix : suffix.slice(0, Math.max(pathOffset, 0));
+
+  if (authority.length === 0) {
+    return null;
+  }
+
+  const delimiter = pathOffset === -1 ? '' : suffix[pathOffset];
+  const remainder = pathOffset === -1 ? '' : suffix.slice(pathOffset);
+  let pathname = '/';
+
+  if (delimiter === '/') {
+    const queryStart = remainder.indexOf('?');
+    const hashStart = remainder.indexOf('#');
+    let pathEnd = remainder.length;
+
+    if (queryStart !== -1) {
+      pathEnd = queryStart;
+    }
+
+    if (hashStart !== -1 && hashStart < pathEnd) {
+      pathEnd = hashStart;
+    }
+
+    pathname = remainder.slice(0, pathEnd);
+  }
+
+  return {
+    protocol,
+    origin: `${protocol}//${normalizeHttpAuthority(authority, protocol)}`,
+    pathname,
+  };
+}
+
+/**
+ * @param {string} authority
+ * @param {'http:' | 'https:'} protocol
+ * @returns {string}
+ */
+function normalizeHttpAuthority(authority, protocol) {
+  const normalizedAuthority = authority.toLowerCase();
+
+  if (
+    (protocol === 'http:' && normalizedAuthority.endsWith(':80')) ||
+    (protocol === 'https:' && normalizedAuthority.endsWith(':443'))
+  ) {
+    return normalizedAuthority.slice(0, normalizedAuthority.lastIndexOf(':'));
+  }
+
+  return normalizedAuthority;
 }
 
 /**

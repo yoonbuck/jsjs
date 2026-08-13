@@ -44,6 +44,41 @@ export function resolveOutputDirectory(outputDirectory) {
 }
 
 /**
+ * @param {string} filePath
+ * @returns {URL}
+ */
+export function resolveRepositoryFile(filePath) {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw new TypeError('Benchmark input file must be a non-empty string');
+  }
+
+  if (path.isAbsolute(filePath)) {
+    throw new RangeError(
+      `Benchmark input file must be repository-relative, not absolute: ${filePath}`,
+    );
+  }
+
+  if (filePath.endsWith('/')) {
+    throw new RangeError(
+      `Benchmark input file must name a file, not a directory: ${filePath}`,
+    );
+  }
+
+  const fileUrl = new URL(filePath, REPOSITORY_ROOT_URL);
+
+  if (
+    !fileUrl.href.startsWith(REPOSITORY_ROOT_URL.href) ||
+    fileUrl.href === REPOSITORY_ROOT_URL.href
+  ) {
+    throw new RangeError(
+      `Benchmark input file resolved outside repository: ${filePath}`,
+    );
+  }
+
+  return fileUrl;
+}
+
+/**
  * @param {string} outputDirectory
  * @param {BenchmarkReport} report
  * @param {{
@@ -207,7 +242,7 @@ function safeHostFileStem(host) {
 function safeOutputFileName(fileName) {
   if (
     typeof fileName !== 'string' ||
-    !/^[a-z0-9-]+\.(json|csv)$/u.test(fileName)
+    !/^[a-z0-9-]+\.(json|csv|md)$/u.test(fileName)
   ) {
     throw new RangeError(`Benchmark output file name is not safe: ${fileName}`);
   }

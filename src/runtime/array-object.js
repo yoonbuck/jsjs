@@ -202,6 +202,11 @@ export class EngineArray extends EngineObject {
  * the canonical decimal string of an integer below 2^32-1, so `"01"`,
  * `"1.0"`, `"-1"`, and `"4294967295"` are ordinary properties.
  *
+ * Uses a character-scan fast path to avoid `Number()` and `String()` round-
+ * trips. Code-unit reads use indexed access (`name[i]`) and arithmetic
+ * coercion (`c - '0'`) rather than host String prototype methods, satisfying
+ * the repository invariant.
+ *
  * @param {PropertyKey} name
  * @returns {number | undefined}
  */
@@ -210,18 +215,51 @@ export function toArrayIndex(name) {
     return undefined;
   }
 
-  const index = Number(name);
+  const len = name.length;
 
-  if (
-    !Number.isInteger(index) ||
-    index < 0 ||
-    index >= MAX_ARRAY_LENGTH ||
-    String(index) !== name
-  ) {
+  // Empty or too long: '4294967294' (max valid) has 10 chars.
+  if (len === 0 || len > 10) {
     return undefined;
   }
 
-  return index;
+  const first = name[0];
+
+  // Single-character fast path: '0'–'9' are valid single-digit indices.
+  if (len === 1) {
+    if (first >= '0' && first <= '9') {
+      return /** @type {number} */ (
+        /** @type {any} */ (first) - /** @type {any} */ ('0')
+      );
+    }
+    return undefined;
+  }
+
+  // Multi-digit: first char must be '1'–'9' to exclude leading zeros and
+  // non-digit prefixes such as '+', '-', space, and letters.
+  if (first < '1' || first > '9') {
+    return undefined;
+  }
+
+  let val = /** @type {number} */ (
+    /** @type {any} */ (first) - /** @type {any} */ ('0')
+  );
+
+  for (let i = 1; i < len; i++) {
+    const c = name[i];
+    if (c < '0' || c > '9') {
+      return undefined;
+    }
+    val =
+      val * 10 +
+      /** @type {number} */ (/** @type {any} */ (c) - /** @type {any} */ ('0'));
+  }
+
+  // Reject 4294967295 (2^32-1) and any overflow.
+  if (val >= MAX_ARRAY_LENGTH) {
+    return undefined;
+  }
+
+  return val;
 }
 
 /**

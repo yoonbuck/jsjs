@@ -307,7 +307,33 @@ export class ArgumentsObject extends EngineObject {
   }
 
   /**
-   * @param {PropertyKey} name
+   * Overrides `_peekOwnDescriptor` to inject the live parameter-binding value
+   * for mapped argument indices. When no mapping exists the raw stored
+   * descriptor is returned without any copy (the common case). When a mapping
+   * exists a new object is created so the stored descriptor is not mutated with
+   * the live value — callers of `_peekOwnDescriptor` must not retain the
+   * returned object across mutations regardless.
+   *
+   * @param {import('./descriptors.js').PropertyKey} name
+   * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
+   */
+  _peekOwnDescriptor(name) {
+    const raw = this._properties.get(name);
+    if (raw === undefined) {
+      return undefined;
+    }
+    const parameterName = this._parameterMap.get(name);
+    if (parameterName === undefined) {
+      return raw;
+    }
+    return {
+      ...raw,
+      value: this._environment.getBindingValue(parameterName, false),
+    };
+  }
+
+  /**
+   * @param {import('./descriptors.js').PropertyKey} name
    * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
