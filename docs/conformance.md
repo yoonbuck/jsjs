@@ -7,8 +7,10 @@ engine implements, and the live coverage numbers produced by the Test262 suite.
 
 This engine implements the ES5.1 language and standard library plus ES2015
 lexical declarations (`let`/`const`, TDZ, and per-iteration bindings), the
-iteration protocol and `for`-`of`, and block-level function declarations. It
-also implements issue #25's ES2015 syntax surface: arrow functions; classes,
+iteration protocol and `for`-`of`, and block-level function declarations. The
+limited Annex B statement-position forms remain unsupported (see
+[Limitations](limitations.md#annex-b-statement-position-function-declarations-are-limited)).
+It also implements issue #25's ES2015 syntax surface: arrow functions; classes,
 inheritance, `super`, and computed method names; computed object names;
 destructuring declarations, assignments, and parameters; default and rest
 parameters; iterable spread in arrays, calls, and construction; and template
@@ -147,14 +149,12 @@ A file is a candidate only if it survives every filter:
   tests are documented exact metadata exceptions rather than claims for those
   neighboring features.
 
-- **Baseline and engine grammar filters.** An **untagged** file and every harness
-  file it includes must first parse under the ES5.1 baseline grammar. That
-  prevents a newly parseable syntax form from silently entering the broad
-  baseline; ES2015 syntax enters only when its Test262 tag clears a narrow
-  feature area. Every remaining file and include is then parsed with the
-  engine's own `parseScript`. A file that fails either relevant grammar gate is
-  excluded structurally rather than by name. This keeps parser growth from
-  silently widening conformance claims.
+- **Engine grammar filter.** Every remaining file and harness include is parsed
+  with the engine's own `parseScript`. A file that fails the parser's supported
+  shape gate is excluded structurally rather than by name; known-good untagged
+  paths remain selected when the engine gains a supported grammar form. The
+  path policy, exact feature-area tags, module flag, and classified exclusions
+  continue to prevent unsupported neighbors from becoming claims.
 - **Classified exclusions.** What survives all of the above but still must not
   run is carved out one path (or prefix) at a time, each with a category and a
   written reason.
@@ -167,12 +167,12 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 638 classified exclusions break down as:
+editions deliberately changed. The 655 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                |
 | -------------------- | ----- | -------------------------------------------------------------------------------------------- |
 | `post-es5-semantics` | 336   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1.              |
-| `post-es5-builtin`   | 242   | A built-in or member ES5.1 does not define.                                                  |
+| `post-es5-builtin`   | 259   | A built-in or member ES5.1 does not define.                                                  |
 | `post-es5-syntax`    | 25    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
 | `host-dependent`     | 33    | The result depends on a host facility or environment.                                        |
 | `engine-deviation`   | 2     | This engine knowingly differs from ES5.1; each entry names a limitation heading.             |
@@ -374,7 +374,9 @@ upstream checkout at `vendor/test262`; see the Test262 section above).
 Issue #25 syntax coverage is similarly focused in
 `test/ci/es2015-syntax-test262.test.js`. Its pinned list exercises arrow lexical
 `this` and non-construction; class inheritance, computed instance/static names,
-and derived `super`; computed-key ordering; default-parameter TDZ/order;
+including computed ordinary `['constructor']` methods and computed static
+`['prototype']` TypeErrors, and derived `super`; computed-key ordering;
+default-parameter TDZ/order;
 destructuring binding/assignment ordering and iterator abrupt completion;
 realm-owned rest arrays; iterable spread call order; and tagged-template
 cooked/raw identity and caching. It also classifies, rather than claims, public

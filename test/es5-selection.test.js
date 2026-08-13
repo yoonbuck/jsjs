@@ -84,9 +84,7 @@ const CANDIDATE_INFO = Object.freeze({
   declaresFeatures: false,
   features: Object.freeze([]),
   isModule: false,
-  parsesUnderBaselineGrammar: true,
   parsesUnderEngineGrammar: true,
-  includesParseUnderBaselineGrammar: true,
   includesParseUnderEngineGrammar: true,
 });
 
@@ -574,6 +572,27 @@ export default [
     },
   },
   {
+    name: 'isCandidatePath preserves an untagged test that the engine grammar accepts',
+    run: () => {
+      const policy = parseEs5Selection(policyText());
+      const path =
+        'test/built-ins/Array/prototype/reverse/array-has-one-entry.js';
+      const engineCandidate = {
+        declaresFeatures: false,
+        features: Object.freeze([]),
+        isModule: false,
+        parsesUnderEngineGrammar: true,
+        includesParseUnderEngineGrammar: true,
+      };
+
+      assertSame(
+        isCandidatePath(path, engineCandidate, policy),
+        true,
+        'an untagged test must remain selected when the engine parser accepts it',
+      );
+    },
+  },
+  {
     name: 'isCandidatePath drops excluded top-level directories',
     run: () => {
       const policy = parseEs5Selection(policyText());
@@ -644,56 +663,6 @@ export default [
           policy,
         ),
         false,
-      );
-    },
-  },
-  {
-    name: 'an untagged post-ES5 syntax file cannot enter the broad baseline selection',
-    run: () => {
-      const policy = parseEs5Selection(
-        policyText({
-          featureAreas: [
-            {
-              prefix: 'test/language/expressions/arrow-function',
-              features: ['arrow-function'],
-              reason: 'Arrow functions are explicitly claimed here.',
-            },
-          ],
-        }),
-      );
-      const path = 'test/language/expressions/arrow-function/lexical-this.js';
-
-      assertSame(
-        isCandidatePath(
-          path,
-          { ...CANDIDATE_INFO, parsesUnderBaselineGrammar: false },
-          policy,
-        ),
-        false,
-        'an untagged ES2015 file must not bypass a narrow feature claim',
-      );
-      assertSame(
-        isCandidatePath(
-          path,
-          {
-            ...CANDIDATE_INFO,
-            declaresFeatures: true,
-            features: ['arrow-function'],
-            parsesUnderBaselineGrammar: false,
-          },
-          policy,
-        ),
-        true,
-        'a tagged ES2015 file may enter only through its claimed feature area',
-      );
-      assertSame(
-        isCandidatePath(
-          'test/language/expressions/arrow-function/harness-backed.js',
-          { ...CANDIDATE_INFO, includesParseUnderBaselineGrammar: false },
-          policy,
-        ),
-        false,
-        'an untagged test cannot bypass the baseline gate through an ES2015 harness helper',
       );
     },
   },

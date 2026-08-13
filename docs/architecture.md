@@ -248,6 +248,15 @@ separate from parameter bindings; simple parameter lists retain the compatible
 activation path. Arrows reuse parameter instantiation but create no own
 `arguments` or `this` binding.
 
+Class declarations are lexical declarations too: instantiation creates a
+**mutable**, uninitialized binding, so the class name is in the TDZ while its
+heritage and body are evaluated; after successful class evaluation initializes
+it, a later assignment to that declaration is ordinary mutable-binding
+assignment. A named class expression instead creates a distinct, inner
+**immutable** name binding for its own heritage and body. That inner name has
+the same evaluation-time TDZ, rejects reassignment after initialization, and
+does not leak into the surrounding scope.
+
 ### Template-object ownership (`src/runtime/realm.js`, `src/evaluator/expressions.js`)
 
 Each `Realm` owns `templateObjects`, a `WeakMap` from parsed

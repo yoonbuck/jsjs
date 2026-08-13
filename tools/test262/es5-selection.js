@@ -14,16 +14,15 @@
  *
  * The policy expresses four structural filters as data — excluded top-level
  * directories, the allowed `test/built-ins/<name>` list, the excluded
- * `test/language/<dir>` list, and (applied by the caller) the "untagged source
- * parses under the ES5.1 baseline grammar", "source parses under the engine's
- * supported grammar", and "frontmatter carries no `module` flag" filters — plus a
- * `featureAreas` list that names, per directory prefix, exactly which Test262
- * `features:` tags the engine is willing to run there, and an `exclusions`
- * array that records, with a category and a cited reason, every remaining
- * file that is out of scope because it asserts post-ES5 behaviour, needs a
- * host facility, needs `Date`, or exercises a documented intentional
- * deviation. The structural filters produce the candidate set; the exclusions
- * carve the classified failures out of it.
+ * `test/language/<dir>` list, and (applied by the caller) the "source parses
+ * under the engine's supported grammar" and "frontmatter carries no `module`
+ * flag" filters — plus a `featureAreas` list that names, per directory prefix,
+ * exactly which Test262 `features:` tags the engine is willing to run there,
+ * and an `exclusions` array that records, with a category and a cited reason,
+ * every remaining file that is out of scope because it asserts post-ES5
+ * behaviour, needs a host facility, needs `Date`, or exercises a documented
+ * intentional deviation. The structural filters produce the candidate set; the
+ * exclusions carve the classified failures out of it.
  *
  * `featureAreas` is what lets a post-ES5.1 feature the engine has actually
  * implemented earn coverage without reopening the whole tree. A tagged test
@@ -102,9 +101,7 @@ const TEST_ROOT = 'test/';
  *   declaresFeatures: boolean,
  *   features: readonly string[],
  *   isModule: boolean,
- *   parsesUnderBaselineGrammar: boolean,
  *   parsesUnderEngineGrammar: boolean,
- *   includesParseUnderBaselineGrammar: boolean,
  *   includesParseUnderEngineGrammar: boolean,
  * }} Es5CandidateInfo
  */
@@ -504,10 +501,10 @@ function parseFlowSequence(match) {
  * prefix keeps a claim like `Symbol` from dragging in every `Symbol`-tagged
  * test across the whole tree; requiring *every* declared tag to be claimed
  * keeps a test that also needs `cross-realm` or `Symbol.matchAll` out, so an
- * area can never admit more than it says it does. An untagged file and its
- * harness includes additionally have to parse as ES5.1 baseline syntax, so
- * merely teaching the engine a new grammar form cannot silently reopen
- * unrelated untagged upstream tests.
+ * area can never admit more than it says it does. Every remaining file and
+ * harness include must parse under the engine grammar, which keeps unsupported
+ * syntax out without revoking known-good untagged coverage when the engine
+ * gains a supported grammar form.
  *
  * @param {string} path Repository-relative upstream path, e.g. `test/built-ins/Array/x.js`.
  * @param {Es5CandidateInfo} info
@@ -539,14 +536,6 @@ export function isCandidatePath(path, info, policy) {
   }
 
   if (info.isModule) {
-    return false;
-  }
-
-  if (
-    !info.declaresFeatures &&
-    (!info.parsesUnderBaselineGrammar ||
-      !info.includesParseUnderBaselineGrammar)
-  ) {
     return false;
   }
 

@@ -2568,9 +2568,44 @@
       "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
     },
     {
-      "prefix": "test/staging/sm/Proxy",
+      "path": "test/staging/sm/Proxy/define-writable-as-non-writable.js",
       "category": "post-es5-builtin",
-      "reason": "The selected SpiderMonkey Proxy tests require `Proxy`, an ES2015 builtin absent from this subset."
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/delete-non-extensible.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/getPrototypeOf.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/hasInstance.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/json-stringify-replacer-array-revocable-proxy.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/ownkeys-allowed-types.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/ownkeys-linear.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/ownkeys-trap-duplicates.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
     },
     {
       "path": "test/staging/sm/Proxy/proxy-__proto__.js",
@@ -2583,14 +2618,64 @@
       "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/Proxy/proxy-no-receiver-overwrite.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/proxy-proto-lazy-props.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/proxy-with-revoked-arguments.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/regress-bug1062349.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
       "path": "test/staging/sm/Proxy/regress-bug950407.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
     },
     {
+      "path": "test/staging/sm/Proxy/report-writable-as-non-writable.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/revocable-proxy-prototype.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/revoke-as-side-effect.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
       "path": "test/staging/sm/Proxy/revoke-no-name.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
+    },
+    {
+      "path": "test/staging/sm/Proxy/revoked-get-function-realm-typeerror.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/setPrototypeOf.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
+    },
+    {
+      "path": "test/staging/sm/Proxy/trap-null.js",
+      "category": "post-es5-builtin",
+      "reason": "Depends on `Proxy`, an ES2015 builtin absent from this subset."
     },
     {
       "prefix": "test/staging/sm/Reflect",

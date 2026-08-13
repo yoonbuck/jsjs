@@ -569,6 +569,23 @@ in `src/parser.js`; the iterative walks are `EngineObject#getProperty`
 `src/evaluator/static-semantics.js`.
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.
 
+### Annex B statement-position function declarations are limited
+
+This is a legacy Annex B boundary, separate from issue #25's ES2015 syntax
+surface. The engine supports block-level function declarations and their
+applicable Annex B.3.3 aliases, but does not implement every web-legacy
+statement-position extension. A `FunctionDeclaration` directly in an iteration
+or `with` body is rejected in every mode. A direct `if` or `else` branch is also
+rejected, including sloppy `if (condition) function f() {}`: Annex B.3.4
+specifies semantics for that form, but the evaluator does not implement them.
+Put the declaration in a block instead. The separate sloppy, statement-list
+labelled-function case remains supported where Annex B.3.2 permits it.
+
+**Backing code:** `src/parser.js`
+(`checkStatementPositionFunctionDeclarations`).
+**Verification:** `evaluateScript(realm, 'if (true) function f() {}')` throws a
+host `SyntaxError`.
+
 ### Remaining unsupported syntax is rejected at parse time
 
 The engine now accepts the issue #25 ES2015 syntax surface: arrows, classes and

@@ -21,12 +21,23 @@ import {
   assertPinnedCheckout,
   readTest262Pin,
 } from '../../tools/test262/upstream-run.js';
+import {
+  parseUpstreamSubset,
+  upstreamSubsetPaths,
+} from '../../tools/test262/upstream.js';
+
+const PRE_TASK9_BASELINE_SUBSET_FILE =
+  'test/fixtures/test262-upstream-subset-238eee.json';
+
+const PRE_TASK9_BASELINE_PATH_COUNT = 12434;
 
 /**
  * Positive and negative upstream files for the implemented language forms,
  * sorted by repository-relative path.
  */
 const SUPPORTED_PATHS = Object.freeze([
+  'test/language/computed-property-names/class/method/constructor.js',
+  'test/language/computed-property-names/class/static/method-prototype.js',
   'test/language/destructuring/binding/initialization-requires-object-coercible-null.js',
   'test/language/destructuring/binding/initialization-returns-normal-completion-for-empty-objects.js',
   'test/language/expressions/array/spread-mult-iter.js',
@@ -34,9 +45,9 @@ const SUPPORTED_PATHS = Object.freeze([
   'test/language/expressions/arrow-function/throw-new.js',
   'test/language/expressions/assignment/dstr/array-elem-iter-thrw-close.js',
   'test/language/expressions/assignment/dstr/obj-prop-put-order.js',
+  'test/language/expressions/call/spread-err-sngl-err-itr-step.js',
   'test/language/expressions/class/accessor-name-inst/computed.js',
   'test/language/expressions/class/accessor-name-static/computed.js',
-  'test/language/expressions/call/spread-err-sngl-err-itr-step.js',
   'test/language/expressions/function/dflt-params-arg-val-undefined.js',
   'test/language/expressions/function/dflt-params-ref-later.js',
   'test/language/expressions/function/dflt-params-rest.js',
@@ -45,6 +56,7 @@ const SUPPORTED_PATHS = Object.freeze([
   'test/language/expressions/object/computed-property-name-topropertykey-before-value-evaluation.js',
   'test/language/expressions/tagged-template/cache-same-site.js',
   'test/language/expressions/template-literal/evaluation-order.js',
+  'test/language/rest-parameters/rest-parameters-produce-an-array.js',
   'test/language/statements/class/subclass/derived-class-return-override-catch-super.js',
 ]);
 
@@ -76,6 +88,11 @@ export default [
   {
     name: 'focused ES2015 syntax Test262 files pass and out-of-scope neighbors stay classified',
     run: async () => {
+      assertSame(
+        JSON.stringify(SUPPORTED_PATHS),
+        JSON.stringify([...SUPPORTED_PATHS].sort()),
+        'supported Test262 paths must stay lexicographically sorted',
+      );
       const pin = await readTest262Pin();
 
       await assertPinnedCheckout(pin);
@@ -144,6 +161,33 @@ export default [
       assertSame(summary.passed, supportedRecords.length);
       assertSame(summary.failed, invalidEscapes.length);
       assertSame(summary.skipped, 2);
+    },
+  },
+  {
+    name: 'generated selection retains every path from the pre-Task 9 known-good subset',
+    run: async () => {
+      const [baselineText, currentText] = await Promise.all([
+        readFile(PRE_TASK9_BASELINE_SUBSET_FILE, 'utf8'),
+        readFile('tools/test262/upstream-subset.json', 'utf8'),
+      ]);
+      const baselinePaths = upstreamSubsetPaths(
+        parseUpstreamSubset(baselineText),
+      );
+      const currentPaths = new Set(
+        upstreamSubsetPaths(parseUpstreamSubset(currentText)),
+      );
+      const missing = baselinePaths.filter((path) => !currentPaths.has(path));
+
+      assertSame(
+        baselinePaths.length,
+        PRE_TASK9_BASELINE_PATH_COUNT,
+        'the preserved baseline fixture must retain its known-good path count',
+      );
+      assertSame(
+        missing.length,
+        0,
+        `current selection dropped pre-Task 9 paths: ${JSON.stringify(missing)}`,
+      );
     },
   },
 ];
