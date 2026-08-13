@@ -7,6 +7,7 @@ import {
 import {
   getIdentifierBindingValue,
   getIdentifierReference,
+  getThisBinding,
   getSuperHomeObject,
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
@@ -152,7 +153,7 @@ export function evaluateExpression(node, context) {
       case 'Identifier':
         return getIdentifierReference(context.env, node.name, context.strict);
       case 'ThisExpression':
-        return context.thisValue;
+        return getContextThisBinding(context);
       case 'UnaryExpression':
         return evaluateUnaryExpression(node, context);
       case 'BinaryExpression':
@@ -917,16 +918,13 @@ function evaluateMemberExpression(node, context) {
 /**
  * Evaluates a `super.prop`/`super[expr]` `MemberExpression` (ECMA-262
  * 12.3.5): resolves ES2015 `GetSuperBase` off the currently executing
- * enclosing function execution environment's method HomeObject and builds a
+ * function execution record's method HomeObject and builds a
  * `SuperReferenceBase` so
  * `GetValue`/`PutValue` read and write through the home object's
  * *prototype* while keeping the method's own `this` as the receiver. A
- * missing `homeObject` (an ordinary function, reached only if some future
- * syntax addition parses `super` somewhere Acorn's own `allowSuper` check
- * should have already rejected) is defense in depth: it throws the same
- * guest `ReferenceError` a real engine's static early error would have
- * produced, documented as an intentional runtime fallback for what the
- * specification instead catches at parse time.
+ * missing `homeObject` marks an ordinary-function lexical boundary. The
+ * runtime check is defense in depth for custom ASTs that evade the parser's
+ * static early-error gate.
  *
  * @param {any} node
  * @param {EvaluationContext} context
@@ -934,17 +932,28 @@ function evaluateMemberExpression(node, context) {
  */
 function evaluateSuperMemberExpression(node, context) {
   const homeObject = getSuperHomeObject(context.functionEnvironment);
+  const thisValue = getContextThisBinding(context);
 
   const propertyKey = node.computed
     ? toPropertyKey(evaluateExpressionValue(node.property, context))
     : node.property.name;
 
   return new Reference(
-    new SuperReferenceBase(homeObject, context.thisValue),
+    new SuperReferenceBase(homeObject, thisValue),
     propertyKey,
     context.strict,
-    context.thisValue,
+    thisValue,
   );
+}
+
+/**
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function getContextThisBinding(context) {
+  return context.functionEnvironment === undefined
+    ? context.thisValue
+    : getThisBinding(context.functionEnvironment);
 }
 
 /**

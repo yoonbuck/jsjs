@@ -739,7 +739,7 @@ export function getThisBinding(functionEnvironment) {
 /**
  * @param {FunctionExecutionEnvironment} functionEnvironment
  * @param {unknown} value
- * @returns {void}
+ * @returns {unknown}
  */
 export function bindThisValue(functionEnvironment, value) {
   if (functionEnvironment.thisStatus !== 'uninitialized') {
@@ -751,21 +751,20 @@ export function bindThisValue(functionEnvironment, value) {
 
   functionEnvironment.thisValue = value;
   functionEnvironment.thisStatus = 'initialized';
+  return value;
 }
 
 /**
+ * Arrows reuse their enclosing function execution record, so a method
+ * HomeObject must be present on the supplied record itself. An ordinary
+ * function creates its own record and therefore stops lexical `super` lookup.
+ *
  * @param {FunctionExecutionEnvironment | undefined} functionEnvironment
  * @returns {EngineObject}
  */
 export function getSuperHomeObject(functionEnvironment) {
-  let current = functionEnvironment;
-
-  while (current !== undefined) {
-    if (current.homeObject instanceof EngineObject) {
-      return current.homeObject;
-    }
-
-    current = current.outer;
+  if (functionEnvironment?.homeObject instanceof EngineObject) {
+    return functionEnvironment.homeObject;
   }
 
   throw new GuestErrorSignal(

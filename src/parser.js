@@ -764,6 +764,10 @@ function superAllowedForChildren(node, parent, parentKey, inherited) {
     return inherited;
   }
 
+  if (node.type === 'FunctionDeclaration') {
+    return false;
+  }
+
   if (node.type !== 'FunctionExpression') {
     return inherited;
   }
@@ -1011,6 +1015,14 @@ function unsupportedEs2015Message(
     return `unsupported AST node type ${node.type}`;
   }
 
+  if (isFunctionNode(node)) {
+    const parameterMessage = validateFunctionParameterList(node);
+
+    if (parameterMessage !== undefined) {
+      return parameterMessage;
+    }
+  }
+
   if (
     parent &&
     parent.type === 'ObjectPattern' &&
@@ -1195,6 +1207,108 @@ function validateArrowFunctionExpression(node) {
   return node.body.type === 'BlockStatement' && Array.isArray(node.body.body)
     ? undefined
     : 'unsupported arrow function block body';
+}
+
+/**
+ * Rejects malformed custom function parameter trees before the early-error
+ * pass reaches `boundNames` or pattern-cycle detection. Placement and
+ * expression capability checks remain the responsibility of the main AST walk.
+ *
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateFunctionParameterList(node) {
+  if (!Array.isArray(node.params)) {
+    return 'function parameters must be an array';
+  }
+
+  /** @type {any[]} */
+  const pending = [...node.params];
+  const visited = new WeakSet();
+
+  while (pending.length > 0) {
+    const parameter = pending.pop();
+
+    if (!isBindingParameterNode(parameter)) {
+      return 'unsupported function parameter';
+    }
+
+    if (visited.has(parameter)) {
+      continue;
+    }
+
+    visited.add(parameter);
+
+    switch (parameter.type) {
+      case 'Identifier':
+        if (typeof parameter.name !== 'string') {
+          return 'unsupported function parameter';
+        }
+        break;
+      case 'ObjectPattern':
+        if (!Array.isArray(parameter.properties)) {
+          return 'unsupported object parameter pattern';
+        }
+
+        for (const property of parameter.properties) {
+          if (!property || typeof property !== 'object') {
+            return 'unsupported object parameter pattern';
+          }
+
+          if (property.type === 'Property') {
+            pending.push(property.value);
+          } else if (property.type === 'RestElement') {
+            pending.push(property);
+          } else {
+            return 'unsupported object parameter pattern';
+          }
+        }
+        break;
+      case 'ArrayPattern':
+        if (!Array.isArray(parameter.elements)) {
+          return 'unsupported array parameter pattern';
+        }
+
+        for (const element of parameter.elements) {
+          if (element !== null) {
+            pending.push(element);
+          }
+        }
+        break;
+      case 'AssignmentPattern':
+        if (
+          !parameter.right ||
+          typeof parameter.right !== 'object' ||
+          typeof parameter.right.type !== 'string'
+        ) {
+          return 'unsupported default parameter value';
+        }
+
+        pending.push(parameter.left);
+        break;
+      case 'RestElement':
+        pending.push(parameter.argument);
+        break;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isBindingParameterNode(node) {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    (node.type === 'Identifier' ||
+      node.type === 'ObjectPattern' ||
+      node.type === 'ArrayPattern' ||
+      node.type === 'AssignmentPattern' ||
+      node.type === 'RestElement')
+  );
 }
 
 /**
@@ -1507,11 +1621,20 @@ function checkUnsupportedEs2015Node(
   parentIndex,
   superAllowed,
 ) {
-  if (node.type === 'Super' && !superAllowed) {
-    throw unsupportedEs2015Error(
-      "'super' keyword is only valid inside a method",
-      node,
-    );
+  if (node.type === 'Super') {
+    if (!superAllowed) {
+      throw unsupportedEs2015Error(
+        "'super' keyword is only valid inside a method",
+        node,
+      );
+    }
+
+    if (!isDirectSuperMemberObject(node, parent, parentKey)) {
+      throw unsupportedEs2015Error(
+        "'super' keyword is only valid as a property reference",
+        node,
+      );
+    }
   }
 
   const typeMessage = unsupportedEs2015Message(
@@ -1564,6 +1687,21 @@ function checkUnsupportedEs2015Node(
       node,
     );
   }
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {boolean}
+ */
+function isDirectSuperMemberObject(node, parent, parentKey) {
+  return (
+    !!parent &&
+    parent.type === 'MemberExpression' &&
+    parentKey === 'object' &&
+    parent.object === node
+  );
 }
 
 /**

@@ -1280,6 +1280,247 @@ const tests = [
     },
   },
   {
+    name: 'malformed custom arrow and ordinary function parameter elements are syntax errors',
+    run() {
+      const arrow = parseScript('var fn = value => value;').body[0].declarations[0]
+        .init;
+      const functionExpression = parseScript(
+        '(function (value) { return value; });',
+      ).body[0].expression;
+
+      /** @param {any} expression */
+      function programFor(expression) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ExpressionStatement',
+              expression,
+            },
+          ],
+        };
+      }
+
+      for (const params of [[{}], [null]]) {
+        assertThrows(
+          () =>
+            parseScript('', {
+              parse: () => programFor({ ...arrow, params }),
+            }),
+          SyntaxError,
+        );
+        assertThrows(
+          () =>
+            parseScript('', {
+              parse: () => programFor({ ...functionExpression, params }),
+            }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'super is only the direct object of a member reference in methods and lexical arrows',
+    run() {
+      parseScript(
+        'var object = { method() { return () => (() => super.value)(); } };',
+      );
+
+      /** @param {any} argument */
+      function programForMethodReturn(argument) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'VariableDeclaration',
+              kind: 'var',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: 'object' },
+                  init: {
+                    type: 'ObjectExpression',
+                    properties: [
+                      {
+                        type: 'Property',
+                        key: { type: 'Identifier', name: 'method' },
+                        value: {
+                          type: 'FunctionExpression',
+                          id: null,
+                          params: [],
+                          generator: false,
+                          async: false,
+                          expression: false,
+                          body: {
+                            type: 'BlockStatement',
+                            body: [
+                              {
+                                type: 'ReturnStatement',
+                                argument,
+                              },
+                            ],
+                          },
+                        },
+                        kind: 'init',
+                        method: true,
+                        computed: false,
+                        shorthand: false,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+      }
+
+      for (const argument of [
+        {
+          type: 'CallExpression',
+          callee: { type: 'Super' },
+          arguments: [],
+        },
+        {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: 'object' },
+          property: { type: 'Super' },
+          computed: false,
+        },
+      ]) {
+        assertThrows(
+          () =>
+            parseScript('', {
+              parse: () => programForMethodReturn(argument),
+            }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'ordinary functions are lexical super boundaries for nested arrows',
+    run() {
+      /** @returns {any} */
+      function superArrow() {
+        return {
+          type: 'ArrowFunctionExpression',
+          id: null,
+          params: [],
+          generator: false,
+          async: false,
+          expression: true,
+          body: {
+            type: 'MemberExpression',
+            object: { type: 'Super' },
+            property: { type: 'Identifier', name: 'value' },
+            computed: false,
+          },
+        };
+      }
+
+      /** @param {any[]} statements */
+      function programForMethodBody(statements) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'VariableDeclaration',
+              kind: 'var',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: 'object' },
+                  init: {
+                    type: 'ObjectExpression',
+                    properties: [
+                      {
+                        type: 'Property',
+                        key: { type: 'Identifier', name: 'method' },
+                        value: {
+                          type: 'FunctionExpression',
+                          id: null,
+                          params: [],
+                          generator: false,
+                          async: false,
+                          expression: false,
+                          body: { type: 'BlockStatement', body: statements },
+                        },
+                        kind: 'init',
+                        method: true,
+                        computed: false,
+                        shorthand: false,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+      }
+
+      const functionExpression = {
+        type: 'FunctionExpression',
+        id: null,
+        params: [],
+        generator: false,
+        async: false,
+        expression: false,
+        body: {
+          type: 'BlockStatement',
+          body: [
+            {
+              type: 'ReturnStatement',
+              argument: superArrow(),
+            },
+          ],
+        },
+      };
+      const functionDeclaration = {
+        type: 'FunctionDeclaration',
+        id: { type: 'Identifier', name: 'nested' },
+        params: [],
+        generator: false,
+        async: false,
+        expression: false,
+        body: {
+          type: 'BlockStatement',
+          body: [
+            {
+              type: 'ReturnStatement',
+              argument: superArrow(),
+            },
+          ],
+        },
+      };
+
+      assertThrows(
+        () =>
+          parseScript('', {
+            parse: () =>
+              programForMethodBody([
+                {
+                  type: 'ReturnStatement',
+                  argument: functionExpression,
+                },
+              ]),
+          }),
+        SyntaxError,
+      );
+      assertThrows(
+        () =>
+          parseScript('', {
+            parse: () => programForMethodBody([functionDeclaration]),
+          }),
+        SyntaxError,
+      );
+    },
+  },
+  {
     name: 'spread is accepted only as a direct array element or call or construction argument',
     run() {
       const accepted = [

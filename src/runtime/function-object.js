@@ -2,10 +2,7 @@ import { EngineObject } from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
 import { toObject } from './conversion.js';
-import {
-  createFunctionExecutionEnvironment,
-  getThisBinding,
-} from './environment.js';
+import { createFunctionExecutionEnvironment } from './environment.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -206,10 +203,7 @@ export class EngineFunction extends EngineObject {
         });
       }
 
-      const resolvedThis =
-        this.thisMode === 'lexical'
-          ? getThisBinding(functionEnvironment)
-          : functionEnvironment.thisValue;
+      const resolvedThis = functionEnvironment.thisValue;
 
       completion = this._execute(this, resolvedThis, args, functionEnvironment);
     } catch (error) {
