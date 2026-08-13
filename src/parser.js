@@ -367,8 +367,8 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
   const pending = [
     { node: root, strict: rootStrict, parent: null, parentKey: undefined },
   ];
-  /** @type {WeakSet<object>} */
-  const seen = new WeakSet();
+  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, strict: boolean }[]>} */
+  const seen = new WeakMap();
 
   while (pending.length > 0) {
     const item =
@@ -382,11 +382,36 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       continue;
     }
 
-    if (seen.has(node)) {
-      continue;
-    }
+    const contexts = seen.get(node);
 
-    seen.add(node);
+    if (contexts !== undefined) {
+      let alreadySeen = false;
+
+      for (const context of contexts) {
+        if (
+          context.parent === item.parent &&
+          context.parentKey === item.parentKey &&
+          context.strict === strict
+        ) {
+          alreadySeen = true;
+          break;
+        }
+      }
+
+      if (alreadySeen) {
+        continue;
+      }
+
+      contexts.push({
+        parent: item.parent,
+        parentKey: item.parentKey,
+        strict,
+      });
+    } else {
+      seen.set(node, [
+        { parent: item.parent, parentKey: item.parentKey, strict },
+      ]);
+    }
 
     if (Array.isArray(node)) {
       for (let index = node.length - 1; index >= 0; index -= 1) {

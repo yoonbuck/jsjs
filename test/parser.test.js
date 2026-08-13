@@ -110,6 +110,42 @@ const tests = [
     },
   },
   {
+    name: 'parseScript validates shared AST nodes in each parent context',
+    run() {
+      const property = {
+        type: 'Property',
+        kind: 'init',
+        computed: false,
+        method: false,
+        shorthand: false,
+        key: { type: 'Identifier', name: 'x' },
+        value: { type: 'Literal', value: 1 },
+      };
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'ObjectExpression',
+              properties: [property],
+            },
+          },
+          {
+            type: 'ExpressionStatement',
+            expression: property,
+          },
+        ],
+      };
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
     name: 'parseScript rethrows non-syntax parser failures unchanged',
     run() {
       const error = /** @type {any} */ (
