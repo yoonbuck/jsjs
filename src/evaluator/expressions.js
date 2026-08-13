@@ -18,7 +18,6 @@ import {
   toInt32,
   toNumber,
   toObject,
-  toString,
   toPropertyKey,
 } from '../runtime/conversion.js';
 import {
@@ -61,6 +60,10 @@ import { performEval } from './eval.js';
 import { createRegExpFromPattern } from '../builtins/regexp.js';
 import { assignPattern } from './patterns.js';
 import { iterableToList } from './iteration.js';
+import {
+  evaluatePropertyName,
+  functionNameFromPropertyKey,
+} from './property-name.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -937,20 +940,57 @@ function evaluateObjectExpression(node, context) {
   const object = new EngineObject(context.realm.intrinsics.objectPrototype);
 
   for (const property of node.properties) {
-    if (property.type !== 'Property' || property.computed) {
-      // ES5 object literals only have plain `Property` members with
-      // literal keys; spread, shorthand methods, and computed keys are
-      // later-edition forms.
+    if (property.type !== 'Property') {
       throw createUnsupportedNodeError(property);
     }
 
-    const key = evaluatePropertyKey(property.key);
+    const key = evaluatePropertyName(property.key, property.computed, context);
 
     if (property.kind === 'init') {
+      if (property.method) {
+        const method = createFunctionObject(
+          property.value,
+          context.env,
+          context,
+          {
+            name: functionNameFromPropertyKey(key),
+            isMethod: true,
+            homeObject: object,
+            createPrototype: false,
+          },
+        );
+        object.defineOwnProperty(key, {
+          value: method,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        continue;
+      }
+
+      const prototypeSetter =
+        !property.computed &&
+        !property.shorthand &&
+        key === '__proto__';
+
+      if (prototypeSetter) {
+        const value = evaluateExpressionValue(property.value, context);
+
+        if (value === null || value instanceof EngineObject) {
+          object.setPrototypeOf(value);
+        }
+        continue;
+      }
+
       const value = isAnonymousFunctionExpression(property.value)
-        ? createFunctionObject(property.value, context.env, context, {
-            name: key,
-          })
+        ? createFunctionObject(
+            property.value,
+            context.env,
+            context,
+            {
+              name: functionNameFromPropertyKey(key),
+            },
+          )
         : evaluateExpressionValue(property.value, context);
 
       object.defineOwnProperty(key, {
@@ -971,9 +1011,10 @@ function evaluateObjectExpression(node, context) {
       context.env,
       context,
       {
-        name: `${property.kind} ${key}`,
+        name: functionNameFromPropertyKey(key, property.kind),
         isMethod: true,
         homeObject: object,
+        createPrototype: false,
       },
     );
     object.defineOwnProperty(key, {
@@ -984,26 +1025,6 @@ function evaluateObjectExpression(node, context) {
   }
 
   return object;
-}
-
-/**
- * Converts an object literal's property-name node to its string property
- * key: identifier names are used verbatim, and literal names go through
- * `ToString` so `{1: x}` and `{"1": x}` name the same property.
- *
- * @param {any} node
- * @returns {string}
- */
-function evaluatePropertyKey(node) {
-  if (node.type === 'Identifier') {
-    return node.name;
-  }
-
-  if (node.type === 'Literal' && !node.regex) {
-    return toString(node.value);
-  }
-
-  throw createUnsupportedNodeError(node);
 }
 
 /**

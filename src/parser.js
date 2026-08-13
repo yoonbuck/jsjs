@@ -312,6 +312,25 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['ExportAllDeclaration', 'export declarations are not supported'],
 ]);
 
+const SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES = new Set([
+  'Literal',
+  'Identifier',
+  'ThisExpression',
+  'UnaryExpression',
+  'BinaryExpression',
+  'LogicalExpression',
+  'ConditionalExpression',
+  'AssignmentExpression',
+  'UpdateExpression',
+  'CallExpression',
+  'MemberExpression',
+  'FunctionExpression',
+  'ObjectExpression',
+  'ArrayExpression',
+  'NewExpression',
+  'SequenceExpression',
+]);
+
 /**
  * Property keys that hold source-position metadata rather than child nodes;
  * skipped while walking so the traversal only descends into the AST proper.
@@ -843,8 +862,8 @@ function statementPositionFunctionError(context, node) {
  * full node-type table; this function adds the three cases that turn on a flag
  * rather than a distinct `node.type`:
  *
- * - a `Property` that is `computed` (`{ [k]: 1 }`), `shorthand` (`{ x }`), or a
- *   `method` (`{ m() {} }`) — the ES5.1 grammar has only `key: value`;
+ * - a `Property` whose shape is not one of the object-literal forms this
+ *   milestone evaluates;
  * - a `FunctionDeclaration` / `FunctionExpression` that is a `generator`
  *   (`function* g(){}`) or `async`;
  * - a numeric `Literal` written in the ES2015 binary (`0b`) or octal (`0o`)
@@ -908,22 +927,24 @@ function unsupportedEs2015Message(
     }
   }
 
+  if (node.type === 'ObjectExpression') {
+    const objectExpressionMessage = validateObjectExpression(node);
+
+    if (objectExpressionMessage !== undefined) {
+      return objectExpressionMessage;
+    }
+  }
+
   if (node.type === 'Property') {
-    if (
-      parent !== null &&
-      (parent === undefined ||
-        parent.type !== 'ObjectExpression' ||
-        parentKey !== 'properties')
-    ) {
-      return 'object properties are not supported in this AST position';
-    }
+    const propertyMessage = validateObjectExpressionProperty(
+      node,
+      parent,
+      parentKey,
+      parentIndex,
+    );
 
-    if (node.kind !== 'init' && node.kind !== 'get' && node.kind !== 'set') {
-      return 'unsupported object property kind';
-    }
-
-    if (node.method || node.computed || node.shorthand) {
-      return 'computed, shorthand, and method object properties are not supported';
+    if (propertyMessage !== undefined) {
+      return propertyMessage;
     }
   }
 
@@ -1008,6 +1029,187 @@ function unsupportedEs2015Message(
 function isFunctionNode(node) {
   return (
     node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression'
+  );
+}
+
+/**
+ * Rejects malformed custom object-expression property lists before the
+ * evaluator reaches them. `SpreadElement` remains a child here so its
+ * shape-sensitive capability rule below produces the ordinary object-spread
+ * rejection.
+ *
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateObjectExpression(node) {
+  if (!Array.isArray(node.properties)) {
+    return 'object literal properties must be an array';
+  }
+
+  let foundPrototypeSetter = false;
+
+  for (const property of node.properties) {
+    if (
+      !property ||
+      typeof property !== 'object' ||
+      (property.type !== 'Property' && property.type !== 'SpreadElement')
+    ) {
+      return 'unsupported object literal property';
+    }
+
+    if (isPrototypeSetterProperty(property)) {
+      if (foundPrototypeSetter) {
+        return 'duplicate __proto__ properties are not allowed';
+      }
+
+      foundPrototypeSetter = true;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Checks exactly the `Property` shapes that object-literal evaluation supports.
+ * The generic iterative walk still validates every nested key, value, and
+ * function node after this parent-local check succeeds.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @returns {string | undefined}
+ */
+function validateObjectExpressionProperty(node, parent, parentKey, parentIndex) {
+  if (
+    !parent ||
+    parent.type !== 'ObjectExpression' ||
+    parentKey !== 'properties' ||
+    !Array.isArray(parent.properties) ||
+    typeof parentIndex !== 'number' ||
+    !Number.isInteger(parentIndex) ||
+    parentIndex < 0 ||
+    parentIndex >= parent.properties.length ||
+    parent.properties[parentIndex] !== node
+  ) {
+    return 'object properties are not supported in this AST position';
+  }
+
+  if (
+    typeof node.computed !== 'boolean' ||
+    typeof node.method !== 'boolean' ||
+    typeof node.shorthand !== 'boolean' ||
+    (node.kind !== 'init' && node.kind !== 'get' && node.kind !== 'set') ||
+    !node.key ||
+    typeof node.key !== 'object' ||
+    !node.value ||
+    typeof node.value !== 'object'
+  ) {
+    return 'unsupported object property shape';
+  }
+
+  if (
+    !node.computed &&
+    node.key.type !== 'Identifier' &&
+    (node.key.type !== 'Literal' || node.key.regex)
+  ) {
+    return 'unsupported noncomputed object property key';
+  }
+
+  if (
+    node.computed &&
+    !isSupportedObjectPropertyExpression(node.key)
+  ) {
+    return 'unsupported computed object property key';
+  }
+
+  if (node.shorthand) {
+    return node.kind === 'init' &&
+      !node.computed &&
+      !node.method &&
+      node.key.type === 'Identifier' &&
+      node.value.type === 'Identifier' &&
+      node.key.name === node.value.name
+      ? undefined
+      : 'unsupported shorthand object property';
+  }
+
+  if (node.method) {
+    return node.kind === 'init' && isObjectLiteralFunction(node.value)
+      ? undefined
+      : 'unsupported concise object method';
+  }
+
+  if (node.kind === 'init') {
+    return isSupportedObjectPropertyExpression(node.value)
+      ? undefined
+      : 'unsupported object property value';
+  }
+
+  if (!isObjectLiteralFunction(node.value)) {
+    return 'unsupported object accessor';
+  }
+
+  if (node.kind === 'get') {
+    return node.value.params.length === 0
+      ? undefined
+      : 'object getters must not have parameters';
+  }
+
+  return node.value.params.length === 1 &&
+    node.value.params[0].type !== 'RestElement'
+    ? undefined
+    : 'object setters must have one non-rest parameter';
+}
+
+/**
+ * @param {any} property
+ * @returns {boolean}
+ */
+function isPrototypeSetterProperty(property) {
+  return (
+    property.type === 'Property' &&
+    property.kind === 'init' &&
+    property.computed === false &&
+    property.method === false &&
+    property.shorthand === false &&
+    property.key &&
+    ((property.key.type === 'Identifier' &&
+      property.key.name === '__proto__') ||
+      (property.key.type === 'Literal' &&
+        !property.key.regex &&
+        property.key.value === '__proto__'))
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isSupportedObjectPropertyExpression(node) {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    typeof node.type === 'string' &&
+    SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES.has(node.type)
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isObjectLiteralFunction(node) {
+  return (
+    node.type === 'FunctionExpression' &&
+    node.id === null &&
+    Array.isArray(node.params) &&
+    node.generator === false &&
+    (node.async === undefined || node.async === false) &&
+    node.expression === false &&
+    node.body &&
+    node.body.type === 'BlockStatement' &&
+    Array.isArray(node.body.body)
   );
 }
 

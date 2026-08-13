@@ -721,7 +721,32 @@ const tests = [
     },
   },
   {
-    name: 'each reachable unsupported ES2015 construct is rejected by the pass from parseScript and parseEval',
+    name: 'enhanced object literal property forms parse from parseScript and parseEval',
+    run() {
+      const accepted = [
+        'var value = 1; var object = { value };',
+        'var object = { [key]: value };',
+        'var object = { method(value = 1, ...rest) { return value; } };',
+        'var object = { get [key]() { return value; }, set [key](value) {} };',
+      ];
+
+      for (const source of accepted) {
+        assertSame(parseScript(source).type, 'Program', source);
+        assertSame(parseEval(source).type, 'Program', source);
+      }
+
+      const property = parseScript(
+        'var value; var object = { value, [key]: value, method() {}, get item() {}, set item(value) {} };',
+      ).body[1].declarations[0].init.properties;
+      assertSame(property[0].shorthand, true);
+      assertSame(property[1].computed, true);
+      assertSame(property[2].method, true);
+      assertSame(property[3].kind, 'get');
+      assertSame(property[4].kind, 'set');
+    },
+  },
+  {
+    name: 'each remaining reachable unsupported ES2015 construct is rejected by the pass from parseScript and parseEval',
     run() {
       const rejected = [
         'class C {}',
@@ -730,9 +755,9 @@ const tests = [
         '`template`;',
         'tag`template`;',
         'function* g() { yield 1; }',
-        'var d = { a };',
-        'var d = { [k]: 1 };',
-        'var d = { m() {} };',
+        'var object = { *method() {} };',
+        'var object = { async method() {} };',
+        'var object = { ...source };',
         'function withMeta() { return new.target; }',
         '0b101;',
         '0B101;',
@@ -746,6 +771,183 @@ const tests = [
         assertThrows(() => parseScript(source), SyntaxError);
         assertThrows(() => parseEval(source), SyntaxError);
       }
+    },
+  },
+  {
+    name: 'duplicate static __proto__ properties remain an object-literal early error',
+    run() {
+      const source = 'var object = { __proto__: first, __proto__: second };';
+
+      assertThrows(() => parseScript(source), SyntaxError);
+      assertThrows(() => parseEval(source), SyntaxError);
+    },
+  },
+  {
+    name: 'custom parser object expressions admit only exact enhanced property shapes',
+    run() {
+      /**
+       * @param {readonly any[]} [params=[]]
+       * @returns {any}
+       */
+      function functionValue(params = []) {
+        return {
+          type: 'FunctionExpression',
+          id: null,
+          params,
+          generator: false,
+          async: false,
+          expression: false,
+          body: { type: 'BlockStatement', body: [] },
+        };
+      }
+
+      /** @returns {any} */
+      function plainProperty() {
+        return {
+          type: 'Property',
+          kind: 'init',
+          computed: false,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'value' },
+          value: { type: 'Literal', value: 1 },
+        };
+      }
+
+      /**
+       * @param {any} properties
+       * @returns {any}
+       */
+      function programFor(properties) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ExpressionStatement',
+              expression: { type: 'ObjectExpression', properties },
+            },
+          ],
+        };
+      }
+
+      const valid = [
+        plainProperty(),
+        {
+          ...plainProperty(),
+          computed: true,
+          key: { type: 'Identifier', name: 'key' },
+        },
+        {
+          type: 'Property',
+          kind: 'init',
+          computed: false,
+          method: false,
+          shorthand: true,
+          key: { type: 'Identifier', name: 'value' },
+          value: { type: 'Identifier', name: 'value' },
+        },
+        {
+          type: 'Property',
+          kind: 'init',
+          computed: false,
+          method: true,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'method' },
+          value: functionValue(),
+        },
+        {
+          type: 'Property',
+          kind: 'get',
+          computed: false,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'value' },
+          value: functionValue(),
+        },
+        {
+          type: 'Property',
+          kind: 'set',
+          computed: false,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'value' },
+          value: functionValue([{ type: 'Identifier', name: 'next' }]),
+        },
+      ];
+
+      for (const property of valid) {
+        assertSame(
+          parseScript('', { parse: () => programFor([property]) }).type,
+          'Program',
+        );
+      }
+
+      const malformed = [
+        [[plainProperty()]],
+        { ...plainProperty(), computed: 'false' },
+        {
+          ...plainProperty(),
+          computed: true,
+          key: { type: 'Literal', value: 'key' },
+          value: { type: 'BogusExpression' },
+        },
+        {
+          ...plainProperty(),
+          shorthand: true,
+          value: { type: 'Identifier', name: 'other' },
+        },
+        {
+          ...plainProperty(),
+          method: true,
+          value: { type: 'Literal', value: 1 },
+        },
+        {
+          ...plainProperty(),
+          kind: 'get',
+          value: functionValue([{ type: 'Identifier', name: 'value' }]),
+        },
+      ];
+
+      for (const property of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => programFor([property]) }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom parser object expressions retain the duplicate __proto__ early error',
+    run() {
+      /** @returns {any} */
+      function protoProperty() {
+        return {
+          type: 'Property',
+          kind: 'init',
+          computed: false,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: '__proto__' },
+          value: { type: 'Identifier', name: 'proto' },
+        };
+      }
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'ObjectExpression',
+              properties: [protoProperty(), protoProperty()],
+            },
+          },
+        ],
+      };
+
+      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
     },
   },
   {

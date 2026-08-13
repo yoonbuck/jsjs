@@ -1,5 +1,6 @@
 import { toPropertyKey } from '../runtime/conversion.js';
 import { createUnsupportedNodeError } from '../runtime/errors.js';
+import { symbolDescription } from '../runtime/symbol.js';
 import { evaluateExpressionValue } from './expressions.js';
 
 /**
@@ -26,4 +27,31 @@ export function evaluatePropertyName(node, computed, context) {
   }
 
   throw createUnsupportedNodeError(node);
+}
+
+/**
+ * ECMA-262's SetFunctionName spelling for an object property key. Symbols use
+ * their descriptive string without the `Symbol(...)` wrapper.
+ *
+ * @param {string | symbol} key
+ * @param {string} [prefix='']
+ * @returns {string}
+ */
+export function functionNameFromPropertyKey(key, prefix = '') {
+  const name =
+    typeof key === 'symbol'
+      ? symbolName(key)
+      : key;
+
+  return prefix === '' ? name : `${prefix} ${name}`;
+}
+
+/**
+ * @param {symbol} key
+ * @returns {string}
+ */
+function symbolName(key) {
+  const description = symbolDescription(key);
+
+  return description === undefined ? '' : `[${description}]`;
 }
