@@ -14,7 +14,7 @@ import {
   EngineFunction,
   createArgumentsObject,
 } from '../runtime/function-object.js';
-import { createUnsupportedNodeError } from '../runtime/errors.js';
+import { EngineArray } from '../runtime/array-object.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateStatementList } from './statements.js';
 import { assignBindingPattern, initializeBindingPattern } from './patterns.js';
@@ -260,11 +260,10 @@ export function globalDeclarationInstantiation(program, context) {
 }
 
 /**
- * Performs the per-call half of declaration instantiation (ECMA-262 10.5)
- * inside an already-created activation environment: binds formal
- * parameters to their arguments, instantiates the body's function
- * declarations, and creates `undefined`-initialized bindings for the
- * body's `var` names that nothing has claimed yet.
+ * Performs ES2015 §9.2.12 FunctionDeclarationInstantiation. Parameter
+ * bindings are created together before defaults run, defaults initialize them
+ * from left to right, and a non-simple list receives a separate body variable
+ * environment so body declarations are not visible to parameter expressions.
  *
  * @param {any} functionNode
  * @param {import('../runtime/function-object.js').EngineFunction} functionObject
@@ -278,31 +277,91 @@ export function functionDeclarationInstantiation(
   args,
   context,
 ) {
-  // ES2015 §9.2.12: the activation bindings — parameters, `arguments`, the
-  // body's `var` names, and its top-level function declarations — all live in
-  // the *variable* environment. The hoisted function objects instantiated below
-  // still capture `context.env` (the body's *lexical* environment) as their
-  // `[[Scope]]` per step 36, so a sloppy function's hoisted inner function sees
-  // the body's `let`/`const`. For strict code, and everywhere else this runs,
-  // `context.env === context.variableEnv`, so this is unchanged there.
-  const env =
+  const parameterEnv =
     /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
-      context.variableEnv
+      context.env
     );
   const parameterNames = functionObject.parameterNames;
+  const formalParameters = functionObject.formalParameters;
 
-  for (let index = 0; index < parameterNames.length; index += 1) {
-    const name = parameterNames[index];
-
-    if (!env.hasBinding(name)) {
-      env.createMutableBinding(name, false);
+  // Every bound name exists before the first default expression runs. Duplicate
+  // names are possible only for sloppy simple lists and share one binding.
+  for (const name of parameterNames) {
+    if (!parameterEnv.hasBinding(name)) {
+      parameterEnv.createMutableBinding(name, false);
     }
-
-    env.initializeBinding(name, index < args.length ? args[index] : undefined);
   }
 
   const varScoped = topLevelVarScopedDeclarations(functionNode.body.body);
   const varNames = new Set(topLevelVarDeclaredNames(functionNode.body.body));
+  const functionNames = new Set(
+    varScoped
+      .filter((declaration) => declaration.type === 'FunctionDeclaration')
+      .map((declaration) => declaration.id.name),
+  );
+  const lexicalNames = new Set(
+    topLevelLexicallyDeclaredNames(functionNode.body.body),
+  );
+  const hasParameterExpressions = formalParameters.some(
+    containsParameterExpression,
+  );
+  const mappedArguments =
+    !functionObject.strict && functionObject.simpleParameterList;
+  const argumentsObjectNeeded =
+    functionObject.functionKind !== 'arrow' &&
+    !parameterNames.includes('arguments') &&
+    (hasParameterExpressions ||
+      (!functionNames.has('arguments') && !lexicalNames.has('arguments')));
+
+  if (argumentsObjectNeeded) {
+    parameterEnv.createMutableBinding('arguments', false);
+    parameterEnv.initializeBinding(
+      'arguments',
+      createArgumentsObject(
+        functionObject,
+        args,
+        parameterEnv,
+        mappedArguments,
+      ),
+    );
+  }
+
+  for (let index = 0; index < formalParameters.length; index += 1) {
+    const parameter = formalParameters[index];
+    const value =
+      parameter.type === 'RestElement'
+        ? createRestParameterArray(functionObject, args, index)
+        : index < args.length
+          ? args[index]
+          : undefined;
+
+    initializeBindingPattern(parameter, value, parameterEnv, context);
+  }
+
+  const env = functionObject.simpleParameterList
+    ? parameterEnv
+    : newDeclarativeEnvironment(parameterEnv);
+  context.variableEnv = env;
+
+  for (const name of varNames) {
+    if (env.hasBinding(name)) {
+      continue;
+    }
+
+    const initialValue =
+      !functionObject.simpleParameterList && parameterEnv.hasBinding(name)
+        ? parameterEnv.getBindingValue(name, false)
+        : undefined;
+    env.createMutableBinding(name, false);
+    env.initializeBinding(name, initialValue);
+  }
+
+  // Hoisted body functions capture the body's lexical environment, not the
+  // parameter environment used while defaults were evaluated.
+  const lexicalEnv = functionObject.strict
+    ? env
+    : newDeclarativeEnvironment(env);
+  context.env = lexicalEnv;
 
   for (const declaration of varScoped) {
     if (declaration.type !== 'FunctionDeclaration') {
@@ -314,23 +373,9 @@ export function functionDeclarationInstantiation(
 
     if (!env.hasBinding(name)) {
       env.createMutableBinding(name, false);
-    }
-
-    env.initializeBinding(name, nested);
-  }
-
-  if (!env.hasBinding('arguments')) {
-    env.createMutableBinding('arguments', false);
-    env.initializeBinding(
-      'arguments',
-      createArgumentsObject(functionObject, args, env),
-    );
-  }
-
-  for (const name of varNames) {
-    if (!env.hasBinding(name)) {
-      env.createMutableBinding(name, false);
-      env.initializeBinding(name, undefined);
+      env.initializeBinding(name, nested);
+    } else {
+      env.setMutableBinding(name, nested, false);
     }
   }
 
@@ -369,6 +414,55 @@ export function functionDeclarationInstantiation(
     }
 
     context.annexBFunctionDeclarations = new Set(aliasDeclarations);
+  }
+}
+
+/**
+ * @param {EngineFunction} functionObject
+ * @param {readonly unknown[]} args
+ * @param {number} start
+ * @returns {EngineArray}
+ */
+function createRestParameterArray(functionObject, args, start) {
+  const array = new EngineArray(
+    functionObject.realm.intrinsics.arrayPrototype,
+  );
+
+  for (let index = start; index < args.length; index += 1) {
+    array.defineOwnProperty(String(index - start), {
+      value: args[index],
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  return array;
+}
+
+/**
+ * Implements ContainsExpression for the supported BindingElement shapes.
+ *
+ * @param {any} parameter
+ * @returns {boolean}
+ */
+function containsParameterExpression(parameter) {
+  switch (parameter.type) {
+    case 'AssignmentPattern':
+      return true;
+    case 'RestElement':
+      return containsParameterExpression(parameter.argument);
+    case 'ArrayPattern':
+      return /** @type {any[]} */ (parameter.elements).some(
+        (element) => element && containsParameterExpression(element),
+      );
+    case 'ObjectPattern':
+      return /** @type {any[]} */ (parameter.properties).some(
+        (property) =>
+          property.computed || containsParameterExpression(property.value),
+      );
+    default:
+      return false;
   }
 }
 
@@ -600,6 +694,8 @@ export function instantiateFunctionObject(node, context) {
  * @typedef {{
  *   name?: string,
  *   isMethod?: boolean,
+ *   createPrototype?: boolean,
+ *   functionKind?: 'normal' | 'arrow',
  *   homeObject?: import('../runtime/object.js').EngineObject,
  * }} CreateFunctionObjectOptions
  */
@@ -625,19 +721,13 @@ export function isAnonymousFunctionExpression(node) {
  * @returns {EngineFunction}
  */
 export function createFunctionObject(node, scope, context, options = {}) {
-  /** @type {string[]} */
-  const parameterNames = [];
-
-  for (const parameter of node.params) {
-    if (parameter.type !== 'Identifier') {
-      // ES5 formal parameters are always plain identifiers; anything else
-      // (destructuring, defaults, rest) is a later-edition form this
-      // engine does not implement.
-      throw createUnsupportedNodeError(parameter);
-    }
-
-    parameterNames.push(parameter.name);
-  }
+  /** @type {readonly any[]} */
+  const formalParameters = node.params;
+  const parameterNames = formalParameters.flatMap(boundNames);
+  const simpleParameterList = formalParameters.every(
+    (parameter) => parameter.type === 'Identifier',
+  );
+  const expectedArgumentCount = firstOptionalIndex(formalParameters);
 
   // A function is strict when its enclosing scope is already strict OR when
   // the function's own body opens with a "use strict" directive prologue
@@ -647,11 +737,16 @@ export function createFunctionObject(node, scope, context, options = {}) {
 
   const functionObject = new EngineFunction({
     realm: context.realm,
+    formalParameters,
     parameterNames,
+    expectedArgumentCount,
+    simpleParameterList,
     scope,
     strict,
     name,
     isMethod: options.isMethod ?? false,
+    createPrototype: options.createPrototype,
+    functionKind: options.functionKind,
     execute: (functionObject, thisValue, args) =>
       executeFunctionBody(node, functionObject, thisValue, args),
   });
@@ -664,18 +759,35 @@ export function createFunctionObject(node, scope, context, options = {}) {
 }
 
 /**
+ * @param {readonly any[]} formalParameters
+ * @returns {number}
+ */
+function firstOptionalIndex(formalParameters) {
+  for (let index = 0; index < formalParameters.length; index += 1) {
+    const parameter = formalParameters[index];
+
+    if (
+      parameter.type === 'AssignmentPattern' ||
+      parameter.type === 'RestElement'
+    ) {
+      return index;
+    }
+  }
+
+  return formalParameters.length;
+}
+
+/**
  * Runs a function body in a fresh activation environment whose outer
  * environment is the function's captured `[[Scope]]`, so closures observe
  * the environment their function was created in rather than the caller's.
  *
- * Per ES2015 §9.2.12 the activation environment `varEnv` is the *variable*
- * environment — `functionDeclarationInstantiation` binds the parameters,
- * `arguments`, the body's `var` names, and its top-level function declarations
- * there, and a direct `eval("var …")` in the body hoists there too — while the
- * body's *lexical* environment `lexEnv` (holding its `let`/`const`) is layered
- * over it. The body statement list evaluates with `env: lexEnv` for identifier
- * resolution and `variableEnv: varEnv`; see the inline comments for why the
- * strict case shares one environment.
+ * Per ES2015 §9.2.12 a non-simple list layers its parameter environment over
+ * the callee's initial variable environment, then layers a distinct body
+ * variable environment over the parameters. The body lexical environment
+ * (holding `let`/`const`) is installed last. Simple lists reuse the initial
+ * environment for parameters and body `var`s. This preserves both parameter
+ * default isolation and the variable environment direct eval needs.
  *
  * @param {any} node
  * @param {EngineFunction} functionObject
@@ -684,40 +796,29 @@ export function createFunctionObject(node, scope, context, options = {}) {
  * @returns {{ type: string, value: unknown }}
  */
 function executeFunctionBody(node, functionObject, thisValue, args) {
-  const varEnv = newDeclarativeEnvironment(functionObject.scope);
-
-  // ES2015 §9.2.12: the body's lexical environment is a fresh declarative
-  // environment over `varEnv` when the function is non-strict (step 30) and
-  // `varEnv` itself when it is strict (step 31); step 33 installs it as the
-  // running context's LexicalEnvironment (here, `context.env`). Sharing one
-  // environment in the strict case is unobservable: the early errors that would
-  // let the merge show through are raised at parse time — a formal parameter
-  // cannot be redeclared as a body `let`/`const`, and a lexically declared name
-  // cannot collide with a var-scoped one — so the two records' binding sets are
-  // disjoint and whether they live in one record or two changes no lookup. This
-  // equivalence was verified empirically (Task 6, fix round 2): forcing the
-  // strict case down the fresh-environment path left the full local suite and
-  // the entire pinned Test262 suite (22219/22219) green. The spec-faithful
-  // branch is kept because the spec specifies it, not because it is required to
-  // pass a test.
-  const lexEnv = functionObject.strict
-    ? varEnv
-    : newDeclarativeEnvironment(varEnv);
+  const functionEnv = newDeclarativeEnvironment(functionObject.scope);
+  const parameterEnv = functionObject.simpleParameterList
+    ? functionEnv
+    : newDeclarativeEnvironment(functionEnv);
 
   /** @type {EvaluationContext} */
   const context = {
     realm: functionObject.realm,
-    // `env` is the lexical environment so the hoisted function objects
-    // instantiated in `functionDeclarationInstantiation` capture it (§9.2.12
-    // step 36); the activation bindings still land in `variableEnv`.
-    env: lexEnv,
-    variableEnv: varEnv,
+    // FunctionDeclarationInstantiation keeps this environment active while
+    // defaults run. Direct eval declarations use the underlying function
+    // variable environment, then instantiation installs the body environments.
+    env: parameterEnv,
+    variableEnv: functionEnv,
     strict: functionObject.strict,
     thisValue,
     homeObject: functionObject.homeObject,
   };
 
   functionDeclarationInstantiation(node, functionObject, args, context);
+  const lexEnv =
+    /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
+      context.env
+    );
 
   // ES2015 §9.2.12 step 35: instantiate the body's top-level lexically-scoped
   // declarations into `lexEnv` with the same rules a block uses — `let`/`const`

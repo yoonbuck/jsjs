@@ -17,12 +17,17 @@ import { toObject } from './conversion.js';
  *
  * @typedef {{
  *   realm: Realm,
+ *   formalParameters: readonly any[],
  *   parameterNames: readonly string[],
+ *   expectedArgumentCount: number,
+ *   simpleParameterList: boolean,
  *   scope: EnvironmentRecordLike,
  *   strict: boolean,
  *   execute: FunctionBodyExecutor,
  *   name?: string,
  *   isMethod?: boolean,
+ *   createPrototype?: boolean,
+ *   functionKind?: 'normal' | 'arrow',
  * }} EngineFunctionOptions
  */
 
@@ -42,32 +47,45 @@ export class EngineFunction extends EngineObject {
    */
   constructor({
     realm,
+    formalParameters,
     parameterNames,
+    expectedArgumentCount,
+    simpleParameterList,
     scope,
     strict,
     execute,
     name = '',
     isMethod = false,
+    createPrototype = !isMethod,
+    functionKind = 'normal',
   }) {
     super(realm.intrinsics.functionPrototype, 'Function');
 
     /** @type {Realm} */
     this.realm = realm;
+    /** @type {readonly any[]} */
+    this.formalParameters = formalParameters;
     /** @type {readonly string[]} */
     this.parameterNames = parameterNames;
+    /** @type {number} */
+    this.expectedArgumentCount = expectedArgumentCount;
+    /** @type {boolean} */
+    this.simpleParameterList = simpleParameterList;
     /** @type {EnvironmentRecordLike} */
     this.scope = scope;
     /** @type {boolean} */
     this.strict = strict;
     /** @type {boolean} */
     this._isConstructor = !isMethod;
+    /** @type {'normal' | 'arrow'} */
+    this.functionKind = functionKind;
     /** @type {FunctionBodyExecutor} */
     this._execute = execute;
     /** @type {EngineObject | undefined} */
     this.homeObject = undefined;
 
     this.defineOwnProperty('length', {
-      value: parameterNames.length,
+      value: expectedArgumentCount,
       writable: false,
       enumerable: false,
       configurable: true,
@@ -79,19 +97,21 @@ export class EngineFunction extends EngineObject {
       configurable: true,
     });
 
-    const prototype = new EngineObject(realm.intrinsics.objectPrototype);
-    prototype.defineOwnProperty('constructor', {
-      value: this,
-      writable: true,
-      enumerable: false,
-      configurable: true,
-    });
-    this.defineOwnProperty('prototype', {
-      value: prototype,
-      writable: true,
-      enumerable: false,
-      configurable: false,
-    });
+    if (createPrototype) {
+      const prototype = new EngineObject(realm.intrinsics.objectPrototype);
+      prototype.defineOwnProperty('constructor', {
+        value: this,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      this.defineOwnProperty('prototype', {
+        value: prototype,
+        writable: true,
+        enumerable: false,
+        configurable: false,
+      });
+    }
 
     // ECMA-262 13.2 strict-function-only steps: define non-configurable,
     // non-enumerable accessor properties for "caller" and "arguments" that
@@ -410,17 +430,18 @@ export class ArgumentsObject extends EngineObject {
 /**
  * Builds the `arguments` object for one activation (ECMA-262 10.6): a
  * `length` of the actual argument count, one index property per passed
- * argument, and a `callee` back-reference to the running function. Index
- * properties are walked from the last argument down so that duplicate
- * formal parameter names map to their *last* occurrence, matching the
- * specified `MakeArgGetter`/`MakeArgSetter` loop.
+ * argument. A mapped object receives a `callee` back-reference; an unmapped
+ * object receives the ES2015 poison pill instead. Index properties are walked
+ * from the last argument down so duplicate formal names map only their *last*
+ * occurrence, matching the specified `MakeArgGetter`/`MakeArgSetter` loop.
  *
  * @param {EngineFunction} functionObject
  * @param {readonly unknown[]} args
  * @param {EnvironmentRecordLike} env
+ * @param {boolean} mapped
  * @returns {ArgumentsObject}
  */
-export function createArgumentsObject(functionObject, args, env) {
+export function createArgumentsObject(functionObject, args, env, mapped) {
   const argumentsObject = new ArgumentsObject(
     functionObject.realm.intrinsics.objectPrototype,
     env,
@@ -433,10 +454,6 @@ export function createArgumentsObject(functionObject, args, env) {
     configurable: true,
   });
 
-  const parameterNames = functionObject.parameterNames;
-  /** @type {Set<string>} */
-  const mappedNames = new Set();
-
   for (let index = args.length - 1; index >= 0; index -= 1) {
     const key = String(index);
 
@@ -446,24 +463,31 @@ export function createArgumentsObject(functionObject, args, env) {
       enumerable: true,
       configurable: true,
     });
+  }
 
-    if (functionObject.strict || index >= parameterNames.length) {
-      continue;
-    }
+  if (mapped) {
+    const parameterNames = functionObject.parameterNames;
+    /** @type {Set<string>} */
+    const mappedNames = new Set();
 
-    const parameterName = parameterNames[index];
+    for (let index = parameterNames.length - 1; index >= 0; index -= 1) {
+      const parameterName = parameterNames[index];
 
-    if (!mappedNames.has(parameterName)) {
+      if (mappedNames.has(parameterName)) {
+        continue;
+      }
+
       mappedNames.add(parameterName);
-      argumentsObject.mapParameter(key, parameterName);
+
+      if (index < args.length) {
+        argumentsObject.mapParameter(String(index), parameterName);
+      }
     }
   }
 
-  if (functionObject.strict) {
-    // ECMA-262 10.6 strict-arguments steps: "callee" and "caller" become
-    // non-configurable accessor properties that each throw a TypeError on
-    // read or write.  The shared %ThrowTypeError% intrinsic is used so every
-    // strict arguments object in the same realm shares the same thrower.
+  if (!mapped) {
+    // ES2015 §9.4.4.6: unmapped arguments objects use the realm's shared
+    // %ThrowTypeError% intrinsic for their legacy poison-pill properties.
     const thrower = /** @type {EngineFunction | undefined} */ (
       functionObject.realm.intrinsics.throwTypeErrorFunction
     );
@@ -484,7 +508,12 @@ export function createArgumentsObject(functionObject, args, env) {
       configurable: false,
     };
     argumentsObject.defineOwnProperty('callee', poisonPill);
-    argumentsObject.defineOwnProperty('caller', poisonPill);
+
+    // Preserve the engine's ES5 strict-arguments `caller` poison pill without
+    // adding that legacy property to sloppy non-simple arguments objects.
+    if (functionObject.strict) {
+      argumentsObject.defineOwnProperty('caller', poisonPill);
+    }
   } else {
     argumentsObject.defineOwnProperty('callee', {
       value: functionObject,

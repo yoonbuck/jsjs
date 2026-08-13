@@ -61,7 +61,10 @@ import { createFunctionObject } from './declarations.js';
  * `Function.prototype`, and its `length`/`prototype`/`constructor` descriptors
  * and strict `caller`/`arguments` poison pills come out identical to a
  * source-declared function because the object is built through the shared
- * `createFunctionObject` (13.2) path rather than assembled by hand.
+ * `createFunctionObject` (13.2) path rather than assembled by hand. The parsed
+ * formal-parameter AST is retained intact, so defaults, destructuring, rest,
+ * expected argument count, and non-simple arguments rules use the same
+ * instantiation path as source-declared functions.
  *
  * @param {Realm} realm The realm that owns the invoked `Function` constructor.
  * @param {readonly unknown[]} args

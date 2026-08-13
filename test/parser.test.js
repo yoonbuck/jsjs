@@ -411,6 +411,32 @@ const tests = [
       const program = parseScript('', { parse: () => cyclic });
 
       assertSame(program.type, 'Program');
+
+      const parameter = /** @type {any} */ ({
+        type: 'ArrayPattern',
+        elements: /** @type {any[]} */ ([]),
+      });
+      parameter.elements.push(parameter);
+      const cyclicParameter = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'FunctionDeclaration',
+            id: { type: 'Identifier', name: 'f' },
+            params: [parameter],
+            generator: false,
+            async: false,
+            expression: false,
+            body: { type: 'BlockStatement', body: [] },
+          },
+        ],
+      };
+
+      assertSame(
+        parseScript('', { parse: () => cyclicParameter }).type,
+        'Program',
+      );
     },
   },
   {
@@ -707,8 +733,6 @@ const tests = [
         'var d = { a };',
         'var d = { [k]: 1 };',
         'var d = { m() {} };',
-        'function withDefault(a = 1) { return a; }',
-        'function withRest(...a) { return a; }',
         'foo(...a);',
         'function withMeta() { return new.target; }',
         '0b101;',
@@ -866,12 +890,39 @@ const tests = [
     },
   },
   {
-    name: 'parameter patterns remain rejected',
+    name: 'ordinary functions accept default rest and destructuring parameters',
     run() {
-      assertThrows(() => parseScript('function f({x}) {}'), SyntaxError);
-      assertThrows(() => parseScript('function f([x]) {}'), SyntaxError);
-      assertThrows(() => parseScript('function f(x = 1) {}'), SyntaxError);
-      assertThrows(() => parseScript('function f(...xs) {}'), SyntaxError);
+      parseScript('function f({x}, [y], z = 1, ...rest) {}');
+      parseScript('(function ({x: y = 1}, [z, ...tail]) {})');
+    },
+  },
+  {
+    name: 'non-simple parameter early errors and sloppy duplicate rules are retained',
+    run() {
+      assertThrows(
+        () => parseScript('function f(a = 1) { "use strict"; }'),
+        SyntaxError,
+      );
+      assertThrows(
+        () => parseScript('function f(a = 1, a) {}'),
+        SyntaxError,
+      );
+      parseScript('function f(a, a) {}');
+    },
+  },
+  {
+    name: 'generator async arrow and spread forms remain unsupported around parameters',
+    run() {
+      const rejected = [
+        'function* g(a = 1) {}',
+        'async function f(a = 1) {}',
+        '(a = 1) => a',
+        'function f(a) {} f(...values);',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
     },
   },
   {
@@ -967,6 +1018,28 @@ const tests = [
           },
         ],
       };
+      const invalidFunctionParameter = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'FunctionDeclaration',
+            id: { type: 'Identifier', name: 'f' },
+            params: [
+              {
+                type: 'MemberExpression',
+                object: { type: 'Identifier', name: 'object' },
+                property: { type: 'Identifier', name: 'value' },
+                computed: false,
+              },
+            ],
+            generator: false,
+            async: false,
+            expression: false,
+            body: { type: 'BlockStatement', body: [] },
+          },
+        ],
+      };
 
       assertThrows(
         () => parseScript('', { parse: () => invalidBinding }),
@@ -982,6 +1055,10 @@ const tests = [
       );
       assertThrows(
         () => parseScript('', { parse: () => invalidSharedRest }),
+        SyntaxError,
+      );
+      assertThrows(
+        () => parseScript('', { parse: () => invalidFunctionParameter }),
         SyntaxError,
       );
     },

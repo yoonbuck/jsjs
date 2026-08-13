@@ -27,6 +27,7 @@ import evaluatorExpressions from './evaluator-expressions.test.js';
 import evaluatorStatements from './evaluator-statements.test.js';
 import withStatements from './with-statement.test.js';
 import functions from './functions.test.js';
+import functionParameters from './function-parameters.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
 import test262Runner from './test262-runner.test.js';
 import es5Selection from './es5-selection.test.js';
@@ -119,6 +120,10 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: withStatements,
   }),
   Object.freeze({ file: 'test/functions.test.js', tests: functions }),
+  Object.freeze({
+    file: 'test/function-parameters.test.js',
+    tests: functionParameters,
+  }),
   Object.freeze({
     file: 'test/object-array-literals.test.js',
     tests: objectArrayLiterals,

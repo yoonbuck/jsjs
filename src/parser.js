@@ -2,8 +2,12 @@
 // engine module that names it: see that file for why the vendored build exists
 // and how it keeps Node, browser, and `jsc` runs on the same source.
 import { Parser } from './parser-dependency.js';
-import { normalizeSyntaxError } from './runtime/errors.js';
+import {
+  normalizeSyntaxError,
+  UnsupportedNodeError,
+} from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
+import { boundNames } from './evaluator/static-semantics.js';
 import {
   parseFlags,
   RegExpSyntaxError,
@@ -459,6 +463,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.patternContext,
       item.parentIndex,
     );
+    checkFunctionParameterEarlyErrors(node);
 
     const childStrict = childScopeStrictness(node, strict);
     const keys = Object.keys(node);
@@ -476,6 +481,134 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       }
     }
   }
+}
+
+/**
+ * Applies the ES2015 early errors Acorn 8 does not enforce when parsing with
+ * `ecmaVersion: 6`: a non-simple list cannot contain duplicate bound names, and
+ * its function body cannot contain a "use strict" directive.
+ *
+ * @param {any} node
+ * @returns {void}
+ */
+function checkFunctionParameterEarlyErrors(node) {
+  if (
+    !isFunctionNode(node) ||
+    /** @type {any[]} */ (node.params).every(
+      (parameter) => parameter.type === 'Identifier',
+    )
+  ) {
+    return;
+  }
+
+  if (
+    node.body &&
+    Array.isArray(node.body.body) &&
+    hasUseStrictDirective(node.body.body)
+  ) {
+    throw unsupportedEs2015Error(
+      'Illegal "use strict" directive in function with non-simple parameter list',
+      node,
+    );
+  }
+
+  const seen = new Set();
+
+  for (const parameter of node.params) {
+    if (hasBindingPatternCycle(parameter)) {
+      // The main AST walk is cycle-aware and will validate the reachable
+      // shapes; skip duplicate-name collection rather than looping here.
+      return;
+    }
+
+    let names;
+
+    try {
+      names = boundNames(parameter);
+    } catch (error) {
+      if (error instanceof UnsupportedNodeError) {
+        // The shape-aware capability walk will reject this parameter with a
+        // positioned SyntaxError when it visits the unsupported child.
+        return;
+      }
+
+      throw error;
+    }
+
+    for (const name of names) {
+      if (seen.has(name)) {
+        throw unsupportedEs2015Error(
+          'Duplicate parameter name not allowed in this context',
+          parameter,
+        );
+      }
+
+      seen.add(name);
+    }
+  }
+}
+
+/**
+ * @param {any} root
+ * @returns {boolean}
+ */
+function hasBindingPatternCycle(root) {
+  const visiting = new WeakSet();
+  const visited = new WeakSet();
+  /** @type {{ node: any, exiting: boolean }[]} */
+  const pending = [{ node: root, exiting: false }];
+
+  while (pending.length > 0) {
+    const { node, exiting } =
+      /** @type {{ node: any, exiting: boolean }} */ (pending.pop());
+
+    if (!node || typeof node !== 'object') {
+      continue;
+    }
+
+    if (exiting) {
+      visiting.delete(node);
+      visited.add(node);
+      continue;
+    }
+
+    if (visited.has(node)) {
+      continue;
+    }
+
+    if (visiting.has(node)) {
+      return true;
+    }
+
+    visiting.add(node);
+    pending.push({ node, exiting: true });
+
+    switch (node.type) {
+      case 'AssignmentPattern':
+        pending.push({ node: node.left, exiting: false });
+        break;
+      case 'RestElement':
+        pending.push({ node: node.argument, exiting: false });
+        break;
+      case 'ArrayPattern':
+        for (const element of node.elements) {
+          if (element !== null) {
+            pending.push({ node: element, exiting: false });
+          }
+        }
+        break;
+      case 'ObjectPattern':
+        for (const property of node.properties) {
+          pending.push({
+            node: property.type === 'Property' ? property.value : property,
+            exiting: false,
+          });
+        }
+        break;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -605,6 +738,10 @@ function pushChild(
  */
 function patternContextForChild(parent, key, inherited) {
   if (parent.type === 'VariableDeclarator' && key === 'id') {
+    return 'binding';
+  }
+
+  if (isFunctionNode(parent) && key === 'params') {
     return 'binding';
   }
 
@@ -809,6 +946,7 @@ function unsupportedEs2015Message(
 
   if (node.type === 'AssignmentPattern') {
     const validPlacement =
+      (parent && isFunctionNode(parent) && parentKey === 'params') ||
       (parent && parent.type === 'ArrayPattern' && parentKey === 'elements') ||
       (parent && parent.type === 'Property' && parentKey === 'value');
 
@@ -822,11 +960,20 @@ function unsupportedEs2015Message(
   }
 
   if (node.type === 'RestElement') {
-    return patternContext !== undefined &&
+    const validArrayRest =
+      patternContext !== undefined &&
       parent &&
       parent.type === 'ArrayPattern' &&
       parentKey === 'elements' &&
-      parentIndex === parent.elements.length - 1
+      parentIndex === parent.elements.length - 1;
+    const validParameterRest =
+      patternContext === 'binding' &&
+      parent &&
+      isFunctionNode(parent) &&
+      parentKey === 'params' &&
+      parentIndex === parent.params.length - 1;
+
+    return validArrayRest || validParameterRest
       ? undefined
       : 'rest elements are not supported in this context';
   }

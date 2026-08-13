@@ -106,6 +106,26 @@ const tests = [
     },
   },
   {
+    name: 'dynamic functions support default destructuring and rest parameters',
+    run() {
+      assertNormal(
+        run(
+          'new Function("a = 1", "{ b } = { b: a + 1 }", "...rest", ' +
+            '"return a + \\":\\" + b + \\":\\" + rest.join(\\",\\") + \\":\\" + arguments.length;")' +
+            '(undefined, undefined, 3, 4);',
+        ),
+        '1:2:3,4:4',
+      );
+      assertNormal(
+        run(
+          'new Function("a", "b = 1", "c", "return 0;").length + ":" +' +
+            'new Function("{ a }", "return a;").length;',
+        ),
+        '1:1',
+      );
+    },
+  },
+  {
     name: 'comments and line terminators are allowed inside the parameter text',
     run() {
       assertNormal(
@@ -379,6 +399,31 @@ const tests = [
       const realm = createRealm();
       assertGuestThrow(
         runIn(realm, 'new Function("a", "a", "\\"use strict\\"; return a;");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'a dynamic non-simple parameter list rejects a use strict directive',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(
+          realm,
+          'new Function("a = 1", "\\"use strict\\"; return a;");',
+        ),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'a dynamic non-simple parameter list rejects duplicate bound names',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'new Function("a = 1", "a", "return a;");'),
         'SyntaxError',
         realm,
       );

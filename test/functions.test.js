@@ -298,6 +298,23 @@ const tests = [
     },
   },
   {
+    name: 'strict arguments indices are not mapped to formal parameters',
+    run() {
+      assertSame(
+        run(
+          'function f(a) { "use strict"; a = 2; return arguments[0]; } f(1);',
+        ),
+        1,
+      );
+      assertSame(
+        run(
+          'function f(a) { "use strict"; arguments[0] = 2; return a; } f(1);',
+        ),
+        1,
+      );
+    },
+  },
+  {
     name: 'arguments indices beyond the formal parameters are unmapped values',
     run() {
       assertSame(
