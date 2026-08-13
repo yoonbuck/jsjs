@@ -29,6 +29,7 @@ import {
   blockDeclarationInstantiation,
   evaluateVariableDeclaration,
 } from './declarations.js';
+import { evaluateClassDefinition } from './classes.js';
 import {
   boundNames,
   isConstantDeclaration,
@@ -57,6 +58,7 @@ export const STATEMENT_TYPES = new Set([
   'BlockStatement',
   'VariableDeclaration',
   'FunctionDeclaration',
+  'ClassDeclaration',
   'IfStatement',
   'WhileStatement',
   'DoWhileStatement',
@@ -105,6 +107,8 @@ export function evaluateStatement(node, context, labelSet = []) {
         return evaluateVariableDeclaration(node, context);
       case 'FunctionDeclaration':
         return evaluateFunctionDeclaration(node, context);
+      case 'ClassDeclaration':
+        return evaluateClassDeclaration(node, context);
       case 'IfStatement':
         return evaluateIfStatement(node, context);
       case 'WhileStatement':
@@ -246,6 +250,30 @@ function evaluateFunctionDeclaration(node, context) {
     context.variableEnv.setMutableBinding(name, value, false);
   }
 
+  return createNormalCompletion(EMPTY);
+}
+
+/**
+ * A class declaration's mutable lexical binding is created uninitialized by
+ * declaration instantiation. Evaluate the definition first so a failing
+ * heritage or element leaves that binding in its TDZ, then initialize it.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Completion}
+ */
+function evaluateClassDeclaration(node, context) {
+  const value = evaluateClassDefinition(node, context, node.id.name);
+  const reference = getIdentifierReference(
+    context.env,
+    node.id.name,
+    context.strict,
+  );
+  const environment =
+    /** @type {{ initializeBinding(name: string, value: unknown): void }} */ (
+      reference.base
+    );
+  environment.initializeBinding(node.id.name, value);
   return createNormalCompletion(EMPTY);
 }
 

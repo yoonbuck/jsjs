@@ -246,7 +246,7 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  *
  * *Reachable* — this pass is what rejects the construct, because the node is the
  * first unsupported one the walk visits on some accepted parse:
- * `ClassDeclaration`, `ClassExpression`, `ObjectPattern`, `ArrayPattern`,
+ * `ObjectPattern`, `ArrayPattern`,
  * `AssignmentPattern`, `RestElement`, and
  * `MetaProperty` (via `new.target` inside a function). `SpreadElement` is
  * handled shape-sensitively by `unsupportedEs2015Message`, because array
@@ -257,9 +257,6 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * walk always rejects an ancestor first, so this entry never fires on its own.
  * These are defence-in-depth: were the walk order or a parent's flag ever to
  * change, the node would still be refused rather than silently evaluated.
- * - `ClassBody` / `MethodDefinition` occur only inside a class, rejected first
- *   at `ClassDeclaration` / `ClassExpression`. (`{ m() {} }` is a `Property`
- *   with `method: true`, not a `MethodDefinition`.)
  * - `YieldExpression` occurs only inside a generator, whose enclosing
  *   `Function` is rejected first by the `generator: true` flag check in
  *   `checkUnsupportedEs2015Node`.
@@ -292,10 +289,6 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * @type {ReadonlyMap<string, string>}
  */
 const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
-  ['ClassDeclaration', '`class` declarations are not supported'],
-  ['ClassExpression', '`class` expressions are not supported'],
-  ['ClassBody', '`class` bodies are not supported'],
-  ['MethodDefinition', 'class and object methods are not supported'],
   ['YieldExpression', 'generators and `yield` are not supported'],
   ['AwaitExpression', '`await` expressions are not supported'],
   ['ObjectPattern', 'destructuring patterns are not supported'],
@@ -324,6 +317,7 @@ const SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES = new Set([
   'MemberExpression',
   'FunctionExpression',
   'ArrowFunctionExpression',
+  'ClassExpression',
   'ObjectExpression',
   'ArrayExpression',
   'NewExpression',
@@ -379,6 +373,10 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
   'MemberExpression',
   'FunctionExpression',
   'ArrowFunctionExpression',
+  'ClassDeclaration',
+  'ClassExpression',
+  'ClassBody',
+  'MethodDefinition',
   'ObjectExpression',
   'ArrayExpression',
   'NewExpression',
@@ -452,24 +450,26 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
-  /** @type {{ node: any, strict: boolean, superAllowed: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} */
+  /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
     {
       node: root,
       strict: rootStrict,
       superAllowed: false,
+      superCallAllowed: false,
+      classDerived: undefined,
       parent: null,
       parentKey: undefined,
       parentIndex: undefined,
       patternContext: undefined,
     },
   ];
-  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, strict: boolean, superAllowed: boolean, patternContext: 'binding' | 'assignment' | undefined }[]>} */
+  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, patternContext: 'binding' | 'assignment' | undefined }[]>} */
   const seen = new WeakMap();
 
   while (pending.length > 0) {
     const item =
-      /** @type {{ node: any, strict: boolean, superAllowed: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }} */ (
+      /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }} */ (
         pending.pop()
       );
     const node = item.node;
@@ -491,6 +491,8 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           context.parentIndex === item.parentIndex &&
           context.strict === strict &&
           context.superAllowed === item.superAllowed &&
+          context.superCallAllowed === item.superCallAllowed &&
+          context.classDerived === item.classDerived &&
           context.patternContext === item.patternContext
         ) {
           alreadySeen = true;
@@ -508,6 +510,8 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
         parentIndex: item.parentIndex,
         strict,
         superAllowed: item.superAllowed,
+        superCallAllowed: item.superCallAllowed,
+        classDerived: item.classDerived,
         patternContext: item.patternContext,
       });
     } else {
@@ -518,6 +522,8 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           parentIndex: item.parentIndex,
           strict,
           superAllowed: item.superAllowed,
+          superCallAllowed: item.superCallAllowed,
+          classDerived: item.classDerived,
           patternContext: item.patternContext,
         },
       ]);
@@ -530,6 +536,8 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           node[index],
           strict,
           item.superAllowed,
+          item.superCallAllowed,
+          item.classDerived,
           item.parent,
           item.parentKey,
           item.patternContext,
@@ -553,8 +561,16 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.patternContext,
       item.parentIndex,
       item.superAllowed,
+      item.superCallAllowed,
     );
-    checkFunctionParameterEarlyErrors(node);
+    checkStrictBindingIdentifier(
+      node,
+      item.parent,
+      item.parentKey,
+      item.patternContext,
+      strict,
+    );
+    checkFunctionParameterEarlyErrors(node, strict);
 
     const childStrict = childScopeStrictness(node, strict);
     const childSuperAllowed = superAllowedForChildren(
@@ -562,6 +578,13 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.parent,
       item.parentKey,
       item.superAllowed,
+    );
+    const childSuperCallAllowed = superCallAllowedForChildren(
+      node,
+      item.parent,
+      item.parentKey,
+      item.superCallAllowed,
+      item.classDerived,
     );
     const keys = Object.keys(node);
 
@@ -572,6 +595,8 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           node[keys[index]],
           childStrict,
           childSuperAllowed,
+          childSuperCallAllowed,
+          classDerivedForChild(node, keys[index], item.classDerived),
           node,
           keys[index],
           patternContextForChild(node, keys[index], item.patternContext),
@@ -587,9 +612,10 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
  * its function body cannot contain a "use strict" directive.
  *
  * @param {any} node
+ * @param {boolean} strict
  * @returns {void}
  */
-function checkFunctionParameterEarlyErrors(node) {
+function checkFunctionParameterEarlyErrors(node, strict) {
   if (!isFunctionNode(node)) {
     return;
   }
@@ -598,7 +624,7 @@ function checkFunctionParameterEarlyErrors(node) {
     (parameter) => parameter.type === 'Identifier',
   );
 
-  if (simple && node.type !== 'ArrowFunctionExpression') {
+  if (simple && !strict && node.type !== 'ArrowFunctionExpression') {
     return;
   }
 
@@ -651,6 +677,57 @@ function checkFunctionParameterEarlyErrors(node) {
 }
 
 /**
+ * The host parser catches these for source text, but a custom parser hook can
+ * hand the evaluator an otherwise plausible strict class method tree. Keep the
+ * capability boundary equally strict for those ASTs.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @param {boolean} strict
+ * @returns {void}
+ */
+function checkStrictBindingIdentifier(
+  node,
+  parent,
+  parentKey,
+  patternContext,
+  strict,
+) {
+  if (
+    !isIdentifierNode(node) ||
+    (node.name !== 'eval' && node.name !== 'arguments')
+  ) {
+    return;
+  }
+
+  const functionName =
+    (parent?.type === 'FunctionDeclaration' ||
+      parent?.type === 'FunctionExpression') &&
+    parentKey === 'id';
+  const className =
+    (parent?.type === 'ClassDeclaration' ||
+      parent?.type === 'ClassExpression') &&
+    parentKey === 'id';
+  const catchParameter =
+    parent?.type === 'CatchClause' && parentKey === 'param';
+
+  if (!strict && !className) {
+    return;
+  }
+
+  if (
+    patternContext === 'binding' ||
+    functionName ||
+    className ||
+    catchParameter
+  ) {
+    throw unsupportedEs2015Error(`Binding ${node.name} in strict mode`, node);
+  }
+}
+
+/**
  * @param {any} root
  * @returns {boolean}
  */
@@ -661,8 +738,9 @@ function hasBindingPatternCycle(root) {
   const pending = [{ node: root, exiting: false }];
 
   while (pending.length > 0) {
-    const { node, exiting } =
-      /** @type {{ node: any, exiting: boolean }} */ (pending.pop());
+    const { node, exiting } = /** @type {{ node: any, exiting: boolean }} */ (
+      pending.pop()
+    );
 
     if (!node || typeof node !== 'object') {
       continue;
@@ -741,6 +819,10 @@ function childScopeStrictness(node, strict) {
     );
   }
 
+  if (node.type === 'ClassBody') {
+    return true;
+  }
+
   if (node.type === 'Program') {
     return Array.isArray(node.body) && hasUseStrictDirective(node.body);
   }
@@ -773,11 +855,68 @@ function superAllowedForChildren(node, parent, parentKey, inherited) {
   }
 
   return (
-    parent?.type === 'Property' &&
-    parentKey === 'value' &&
-    isObjectLiteralFunction(node) &&
-    (parent.method === true || parent.kind === 'get' || parent.kind === 'set')
+    (parent?.type === 'Property' &&
+      parentKey === 'value' &&
+      isObjectLiteralFunction(node) &&
+      (parent.method === true ||
+        parent.kind === 'get' ||
+        parent.kind === 'set')) ||
+    (parent?.type === 'MethodDefinition' &&
+      parentKey === 'value' &&
+      isClassMethodFunction(parent, node))
   );
+}
+
+/**
+ * `super(...)` is narrower than super-property access: only a derived class
+ * constructor, and arrows nested lexically within it, can make a direct super
+ * call. Every ordinary nested function starts a new boundary.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {boolean} inherited
+ * @param {boolean | undefined} classDerived
+ * @returns {boolean}
+ */
+function superCallAllowedForChildren(
+  node,
+  parent,
+  parentKey,
+  inherited,
+  classDerived,
+) {
+  if (node.type === 'ArrowFunctionExpression') {
+    return inherited;
+  }
+
+  if (node.type !== 'FunctionExpression') {
+    return inherited;
+  }
+
+  return (
+    classDerived === true &&
+    parent?.type === 'MethodDefinition' &&
+    parentKey === 'value' &&
+    isClassConstructorDefinition(parent, node)
+  );
+}
+
+/**
+ * @param {any} node
+ * @param {string} key
+ * @param {boolean | undefined} inherited
+ * @returns {boolean | undefined}
+ */
+function classDerivedForChild(node, key, inherited) {
+  if (
+    (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') &&
+    key === 'body'
+  ) {
+    return node.superClass !== null;
+  }
+
+  return inherited;
 }
 
 /**
@@ -836,10 +975,12 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean, superAllowed: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} pending
+ * @param {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} pending
  * @param {unknown} value
  * @param {boolean} strict
  * @param {boolean} superAllowed
+ * @param {boolean} superCallAllowed
+ * @param {boolean | undefined} classDerived
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
@@ -851,6 +992,8 @@ function pushChild(
   value,
   strict,
   superAllowed,
+  superCallAllowed,
+  classDerived,
   parent,
   parentKey,
   patternContext,
@@ -861,6 +1004,8 @@ function pushChild(
       node: value,
       strict,
       superAllowed,
+      superCallAllowed,
+      classDerived,
       parent,
       parentKey,
       parentIndex,
@@ -1013,6 +1158,18 @@ function unsupportedEs2015Message(
 ) {
   if (!RECOGNIZED_AST_NODE_TYPES.has(node.type)) {
     return `unsupported AST node type ${node.type}`;
+  }
+
+  if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
+    return validateClassDefinition(node, parent, parentKey, parentIndex);
+  }
+
+  if (node.type === 'ClassBody') {
+    return validateClassBody(node, parent, parentKey);
+  }
+
+  if (node.type === 'MethodDefinition') {
+    return validateClassMethodDefinition(node, parent, parentKey, parentIndex);
   }
 
   if (isFunctionNode(node)) {
@@ -1178,6 +1335,296 @@ function isFunctionNode(node) {
     node.type === 'FunctionDeclaration' ||
     node.type === 'FunctionExpression' ||
     node.type === 'ArrowFunctionExpression'
+  );
+}
+
+/**
+ * Class definitions need a separate shape gate because Acorn exposes a
+ * `ClassBody` and `MethodDefinition` tree that no other supported syntax uses.
+ * The generic iterative walk remains responsible for recursively validating
+ * every heritage, key, parameter, and body child after this local gate passes.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @returns {string | undefined}
+ */
+function validateClassDefinition(node, parent, parentKey, parentIndex) {
+  if (
+    node.type === 'ClassDeclaration' &&
+    !isClassDeclarationPosition(parent, parentKey, parentIndex)
+  ) {
+    return 'class declarations are not supported in this AST position';
+  }
+
+  if (
+    node.type === 'ClassDeclaration' &&
+    (!isIdentifierNode(node.id) || typeof node.id.name !== 'string')
+  ) {
+    return 'class declarations require an identifier name';
+  }
+
+  if (
+    node.type === 'ClassExpression' &&
+    node.id !== null &&
+    !isIdentifierNode(node.id)
+  ) {
+    return 'unsupported class expression name';
+  }
+
+  if (
+    !Object.prototype.hasOwnProperty.call(node, 'superClass') ||
+    (node.superClass !== null &&
+      !isSupportedObjectPropertyExpression(node.superClass))
+  ) {
+    return 'unsupported class heritage expression';
+  }
+
+  if (
+    !node.body ||
+    node.body.type !== 'ClassBody' ||
+    !Array.isArray(node.body.body)
+  ) {
+    return 'unsupported class body shape';
+  }
+
+  if (
+    node.decorators !== undefined ||
+    node.typeParameters !== undefined ||
+    node.superTypeParameters !== undefined ||
+    node.implements !== undefined ||
+    node.abstract === true ||
+    node.declare === true
+  ) {
+    return 'class decorators and type annotations are not supported';
+  }
+
+  let constructorCount = 0;
+
+  for (const element of node.body.body) {
+    if (isClassConstructorDefinition(element, element?.value)) {
+      constructorCount += 1;
+
+      if (constructorCount > 1) {
+        return 'duplicate constructor in class body';
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @returns {boolean}
+ */
+function isClassDeclarationPosition(parent, parentKey, parentIndex) {
+  if (
+    !parent ||
+    typeof parentIndex !== 'number' ||
+    !Number.isInteger(parentIndex)
+  ) {
+    return false;
+  }
+
+  const list =
+    (parent.type === 'Program' || parent.type === 'BlockStatement') &&
+    parentKey === 'body'
+      ? parent.body
+      : parent.type === 'SwitchCase' && parentKey === 'consequent'
+        ? parent.consequent
+        : undefined;
+
+  return Array.isArray(list) && parentIndex >= 0 && parentIndex < list.length;
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {string | undefined}
+ */
+function validateClassBody(node, parent, parentKey) {
+  if (
+    !parent ||
+    (parent.type !== 'ClassDeclaration' && parent.type !== 'ClassExpression') ||
+    parentKey !== 'body' ||
+    parent.body !== node ||
+    !Array.isArray(node.body)
+  ) {
+    return 'class bodies are only supported as class definition bodies';
+  }
+
+  for (const element of node.body) {
+    if (
+      !element ||
+      typeof element !== 'object' ||
+      element.type !== 'MethodDefinition'
+    ) {
+      return 'unsupported class element';
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @returns {string | undefined}
+ */
+function validateClassMethodDefinition(node, parent, parentKey, parentIndex) {
+  if (
+    !parent ||
+    parent.type !== 'ClassBody' ||
+    parentKey !== 'body' ||
+    !Array.isArray(parent.body) ||
+    typeof parentIndex !== 'number' ||
+    !Number.isInteger(parentIndex) ||
+    parentIndex < 0 ||
+    parentIndex >= parent.body.length ||
+    parent.body[parentIndex] !== node
+  ) {
+    return 'class methods are only supported in class bodies';
+  }
+
+  if (
+    typeof node.computed !== 'boolean' ||
+    typeof node.static !== 'boolean' ||
+    (node.kind !== 'constructor' &&
+      node.kind !== 'method' &&
+      node.kind !== 'get' &&
+      node.kind !== 'set') ||
+    !isValidClassMethodKey(node.key, node.computed) ||
+    !isClassMethodFunction(node, node.value)
+  ) {
+    return 'unsupported class method shape';
+  }
+
+  const keyName = nonComputedClassMethodName(node);
+  const constructor = isClassConstructorDefinition(node, node.value);
+
+  if (constructor && node.kind !== 'constructor') {
+    return 'class constructors must use constructor method syntax';
+  }
+
+  if (!constructor && node.kind === 'constructor') {
+    return 'only noncomputed instance constructor methods may be constructors';
+  }
+
+  if (constructor && node.value.generator) {
+    return 'class constructors cannot be generators';
+  }
+
+  if (node.static && !node.computed && keyName === 'prototype') {
+    return 'classes may not have a static property named prototype';
+  }
+
+  if (node.kind === 'get' && node.value.params.length !== 0) {
+    return 'class getters must not have parameters';
+  }
+
+  if (
+    node.kind === 'set' &&
+    (node.value.params.length !== 1 ||
+      node.value.params[0].type === 'RestElement')
+  ) {
+    return 'class setters must have one non-rest parameter';
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
+ * @param {boolean} computed
+ * @returns {boolean}
+ */
+function isValidClassMethodKey(node, computed) {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  if (computed) {
+    return isSupportedObjectPropertyExpression(node);
+  }
+
+  return isIdentifierNode(node) || (node.type === 'Literal' && !node.regex);
+}
+
+/**
+ * @param {any} node
+ * @returns {node is { type: 'Identifier', name: string }}
+ */
+function isIdentifierNode(node) {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    node.type === 'Identifier' &&
+    typeof node.name === 'string'
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function nonComputedClassMethodName(node) {
+  if (node.computed) {
+    return undefined;
+  }
+
+  if (isIdentifierNode(node.key)) {
+    return node.key.name;
+  }
+
+  if (node.key?.type === 'Literal' && !node.key.regex) {
+    return String(node.key.value);
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} definition
+ * @param {any} value
+ * @returns {boolean}
+ */
+function isClassConstructorDefinition(definition, value) {
+  return (
+    !!definition &&
+    definition.type === 'MethodDefinition' &&
+    definition.static === false &&
+    definition.computed === false &&
+    nonComputedClassMethodName(definition) === 'constructor' &&
+    isClassMethodFunction(definition, value)
+  );
+}
+
+/**
+ * @param {any} definition
+ * @param {any} value
+ * @returns {boolean}
+ */
+function isClassMethodFunction(definition, value) {
+  return (
+    !!definition &&
+    definition.type === 'MethodDefinition' &&
+    !!value &&
+    value.type === 'FunctionExpression' &&
+    value.id === null &&
+    Array.isArray(value.params) &&
+    value.generator === false &&
+    (value.async === undefined || value.async === false) &&
+    value.expression === false &&
+    value.body &&
+    value.body.type === 'BlockStatement' &&
+    Array.isArray(value.body.body)
   );
 }
 
@@ -1706,6 +2153,7 @@ function isObjectLiteralFunction(node) {
  * @param {'binding' | 'assignment' | undefined} patternContext
  * @param {number | undefined} parentIndex
  * @param {boolean} superAllowed
+ * @param {boolean} superCallAllowed
  * @returns {void}
  */
 function checkUnsupportedEs2015Node(
@@ -1716,18 +2164,26 @@ function checkUnsupportedEs2015Node(
   patternContext,
   parentIndex,
   superAllowed,
+  superCallAllowed,
 ) {
   if (node.type === 'Super') {
-    if (!superAllowed) {
+    const directMember = isDirectSuperMemberObject(node, parent, parentKey);
+    const directCall = isDirectSuperCallCallee(node, parent, parentKey);
+
+    if (directMember && superAllowed) {
+      // A super-property reference is valid in every method/accessor and its
+      // lexically nested arrows, including base-class methods.
+    } else if (directCall && superCallAllowed) {
+      // A direct call is valid only in a derived constructor and arrows that
+      // retain that constructor's execution environment.
+    } else if (!superAllowed && !superCallAllowed) {
       throw unsupportedEs2015Error(
         "'super' keyword is only valid inside a method",
         node,
       );
-    }
-
-    if (!isDirectSuperMemberObject(node, parent, parentKey)) {
+    } else {
       throw unsupportedEs2015Error(
-        "'super' keyword is only valid as a property reference",
+        "'super' keyword is only valid as a property reference or derived constructor call",
         node,
       );
     }
@@ -1799,6 +2255,22 @@ function isDirectSuperMemberObject(node, parent, parentKey) {
     parent.object === node &&
     typeof parent.computed === 'boolean' &&
     isValidSuperMemberProperty(parent.property, parent.computed)
+  );
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {boolean}
+ */
+function isDirectSuperCallCallee(node, parent, parentKey) {
+  return (
+    !!parent &&
+    parent.type === 'CallExpression' &&
+    parentKey === 'callee' &&
+    parent.callee === node &&
+    Array.isArray(parent.arguments)
   );
 }
 

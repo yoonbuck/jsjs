@@ -44,11 +44,14 @@ class BoundFunction extends NativeFunction {
       targetLength > boundArgs.length ? targetLength - boundArgs.length : 0;
     /** @type {import('./shared.js').NativeFunctionOptions['construct']} */
     let construct;
+    /** @type {BoundFunction | undefined} */
+    let boundFunction;
 
     if (isConstructor(target)) {
-      construct = (args) => {
+      construct = (args, _functionObject, newTarget) => {
         const result = target.constructFunction(
           combineArguments(boundArgs, args),
+          newTarget === boundFunction ? target : newTarget,
         );
 
         if (!(result instanceof EngineObject)) {
@@ -78,6 +81,7 @@ class BoundFunction extends NativeFunction {
     this.boundTargetFunction = target;
     this.boundThis = boundThis;
     this.boundArguments = [...boundArgs];
+    boundFunction = this;
 
     const thrower = /** @type {CallableLike} */ (
       realm.intrinsics.throwTypeErrorFunction

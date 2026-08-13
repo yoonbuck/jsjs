@@ -35,6 +35,32 @@ export function createObjectIntrinsics(realm) {
     return toObject(realm, value);
   }
 
+  /**
+   * Object's construct path differs from its call path when reached through a
+   * derived class: `super(value)` must allocate from the active new target
+   * rather than returning an object argument unchanged.
+   *
+   * @param {readonly unknown[]} args
+   * @param {import('./shared.js').NativeFunction} functionObject
+   * @param {unknown} newTarget
+   * @returns {EngineObject}
+   */
+  function constructObject(args, functionObject, newTarget) {
+    if (newTarget === functionObject) {
+      return createObject(args);
+    }
+
+    const candidate =
+      newTarget instanceof EngineObject
+        ? newTarget.get('prototype')
+        : undefined;
+    return new EngineObject(
+      candidate instanceof EngineObject ? candidate : objectPrototype,
+      'Object',
+      realm.agent,
+    );
+  }
+
   const objectConstructor = realm.createNativeFunction({
     name: 'Object',
     length: 1,
@@ -42,8 +68,8 @@ export function createObjectIntrinsics(realm) {
     call(_thisValue, args) {
       return createObject(args);
     },
-    construct(args) {
-      return createObject(args);
+    construct(args, functionObject, newTarget) {
+      return constructObject(args, functionObject, newTarget);
     },
   });
 

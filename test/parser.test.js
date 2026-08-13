@@ -749,8 +749,6 @@ const tests = [
     name: 'each remaining reachable unsupported ES2015 construct is rejected by the pass from parseScript and parseEval',
     run() {
       const rejected = [
-        'class C {}',
-        'var c = class {};',
         'function* g() { yield 1; }',
         'var object = { *method() {} };',
         'var object = { async method() {} };',
@@ -769,6 +767,163 @@ const tests = [
         assertThrows(() => parseScript(source), SyntaxError);
         assertThrows(() => parseEval(source), SyntaxError);
       }
+    },
+  },
+  {
+    name: 'classes expose exact supported AST shapes and preserve class static errors',
+    run() {
+      const accepted = [
+        'class C {}',
+        'var C = class {};',
+        'class C { constructor(value = 1, ...rest) {} method() {} get value() {} set value(next) {} static build() {} }',
+        'class C extends Base { constructor(value) { super(value); } method() { return super.method(); } }',
+        'class C { ["constructor"]() {} static ["prototype"]() {} }',
+        'class C extends null { constructor() { return {}; } }',
+        'class C extends null { constructor() { super(); } }',
+        'class C extends Base { constructor() { return (() => super())(); } }',
+      ];
+
+      for (const source of accepted) {
+        assertSame(parseScript(source).type, 'Program', source);
+        assertSame(parseEval(source).type, 'Program', source);
+      }
+
+      const classNode = parseScript(
+        'class C extends Base { constructor() {} get value() {} static method() {} }',
+      ).body[0];
+      assertSame(classNode.type, 'ClassDeclaration');
+      assertSame(classNode.id.name, 'C');
+      assertSame(classNode.superClass.type, 'Identifier');
+      assertSame(classNode.body.type, 'ClassBody');
+      assertSame(classNode.body.body[0].type, 'MethodDefinition');
+      assertSame(classNode.body.body[0].kind, 'constructor');
+      assertSame(classNode.body.body[1].kind, 'get');
+      assertSame(classNode.body.body[2].static, true);
+
+      const rejected = [
+        'class C { constructor() {} constructor(value) {} }',
+        'class C { get constructor() {} }',
+        'class C { set constructor(value) {} }',
+        'class C { *method() {} }',
+        'class C { static prototype() {} }',
+        'class C { constructor() { super(); } }',
+        'class C { method() { super(); } }',
+        'class C extends Base { method() { super(); } }',
+        'class C extends Base { constructor() { function nested() { super(); } } }',
+        'class C { method(eval) {} }',
+        'class C { method(arguments) {} }',
+        'class C { method(value, value) {} }',
+        'class C { method() { var eval; } }',
+        'class C { field = 1; }',
+        'class C { #private; }',
+        'class C { static {} }',
+        'class C { method() { return new.target; } }',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+        assertThrows(() => parseEval(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'custom parser class ASTs admit only exact recursive class and method shapes',
+    run() {
+      /** @returns {any} */
+      function functionValue() {
+        return {
+          type: 'FunctionExpression',
+          id: null,
+          params: [],
+          generator: false,
+          async: false,
+          expression: false,
+          body: { type: 'BlockStatement', body: [] },
+        };
+      }
+
+      /** @returns {any} */
+      function method() {
+        return {
+          type: 'MethodDefinition',
+          key: { type: 'Identifier', name: 'method' },
+          computed: false,
+          static: false,
+          kind: 'method',
+          value: functionValue(),
+        };
+      }
+
+      /** @param {any} expression */
+      function programFor(expression) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [{ type: 'ExpressionStatement', expression }],
+        };
+      }
+
+      const valid = {
+        type: 'ClassExpression',
+        id: null,
+        superClass: null,
+        body: { type: 'ClassBody', body: [method()] },
+      };
+      assertSame(
+        parseScript('', { parse: () => programFor(valid) }).type,
+        'Program',
+      );
+
+      const malformed = [
+        { ...valid, body: { type: 'ClassBody', body: method() } },
+        { ...valid, body: { type: 'BlockStatement', body: [] } },
+        { ...valid, id: { type: 'Identifier', name: 'eval' } },
+        {
+          ...valid,
+          body: {
+            type: 'ClassBody',
+            body: [{ ...method(), static: 'false' }],
+          },
+        },
+        {
+          ...valid,
+          body: {
+            type: 'ClassBody',
+            body: [{ ...method(), kind: 'field' }],
+          },
+        },
+        {
+          ...valid,
+          body: {
+            type: 'ClassBody',
+            body: [
+              {
+                ...method(),
+                value: { ...functionValue(), generator: true },
+              },
+            ],
+          },
+        },
+      ];
+
+      for (const expression of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => programFor(expression) }),
+          SyntaxError,
+        );
+      }
+
+      const cyclic = {
+        type: 'ClassExpression',
+        id: null,
+        superClass: null,
+        body: { type: 'ClassBody', body: /** @type {any[]} */ ([]) },
+      };
+      cyclic.body.body.push(cyclic.body);
+      assertThrows(
+        () => parseScript('', { parse: () => programFor(cyclic) }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -1039,8 +1194,6 @@ const tests = [
     name: 'unsupported ES2015 constructs unreachable in a script are still rejected as SyntaxErrors from parseScript and parseEval',
     run() {
       const rejected = [
-        'class C { m() {} }',
-        'var c = class { static m() {} };',
         'super.x;',
         'super();',
         'async function f() {}',
@@ -1060,11 +1213,11 @@ const tests = [
     },
   },
   {
-    name: 'two representative unsupported constructs reject a dynamic Function at construction as a guest SyntaxError',
+    name: 'an unsupported construct rejects a dynamic Function at construction as a guest SyntaxError',
     run() {
       const realm = createRealm();
 
-      for (const body of ['class C {}', 'return function* g() {};']) {
+      for (const body of ['return function* g() {};']) {
         assertSame(
           evaluateScript(
             realm,
@@ -1080,15 +1233,12 @@ const tests = [
     },
   },
   {
-    name: 'the unsupported-ES2015 rejection carries the offending node position (class keyword at 0-based index 2)',
+    name: 'class parser nodes retain source positions',
     run() {
-      const error = /** @type {any} */ (
-        assertThrows(() => parseScript('  class C {}'), SyntaxError)
-      );
-
-      assertSame(error.pos, 2);
-      assertSame(error.loc.line, 1);
-      assertSame(error.loc.column, 2);
+      const classNode = parseScript('  class C {}').body[0];
+      assertSame(classNode.start, 2);
+      assertSame(classNode.loc.start.line, 1);
+      assertSame(classNode.loc.start.column, 2);
     },
   },
   {
@@ -2067,7 +2217,7 @@ const tests = [
     },
   },
   {
-    name: 'template AST nodes remain valid only in template positions while arrows accept template bodies and classes stay gated',
+    name: 'template AST nodes remain valid only in template positions while arrows and classes accept their supported forms',
     run() {
       assertThrows(
         () =>
@@ -2082,7 +2232,7 @@ const tests = [
         SyntaxError,
       );
       assertSame(parseScript('() => `x`;').type, 'Program');
-      assertThrows(() => parseScript('class Example {}'), SyntaxError);
+      assertSame(parseScript('class Example {}').type, 'Program');
     },
   },
 ];

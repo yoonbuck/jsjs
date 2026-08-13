@@ -46,10 +46,12 @@ import {
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { SuperReferenceBase } from '../runtime/super-reference.js';
+import { constructSuper } from '../runtime/function-object.js';
 import {
   createFunctionObject,
-  isAnonymousFunctionExpression,
+  evaluateNamedExpression,
 } from './declarations.js';
+import { evaluateClassDefinition } from './classes.js';
 // Direct-eval interception (see isDirectEvalCall) calls into the eval
 // implementation. This closes a loop through the pre-existing intra-evaluator
 // cycle expressions <-> declarations <-> statements; performEval is a
@@ -116,6 +118,7 @@ export const EXPRESSION_TYPES = new Set([
   'MemberExpression',
   'FunctionExpression',
   'ArrowFunctionExpression',
+  'ClassExpression',
   'ObjectExpression',
   'ArrayExpression',
   'NewExpression',
@@ -174,6 +177,8 @@ export function evaluateExpression(node, context) {
         return evaluateFunctionExpression(node, context);
       case 'ArrowFunctionExpression':
         return evaluateArrowFunctionExpression(node, context);
+      case 'ClassExpression':
+        return evaluateClassDefinition(node, context);
       case 'ObjectExpression':
         return evaluateObjectExpression(node, context);
       case 'ArrayExpression':
@@ -549,11 +554,8 @@ function evaluateAssignmentExpression(node, context) {
 
   if (node.operator === '=') {
     const value =
-      node.left.type === 'Identifier' &&
-      isAnonymousFunctionExpression(node.right)
-        ? createFunctionObject(node.right, context.env, context, {
-            name: node.left.name,
-          })
+      node.left.type === 'Identifier'
+        ? evaluateNamedExpression(node.right, context, node.left.name)
         : evaluateExpressionValue(node.right, context);
     putValue(reference, value);
     return value;
@@ -620,6 +622,10 @@ function evaluateUpdateExpression(node, context) {
  * @returns {unknown}
  */
 function evaluateCallExpression(node, context) {
+  if (node.callee.type === 'Super') {
+    return evaluateSuperCallExpression(node, context);
+  }
+
   const calleeReference = evaluateExpression(node.callee, context);
   const callee =
     calleeReference instanceof Reference
@@ -642,6 +648,35 @@ function evaluateCallExpression(node, context) {
   return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
     callee
   ).callFunction(thisValue, args);
+}
+
+/**
+ * Evaluates a direct `super(...args)` call in a derived constructor. Argument
+ * expansion is deliberately shared with ordinary calls and construction; the
+ * runtime helper owns superclass construction, active new-target propagation,
+ * and exactly-once `this` initialization.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateSuperCallExpression(node, context) {
+  const functionEnvironment = context.functionEnvironment;
+
+  if (
+    functionEnvironment === undefined ||
+    functionEnvironment.superConstructor === undefined
+  ) {
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      "'super' call is only valid in a derived constructor",
+    );
+  }
+
+  return constructSuper(
+    evaluateArguments(node.arguments, context),
+    functionEnvironment,
+  );
 }
 
 /**
@@ -1084,16 +1119,11 @@ function evaluateObjectExpression(node, context) {
         continue;
       }
 
-      const value = isAnonymousFunctionExpression(property.value)
-        ? createFunctionObject(
-            property.value,
-            context.env,
-            context,
-            {
-              name: functionNameFromPropertyKey(key),
-            },
-          )
-        : evaluateExpressionValue(property.value, context);
+      const value = evaluateNamedExpression(
+        property.value,
+        context,
+        functionNameFromPropertyKey(key),
+      );
 
       object.defineOwnProperty(key, {
         value,

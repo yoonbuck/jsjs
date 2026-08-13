@@ -16,7 +16,7 @@ import { toBoolean, toUint32 } from '../runtime/conversion.js';
  *     args: readonly unknown[],
  *     functionObject: NativeFunction,
  *   ) => unknown,
- *   construct?: ((args: readonly unknown[], functionObject: NativeFunction) => EngineObject) | undefined,
+ *   construct?: ((args: readonly unknown[], functionObject: NativeFunction, newTarget: unknown) => EngineObject) | undefined,
  *   prototype?: EngineObject | undefined,
  * }} NativeFunctionOptions
  */
@@ -90,9 +90,10 @@ export class NativeFunction extends EngineObject {
 
   /**
    * @param {readonly unknown[]} [args=[]]
+   * @param {unknown} [newTarget=this]
    * @returns {unknown}
    */
-  constructFunction(args = []) {
+  constructFunction(args = [], newTarget = this) {
     const construct = this._construct;
 
     if (construct === undefined) {
@@ -112,7 +113,9 @@ export class NativeFunction extends EngineObject {
     let result;
 
     try {
-      result = runNativeBody(this.realm, () => construct(args, this));
+      result = runNativeBody(this.realm, () =>
+        construct(args, this, newTarget),
+      );
     } finally {
       guard.exit();
     }
@@ -121,6 +124,7 @@ export class NativeFunction extends EngineObject {
       throw new TypeError('Native constructor must return an object');
     }
 
+    setNativeConstructionPrototype(result, this, newTarget);
     return result;
   }
 
@@ -157,6 +161,35 @@ export class NativeFunction extends EngineObject {
 }
 
 /**
+ * Native constructors retain their own allocation algorithms, but ordinary
+ * built-ins such as Object and Array create an object from their intrinsic
+ * prototype. When such a constructor is reached through `super(...)`, move that
+ * fresh allocation onto the active new target's prototype just as
+ * OrdinaryCreateFromConstructor would. An explicit native return object whose
+ * prototype does not match the native constructor remains untouched.
+ *
+ * @param {EngineObject} result
+ * @param {NativeFunction} constructor
+ * @param {unknown} newTarget
+ * @returns {void}
+ */
+function setNativeConstructionPrototype(result, constructor, newTarget) {
+  if (
+    newTarget === constructor ||
+    !(newTarget instanceof EngineObject) ||
+    result.getPrototype() !== constructor.get('prototype')
+  ) {
+    return;
+  }
+
+  const prototype = newTarget.get('prototype');
+
+  if (prototype instanceof EngineObject) {
+    result.setPrototypeOf(prototype);
+  }
+}
+
+/**
  * @param {Realm} realm
  * @param {NativeFunctionOptions} options
  * @returns {NativeFunction}
@@ -180,7 +213,7 @@ export function requireCallable(value, message) {
 }
 
 /**
- * @template {CallableLike & { constructFunction: (args?: readonly unknown[]) => unknown }} T
+ * @template {CallableLike & { constructFunction: (args?: readonly unknown[], newTarget?: unknown) => unknown }} T
  * @param {unknown} value
  * @param {string} message
  * @returns {T}

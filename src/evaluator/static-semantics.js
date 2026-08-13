@@ -350,7 +350,8 @@ export function varDeclaredNames(statements) {
 /**
  * The declaration `item` contributes to `lexicallyScopedDeclarations`, or
  * `null`. Implements ES2015 §13.2.6's `StatementListItem` cases directly (a
- * `let`/`const` declaration, or a `FunctionDeclaration`) plus its
+ * `let`/`const` declaration, a `ClassDeclaration`, or a
+ * `FunctionDeclaration`) plus its
  * `LabelledStatement` bridge into §13.13.7: a chain of `LabeledStatement`
  * wrappers around a `FunctionDeclaration` contributes that
  * `FunctionDeclaration`, unwrapped iteratively (a `while` loop over `.body`,
@@ -374,6 +375,10 @@ function lexicalDeclarationOf(item) {
     return item;
   }
 
+  if (item.type === 'ClassDeclaration') {
+    return item;
+  }
+
   if (item.type === 'LabeledStatement') {
     let body = item.body;
 
@@ -389,7 +394,8 @@ function lexicalDeclarationOf(item) {
 
 /**
  * ES2015 §13.2.6 (`LexicallyScopedDeclarations`) over `statements`, a
- * `StatementList`: the `let`/`const` declarations and `FunctionDeclaration`s
+ * `StatementList`: the `let`/`const` declarations, `ClassDeclaration`s, and
+ * `FunctionDeclaration`s
  * that are direct items of `statements` itself, plus any reached by
  * unwrapping a `LabeledStatement` chain rooted at a direct item (see
  * `lexicalDeclarationOf`), in source order. This does **not** descend into a
@@ -430,7 +436,8 @@ export function lexicallyDeclaredNames(statements) {
 
 /**
  * The declaration `item` contributes to `topLevelLexicallyScopedDeclarations`,
- * or `null`. ES2015 §13.2.8: a `let`/`const` declaration contributes; a
+ * or `null`. ES2015 §13.2.8: a `let`/`const` or `ClassDeclaration`
+ * contributes; a
  * `FunctionDeclaration` — var-scoped at the top level, per §13.2.8's explicit
  * `HoistableDeclaration` exclusion — contributes nothing here, whether direct
  * or reached through a label (a `Statement`, which a `LabeledStatement` is,
@@ -442,7 +449,10 @@ export function lexicallyDeclaredNames(statements) {
  * @returns {any}
  */
 function topLevelLexicalDeclarationOf(item) {
-  if (item.type === 'VariableDeclaration' && item.kind !== 'var') {
+  if (
+    (item.type === 'VariableDeclaration' && item.kind !== 'var') ||
+    item.type === 'ClassDeclaration'
+  ) {
     return item;
   }
 
@@ -451,7 +461,8 @@ function topLevelLexicalDeclarationOf(item) {
 
 /**
  * ES2015 §13.2.8 (`TopLevelLexicallyScopedDeclarations`) over `statements`, a
- * `Program`/function body's `StatementList`: the `let`/`const` declarations
+ * `Program`/function body's `StatementList`: the `let`/`const` and class
+ * declarations
  * that are direct items of `statements`, in source order. Unlike
  * `lexicallyScopedDeclarations`, a top-level `FunctionDeclaration` is
  * excluded — see the note on §13.2.7 this engine mirrors: "At the top level

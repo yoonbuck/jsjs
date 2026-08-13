@@ -1,8 +1,11 @@
 import { EngineObject } from './object.js';
-import { isAccessorDescriptor } from './descriptors.js';
+import { isAccessorDescriptor, isConstructor } from './descriptors.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
 import { toObject } from './conversion.js';
-import { createFunctionExecutionEnvironment } from './environment.js';
+import {
+  bindThisValue,
+  createFunctionExecutionEnvironment,
+} from './environment.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -34,6 +37,9 @@ import { createFunctionExecutionEnvironment } from './environment.js';
  *   constructible?: boolean,
  *   enclosingFunctionEnvironment?: import('./environment.js').FunctionExecutionEnvironment,
  *   methodHomeObject?: EngineObject,
+ *   constructorKind?: 'base' | 'derived' | undefined,
+ *   superConstructor?: unknown,
+ *   defaultDerivedConstructor?: boolean,
  * }} EngineFunctionOptions
  */
 
@@ -63,17 +69,19 @@ export class EngineFunction extends EngineObject {
     name = '',
     isMethod = false,
     functionKind = isMethod ? 'method' : 'normal',
-    thisMode =
-      functionKind === 'arrow'
-        ? 'lexical'
-        : strict
-          ? 'strict'
-          : 'global',
-    constructible =
-      functionKind === 'normal' || functionKind === 'classConstructor',
+    thisMode = functionKind === 'arrow'
+      ? 'lexical'
+      : strict
+        ? 'strict'
+        : 'global',
+    constructible = functionKind === 'normal' ||
+      functionKind === 'classConstructor',
     createPrototype = constructible,
     enclosingFunctionEnvironment = undefined,
     methodHomeObject = undefined,
+    constructorKind = undefined,
+    superConstructor = undefined,
+    defaultDerivedConstructor = false,
   }) {
     super(realm.intrinsics.functionPrototype, 'Function');
 
@@ -101,6 +109,12 @@ export class EngineFunction extends EngineObject {
     this.enclosingFunctionEnvironment = enclosingFunctionEnvironment;
     /** @type {FunctionBodyExecutor} */
     this._execute = execute;
+    /** @type {'base' | 'derived' | undefined} */
+    this.constructorKind = constructorKind;
+    /** @type {unknown} */
+    this.superConstructor = superConstructor;
+    /** @type {boolean} */
+    this.defaultDerivedConstructor = defaultDerivedConstructor;
 
     if (methodHomeObject !== undefined && functionKind !== 'arrow') {
       this.methodHomeObject = methodHomeObject;
@@ -172,58 +186,19 @@ export class EngineFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = []) {
-    let completion;
-    const guard = this.realm.stackGuard;
-
-    // One guest activation, one frame in the realm's stack budget. The guard
-    // raises its `RangeError` signal *before* the body builds an activation
-    // environment, so the caller's boundary converts it into a catchable guest
-    // error with a frame's worth of host stack to spare.
-    guard.enter();
-
-    try {
-      /** @type {import('./environment.js').FunctionExecutionEnvironment} */
-      let functionEnvironment;
-
-      if (this.thisMode === 'lexical') {
-        if (this.enclosingFunctionEnvironment === undefined) {
-          throw new GuestErrorSignal(
-            'ReferenceError',
-            'This binding is not available',
-          );
-        }
-
-        functionEnvironment = this.enclosingFunctionEnvironment;
-      } else {
-        functionEnvironment = createFunctionExecutionEnvironment({
-          outer: this.enclosingFunctionEnvironment,
-          thisStatus: 'initialized',
-          thisValue: this.resolveThisValue(thisValue),
-          homeObject: this.methodHomeObject,
-        });
-      }
-
-      const resolvedThis = functionEnvironment.thisValue;
-
-      completion = this._execute(this, resolvedThis, args, functionEnvironment);
-    } catch (error) {
-      if (error instanceof ThrowSignal) {
-        throw error;
-      }
-
-      if (error instanceof GuestErrorSignal) {
-        // Convert the pre-construction signal into a fully-built guest error
-        // object and re-throw as a ThrowSignal so the evaluator's throw
-        // machinery and try/catch handling can intercept it.
-        throw new ThrowSignal(
-          this.realm.createGuestError(error.typeName, error.guestMessage),
-        );
-      }
-
-      throw error;
-    } finally {
-      guard.exit();
+    if (this.functionKind === 'classConstructor') {
+      throw new GuestErrorSignal(
+        'TypeError',
+        `Class constructor ${this.get('name') || '<anonymous>'} cannot be invoked without 'new'`,
+      );
     }
+
+    const functionEnvironment = this.functionExecutionEnvironment(thisValue);
+    const completion = this.executeWithFunctionEnvironment(
+      functionEnvironment.thisValue,
+      args,
+      functionEnvironment,
+    );
 
     if (completion.type === 'return') {
       return completion.value;
@@ -246,29 +221,167 @@ export class EngineFunction extends EngineObject {
   }
 
   /**
-   * Implements ECMA-262 13.2.2 `[[Construct]]`: build an object that
-   * inherits from the function's `prototype` property (falling back to the
-   * realm's `%Object.prototype%` when that property is not an object), run
-   * the function with the new object as `this`, and keep the new object
-   * unless the body returned an object of its own.
+   * Implements ordinary and class `[[Construct]]`. Ordinary functions allocate
+   * through the supplied `newTarget`; class base constructors bind that
+   * allocation before their body, while derived constructors defer binding until
+   * `super(...)` initializes it.
    *
    * @param {readonly unknown[]} [args=[]]
+   * @param {unknown} [newTarget=this]
    * @returns {EngineObject}
    */
-  constructFunction(args = []) {
+  constructFunction(args = [], newTarget = this) {
     if (!this._isConstructor) {
       throw new GuestErrorSignal('TypeError', 'Function is not a constructor');
     }
 
-    const prototypeProperty = this.get('prototype');
-    const prototype =
-      prototypeProperty instanceof EngineObject
-        ? prototypeProperty
-        : this.realm.intrinsics.objectPrototype;
-    const instance = new EngineObject(prototype);
+    if (this.functionKind === 'classConstructor') {
+      return this.constructClass(args, newTarget);
+    }
+
+    const instance = ordinaryCreateFromConstructor(
+      newTarget,
+      this.realm.intrinsics.objectPrototype,
+      this.realm.agent,
+    );
     const result = this.callFunction(instance, args);
 
     return result instanceof EngineObject ? result : instance;
+  }
+
+  /**
+   * @param {unknown} thisValue
+   * @returns {import('./environment.js').FunctionExecutionEnvironment}
+   */
+  functionExecutionEnvironment(thisValue) {
+    if (this.thisMode === 'lexical') {
+      if (this.enclosingFunctionEnvironment === undefined) {
+        throw new GuestErrorSignal(
+          'ReferenceError',
+          'This binding is not available',
+        );
+      }
+
+      return this.enclosingFunctionEnvironment;
+    }
+
+    return createFunctionExecutionEnvironment({
+      outer: this.enclosingFunctionEnvironment,
+      thisStatus: 'initialized',
+      thisValue: this.resolveThisValue(thisValue),
+      homeObject: this.methodHomeObject,
+    });
+  }
+
+  /**
+   * @param {unknown} thisValue
+   * @param {readonly unknown[]} args
+   * @param {import('./environment.js').FunctionExecutionEnvironment} functionEnvironment
+   * @param {FunctionBodyExecutor} [execute=this._execute]
+   * @returns {Completion}
+   */
+  executeWithFunctionEnvironment(
+    thisValue,
+    args,
+    functionEnvironment,
+    execute = this._execute,
+  ) {
+    const guard = this.realm.stackGuard;
+    guard.enter();
+
+    try {
+      return execute(this, thisValue, args, functionEnvironment);
+    } catch (error) {
+      if (error instanceof ThrowSignal) {
+        throw error;
+      }
+
+      if (error instanceof GuestErrorSignal) {
+        throw new ThrowSignal(
+          this.realm.createGuestError(error.typeName, error.guestMessage),
+        );
+      }
+
+      throw error;
+    } finally {
+      guard.exit();
+    }
+  }
+
+  /**
+   * @param {readonly unknown[]} args
+   * @param {unknown} newTarget
+   * @returns {EngineObject}
+   */
+  constructClass(args, newTarget) {
+    const derived = this.constructorKind === 'derived';
+    const instance = derived
+      ? undefined
+      : ordinaryCreateFromConstructor(
+          newTarget,
+          this.realm.intrinsics.objectPrototype,
+          this.realm.agent,
+        );
+    const functionEnvironment = createFunctionExecutionEnvironment({
+      outer: this.enclosingFunctionEnvironment,
+      thisStatus: derived ? 'uninitialized' : 'initialized',
+      thisValue: instance,
+      newTarget,
+      superConstructor: this.superConstructor,
+    });
+    const completion = this.defaultDerivedConstructor
+      ? this.executeWithFunctionEnvironment(
+          undefined,
+          args,
+          functionEnvironment,
+          (_functionObject, _thisValue, values, environment) => {
+            constructSuper(values, environment);
+            return { type: 'normal', value: undefined };
+          },
+        )
+      : this.executeWithFunctionEnvironment(
+          instance,
+          args,
+          functionEnvironment,
+        );
+
+    if (completion.type === 'throw') {
+      throw new ThrowSignal(completion.value);
+    }
+
+    if (completion.type !== 'normal' && completion.type !== 'return') {
+      throw new TypeError(
+        `Unexpected ${completion.type} completion from a class constructor body`,
+      );
+    }
+
+    const value = completion.type === 'return' ? completion.value : undefined;
+
+    if (!derived) {
+      return value instanceof EngineObject
+        ? value
+        : /** @type {EngineObject} */ (instance);
+    }
+
+    if (value instanceof EngineObject) {
+      return value;
+    }
+
+    if (value !== undefined) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Derived constructors may only return object or undefined values',
+      );
+    }
+
+    if (functionEnvironment.thisStatus !== 'initialized') {
+      throw new GuestErrorSignal(
+        'ReferenceError',
+        "Must call super constructor in derived class before accessing 'this'",
+      );
+    }
+
+    return /** @type {EngineObject} */ (functionEnvironment.thisValue);
   }
 
   /**
@@ -334,6 +447,50 @@ export class EngineFunction extends EngineObject {
 
     return toObject(this.realm, thisValue);
   }
+}
+
+/**
+ * Allocates an ordinary object from `newTarget.prototype`, falling back to the
+ * realm's intrinsic object prototype when the property is not an engine object.
+ *
+ * @param {unknown} newTarget
+ * @param {EngineObject} fallbackPrototype
+ * @param {import('./agent.js').Agent} agent
+ * @returns {EngineObject}
+ */
+function ordinaryCreateFromConstructor(newTarget, fallbackPrototype, agent) {
+  const candidate =
+    newTarget instanceof EngineObject ? newTarget.get('prototype') : undefined;
+  const prototype =
+    candidate instanceof EngineObject ? candidate : fallbackPrototype;
+  return new EngineObject(prototype, 'Object', agent);
+}
+
+/**
+ * Implements the shared runtime portion of a derived constructor's `super(...)`
+ * evaluation. The evaluator expands arguments first; this helper constructs the
+ * active superclass with the current new target and binds the resulting `this`
+ * exactly once.
+ *
+ * @param {readonly unknown[]} args
+ * @param {import('./environment.js').FunctionExecutionEnvironment} functionEnvironment
+ * @returns {unknown}
+ */
+export function constructSuper(args, functionEnvironment) {
+  const superConstructor = functionEnvironment.superConstructor;
+
+  if (!isConstructor(superConstructor)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Super constructor is not a constructor',
+    );
+  }
+
+  const value = superConstructor.constructFunction(
+    args,
+    functionEnvironment.newTarget,
+  );
+  return bindThisValue(functionEnvironment, value);
 }
 
 /**

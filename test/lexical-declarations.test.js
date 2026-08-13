@@ -698,6 +698,21 @@ const tests = [
     },
   },
   {
+    name: 'class declarations are mutable lexical bindings and participate in lexical conflicts',
+    run() {
+      const realm = createRealm();
+      assertNormal(evaluateScript(realm, 'class C {}'), undefined);
+      assertNormal(evaluateScript(realm, 'C = 3; C'), 3);
+      assertCompletionThrows(
+        realm,
+        evaluateScript(realm, 'class C {}'),
+        'SyntaxError',
+      );
+      assertParseRejects('let D; class D {}');
+      assertParseRejects('class E {} var E;');
+    },
+  },
+  {
     name: 'var after let across two scripts throws a SyntaxError',
     run() {
       const realm = createRealm();

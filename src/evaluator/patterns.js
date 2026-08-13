@@ -9,10 +9,7 @@ import {
   iteratorValue,
 } from '../runtime/iterator.js';
 import { Reference, getValue, putValue } from '../runtime/reference.js';
-import {
-  createFunctionObject,
-  isAnonymousFunctionExpression,
-} from './declarations.js';
+import { evaluateNamedExpression } from './declarations.js';
 import { evaluateExpression, evaluateExpressionValue } from './expressions.js';
 import { evaluatePropertyName } from './property-name.js';
 
@@ -192,13 +189,8 @@ function preparePatternTarget(pattern, targetOperations) {
  * @returns {unknown}
  */
 function evaluatePatternDefault(pattern, context) {
-  if (
-    pattern.left.type === 'Identifier' &&
-    isAnonymousFunctionExpression(pattern.right)
-  ) {
-    return createFunctionObject(pattern.right, context.env, context, {
-      name: pattern.left.name,
-    });
+  if (pattern.left.type === 'Identifier') {
+    return evaluateNamedExpression(pattern.right, context, pattern.left.name);
   }
 
   return evaluateExpressionValue(pattern.right, context);

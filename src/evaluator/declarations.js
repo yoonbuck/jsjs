@@ -17,6 +17,7 @@ import {
 } from '../runtime/function-object.js';
 import { EngineArray } from '../runtime/array-object.js';
 import { evaluateExpressionValue } from './expressions.js';
+import { evaluateClassDefinition } from './classes.js';
 import { evaluateStatementList } from './statements.js';
 import { assignBindingPattern, initializeBindingPattern } from './patterns.js';
 import { hasUseStrictDirective } from './directive.js';
@@ -87,10 +88,10 @@ import {
  * without creating anything.
  *
  * Create phase (§15.1.8 steps 15-17), reached only once every check has passed:
- * - step 15: lexically scoped `let`/`const` names get *uninitialized*
+ * - step 15: lexically scoped `let`/`const` and class names get *uninitialized*
  *   declarative bindings — `createImmutableBinding(name, true)` for a `const`,
- *   `createMutableBinding(name, false)` for a `let` — their temporal dead zone
- *   until the declarator runs. A top-level `FunctionDeclaration` is var-scoped,
+ *   `createMutableBinding(name, false)` for `let` and classes — their temporal
+ *   dead zone until the declarator runs. A top-level `FunctionDeclaration` is var-scoped,
  *   not lexical, so it is not in this list. A global lexical binding lives only
  *   in the declarative record and is therefore invisible on the global object.
  * - step 16: the top-level function declarations are bound to their function
@@ -702,6 +703,10 @@ export function instantiateFunctionObject(node, context) {
  *   thisMode?: 'global' | 'strict' | 'lexical',
  *   constructible?: boolean,
  *   homeObject?: import('../runtime/object.js').EngineObject,
+ *   strict?: boolean,
+ *   constructorKind?: 'base' | 'derived',
+ *   superConstructor?: unknown,
+ *   defaultDerivedConstructor?: boolean,
  * }} CreateFunctionObjectOptions
  */
 
@@ -717,6 +722,36 @@ export function isAnonymousFunctionExpression(node) {
     (node.type === 'FunctionExpression' && !node.id) ||
     node.type === 'ArrowFunctionExpression'
   );
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+export function isAnonymousClassExpression(node) {
+  return node.type === 'ClassExpression' && node.id === null;
+}
+
+/**
+ * Applies ES2015 NamedEvaluation to the anonymous function and class forms the
+ * evaluator supports, falling back to ordinary expression evaluation for every
+ * other initializer.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @param {string} name
+ * @returns {unknown}
+ */
+export function evaluateNamedExpression(node, context, name) {
+  if (isAnonymousFunctionExpression(node)) {
+    return createFunctionObject(node, context.env, context, { name });
+  }
+
+  if (isAnonymousClassExpression(node)) {
+    return evaluateClassDefinition(node, context, name);
+  }
+
+  return evaluateExpressionValue(node, context);
 }
 
 /**
@@ -740,9 +775,10 @@ export function createFunctionObject(node, scope, context, options = {}) {
   // 10.1.1 — "once strict, always strict" applies transitively). Concise arrow
   // bodies have no directive prologue.
   const strict =
-    context.strict ||
-    (node.body.type === 'BlockStatement' &&
-      hasUseStrictDirective(node.body.body));
+    options.strict ??
+    (context.strict ||
+      (node.body.type === 'BlockStatement' &&
+        hasUseStrictDirective(node.body.body)));
   const name = options.name ?? (node.id ? node.id.name : '');
   const functionKind =
     options.functionKind ??
@@ -775,6 +811,9 @@ export function createFunctionObject(node, scope, context, options = {}) {
     enclosingFunctionEnvironment: context.functionEnvironment,
     methodHomeObject:
       functionKind === 'arrow' ? undefined : options.homeObject,
+    constructorKind: options.constructorKind,
+    superConstructor: options.superConstructor,
+    defaultDerivedConstructor: options.defaultDerivedConstructor,
     execute: (functionObject, thisValue, args, functionEnvironment) =>
       executeFunctionBody(
         node,
@@ -916,11 +955,11 @@ export function evaluateVariableDeclaration(node, context) {
           declarator.id.name,
           context.strict,
         );
-        const value = isAnonymousFunctionExpression(declarator.init)
-          ? createFunctionObject(declarator.init, context.env, context, {
-              name: declarator.id.name,
-            })
-          : evaluateExpressionValue(declarator.init, context);
+        const value = evaluateNamedExpression(
+          declarator.init,
+          context,
+          declarator.id.name,
+        );
         putValue(reference, value);
       }
     }
@@ -945,11 +984,7 @@ export function evaluateVariableDeclaration(node, context) {
     // setting the property afterwards, so the function is born with the
     // non-writable, non-enumerable, configurable `name` §9.2.11 requires.
     const value = declarator.init
-      ? isAnonymousFunctionExpression(declarator.init)
-        ? createFunctionObject(declarator.init, context.env, context, {
-            name: declarator.id.name,
-          })
-        : evaluateExpressionValue(declarator.init, context)
+      ? evaluateNamedExpression(declarator.init, context, declarator.id.name)
       : undefined;
 
     // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
