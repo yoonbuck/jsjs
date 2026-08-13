@@ -740,7 +740,9 @@ function evaluateTemplateLiteral(node, context) {
   let value = requiredCookedTemplateValue(node.quasis[0]);
 
   for (let index = 0; index < node.expressions.length; index += 1) {
-    value += toString(evaluateExpressionValue(node.expressions[index], context));
+    value += toString(
+      evaluateExpressionValue(node.expressions[index], context),
+    );
     value += requiredCookedTemplateValue(node.quasis[index + 1]);
   }
 
@@ -1106,9 +1108,7 @@ function evaluateObjectExpression(node, context) {
       }
 
       const prototypeSetter =
-        !property.computed &&
-        !property.shorthand &&
-        key === '__proto__';
+        !property.computed && !property.shorthand && key === '__proto__';
 
       if (prototypeSetter) {
         const value = evaluateExpressionValue(property.value, context);
@@ -1174,7 +1174,6 @@ function evaluateArrayExpression(node, context) {
   let index = 0;
 
   for (const element of node.elements) {
-
     if (element === null) {
       index += 1;
       continue;

@@ -38,10 +38,7 @@ export function evaluatePropertyName(node, computed, context) {
  * @returns {string}
  */
 export function functionNameFromPropertyKey(key, prefix = '') {
-  const name =
-    typeof key === 'symbol'
-      ? symbolName(key)
-      : key;
+  const name = typeof key === 'symbol' ? symbolName(key) : key;
 
   return prefix === '' ? name : `${prefix} ${name}`;
 }

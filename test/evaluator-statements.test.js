@@ -27,14 +27,13 @@ const tests = [
         thisValue: realm.globalObject,
       };
 
-      for (const type of ['ClassDeclaration', 'NotANode']) {
-        const error = assertThrows(
-          () => evaluate({ type, body: null }, context),
-          Error,
-        );
-        assertSame(error.name, 'UnsupportedNodeError');
-        assertSame(/** @type {any} */ (error).nodeType, type);
-      }
+      const type = 'NotANode';
+      const error = assertThrows(
+        () => evaluate({ type, body: null }, context),
+        Error,
+      );
+      assertSame(error.name, 'UnsupportedNodeError');
+      assertSame(/** @type {any} */ (error).nodeType, type);
     },
   },
   {

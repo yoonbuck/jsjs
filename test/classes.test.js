@@ -325,7 +325,9 @@ const tests = [
     name: 'computed special class keys retain ordinary instance definitions and reject static prototype replacement',
     run() {
       assertSame(
-        run('class C { ["constructor"]() { return 7; } } new C().constructor();'),
+        run(
+          'class C { ["constructor"]() { return 7; } } new C().constructor();',
+        ),
         7,
       );
       assertSame(

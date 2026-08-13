@@ -579,10 +579,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       const arrayType = /** @type {any} */ (node).type;
 
       if (typeof arrayType === 'string') {
-        throw unsupportedEs2015Error(
-          'arrays cannot be AST nodes',
-          node,
-        );
+        throw unsupportedEs2015Error('arrays cannot be AST nodes', node);
       }
 
       if (
@@ -1278,11 +1275,7 @@ function unsupportedEs2015Message(
     }
   }
 
-  if (
-    parent &&
-    parent.type === 'ObjectPattern' &&
-    parentKey === 'properties'
-  ) {
+  if (parent && parent.type === 'ObjectPattern' && parentKey === 'properties') {
     if (
       node.type !== 'Property' ||
       node.kind !== 'init' ||
@@ -1473,8 +1466,7 @@ function validateClassDefinition(node, parent, parentKey, parentIndex) {
 
   if (
     !Object.prototype.hasOwnProperty.call(node, 'superClass') ||
-    (node.superClass !== null &&
-      !isSupportedExpressionNode(node.superClass))
+    (node.superClass !== null && !isSupportedExpressionNode(node.superClass))
   ) {
     return 'unsupported class heritage expression';
   }
@@ -1487,9 +1479,7 @@ function validateClassDefinition(node, parent, parentKey, parentIndex) {
     return 'unsupported class body shape';
   }
 
-  if (
-    hasDefinedField(node, UNSUPPORTED_CLASS_DEFINITION_FIELDS)
-  ) {
+  if (hasDefinedField(node, UNSUPPORTED_CLASS_DEFINITION_FIELDS)) {
     return 'class decorators and type annotations are not supported';
   }
 
@@ -1775,10 +1765,7 @@ function isSupportedExpressionPosition(
     parent[key][parentIndex] === node;
 
   if (patternContext !== undefined) {
-    if (
-      node.type !== 'Identifier' &&
-      node.type !== 'MemberExpression'
-    ) {
+    if (node.type !== 'Identifier' && node.type !== 'MemberExpression') {
       return false;
     }
 
@@ -1838,9 +1825,7 @@ function isSupportedExpressionPosition(
     case 'LogicalExpression':
       return direct('left') || direct('right');
     case 'ConditionalExpression':
-      return (
-        direct('test') || direct('consequent') || direct('alternate')
-      );
+      return direct('test') || direct('consequent') || direct('alternate');
     case 'AssignmentExpression':
       return (
         direct('right') ||
@@ -1869,8 +1854,7 @@ function isSupportedExpressionPosition(
       return member('expressions');
     case 'TaggedTemplateExpression':
       return (
-        direct('tag') ||
-        (node.type === 'TemplateLiteral' && direct('quasi'))
+        direct('tag') || (node.type === 'TemplateLiteral' && direct('quasi'))
       );
     case 'AssignmentPattern':
       return direct('right');
@@ -1882,8 +1866,7 @@ function isSupportedExpressionPosition(
     case 'ClassDeclaration':
     case 'ClassExpression':
       return (
-        direct('superClass') ||
-        (node.type === 'Identifier' && direct('id'))
+        direct('superClass') || (node.type === 'Identifier' && direct('id'))
       );
     case 'MethodDefinition':
       return (
@@ -1989,9 +1972,8 @@ function validateFunctionParameterList(node) {
   const visitedExpressions = new WeakSet();
 
   while (pending.length > 0) {
-    const { node: parameter, binding } = /** @type {{ node: any, binding: boolean }} */ (
-      pending.pop()
-    );
+    const { node: parameter, binding } =
+      /** @type {{ node: any, binding: boolean }} */ (pending.pop());
 
     if (
       !parameter ||
@@ -2182,7 +2164,9 @@ function validateTemplateLiteral(node, parent, parentKey) {
   }
 
   const tagged =
-    parent && parent.type === 'TaggedTemplateExpression' && parentKey === 'quasi';
+    parent &&
+    parent.type === 'TaggedTemplateExpression' &&
+    parentKey === 'quasi';
 
   for (const expression of node.expressions) {
     if (!isSupportedExpressionNode(expression)) {
@@ -2320,7 +2304,12 @@ function validateObjectExpression(node) {
  * @param {number | undefined} parentIndex
  * @returns {string | undefined}
  */
-function validateObjectExpressionProperty(node, parent, parentKey, parentIndex) {
+function validateObjectExpressionProperty(
+  node,
+  parent,
+  parentKey,
+  parentIndex,
+) {
   if (
     !parent ||
     parent.type !== 'ObjectExpression' ||
@@ -2356,10 +2345,7 @@ function validateObjectExpressionProperty(node, parent, parentKey, parentIndex) 
     return 'unsupported noncomputed object property key';
   }
 
-  if (
-    node.computed &&
-    !isSupportedExpressionNode(node.key)
-  ) {
+  if (node.computed && !isSupportedExpressionNode(node.key)) {
     return 'unsupported computed object property key';
   }
 

@@ -303,9 +303,7 @@ export function functionDeclarationInstantiation(
       .filter((declaration) => declaration.type === 'FunctionDeclaration')
       .map((declaration) => declaration.id.name),
   );
-  const lexicalNames = new Set(
-    topLevelLexicallyDeclaredNames(bodyStatements),
-  );
+  const lexicalNames = new Set(topLevelLexicallyDeclaredNames(bodyStatements));
   const hasParameterExpressions = formalParameters.some(
     containsParameterExpression,
   );
@@ -428,9 +426,7 @@ export function functionDeclarationInstantiation(
  * @returns {EngineArray}
  */
 function createRestParameterArray(functionObject, args, start) {
-  const array = new EngineArray(
-    functionObject.realm.intrinsics.arrayPrototype,
-  );
+  const array = new EngineArray(functionObject.realm.intrinsics.arrayPrototype);
 
   for (let index = start; index < args.length; index += 1) {
     array.defineOwnProperty(String(index - start), {
@@ -808,8 +804,7 @@ export function createFunctionObject(node, scope, context, options = {}) {
     thisMode,
     constructible,
     enclosingFunctionEnvironment: context.functionEnvironment,
-    methodHomeObject:
-      functionKind === 'arrow' ? undefined : options.homeObject,
+    methodHomeObject: functionKind === 'arrow' ? undefined : options.homeObject,
     constructorKind: options.constructorKind,
     defaultDerivedConstructor: options.defaultDerivedConstructor,
     execute: (functionObject, thisValue, args, functionEnvironment) =>

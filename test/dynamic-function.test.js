@@ -409,10 +409,7 @@ const tests = [
     run() {
       const realm = createRealm();
       assertGuestThrow(
-        runIn(
-          realm,
-          'new Function("a = 1", "\\"use strict\\"; return a;");',
-        ),
+        runIn(realm, 'new Function("a = 1", "\\"use strict\\"; return a;");'),
         'SyntaxError',
         realm,
       );

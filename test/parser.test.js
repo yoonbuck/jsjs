@@ -1022,7 +1022,10 @@ const tests = [
         ],
       };
 
-      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -1061,7 +1064,10 @@ const tests = [
         ],
       };
 
-      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -1143,10 +1149,7 @@ const tests = [
         ],
       };
 
-      assertSame(
-        parseScript('', { parse: () => program }).type,
-        'Program',
-      );
+      assertSame(parseScript('', { parse: () => program }).type, 'Program');
     },
   },
   {
@@ -1167,10 +1170,7 @@ const tests = [
         ],
       };
 
-      assertSame(
-        parseScript('', { parse: () => program }).type,
-        'Program',
-      );
+      assertSame(parseScript('', { parse: () => program }).type, 'Program');
     },
   },
   {
@@ -1540,7 +1540,10 @@ const tests = [
         ],
       };
 
-      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -1575,7 +1578,10 @@ const tests = [
         ],
       };
 
-      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -1592,7 +1598,10 @@ const tests = [
         ],
       };
 
-      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -1625,7 +1634,10 @@ const tests = [
         ],
       };
 
-      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -1777,17 +1789,17 @@ const tests = [
         () => parseScript('function f(a = 1) { "use strict"; }'),
         SyntaxError,
       );
-      assertThrows(
-        () => parseScript('function f(a = 1, a) {}'),
-        SyntaxError,
-      );
+      assertThrows(() => parseScript('function f(a = 1, a) {}'), SyntaxError);
       parseScript('function f(a, a) {}');
     },
   },
   {
     name: 'generator and async forms remain unsupported around arrow parameters',
     run() {
-      for (const source of ['function* g(a = 1) {}', 'async function f(a = 1) {}']) {
+      for (const source of [
+        'function* g(a = 1) {}',
+        'async function f(a = 1) {}',
+      ]) {
         assertThrows(() => parseScript(source), SyntaxError);
       }
 
@@ -1859,19 +1871,25 @@ const tests = [
         );
       }
 
-      assertThrows(() => parseScript('var fn = () => super.value;'), SyntaxError);
+      assertThrows(
+        () => parseScript('var fn = () => super.value;'),
+        SyntaxError,
+      );
       assertThrows(
         () => parseScript('var fn = (value = 1) => { "use strict"; };'),
         SyntaxError,
       );
-      assertThrows(() => parseScript('var fn = (value, value) => value;'), SyntaxError);
+      assertThrows(
+        () => parseScript('var fn = (value, value) => value;'),
+        SyntaxError,
+      );
     },
   },
   {
     name: 'malformed custom arrow and ordinary function parameter elements are syntax errors',
     run() {
-      const arrow = parseScript('var fn = value => value;').body[0].declarations[0]
-        .init;
+      const arrow = parseScript('var fn = value => value;').body[0]
+        .declarations[0].init;
       const functionExpression = parseScript(
         '(function (value) { return value; });',
       ).body[0].expression;
@@ -1911,8 +1929,8 @@ const tests = [
   {
     name: 'custom function parameter properties require exact destructuring shapes',
     run() {
-      const arrow = parseScript('var fn = value => value;').body[0].declarations[0]
-        .init;
+      const arrow = parseScript('var fn = value => value;').body[0]
+        .declarations[0].init;
       const functionExpression = parseScript(
         '(function (value) { return value; });',
       ).body[0].expression;
@@ -2143,7 +2161,9 @@ const tests = [
         assertSame(error.name, 'SyntaxError');
 
         if (argument.property?.type === 'BogusExpression') {
-          if (!error.message.includes('unsupported AST node type BogusExpression')) {
+          if (
+            !error.message.includes('unsupported AST node type BogusExpression')
+          ) {
             throw new Error(
               `Expected generic unknown-node rejection, got ${error.message}`,
             );

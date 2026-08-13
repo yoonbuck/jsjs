@@ -121,8 +121,14 @@ const tests = [
       assertSame(first === repeated, true);
       assertSame(first === second, false);
       assertSame(first instanceof EngineArray, true);
-      assertSame(/** @type {EngineArray} */ (first).getPrototype(), firstRealm.intrinsics.arrayPrototype);
-      assertSame(/** @type {EngineArray} */ (second).getPrototype(), secondRealm.intrinsics.arrayPrototype);
+      assertSame(
+        /** @type {EngineArray} */ (first).getPrototype(),
+        firstRealm.intrinsics.arrayPrototype,
+      );
+      assertSame(
+        /** @type {EngineArray} */ (second).getPrototype(),
+        secondRealm.intrinsics.arrayPrototype,
+      );
     },
   },
   {

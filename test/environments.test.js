@@ -945,8 +945,9 @@ const tests = [
       const program = parseScript(
         'var object = { method() { return () => (() => super.value)(); } };',
       );
-      const arrow = program.body[0].declarations[0].init.properties[0].value.body
-        .body[0].argument;
+      const arrow =
+        program.body[0].declarations[0].init.properties[0].value.body.body[0]
+          .argument;
 
       /** @param {import('../src/runtime/environment.js').FunctionExecutionEnvironment} functionEnvironment */
       function createArrow(functionEnvironment) {
