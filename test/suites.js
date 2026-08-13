@@ -68,6 +68,7 @@ import jsonStringify from './json-stringify.test.js';
 import es2015ObjectFunction from './es2015-object-function.test.js';
 import iterators from './iterators.test.js';
 import forOf from './for-of.test.js';
+import destructuring from './destructuring.test.js';
 import es2015RuntimeIntegration from './es2015-runtime-integration.test.js';
 import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
@@ -278,6 +279,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/for-of.test.js',
     tests: forOf,
+  }),
+  Object.freeze({
+    file: 'test/destructuring.test.js',
+    tests: destructuring,
   }),
   Object.freeze({
     file: 'test/es2015-runtime-integration.test.js',

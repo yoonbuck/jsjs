@@ -707,8 +707,6 @@ const tests = [
         'var d = { a };',
         'var d = { [k]: 1 };',
         'var d = { m() {} };',
-        'var { a } = this;',
-        'var [ a ] = this;',
         'function withDefault(a = 1) { return a; }',
         'function withRest(...a) { return a; }',
         'foo(...a);',
@@ -845,6 +843,147 @@ const tests = [
         42,
       );
       assertSame(evaluateScript(realm, 'typeof y;').value, 'undefined');
+    },
+  },
+  {
+    name: 'destructuring declarations assignments and loop heads are accepted',
+    run() {
+      parseScript('var {x: y} = value; [a, ...rest] = values;');
+      parseScript('let [a, {b = 1}] = values; const {c: [d]} = value;');
+      parseScript(
+        'for (let [i] = values; i; [i] = next) {} for ({x: y} in object) {} for (const [a, b] of pairs) {}',
+      );
+    },
+  },
+  {
+    name: 'object rest and invalid array rest placement remain rejected',
+    run() {
+      assertThrows(() => parseScript('var {...rest} = value;'), SyntaxError);
+      assertThrows(
+        () => parseScript('var [a, ...rest, last] = value;'),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'parameter patterns remain rejected',
+    run() {
+      assertThrows(() => parseScript('function f({x}) {}'), SyntaxError);
+      assertThrows(() => parseScript('function f([x]) {}'), SyntaxError);
+      assertThrows(() => parseScript('function f(x = 1) {}'), SyntaxError);
+      assertThrows(() => parseScript('function f(...xs) {}'), SyntaxError);
+    },
+  },
+  {
+    name: 'custom parser patterns reject invalid binding and assignment leaves',
+    run() {
+      const invalidBinding = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'VariableDeclaration',
+            kind: 'var',
+            declarations: [
+              {
+                type: 'VariableDeclarator',
+                id: {
+                  type: 'ArrayPattern',
+                  elements: [
+                    {
+                      type: 'MemberExpression',
+                      object: { type: 'Identifier', name: 'object' },
+                      property: { type: 'Identifier', name: 'value' },
+                      computed: false,
+                    },
+                  ],
+                },
+                init: { type: 'Identifier', name: 'source' },
+              },
+            ],
+          },
+        ],
+      };
+      const invalidAssignment = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'AssignmentExpression',
+              operator: '=',
+              left: {
+                type: 'ArrayPattern',
+                elements: [{ type: 'Literal', value: 1 }],
+              },
+              right: { type: 'Identifier', name: 'source' },
+            },
+          },
+        ],
+      };
+      const invalidRootDefault = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'VariableDeclaration',
+            kind: 'var',
+            declarations: [
+              {
+                type: 'VariableDeclarator',
+                id: {
+                  type: 'AssignmentPattern',
+                  left: { type: 'Identifier', name: 'value' },
+                  right: { type: 'Literal', value: 1 },
+                },
+                init: { type: 'Identifier', name: 'source' },
+              },
+            ],
+          },
+        ],
+      };
+      const sharedRest = {
+        type: 'RestElement',
+        argument: { type: 'Identifier', name: 'rest' },
+      };
+      const invalidSharedRest = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'VariableDeclaration',
+            kind: 'var',
+            declarations: [
+              {
+                type: 'VariableDeclarator',
+                id: {
+                  type: 'ArrayPattern',
+                  elements: [sharedRest, sharedRest],
+                },
+                init: { type: 'Identifier', name: 'source' },
+              },
+            ],
+          },
+        ],
+      };
+
+      assertThrows(
+        () => parseScript('', { parse: () => invalidBinding }),
+        SyntaxError,
+      );
+      assertThrows(
+        () => parseScript('', { parse: () => invalidAssignment }),
+        SyntaxError,
+      );
+      assertThrows(
+        () => parseScript('', { parse: () => invalidRootDefault }),
+        SyntaxError,
+      );
+      assertThrows(
+        () => parseScript('', { parse: () => invalidSharedRest }),
+        SyntaxError,
+      );
     },
   },
 ];

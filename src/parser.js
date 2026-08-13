@@ -363,16 +363,23 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
-  /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined }[]} */
+  /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
-    { node: root, strict: rootStrict, parent: null, parentKey: undefined },
+    {
+      node: root,
+      strict: rootStrict,
+      parent: null,
+      parentKey: undefined,
+      parentIndex: undefined,
+      patternContext: undefined,
+    },
   ];
-  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, strict: boolean }[]>} */
+  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, strict: boolean, patternContext: 'binding' | 'assignment' | undefined }[]>} */
   const seen = new WeakMap();
 
   while (pending.length > 0) {
     const item =
-      /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined }} */ (
+      /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }} */ (
         pending.pop()
       );
     const node = item.node;
@@ -391,7 +398,9 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
         if (
           context.parent === item.parent &&
           context.parentKey === item.parentKey &&
-          context.strict === strict
+          context.parentIndex === item.parentIndex &&
+          context.strict === strict &&
+          context.patternContext === item.patternContext
         ) {
           alreadySeen = true;
           break;
@@ -405,17 +414,33 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       contexts.push({
         parent: item.parent,
         parentKey: item.parentKey,
+        parentIndex: item.parentIndex,
         strict,
+        patternContext: item.patternContext,
       });
     } else {
       seen.set(node, [
-        { parent: item.parent, parentKey: item.parentKey, strict },
+        {
+          parent: item.parent,
+          parentKey: item.parentKey,
+          parentIndex: item.parentIndex,
+          strict,
+          patternContext: item.patternContext,
+        },
       ]);
     }
 
     if (Array.isArray(node)) {
       for (let index = node.length - 1; index >= 0; index -= 1) {
-        pushChild(pending, node[index], strict, item.parent, item.parentKey);
+        pushChild(
+          pending,
+          node[index],
+          strict,
+          item.parent,
+          item.parentKey,
+          item.patternContext,
+          index,
+        );
       }
       continue;
     }
@@ -431,6 +456,8 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       source,
       item.parent,
       item.parentKey,
+      item.patternContext,
+      item.parentIndex,
     );
 
     const childStrict = childScopeStrictness(node, strict);
@@ -438,7 +465,14 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       if (!NODE_POSITION_KEYS.has(keys[index])) {
-        pushChild(pending, node[keys[index]], childStrict, node, keys[index]);
+        pushChild(
+          pending,
+          node[keys[index]],
+          childStrict,
+          node,
+          keys[index],
+          patternContextForChild(node, keys[index], item.patternContext),
+        );
       }
     }
   }
@@ -533,17 +567,83 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined }[]} pending
+ * @param {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} pending
  * @param {unknown} value
  * @param {boolean} strict
  * @param {any} parent
  * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @param {number | undefined} [parentIndex]
  * @returns {void}
  */
-function pushChild(pending, value, strict, parent, parentKey) {
+function pushChild(
+  pending,
+  value,
+  strict,
+  parent,
+  parentKey,
+  patternContext,
+  parentIndex,
+) {
   if (value && typeof value === 'object') {
-    pending.push({ node: value, strict, parent, parentKey });
+    pending.push({
+      node: value,
+      strict,
+      parent,
+      parentKey,
+      parentIndex,
+      patternContext,
+    });
   }
+}
+
+/**
+ * @param {any} parent
+ * @param {string} key
+ * @param {'binding' | 'assignment' | undefined} inherited
+ * @returns {'binding' | 'assignment' | undefined}
+ */
+function patternContextForChild(parent, key, inherited) {
+  if (parent.type === 'VariableDeclarator' && key === 'id') {
+    return 'binding';
+  }
+
+  if (
+    parent.type === 'AssignmentExpression' &&
+    parent.operator === '=' &&
+    key === 'left'
+  ) {
+    return 'assignment';
+  }
+
+  if (
+    (parent.type === 'ForInStatement' || parent.type === 'ForOfStatement') &&
+    key === 'left' &&
+    parent.left.type !== 'VariableDeclaration'
+  ) {
+    return 'assignment';
+  }
+
+  if (parent.type === 'ArrayPattern' && key === 'elements') {
+    return inherited;
+  }
+
+  if (parent.type === 'ObjectPattern' && key === 'properties') {
+    return inherited;
+  }
+
+  if (parent.type === 'Property') {
+    return key === 'value' ? inherited : undefined;
+  }
+
+  if (
+    (parent.type === 'AssignmentPattern' && key === 'left') ||
+    (parent.type === 'RestElement' && key === 'argument')
+  ) {
+    return inherited;
+  }
+
+  return undefined;
 }
 
 /**
@@ -624,10 +724,50 @@ function statementPositionFunctionError(context, node) {
  * @param {any} node
  * @param {any} parent
  * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @param {number | undefined} parentIndex
  * @returns {string | undefined}
  */
-function unsupportedEs2015Message(node, parent, parentKey) {
+function unsupportedEs2015Message(
+  node,
+  parent,
+  parentKey,
+  patternContext,
+  parentIndex,
+) {
+  if (patternContext !== undefined) {
+    const validPatternNode =
+      node.type === 'Identifier' ||
+      node.type === 'ObjectPattern' ||
+      node.type === 'ArrayPattern' ||
+      node.type === 'AssignmentPattern' ||
+      node.type === 'RestElement' ||
+      node.type === 'Property' ||
+      (patternContext === 'assignment' && node.type === 'MemberExpression');
+
+    if (!validPatternNode) {
+      return `invalid ${patternContext} pattern target`;
+    }
+  }
+
   if (node.type === 'Property') {
+    if (
+      parent !== null &&
+      parent !== undefined &&
+      parent.type === 'ObjectPattern' &&
+      parentKey === 'properties'
+    ) {
+      if (
+        patternContext !== undefined &&
+        node.kind === 'init' &&
+        !node.method
+      ) {
+        return undefined;
+      }
+
+      return 'unsupported destructuring property';
+    }
+
     if (
       parent !== null &&
       (parent === undefined ||
@@ -652,8 +792,41 @@ function unsupportedEs2015Message(node, parent, parentKey) {
       : 'generators and `yield` are not supported';
   }
 
-  if (isFunctionNode(node) && (!node.body || node.body.type !== 'BlockStatement')) {
+  if (
+    isFunctionNode(node) &&
+    (!node.body || node.body.type !== 'BlockStatement')
+  ) {
     return 'function bodies must be block statements';
+  }
+
+  if (node.type === 'ObjectPattern' || node.type === 'ArrayPattern') {
+    return patternContext === undefined
+      ? 'destructuring patterns are not supported in this context'
+      : undefined;
+  }
+
+  if (node.type === 'AssignmentPattern') {
+    const validPlacement =
+      (parent && parent.type === 'ArrayPattern' && parentKey === 'elements') ||
+      (parent && parent.type === 'Property' && parentKey === 'value');
+
+    if (!validPlacement) {
+      return 'default value pattern is not supported in this position';
+    }
+
+    return patternContext === undefined
+      ? 'default value patterns are not supported in this context'
+      : undefined;
+  }
+
+  if (node.type === 'RestElement') {
+    return patternContext !== undefined &&
+      parent &&
+      parent.type === 'ArrayPattern' &&
+      parentKey === 'elements' &&
+      parentIndex === parent.elements.length - 1
+      ? undefined
+      : 'rest elements are not supported in this context';
   }
 
   return UNSUPPORTED_ES2015_NODE_MESSAGES.get(node.type);
@@ -664,7 +837,9 @@ function unsupportedEs2015Message(node, parent, parentKey) {
  * @returns {boolean}
  */
 function isFunctionNode(node) {
-  return node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression';
+  return (
+    node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression'
+  );
 }
 
 /**
@@ -672,10 +847,25 @@ function isFunctionNode(node) {
  * @param {string} source
  * @param {any} parent
  * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @param {number | undefined} parentIndex
  * @returns {void}
  */
-function checkUnsupportedEs2015Node(node, source, parent, parentKey) {
-  const typeMessage = unsupportedEs2015Message(node, parent, parentKey);
+function checkUnsupportedEs2015Node(
+  node,
+  source,
+  parent,
+  parentKey,
+  patternContext,
+  parentIndex,
+) {
+  const typeMessage = unsupportedEs2015Message(
+    node,
+    parent,
+    parentKey,
+    patternContext,
+    parentIndex,
+  );
 
   if (typeMessage !== undefined) {
     throw unsupportedEs2015Error(typeMessage, node);

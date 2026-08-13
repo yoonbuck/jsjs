@@ -35,6 +35,11 @@ import {
   lexicallyScopedDeclarations,
 } from './static-semantics.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
+import {
+  assignBindingPattern,
+  assignPattern,
+  initializeBindingPattern,
+} from './patterns.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -629,9 +634,14 @@ function evaluateForInStatement(node, context, labelSet) {
         } else {
           iterationEnv.createMutableBinding(name, false);
         }
-        iterationEnv.initializeBinding(name, key);
       }
       iterationContext = { ...context, env: iterationEnv };
+      initializeBindingPattern(
+        node.left.declarations[0].id,
+        key,
+        iterationEnv,
+        iterationContext,
+      );
     } else {
       assignForInTarget(node.left, key, context);
     }
@@ -680,9 +690,22 @@ function evaluateForInStatement(node, context, labelSet) {
  */
 function assignForInTarget(left, key, context) {
   if (left.type === 'VariableDeclaration') {
-    const name = left.declarations[0].id.name;
-    const reference = getIdentifierReference(context.env, name, context.strict);
-    putValue(reference, key);
+    const pattern = left.declarations[0].id;
+    if (pattern.type === 'Identifier') {
+      const reference = getIdentifierReference(
+        context.env,
+        pattern.name,
+        context.strict,
+      );
+      putValue(reference, key);
+    } else {
+      assignBindingPattern(pattern, key, context);
+    }
+    return;
+  }
+
+  if (left.type === 'ObjectPattern' || left.type === 'ArrayPattern') {
+    assignPattern(left, key, context);
     return;
   }
 
@@ -830,9 +853,15 @@ function bindForOfIteration(left, nextValue, context, isLexical, isConst) {
     } else {
       iterationEnv.createMutableBinding(name, false);
     }
-    iterationEnv.initializeBinding(name, nextValue);
   }
-  return { ...context, env: iterationEnv };
+  const iterationContext = { ...context, env: iterationEnv };
+  initializeBindingPattern(
+    left.declarations[0].id,
+    nextValue,
+    iterationEnv,
+    iterationContext,
+  );
+  return iterationContext;
 }
 
 /**

@@ -17,6 +17,7 @@ import {
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateStatementList } from './statements.js';
+import { assignBindingPattern, initializeBindingPattern } from './patterns.js';
 import { hasUseStrictDirective } from './directive.js';
 import {
   annexBBlockFunctionDeclarations,
@@ -757,6 +758,12 @@ export function evaluateVariableDeclaration(node, context) {
   if (node.kind === 'var') {
     for (const declarator of node.declarations) {
       if (declarator.init) {
+        if (declarator.id.type !== 'Identifier') {
+          const value = evaluateExpressionValue(declarator.init, context);
+          assignBindingPattern(declarator.id, value, context);
+          continue;
+        }
+
         // ES5.1 §12.2.1: evaluate the Identifier to a Reference *before* the
         // Initialiser, so a `with`-bound target captured here survives a
         // property the initializer deletes and PutValue writes back through it.
@@ -778,6 +785,14 @@ export function evaluateVariableDeclaration(node, context) {
   }
 
   for (const declarator of node.declarations) {
+    if (declarator.id.type !== 'Identifier') {
+      const value = declarator.init
+        ? evaluateExpressionValue(declarator.init, context)
+        : undefined;
+      initializeBindingPattern(declarator.id, value, context.env, context);
+      continue;
+    }
+
     // ES2015 §13.3.1.4 step 6 (NamedEvaluation): a lexical binding whose
     // initializer is an anonymous function definition names that function after
     // the binding, so `let f = function () {};` yields `f.name === 'f'`. The

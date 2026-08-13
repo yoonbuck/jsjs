@@ -59,6 +59,7 @@ import {
 // nothing from the evaluator, and no module here reaches realm.js.
 import { performEval } from './eval.js';
 import { createRegExpFromPattern } from '../builtins/regexp.js';
+import { assignPattern } from './patterns.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -509,6 +510,16 @@ function evaluateConditionalExpression(node, context) {
  * @returns {unknown}
  */
 function evaluateAssignmentExpression(node, context) {
+  if (node.left.type === 'ObjectPattern' || node.left.type === 'ArrayPattern') {
+    if (node.operator !== '=') {
+      throw createUnsupportedOperatorError('assignment', node.operator);
+    }
+
+    const value = evaluateExpressionValue(node.right, context);
+    assignPattern(node.left, value, context);
+    return value;
+  }
+
   if (
     node.left.type !== 'Identifier' &&
     node.left.type !== 'MemberExpression'
