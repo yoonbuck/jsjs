@@ -2,6 +2,10 @@ import { EngineObject } from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
 import { toObject } from './conversion.js';
+import {
+  createFunctionExecutionEnvironment,
+  getThisBinding,
+} from './environment.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -13,6 +17,7 @@ import { toObject } from './conversion.js';
  *   functionObject: EngineFunction,
  *   thisValue: unknown,
  *   args: readonly unknown[],
+ *   functionEnvironment: import('./environment.js').FunctionExecutionEnvironment,
  * ) => Completion} FunctionBodyExecutor
  *
  * @typedef {{
@@ -27,7 +32,11 @@ import { toObject } from './conversion.js';
  *   name?: string,
  *   isMethod?: boolean,
  *   createPrototype?: boolean,
- *   functionKind?: 'normal' | 'arrow',
+ *   functionKind?: 'normal' | 'method' | 'arrow' | 'classConstructor',
+ *   thisMode?: 'global' | 'strict' | 'lexical',
+ *   constructible?: boolean,
+ *   enclosingFunctionEnvironment?: import('./environment.js').FunctionExecutionEnvironment,
+ *   methodHomeObject?: EngineObject,
  * }} EngineFunctionOptions
  */
 
@@ -56,8 +65,18 @@ export class EngineFunction extends EngineObject {
     execute,
     name = '',
     isMethod = false,
-    createPrototype = !isMethod,
-    functionKind = 'normal',
+    functionKind = isMethod ? 'method' : 'normal',
+    thisMode =
+      functionKind === 'arrow'
+        ? 'lexical'
+        : strict
+          ? 'strict'
+          : 'global',
+    constructible =
+      functionKind === 'normal' || functionKind === 'classConstructor',
+    createPrototype = constructible,
+    enclosingFunctionEnvironment = undefined,
+    methodHomeObject = undefined,
   }) {
     super(realm.intrinsics.functionPrototype, 'Function');
 
@@ -76,13 +95,19 @@ export class EngineFunction extends EngineObject {
     /** @type {boolean} */
     this.strict = strict;
     /** @type {boolean} */
-    this._isConstructor = !isMethod;
-    /** @type {'normal' | 'arrow'} */
+    this._isConstructor = constructible;
+    /** @type {'normal' | 'method' | 'arrow' | 'classConstructor'} */
     this.functionKind = functionKind;
+    /** @type {'global' | 'strict' | 'lexical'} */
+    this.thisMode = thisMode;
+    /** @type {import('./environment.js').FunctionExecutionEnvironment | undefined} */
+    this.enclosingFunctionEnvironment = enclosingFunctionEnvironment;
     /** @type {FunctionBodyExecutor} */
     this._execute = execute;
-    /** @type {EngineObject | undefined} */
-    this.homeObject = undefined;
+
+    if (methodHomeObject !== undefined && functionKind !== 'arrow') {
+      this.methodHomeObject = methodHomeObject;
+    }
 
     this.defineOwnProperty('length', {
       value: expectedArgumentCount,
@@ -160,7 +185,33 @@ export class EngineFunction extends EngineObject {
     guard.enter();
 
     try {
-      completion = this._execute(this, this.resolveThisValue(thisValue), args);
+      /** @type {import('./environment.js').FunctionExecutionEnvironment} */
+      let functionEnvironment;
+
+      if (this.thisMode === 'lexical') {
+        if (this.enclosingFunctionEnvironment === undefined) {
+          throw new GuestErrorSignal(
+            'ReferenceError',
+            'This binding is not available',
+          );
+        }
+
+        functionEnvironment = this.enclosingFunctionEnvironment;
+      } else {
+        functionEnvironment = createFunctionExecutionEnvironment({
+          outer: this.enclosingFunctionEnvironment,
+          thisStatus: 'initialized',
+          thisValue: this.resolveThisValue(thisValue),
+          homeObject: this.methodHomeObject,
+        });
+      }
+
+      const resolvedThis =
+        this.thisMode === 'lexical'
+          ? getThisBinding(functionEnvironment)
+          : functionEnvironment.thisValue;
+
+      completion = this._execute(this, resolvedThis, args, functionEnvironment);
     } catch (error) {
       if (error instanceof ThrowSignal) {
         throw error;
@@ -211,6 +262,10 @@ export class EngineFunction extends EngineObject {
    * @returns {EngineObject}
    */
   constructFunction(args = []) {
+    if (!this._isConstructor) {
+      throw new GuestErrorSignal('TypeError', 'Function is not a constructor');
+    }
+
     const prototypeProperty = this.get('prototype');
     const prototype =
       prototypeProperty instanceof EngineObject
@@ -271,7 +326,7 @@ export class EngineFunction extends EngineObject {
    * @returns {unknown}
    */
   resolveThisValue(thisValue) {
-    if (this.strict) {
+    if (this.thisMode === 'strict') {
       return thisValue;
     }
 

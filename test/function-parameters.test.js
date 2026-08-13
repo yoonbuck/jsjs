@@ -285,6 +285,22 @@ const tests = [
       );
     },
   },
+  {
+    name: 'arrows reuse non-simple parameter binding semantics without an own arguments object',
+    run() {
+      assertSame(
+        run(`
+          function outer() {
+            var arrow = (first = 1, second = first + 1, ...rest) =>
+              first + ':' + second + ':' + rest.join(',') + ':' + arguments[0];
+            return arrow(undefined, undefined, 4, 5);
+          }
+          outer(9);
+        `),
+        '1:2:4,5:9',
+      );
+    },
+  },
 ];
 
 export default tests;

@@ -246,8 +246,8 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  *
  * *Reachable* — this pass is what rejects the construct, because the node is the
  * first unsupported one the walk visits on some accepted parse:
- * `ClassDeclaration`, `ClassExpression`, `ArrowFunctionExpression`,
- * `ObjectPattern`, `ArrayPattern`, `AssignmentPattern`, `RestElement`, and
+ * `ClassDeclaration`, `ClassExpression`, `ObjectPattern`, `ArrayPattern`,
+ * `AssignmentPattern`, `RestElement`, and
  * `MetaProperty` (via `new.target` inside a function). `SpreadElement` is
  * handled shape-sensitively by `unsupportedEs2015Message`, because array
  * elements and call/construction argument lists are implemented while all
@@ -296,7 +296,6 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['ClassExpression', '`class` expressions are not supported'],
   ['ClassBody', '`class` bodies are not supported'],
   ['MethodDefinition', 'class and object methods are not supported'],
-  ['ArrowFunctionExpression', 'arrow functions are not supported'],
   ['YieldExpression', 'generators and `yield` are not supported'],
   ['AwaitExpression', '`await` expressions are not supported'],
   ['ObjectPattern', 'destructuring patterns are not supported'],
@@ -324,6 +323,7 @@ const SUPPORTED_OBJECT_PROPERTY_EXPRESSION_TYPES = new Set([
   'CallExpression',
   'MemberExpression',
   'FunctionExpression',
+  'ArrowFunctionExpression',
   'ObjectExpression',
   'ArrayExpression',
   'NewExpression',
@@ -378,6 +378,7 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
   'CallExpression',
   'MemberExpression',
   'FunctionExpression',
+  'ArrowFunctionExpression',
   'ObjectExpression',
   'ArrayExpression',
   'NewExpression',
@@ -435,7 +436,7 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * program (§10.1.1): a strict function may nest in a sloppy script and vice
  * versa. The walk therefore carries the strictness of each node's enclosing
  * function (or program) scope, folding in each `FunctionDeclaration` /
- * `FunctionExpression` body's — and the `Program`'s — own directive prologue
+ * `FunctionExpression` / block-body arrow bodies' — and the `Program`'s — own directive prologue
  * on top of the inherited flag, plus the caller-supplied `rootStrict` that a
  * strict `eval` inherits with no directive.
  *
@@ -451,23 +452,24 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
-  /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} */
+  /** @type {{ node: any, strict: boolean, superAllowed: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
     {
       node: root,
       strict: rootStrict,
+      superAllowed: false,
       parent: null,
       parentKey: undefined,
       parentIndex: undefined,
       patternContext: undefined,
     },
   ];
-  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, strict: boolean, patternContext: 'binding' | 'assignment' | undefined }[]>} */
+  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, strict: boolean, superAllowed: boolean, patternContext: 'binding' | 'assignment' | undefined }[]>} */
   const seen = new WeakMap();
 
   while (pending.length > 0) {
     const item =
-      /** @type {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }} */ (
+      /** @type {{ node: any, strict: boolean, superAllowed: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }} */ (
         pending.pop()
       );
     const node = item.node;
@@ -488,6 +490,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           context.parentKey === item.parentKey &&
           context.parentIndex === item.parentIndex &&
           context.strict === strict &&
+          context.superAllowed === item.superAllowed &&
           context.patternContext === item.patternContext
         ) {
           alreadySeen = true;
@@ -504,6 +507,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
         parentKey: item.parentKey,
         parentIndex: item.parentIndex,
         strict,
+        superAllowed: item.superAllowed,
         patternContext: item.patternContext,
       });
     } else {
@@ -513,6 +517,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           parentKey: item.parentKey,
           parentIndex: item.parentIndex,
           strict,
+          superAllowed: item.superAllowed,
           patternContext: item.patternContext,
         },
       ]);
@@ -524,6 +529,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           pending,
           node[index],
           strict,
+          item.superAllowed,
           item.parent,
           item.parentKey,
           item.patternContext,
@@ -546,10 +552,17 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.parentKey,
       item.patternContext,
       item.parentIndex,
+      item.superAllowed,
     );
     checkFunctionParameterEarlyErrors(node);
 
     const childStrict = childScopeStrictness(node, strict);
+    const childSuperAllowed = superAllowedForChildren(
+      node,
+      item.parent,
+      item.parentKey,
+      item.superAllowed,
+    );
     const keys = Object.keys(node);
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
@@ -558,6 +571,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           pending,
           node[keys[index]],
           childStrict,
+          childSuperAllowed,
           node,
           keys[index],
           patternContextForChild(node, keys[index], item.patternContext),
@@ -576,16 +590,20 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
  * @returns {void}
  */
 function checkFunctionParameterEarlyErrors(node) {
-  if (
-    !isFunctionNode(node) ||
-    /** @type {any[]} */ (node.params).every(
-      (parameter) => parameter.type === 'Identifier',
-    )
-  ) {
+  if (!isFunctionNode(node)) {
+    return;
+  }
+
+  const simple = /** @type {any[]} */ (node.params).every(
+    (parameter) => parameter.type === 'Identifier',
+  );
+
+  if (simple && node.type !== 'ArrowFunctionExpression') {
     return;
   }
 
   if (
+    !simple &&
     node.body &&
     Array.isArray(node.body.body) &&
     hasUseStrictDirective(node.body.body)
@@ -712,7 +730,9 @@ function childScopeStrictness(node, strict) {
 
   if (
     node.type === 'FunctionDeclaration' ||
-    node.type === 'FunctionExpression'
+    node.type === 'FunctionExpression' ||
+    (node.type === 'ArrowFunctionExpression' &&
+      node.body?.type === 'BlockStatement')
   ) {
     const body = node.body;
 
@@ -726,6 +746,34 @@ function childScopeStrictness(node, strict) {
   }
 
   return false;
+}
+
+/**
+ * `super` is lexically available only in an object literal method/accessor and
+ * in arrows nested within that method's execution scope. A nested ordinary
+ * function starts a fresh super boundary.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {boolean} inherited
+ * @returns {boolean}
+ */
+function superAllowedForChildren(node, parent, parentKey, inherited) {
+  if (node.type === 'ArrowFunctionExpression') {
+    return inherited;
+  }
+
+  if (node.type !== 'FunctionExpression') {
+    return inherited;
+  }
+
+  return (
+    parent?.type === 'Property' &&
+    parentKey === 'value' &&
+    isObjectLiteralFunction(node) &&
+    (parent.method === true || parent.kind === 'get' || parent.kind === 'set')
+  );
 }
 
 /**
@@ -784,9 +832,10 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} pending
+ * @param {{ node: any, strict: boolean, superAllowed: boolean, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} pending
  * @param {unknown} value
  * @param {boolean} strict
+ * @param {boolean} superAllowed
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
@@ -797,6 +846,7 @@ function pushChild(
   pending,
   value,
   strict,
+  superAllowed,
   parent,
   parentKey,
   patternContext,
@@ -806,6 +856,7 @@ function pushChild(
     pending.push({
       node: value,
       strict,
+      superAllowed,
       parent,
       parentKey,
       parentIndex,
@@ -1014,6 +1065,10 @@ function unsupportedEs2015Message(
     return validateTaggedTemplateExpression(node);
   }
 
+  if (node.type === 'ArrowFunctionExpression') {
+    return validateArrowFunctionExpression(node);
+  }
+
   if (node.type === 'Property') {
     const propertyMessage = validateObjectExpressionProperty(
       node,
@@ -1034,6 +1089,7 @@ function unsupportedEs2015Message(
   }
 
   if (
+    node.type !== 'ArrowFunctionExpression' &&
     isFunctionNode(node) &&
     (!node.body || node.body.type !== 'BlockStatement')
   ) {
@@ -1107,8 +1163,38 @@ function unsupportedEs2015Message(
  */
 function isFunctionNode(node) {
   return (
-    node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression'
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'ArrowFunctionExpression'
   );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateArrowFunctionExpression(node) {
+  if (
+    node.id !== null ||
+    !Array.isArray(node.params) ||
+    node.generator !== false ||
+    (node.async !== undefined && node.async !== false) ||
+    typeof node.expression !== 'boolean' ||
+    !node.body ||
+    typeof node.body !== 'object'
+  ) {
+    return 'unsupported arrow function shape';
+  }
+
+  if (node.expression) {
+    return isSupportedObjectPropertyExpression(node.body)
+      ? undefined
+      : 'unsupported arrow function expression body';
+  }
+
+  return node.body.type === 'BlockStatement' && Array.isArray(node.body.body)
+    ? undefined
+    : 'unsupported arrow function block body';
 }
 
 /**
@@ -1409,6 +1495,7 @@ function isObjectLiteralFunction(node) {
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
  * @param {number | undefined} parentIndex
+ * @param {boolean} superAllowed
  * @returns {void}
  */
 function checkUnsupportedEs2015Node(
@@ -1418,7 +1505,15 @@ function checkUnsupportedEs2015Node(
   parentKey,
   patternContext,
   parentIndex,
+  superAllowed,
 ) {
+  if (node.type === 'Super' && !superAllowed) {
+    throw unsupportedEs2015Error(
+      "'super' keyword is only valid inside a method",
+      node,
+    );
+  }
+
   const typeMessage = unsupportedEs2015Message(
     node,
     parent,

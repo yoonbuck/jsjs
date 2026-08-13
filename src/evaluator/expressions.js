@@ -7,6 +7,7 @@ import {
 import {
   getIdentifierBindingValue,
   getIdentifierReference,
+  getSuperHomeObject,
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
@@ -113,6 +114,7 @@ export const EXPRESSION_TYPES = new Set([
   'CallExpression',
   'MemberExpression',
   'FunctionExpression',
+  'ArrowFunctionExpression',
   'ObjectExpression',
   'ArrayExpression',
   'NewExpression',
@@ -169,6 +171,8 @@ export function evaluateExpression(node, context) {
         return evaluateMemberExpression(node, context);
       case 'FunctionExpression':
         return evaluateFunctionExpression(node, context);
+      case 'ArrowFunctionExpression':
+        return evaluateArrowFunctionExpression(node, context);
       case 'ObjectExpression':
         return evaluateObjectExpression(node, context);
       case 'ArrayExpression':
@@ -913,7 +917,8 @@ function evaluateMemberExpression(node, context) {
 /**
  * Evaluates a `super.prop`/`super[expr]` `MemberExpression` (ECMA-262
  * 12.3.5): resolves ES2015 `GetSuperBase` off the currently executing
- * method's `[[HomeObject]]` and builds a `SuperReferenceBase` so
+ * enclosing function execution environment's method HomeObject and builds a
+ * `SuperReferenceBase` so
  * `GetValue`/`PutValue` read and write through the home object's
  * *prototype* while keeping the method's own `this` as the receiver. A
  * missing `homeObject` (an ordinary function, reached only if some future
@@ -928,14 +933,7 @@ function evaluateMemberExpression(node, context) {
  * @returns {Reference}
  */
 function evaluateSuperMemberExpression(node, context) {
-  const homeObject = context.homeObject;
-
-  if (!(homeObject instanceof EngineObject)) {
-    throw new GuestErrorSignal(
-      'ReferenceError',
-      "'super' keyword is only valid inside a method",
-    );
-  }
+  const homeObject = getSuperHomeObject(context.functionEnvironment);
 
   const propertyKey = node.computed
     ? toPropertyKey(evaluateExpressionValue(node.property, context))
@@ -1001,6 +999,24 @@ function evaluateFunctionExpression(node, context) {
   functionEnvironment.initializeBinding(node.id.name, functionObject);
 
   return functionObject;
+}
+
+/**
+ * Arrows capture the running function execution environment through
+ * `createFunctionObject`; unlike a normal expression they introduce neither an
+ * own this/arguments binding nor an own HomeObject.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {import('../runtime/function-object.js').EngineFunction}
+ */
+function evaluateArrowFunctionExpression(node, context) {
+  return createFunctionObject(node, context.env, context, {
+    functionKind: 'arrow',
+    thisMode: 'lexical',
+    constructible: false,
+    createPrototype: false,
+  });
 }
 
 /**

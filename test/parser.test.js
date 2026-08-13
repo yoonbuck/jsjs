@@ -751,7 +751,6 @@ const tests = [
       const rejected = [
         'class C {}',
         'var c = class {};',
-        'var f = () => 1;',
         'function* g() { yield 1; }',
         'var object = { *method() {} };',
         'var object = { async method() {} };',
@@ -1065,7 +1064,7 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      for (const body of ['class C {}', 'return () => 1;']) {
+      for (const body of ['class C {}', 'return function* g() {};']) {
         assertSame(
           evaluateScript(
             realm,
@@ -1198,17 +1197,86 @@ const tests = [
     },
   },
   {
-    name: 'generator async and arrow forms remain unsupported around parameters',
+    name: 'generator and async forms remain unsupported around arrow parameters',
     run() {
-      const rejected = [
-        'function* g(a = 1) {}',
-        'async function f(a = 1) {}',
-        '(a = 1) => a',
-      ];
-
-      for (const source of rejected) {
+      for (const source of ['function* g(a = 1) {}', 'async function f(a = 1) {}']) {
         assertThrows(() => parseScript(source), SyntaxError);
       }
+
+      parseScript('(a = 1, ...rest) => ({ a, rest });');
+      parseScript('value => { return value; };');
+    },
+  },
+  {
+    name: 'arrows expose exact supported parser shapes and reject malformed custom variants',
+    run() {
+      const concise = parseScript(
+        'var fn = (first = 1, ...rest) => ({ first: first, rest: rest });',
+      ).body[0].declarations[0].init;
+      const block = parseScript('var fn = value => { return value; };').body[0]
+        .declarations[0].init;
+
+      assertSame(concise.type, 'ArrowFunctionExpression');
+      assertSame(concise.async, undefined);
+      assertSame(concise.generator, false);
+      assertSame(concise.expression, true);
+      assertSame(concise.body.type, 'ObjectExpression');
+      assertSame(block.expression, false);
+      assertSame(block.body.type, 'BlockStatement');
+
+      /** @param {any} arrow */
+      function programFor(arrow) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ExpressionStatement',
+              expression: arrow,
+            },
+          ],
+        };
+      }
+
+      const malformed = [
+        { ...concise, async: true },
+        { ...concise, generator: true },
+        { ...concise, expression: false },
+        { ...block, expression: true },
+        { ...concise, params: {} },
+        { ...concise, body: { type: 'BogusExpression' } },
+        {
+          ...block,
+          params: [
+            { type: 'Identifier', name: 'duplicate' },
+            { type: 'Identifier', name: 'duplicate' },
+          ],
+        },
+        {
+          ...concise,
+          params: [],
+          body: {
+            type: 'MemberExpression',
+            object: { type: 'Super' },
+            property: { type: 'Identifier', name: 'value' },
+            computed: false,
+          },
+        },
+      ];
+
+      for (const arrow of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => programFor(arrow) }),
+          SyntaxError,
+        );
+      }
+
+      assertThrows(() => parseScript('var fn = () => super.value;'), SyntaxError);
+      assertThrows(
+        () => parseScript('var fn = (value = 1) => { "use strict"; };'),
+        SyntaxError,
+      );
+      assertThrows(() => parseScript('var fn = (value, value) => value;'), SyntaxError);
     },
   },
   {
@@ -1594,7 +1662,7 @@ const tests = [
     },
   },
   {
-    name: 'template AST nodes remain valid only in template positions while arrows and classes stay gated',
+    name: 'template AST nodes remain valid only in template positions while arrows accept template bodies and classes stay gated',
     run() {
       assertThrows(
         () =>
@@ -1608,7 +1676,7 @@ const tests = [
           }),
         SyntaxError,
       );
-      assertThrows(() => parseScript('() => `x`;'), SyntaxError);
+      assertSame(parseScript('() => `x`;').type, 'Program');
       assertThrows(() => parseScript('class Example {}'), SyntaxError);
     },
   },

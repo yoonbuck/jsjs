@@ -3,3 +3,5 @@ node_modules/
 /.superpowers/
 # Generated benchmark reports and raw CPU/allocation profiling evidence.
 /.benchmark-results/
+/task-7-brief.md
+/task-7-report.md

@@ -5,6 +5,7 @@ import { EMPTY, ThrowSignal, GuestErrorSignal } from './runtime/completion.js';
 import { globalDeclarationInstantiation } from './evaluator/declarations.js';
 import { evaluateStatementList } from './evaluator/statements.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
+import { createFunctionExecutionEnvironment } from './runtime/environment.js';
 
 export { parseScript, createRealm, Realm, Agent, createAgent };
 
@@ -50,6 +51,10 @@ export function evaluateScript(realm, source, parserOptions = {}) {
     variableEnv: realm.globalEnvironment,
     strict: hasUseStrictDirective(program.body),
     thisValue: realm.globalEnvironment.getThisBinding(),
+    functionEnvironment: createFunctionExecutionEnvironment({
+      thisStatus: 'initialized',
+      thisValue: realm.globalEnvironment.getThisBinding(),
+    }),
   };
 
   /** @type {{ type: string, value: unknown }} */

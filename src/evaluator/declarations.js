@@ -8,6 +8,7 @@ import { putValue } from '../runtime/reference.js';
 import {
   EMPTY,
   createNormalCompletion,
+  createReturnCompletion,
   GuestErrorSignal,
 } from '../runtime/completion.js';
 import {
@@ -292,15 +293,17 @@ export function functionDeclarationInstantiation(
     }
   }
 
-  const varScoped = topLevelVarScopedDeclarations(functionNode.body.body);
-  const varNames = new Set(topLevelVarDeclaredNames(functionNode.body.body));
+  const bodyStatements =
+    functionNode.body.type === 'BlockStatement' ? functionNode.body.body : [];
+  const varScoped = topLevelVarScopedDeclarations(bodyStatements);
+  const varNames = new Set(topLevelVarDeclaredNames(bodyStatements));
   const functionNames = new Set(
     varScoped
       .filter((declaration) => declaration.type === 'FunctionDeclaration')
       .map((declaration) => declaration.id.name),
   );
   const lexicalNames = new Set(
-    topLevelLexicallyDeclaredNames(functionNode.body.body),
+    topLevelLexicallyDeclaredNames(bodyStatements),
   );
   const hasParameterExpressions = formalParameters.some(
     containsParameterExpression,
@@ -394,14 +397,14 @@ export function functionDeclarationInstantiation(
     // ineligible collision neither creates a var binding here nor copies at
     // evaluation time; it falls back to plain block-scoped evaluation.
     const excludedNames = new Set(
-      topLevelLexicallyDeclaredNames(functionNode.body.body),
+      topLevelLexicallyDeclaredNames(bodyStatements),
     );
     for (const name of parameterNames) {
       excludedNames.add(name);
     }
 
     const aliasDeclarations = annexBBlockFunctionDeclarations(
-      functionNode.body.body,
+      bodyStatements,
       excludedNames,
     );
 
@@ -695,22 +698,25 @@ export function instantiateFunctionObject(node, context) {
  *   name?: string,
  *   isMethod?: boolean,
  *   createPrototype?: boolean,
- *   functionKind?: 'normal' | 'arrow',
+ *   functionKind?: 'normal' | 'method' | 'arrow' | 'classConstructor',
+ *   thisMode?: 'global' | 'strict' | 'lexical',
+ *   constructible?: boolean,
  *   homeObject?: import('../runtime/object.js').EngineObject,
  * }} CreateFunctionObjectOptions
  */
 
 /**
  * ECMA-262's `IsAnonymousFunctionDefinition`, restricted to the one AST shape
- * this ES5-syntax engine can produce it for: a `FunctionExpression` with no
- * `id`. (Arrow functions and class expressions, the grammar's other two
- * anonymous-definition shapes, are not implemented yet — see issue #25.)
+ * function-expression and arrow forms the evaluator implements.
  *
  * @param {any} node
  * @returns {boolean}
  */
 export function isAnonymousFunctionExpression(node) {
-  return node.type === 'FunctionExpression' && !node.id;
+  return (
+    (node.type === 'FunctionExpression' && !node.id) ||
+    node.type === 'ArrowFunctionExpression'
+  );
 }
 
 /**
@@ -730,10 +736,27 @@ export function createFunctionObject(node, scope, context, options = {}) {
   const expectedArgumentCount = firstOptionalIndex(formalParameters);
 
   // A function is strict when its enclosing scope is already strict OR when
-  // the function's own body opens with a "use strict" directive prologue
-  // (ECMA-262 10.1.1 — "once strict, always strict" applies transitively).
-  const strict = context.strict || hasUseStrictDirective(node.body.body);
+  // its block body opens with a "use strict" directive prologue (ECMA-262
+  // 10.1.1 — "once strict, always strict" applies transitively). Concise arrow
+  // bodies have no directive prologue.
+  const strict =
+    context.strict ||
+    (node.body.type === 'BlockStatement' &&
+      hasUseStrictDirective(node.body.body));
   const name = options.name ?? (node.id ? node.id.name : '');
+  const functionKind =
+    options.functionKind ??
+    (node.type === 'ArrowFunctionExpression'
+      ? 'arrow'
+      : options.isMethod
+        ? 'method'
+        : 'normal');
+  const thisMode =
+    options.thisMode ??
+    (functionKind === 'arrow' ? 'lexical' : strict ? 'strict' : 'global');
+  const constructible =
+    options.constructible ??
+    (functionKind === 'normal' || functionKind === 'classConstructor');
 
   const functionObject = new EngineFunction({
     realm: context.realm,
@@ -744,16 +767,23 @@ export function createFunctionObject(node, scope, context, options = {}) {
     scope,
     strict,
     name,
-    isMethod: options.isMethod ?? false,
-    createPrototype: options.createPrototype,
-    functionKind: options.functionKind,
-    execute: (functionObject, thisValue, args) =>
-      executeFunctionBody(node, functionObject, thisValue, args),
+    isMethod: functionKind === 'method',
+    createPrototype: options.createPrototype ?? constructible,
+    functionKind,
+    thisMode,
+    constructible,
+    enclosingFunctionEnvironment: context.functionEnvironment,
+    methodHomeObject:
+      functionKind === 'arrow' ? undefined : options.homeObject,
+    execute: (functionObject, thisValue, args, functionEnvironment) =>
+      executeFunctionBody(
+        node,
+        functionObject,
+        thisValue,
+        args,
+        functionEnvironment,
+      ),
   });
-
-  if (options.homeObject !== undefined) {
-    functionObject.homeObject = options.homeObject;
-  }
 
   return functionObject;
 }
@@ -793,9 +823,16 @@ function firstOptionalIndex(formalParameters) {
  * @param {EngineFunction} functionObject
  * @param {unknown} thisValue
  * @param {readonly unknown[]} args
+ * @param {import('../runtime/environment.js').FunctionExecutionEnvironment} functionEnvironment
  * @returns {{ type: string, value: unknown }}
  */
-function executeFunctionBody(node, functionObject, thisValue, args) {
+function executeFunctionBody(
+  node,
+  functionObject,
+  thisValue,
+  args,
+  functionEnvironment,
+) {
   const functionEnv = newDeclarativeEnvironment(functionObject.scope);
   const parameterEnv = functionObject.simpleParameterList
     ? functionEnv
@@ -811,10 +848,12 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
     variableEnv: functionEnv,
     strict: functionObject.strict,
     thisValue,
-    homeObject: functionObject.homeObject,
+    functionEnvironment,
   };
 
   functionDeclarationInstantiation(node, functionObject, args, context);
+  const bodyStatements =
+    node.body.type === 'BlockStatement' ? node.body.body : [];
   const lexEnv =
     /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
       context.env
@@ -827,12 +866,16 @@ function executeFunctionBody(node, functionObject, thisValue, args) {
   // declarations (they are var-scoped and already handled above), which is why
   // it is the right helper here.
   blockDeclarationInstantiation(
-    topLevelLexicallyScopedDeclarations(node.body.body),
+    topLevelLexicallyScopedDeclarations(bodyStatements),
     lexEnv,
     context,
   );
 
-  return evaluateStatementList(node.body.body, context);
+  if (node.type === 'ArrowFunctionExpression' && node.expression) {
+    return createReturnCompletion(evaluateExpressionValue(node.body, context));
+  }
+
+  return evaluateStatementList(bodyStatements, context);
 }
 
 /**

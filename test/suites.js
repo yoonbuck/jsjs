@@ -32,6 +32,7 @@ import objectArrayLiterals from './object-array-literals.test.js';
 import spread from './spread.test.js';
 import enhancedObjectLiterals from './enhanced-object-literals.test.js';
 import templateLiterals from './template-literals.test.js';
+import arrowFunctions from './arrow-functions.test.js';
 import test262Runner from './test262-runner.test.js';
 import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
@@ -139,6 +140,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/template-literals.test.js',
     tests: templateLiterals,
+  }),
+  Object.freeze({
+    file: 'test/arrow-functions.test.js',
+    tests: arrowFunctions,
   }),
   Object.freeze({
     file: 'test/test262-runner.test.js',

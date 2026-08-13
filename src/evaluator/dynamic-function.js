@@ -44,6 +44,7 @@
 import { toString } from '../runtime/conversion.js';
 import { parseEval } from '../parser.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
+import { createFunctionExecutionEnvironment } from '../runtime/environment.js';
 import { createFunctionObject } from './declarations.js';
 
 /**
@@ -84,6 +85,10 @@ export function createDynamicFunction(realm, args) {
     variableEnv: realm.globalEnvironment,
     strict: false,
     thisValue: realm.globalObject,
+    functionEnvironment: createFunctionExecutionEnvironment({
+      thisStatus: 'initialized',
+      thisValue: realm.globalObject,
+    }),
   };
 
   return createFunctionObject(
