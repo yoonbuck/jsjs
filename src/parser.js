@@ -492,7 +492,7 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
-  /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} */
+  /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
     {
       node: root,
@@ -503,15 +503,16 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       parent: null,
       parentKey: undefined,
       parentIndex: undefined,
+      nestedArray: false,
       patternContext: undefined,
     },
   ];
-  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, patternContext: 'binding' | 'assignment' | undefined }[]>} */
+  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, patternContext: 'binding' | 'assignment' | undefined }[]>} */
   const seen = new WeakMap();
 
   while (pending.length > 0) {
     const item =
-      /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }} */ (
+      /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
         pending.pop()
       );
     const node = item.node;
@@ -531,6 +532,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           context.parent === item.parent &&
           context.parentKey === item.parentKey &&
           context.parentIndex === item.parentIndex &&
+          context.nestedArray === item.nestedArray &&
           context.strict === strict &&
           context.superAllowed === item.superAllowed &&
           context.superCallAllowed === item.superCallAllowed &&
@@ -550,6 +552,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
         parent: item.parent,
         parentKey: item.parentKey,
         parentIndex: item.parentIndex,
+        nestedArray: item.nestedArray,
         strict,
         superAllowed: item.superAllowed,
         superCallAllowed: item.superCallAllowed,
@@ -562,6 +565,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           parent: item.parent,
           parentKey: item.parentKey,
           parentIndex: item.parentIndex,
+          nestedArray: item.nestedArray,
           strict,
           superAllowed: item.superAllowed,
           superCallAllowed: item.superCallAllowed,
@@ -572,7 +576,31 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
     }
 
     if (Array.isArray(node)) {
+      const arrayType = /** @type {any} */ (node).type;
+
+      if (typeof arrayType === 'string') {
+        throw unsupportedEs2015Error(
+          'arrays cannot be AST nodes',
+          node,
+        );
+      }
+
+      if (
+        !item.nestedArray &&
+        (item.parentIndex !== undefined ||
+          !item.parent ||
+          typeof item.parentKey !== 'string' ||
+          item.parent[item.parentKey] !== node)
+      ) {
+        throw unsupportedEs2015Error(
+          'AST child arrays must be direct property values',
+          node,
+        );
+      }
+
       for (let index = node.length - 1; index >= 0; index -= 1) {
+        const nestedArray = item.nestedArray || Array.isArray(node[index]);
+
         pushChild(
           pending,
           node[index],
@@ -580,10 +608,11 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
           item.superAllowed,
           item.superCallAllowed,
           item.classDerived,
-          item.parent,
-          item.parentKey,
+          nestedArray ? null : item.parent,
+          nestedArray ? undefined : item.parentKey,
           item.patternContext,
-          index,
+          nestedArray ? undefined : index,
+          nestedArray,
         );
       }
       continue;
@@ -591,6 +620,13 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
 
     if (typeof node.type !== 'string') {
       continue;
+    }
+
+    if (item.nestedArray) {
+      throw unsupportedEs2015Error(
+        'AST nodes cannot appear in nested arrays',
+        node,
+      );
     }
 
     checkFunctionDeclarationPosition(node, strict);
@@ -1021,7 +1057,7 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, patternContext: 'binding' | 'assignment' | undefined }[]} pending
+ * @param {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} pending
  * @param {unknown} value
  * @param {boolean} strict
  * @param {boolean} superAllowed
@@ -1031,6 +1067,7 @@ function checkFunctionDeclarationPosition(node, strict) {
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
  * @param {number | undefined} [parentIndex]
+ * @param {boolean} [nestedArray=false]
  * @returns {void}
  */
 function pushChild(
@@ -1044,6 +1081,7 @@ function pushChild(
   parentKey,
   patternContext,
   parentIndex,
+  nestedArray = false,
 ) {
   if (value && typeof value === 'object') {
     pending.push({
@@ -1055,6 +1093,7 @@ function pushChild(
       parent,
       parentKey,
       parentIndex,
+      nestedArray,
       patternContext,
     });
   }

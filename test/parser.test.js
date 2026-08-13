@@ -1041,6 +1041,139 @@ const tests = [
     },
   },
   {
+    name: 'custom parser rejects a decorated array presented as an AST node',
+    run() {
+      const decorated = /** @type {any} */ ([]);
+      decorated.type = 'ClassExpression';
+      decorated.id = null;
+      decorated.superClass = null;
+      decorated.body = { type: 'ClassBody', body: [] };
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: { type: 'Literal', value: 0 },
+            unexpectedExpression: decorated,
+          },
+        ],
+      };
+
+      assertThrows(() => parseScript('', { parse: () => program }), SyntaxError);
+    },
+  },
+  {
+    name: 'custom parser rejects nested arrays in expression child lists',
+    run() {
+      /** @returns {any} */
+      function classExpression() {
+        return {
+          type: 'ClassExpression',
+          id: null,
+          superClass: null,
+          body: { type: 'ClassBody', body: [] },
+        };
+      }
+
+      /** @param {any} expression */
+      function programFor(expression) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [{ type: 'ExpressionStatement', expression }],
+        };
+      }
+
+      const element = classExpression();
+      const argument = classExpression();
+      const malformed = [
+        {
+          type: 'ArrayExpression',
+          elements: [element, [element]],
+        },
+        {
+          type: 'CallExpression',
+          callee: { type: 'Identifier', name: 'call' },
+          arguments: [argument, [argument]],
+        },
+      ];
+
+      for (const expression of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => programFor(expression) }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom parser accepts class expressions in direct expression child lists',
+    run() {
+      /** @returns {any} */
+      function classExpression() {
+        return {
+          type: 'ClassExpression',
+          id: null,
+          superClass: null,
+          body: { type: 'ClassBody', body: [] },
+        };
+      }
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'ArrayExpression',
+              elements: [classExpression()],
+            },
+          },
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'CallExpression',
+              callee: { type: 'Identifier', name: 'call' },
+              arguments: [classExpression()],
+            },
+          },
+        ],
+      };
+
+      assertSame(
+        parseScript('', { parse: () => program }).type,
+        'Program',
+      );
+    },
+  },
+  {
+    name: 'a cyclic custom metadata array terminates without becoming an AST node',
+    run() {
+      const metadata = /** @type {any[]} */ ([]);
+      metadata.push(metadata);
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: { type: 'Literal', value: 0 },
+            metadata,
+          },
+        ],
+      };
+
+      assertSame(
+        parseScript('', { parse: () => program }).type,
+        'Program',
+      );
+    },
+  },
+  {
     name: 'custom parser rejects post-ES2015 class metadata even when empty',
     run() {
       /** @returns {any} */
