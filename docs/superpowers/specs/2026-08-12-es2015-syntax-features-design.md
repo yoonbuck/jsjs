@@ -209,11 +209,13 @@ remain syntax errors.
 
 ## Classes and Construction
 
-`ClassDeclaration` is a lexical declaration and `ClassExpression` optionally
-creates an inner immutable name binding. Class name bindings are created
-uninitialized before evaluation, so the class name and `extends` expression
-observe the required temporal dead zone. Class bodies and every constructor and
-method execute in strict mode regardless of the surrounding source.
+`ClassDeclaration` creates a mutable lexical binding, while a named
+`ClassExpression` creates an optional inner immutable name binding. Both start
+uninitialized before class evaluation, so the class name and `extends`
+expression observe the required temporal dead zone. The declaration binding is
+initialized only after successful evaluation and may then be assigned. Class
+bodies and every constructor and method execute in strict mode regardless of
+the surrounding source.
 
 Class evaluation:
 
@@ -226,10 +228,16 @@ Class evaluation:
 5. defines instance and static methods/accessors with the appropriate
    `[[HomeObject]]`, inferred names, strictness, and non-constructibility.
 
-The parser and evaluator enforce constructor and method restrictions: one
-constructor at most, no accessor/generator constructor, no static
-`"prototype"` method, no instance `"constructor"` data method outside the
-constructor role, and Acorn's syntactic restrictions on `super`. Generators
+The parser and evaluator enforce constructor and method restrictions through
+ES2015 static `PropName` semantics. Only a non-computed method definition whose
+statically known name is `"constructor"` has the special constructor role and
+its restrictions (one constructor at most and no accessor/generator
+constructor). A computed name that evaluates to `"constructor"` is an ordinary
+method. Likewise, the static `"prototype"` early error applies only to a static
+method definition whose non-computed `PropName` is `"prototype"`; a computed
+static name that evaluates to `"prototype"` is allowed and defines an ordinary
+property. Focused parser/evaluator tests pin both allowed computed cases.
+Acorn's syntactic restrictions on `super` remain authoritative. Generators
 remain rejected even when written as class or object methods.
 
 `EngineFunction` construction is generalized rather than bypassed:
@@ -260,8 +268,12 @@ The existing iterative static-semantics walks are extended so:
 
 - `BoundNames` descends through every supported binding pattern;
 - class declarations participate in lexical declaration lists;
-- class declarations are instantiated as immutable uninitialized bindings and
-  initialized only after successful class evaluation;
+- class declarations are instantiated as mutable uninitialized lexical bindings
+  and initialized only after successful class evaluation, so they have a TDZ
+  during heritage/body evaluation but assignment to the initialized declaration
+  name is permitted;
+- a named class expression's optional inner name is an immutable binding visible
+  only within the class definition;
 - function/var/lexical conflict checks use all pattern-bound names; and
 - declaration walks preserve source order, duplicate behavior, cycle safety,
   and host-stack independence.
@@ -324,4 +336,3 @@ Before issue #25 can close:
 - the pull request is squash-merged and its branch deleted; and
 - issue #25 and roadmap #24 contain final evidence, issue #25 is closed, and
   issue #28 is reported as newly unblocked.
-
