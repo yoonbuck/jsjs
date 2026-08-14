@@ -5,7 +5,10 @@ import {
 } from './completion.js';
 import { isCallable, isConstructor } from './descriptors.js';
 import { getFunctionRealm } from './function-realm.js';
+import { EngineArray } from './array-object.js';
+import { toObject } from './conversion.js';
 import { EngineObject } from './object.js';
+import { iteratorClose, iteratorStep, iteratorValue } from './iterator.js';
 import { isRealm } from './realm.js';
 
 /**
@@ -96,6 +99,163 @@ export function newPromiseCapability(constructor, currentRealm) {
   }
 
   return { promise, resolve, reject };
+}
+
+/**
+ * ECMA-262 §25.4.4.1.1 `PerformPromiseAll`, using the ES2015 form that
+ * observes and invokes `C.resolve` once for each iterated value.
+ *
+ * @param {import('./iterator.js').IteratorRecord} iteratorRecord
+ * @param {EngineObject} constructor
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {Realm} currentRealm
+ * @returns {EngineObject}
+ */
+export function performPromiseAll(
+  iteratorRecord,
+  constructor,
+  resultCapability,
+  currentRealm,
+) {
+  const values = new EngineArray(currentRealm.intrinsics.arrayPrototype);
+  const remainingElementsCount = { value: 1 };
+  let index = 0;
+
+  while (true) {
+    /** @type {EngineObject | false} */
+    let next;
+    try {
+      next = iteratorStep(iteratorRecord);
+    } catch (error) {
+      return rejectAfterIteratorClose(
+        currentRealm,
+        iteratorRecord,
+        resultCapability,
+        error,
+      );
+    }
+
+    if (next === false) {
+      remainingElementsCount.value -= 1;
+      if (remainingElementsCount.value === 0) {
+        resultCapability.resolve.callFunction(undefined, [values]);
+      }
+      return resultCapability.promise;
+    }
+
+    /** @type {unknown} */
+    let nextValue;
+    try {
+      nextValue = iteratorValue(next);
+    } catch (error) {
+      return rejectAfterIteratorClose(
+        currentRealm,
+        iteratorRecord,
+        resultCapability,
+        error,
+      );
+    }
+
+    values.defineOwnProperty(String(index), {
+      value: undefined,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    const resolveElement = createPromiseAllResolveElementFunction(
+      index,
+      values,
+      resultCapability,
+      remainingElementsCount,
+      currentRealm,
+    );
+    remainingElementsCount.value += 1;
+
+    try {
+      const nextPromise = promiseResolve(constructor, nextValue);
+      invokeThen(
+        currentRealm,
+        nextPromise,
+        resolveElement,
+        resultCapability.reject,
+      );
+    } catch (error) {
+      return rejectAfterIteratorClose(
+        currentRealm,
+        iteratorRecord,
+        resultCapability,
+        error,
+      );
+    }
+
+    index += 1;
+  }
+}
+
+/**
+ * ECMA-262 §25.4.4.3.1 `PerformPromiseRace`, using the ES2015 form that
+ * observes and invokes `C.resolve` once for each iterated value.
+ *
+ * @param {import('./iterator.js').IteratorRecord} iteratorRecord
+ * @param {EngineObject} constructor
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {Realm} currentRealm
+ * @returns {EngineObject}
+ */
+export function performPromiseRace(
+  iteratorRecord,
+  constructor,
+  resultCapability,
+  currentRealm,
+) {
+  while (true) {
+    /** @type {EngineObject | false} */
+    let next;
+    try {
+      next = iteratorStep(iteratorRecord);
+    } catch (error) {
+      return rejectAfterIteratorClose(
+        currentRealm,
+        iteratorRecord,
+        resultCapability,
+        error,
+      );
+    }
+
+    if (next === false) {
+      return resultCapability.promise;
+    }
+
+    /** @type {unknown} */
+    let nextValue;
+    try {
+      nextValue = iteratorValue(next);
+    } catch (error) {
+      return rejectAfterIteratorClose(
+        currentRealm,
+        iteratorRecord,
+        resultCapability,
+        error,
+      );
+    }
+
+    try {
+      const nextPromise = promiseResolve(constructor, nextValue);
+      invokeThen(
+        currentRealm,
+        nextPromise,
+        resultCapability.resolve,
+        resultCapability.reject,
+      );
+    } catch (error) {
+      return rejectAfterIteratorClose(
+        currentRealm,
+        iteratorRecord,
+        resultCapability,
+        error,
+      );
+    }
+  }
 }
 
 /**
@@ -317,6 +477,110 @@ export function createResolvingFunctions(promise, currentRealm) {
   });
 
   return { resolve, reject };
+}
+
+/**
+ * @param {number} index
+ * @param {EngineArray} values
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {{ value: number }} remainingElementsCount
+ * @param {Realm} currentRealm
+ * @returns {CallableLike}
+ */
+function createPromiseAllResolveElementFunction(
+  index,
+  values,
+  resultCapability,
+  remainingElementsCount,
+  currentRealm,
+) {
+  const alreadyCalled = { value: false };
+
+  return currentRealm.createNativeFunction({
+    name: '',
+    length: 1,
+    call(_thisValue, args) {
+      if (alreadyCalled.value) {
+        return undefined;
+      }
+      alreadyCalled.value = true;
+
+      values.defineOwnProperty(String(index), {
+        value: args[0],
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      remainingElementsCount.value -= 1;
+
+      if (remainingElementsCount.value === 0) {
+        resultCapability.resolve.callFunction(undefined, [values]);
+      }
+
+      return undefined;
+    },
+  });
+}
+
+/**
+ * ES2015's `Invoke(C, "resolve", « value »)`, deliberately kept inside the
+ * iteration loop so an accessor is observed for every source value.
+ *
+ * @param {EngineObject} constructor
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function promiseResolve(constructor, value) {
+  const resolve = constructor.get('resolve');
+
+  if (!isCallable(resolve)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Promise resolve method is not callable',
+    );
+  }
+
+  return resolve.callFunction(constructor, [value]);
+}
+
+/**
+ * @param {Realm} currentRealm
+ * @param {unknown} promise
+ * @param {CallableLike} onFulfilled
+ * @param {CallableLike} onRejected
+ * @returns {unknown}
+ */
+function invokeThen(currentRealm, promise, onFulfilled, onRejected) {
+  const then = toObject(currentRealm, promise).get('then');
+
+  if (!isCallable(then)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Promise then method is not callable',
+    );
+  }
+
+  return then.callFunction(promise, [onFulfilled, onRejected]);
+}
+
+/**
+ * @param {Realm} currentRealm
+ * @param {import('./iterator.js').IteratorRecord} iteratorRecord
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {unknown} error
+ * @returns {EngineObject}
+ */
+function rejectAfterIteratorClose(
+  currentRealm,
+  iteratorRecord,
+  resultCapability,
+  error,
+) {
+  iteratorClose(currentRealm, iteratorRecord, true);
+  resultCapability.reject.callFunction(undefined, [
+    abruptValue(currentRealm, error),
+  ]);
+  return resultCapability.promise;
 }
 
 /**

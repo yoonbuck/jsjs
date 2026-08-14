@@ -2,10 +2,13 @@ import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
 import { toObject } from '../runtime/conversion.js';
 import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import { EngineObject } from '../runtime/object.js';
+import { getIterator } from '../runtime/iterator.js';
 import {
   PromiseObject,
   createResolvingFunctions,
   newPromiseCapability,
+  performPromiseAll,
+  performPromiseRace,
   performPromiseThen,
   speciesConstructor,
 } from '../runtime/promise.js';
@@ -176,6 +179,66 @@ export function createPromiseIntrinsics(realm) {
         const capability = newPromiseCapability(thisValue, realm);
         capability.reject.callFunction(undefined, [args[0]]);
         return capability.promise;
+      },
+    }),
+  );
+  defineBuiltinMethod(
+    promiseConstructor,
+    'all',
+    realm.createNativeFunction({
+      name: 'all',
+      length: 1,
+      call(thisValue, args) {
+        const resultCapability = newPromiseCapability(thisValue, realm);
+        const constructor = /** @type {EngineObject} */ (thisValue);
+        /** @type {import('../runtime/iterator.js').IteratorRecord} */
+        let iteratorRecord;
+
+        try {
+          iteratorRecord = getIterator(realm, args[0]);
+        } catch (error) {
+          resultCapability.reject.callFunction(undefined, [
+            abruptValue(realm, error),
+          ]);
+          return resultCapability.promise;
+        }
+
+        return performPromiseAll(
+          iteratorRecord,
+          constructor,
+          resultCapability,
+          realm,
+        );
+      },
+    }),
+  );
+  defineBuiltinMethod(
+    promiseConstructor,
+    'race',
+    realm.createNativeFunction({
+      name: 'race',
+      length: 1,
+      call(thisValue, args) {
+        const resultCapability = newPromiseCapability(thisValue, realm);
+        const constructor = /** @type {EngineObject} */ (thisValue);
+        /** @type {import('../runtime/iterator.js').IteratorRecord} */
+        let iteratorRecord;
+
+        try {
+          iteratorRecord = getIterator(realm, args[0]);
+        } catch (error) {
+          resultCapability.reject.callFunction(undefined, [
+            abruptValue(realm, error),
+          ]);
+          return resultCapability.promise;
+        }
+
+        return performPromiseRace(
+          iteratorRecord,
+          constructor,
+          resultCapability,
+          realm,
+        );
       },
     }),
   );
