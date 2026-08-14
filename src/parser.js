@@ -545,14 +545,6 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
 ]);
 
 /**
- * Property keys that hold source-position metadata rather than child nodes;
- * skipped while walking so the traversal only descends into the AST proper.
- *
- * @type {ReadonlySet<string>}
- */
-const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
-
-/**
  * The ESTree fields that can recursively contain evaluator-relevant AST nodes
  * or their direct child lists. Metadata stays outside this boundary: it is
  * still inspected by the main capability walk for hidden AST nodes, but a
@@ -769,7 +761,22 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       continue;
     }
 
+    const keys = Object.keys(node);
+
     if (typeof node.type !== 'string') {
+      for (let index = keys.length - 1; index >= 0; index -= 1) {
+        pushChild(
+          pending,
+          node[keys[index]],
+          strict,
+          item.superAllowed,
+          item.superCallAllowed,
+          item.classDerived,
+          node,
+          keys[index],
+          item.patternContext,
+        );
+      }
       continue;
     }
 
@@ -821,22 +828,18 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.superCallAllowed,
       item.classDerived,
     );
-    const keys = Object.keys(node);
-
     for (let index = keys.length - 1; index >= 0; index -= 1) {
-      if (!NODE_POSITION_KEYS.has(keys[index])) {
-        pushChild(
-          pending,
-          node[keys[index]],
-          childStrict,
-          childSuperAllowed,
-          childSuperCallAllowed,
-          classDerivedForChild(node, keys[index], item.classDerived),
-          node,
-          keys[index],
-          patternContextForChild(node, keys[index], item.patternContext),
-        );
-      }
+      pushChild(
+        pending,
+        node[keys[index]],
+        childStrict,
+        childSuperAllowed,
+        childSuperCallAllowed,
+        classDerivedForChild(node, keys[index], item.classDerived),
+        node,
+        keys[index],
+        patternContextForChild(node, keys[index], item.patternContext),
+      );
     }
   }
 }
@@ -1402,9 +1405,20 @@ function unsupportedEs2015Message(
     return `unsupported AST node type ${node.type}`;
   }
 
-  if (
-    isSupportedExpressionNode(node) &&
-    !isSupportedExpressionPosition(
+  if (isSupportedExpressionNode(node)) {
+    if (
+      !isSupportedExpressionPosition(
+        node,
+        parent,
+        parentKey,
+        parentIndex,
+        patternContext,
+      )
+    ) {
+      return 'expressions are not supported in this AST position';
+    }
+  } else if (
+    !isSupportedNonExpressionPosition(
       node,
       parent,
       parentKey,
@@ -1412,7 +1426,7 @@ function unsupportedEs2015Message(
       patternContext,
     )
   ) {
-    return 'expressions are not supported in this AST position';
+    return 'AST nodes are not supported in this AST position';
   }
 
   if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
@@ -1750,6 +1764,12 @@ function validateClassMethodDefinition(node, parent, parentKey, parentIndex) {
     return 'unsupported class method shape';
   }
 
+  const parameterMessage = validateFunctionParameterList(node.value);
+
+  if (parameterMessage !== undefined) {
+    return parameterMessage;
+  }
+
   const keyName = nonComputedClassMethodName(node);
   const constructor = isClassConstructorDefinition(node, node.value);
 
@@ -2066,6 +2086,180 @@ function isSupportedExpressionPosition(
     case 'BreakStatement':
     case 'ContinueStatement':
       return node.type === 'Identifier' && direct('label');
+    default:
+      return false;
+  }
+}
+
+/**
+ * Every recognized structural or statement node must occupy the precise
+ * evaluator-consumed ESTree edge that gives it meaning. This complements the
+ * expression placement gate above and prevents custom-parser metadata from
+ * hiding otherwise familiar AST nodes.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @returns {boolean}
+ */
+function isSupportedNonExpressionPosition(
+  node,
+  parent,
+  parentKey,
+  parentIndex,
+  patternContext,
+) {
+  if (node.type === 'Program') {
+    return parent === null;
+  }
+
+  if (!parent || typeof parentKey !== 'string') {
+    return false;
+  }
+
+  /** @param {string} key @returns {boolean} */
+  const direct = (key) => parentKey === key && parent[key] === node;
+  /** @param {string} key @returns {boolean} */
+  const member = (key) =>
+    parentKey === key &&
+    Array.isArray(parent[key]) &&
+    typeof parentIndex === 'number' &&
+    Number.isInteger(parentIndex) &&
+    parentIndex >= 0 &&
+    parentIndex < parent[key].length &&
+    parent[key][parentIndex] === node;
+  const statement = () =>
+    ((parent.type === 'Program' || parent.type === 'BlockStatement') &&
+      member('body')) ||
+    (parent.type === 'SwitchCase' && member('consequent')) ||
+    (parent.type === 'IfStatement' &&
+      (direct('consequent') || direct('alternate'))) ||
+    ((parent.type === 'WhileStatement' ||
+      parent.type === 'DoWhileStatement' ||
+      parent.type === 'ForStatement' ||
+      parent.type === 'ForInStatement' ||
+      parent.type === 'ForOfStatement' ||
+      parent.type === 'LabeledStatement' ||
+      parent.type === 'WithStatement') &&
+      direct('body'));
+  const pattern = () =>
+    (parent.type === 'VariableDeclarator' && direct('id')) ||
+    (isFunctionNode(parent) && member('params')) ||
+    (parent.type === 'ArrayPattern' && member('elements')) ||
+    (parent.type === 'Property' && direct('value')) ||
+    (parent.type === 'AssignmentPattern' && direct('left')) ||
+    (parent.type === 'RestElement' && direct('argument')) ||
+    ((parent.type === 'AssignmentExpression' ||
+      parent.type === 'ForInStatement' ||
+      parent.type === 'ForOfStatement') &&
+      direct('left'));
+
+  switch (node.type) {
+    case 'ExpressionStatement':
+    case 'EmptyStatement':
+    case 'FunctionDeclaration':
+    case 'ClassDeclaration':
+    case 'IfStatement':
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+    case 'BreakStatement':
+    case 'ContinueStatement':
+    case 'ReturnStatement':
+    case 'ThrowStatement':
+    case 'SwitchStatement':
+    case 'LabeledStatement':
+    case 'DebuggerStatement':
+    case 'WithStatement':
+      return statement();
+    case 'BlockStatement':
+      return (
+        statement() ||
+        (isFunctionNode(parent) && direct('body')) ||
+        (parent.type === 'TryStatement' &&
+          (direct('block') || direct('finalizer'))) ||
+        (parent.type === 'CatchClause' && direct('body'))
+      );
+    case 'VariableDeclaration':
+      return (
+        statement() ||
+        (parent.type === 'ForStatement' && direct('init')) ||
+        ((parent.type === 'ForInStatement' ||
+          parent.type === 'ForOfStatement') &&
+          direct('left'))
+      );
+    case 'ForStatement':
+    case 'ForInStatement':
+    case 'ForOfStatement':
+      return statement();
+    case 'TryStatement':
+      return statement();
+    case 'VariableDeclarator':
+      return parent.type === 'VariableDeclaration' && member('declarations');
+    case 'CatchClause':
+      return parent.type === 'TryStatement' && direct('handler');
+    case 'SwitchCase':
+      return parent.type === 'SwitchStatement' && member('cases');
+    case 'Property':
+      return (
+        (parent.type === 'ObjectExpression' ||
+          parent.type === 'ObjectPattern') &&
+        member('properties')
+      );
+    case 'ClassBody':
+      return (
+        (parent.type === 'ClassDeclaration' ||
+          parent.type === 'ClassExpression') &&
+        direct('body')
+      );
+    case 'MethodDefinition':
+      return parent.type === 'ClassBody' && member('body');
+    case 'TemplateElement':
+      return parent.type === 'TemplateLiteral' && member('quasis');
+    case 'Super':
+      return (
+        (parent.type === 'MemberExpression' && direct('object')) ||
+        (parent.type === 'CallExpression' && direct('callee'))
+      );
+    case 'SpreadElement':
+      return (
+        (parent.type === 'ArrayExpression' && member('elements')) ||
+        (parent.type === 'CallExpression' && member('arguments')) ||
+        (parent.type === 'NewExpression' && member('arguments')) ||
+        (parent.type === 'ObjectExpression' && member('properties'))
+      );
+    case 'ObjectPattern':
+    case 'ArrayPattern':
+      return patternContext !== undefined && pattern();
+    case 'AssignmentPattern':
+      return (
+        (isFunctionNode(parent) && member('params')) ||
+        (parent.type === 'ArrayPattern' && member('elements')) ||
+        (parent.type === 'Property' && direct('value'))
+      );
+    case 'RestElement':
+      return (
+        (isFunctionNode(parent) && member('params')) ||
+        (parent.type === 'ArrayPattern' && member('elements')) ||
+        (parent.type === 'ObjectPattern' && member('properties'))
+      );
+    case 'YieldExpression':
+    case 'AwaitExpression':
+    case 'MetaProperty':
+    case 'ImportExpression':
+      return isSupportedExpressionPosition(
+        node,
+        parent,
+        parentKey,
+        parentIndex,
+        patternContext,
+      );
+    case 'ImportDeclaration':
+    case 'ExportNamedDeclaration':
+    case 'ExportDefaultDeclaration':
+    case 'ExportAllDeclaration':
+      return parent.type === 'Program' && member('body');
     default:
       return false;
   }
@@ -2536,6 +2730,12 @@ function validateObjectExpressionProperty(
     return 'unsupported object accessor';
   }
 
+  const parameterMessage = validateFunctionParameterList(node.value);
+
+  if (parameterMessage !== undefined) {
+    return parameterMessage;
+  }
+
   if (node.kind === 'get') {
     return node.value.params.length === 0
       ? undefined
@@ -2618,13 +2818,13 @@ function validateEvaluatorChildEdges(node) {
       return (
         validateRequiredChild(node, 'id', isIdentifierNodeOrUnknown) ??
         validateChildList(node, 'params', isBindingPatternNodeOrUnknown) ??
-        validateRequiredChild(node, 'body', isBlockStatementOrUnknown)
+        validateFunctionBlockBody(node)
       );
     case 'FunctionExpression':
       return (
         validateOptionalChild(node, 'id', isIdentifierNodeOrUnknown) ??
         validateChildList(node, 'params', isBindingPatternNodeOrUnknown) ??
-        validateRequiredChild(node, 'body', isBlockStatementOrUnknown)
+        validateFunctionBlockBody(node)
       );
     case 'ArrowFunctionExpression':
       if (!Array.isArray(node.params)) {
@@ -2635,7 +2835,7 @@ function validateEvaluatorChildEdges(node) {
         return validateRequiredChild(node, 'body', isExpressionNodeOrUnknown);
       }
 
-      return validateRequiredChild(node, 'body', isBlockStatementOrUnknown);
+      return validateFunctionBlockBody(node);
     case 'IfStatement':
       return (
         validateRequiredChild(node, 'test', isExpressionNodeOrUnknown) ??
@@ -2759,11 +2959,7 @@ function validateEvaluatorChildEdges(node) {
     case 'SpreadElement':
       return validateRequiredChild(node, 'argument', isExpressionNodeOrUnknown);
     case 'ObjectPattern':
-      return validateChildList(
-        node,
-        'properties',
-        isPatternPropertyNodeOrUnknown,
-      );
+      return validateObjectPatternProperties(node);
     case 'ArrayPattern':
       return validateArrayPatternElements(node);
     case 'AssignmentPattern':
@@ -2852,6 +3048,28 @@ function validateOptionalChildList(node, field, accepts) {
   }
 
   return validateChildList(node, field, accepts);
+}
+
+/**
+ * Function early errors inspect a block's directive prologue before the main
+ * traversal reaches that block. Check the complete statement list first so a
+ * malformed member cannot escape as a host error.
+ *
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateFunctionBlockBody(node) {
+  const bodyMessage = validateRequiredChild(
+    node,
+    'body',
+    isBlockStatementOrUnknown,
+  );
+
+  if (bodyMessage !== undefined || node.body?.type !== 'BlockStatement') {
+    return bodyMessage;
+  }
+
+  return validateChildList(node.body, 'body', isStatementNodeOrUnknown);
 }
 
 /**
@@ -2967,6 +3185,42 @@ function validateArrayPatternElements(node) {
   for (const element of elements) {
     if (element !== null && !isPatternNodeOrUnknown(element)) {
       return invalidEvaluatorChild(node, 'elements');
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * `Property` is both an evaluator child and a pattern container. Validate its
+ * key and value before a later static-semantics pass can inspect them.
+ *
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateObjectPatternProperties(node) {
+  const properties = node.properties;
+
+  if (!Array.isArray(properties)) {
+    return invalidEvaluatorChild(node, 'properties');
+  }
+
+  for (const property of properties) {
+    if (!isPatternPropertyNodeOrUnknown(property)) {
+      return invalidEvaluatorChild(node, 'properties');
+    }
+
+    if (property?.type === 'Property') {
+      if (
+        !property.key ||
+        typeof property.key !== 'object' ||
+        typeof property.key.type !== 'string' ||
+        !property.value ||
+        typeof property.value !== 'object' ||
+        typeof property.value.type !== 'string'
+      ) {
+        return invalidEvaluatorChild(node, 'properties');
+      }
     }
   }
 

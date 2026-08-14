@@ -507,6 +507,99 @@ const tests = [
     },
   },
   {
+    name: 'custom parser rejects an object-pattern property without a value',
+    run() {
+      assertParserAndEvaluatorSyntaxError(
+        objectPatternProgram({
+          type: 'Property',
+          kind: 'init',
+          computed: false,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: 'value' },
+          value: null,
+        }),
+      );
+    },
+  },
+  {
+    name: 'custom parser rejects null members before function and setter semantics inspect them',
+    run() {
+      /** @param {any[]} params */
+      function setterFunction(params) {
+        return {
+          type: 'FunctionExpression',
+          id: null,
+          params,
+          generator: false,
+          async: false,
+          expression: false,
+          body: { type: 'BlockStatement', body: [] },
+        };
+      }
+
+      const malformedPrograms = [
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'FunctionDeclaration',
+              id: { type: 'Identifier', name: 'f' },
+              params: [],
+              generator: false,
+              async: false,
+              expression: false,
+              body: { type: 'BlockStatement', body: [null] },
+            },
+          ],
+        },
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ClassDeclaration',
+              id: { type: 'Identifier', name: 'C' },
+              superClass: null,
+              body: {
+                type: 'ClassBody',
+                body: [
+                  {
+                    type: 'MethodDefinition',
+                    key: { type: 'Identifier', name: 'value' },
+                    computed: false,
+                    static: false,
+                    kind: 'set',
+                    value: setterFunction([null]),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        expressionProgram({
+          type: 'ObjectExpression',
+          properties: [
+            {
+              type: 'Property',
+              key: { type: 'Identifier', name: 'value' },
+              computed: false,
+              method: false,
+              shorthand: false,
+              kind: 'set',
+              value: setterFunction([null]),
+            },
+          ],
+        }),
+      ];
+
+      for (const program of malformedPrograms) {
+        assertParserAndEvaluatorSyntaxError(program);
+      }
+    },
+  },
+  {
     name: 'custom parser preserves null array-expression holes',
     run() {
       assertSame(
@@ -1338,6 +1431,34 @@ const tests = [
       };
 
       assertSame(parseScript('', { parse: () => program }).type, 'Program');
+    },
+  },
+  {
+    name: 'custom parser rejects AST nodes hidden on extra fields and metadata containers',
+    run() {
+      /** @returns {any} */
+      function hiddenBlock() {
+        return { type: 'BlockStatement', body: [] };
+      }
+
+      /** @param {Record<string, unknown>} extra */
+      function program(extra) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [{ type: 'BlockStatement', body: [], ...extra }],
+        };
+      }
+
+      const malformedPrograms = [
+        program({ hidden: hiddenBlock() }),
+        program({ metadata: { hidden: hiddenBlock() } }),
+        program({ metadata: [{ nested: hiddenBlock() }] }),
+      ];
+
+      for (const malformed of malformedPrograms) {
+        assertParserAndEvaluatorSyntaxError(malformed);
+      }
     },
   },
   {
