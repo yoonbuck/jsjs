@@ -291,6 +291,44 @@ const tests = [
     },
   },
   {
+    name: 'derived constructor primitive-return TypeErrors use the constructor realm',
+    run() {
+      const calleeRealm = createRealm();
+      const callerRealm = createRealm();
+      const classCompletion = evaluateScript(
+        calleeRealm,
+        'class Base {} class ForeignDerived extends Base { constructor() { return 1; } } ForeignDerived;',
+      );
+
+      assertSame(classCompletion.type, 'normal');
+      const sameRealmCompletion = evaluateScript(
+        calleeRealm,
+        'new ForeignDerived();',
+      );
+      assertSame(sameRealmCompletion.type, 'throw');
+      assertSame(
+        /** @type {any} */ (sameRealmCompletion.value).getPrototype(),
+        calleeRealm.intrinsics.typeErrorPrototype,
+      );
+
+      callerRealm.globalObject.defineOwnProperty('ForeignDerived', {
+        value: classCompletion.value,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const crossRealmCompletion = evaluateScript(
+        callerRealm,
+        'new ForeignDerived();',
+      );
+      assertSame(crossRealmCompletion.type, 'throw');
+      assertSame(
+        /** @type {any} */ (crossRealmCompletion.value).getPrototype(),
+        calleeRealm.intrinsics.typeErrorPrototype,
+      );
+    },
+  },
+  {
     name: 'class constructors and methods inherit restricted caller and arguments properties',
     run() {
       assertSame(

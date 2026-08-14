@@ -374,9 +374,11 @@ export class EngineFunction extends EngineObject {
     }
 
     if (value !== undefined) {
-      throw new GuestErrorSignal(
-        'TypeError',
-        'Derived constructors may only return object or undefined values',
+      throw new ThrowSignal(
+        this.realm.createGuestError(
+          'TypeError',
+          'Derived constructors may only return object or undefined values',
+        ),
       );
     }
 

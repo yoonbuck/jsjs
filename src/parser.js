@@ -18,6 +18,7 @@ import {
   validatePattern,
 } from './runtime/regexp-syntax.js';
 
+const HostRegExp = RegExp;
 const PARSER_OPTIONS = Object.freeze({
   ecmaVersion: 6,
   sourceType: 'script',
@@ -148,6 +149,8 @@ export function parseScript(source, options = {}) {
     ? parserOptions.program
     : undefined;
   let reusableProgramSnapshot;
+  /** @type {WeakSet<object> | undefined} */
+  let reusableProgramSnapshotValues;
   let reusableDirectivePrologueOpen = false;
   let reusableProgramStrict = false;
 
@@ -156,7 +159,11 @@ export function parseScript(source, options = {}) {
   }
 
   if (hasReusableProgram) {
-    reusableProgramSnapshot = snapshotReusableProgram(reusableProgram);
+    reusableProgramSnapshotValues = new WeakSet();
+    reusableProgramSnapshot = snapshotReusableProgram(
+      reusableProgram,
+      reusableProgramSnapshotValues,
+    );
     validateReusableProgram(reusableProgramSnapshot);
     const reusableBody = /** @type {any[]} */ (
       ownDataPropertyValue(
@@ -192,11 +199,25 @@ export function parseScript(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
   if (hasReusableProgram) {
+    if (
+      reusableDirectivePrologueOpen &&
+      !reusableProgramStrict &&
+      hasUseStrictDirective(program.body)
+    ) {
+      checkStrictDirectiveLiterals(
+        /** @type {any[]} */ (
+          ownDataPropertyValue(
+            /** @type {object} */ (reusableProgramSnapshot),
+            'body',
+          )
+        ),
+      );
+    }
+
     program = mergeReusableProgram(
       /** @type {any} */ (reusableProgramSnapshot),
       program,
     );
-    checkProgramDeclarationEarlyErrors(program.body);
   }
 
   return validateScriptProgram(
@@ -205,6 +226,7 @@ export function parseScript(source, options = {}) {
     false,
     hasCustomParse || hasCustomProgram,
     hasReusableProgram,
+    reusableProgramSnapshotValues,
   );
 }
 
@@ -256,6 +278,7 @@ export function parseEval(source, strict = false) {
  * @param {boolean} [strict=false]
  * @param {boolean} [customAst=false]
  * @param {boolean} [customAstValidated=false]
+ * @param {WeakSet<object>} [sourceIndependentNodes]
  * @returns {any}
  */
 function validateScriptProgram(
@@ -264,6 +287,7 @@ function validateScriptProgram(
   strict = false,
   customAst = false,
   customAstValidated = false,
+  sourceIndependentNodes,
 ) {
   if (customAst && !customAstValidated) {
     checkUntrustedAstDescriptors(program);
@@ -282,7 +306,9 @@ function validateScriptProgram(
     source,
     strict,
     customAst,
+    sourceIndependentNodes,
   );
+  checkProgramDeclarationEarlyErrors(/** @type {any} */ (program).body);
 
   return /** @type {any} */ (program);
 }
@@ -302,9 +328,10 @@ function validateScriptProgram(
  * caller-supplied method is used.
  *
  * @param {unknown} program
+ * @param {WeakSet<object>} snapshotValues
  * @returns {unknown}
  */
-function snapshotReusableProgram(program) {
+function snapshotReusableProgram(program, snapshotValues) {
   /** @type {WeakMap<object, object>} */
   const copies = new WeakMap();
   /** @type {{ source: object, target: object, array: boolean }[]} */
@@ -336,6 +363,7 @@ function snapshotReusableProgram(program) {
     const array = Array.isArray(value);
     const copy = array ? [] : {};
     copies.set(value, copy);
+    snapshotValues.add(copy);
     pending.push({ source: value, target: copy, array });
     return copy;
   }
@@ -350,6 +378,9 @@ function snapshotReusableProgram(program) {
     const keys = Reflect.ownKeys(source);
     let arrayLength = 0;
     let arrayLengthWritable = true;
+    const regexpLiteralValue = array
+      ? undefined
+      : createSnapshotRegExpLiteralValue(source);
 
     checkSnapshotSourceSyntaxInheritance(source);
 
@@ -399,8 +430,12 @@ function snapshotReusableProgram(program) {
         continue;
       }
 
+      const copiedValue = copyValue(descriptor.value);
       const copiedDescriptor = {
-        value: copyValue(descriptor.value),
+        value:
+          key === 'value' && regexpLiteralValue !== undefined
+            ? regexpLiteralValue
+            : copiedValue,
         writable: descriptor.writable === true,
         enumerable: descriptor.enumerable === true,
         configurable: descriptor.configurable === true,
@@ -422,6 +457,46 @@ function snapshotReusableProgram(program) {
 
   checkOmittedArrayMetadata(omittedArrayMetadata);
   return snapshot;
+}
+
+/**
+ * Reconstructs Acorn's host-RegExp convenience value only from the literal's
+ * validated, descriptor-safe pattern record. The caller's value object is
+ * never queried or invoked.
+ *
+ * @param {object} source
+ * @returns {RegExp | undefined}
+ */
+function createSnapshotRegExpLiteralValue(source) {
+  const type = Reflect.getOwnPropertyDescriptor(source, 'type');
+  const regex = Reflect.getOwnPropertyDescriptor(source, 'regex');
+
+  if (
+    type === undefined ||
+    !Object.prototype.hasOwnProperty.call(type, 'value') ||
+    type.value !== 'Literal' ||
+    regex === undefined ||
+    !Object.prototype.hasOwnProperty.call(regex, 'value') ||
+    !isRegexLiteralRecord(regex.value)
+  ) {
+    return undefined;
+  }
+
+  const pattern = /** @type {PropertyDescriptor} */ (
+    Reflect.getOwnPropertyDescriptor(regex.value, 'pattern')
+  ).value;
+  const flags = /** @type {PropertyDescriptor} */ (
+    Reflect.getOwnPropertyDescriptor(regex.value, 'flags')
+  ).value;
+
+  try {
+    parseFlags(flags);
+    validatePattern(pattern);
+  } catch {
+    return undefined;
+  }
+
+  return new HostRegExp(pattern, flags);
 }
 
 /**
@@ -678,9 +753,7 @@ function mergeReusableProgram(existingProgram, parsedProgram) {
 }
 
 /**
- * Applies ScriptBody's declaration early errors to the combined Program. Acorn
- * checks each separately parsed half, so only the merge boundary can introduce
- * a duplicate lexical name or a lexical/var conflict.
+ * Applies ScriptBody's declaration early errors to a Program.
  *
  * The shared top-level static semantics preserve the important distinctions:
  * classes and destructuring contribute all bound lexical names, direct and
@@ -753,6 +826,65 @@ function hasOpenDirectivePrologue(body) {
   }
 
   return true;
+}
+
+/**
+ * When a later appended directive activates strict mode, Acorn has only seen
+ * the appended source. Recheck the snapshotted directive literals' raw text for
+ * the legacy decimal escapes its strict lexer rejects.
+ *
+ * @param {any[]} body
+ * @returns {void}
+ */
+function checkStrictDirectiveLiterals(body) {
+  const length = ownArrayLength(body);
+
+  for (let index = 0; index < length; index += 1) {
+    const statement = /** @type {object} */ (
+      ownDenseArrayElementValue(body, index)
+    );
+    const expression = /** @type {object} */ (
+      ownDataPropertyValue(statement, 'expression')
+    );
+    const raw = ownDataPropertyValue(expression, 'raw');
+
+    if (typeof raw !== 'string') {
+      throw untrustedAstSyntaxError(
+        'Reusable directive literals require raw source text',
+      );
+    }
+
+    if (hasStrictForbiddenStringEscape(raw)) {
+      throw new SyntaxError('Invalid escape sequence in strict directive');
+    }
+  }
+}
+
+/**
+ * @param {string} raw
+ * @returns {boolean}
+ */
+function hasStrictForbiddenStringEscape(raw) {
+  for (let index = 0; index < raw.length; index += 1) {
+    if (raw.charCodeAt(index) !== 92) {
+      continue;
+    }
+
+    const escaped = raw.charCodeAt(index + 1);
+
+    if (
+      (escaped >= 49 && escaped <= 57) ||
+      (escaped === 48 &&
+        raw.charCodeAt(index + 2) >= 48 &&
+        raw.charCodeAt(index + 2) <= 57)
+    ) {
+      return true;
+    }
+
+    index += 1;
+  }
+
+  return false;
 }
 
 /**
@@ -1828,6 +1960,7 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @param {any} root
  * @param {string} source The exact text parsed, for the code-point-escape check.
  * @param {boolean} rootStrict
+ * @param {WeakSet<object>} [sourceIndependentNodes]
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(
@@ -1835,6 +1968,7 @@ function checkStatementPositionFunctionDeclarations(
   source,
   rootStrict,
   allOwnKeys = false,
+  sourceIndependentNodes,
 ) {
   /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
@@ -1988,6 +2122,7 @@ function checkStatementPositionFunctionDeclarations(
       item.parentIndex,
       item.superAllowed,
       item.superCallAllowed,
+      sourceIndependentNodes === undefined || !sourceIndependentNodes.has(node),
     );
     checkUnsupportedForOfAwait(node);
 
@@ -4659,8 +4794,8 @@ function validateChildList(node, field, accepts) {
     return invalidEvaluatorChild(node, field);
   }
 
-  for (const value of values) {
-    if (!accepts(value)) {
+  for (let index = 0; index < values.length; index += 1) {
+    if (!accepts(values[index])) {
       return invalidEvaluatorChild(node, field);
     }
   }
@@ -5160,6 +5295,7 @@ function isObjectLiteralFunction(node) {
  * @param {number | undefined} parentIndex
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
+ * @param {boolean} identifierSourceMatches
  * @returns {void}
  */
 function checkUnsupportedEs2015Node(
@@ -5171,6 +5307,7 @@ function checkUnsupportedEs2015Node(
   parentIndex,
   superAllowed,
   superCallAllowed,
+  identifierSourceMatches,
 ) {
   if (node.type === 'Super') {
     const directMember = isDirectSuperMemberObject(node, parent, parentKey);
@@ -5224,6 +5361,7 @@ function checkUnsupportedEs2015Node(
   }
 
   if (
+    identifierSourceMatches &&
     node.type === 'Identifier' &&
     typeof node.start === 'number' &&
     typeof node.end === 'number' &&

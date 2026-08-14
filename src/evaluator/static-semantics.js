@@ -187,7 +187,10 @@ function reverseFrom(items, start) {
  */
 function collectOrdered(seed, classify) {
   /** @type {any[]} */
-  const pending = [...seed];
+  const pending = [];
+  for (let index = 0; index < seed.length; index += 1) {
+    pending.push(seed[index]);
+  }
   reverseFrom(pending, 0);
   /** @type {any[]} */
   const results = [];
@@ -230,8 +233,8 @@ function collectOrdered(seed, classify) {
 function pushVarScopeContainerChildren(node, pending) {
   switch (node.type) {
     case 'BlockStatement':
-      for (const statement of node.body) {
-        pending.push(statement);
+      for (let index = 0; index < node.body.length; index += 1) {
+        pending.push(node.body[index]);
       }
       return true;
     case 'IfStatement':
@@ -269,9 +272,14 @@ function pushVarScopeContainerChildren(node, pending) {
       }
       return true;
     case 'SwitchStatement':
-      for (const switchCase of node.cases) {
-        for (const statement of switchCase.consequent) {
-          pending.push(statement);
+      for (let caseIndex = 0; caseIndex < node.cases.length; caseIndex += 1) {
+        const consequent = node.cases[caseIndex].consequent;
+        for (
+          let statementIndex = 0;
+          statementIndex < consequent.length;
+          statementIndex += 1
+        ) {
+          pending.push(consequent[statementIndex]);
         }
       }
       return true;
@@ -497,7 +505,8 @@ export function topLevelLexicallyScopedDeclarations(statements) {
   /** @type {any[]} */
   const declarations = [];
 
-  for (const item of statements) {
+  for (let index = 0; index < statements.length; index += 1) {
+    const item = statements[index];
     const declaration = topLevelLexicalDeclarationOf(item);
 
     if (declaration !== null) {
@@ -546,7 +555,8 @@ export function topLevelVarScopedDeclarations(statements) {
   /** @type {any[]} */
   const results = [];
 
-  for (const item of statements) {
+  for (let index = 0; index < statements.length; index += 1) {
+    const item = statements[index];
     const functionDeclaration = topLevelFunctionDeclarationOf(item);
 
     if (functionDeclaration !== null) {
@@ -554,8 +564,13 @@ export function topLevelVarScopedDeclarations(statements) {
       continue;
     }
 
-    for (const declaration of varScopedDeclarations([item])) {
-      results.push(declaration);
+    const scopedDeclarations = varScopedDeclarations([item]);
+    for (
+      let declarationIndex = 0;
+      declarationIndex < scopedDeclarations.length;
+      declarationIndex += 1
+    ) {
+      results.push(scopedDeclarations[declarationIndex]);
     }
   }
 

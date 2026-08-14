@@ -701,6 +701,33 @@ const tests = [
     },
   },
   {
+    name: 'reusable Program snapshots reconstruct distinct RegExp literal values',
+    run() {
+      const program = parseScript('var pattern = /source/gi;');
+      const originalLiteral = program.body[0].declarations[0].init;
+      const originalValue = originalLiteral.value;
+      originalValue.lastIndex = 4;
+
+      const result = parseScript('pattern;', { program });
+      const copiedLiteral = result.body[0].declarations[0].init;
+      const copiedValue = copiedLiteral.value;
+
+      assertSame(copiedValue instanceof RegExp, true);
+      assertSame(copiedValue === originalValue, false);
+      assertSame(copiedValue.source, 'source');
+      assertSame(copiedValue.flags, 'gi');
+      assertSame(copiedValue.lastIndex, 0);
+
+      const completion = evaluateScript(
+        createRealm(),
+        '[pattern.source, pattern.global, pattern.ignoreCase].join(":");',
+        { program },
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'source:true:true');
+    },
+  },
+  {
     name: 'reusable Program snapshots preserve shared nodes while isolating callback mutation',
     run() {
       const program = parseScript('function existing(value) { return value; }');
@@ -819,6 +846,38 @@ const tests = [
     },
   },
   {
+    name: 'appended use strict revalidates earlier directive escape sequences',
+    run() {
+      for (const directive of ['"\\1";', '"\\8";']) {
+        const program = parseScript(directive);
+
+        assertThrows(
+          () => parseScript(`${directive}"use strict";`),
+          SyntaxError,
+        );
+        assertThrows(
+          () => parseScript('"use strict";', { program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'appended source spans are not applied to existing identifiers',
+    run() {
+      const program = parseScript('; foo;');
+      const result = parseScript('/*\\u{*/ 0;', { program });
+
+      assertSame(result.body.length, 3);
+      assertSame(result.body[1].expression.name, 'foo');
+      assertSame(result.body[2].expression.value, 0);
+      assertThrows(
+        () => parseScript('var \\u{66}oo = 1;', { program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
     name: 'caller-supplied Program append rejects cross-boundary declaration conflicts',
     run() {
       const rejected = [
@@ -858,6 +917,46 @@ const tests = [
 
         assertSame(result.type, 'Program');
       }
+    },
+  },
+  {
+    name: 'ordinary scripts reject labelled-function lexical conflicts and preserve var behavior',
+    run() {
+      assertThrows(
+        () => parseScript('label: function x() {}; let x;'),
+        SyntaxError,
+      );
+
+      for (const source of [
+        'label: function x() {}; var x;',
+        'function x() {}; function x() {}; var x;',
+        '{ function x() {} } let x;',
+      ]) {
+        assertSame(parseScript(source).type, 'Program', source);
+      }
+    },
+  },
+  {
+    name: 'custom AST declaration checks do not invoke array iterators',
+    run() {
+      const program = parseScript('label: function x() {}; var x;');
+      program.body[1] = parseScript('let x;').body[0];
+      const defaultIterator = program.body[Symbol.iterator];
+      let iteratorCalls = 0;
+
+      Object.defineProperty(program.body, Symbol.iterator, {
+        value() {
+          iteratorCalls += 1;
+          return defaultIterator.call(this);
+        },
+        configurable: true,
+      });
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+      assertSame(iteratorCalls, 0);
     },
   },
   {
