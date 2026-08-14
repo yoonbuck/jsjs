@@ -57,6 +57,27 @@ export default [
     },
   },
   {
+    name: 'GetFunctionRealm pins a direct function to its defining Realm across observations',
+    run: () => {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const handler = evaluateScript(
+        realmA,
+        '(function crossRealmHandler() {})',
+      ).value;
+      realmB.globalObject.defineOwnProperty('handler', {
+        value: handler,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const observed = evaluateScript(realmB, 'handler').value;
+      assertSame(observed, handler);
+      assertSame(getFunctionRealm(callable(observed)).value, realmA);
+    },
+  },
+  {
     name: 'GetFunctionRealm follows long bound chains without a host stack overflow',
     run: () => {
       const realm = createRealm();
