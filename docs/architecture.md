@@ -502,7 +502,12 @@ object and array data while preserving cycles and shared references, but rejects
 function-valued state before callbacks because ESTree does not require it. The
 combined Program is also checked for duplicate lexical declarations and
 lexical/`var` conflicts across the append boundary. A custom `parse` hook still
-receives its options unchanged.
+receives its options unchanged, but its returned Program graph is
+descriptor-safely snapshotted before any shape, capability, or early-error
+validation. The resulting ordinary nodes and arrays retain safe RegExp literals,
+cycles, and shared references for validation while dropping scanned non-index
+array metadata, so `parseScript` returns a fresh graph rather than preserving
+the hook's object identity.
 
 Multiple `evaluateScript` calls against the same realm share state:
 

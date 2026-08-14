@@ -105,7 +105,7 @@ const tests = [
     },
   },
   {
-    name: 'the same parsed site creates separate template objects in separate realms',
+    name: 'custom parser snapshots create separate template sites across evaluations and realms',
     run() {
       const program = parseScript('tag`site`;');
       const firstRealm = createRealm();
@@ -118,7 +118,7 @@ const tests = [
       const repeated = evaluateProgram(firstRealm, program);
       const second = evaluateProgram(secondRealm, program);
 
-      assertSame(first === repeated, true);
+      assertSame(first === repeated, false);
       assertSame(first === second, false);
       assertSame(first instanceof EngineArray, true);
       assertSame(

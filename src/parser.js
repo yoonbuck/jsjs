@@ -160,7 +160,7 @@ export function parseScript(source, options = {}) {
 
   if (hasReusableProgram) {
     reusableProgramSnapshotValues = new WeakSet();
-    reusableProgramSnapshot = snapshotReusableProgram(
+    reusableProgramSnapshot = snapshotProgramGraph(
       reusableProgram,
       reusableProgramSnapshotValues,
     );
@@ -198,6 +198,11 @@ export function parseScript(source, options = {}) {
     // same way relabelling a host error inside the engine would hide ours.
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
+
+  if (hasCustomParse) {
+    program = snapshotProgramGraph(program);
+  }
+
   if (hasReusableProgram) {
     if (
       reusableDirectivePrologueOpen &&
@@ -314,13 +319,13 @@ function validateScriptProgram(
 }
 
 /**
- * Takes ownership of a reusable AST before Acorn callbacks can mutate its
- * caller-owned graph. Own data properties are copied descriptor-by-descriptor
- * into ordinary objects and arrays, preserving cycles and shared references
- * without invoking accessors. Non-index array properties are omitted so a
- * shadowed `map`, `every`, or iterator cannot become executable validation
- * state; their detached values are still scanned to ensure the omission cannot
- * hide an AST node or function. Functions are rejected everywhere because no
+ * Takes ownership of an untrusted AST graph before validation can inspect it.
+ * Own data properties are copied descriptor-by-descriptor into ordinary objects
+ * and arrays, preserving cycles and shared references without invoking
+ * accessors. Non-index array properties are omitted so a shadowed `map`,
+ * `every`, or iterator cannot become executable validation state; their
+ * detached values are still scanned to ensure the omission cannot hide an AST
+ * node or function. Functions are rejected everywhere because no
  * evaluator-relevant ESTree value requires one and retaining one would preserve
  * caller-owned executable state.
  *
@@ -328,10 +333,10 @@ function validateScriptProgram(
  * caller-supplied method is used.
  *
  * @param {unknown} program
- * @param {WeakSet<object>} snapshotValues
+ * @param {WeakSet<object>} [snapshotValues]
  * @returns {unknown}
  */
-function snapshotReusableProgram(program, snapshotValues) {
+function snapshotProgramGraph(program, snapshotValues) {
   /** @type {WeakMap<object, object>} */
   const copies = new WeakMap();
   /** @type {{ source: object, target: object, array: boolean }[]} */
@@ -346,7 +351,7 @@ function snapshotReusableProgram(program, snapshotValues) {
   function copyValue(value) {
     if (typeof value === 'function') {
       throw untrustedAstSyntaxError(
-        'Reusable Program values must not be functions',
+        'Untrusted AST values must not be functions',
       );
     }
 
@@ -363,7 +368,7 @@ function snapshotReusableProgram(program, snapshotValues) {
     const array = Array.isArray(value);
     const copy = array ? [] : {};
     copies.set(value, copy);
-    snapshotValues.add(copy);
+    snapshotValues?.add(copy);
     pending.push({ source: value, target: copy, array });
     return copy;
   }
@@ -442,7 +447,7 @@ function snapshotReusableProgram(program, snapshotValues) {
       };
 
       if (!Reflect.defineProperty(target, key, copiedDescriptor)) {
-        throw new TypeError('Unable to snapshot reusable Program property');
+        throw new TypeError('Unable to snapshot untrusted AST property');
       }
     }
 
@@ -451,7 +456,7 @@ function snapshotReusableProgram(program, snapshotValues) {
       !arrayLengthWritable &&
       !Reflect.defineProperty(target, 'length', { writable: false })
     ) {
-      throw new TypeError('Unable to snapshot reusable Program array');
+      throw new TypeError('Unable to snapshot untrusted AST array');
     }
   }
 
@@ -560,7 +565,7 @@ function checkOmittedArrayMetadata(roots) {
 
     if (typeof value === 'function') {
       throw untrustedAstSyntaxError(
-        'Reusable Program values must not be functions',
+        'Untrusted AST values must not be functions',
       );
     }
 
@@ -573,6 +578,7 @@ function checkOmittedArrayMetadata(roots) {
     }
 
     seen.add(value);
+    checkSnapshotSourceSyntaxInheritance(value);
 
     const keys = Reflect.ownKeys(value);
 

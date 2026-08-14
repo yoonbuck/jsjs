@@ -1010,7 +1010,7 @@ const tests = [
     },
   },
   {
-    name: 'a custom parser still receives and may return its program option',
+    name: 'a custom parser receives its program option but returns an engine-owned snapshot',
     run() {
       const program = expressionProgram({ type: 'Literal', value: 1 });
       let receivedProgram;
@@ -1027,7 +1027,9 @@ const tests = [
       });
 
       assertSame(receivedProgram, program);
-      assertSame(result, program);
+      assertSame(result === program, false);
+      assertSame(result.body === program.body, false);
+      assertSame(result.body[0].expression.value, 1);
     },
   },
   {
@@ -1129,6 +1131,119 @@ const tests = [
         SyntaxError,
       );
       assertSame(getterCalls, 0);
+    },
+  },
+  {
+    name: 'custom parser snapshots parameter arrays before malformed-parameter validation',
+    run() {
+      const params = /** @type {any[]} */ ([{}]);
+      let mapCalls = 0;
+      params.map = () => {
+        mapCalls += 1;
+        return [];
+      };
+      const program = expressionProgram({
+        type: 'ArrowFunctionExpression',
+        id: null,
+        params,
+        generator: false,
+        async: false,
+        expression: true,
+        body: { type: 'Literal', value: 0 },
+      });
+      let parseError;
+      let evaluationError;
+
+      try {
+        parseScript('', { parse: () => program });
+      } catch (error) {
+        parseError = error;
+      }
+
+      try {
+        evaluateScript(createRealm(), '', { parse: () => program });
+      } catch (error) {
+        evaluationError = error;
+      }
+
+      assertSame(
+        `${mapCalls}:${parseError instanceof SyntaxError}:${evaluationError instanceof SyntaxError}`,
+        '0:true:true',
+      );
+    },
+  },
+  {
+    name: 'custom parser snapshots object-property arrays before duplicate __proto__ validation',
+    run() {
+      /** @returns {any} */
+      function protoProperty() {
+        return {
+          type: 'Property',
+          kind: 'init',
+          computed: false,
+          method: false,
+          shorthand: false,
+          key: { type: 'Identifier', name: '__proto__' },
+          value: { type: 'Identifier', name: 'proto' },
+        };
+      }
+
+      const properties = [protoProperty(), protoProperty()];
+      let iteratorCalls = 0;
+      properties[Symbol.iterator] = function () {
+        iteratorCalls += 1;
+        return [][Symbol.iterator]();
+      };
+      const program = expressionProgram({
+        type: 'ObjectExpression',
+        properties,
+      });
+      let parseError;
+      let evaluationError;
+
+      try {
+        parseScript('', { parse: () => program });
+      } catch (error) {
+        parseError = error;
+      }
+
+      try {
+        evaluateScript(createRealm(), '', { parse: () => program });
+      } catch (error) {
+        evaluationError = error;
+      }
+
+      assertSame(
+        `${iteratorCalls}:${parseError instanceof SyntaxError}:${evaluationError instanceof SyntaxError}`,
+        '0:true:true',
+      );
+    },
+  },
+  {
+    name: 'custom parser snapshots preserve RegExp literals and cyclic shared metadata',
+    run() {
+      const program = parseScript('/source/gi;');
+      const shared = { note: 'shared' };
+      const metadata = /** @type {any} */ ({
+        values: [shared, shared],
+      });
+      metadata.self = metadata;
+      program.body[0].metadata = metadata;
+
+      const result = parseScript('', { parse: () => program });
+      const copiedMetadata = result.body[0].metadata;
+      const originalValue = program.body[0].expression.value;
+      const copiedValue = result.body[0].expression.value;
+
+      assertSame(result === program, false);
+      assertSame(copiedMetadata === metadata, false);
+      assertSame(copiedMetadata.self, copiedMetadata);
+      assertSame(copiedMetadata.values[0], copiedMetadata.values[1]);
+      assertSame(copiedMetadata.values[0] === shared, false);
+      assertSame(copiedValue instanceof RegExp, true);
+      assertSame(copiedValue === originalValue, false);
+      assertSame(copiedValue.source, 'source');
+      assertSame(copiedValue.flags, 'gi');
     },
   },
   {
