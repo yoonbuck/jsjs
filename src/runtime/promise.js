@@ -43,6 +43,7 @@ export class PromiseObject extends EngineObject {
     /** @type {PromiseReactionRecord[]} */
     this.promiseRejectReactions = [];
     this.promiseIsHandled = false;
+    this.promiseRejectionHandleReported = false;
   }
 }
 
@@ -146,7 +147,12 @@ export function performPromiseThen(
     );
   }
 
-  if (promise.promiseState === 'rejected' && !promise.promiseIsHandled) {
+  if (
+    promise.promiseState === 'rejected' &&
+    !promise.promiseIsHandled &&
+    !promise.promiseRejectionHandleReported
+  ) {
+    promise.promiseRejectionHandleReported = true;
     trackPromiseRejection(promise, 'handle');
   }
   promise.promiseIsHandled = true;

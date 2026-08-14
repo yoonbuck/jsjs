@@ -483,6 +483,83 @@ export default [
     },
   },
   {
+    name: 'rejection tracking handles once when its handle hook reenters then',
+    run: () => {
+      /** @type {Array<[unknown, 'reject' | 'handle']>} */
+      const events = [];
+      /** @type {PromiseObject | undefined} */
+      let reentrantChild;
+      let didReenter = false;
+      const realm = createRealm({
+        jobHost: {
+          scheduleMicrotask() {},
+          promiseRejectionTracker(promise, operation) {
+            events.push([promise, operation]);
+            if (operation === 'handle' && !didReenter) {
+              didReenter = true;
+              const then =
+                /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+                  /** @type {EngineObject} */ (promise).get('then')
+                );
+              const reentrantHandler = realm.createNativeFunction({
+                name: 'reentrantHandler',
+                length: 1,
+                call(_thisValue, args) {
+                  assertNormalValue(
+                    evaluateScript(
+                      realm,
+                      `log.push("reentrant:" + ${JSON.stringify(args[0])});`,
+                    ),
+                    2,
+                  );
+                  return undefined;
+                },
+              });
+              reentrantChild = promiseObject(
+                then.callFunction(promise, [undefined, reentrantHandler]),
+              );
+            }
+          },
+        },
+      });
+      const rejected = promiseObject(
+        evaluateScript(
+          realm,
+          [
+            'var log = [];',
+            'var rejected = Promise.reject("reason");',
+            'var firstChild = rejected.then(undefined, function (reason) {',
+            '  log.push("first:" + reason);',
+            '});',
+            'rejected;',
+          ].join('\n'),
+        ).value,
+      );
+      const firstChild = promiseObject(realm.globalObject.get('firstChild'));
+
+      if (reentrantChild === undefined) {
+        throw new Error('Expected the rejection tracker to attach a handler');
+      }
+
+      assertSame(events.length, 2);
+      assertSame(events[0][0], rejected);
+      assertSame(events[0][1], 'reject');
+      assertSame(events[1][0], rejected);
+      assertSame(events[1][1], 'handle');
+      assertSame(rejected.promiseState, 'rejected');
+      assertSame(rejected.promiseResult, 'reason');
+      assertSame(firstChild.promiseState, 'pending');
+      assertSame(reentrantChild.promiseState, 'pending');
+      assertSame(realm.agent.runJobs().failures.length, 0);
+      assertNormalValue(
+        evaluateScript(realm, 'log.join(",")'),
+        'first:reason,reentrant:reason',
+      );
+      assertSame(firstChild.promiseState, 'fulfilled');
+      assertSame(reentrantChild.promiseState, 'fulfilled');
+    },
+  },
+  {
     name: 'rejection tracker failures preserve Promise state and queued ordering',
     run: () => {
       const trackerError = new Error('tracker failed');
