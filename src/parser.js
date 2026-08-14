@@ -218,7 +218,8 @@ function checkAcyclicAstChildren(root) {
     }
 
     const array = Array.isArray(value);
-    const node = !array && typeof (/** @type {any} */ (value).type) === 'string';
+    const node =
+      !array && typeof (/** @type {any} */ (value).type) === 'string';
 
     if (!array && !node) {
       continue;
@@ -256,7 +257,7 @@ function checkAcyclicAstChildren(root) {
 
       if (AST_CHILD_PROPERTY_KEYS.has(key)) {
         pending.push({
-          value: value[key],
+          value: /** @type {any} */ (value)[key],
           exiting: false,
           structural: true,
         });
@@ -407,6 +408,38 @@ const SUPPORTED_EXPRESSION_TYPES = new Set([
   'SequenceExpression',
   'TemplateLiteral',
   'TaggedTemplateExpression',
+]);
+
+/**
+ * Every statement node the evaluator dispatches. Kept beside the expression
+ * capability table so custom parser output can be checked against the same
+ * statement/expression boundary before evaluation reaches an internal
+ * dispatcher.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const SUPPORTED_STATEMENT_TYPES = new Set([
+  'ExpressionStatement',
+  'EmptyStatement',
+  'BlockStatement',
+  'VariableDeclaration',
+  'FunctionDeclaration',
+  'ClassDeclaration',
+  'IfStatement',
+  'WhileStatement',
+  'DoWhileStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+  'BreakStatement',
+  'ContinueStatement',
+  'ReturnStatement',
+  'ThrowStatement',
+  'TryStatement',
+  'SwitchStatement',
+  'LabeledStatement',
+  'DebuggerStatement',
+  'WithStatement',
 ]);
 
 const UNSUPPORTED_CLASS_DEFINITION_FIELDS = [
@@ -759,6 +792,12 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.superAllowed,
       item.superCallAllowed,
     );
+    const childMessage = validateEvaluatorChildEdges(node);
+
+    if (childMessage !== undefined) {
+      throw unsupportedEs2015Error(childMessage, node);
+    }
+
     checkStrictBindingIdentifier(
       node,
       item.parent,
@@ -2539,6 +2578,582 @@ function isSupportedExpressionNode(node) {
     typeof node === 'object' &&
     typeof node.type === 'string' &&
     SUPPORTED_EXPRESSION_TYPES.has(node.type)
+  );
+}
+
+/**
+ * A custom parser can return ordinary JavaScript values where an evaluator
+ * helper expects a particular AST child. The generic walk below catches AST
+ * nodes that appear in an invalid position, but primitives, nulls, and nested
+ * child arrays have no `type` and would otherwise reach evaluator internals.
+ * Check every consumed edge here, while leaving unknown typed nodes to the
+ * generic walker so its ordinary unsupported-node diagnostic is preserved.
+ *
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateEvaluatorChildEdges(node) {
+  switch (node.type) {
+    case 'Program':
+    case 'BlockStatement':
+      return validateChildList(node, 'body', isStatementNodeOrUnknown);
+    case 'ExpressionStatement':
+      return validateRequiredChild(
+        node,
+        'expression',
+        isExpressionNodeOrUnknown,
+      );
+    case 'VariableDeclaration':
+      return validateChildList(
+        node,
+        'declarations',
+        isVariableDeclaratorOrUnknown,
+      );
+    case 'VariableDeclarator':
+      return (
+        validateRequiredChild(node, 'id', isBindingPatternNodeOrUnknown) ??
+        validateOptionalChild(node, 'init', isExpressionNodeOrUnknown)
+      );
+    case 'FunctionDeclaration':
+      return (
+        validateRequiredChild(node, 'id', isIdentifierNodeOrUnknown) ??
+        validateChildList(node, 'params', isBindingPatternNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isBlockStatementOrUnknown)
+      );
+    case 'FunctionExpression':
+      return (
+        validateOptionalChild(node, 'id', isIdentifierNodeOrUnknown) ??
+        validateChildList(node, 'params', isBindingPatternNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isBlockStatementOrUnknown)
+      );
+    case 'ArrowFunctionExpression':
+      if (!Array.isArray(node.params)) {
+        return invalidEvaluatorChild(node, 'params');
+      }
+
+      if (node.expression === true) {
+        return validateRequiredChild(node, 'body', isExpressionNodeOrUnknown);
+      }
+
+      return validateRequiredChild(node, 'body', isBlockStatementOrUnknown);
+    case 'IfStatement':
+      return (
+        validateRequiredChild(node, 'test', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'consequent', isStatementNodeOrUnknown) ??
+        validateOptionalChild(node, 'alternate', isStatementNodeOrUnknown)
+      );
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+      return (
+        validateRequiredChild(node, 'test', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
+      );
+    case 'ForStatement':
+      return (
+        validateOptionalChild(node, 'init', isForInitializerNodeOrUnknown) ??
+        validateOptionalChild(node, 'test', isExpressionNodeOrUnknown) ??
+        validateOptionalChild(node, 'update', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
+      );
+    case 'ForInStatement':
+    case 'ForOfStatement':
+      return (
+        validateRequiredChild(node, 'left', isForInOfLeftNodeOrUnknown) ??
+        validateRequiredChild(node, 'right', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
+      );
+    case 'BreakStatement':
+    case 'ContinueStatement':
+      return validateOptionalChild(node, 'label', isIdentifierNodeOrUnknown);
+    case 'ReturnStatement':
+      return validateOptionalChild(node, 'argument', isExpressionNodeOrUnknown);
+    case 'ThrowStatement':
+      return validateRequiredChild(node, 'argument', isExpressionNodeOrUnknown);
+    case 'TryStatement':
+      return (
+        validateRequiredChild(node, 'block', isBlockStatementOrUnknown) ??
+        validateOptionalChild(node, 'handler', isCatchClauseOrUnknown) ??
+        validateOptionalChild(node, 'finalizer', isBlockStatementOrUnknown)
+      );
+    case 'CatchClause':
+      return (
+        validateRequiredChild(node, 'param', isIdentifierNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isBlockStatementOrUnknown)
+      );
+    case 'SwitchStatement':
+      return (
+        validateRequiredChild(
+          node,
+          'discriminant',
+          isExpressionNodeOrUnknown,
+        ) ?? validateChildList(node, 'cases', isSwitchCaseOrUnknown)
+      );
+    case 'SwitchCase':
+      return (
+        validateOptionalChild(node, 'test', isExpressionNodeOrUnknown) ??
+        validateChildList(node, 'consequent', isStatementNodeOrUnknown)
+      );
+    case 'LabeledStatement':
+      return (
+        validateRequiredChild(node, 'label', isIdentifierNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
+      );
+    case 'WithStatement':
+      return (
+        validateRequiredChild(node, 'object', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
+      );
+    case 'UnaryExpression':
+      return validateRequiredChild(node, 'argument', isExpressionNodeOrUnknown);
+    case 'BinaryExpression':
+    case 'LogicalExpression':
+      return (
+        validateRequiredChild(node, 'left', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'right', isExpressionNodeOrUnknown)
+      );
+    case 'ConditionalExpression':
+      return (
+        validateRequiredChild(node, 'test', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'consequent', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'alternate', isExpressionNodeOrUnknown)
+      );
+    case 'AssignmentExpression':
+      return (
+        validateRequiredChild(node, 'left', isAssignmentTargetNodeOrUnknown) ??
+        validateRequiredChild(node, 'right', isExpressionNodeOrUnknown)
+      );
+    case 'UpdateExpression':
+      return validateRequiredChild(
+        node,
+        'argument',
+        isIdentifierOrMemberNodeOrUnknown,
+      );
+    case 'CallExpression':
+      return (
+        validateRequiredChild(node, 'callee', isCallCalleeNodeOrUnknown) ??
+        validateChildList(node, 'arguments', isArgumentNodeOrUnknown)
+      );
+    case 'NewExpression':
+      return (
+        validateRequiredChild(node, 'callee', isExpressionNodeOrUnknown) ??
+        validateOptionalChildList(node, 'arguments', isArgumentNodeOrUnknown)
+      );
+    case 'MemberExpression':
+      return validateMemberExpressionEdges(node);
+    case 'ObjectExpression':
+      return validateChildList(
+        node,
+        'properties',
+        isObjectPropertyNodeOrUnknown,
+      );
+    case 'ArrayExpression':
+      return validateArrayExpressionElements(node);
+    case 'SequenceExpression':
+      return validateChildList(node, 'expressions', isExpressionNodeOrUnknown);
+    case 'TemplateLiteral':
+      return (
+        validateChildList(node, 'expressions', isExpressionNodeOrUnknown) ??
+        validateChildList(node, 'quasis', isTemplateElementNodeOrUnknown)
+      );
+    case 'TaggedTemplateExpression':
+      return (
+        validateRequiredChild(node, 'tag', isExpressionNodeOrUnknown) ??
+        validateRequiredChild(node, 'quasi', isTemplateLiteralNodeOrUnknown)
+      );
+    case 'SpreadElement':
+      return validateRequiredChild(node, 'argument', isExpressionNodeOrUnknown);
+    case 'ObjectPattern':
+      return validateChildList(
+        node,
+        'properties',
+        isPatternPropertyNodeOrUnknown,
+      );
+    case 'ArrayPattern':
+      return validateArrayPatternElements(node);
+    case 'AssignmentPattern':
+      return (
+        validateRequiredChild(node, 'left', isPatternNodeOrUnknown) ??
+        validateRequiredChild(node, 'right', isExpressionNodeOrUnknown)
+      );
+    case 'RestElement':
+      return validateRequiredChild(node, 'argument', isPatternNodeOrUnknown);
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
+function validateRequiredChild(node, field, accepts) {
+  return accepts(node[field]) ? undefined : invalidEvaluatorChild(node, field);
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
+function validateOptionalChild(node, field, accepts) {
+  const value = node[field];
+
+  return value === null || value === undefined || accepts(value)
+    ? undefined
+    : invalidEvaluatorChild(node, field);
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
+function validateChildList(node, field, accepts) {
+  const values = node[field];
+
+  if (!Array.isArray(values)) {
+    return invalidEvaluatorChild(node, field);
+  }
+
+  for (const value of values) {
+    if (!accepts(value)) {
+      return invalidEvaluatorChild(node, field);
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
+function validateOptionalChildList(node, field, accepts) {
+  const values = node[field];
+
+  if (values === null || values === undefined) {
+    return undefined;
+  }
+
+  return validateChildList(node, field, accepts);
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateMemberExpressionEdges(node) {
+  const objectMessage = validateRequiredChild(
+    node,
+    'object',
+    isMemberObjectNodeOrUnknown,
+  );
+
+  if (objectMessage !== undefined) {
+    return objectMessage;
+  }
+
+  return node.computed === true
+    ? validateRequiredChild(node, 'property', isExpressionNodeOrUnknown)
+    : node.computed === false
+      ? validateRequiredChild(node, 'property', isIdentifierNodeOrUnknown)
+      : invalidEvaluatorChild(node, 'computed');
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateArrayExpressionElements(node) {
+  const elements = node.elements;
+
+  if (!Array.isArray(elements)) {
+    return invalidEvaluatorChild(node, 'elements');
+  }
+
+  for (const element of elements) {
+    if (
+      element !== null &&
+      !isExpressionNodeOrUnknown(element) &&
+      !isNodeTypeOrUnknown(element, 'SpreadElement')
+    ) {
+      return invalidEvaluatorChild(node, 'elements');
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateArrayPatternElements(node) {
+  const elements = node.elements;
+
+  if (!Array.isArray(elements)) {
+    return invalidEvaluatorChild(node, 'elements');
+  }
+
+  for (const element of elements) {
+    if (element !== null && !isPatternNodeOrUnknown(element)) {
+      return invalidEvaluatorChild(node, 'elements');
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @returns {string}
+ */
+function invalidEvaluatorChild(node, field) {
+  return `${node.type}.${field} has an unsupported evaluator child`;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isUnknownAstNode(value) {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (/** @type {any} */ (value).type) === 'string' &&
+    !RECOGNIZED_AST_NODE_TYPES.has(/** @type {any} */ (value).type)
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} type
+ * @returns {boolean}
+ */
+function isNodeTypeOrUnknown(value, type) {
+  return (
+    isUnknownAstNode(value) ||
+    (!!value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      /** @type {any} */ (value).type === type)
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isExpressionNodeOrUnknown(value) {
+  return isUnknownAstNode(value) || isSupportedExpressionNode(value);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isStatementNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    (!!value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      SUPPORTED_STATEMENT_TYPES.has(/** @type {any} */ (value).type))
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isIdentifierNodeOrUnknown(value) {
+  return isUnknownAstNode(value) || isIdentifierNode(value);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isBlockStatementOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'BlockStatement');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isVariableDeclaratorOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'VariableDeclarator');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isCatchClauseOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'CatchClause');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSwitchCaseOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'SwitchCase');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isTemplateElementNodeOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'TemplateElement');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isTemplateLiteralNodeOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'TemplateLiteral');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isObjectPropertyNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'Property') ||
+    isNodeTypeOrUnknown(value, 'SpreadElement')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isPatternPropertyNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'Property') ||
+    isNodeTypeOrUnknown(value, 'RestElement')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isBindingPatternNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'Identifier') ||
+    isNodeTypeOrUnknown(value, 'ObjectPattern') ||
+    isNodeTypeOrUnknown(value, 'ArrayPattern') ||
+    isNodeTypeOrUnknown(value, 'AssignmentPattern') ||
+    isNodeTypeOrUnknown(value, 'RestElement')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isPatternNodeOrUnknown(value) {
+  return (
+    isBindingPatternNodeOrUnknown(value) ||
+    isNodeTypeOrUnknown(value, 'MemberExpression')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isAssignmentTargetNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'Identifier') ||
+    isNodeTypeOrUnknown(value, 'MemberExpression') ||
+    isNodeTypeOrUnknown(value, 'ObjectPattern') ||
+    isNodeTypeOrUnknown(value, 'ArrayPattern')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isIdentifierOrMemberNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'Identifier') ||
+    isNodeTypeOrUnknown(value, 'MemberExpression')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isForInitializerNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'VariableDeclaration') ||
+    isExpressionNodeOrUnknown(value)
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isForInOfLeftNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'VariableDeclaration') ||
+    isAssignmentTargetNodeOrUnknown(value)
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isCallCalleeNodeOrUnknown(value) {
+  return (
+    isNodeTypeOrUnknown(value, 'Super') || isExpressionNodeOrUnknown(value)
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isArgumentNodeOrUnknown(value) {
+  return (
+    isExpressionNodeOrUnknown(value) ||
+    isNodeTypeOrUnknown(value, 'SpreadElement')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isMemberObjectNodeOrUnknown(value) {
+  return (
+    isNodeTypeOrUnknown(value, 'Super') || isExpressionNodeOrUnknown(value)
   );
 }
 

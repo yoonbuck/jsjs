@@ -434,6 +434,94 @@ const tests = [
     },
   },
   {
+    name: 'custom parser rejects a statement node on a direct expression edge',
+    run() {
+      const program = expressionProgram({
+        type: 'BinaryExpression',
+        operator: '+',
+        left: { type: 'BlockStatement', body: [] },
+        right: { type: 'Literal', value: 1 },
+      });
+
+      assertParserAndEvaluatorSyntaxError(program);
+    },
+  },
+  {
+    name: 'custom parser rejects nested arrays on evaluator child lists',
+    run() {
+      const program = expressionProgram({
+        type: 'ArrayExpression',
+        elements: [[]],
+      });
+
+      assertParserAndEvaluatorSyntaxError(program);
+    },
+  },
+  {
+    name: 'custom parser rejects primitive null and wrong-node evaluator children',
+    run() {
+      const malformedPrograms = [
+        expressionProgram({
+          type: 'CallExpression',
+          callee: { type: 'Identifier', name: 'call' },
+          arguments: [null],
+        }),
+        expressionProgram({
+          type: 'SequenceExpression',
+          expressions: [0],
+        }),
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'IfStatement',
+              test: { type: 'Literal', value: true },
+              consequent: null,
+              alternate: null,
+            },
+          ],
+        },
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'VariableDeclaration',
+              kind: 'var',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: 'value' },
+                  init: 0,
+                },
+              ],
+            },
+          ],
+        },
+      ];
+
+      for (const program of malformedPrograms) {
+        assertParserAndEvaluatorSyntaxError(program);
+      }
+    },
+  },
+  {
+    name: 'custom parser preserves null array-expression holes',
+    run() {
+      assertSame(
+        parseScript('', {
+          parse: () =>
+            expressionProgram({
+              type: 'ArrayExpression',
+              elements: [null],
+            }),
+        }).type,
+        'Program',
+      );
+    },
+  },
+  {
     name: 'a statement-position function declaration is still rejected when deeply nested',
     run() {
       // The depth fix must not cost reach: the offending node here sits
@@ -2691,6 +2779,25 @@ const tests = [
     },
   },
 ];
+
+/**
+ * @param {any} program
+ * @returns {void}
+ */
+function assertParserAndEvaluatorSyntaxError(program) {
+  const parseError = /** @type {any} */ (
+    assertThrows(() => parseScript('', { parse: () => program }), SyntaxError)
+  );
+  const evaluationError = /** @type {any} */ (
+    assertThrows(
+      () => evaluateScript(createRealm(), '', { parse: () => program }),
+      SyntaxError,
+    )
+  );
+
+  assertSame(parseError.name, 'SyntaxError');
+  assertSame(evaluationError.name, 'SyntaxError');
+}
 
 /**
  * @param {any} expression
