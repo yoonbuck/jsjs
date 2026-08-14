@@ -511,58 +511,155 @@ const tests = [
     },
   },
   {
-    name: 'a token callback cannot invalidate a prevalidated caller-supplied Acorn program',
+    name: 'a token callback mutates only the ignored caller-supplied Acorn program',
     run() {
       const program = parseScript('1 + 2;');
       let callbackCalls = 0;
 
-      assertThrows(
-        () =>
-          parseScript('0;', {
-            program,
-            onToken() {
-              callbackCalls += 1;
-              program.body[0].expression.operator = '**';
-            },
-          }),
-        SyntaxError,
-      );
+      const result = parseScript('0;', {
+        program,
+        onToken() {
+          callbackCalls += 1;
+          program.body[0].expression.operator = '**';
+        },
+      });
+
       assertSame(callbackCalls > 0, true);
+      assertSame(program.body[0].expression.operator, '**');
+      assertSame(result.body[0].expression.operator, '+');
+      assertSame(result.body[1].expression.value, 0);
     },
   },
   {
-    name: 'a token callback cannot install a Program getter that Acorn executes',
+    name: 'a token callback cannot install a Program getter that the engine executes',
     run() {
       const program = parseScript('1 + 2;');
       let callbackCalls = 0;
       let getterCalls = 0;
-      let thrown;
+      const result = parseScript('0;', {
+        program,
+        onToken() {
+          callbackCalls += 1;
 
-      try {
-        parseScript('0;', {
-          program,
-          onToken() {
-            callbackCalls += 1;
-
-            if (callbackCalls === 1) {
-              Object.defineProperty(program, 'body', {
-                get() {
-                  getterCalls += 1;
-                  throw new Error('Program.body getter must not execute');
-                },
-                enumerable: true,
-                configurable: true,
-              });
-            }
-          },
-        });
-      } catch (error) {
-        thrown = error;
-      }
+          if (callbackCalls === 1) {
+            Object.defineProperty(program, 'body', {
+              get() {
+                getterCalls += 1;
+                throw new Error('Program.body getter must not execute');
+              },
+              enumerable: true,
+              configurable: true,
+            });
+          }
+        },
+      });
 
       assertSame(callbackCalls > 0, true);
       assertSame(getterCalls, 0);
-      assertSame(thrown instanceof SyntaxError, true);
+      assertSame(result.body.length, 2);
+      assertSame(result.body[0].expression.operator, '+');
+    },
+  },
+  {
+    name: 'a token callback cannot smuggle an every method past function validation',
+    run() {
+      const program = parseScript('function existing(value) { return value; }');
+      const declaration = program.body[0];
+      let everyCalls = 0;
+
+      const result = parseScript('added;', {
+        program,
+        onToken() {
+          Object.defineProperty(declaration.params, 'every', {
+            value() {
+              everyCalls += 1;
+              declaration.generator = true;
+              return true;
+            },
+            configurable: true,
+          });
+        },
+      });
+
+      assertSame(everyCalls, 0);
+      assertSame(declaration.generator, false);
+      assertSame(result.body.length, 2);
+      assertSame(result.body[0].generator, false);
+      assertSame(
+        Object.prototype.hasOwnProperty.call(result.body[0].params, 'every'),
+        false,
+      );
+      assertSame(result.body[1].expression.name, 'added');
+    },
+  },
+  {
+    name: 'reusable Program snapshots omit other structural-array method shadows',
+    run() {
+      const program = parseScript('function existing(value) { return value; }');
+      const declaration = program.body[0];
+      let methodCalls = 0;
+
+      for (const method of ['map', 'every', 'some', 'includes']) {
+        Object.defineProperty(declaration.params, method, {
+          value() {
+            methodCalls += 1;
+            declaration.generator = true;
+            return [];
+          },
+          configurable: true,
+        });
+      }
+
+      const result = parseScript('added;', { program });
+
+      assertSame(methodCalls, 0);
+      assertSame(declaration.generator, false);
+      assertSame(result.body[0].generator, false);
+      for (const method of ['map', 'every', 'some', 'includes']) {
+        assertSame(
+          Object.prototype.hasOwnProperty.call(result.body[0].params, method),
+          false,
+          method,
+        );
+      }
+    },
+  },
+  {
+    name: 'omitted structural-array methods cannot hide AST nodes in function metadata',
+    run() {
+      const program = parseScript('function existing(value) { return value; }');
+      const method = () => true;
+      method.metadata = {
+        type: 'FunctionDeclaration',
+        generator: true,
+      };
+      Object.defineProperty(program.body[0].params, 'every', {
+        value: method,
+        configurable: true,
+      });
+
+      assertThrows(() => parseScript('added;', { program }), SyntaxError);
+    },
+  },
+  {
+    name: 'reusable Program snapshots preserve shared nodes while isolating callback mutation',
+    run() {
+      const program = parseScript('function existing(value) { return value; }');
+      const declaration = program.body[0];
+      declaration.id = declaration.params[0];
+
+      const result = parseScript('added;', {
+        program,
+        onToken() {
+          declaration.id.name = 'mutated';
+        },
+      });
+      const copiedDeclaration = result.body[0];
+
+      assertSame(declaration.id.name, 'mutated');
+      assertSame(copiedDeclaration.id.name, 'value');
+      assertSame(copiedDeclaration.id === copiedDeclaration.params[0], true);
+      assertSame(result.body[1].expression.name, 'added');
     },
   },
   {
@@ -665,6 +762,56 @@ const tests = [
       });
 
       assertSame(forgedResult.body[1].directive, undefined);
+    },
+  },
+  {
+    name: 'a reusable strict Program parses appended source with inherited strictness',
+    run() {
+      for (const strictPrefix of [
+        '"use strict";',
+        '"use strict"; existing;',
+        '"other"; "use strict"; existing;',
+      ]) {
+        assertThrows(
+          () =>
+            parseScript('with ({ value: 1 }) {}', {
+              program: parseScript(strictPrefix),
+            }),
+          SyntaxError,
+        );
+      }
+
+      for (const directivePrefix of ['', '"existing";']) {
+        assertThrows(
+          () =>
+            parseScript('"use strict"; with ({ value: 1 }) {}', {
+              program: parseScript(directivePrefix),
+            }),
+          SyntaxError,
+        );
+      }
+
+      assertThrows(
+        () =>
+          evaluateScript(createRealm(), 'with ({ value: 1 }) {}', {
+            program: parseScript('"use strict"; 0;'),
+          }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'a closed reusable directive prologue does not make appended directives retroactive',
+    run() {
+      const program = parseScript('existing;');
+      const result = parseScript('"use strict"; with ({ value: 1 }) {}', {
+        program,
+      });
+
+      assertSame(result.body.length, 3);
+      assertSame(result.body[0].expression.name, 'existing');
+      assertSame(result.body[1].directive, undefined);
+      assertSame(result.body[2].type, 'WithStatement');
     },
   },
   {

@@ -492,11 +492,13 @@ object (an `EngineObject`), not a host exception.
 
 `parserOptions` is forwarded to Acorn and merged with the engine's defaults
 (`ecmaVersion: 6`, `sourceType: 'script'`). A caller-supplied Acorn `program`
-is the exception: `parseScript` parses into a fresh Program, validates the
-supplied graph after parser callbacks finish, and returns a fresh Program whose
-body contains the supplied statements followed by the newly parsed statements.
-The supplied Program is not mutated. A custom `parse` hook still receives its
-options unchanged.
+is the exception: before parser callbacks run, `parseScript` makes and validates
+a descriptor-safe snapshot of its AST nodes and structural arrays. Parsing then
+uses that snapshot's directive prologue to inherit strictness, and returns a
+fresh Program whose body contains the snapshotted statements followed by the
+newly parsed statements. Callback mutations affect only the ignored original;
+the supplied Program is not mutated by the engine. A custom `parse` hook still
+receives its options unchanged.
 
 Multiple `evaluateScript` calls against the same realm share state:
 

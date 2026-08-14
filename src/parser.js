@@ -66,6 +66,8 @@ function parseWithScriptParser(source, options) {
  * @type {typeof Parser | undefined}
  */
 let strictParser;
+/** @type {typeof Parser | undefined} */
+let sloppyScriptParser;
 
 /**
  * @returns {typeof Parser}
@@ -92,6 +94,35 @@ function getStrictParser() {
 }
 
 /**
+ * Acorn normally discovers a script's strictness from its own leading
+ * directives. When appending after a closed directive prologue, those strings
+ * are no longer directives in the combined Program, so top-level parsing must
+ * remain sloppy. Function bodies still discover their own directives normally.
+ *
+ * @returns {typeof Parser}
+ */
+function getSloppyScriptParser() {
+  if (sloppyScriptParser === undefined) {
+    sloppyScriptParser = Parser.extend(
+      (Base) =>
+        class extends Base {
+          /**
+           * @param {any} options
+           * @param {string} input
+           * @param {number} [startPos]
+           */
+          constructor(options, input, startPos) {
+            super(options, input, startPos);
+            this.strict = false;
+          }
+        },
+    );
+  }
+
+  return sloppyScriptParser;
+}
+
+/**
  * @param {string} source
  * @param {Record<string, unknown>} [options]
  * @returns {any}
@@ -112,22 +143,43 @@ export function parseScript(source, options = {}) {
   const reusableProgram = hasReusableProgram
     ? parserOptions.program
     : undefined;
+  let reusableProgramSnapshot;
+  let reusableDirectivePrologueOpen = false;
+  let reusableProgramStrict = false;
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
   }
 
   if (hasReusableProgram) {
+    reusableProgramSnapshot = snapshotReusableProgram(reusableProgram);
+    validateReusableProgram(reusableProgramSnapshot);
+    const reusableBody = /** @type {any[]} */ (
+      ownDataPropertyValue(
+        /** @type {object} */ (reusableProgramSnapshot),
+        'body',
+      )
+    );
+    reusableDirectivePrologueOpen = hasOpenDirectivePrologue(reusableBody);
+    reusableProgramStrict = hasUseStrictDirective(reusableBody);
     delete parserOptions.program;
   }
 
   let program;
 
   try {
-    program = parse(source, {
+    const effectiveOptions = {
       ...parserOptions,
       ...PARSER_OPTIONS,
-    });
+    };
+
+    if (hasReusableProgram && reusableProgramStrict) {
+      program = getStrictParser().parse(source, effectiveOptions);
+    } else if (hasReusableProgram && !reusableDirectivePrologueOpen) {
+      program = getSloppyScriptParser().parse(source, effectiveOptions);
+    } else {
+      program = parse(source, effectiveOptions);
+    }
   } catch (error) {
     // Only the engine's own parser gets the stack-overflow conversion below.
     // An embedder that injected its own `parse` owns whatever that throws;
@@ -135,11 +187,9 @@ export function parseScript(source, options = {}) {
     // same way relabelling a host error inside the engine would hide ours.
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
-
   if (hasReusableProgram) {
-    validateReusableProgram(reusableProgram);
     program = mergeReusableProgram(
-      /** @type {any} */ (reusableProgram),
+      /** @type {any} */ (reusableProgramSnapshot),
       program,
     );
   }
@@ -233,11 +283,236 @@ function validateScriptProgram(
 }
 
 /**
+ * Takes ownership of a reusable AST before Acorn callbacks can mutate its
+ * caller-owned graph. Own data properties are copied descriptor-by-descriptor
+ * into ordinary objects and arrays, preserving cycles and shared references
+ * without invoking accessors. Non-index array properties are omitted so a
+ * shadowed `map`, `every`, or iterator cannot become executable validation
+ * state; their detached values are still scanned to ensure the omission cannot
+ * hide an AST node.
+ *
+ * Reflection is unavoidable for Proxy inputs, but no ordinary property read or
+ * caller-supplied method is used.
+ *
+ * @param {unknown} program
+ * @returns {unknown}
+ */
+function snapshotReusableProgram(program) {
+  /** @type {WeakMap<object, object>} */
+  const copies = new WeakMap();
+  /** @type {{ source: object, target: object, array: boolean }[]} */
+  const pending = [];
+  /** @type {unknown[]} */
+  const omittedArrayMetadata = [];
+
+  /**
+   * @param {unknown} value
+   * @returns {unknown}
+   */
+  function copyValue(value) {
+    if (!value || typeof value !== 'object') {
+      return value;
+    }
+
+    const existing = copies.get(value);
+
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const array = Array.isArray(value);
+    const copy = array ? [] : {};
+    copies.set(value, copy);
+    pending.push({ source: value, target: copy, array });
+    return copy;
+  }
+
+  const snapshot = copyValue(program);
+
+  while (pending.length > 0) {
+    const { source, target, array } =
+      /** @type {{ source: object, target: object, array: boolean }} */ (
+        pending.pop()
+      );
+    const keys = Reflect.ownKeys(source);
+    let arrayLength = 0;
+    let arrayLengthWritable = true;
+
+    checkSnapshotSourceSyntaxInheritance(source);
+
+    if (array) {
+      const length = Reflect.getOwnPropertyDescriptor(source, 'length');
+
+      if (
+        length === undefined ||
+        !Object.prototype.hasOwnProperty.call(length, 'value') ||
+        !Number.isSafeInteger(length.value) ||
+        length.value < 0
+      ) {
+        throw new TypeError('Expected Program body to be an ordinary array');
+      }
+
+      arrayLength = length.value;
+      arrayLengthWritable = length.writable === true;
+      Reflect.defineProperty(target, 'length', {
+        value: arrayLength,
+        writable: true,
+        enumerable: false,
+        configurable: false,
+      });
+    }
+
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index];
+
+      if (array && key === 'length') {
+        continue;
+      }
+
+      const descriptor = Reflect.getOwnPropertyDescriptor(source, key);
+
+      if (descriptor === undefined) {
+        continue;
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST properties must be own data properties',
+        );
+      }
+
+      if (array && !isDirectArrayElementKey(key, arrayLength)) {
+        omittedArrayMetadata.push(descriptor.value);
+        continue;
+      }
+
+      const copiedDescriptor = {
+        value: copyValue(descriptor.value),
+        writable: descriptor.writable === true,
+        enumerable: descriptor.enumerable === true,
+        configurable: descriptor.configurable === true,
+      };
+
+      if (!Reflect.defineProperty(target, key, copiedDescriptor)) {
+        throw new TypeError('Unable to snapshot reusable Program property');
+      }
+    }
+
+    if (
+      array &&
+      !arrayLengthWritable &&
+      !Reflect.defineProperty(target, 'length', { writable: false })
+    ) {
+      throw new TypeError('Unable to snapshot reusable Program array');
+    }
+  }
+
+  checkOmittedArrayMetadata(omittedArrayMetadata);
+  return snapshot;
+}
+
+/**
+ * Rejects inherited syntax before ordinary snapshot objects discard the
+ * caller's prototypes. Prototype descriptors are inspected without reading
+ * their values, so inherited accessors never execute.
+ *
+ * @param {object} value
+ * @returns {void}
+ */
+function checkSnapshotSourceSyntaxInheritance(value) {
+  const type = Reflect.getOwnPropertyDescriptor(value, 'type');
+
+  if (type === undefined) {
+    if (hasInheritedAstSyntaxField(value, 'type')) {
+      throw untrustedAstSyntaxError(
+        'Untrusted AST syntax fields must not be inherited',
+      );
+    }
+    return;
+  }
+
+  if (
+    !Object.prototype.hasOwnProperty.call(type, 'value') ||
+    typeof type.value !== 'string'
+  ) {
+    return;
+  }
+
+  for (const field of UNTRUSTED_AST_SYNTAX_FIELD_NAMES) {
+    if (
+      field !== 'type' &&
+      Reflect.getOwnPropertyDescriptor(value, field) === undefined &&
+      hasInheritedAstSyntaxField(value, field)
+    ) {
+      throw untrustedAstSyntaxError(
+        'Untrusted AST syntax fields must not be inherited',
+      );
+    }
+  }
+
+  checkUntrustedAstSourceLocation(value);
+}
+
+/**
+ * Array metadata is not retained on the engine-owned snapshot. Scan its data
+ * graph first so an omitted method-shadow or symbol property cannot conceal an
+ * AST node from the capability boundary.
+ *
+ * @param {unknown[]} roots
+ * @returns {void}
+ */
+function checkOmittedArrayMetadata(roots) {
+  /** @type {unknown[]} */
+  const pending = roots.slice();
+  /** @type {WeakSet<object>} */
+  const seen = new WeakSet();
+
+  while (pending.length > 0) {
+    const value = pending.pop();
+
+    if (!value || (typeof value !== 'object' && typeof value !== 'function')) {
+      continue;
+    }
+
+    if (seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+
+    const keys = Reflect.ownKeys(value);
+
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index];
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+
+      if (descriptor === undefined) {
+        continue;
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST properties must be own data properties',
+        );
+      }
+
+      if (key === 'type' && typeof descriptor.value === 'string') {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST nodes cannot be hidden in array metadata',
+        );
+      }
+
+      pending.push(descriptor.value);
+    }
+  }
+}
+
+/**
  * Validates a Program supplied for Acorn-style statement appending. parseScript
- * never gives this graph to Acorn: callbacks run while Acorn builds a separate
- * Program, then this validation observes their final mutations before a safe
- * merge. Requiring Acorn's location shape also turns malformed reuse targets
- * into a parser-boundary TypeError without partially writing to them.
+ * never gives the caller-owned graph to Acorn: it validates and uses only the
+ * engine-owned snapshot while callbacks can mutate the ignored original.
+ * Requiring Acorn's location shape also turns malformed reuse targets into a
+ * parser-boundary TypeError without partially writing to them.
  *
  * @param {unknown} program
  * @returns {void}
@@ -562,7 +837,7 @@ function checkUntrustedAstDescriptors(root) {
  * @returns {void}
  */
 function checkUntrustedAstSourceLocation(node) {
-  const loc = Object.getOwnPropertyDescriptor(node, 'loc');
+  const loc = Reflect.getOwnPropertyDescriptor(node, 'loc');
 
   if (
     loc === undefined ||
@@ -574,7 +849,7 @@ function checkUntrustedAstSourceLocation(node) {
   }
 
   for (const endpoint of ['start', 'end']) {
-    const position = Object.getOwnPropertyDescriptor(loc.value, endpoint);
+    const position = Reflect.getOwnPropertyDescriptor(loc.value, endpoint);
 
     if (position === undefined) {
       if (hasInheritedAstSyntaxField(loc.value, endpoint)) {
@@ -595,7 +870,7 @@ function checkUntrustedAstSourceLocation(node) {
 
     for (const field of ['line', 'column']) {
       if (
-        Object.getOwnPropertyDescriptor(position.value, field) === undefined &&
+        Reflect.getOwnPropertyDescriptor(position.value, field) === undefined &&
         hasInheritedAstSyntaxField(position.value, field)
       ) {
         throw untrustedAstSyntaxError(
@@ -615,14 +890,14 @@ function checkUntrustedAstSourceLocation(node) {
  * @returns {boolean}
  */
 function hasInheritedAstSyntaxField(value, field) {
-  let prototype = Object.getPrototypeOf(value);
+  let prototype = Reflect.getPrototypeOf(value);
 
   while (prototype !== null) {
-    if (Object.prototype.hasOwnProperty.call(prototype, field)) {
+    if (Reflect.getOwnPropertyDescriptor(prototype, field) !== undefined) {
       return true;
     }
 
-    prototype = Object.getPrototypeOf(prototype);
+    prototype = Reflect.getPrototypeOf(prototype);
   }
 
   return false;
