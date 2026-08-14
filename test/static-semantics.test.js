@@ -3,6 +3,7 @@ import { parseScript } from '../src/parser.js';
 import { UnsupportedNodeError } from '../src/runtime/errors.js';
 import {
   boundNames,
+  summarizeBoundNames,
   isConstantDeclaration,
   varDeclaredNames,
   varScopedDeclarations,
@@ -140,6 +141,56 @@ const tests = [
       );
 
       assertSame(error.nodeType, 'ArrayPattern');
+    },
+  },
+  {
+    name: 'summarizeBoundNames counts shared pattern aliases without expanding them',
+    run() {
+      const property = {
+        type: 'Property',
+        kind: 'init',
+        computed: false,
+        method: false,
+        shorthand: false,
+        key: { type: 'Identifier', name: 'key' },
+        value: {
+          type: 'AssignmentPattern',
+          left: { type: 'Identifier', name: 'value' },
+          right: { type: 'Literal', value: 1 },
+        },
+      };
+      const pattern = {
+        type: 'ArrayPattern',
+        elements: [
+          { type: 'ObjectPattern', properties: [property] },
+          {
+            type: 'RestElement',
+            argument: { type: 'Identifier', name: 'rest' },
+          },
+        ],
+      };
+      const summary = summarizeBoundNames([pattern, pattern]);
+
+      assertSame(summarizeBoundNames([pattern]).duplicate, false);
+      assertSame([...summary.names].join(','), 'value,rest');
+      assertSame(summary.duplicate, true);
+    },
+  },
+  {
+    name: 'summarizeBoundNames rejects cycles through pattern properties',
+    run() {
+      const pattern = /** @type {any} */ ({
+        type: 'ObjectPattern',
+        properties: [],
+      });
+      const property = { type: 'Property', value: pattern };
+      pattern.properties.push(property);
+
+      const error = /** @type {any} */ (
+        assertThrows(() => summarizeBoundNames([pattern]), UnsupportedNodeError)
+      );
+
+      assertSame(error.nodeType, 'ObjectPattern');
     },
   },
   {

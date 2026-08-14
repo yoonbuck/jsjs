@@ -138,6 +138,189 @@ export function boundNames(node) {
   return names;
 }
 
+/** @type {readonly any[]} */
+const EMPTY_BOUND_NAME_CHILDREN = Object.freeze([]);
+
+/**
+ * Summarizes the concatenation of several BoundNames lists without expanding
+ * repeated aliases in an AST DAG. Each graph node is classified once, then a
+ * capped occurrence count is propagated from the roots through every semantic
+ * edge. Repeating the same node in two positions therefore still makes each of
+ * its names duplicate, while a recursively shared pattern takes work
+ * proportional to the graph rather than to its expanded tree.
+ *
+ * The returned `names` set contains each bound name once. `duplicate` reports
+ * whether any name occurs more than once in the conceptual concatenated list.
+ * Cycles and unsupported binding nodes fail exactly as `boundNames` does.
+ *
+ * @param {readonly any[]} nodes
+ * @returns {{ names: Set<string>, duplicate: boolean }}
+ */
+export function summarizeBoundNames(nodes) {
+  /** @type {WeakMap<object, readonly any[]>} */
+  const children = new WeakMap();
+  /** @type {WeakMap<object, 1 | 2>} */
+  const occurrences = new WeakMap();
+  const visiting = new WeakSet();
+  const completed = new WeakSet();
+  /** @type {{ node: any, exiting: boolean }[]} */
+  const pending = [];
+  /** @type {any[]} */
+  const discoveryOrder = [];
+  /** @type {any[]} */
+  const postorder = [];
+
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    pending.push({ node: nodes[index], exiting: false });
+  }
+
+  while (pending.length > 0) {
+    const { node: current, exiting } =
+      /** @type {{ node: any, exiting: boolean }} */ (pending.pop());
+
+    if (!current || typeof current !== 'object') {
+      throw createUnsupportedNodeError(current);
+    }
+
+    if (exiting) {
+      visiting.delete(current);
+      completed.add(current);
+      postorder.push(current);
+      continue;
+    }
+
+    if (completed.has(current)) {
+      continue;
+    }
+
+    if (visiting.has(current)) {
+      throw createUnsupportedNodeError(current);
+    }
+
+    const currentChildren = boundNameChildren(current);
+    visiting.add(current);
+    children.set(current, currentChildren);
+    discoveryOrder.push(current);
+    pending.push({ node: current, exiting: true });
+
+    for (let index = currentChildren.length - 1; index >= 0; index -= 1) {
+      if (currentChildren[index] !== null) {
+        pending.push({ node: currentChildren[index], exiting: false });
+      }
+    }
+  }
+
+  for (let index = 0; index < nodes.length; index += 1) {
+    addBoundNameOccurrences(occurrences, nodes[index], 1);
+  }
+
+  for (let index = postorder.length - 1; index >= 0; index -= 1) {
+    const current = postorder[index];
+    const count = occurrences.get(current);
+
+    if (count === undefined) {
+      continue;
+    }
+
+    const currentChildren = /** @type {readonly any[]} */ (
+      children.get(current)
+    );
+
+    for (
+      let childIndex = 0;
+      childIndex < currentChildren.length;
+      childIndex += 1
+    ) {
+      const child = currentChildren[childIndex];
+
+      if (child !== null) {
+        addBoundNameOccurrences(occurrences, child, count);
+      }
+    }
+  }
+
+  const names = new Set();
+  let duplicate = false;
+
+  for (const current of discoveryOrder) {
+    const name = directlyBoundName(current);
+
+    if (name === undefined) {
+      continue;
+    }
+
+    if (occurrences.get(current) === 2 || names.has(name)) {
+      duplicate = true;
+    }
+
+    names.add(name);
+  }
+
+  return { names, duplicate };
+}
+
+/**
+ * @param {any} node
+ * @returns {readonly any[]}
+ */
+function boundNameChildren(node) {
+  switch (node.type) {
+    case 'Identifier':
+    case 'FunctionDeclaration':
+    case 'ClassDeclaration':
+      return EMPTY_BOUND_NAME_CHILDREN;
+    case 'VariableDeclaration': {
+      /** @type {any[]} */
+      const declarationIds = [];
+
+      for (let index = 0; index < node.declarations.length; index += 1) {
+        declarationIds.push(node.declarations[index].id);
+      }
+
+      return declarationIds;
+    }
+    case 'AssignmentPattern':
+      return [node.left];
+    case 'RestElement':
+      return [node.argument];
+    case 'ArrayPattern':
+      return node.elements;
+    case 'ObjectPattern':
+      return node.properties;
+    case 'Property':
+      return [node.value];
+    default:
+      throw createUnsupportedNodeError(node);
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function directlyBoundName(node) {
+  switch (node.type) {
+    case 'Identifier':
+      return node.name;
+    case 'FunctionDeclaration':
+    case 'ClassDeclaration':
+      return node.id.name;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * @param {WeakMap<object, 1 | 2>} occurrences
+ * @param {object} node
+ * @param {1 | 2} count
+ * @returns {void}
+ */
+function addBoundNameOccurrences(occurrences, node, count) {
+  const previous = occurrences.get(node);
+  occurrences.set(node, previous === undefined ? count : 2);
+}
+
 /**
  * ES2015 §13.3.1.3 — true for a `const` `LexicalDeclaration`, false for
  * `let`, `var`, and every other declaration form (a `FunctionDeclaration`'s

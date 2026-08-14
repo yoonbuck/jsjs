@@ -8,7 +8,7 @@ import {
 } from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import {
-  boundNames,
+  summarizeBoundNames,
   topLevelLexicallyDeclaredNames,
   topLevelVarDeclaredNames,
 } from './evaluator/static-semantics.js';
@@ -1279,7 +1279,7 @@ function checkCustomAstDefenses(root) {
       patternContext: undefined,
     },
   ];
-  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]>} */
+  /** @type {WeakMap<object, ValidationContextRecord | Map<any, any>>} */
   const seen = new WeakMap();
 
   while (pending.length > 0) {
@@ -1293,45 +1293,17 @@ function checkCustomAstDefenses(root) {
       continue;
     }
 
-    const contexts = seen.get(value);
-
-    if (contexts !== undefined) {
-      let alreadySeen = false;
-
-      for (const context of contexts) {
-        if (
-          context.parent === item.parent &&
-          context.parentKey === item.parentKey &&
-          context.parentIndex === item.parentIndex &&
-          context.nestedArray === item.nestedArray &&
-          context.patternContext === item.patternContext
-        ) {
-          alreadySeen = true;
-          break;
-        }
-      }
-
-      if (alreadySeen) {
-        continue;
-      }
-
-      contexts.push({
-        parent: item.parent,
-        parentKey: item.parentKey,
-        parentIndex: item.parentIndex,
-        nestedArray: item.nestedArray,
-        patternContext: item.patternContext,
-      });
-    } else {
-      seen.set(value, [
-        {
-          parent: item.parent,
-          parentKey: item.parentKey,
-          parentIndex: item.parentIndex,
-          nestedArray: item.nestedArray,
-          patternContext: item.patternContext,
-        },
-      ]);
+    if (
+      rememberValidationContext(
+        seen,
+        value,
+        item.parent,
+        item.parentKey,
+        item.parentIndex,
+        basicValidationContextKey(item.nestedArray, item.patternContext),
+      )
+    ) {
+      continue;
     }
 
     if (Array.isArray(value)) {
@@ -1434,6 +1406,172 @@ function checkCustomAstDefenses(root) {
       });
     }
   }
+}
+
+/**
+ * Records one validation context in fixed-depth identity/primitive maps. The
+ * outer WeakMap keeps node ownership weak; the nested Maps retain parents only
+ * for the duration of the current validation pass. A node's first context stays
+ * as one compact record; a second context promotes it to the indexed form, so
+ * ordinary trees do not allocate several maps for every uniquely visited node.
+ *
+ * @typedef {{ parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, primitiveKey: number }} ValidationContextRecord
+ *
+ * @param {WeakMap<object, ValidationContextRecord | Map<any, any>>} seen
+ * @param {object} value
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @param {number} primitiveKey
+ * @returns {boolean} Whether the exact context was already present.
+ */
+function rememberValidationContext(
+  seen,
+  value,
+  parent,
+  parentKey,
+  parentIndex,
+  primitiveKey,
+) {
+  const contexts = seen.get(value);
+
+  if (contexts === undefined) {
+    seen.set(value, { parent, parentKey, parentIndex, primitiveKey });
+    return false;
+  }
+
+  if (contexts instanceof Map) {
+    return rememberMappedValidationContext(
+      contexts,
+      parent,
+      parentKey,
+      parentIndex,
+      primitiveKey,
+    );
+  }
+
+  if (
+    contexts.parent === parent &&
+    contexts.parentKey === parentKey &&
+    contexts.parentIndex === parentIndex &&
+    contexts.primitiveKey === primitiveKey
+  ) {
+    return true;
+  }
+
+  const byParent = new Map();
+  rememberMappedValidationContext(
+    byParent,
+    contexts.parent,
+    contexts.parentKey,
+    contexts.parentIndex,
+    contexts.primitiveKey,
+  );
+  rememberMappedValidationContext(
+    byParent,
+    parent,
+    parentKey,
+    parentIndex,
+    primitiveKey,
+  );
+  seen.set(value, byParent);
+  return false;
+}
+
+/**
+ * @param {Map<any, any>} byParent
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @param {number} primitiveKey
+ * @returns {boolean}
+ */
+function rememberMappedValidationContext(
+  byParent,
+  parent,
+  parentKey,
+  parentIndex,
+  primitiveKey,
+) {
+  let byParentKey = byParent.get(parent);
+
+  if (byParentKey === undefined) {
+    byParentKey = new Map();
+    byParent.set(parent, byParentKey);
+  }
+
+  let byParentIndex = byParentKey.get(parentKey);
+
+  if (byParentIndex === undefined) {
+    byParentIndex = new Map();
+    byParentKey.set(parentKey, byParentIndex);
+  }
+
+  const primitiveKeys = byParentIndex.get(parentIndex);
+
+  if (primitiveKeys === undefined) {
+    byParentIndex.set(parentIndex, primitiveKey);
+    return false;
+  }
+
+  if (typeof primitiveKeys === 'number') {
+    if (primitiveKeys === primitiveKey) {
+      return true;
+    }
+
+    byParentIndex.set(parentIndex, new Set([primitiveKeys, primitiveKey]));
+    return false;
+  }
+
+  if (/** @type {Set<number>} */ (primitiveKeys).has(primitiveKey)) {
+    return true;
+  }
+
+  /** @type {Set<number>} */ (primitiveKeys).add(primitiveKey);
+  return false;
+}
+
+/**
+ * A collision-free mixed-radix key for the primitive context dimensions shared
+ * by the custom-AST defense walk.
+ *
+ * @param {boolean} nestedArray
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @returns {number}
+ */
+function basicValidationContextKey(nestedArray, patternContext) {
+  const patternKey =
+    patternContext === undefined ? 0 : patternContext === 'binding' ? 1 : 2;
+  return patternKey * 2 + (nestedArray ? 1 : 0);
+}
+
+/**
+ * Extends the basic mixed-radix key with every execution-context dimension
+ * carried by the syntax walk.
+ *
+ * @param {boolean} nestedArray
+ * @param {boolean} strict
+ * @param {boolean} superAllowed
+ * @param {boolean} superCallAllowed
+ * @param {boolean | undefined} classDerived
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @returns {number}
+ */
+function syntaxValidationContextKey(
+  nestedArray,
+  strict,
+  superAllowed,
+  superCallAllowed,
+  classDerived,
+  patternContext,
+) {
+  const classKey =
+    classDerived === undefined ? 0 : classDerived === false ? 1 : 2;
+  let key = basicValidationContextKey(nestedArray, patternContext);
+  key = key * 2 + (strict ? 1 : 0);
+  key = key * 2 + (superAllowed ? 1 : 0);
+  key = key * 2 + (superCallAllowed ? 1 : 0);
+  return key * 3 + classKey;
 }
 
 /**
@@ -2069,7 +2207,7 @@ function checkStatementPositionFunctionDeclarations(
       patternContext: undefined,
     },
   ];
-  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, patternContext: 'binding' | 'assignment' | undefined }[]>} */
+  /** @type {WeakMap<object, ValidationContextRecord | Map<any, any>>} */
   const seen = new WeakMap();
 
   while (pending.length > 0) {
@@ -2084,57 +2222,24 @@ function checkStatementPositionFunctionDeclarations(
       continue;
     }
 
-    const contexts = seen.get(node);
-
-    if (contexts !== undefined) {
-      let alreadySeen = false;
-
-      for (const context of contexts) {
-        if (
-          context.parent === item.parent &&
-          context.parentKey === item.parentKey &&
-          context.parentIndex === item.parentIndex &&
-          context.nestedArray === item.nestedArray &&
-          context.strict === strict &&
-          context.superAllowed === item.superAllowed &&
-          context.superCallAllowed === item.superCallAllowed &&
-          context.classDerived === item.classDerived &&
-          context.patternContext === item.patternContext
-        ) {
-          alreadySeen = true;
-          break;
-        }
-      }
-
-      if (alreadySeen) {
-        continue;
-      }
-
-      contexts.push({
-        parent: item.parent,
-        parentKey: item.parentKey,
-        parentIndex: item.parentIndex,
-        nestedArray: item.nestedArray,
-        strict,
-        superAllowed: item.superAllowed,
-        superCallAllowed: item.superCallAllowed,
-        classDerived: item.classDerived,
-        patternContext: item.patternContext,
-      });
-    } else {
-      seen.set(node, [
-        {
-          parent: item.parent,
-          parentKey: item.parentKey,
-          parentIndex: item.parentIndex,
-          nestedArray: item.nestedArray,
+    if (
+      rememberValidationContext(
+        seen,
+        node,
+        item.parent,
+        item.parentKey,
+        item.parentIndex,
+        syntaxValidationContextKey(
+          item.nestedArray,
           strict,
-          superAllowed: item.superAllowed,
-          superCallAllowed: item.superCallAllowed,
-          classDerived: item.classDerived,
-          patternContext: item.patternContext,
-        },
-      ]);
+          item.superAllowed,
+          item.superCallAllowed,
+          item.classDerived,
+          item.patternContext,
+        ),
+      )
+    ) {
+      continue;
     }
 
     if (Array.isArray(node)) {
@@ -2294,39 +2399,25 @@ function checkFunctionParameterEarlyErrors(node, strict) {
     );
   }
 
-  const seen = new Set();
+  let summary;
 
-  for (const parameter of node.params) {
-    if (hasBindingPatternCycle(parameter)) {
-      // The main AST walk is cycle-aware and will validate the reachable
-      // shapes; skip duplicate-name collection rather than looping here.
+  try {
+    summary = summarizeBoundNames(node.params);
+  } catch (error) {
+    if (error instanceof UnsupportedNodeError) {
+      // The shape-aware capability walk will reject this parameter with a
+      // positioned SyntaxError when it visits the unsupported child.
       return;
     }
 
-    let names;
+    throw error;
+  }
 
-    try {
-      names = boundNames(parameter);
-    } catch (error) {
-      if (error instanceof UnsupportedNodeError) {
-        // The shape-aware capability walk will reject this parameter with a
-        // positioned SyntaxError when it visits the unsupported child.
-        return;
-      }
-
-      throw error;
-    }
-
-    for (const name of names) {
-      if (seen.has(name)) {
-        throw unsupportedEs2015Error(
-          'Duplicate parameter name not allowed in this context',
-          parameter,
-        );
-      }
-
-      seen.add(name);
-    }
+  if (summary.duplicate) {
+    throw unsupportedEs2015Error(
+      'Duplicate parameter name not allowed in this context',
+      node,
+    );
   }
 }
 
@@ -2379,70 +2470,6 @@ function checkStrictBindingIdentifier(
   ) {
     throw unsupportedEs2015Error(`Binding ${node.name} in strict mode`, node);
   }
-}
-
-/**
- * @param {any} root
- * @returns {boolean}
- */
-function hasBindingPatternCycle(root) {
-  const visiting = new WeakSet();
-  const visited = new WeakSet();
-  /** @type {{ node: any, exiting: boolean }[]} */
-  const pending = [{ node: root, exiting: false }];
-
-  while (pending.length > 0) {
-    const { node, exiting } = /** @type {{ node: any, exiting: boolean }} */ (
-      pending.pop()
-    );
-
-    if (!node || typeof node !== 'object') {
-      continue;
-    }
-
-    if (exiting) {
-      visiting.delete(node);
-      visited.add(node);
-      continue;
-    }
-
-    if (visited.has(node)) {
-      continue;
-    }
-
-    if (visiting.has(node)) {
-      return true;
-    }
-
-    visiting.add(node);
-    pending.push({ node, exiting: true });
-
-    switch (node.type) {
-      case 'AssignmentPattern':
-        pending.push({ node: node.left, exiting: false });
-        break;
-      case 'RestElement':
-        pending.push({ node: node.argument, exiting: false });
-        break;
-      case 'ArrayPattern':
-        for (const element of node.elements) {
-          if (element !== null) {
-            pending.push({ node: element, exiting: false });
-          }
-        }
-        break;
-      case 'ObjectPattern':
-        for (const property of node.properties) {
-          pending.push({
-            node: property.type === 'Property' ? property.value : property,
-            exiting: false,
-          });
-        }
-        break;
-    }
-  }
-
-  return false;
 }
 
 /**
@@ -3753,7 +3780,7 @@ function validateArrowFunctionExpression(node) {
 
 /**
  * Rejects malformed custom function parameter trees before the early-error
- * pass reaches `boundNames` or pattern-cycle detection. Placement and
+ * pass reaches the bound-name summary. Placement and
  * expression capability checks remain the responsibility of the main AST walk.
  *
  * @param {any} node

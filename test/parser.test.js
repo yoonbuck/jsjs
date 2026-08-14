@@ -187,6 +187,203 @@ const tests = [
     },
   },
   {
+    name: 'duplicate-name checks bound work for recursively shared parameter patterns',
+    run() {
+      const property = {
+        type: 'Property',
+        kind: 'init',
+        computed: false,
+        method: false,
+        shorthand: false,
+        key: { type: 'Identifier', name: 'key' },
+        value: {
+          type: 'AssignmentPattern',
+          left: { type: 'Identifier', name: 'value' },
+          right: { type: 'Literal', value: 1 },
+        },
+      };
+      /** @type {any} */
+      let pattern = {
+        type: 'ArrayPattern',
+        elements: [
+          { type: 'ObjectPattern', properties: [property] },
+          {
+            type: 'RestElement',
+            argument: { type: 'Identifier', name: 'rest' },
+          },
+        ],
+      };
+
+      for (let depth = 0; depth < 14; depth += 1) {
+        pattern = { type: 'ArrayPattern', elements: [pattern, pattern] };
+      }
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'FunctionDeclaration',
+            id: { type: 'Identifier', name: 'f' },
+            params: [pattern],
+            generator: false,
+            async: false,
+            expression: false,
+            body: { type: 'BlockStatement', body: [] },
+          },
+        ],
+      };
+      const push = Array.prototype.push;
+      let pushCalls = 0;
+
+      Array.prototype.push = function countedPush(
+        /** @type {any[]} */ ...values
+      ) {
+        pushCalls += 1;
+        return push.apply(this, values);
+      };
+
+      try {
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      } finally {
+        Array.prototype.push = push;
+      }
+
+      if (pushCalls >= 2000) {
+        throw new Error(
+          `Expected fewer than 2000 worklist pushes, got ${pushCalls}`,
+        );
+      }
+    },
+  },
+  {
+    name: 'duplicate-name checks count the same pattern in distinct parameter positions',
+    run() {
+      const shared = {
+        type: 'ObjectPattern',
+        properties: [
+          {
+            type: 'Property',
+            kind: 'init',
+            computed: false,
+            method: false,
+            shorthand: true,
+            key: { type: 'Identifier', name: 'value' },
+            value: { type: 'Identifier', name: 'value' },
+          },
+        ],
+      };
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'FunctionDeclaration',
+            id: { type: 'Identifier', name: 'f' },
+            params: [shared, shared],
+            generator: false,
+            async: false,
+            expression: false,
+            body: { type: 'BlockStatement', body: [] },
+          },
+        ],
+      };
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'parseScript indexes repeated-node validation contexts without linear scans',
+    run() {
+      const shared = { type: 'Literal', value: 1 };
+      const program = expressionProgram({
+        type: 'SequenceExpression',
+        expressions: Array(128).fill(shared),
+      });
+      const arrayIterator = Array.prototype[Symbol.iterator];
+      let iteratorSteps = 0;
+
+      Array.prototype[Symbol.iterator] = function countedIterator() {
+        const iterator = arrayIterator.call(this);
+
+        return {
+          next() {
+            iteratorSteps += 1;
+            return iterator.next();
+          },
+          [Symbol.iterator]() {
+            return this;
+          },
+        };
+      };
+
+      try {
+        assertSame(parseScript('', { parse: () => program }).type, 'Program');
+      } finally {
+        Array.prototype[Symbol.iterator] = arrayIterator;
+      }
+
+      if (iteratorSteps >= 1000) {
+        throw new Error(
+          `Expected fewer than 1000 array-iterator steps, got ${iteratorSteps}`,
+        );
+      }
+    },
+  },
+  {
+    name: 'parseScript rechecks a shared subtree when inherited strictness changes',
+    run() {
+      const sharedDeclaration = {
+        type: 'VariableDeclaration',
+        kind: 'var',
+        declarations: [
+          {
+            type: 'VariableDeclarator',
+            id: { type: 'Identifier', name: 'eval' },
+            init: null,
+          },
+        ],
+      };
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          sharedDeclaration,
+          {
+            type: 'FunctionDeclaration',
+            id: { type: 'Identifier', name: 'strictFunction' },
+            params: [],
+            generator: false,
+            async: false,
+            expression: false,
+            body: {
+              type: 'BlockStatement',
+              body: [
+                {
+                  type: 'ExpressionStatement',
+                  expression: { type: 'Literal', value: 'use strict' },
+                  directive: 'use strict',
+                },
+                sharedDeclaration,
+              ],
+            },
+          },
+        ],
+      };
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
     name: 'parseScript rethrows non-syntax parser failures unchanged',
     run() {
       const error = /** @type {any} */ (
