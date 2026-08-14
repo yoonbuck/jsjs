@@ -127,10 +127,10 @@ Queue entries are explicit Job Records:
 
 The callback and arguments are internal engine data, not a host function used
 as guest semantics. A non-null `realm` selects the execution context for the
-job. A null Realm means the specification assigned no handler Realm; draining
-does not manufacture a fallback Realm. Functions called by that job still
-establish and use their own Realm through the ordinary engine call protocol.
-`kind` is diagnostic and never changes ordering.
+job. A null Realm is restricted to a specification path that evaluates no user
+ECMAScript code and creates no new ECMAScript objects; it is not a general
+fallback for failed Realm discovery. Draining never manufactures a Realm for
+that path. `kind` is diagnostic and never changes ordering.
 
 For a non-null Realm, the Agent installs the target Realm/job context before
 running the job and restores the previous context in `finally`. For a null
@@ -259,12 +259,15 @@ Promise jobs use the specification's nullable Realm selection rather than a
 capability-based approximation:
 
 - `NewPromiseReactionJob` uses `GetFunctionRealm` for a non-empty handler. An
-  empty identity/thrower handler has a null Job Realm. If `GetFunctionRealm`
-  completes abruptly, the Job Realm is also null; the later handler call still
-  follows ordinary guest abrupt-completion and Promise rejection semantics.
+  empty identity/thrower handler has a null Job Realm. A successful
+  `GetFunctionRealm` supplies the returned Realm. If `GetFunctionRealm`
+  completes abruptly, the job captures the current Realm Record at lookup time;
+  the later handler call still follows ordinary guest abrupt-completion and
+  Promise rejection semantics.
 - `NewPromiseResolveThenableJob` uses `GetFunctionRealm` for the captured
-  `then` callback. An abrupt Realm lookup selects null, as specified, rather
-  than the Promise or capability Realm.
+  `then` callback. A successful lookup supplies the returned Realm. An abrupt
+  lookup captures the current Realm Record at lookup time. A thenable job's
+  Realm is therefore never null.
 
 `GetFunctionRealm` is one shared runtime operation: ordinary and native
 functions return their owning Realm, bound functions recurse to their bound
@@ -273,14 +276,17 @@ a future Proxy callable will recurse to its target or complete abruptly when
 revoked. The current no-Proxy engine exercises that last completion through the
 internal callable-exotic fixture described below.
 
-Null-Realm jobs execute without installing an invented Realm. Resolving
-functions, handlers, and guest errors continue to use their callable-owning
-Realm through normal call semantics. Focused cross-Realm tests cover an empty
-handler, a foreign bound/unbound handler, a foreign thenable, and abrupt Realm
-lookup. Because guest `Proxy` is outside this milestone, the abrupt path uses an
-internal callable-exotic fixture and is differential-checked against the
-equivalent native revoked-Proxy behavior in Node, Chromium, and JSC;
-Proxy-dependent Test262 files remain honestly excluded until guest Proxy exists.
+Null-Realm jobs execute without installing an invented Realm and are allowed
+only where no user ECMAScript code runs and no new ECMAScript object is created.
+All other Promise jobs carry either the Realm returned by `GetFunctionRealm` or
+the current Realm captured when that lookup completed abruptly. Focused
+cross-Realm tests cover an empty handler, a foreign bound/unbound handler, a
+foreign thenable, and abrupt Realm lookup. Because guest `Proxy` is outside this
+milestone, the abrupt path uses an internal callable-exotic fixture and is
+differential-checked against equivalent native revoked-Proxy behavior in Node,
+Chromium, and JSC, asserting that new errors belong to the current Realm at
+lookup time. Proxy-dependent Test262 files remain honestly excluded until guest
+Proxy exists.
 
 ### Async Test262 execution
 
