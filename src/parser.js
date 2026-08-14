@@ -98,6 +98,7 @@ function getStrictParser() {
  */
 export function parseScript(source, options = {}) {
   const { parse = parseWithScriptParser, ...parserOptions } = options;
+  const hasCustomParse = parse !== parseWithScriptParser;
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
@@ -118,7 +119,7 @@ export function parseScript(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
-  return validateScriptProgram(program, source);
+  return validateScriptProgram(program, source, false, hasCustomParse);
 }
 
 /**
@@ -167,9 +168,15 @@ export function parseEval(source, strict = false) {
  * @param {unknown} program
  * @param {string} source
  * @param {boolean} [strict=false]
+ * @param {boolean} [customAst=false]
  * @returns {any}
  */
-function validateScriptProgram(program, source, strict = false) {
+function validateScriptProgram(
+  program,
+  source,
+  strict = false,
+  customAst = false,
+) {
   if (
     !program ||
     typeof program !== 'object' ||
@@ -180,7 +187,10 @@ function validateScriptProgram(program, source, strict = false) {
     throw new TypeError('Expected parser to return a script Program node');
   }
 
-  checkAcyclicAstChildren(/** @type {any} */ (program));
+  if (customAst) {
+    checkCustomAstDefenses(/** @type {any} */ (program));
+  }
+
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
     source,
@@ -262,6 +272,151 @@ function checkAcyclicAstChildren(root) {
           structural: true,
         });
       }
+    }
+  }
+}
+
+/**
+ * Applies the checks needed only for an untrusted custom parser result. Acorn
+ * creates an acyclic ESTree graph with evaluator-consumed edges, so keeping
+ * these generic scans off its ordinary output avoids rewalking every source
+ * tree while the main syntax and capability gate remains in place below.
+ *
+ * @param {any} root
+ * @returns {void}
+ */
+function checkCustomAstDefenses(root) {
+  checkAcyclicAstChildren(root);
+
+  /** @type {{ value: unknown, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
+  const pending = [
+    {
+      value: root,
+      parent: null,
+      parentKey: undefined,
+      parentIndex: undefined,
+      nestedArray: false,
+      patternContext: undefined,
+    },
+  ];
+  /** @type {WeakMap<object, { parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]>} */
+  const seen = new WeakMap();
+
+  while (pending.length > 0) {
+    const item =
+      /** @type {{ value: any, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
+        pending.pop()
+      );
+    const value = item.value;
+
+    if (!value || typeof value !== 'object') {
+      continue;
+    }
+
+    const contexts = seen.get(value);
+
+    if (contexts !== undefined) {
+      let alreadySeen = false;
+
+      for (const context of contexts) {
+        if (
+          context.parent === item.parent &&
+          context.parentKey === item.parentKey &&
+          context.parentIndex === item.parentIndex &&
+          context.nestedArray === item.nestedArray &&
+          context.patternContext === item.patternContext
+        ) {
+          alreadySeen = true;
+          break;
+        }
+      }
+
+      if (alreadySeen) {
+        continue;
+      }
+
+      contexts.push({
+        parent: item.parent,
+        parentKey: item.parentKey,
+        parentIndex: item.parentIndex,
+        nestedArray: item.nestedArray,
+        patternContext: item.patternContext,
+      });
+    } else {
+      seen.set(value, [
+        {
+          parent: item.parent,
+          parentKey: item.parentKey,
+          parentIndex: item.parentIndex,
+          nestedArray: item.nestedArray,
+          patternContext: item.patternContext,
+        },
+      ]);
+    }
+
+    if (Array.isArray(value)) {
+      if (typeof (/** @type {any} */ (value).type) === 'string') {
+        throw unsupportedEs2015Error('arrays cannot be AST nodes', value);
+      }
+
+      for (let index = value.length - 1; index >= 0; index -= 1) {
+        const nestedArray = item.nestedArray || Array.isArray(value[index]);
+
+        pending.push({
+          value: value[index],
+          parent: nestedArray ? null : item.parent,
+          parentKey: nestedArray ? undefined : item.parentKey,
+          parentIndex: nestedArray ? undefined : index,
+          nestedArray,
+          patternContext: item.patternContext,
+        });
+      }
+      continue;
+    }
+
+    const keys = Object.keys(value);
+    const typedNode = typeof value.type === 'string';
+
+    if (typedNode) {
+      if (item.nestedArray) {
+        throw unsupportedEs2015Error(
+          'AST nodes cannot appear in nested arrays',
+          value,
+        );
+      }
+
+      const childMessage = validateEvaluatorChildEdges(value);
+
+      if (childMessage !== undefined) {
+        throw unsupportedEs2015Error(childMessage, value);
+      }
+
+      const placementMessage = validateCustomAstNodePlacement(
+        value,
+        item.parent,
+        item.parentKey,
+        item.parentIndex,
+        item.patternContext,
+      );
+
+      if (placementMessage !== undefined) {
+        throw unsupportedEs2015Error(placementMessage, value);
+      }
+    }
+
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      const key = keys[index];
+
+      pending.push({
+        value: value[key],
+        parent: value,
+        parentKey: key,
+        parentIndex: undefined,
+        nestedArray: item.nestedArray,
+        patternContext: typedNode
+          ? patternContextForChild(value, key, item.patternContext)
+          : item.patternContext,
+      });
     }
   }
 }
@@ -590,6 +745,15 @@ const AST_CHILD_PROPERTY_KEYS = new Set([
 ]);
 
 /**
+ * Property keys that hold source-position metadata rather than child nodes.
+ * Trusted Acorn output is walked only through its AST proper; the custom-parser
+ * defensive phase above is responsible for inspecting arbitrary metadata.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
+
+/**
  * Rejects a `FunctionDeclaration` that sits in a statement position the ES5.1
  * grammar (with Annex B) forbids, as a parse-time early error.
  *
@@ -761,22 +925,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       continue;
     }
 
-    const keys = Object.keys(node);
-
     if (typeof node.type !== 'string') {
-      for (let index = keys.length - 1; index >= 0; index -= 1) {
-        pushChild(
-          pending,
-          node[keys[index]],
-          strict,
-          item.superAllowed,
-          item.superCallAllowed,
-          item.classDerived,
-          node,
-          keys[index],
-          item.patternContext,
-        );
-      }
       continue;
     }
 
@@ -799,11 +948,7 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.superAllowed,
       item.superCallAllowed,
     );
-    const childMessage = validateEvaluatorChildEdges(node);
-
-    if (childMessage !== undefined) {
-      throw unsupportedEs2015Error(childMessage, node);
-    }
+    checkUnsupportedForOfAwait(node);
 
     checkStrictBindingIdentifier(
       node,
@@ -828,18 +973,22 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.superCallAllowed,
       item.classDerived,
     );
+    const keys = Object.keys(node);
+
     for (let index = keys.length - 1; index >= 0; index -= 1) {
-      pushChild(
-        pending,
-        node[keys[index]],
-        childStrict,
-        childSuperAllowed,
-        childSuperCallAllowed,
-        classDerivedForChild(node, keys[index], item.classDerived),
-        node,
-        keys[index],
-        patternContextForChild(node, keys[index], item.patternContext),
-      );
+      if (!NODE_POSITION_KEYS.has(keys[index])) {
+        pushChild(
+          pending,
+          node[keys[index]],
+          childStrict,
+          childSuperAllowed,
+          childSuperCallAllowed,
+          classDerivedForChild(node, keys[index], item.classDerived),
+          node,
+          keys[index],
+          patternContextForChild(node, keys[index], item.patternContext),
+        );
+      }
     }
   }
 }
@@ -1405,20 +1554,9 @@ function unsupportedEs2015Message(
     return `unsupported AST node type ${node.type}`;
   }
 
-  if (isSupportedExpressionNode(node)) {
-    if (
-      !isSupportedExpressionPosition(
-        node,
-        parent,
-        parentKey,
-        parentIndex,
-        patternContext,
-      )
-    ) {
-      return 'expressions are not supported in this AST position';
-    }
-  } else if (
-    !isSupportedNonExpressionPosition(
+  if (
+    isSupportedExpressionNode(node) &&
+    !isSupportedExpressionPosition(
       node,
       parent,
       parentKey,
@@ -1426,7 +1564,7 @@ function unsupportedEs2015Message(
       patternContext,
     )
   ) {
-    return 'AST nodes are not supported in this AST position';
+    return 'expressions are not supported in this AST position';
   }
 
   if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
@@ -1589,6 +1727,51 @@ function unsupportedEs2015Message(
   }
 
   return UNSUPPORTED_ES2015_NODE_MESSAGES.get(node.type);
+}
+
+/**
+ * Validates the exact parent edge of every custom-parser AST node before the
+ * regular syntax gate checks its feature-specific shape.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @returns {string | undefined}
+ */
+function validateCustomAstNodePlacement(
+  node,
+  parent,
+  parentKey,
+  parentIndex,
+  patternContext,
+) {
+  if (!RECOGNIZED_AST_NODE_TYPES.has(node.type)) {
+    return `unsupported AST node type ${node.type}`;
+  }
+
+  if (isSupportedExpressionNode(node)) {
+    return isSupportedExpressionPosition(
+      node,
+      parent,
+      parentKey,
+      parentIndex,
+      patternContext,
+    )
+      ? undefined
+      : 'expressions are not supported in this AST position';
+  }
+
+  return isSupportedNonExpressionPosition(
+    node,
+    parent,
+    parentKey,
+    parentIndex,
+    patternContext,
+  )
+    ? undefined
+    : 'AST nodes are not supported in this AST position';
 }
 
 /**
@@ -3099,12 +3282,10 @@ function validateMemberExpressionEdges(node) {
  * @returns {string | undefined}
  */
 function validateForInOfEdges(node) {
-  if (
-    node.type === 'ForOfStatement' &&
-    Object.prototype.hasOwnProperty.call(node, 'await') &&
-    node.await !== false
-  ) {
-    return 'async for-of is not supported';
+  const awaitMessage = unsupportedForOfAwaitMessage(node);
+
+  if (awaitMessage !== undefined) {
+    return awaitMessage;
   }
 
   const leftMessage = validateForInOfLeft(node);
@@ -3117,6 +3298,33 @@ function validateForInOfEdges(node) {
     validateRequiredChild(node, 'right', isExpressionNodeOrUnknown) ??
     validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
   );
+}
+
+/**
+ * `await` is a post-ES2015 extension to the for-of AST. Keep this capability
+ * gate in the ordinary parser pass as well as the custom edge validator.
+ *
+ * @param {any} node
+ * @returns {void}
+ */
+function checkUnsupportedForOfAwait(node) {
+  const message = unsupportedForOfAwaitMessage(node);
+
+  if (message !== undefined) {
+    throw unsupportedEs2015Error(message, node);
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function unsupportedForOfAwaitMessage(node) {
+  return node.type === 'ForOfStatement' &&
+    Object.prototype.hasOwnProperty.call(node, 'await') &&
+    node.await !== false
+    ? 'async for-of is not supported'
+    : undefined;
 }
 
 /**
