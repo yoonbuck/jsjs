@@ -73,6 +73,10 @@ function parseWithScriptParser(source, options) {
 let strictParser;
 /** @type {typeof Parser | undefined} */
 let sloppyScriptParser;
+/** @type {typeof Parser | undefined} */
+let directSuperParser;
+/** @type {typeof Parser | undefined} */
+let strictDirectSuperParser;
 
 /**
  * @returns {typeof Parser}
@@ -125,6 +129,48 @@ function getSloppyScriptParser() {
   }
 
   return sloppyScriptParser;
+}
+
+/**
+ * Acorn's public `allowSuperOutsideMethod` option admits super-property syntax
+ * but deliberately still rejects direct `super(...)`. Eval code needs both
+ * forms to reach this module's context-sensitive early-error pass when the
+ * direct caller is a derived constructor.
+ *
+ * @param {boolean} strict
+ * @param {boolean} allowDirectSuper
+ * @returns {typeof Parser}
+ */
+function getEvalParser(strict, allowDirectSuper) {
+  if (!allowDirectSuper) {
+    return strict ? getStrictParser() : Parser;
+  }
+
+  if (directSuperParser === undefined) {
+    directSuperParser = Parser.extend(
+      (Base) =>
+        class extends Base {
+          get allowDirectSuper() {
+            return true;
+          }
+        },
+    );
+  }
+
+  if (strictDirectSuperParser === undefined) {
+    strictDirectSuperParser = getStrictParser().extend(
+      (Base) =>
+        class extends Base {
+          get allowDirectSuper() {
+            return true;
+          }
+        },
+    );
+  }
+
+  return strict
+    ? /** @type {typeof Parser} */ (strictDirectSuperParser)
+    : directSuperParser;
 }
 
 /**
@@ -248,20 +294,34 @@ export function parseScript(source, options = {}) {
  *
  * @param {string} source
  * @param {boolean} [strict=false]
+ * @param {{ superAllowed?: boolean, superCallAllowed?: boolean }} [context]
  * @returns {any}
  */
-export function parseEval(source, strict = false) {
-  const parser = strict ? getStrictParser() : Parser;
+export function parseEval(source, strict = false, context = {}) {
+  const superCallAllowed = context.superCallAllowed === true;
+  const superAllowed = context.superAllowed === true || superCallAllowed;
+  const parser = getEvalParser(strict, superCallAllowed);
+  const parserOptions = superAllowed
+    ? { ...PARSER_OPTIONS, allowSuperOutsideMethod: true }
+    : PARSER_OPTIONS;
 
   let program;
 
   try {
-    program = parser.parse(source, PARSER_OPTIONS);
+    program = parser.parse(source, parserOptions);
   } catch (error) {
     throw asParseFailure(error, true);
   }
 
-  return validateScriptProgram(program, source, strict);
+  return validateScriptProgram(
+    program,
+    source,
+    strict,
+    false,
+    false,
+    undefined,
+    { superAllowed, superCallAllowed },
+  );
 }
 
 /**
@@ -284,6 +344,7 @@ export function parseEval(source, strict = false) {
  * @param {boolean} [customAst=false]
  * @param {boolean} [customAstValidated=false]
  * @param {WeakSet<object>} [sourceIndependentNodes]
+ * @param {{ superAllowed: boolean, superCallAllowed: boolean }} [rootContext]
  * @returns {any}
  */
 function validateScriptProgram(
@@ -293,6 +354,7 @@ function validateScriptProgram(
   customAst = false,
   customAstValidated = false,
   sourceIndependentNodes,
+  rootContext = { superAllowed: false, superCallAllowed: false },
 ) {
   if (customAst && !customAstValidated) {
     checkUntrustedAstDescriptors(program);
@@ -312,6 +374,7 @@ function validateScriptProgram(
     strict,
     customAst,
     sourceIndependentNodes,
+    rootContext,
   );
   checkProgramDeclarationEarlyErrors(/** @type {any} */ (program).body);
 
@@ -1100,7 +1163,12 @@ function untrustedAstSyntaxError(message) {
  * back-edge. An active-path set, rather than a global visited set, permits
  * legitimate shared nodes in a DAG (notably Acorn's shorthand property
  * key/value identity) while rejecting a node or child array that reaches an
- * ancestor. The explicit enter/exit worklist avoids recursive host stack use.
+ * ancestor. Completed values are memoized separately so recursively shared
+ * DAGs remain linear without hiding a back-edge on the active path. The
+ * identity-only completed set is safe in this cycle-only prepass; the later
+ * semantic walks retain their parent, position, pattern, strict, and super
+ * context keys. The explicit enter/exit worklist avoids recursive host stack
+ * use.
  *
  * @param {any} root
  * @returns {void}
@@ -1110,6 +1178,8 @@ function checkAcyclicAstChildren(root) {
   const pending = [{ value: root, exiting: false, structural: true }];
   const visitingNodes = new WeakSet();
   const visitingArrays = new WeakSet();
+  const completedNodes = new WeakSet();
+  const completedArrays = new WeakSet();
 
   while (pending.length > 0) {
     const item =
@@ -1131,14 +1201,20 @@ function checkAcyclicAstChildren(root) {
     }
 
     const visiting = array ? visitingArrays : visitingNodes;
+    const completed = array ? completedArrays : completedNodes;
 
     if (item.exiting) {
       visiting.delete(value);
+      completed.add(value);
       continue;
     }
 
     if (visiting.has(value)) {
       throw unsupportedEs2015Error('cyclic AST child graph', value);
+    }
+
+    if (completed.has(value)) {
+      continue;
     }
 
     visiting.add(value);
@@ -1967,6 +2043,7 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @param {string} source The exact text parsed, for the code-point-escape check.
  * @param {boolean} rootStrict
  * @param {WeakSet<object>} [sourceIndependentNodes]
+ * @param {{ superAllowed: boolean, superCallAllowed: boolean }} [rootContext]
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(
@@ -1975,14 +2052,15 @@ function checkStatementPositionFunctionDeclarations(
   rootStrict,
   allOwnKeys = false,
   sourceIndependentNodes,
+  rootContext = { superAllowed: false, superCallAllowed: false },
 ) {
   /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
     {
       node: root,
       strict: rootStrict,
-      superAllowed: false,
-      superCallAllowed: false,
+      superAllowed: rootContext.superAllowed,
+      superCallAllowed: rootContext.superCallAllowed,
       classDerived: undefined,
       parent: null,
       parentKey: undefined,

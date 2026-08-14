@@ -146,6 +146,47 @@ const tests = [
     },
   },
   {
+    name: 'parseScript validates a recursively shared two-edge AST DAG in linear work',
+    run() {
+      /** @type {any} */
+      let expression = { type: 'Literal', value: 1 };
+
+      for (let depth = 0; depth < 12; depth += 1) {
+        expression = {
+          type: 'ConditionalExpression',
+          test: { type: 'Literal', value: true },
+          consequent: expression,
+          alternate: expression,
+        };
+      }
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [{ type: 'ExpressionStatement', expression }],
+      };
+      const ownKeys = Reflect.ownKeys;
+      let ownKeysCalls = 0;
+
+      Reflect.ownKeys = function countedOwnKeys(value) {
+        ownKeysCalls += 1;
+        return ownKeys(value);
+      };
+
+      try {
+        assertSame(parseScript('', { parse: () => program }).type, 'Program');
+      } finally {
+        Reflect.ownKeys = ownKeys;
+      }
+
+      if (ownKeysCalls >= 500) {
+        throw new Error(
+          `Expected fewer than 500 AST key scans, got ${ownKeysCalls}`,
+        );
+      }
+    },
+  },
+  {
     name: 'parseScript rethrows non-syntax parser failures unchanged',
     run() {
       const error = /** @type {any} */ (

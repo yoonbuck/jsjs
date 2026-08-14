@@ -103,7 +103,11 @@ export function performEval(x, callerContext) {
   let program;
 
   try {
-    program = parseEval(x, inheritedStrict);
+    program = parseEval(x, inheritedStrict, {
+      superAllowed: callerContext.functionEnvironment?.homeObject !== undefined,
+      superCallAllowed:
+        callerContext.functionEnvironment?.activeConstructor !== undefined,
+    });
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new GuestErrorSignal('SyntaxError', error.message);
