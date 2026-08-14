@@ -113,7 +113,7 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
 
   defineClassProperty(prototype, 'constructor', {
     value: constructor,
-    writable: false,
+    writable: true,
     enumerable: false,
     configurable: true,
   });

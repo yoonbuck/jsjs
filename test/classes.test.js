@@ -164,7 +164,7 @@ const tests = [
       assertSame(prototypeDescriptor.enumerable, false);
       assertSame(prototypeDescriptor.configurable, false);
       assertSame(constructorDescriptor.value, C);
-      assertSame(constructorDescriptor.writable, false);
+      assertSame(constructorDescriptor.writable, true);
       assertSame(constructorDescriptor.enumerable, false);
       assertSame(constructorDescriptor.configurable, true);
       assertSame(methodDescriptor.writable, true);

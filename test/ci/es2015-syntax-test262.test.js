@@ -88,6 +88,7 @@ const SUPPORTED_PATHS = Object.freeze([
   'test/language/expressions/tagged-template/cache-same-site.js',
   'test/language/expressions/template-literal/evaluation-order.js',
   'test/language/rest-parameters/rest-parameters-produce-an-array.js',
+  'test/language/statements/class/definition/constructor-property.js',
   'test/language/statements/class/method-static/forbidden-ext/b1/cls-decl-meth-static-forbidden-ext-direct-access-prop-arguments.js',
   'test/language/statements/class/method-static/forbidden-ext/b1/cls-decl-meth-static-forbidden-ext-direct-access-prop-caller.js',
   'test/language/statements/class/method/forbidden-ext/b1/cls-decl-meth-forbidden-ext-direct-access-prop-arguments.js',
