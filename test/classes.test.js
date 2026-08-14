@@ -456,6 +456,30 @@ const tests = [
     },
   },
   {
+    name: 'bound super construction preserves an explicit base-constructor object return',
+    run() {
+      assertSame(
+        run(`
+          class Base {
+            constructor() {
+              return Object.create(Base.prototype);
+            }
+          }
+          var BoundBase = Base.bind(null);
+          BoundBase.prototype = Base.prototype;
+          class Derived extends BoundBase {}
+          var result = new Derived();
+          [
+            Object.getPrototypeOf(result) === Base.prototype,
+            result instanceof Base,
+            result instanceof Derived
+          ].join(':');
+        `),
+        'true:true:false',
+      );
+    },
+  },
+  {
     name: 'derived classes inherit static and instance behavior with super receivers',
     run() {
       assertSame(

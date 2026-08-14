@@ -18,6 +18,7 @@ import { toBoolean, toUint32 } from '../runtime/conversion.js';
  *   ) => unknown,
  *   construct?: ((args: readonly unknown[], functionObject: NativeFunction, newTarget: unknown) => EngineObject) | undefined,
  *   prototype?: EngineObject | undefined,
+ *   retargetConstructionResult?: boolean,
  * }} NativeFunctionOptions
  */
 
@@ -31,7 +32,17 @@ export class NativeFunction extends EngineObject {
    * @param {Realm} realm
    * @param {NativeFunctionOptions} options
    */
-  constructor(realm, { name, length, call, construct, prototype }) {
+  constructor(
+    realm,
+    {
+      name,
+      length,
+      call,
+      construct,
+      prototype,
+      retargetConstructionResult = true,
+    },
+  ) {
     super(realm.intrinsics.functionPrototype, 'Function');
 
     /** @type {Realm} */
@@ -44,6 +55,8 @@ export class NativeFunction extends EngineObject {
     this._nativeName = name;
     /** @type {boolean} */
     this._isConstructor = construct !== undefined;
+    /** @type {boolean} */
+    this._retargetConstructionResult = retargetConstructionResult;
 
     this.defineOwnProperty('length', {
       value: length,
@@ -124,7 +137,9 @@ export class NativeFunction extends EngineObject {
       throw new TypeError('Native constructor must return an object');
     }
 
-    setNativeConstructionPrototype(result, this, newTarget);
+    if (this._retargetConstructionResult) {
+      setNativeConstructionPrototype(result, this, newTarget);
+    }
     return result;
   }
 

@@ -76,6 +76,10 @@ class BoundFunction extends NativeFunction {
         );
       },
       construct,
+      // `construct` above delegates with the corrected target/newTarget pair,
+      // so NativeFunction's ordinary allocation retargeting must not rewrite
+      // an explicit object the target returns.
+      retargetConstructionResult: false,
     });
 
     this.boundTargetFunction = target;
