@@ -262,6 +262,35 @@ const tests = [
     },
   },
   {
+    name: 'derived constructor fallthrough errors use the callee ReferenceError realm',
+    run() {
+      const calleeRealm = createRealm();
+      const callerRealm = createRealm();
+      const classCompletion = evaluateScript(
+        calleeRealm,
+        'class Base {} class ForeignDerived extends Base { constructor() {} } ForeignDerived;',
+      );
+
+      assertSame(classCompletion.type, 'normal');
+      callerRealm.globalObject.defineOwnProperty('ForeignDerived', {
+        value: classCompletion.value,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const crossRealmCompletion = evaluateScript(
+        callerRealm,
+        'new ForeignDerived();',
+      );
+
+      assertSame(crossRealmCompletion.type, 'throw');
+      assertSame(
+        /** @type {any} */ (crossRealmCompletion.value).getPrototype(),
+        calleeRealm.intrinsics.referenceErrorPrototype,
+      );
+    },
+  },
+  {
     name: 'class constructors and methods inherit restricted caller and arguments properties',
     run() {
       assertSame(

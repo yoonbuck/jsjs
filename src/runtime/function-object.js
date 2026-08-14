@@ -381,9 +381,11 @@ export class EngineFunction extends EngineObject {
     }
 
     if (functionEnvironment.thisStatus !== 'initialized') {
-      throw new GuestErrorSignal(
-        'ReferenceError',
-        "Must call super constructor in derived class before accessing 'this'",
+      throw new ThrowSignal(
+        this.realm.createGuestError(
+          'ReferenceError',
+          "Must call super constructor in derived class before accessing 'this'",
+        ),
       );
     }
 
