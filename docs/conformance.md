@@ -66,6 +66,11 @@ self-resolution, adopts same-engine Promises when appropriate, reads a
 thenable's `then` once for thenable assimilation, and enqueues thenable and
 reaction jobs. It never uses host Promise assimilation.
 
+Promise `Symbol.species` selects the derived Promise constructor for `then`:
+`Promise[Symbol.species]` returns its receiver, missing or null species fall
+back to the Realm's intrinsic Promise constructor, and a non-constructor species
+throws a guest `TypeError`.
+
 Reactions preserve registration order. Guest abrupt completions from handlers
 reject the derived Promise rather than escaping the Agent Job Queue. Promise
 jobs select the handler's function Realm when available, preserving Realm-owned

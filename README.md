@@ -79,9 +79,10 @@ const realm = createRealm({
 });
 ```
 
-This sample host may use `queueMicrotask`; nothing in `src/` probes or calls
-that host API. `jobHost.scheduleMicrotask` is optional at the embedding boundary
-only in the sense that omitting the whole `jobHost` selects manual mode. See
+This example names `queueMicrotask` only as an embedder/host scheduling choice;
+nothing in `src/` probes or calls that host API. `jobHost.scheduleMicrotask` is
+optional at the embedding boundary only in the sense that omitting the whole
+`jobHost` selects manual mode. See
 [docs/conformance.md](docs/conformance.md) for Agent Job, Promise, rejection
 tracker, and async Test262 behavior.
 

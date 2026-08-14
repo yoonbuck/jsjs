@@ -219,9 +219,9 @@ TZ=UTC node test/run-node.js test/ci/es2015-promise-test262.test.js
 ```
 
 The focused suite requires the exact upstream revision in `vendor/test262` and
-does not rewrite coverage artifacts. Do not run the broad upstream Test262
-selection or regenerate its report for this focused check; exact-SHA CI owns
-that coverage and its generated artifacts.
+does not rewrite coverage artifacts. For this Layer-1 focused check, do not run
+the broad upstream Test262 suite locally or regenerate its report; exact-SHA CI
+owns that coverage and its generated artifacts.
 
 ### Fixture vs. upstream suites
 

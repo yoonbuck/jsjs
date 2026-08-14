@@ -1548,6 +1548,38 @@ export default [
         'README must document the optional jobHost scheduler interface',
       );
       assertSame(
+        /jobHost: \{\s+scheduleMicrotask\(callback\) \{\s+queueMicrotask\(callback\);\s+\},/u.test(
+          readme,
+        ),
+        true,
+        'README must show queueMicrotask only inside the embedder jobHost scheduler example',
+      );
+      const queueMicrotaskMentions = [readme, testing, conformance]
+        .join('\n')
+        .match(/\bqueueMicrotask\b/gu);
+      assertSame(
+        queueMicrotaskMentions?.length,
+        2,
+        'the layer-1 documentation must name queueMicrotask only in the README host example and its host-only claim',
+      );
+      assertSame(
+        readme.includes(
+          'This example names `queueMicrotask` only as an embedder/host scheduling choice;',
+        ),
+        true,
+        'README must describe queueMicrotask as an embedder/host scheduling choice only',
+      );
+      const sourceQueueMicrotaskUsers = [
+        ...(await readJavaScript('src/')).entries(),
+      ]
+        .filter(([, source]) => source.includes('queueMicrotask'))
+        .map(([file]) => file);
+      assertSame(
+        JSON.stringify(sourceQueueMicrotaskUsers),
+        '[]',
+        'src/ must not probe or call the host queueMicrotask API',
+      );
+      assertSame(
         testing.includes('test/ci/es2015-promise-test262.test.js'),
         true,
         'docs/testing.md must name the focused ES2015 Promise Test262 suite',
@@ -1557,6 +1589,13 @@ export default [
         true,
         'docs/testing.md must document UTC for the focused Promise Test262 suite',
       );
+      assertSame(
+        /For this Layer-1 focused check, do not run\s+the broad upstream Test262 suite locally or regenerate its report; exact-SHA CI\s+owns that coverage and its generated artifacts\./u.test(
+          testing,
+        ),
+        true,
+        'docs/testing.md must reserve the broad upstream Test262 run and artifact regeneration for CI during the Layer-1 focused check',
+      );
 
       for (const contract of [
         'Agent Jobs',
@@ -1564,6 +1603,8 @@ export default [
         'reactions',
         'thenable assimilation',
         'combinators',
+        'Promise `Symbol.species` selects the derived Promise constructor',
+        'promiseRejectionTracker(promise, operation)',
         'async $DONE',
         'Generators and modules are not implemented.',
       ]) {
