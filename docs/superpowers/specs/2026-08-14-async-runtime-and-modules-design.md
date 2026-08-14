@@ -106,7 +106,7 @@ Queue entries are explicit Job Records:
 ```js
 /**
  * @typedef {{
- *   realm: Realm,
+ *   realm: Realm | null,
  *   callback: (args: readonly unknown[]) => JobCompletion,
  *   arguments: readonly unknown[],
  *   kind: string,
@@ -126,14 +126,17 @@ Queue entries are explicit Job Records:
 ```
 
 The callback and arguments are internal engine data, not a host function used
-as guest semantics. `realm` selects the execution context and guest-error
-materialization domain for the job. `kind` is diagnostic and never changes
-ordering.
+as guest semantics. A non-null `realm` selects the execution context for the
+job. A null Realm means the specification assigned no handler Realm; draining
+does not manufacture a fallback Realm. Functions called by that job still
+establish and use their own Realm through the ordinary engine call protocol.
+`kind` is diagnostic and never changes ordering.
 
-The Agent installs the target Realm/job context before running each job and
-restores the previous context in `finally`. Jobs from several related realms
-therefore share one FIFO while retaining the Realm in which their semantics
-must run.
+For a non-null Realm, the Agent installs the target Realm/job context before
+running the job and restores the previous context in `finally`. For a null
+Realm it installs a null job context and likewise restores the previous one.
+Jobs from several related realms therefore share one FIFO without silently
+assigning an absent handler Realm to a capability or originating Promise.
 
 ### Portable scheduling adapter
 
@@ -176,15 +179,24 @@ moves to `scheduled`, and invokes `scheduleMicrotask` once. Enqueuing while
 the state remains `idle` until `runJobs()` begins. A drain processes FIFO
 through jobs appended by earlier jobs, then returns to `idle`.
 
+State is paired with a monotonically increasing checkpoint generation. Every
+idle-to-scheduled transition increments the generation and captures that token
+in the scheduled closure. A host callback may drain only while the Agent is
+`scheduled` **and** its captured token equals the currently scheduled
+generation. Every other callback is stale and is a no-op, even when a newer
+generation is currently `scheduled`.
+
 If `scheduleMicrotask` throws, the Agent restores `idle`, retains every queued
-job, and rethrows the host error synchronously. The embedder can repair the
-adapter and call `runJobs`; scheduling failure never loses guest work or leaves
-the Agent stuck in `scheduled`.
+job, invalidates that generation, and rethrows the host error synchronously. The
+embedder can repair the adapter and call `runJobs`; scheduling failure never
+loses guest work or leaves the Agent stuck in `scheduled`.
 
 A public `runJobs()` invoked while `scheduled` may drain early and makes the
-later host callback a documented no-op. Calling it while `draining` throws a
-host `TypeError` before changing state. A duplicate or stale host callback
-observing `idle` is a no-op. No suspension retains a host stack frame.
+later host callback stale by invalidating its generation. Calling it while
+`draining` throws a host `TypeError` before changing state. A duplicate or stale
+host callback is a no-op regardless of the current three-state value. This
+prevents callback A, manually drained early, from consuming a newer generation
+B if A arrives after B is scheduled. No suspension retains a host stack frame.
 
 `runJobs()` never leaks an expected guest abrupt completion as an uncaught host
 exception. It drains all jobs and returns a deterministic report:
@@ -233,10 +245,8 @@ uses host Promise assimilation.
 Settling a Promise is one-way. It snapshots and clears the applicable reaction
 list, preserves registration order, and enqueues one reaction Job Record per
 reaction. `then` uses identity/thrower behavior for missing handlers,
-`SpeciesConstructor` for the result capability, and the handler's Realm when
-selecting the Job Record Realm, with the capability Promise Realm as the
-specified fallback. Cross-Realm tests pin the selected intrinsic and error
-ownership.
+`SpeciesConstructor` for the result capability, and the nullable Job Realm rules
+below. Cross-Realm tests pin the selected intrinsic and error ownership.
 
 The constructor calls its executor synchronously with realm-owned resolving
 functions. Executor throws reject the Promise. `Promise.resolve` preserves an
@@ -244,6 +254,33 @@ input Promise only when its constructor matches. `all` and `race` consume input
 with the existing iterator operations, preserve input order, use per-element
 already-called cells, and apply the existing `IteratorClose` abrupt-completion
 precedence.
+
+Promise jobs use the specification's nullable Realm selection rather than a
+capability-based approximation:
+
+- `NewPromiseReactionJob` uses `GetFunctionRealm` for a non-empty handler. An
+  empty identity/thrower handler has a null Job Realm. If `GetFunctionRealm`
+  completes abruptly, the Job Realm is also null; the later handler call still
+  follows ordinary guest abrupt-completion and Promise rejection semantics.
+- `NewPromiseResolveThenableJob` uses `GetFunctionRealm` for the captured
+  `then` callback. An abrupt Realm lookup selects null, as specified, rather
+  than the Promise or capability Realm.
+
+`GetFunctionRealm` is one shared runtime operation: ordinary and native
+functions return their owning Realm, bound functions recurse to their bound
+target rather than returning the Realm in which `bind` created the wrapper, and
+a future Proxy callable will recurse to its target or complete abruptly when
+revoked. The current no-Proxy engine exercises that last completion through the
+internal callable-exotic fixture described below.
+
+Null-Realm jobs execute without installing an invented Realm. Resolving
+functions, handlers, and guest errors continue to use their callable-owning
+Realm through normal call semantics. Focused cross-Realm tests cover an empty
+handler, a foreign bound/unbound handler, a foreign thenable, and abrupt Realm
+lookup. Because guest `Proxy` is outside this milestone, the abrupt path uses an
+internal callable-exotic fixture and is differential-checked against the
+equivalent native revoked-Proxy behavior in Node, Chromium, and JSC;
+Proxy-dependent Test262 files remain honestly excluded until guest Proxy exists.
 
 ### Async Test262 execution
 
@@ -258,6 +295,13 @@ semantics to complete them. A test that exhausts the checkpoint without calling
 The runner's ordinary sync path remains unchanged. Async negative expectations,
 duplicate `$DONE`, thrown harness code, queued failures, and cross-host record
 equivalence receive focused tests before the flag is enabled.
+
+Checkpoint tests pin FIFO, enqueue-during-drain, one-checkpoint coalescing,
+manual mode, reentrant drains, scheduler-throw recovery, and generation
+identity. The generation regression uses this exact order: callback A is
+scheduled, `runJobs()` drains A early, new work schedules callback B, late
+callback A runs while B is `scheduled` and must do nothing, then B drains only
+B's generation.
 
 ### Layer 1 non-goals
 
@@ -346,6 +390,52 @@ returns a done result carrying `value`, and `throw(error)` throws `error`.
 Reentrant resume while `executing` raises a guest `TypeError` without corrupting
 the continuation. Terminal normal or abrupt completion changes state to
 `completed` before returning or propagating.
+
+### Dynamic GeneratorFunction constructor
+
+`%GeneratorFunction%` is a per-Realm intrinsic with `name` `"GeneratorFunction"`
+and `length` 1. It is not installed as a global binding. Guest code reaches it
+through a generator function's inherited `constructor`.
+
+Its intrinsic prototype is the Realm's `%Function%` constructor object. Its own
+non-writable, non-enumerable, non-configurable `prototype` property is
+`%GeneratorFunction.prototype%`. Calling or constructing
+`%GeneratorFunction%` performs the same dynamic creation algorithm in the
+invoked constructor's Realm and returns a new generator **function**, not a
+Generator object.
+
+`%GeneratorFunction.prototype%` is a non-callable, non-constructible ordinary
+object inheriting `%Function.prototype%`. It has:
+
+- a non-writable, non-enumerable, configurable `constructor` property naming
+  `%GeneratorFunction%`;
+- a non-writable, non-enumerable, configurable `prototype` property naming
+  `%GeneratorPrototype%`; and
+- `@@toStringTag` `"GeneratorFunction"` with the ES2015 descriptor.
+
+`%GeneratorPrototype%` inherits `%IteratorPrototype%`. Its `constructor`
+property names `%GeneratorFunction.prototype%`, not `%GeneratorFunction%`; it
+also owns `next`, `return`, `throw`, and `@@toStringTag` `"Generator"` with the
+specified descriptors.
+
+Dynamic creation applies `ToString` to parameter and body arguments from left
+to right, then independently validates the parameter fragment, generator-body
+fragment, and woven `function* anonymous(P) { body }` source. This extends the
+existing dynamic `Function` anti-escape strategy rather than delegating to host
+`GeneratorFunction`. Parse and early errors become Realm-owned guest
+`SyntaxError`s. The created generator function closes over the constructor
+Realm's global environment, does not inherit caller strictness, derives
+strictness from its own body directive, is non-constructible, and creates
+Generator objects through the same continuation path as source-declared
+generators. Calling and `new`-constructing `%GeneratorFunction%` are equivalent;
+calling or constructing `%GeneratorFunction.prototype%` is a guest `TypeError`.
+
+Focused portable tests and targeted Test262 cover reachability without a global
+binding, call/construct equivalence, parameter/body coercion and independent
+syntax validation, strictness, Realm ownership, prototype identity and
+descriptors, non-constructibility of created generator functions, and dynamic
+`yield` execution. `%AsyncGeneratorFunction%` and later dynamic constructors
+remain rejected and out of scope.
 
 ### Delegated yield
 
