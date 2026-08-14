@@ -427,6 +427,47 @@ export default [
     },
   },
   {
+    name: 'malformed Job Completions are contained, reported, and do not stop later jobs',
+    run: () => {
+      /** @type {unknown[]} */
+      const reported = [];
+      const realm = createRealm({
+        jobHost: {
+          scheduleMicrotask() {},
+          reportJobError(failure) {
+            reported.push(failure);
+          },
+        },
+      });
+      let laterRan = false;
+      realm.agent.enqueueJob(
+        createJob(realm, 'malformed-completion', () =>
+          /** @type {any} */ ({ type: 'invalid', value: undefined }),
+        ),
+      );
+      realm.agent.enqueueJob(
+        createJob(realm, 'later', () => {
+          laterRan = true;
+          return createNormalCompletion(undefined);
+        }),
+      );
+
+      const report = realm.agent.runJobs();
+      const failure = report.failures[0];
+      assertSame(report.processed, 2);
+      assertSame(laterRan, true);
+      assertSame(report.failures.length, 1);
+      assertSame(failure.job?.kind, 'malformed-completion');
+      assertSame(failure.category, 'job');
+      assertSame(failure.error instanceof TypeError, true);
+      assertSame(reported.length, 1);
+      assertSame(reported[0], failure);
+      const durableFailures = realm.agent.takeJobFailures();
+      assertSame(durableFailures.length, 1);
+      assertSame(durableFailures[0], failure);
+    },
+  },
+  {
     name: 'a reporting hook throw is retained without escaping or recursion',
     run: () => {
       const jobError = new Error('job failed');
