@@ -278,7 +278,7 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 `npm run ci:generate` rewrites the committed file; `npm run ci:check` fails
 (without writing) if the two have drifted.
 
-Every push and pull request against `main` runs ten jobs:
+Every push and pull request against `main` runs eleven jobs:
 
 | Job                | What it runs                                           | Depends on |
 | ------------------ | ------------------------------------------------------ | ---------- |
@@ -289,6 +289,7 @@ Every push and pull request against `main` runs ten jobs:
 | `typecheck`        | `npm run typecheck` (`tsc` in checkJs mode)            | —          |
 | `test-node`        | `npm run test:node`                                    | `vendor`   |
 | `test-browser`     | `npm run test:browser` (Playwright headless Chromium)  | `vendor`   |
+| `test-jsc`         | `npm run test:jsc` (JavaScriptCoreGTK shell)           | `vendor`   |
 | `test262-fixtures` | `npm run test262:fixtures` (local fixture tree)        | `vendor`   |
 | `benchmark-smoke`  | `npm run benchmark:smoke` (correctness-only smoke run) | `vendor`   |
 | `test262-upstream` | `npm run test262:upstream` (pinned upstream subset)    | `vendor`   |
@@ -311,10 +312,12 @@ Two properties are asserted by `test/node/workflow-contract.test.js`:
 
 ### JSC in CI
 
-JSC is a local/conditional adapter, not a CI job. GitHub's hosted runners do not
-ship a standalone `jsc` binary on `PATH`. The byte-identical-output guarantee
-between Node, Chromium, and `jsc` is enforced by `test/test262-runner.test.js`,
-which runs under all three runners.
+`test-jsc` is required. On Ubuntu 24.04 it installs
+`libjavascriptcoregtk-4.1-bin` and exposes `/usr/bin/jsc-4.1` as `jsc` through
+`/usr/local/bin`, so the later `npm run test:jsc` step does not depend on shell
+state from installation. The byte-identical-output guarantee between Node,
+Chromium, and `jsc` is enforced by `test/test262-runner.test.js`, which runs
+under all three runners.
 
 ## Troubleshooting
 

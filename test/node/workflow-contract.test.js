@@ -64,6 +64,7 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
   typecheck: 'npm run typecheck',
   'test-node': 'npm run test:node',
   'test-browser': 'npm run test:browser',
+  'test-jsc': 'npm run test:jsc',
   'test262-fixtures': 'npm run test262:fixtures',
   'test262-upstream': 'npm run test262:upstream',
   'benchmark-smoke': 'npm run benchmark:smoke',
@@ -72,6 +73,12 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
 /** The exact browser install command that docs/testing.md documents. */
 const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
+
+const JSC_INSTALL_COMMAND = [
+  'sudo apt-get update',
+  'sudo apt-get install --yes libjavascriptcoregtk-4.1-bin',
+  'sudo ln --symbolic --force /usr/bin/jsc-4.1 /usr/local/bin/jsc',
+].join(' && ');
 
 /**
  * Representative fixtures for each ES5 Date family the engine completed.
@@ -359,6 +366,28 @@ export default [
         testingDoc.includes(BROWSER_INSTALL_COMMAND),
         true,
         'docs/testing.md must document the exact install command CI uses',
+      );
+    },
+  },
+  {
+    name: 'the required JavaScriptCore job installs a shell and runs the portable suite',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, 'test-jsc');
+      const commands = runCommands(job);
+
+      assertSame(job.name, 'JavaScriptCore tests');
+      assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
+      assertSame(
+        commands.includes(JSC_INSTALL_COMMAND),
+        true,
+        `test-jsc must install JavaScriptCore with ${JSC_INSTALL_COMMAND}`,
+      );
+      assertSame(
+        commands.indexOf(JSC_INSTALL_COMMAND) <
+          commands.indexOf('npm run test:jsc'),
+        true,
+        'the JavaScriptCore shell must be installed before the JSC suite runs',
       );
     },
   },

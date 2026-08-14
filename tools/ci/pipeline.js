@@ -103,6 +103,17 @@ export const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
 /**
+ * Ubuntu 24.04 ships the JavaScriptCoreGTK shell under a versioned executable
+ * name. The symlink lives in `/usr/local/bin`, which GitHub Actions exposes to
+ * every later step, so the portable test command can consistently invoke `jsc`.
+ */
+export const JSC_INSTALL_COMMAND = [
+  'sudo apt-get update',
+  'sudo apt-get install --yes libjavascriptcoregtk-4.1-bin',
+  'sudo ln --symbolic --force /usr/bin/jsc-4.1 /usr/local/bin/jsc',
+].join(' && ');
+
+/**
  * Every action the workflow uses, pinned to an immutable commit SHA. The
  * `version` is the release tag that SHA belongs to, kept so a reader can tell at
  * a glance what is pinned and a bump reviews as "v7.0.0 -> v7.0.1" rather than
@@ -224,7 +235,7 @@ export function toGithubSlug(repository) {
 }
 
 /**
- * The ten checks CI runs as distinct jobs.
+ * The eleven checks CI runs as distinct jobs.
  *
  * `ci-drift` runs `ci:check`, which is what makes this module the source of
  * truth rather than a convention: a hand-edited workflow fails CI. `vendor`
@@ -275,6 +286,15 @@ export function createCiJobs(test262) {
       [
         runStep('Install the headless browser', BROWSER_INSTALL_COMMAND),
         runStep('Run browser suites', 'npm run test:browser'),
+      ],
+      ['vendor'],
+    ),
+    job(
+      'test-jsc',
+      'JavaScriptCore tests',
+      [
+        runStep('Install the JavaScriptCore shell', JSC_INSTALL_COMMAND),
+        runStep('Run JavaScriptCore suites', 'npm run test:jsc'),
       ],
       ['vendor'],
     ),
