@@ -383,10 +383,15 @@ export default [
         `test-jsc must install JavaScriptCore with ${JSC_INSTALL_COMMAND}`,
       );
       assertSame(
+        commands.includes(JSC_EXECUTABLE_CHECK),
+        true,
+        `test-jsc must verify ${JSC_EXECUTABLE_CHECK}`,
+      );
+      assertSame(
         commands.indexOf(JSC_INSTALL_COMMAND) <
           commands.indexOf(JSC_EXECUTABLE_CHECK),
         true,
-        `test-jsc must verify ${JSC_EXECUTABLE_CHECK} after installation`,
+        'the JavaScriptCore shell must be verified after installation',
       );
       assertSame(
         commands.indexOf(JSC_EXECUTABLE_CHECK) <
