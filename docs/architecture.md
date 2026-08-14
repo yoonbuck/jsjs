@@ -14,7 +14,8 @@ Source enters through `evaluateScript(realm, source)`, which:
 
 1. **Parses** via `src/parser.js` — Acorn configured at `ecmaVersion: 6`,
    `sourceType: 'script'`. Its ES2015 capability pass admits lexical declarations,
-   `for`-`of`, arrows, class declarations/expressions and ES2015 methods,
+   block-level function declarations, `for`-`of`, arrows, class
+   declarations/expressions and ES2015 methods,
    computed property names, destructuring, default/rest parameters, array/call/
    construction spread, and template/tagged-template expressions. Acorn supplies
    redeclaration early errors; the engine validates each supported AST shape
@@ -524,10 +525,11 @@ console.log(result); // { type: 'normal', value: 42 }
 
 Parses `source` as a script and returns an Acorn AST. The supported ES2015
 grammar is the capability set listed under [Source flow](#source-flow), including
-lexical declarations, arrows, classes, templates, destructuring, parameter and
-spread syntax, and enhanced object literals. Neighboring ES2015 forms outside
-that list are rejected by the engine's capability pass. Throws a host
-`SyntaxError` (not a guest error) on invalid input.
+lexical and block-level function declarations, arrows, classes, templates,
+destructuring, parameter and spread syntax, and enhanced object literals.
+Neighboring ES2015 forms outside that list are rejected by the engine's
+capability pass. Throws a host `SyntaxError` (not a guest error) on invalid
+input.
 
 ### `createAgent(): Agent`
 
