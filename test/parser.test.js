@@ -1876,6 +1876,64 @@ const tests = [
     },
   },
   {
+    name: 'own strict directives reject duplicate simple parameters from source and custom ASTs',
+    run() {
+      assertThrows(
+        () => parseScript('function f(a, a) { "use strict"; }'),
+        SyntaxError,
+      );
+
+      const parameters = [
+        { type: 'Identifier', name: 'a' },
+        { type: 'Identifier', name: 'a' },
+      ];
+      const strictProgram = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'FunctionDeclaration',
+            id: { type: 'Identifier', name: 'f' },
+            params: parameters,
+            generator: false,
+            async: false,
+            expression: false,
+            body: {
+              type: 'BlockStatement',
+              body: [
+                {
+                  type: 'ExpressionStatement',
+                  expression: { type: 'Literal', value: 'use strict' },
+                  directive: 'use strict',
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      assertThrows(
+        () => parseScript('', { parse: () => strictProgram }),
+        SyntaxError,
+      );
+
+      const sloppyProgram = {
+        ...strictProgram,
+        body: [
+          {
+            ...strictProgram.body[0],
+            body: { type: 'BlockStatement', body: [] },
+          },
+        ],
+      };
+
+      assertSame(
+        parseScript('', { parse: () => sloppyProgram }).type,
+        'Program',
+      );
+    },
+  },
+  {
     name: 'generator and async forms remain unsupported around arrow parameters',
     run() {
       for (const source of [

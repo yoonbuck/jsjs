@@ -858,17 +858,17 @@ function checkFunctionParameterEarlyErrors(node, strict) {
   const simple = /** @type {any[]} */ (node.params).every(
     (parameter) => parameter.type === 'Identifier',
   );
+  const ownStrict =
+    node.body?.type === 'BlockStatement' &&
+    Array.isArray(node.body.body) &&
+    hasUseStrictDirective(node.body.body);
+  const effectiveStrict = strict || ownStrict;
 
-  if (simple && !strict && node.type !== 'ArrowFunctionExpression') {
+  if (simple && !effectiveStrict && node.type !== 'ArrowFunctionExpression') {
     return;
   }
 
-  if (
-    !simple &&
-    node.body &&
-    Array.isArray(node.body.body) &&
-    hasUseStrictDirective(node.body.body)
-  ) {
+  if (!simple && ownStrict) {
     throw unsupportedEs2015Error(
       'Illegal "use strict" directive in function with non-simple parameter list',
       node,
