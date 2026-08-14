@@ -454,6 +454,63 @@ const tests = [
     },
   },
   {
+    name: 'a caller-supplied Acorn program rejects accessor and inherited state before Acorn reads it',
+    run() {
+      const program = parseScript('');
+      let getterCalls = 0;
+      let thrown;
+
+      Object.defineProperty(program, 'body', {
+        get() {
+          getterCalls += 1;
+          throw new Error('Program.body getter must not execute');
+        },
+        enumerable: true,
+        configurable: true,
+      });
+
+      try {
+        parseScript('0;', { program });
+      } catch (error) {
+        thrown = error;
+      }
+
+      assertSame(getterCalls, 0);
+      assertSame(thrown instanceof SyntaxError, true);
+
+      let inheritedGetterCalls = 0;
+      let inheritedThrown;
+      const inheritedProgram = Object.assign(
+        Object.create({
+          get body() {
+            inheritedGetterCalls += 1;
+            throw new Error('inherited Program.body getter must not execute');
+          },
+        }),
+        {
+          type: 'Program',
+          sourceType: 'script',
+        },
+      );
+
+      try {
+        parseScript('0;', { program: inheritedProgram });
+      } catch (error) {
+        inheritedThrown = error;
+      }
+
+      assertSame(inheritedGetterCalls, 0);
+      assertSame(inheritedThrown instanceof SyntaxError, true);
+
+      for (const absentProgram of [undefined, null, false, 0, '']) {
+        assertSame(
+          parseScript('0;', { program: absentProgram }).body.length,
+          1,
+        );
+      }
+    },
+  },
+  {
     name: 'a caller-supplied Acorn program rejects AST nodes hidden in metadata',
     run() {
       const program = parseScript('{}');
@@ -555,6 +612,87 @@ const tests = [
     },
   },
   {
+    name: 'custom parser rejects sparse child arrays without reading inherited entries',
+    run() {
+      /**
+       * @param {(calls: number) => any} inheritedValue
+       * @returns {{ getterCalls: number, thrown: unknown }}
+       */
+      function runSparseBody(inheritedValue) {
+        const inheritedIndex = '31';
+        const previous = Object.getOwnPropertyDescriptor(
+          Array.prototype,
+          inheritedIndex,
+        );
+        const body = new Array(32);
+        let getterCalls = 0;
+        let thrown;
+
+        for (let index = 0; index < 31; index += 1) {
+          body[index] = { type: 'EmptyStatement' };
+        }
+
+        Object.defineProperty(Array.prototype, inheritedIndex, {
+          get() {
+            getterCalls += 1;
+            return inheritedValue(getterCalls);
+          },
+          set(value) {
+            Object.defineProperty(this, inheritedIndex, {
+              value,
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            });
+          },
+          configurable: true,
+        });
+
+        try {
+          parseScript('', {
+            parse: () => ({
+              type: 'Program',
+              sourceType: 'script',
+              body,
+            }),
+          });
+        } catch (error) {
+          thrown = error;
+        } finally {
+          if (previous === undefined) {
+            delete Array.prototype[inheritedIndex];
+          } else {
+            Object.defineProperty(Array.prototype, inheritedIndex, previous);
+          }
+        }
+
+        return { getterCalls, thrown };
+      }
+
+      const stable = runSparseBody(() => ({ type: 'EmptyStatement' }));
+      const changing = runSparseBody((calls) =>
+        calls === 1
+          ? { type: 'EmptyStatement' }
+          : { type: 'Literal', value: 0 },
+      );
+
+      assertSame(stable.getterCalls, 0);
+      assertSame(stable.thrown instanceof SyntaxError, true);
+      assertSame(changing.getterCalls, 0);
+      assertSame(changing.thrown instanceof SyntaxError, true);
+
+      const sparseMetadata = new Array(2);
+      sparseMetadata[1] = { note: 'plain metadata remains valid' };
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [{ type: 'EmptyStatement', metadata: sparseMetadata }],
+      };
+
+      assertSame(parseScript('', { parse: () => program }).type, 'Program');
+    },
+  },
+  {
     name: 'custom parser rejects AST nodes hidden in nonenumerable and symbol metadata',
     run() {
       /** @returns {any} */
@@ -630,6 +768,34 @@ const tests = [
       for (const expression of malformed) {
         assertParserAndEvaluatorSyntaxError(expressionProgram(expression));
       }
+    },
+  },
+  {
+    name: 'custom parser requires UnaryExpression.prefix to be exactly true',
+    run() {
+      for (const scalar of [{}, { prefix: false }, { prefix: 'true' }]) {
+        assertParserAndEvaluatorSyntaxError(
+          expressionProgram({
+            type: 'UnaryExpression',
+            operator: '!',
+            argument: { type: 'Literal', value: true },
+            ...scalar,
+          }),
+        );
+      }
+
+      assertSame(
+        parseScript('', {
+          parse: () =>
+            expressionProgram({
+              type: 'UnaryExpression',
+              operator: '!',
+              prefix: true,
+              argument: { type: 'Literal', value: true },
+            }),
+        }).type,
+        'Program',
+      );
     },
   },
   {

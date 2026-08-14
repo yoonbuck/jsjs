@@ -107,9 +107,15 @@ export function parseScript(source, options = {}) {
     parserOptions,
     'program',
   );
+  const preflightProgram =
+    !hasCustomParse && hasCustomProgram && Boolean(parserOptions.program);
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
+  }
+
+  if (preflightProgram) {
+    validateReusableProgram(parserOptions.program);
   }
 
   let program;
@@ -132,6 +138,7 @@ export function parseScript(source, options = {}) {
     source,
     false,
     hasCustomParse || hasCustomProgram,
+    preflightProgram,
   );
 }
 
@@ -182,6 +189,7 @@ export function parseEval(source, strict = false) {
  * @param {string} source
  * @param {boolean} [strict=false]
  * @param {boolean} [customAst=false]
+ * @param {boolean} [customAstPrevalidated=false]
  * @returns {any}
  */
 function validateScriptProgram(
@@ -189,22 +197,17 @@ function validateScriptProgram(
   source,
   strict = false,
   customAst = false,
+  customAstPrevalidated = false,
 ) {
-  if (customAst) {
+  if (customAst && !customAstPrevalidated) {
     checkUntrustedAstDescriptors(program);
   }
 
-  if (
-    !program ||
-    typeof program !== 'object' ||
-    /** @type {any} */ (program).type !== 'Program' ||
-    /** @type {any} */ (program).sourceType !== 'script' ||
-    !Array.isArray(/** @type {any} */ (program).body)
-  ) {
+  if (!isScriptProgram(program)) {
     throw new TypeError('Expected parser to return a script Program node');
   }
 
-  if (customAst) {
+  if (customAst && !customAstPrevalidated) {
     checkCustomAstDefenses(/** @type {any} */ (program));
   }
 
@@ -216,6 +219,40 @@ function validateScriptProgram(
   );
 
   return /** @type {any} */ (program);
+}
+
+/**
+ * Acorn reuses `options.program` directly: it reads and appends to `body`,
+ * adapts its directive prologue, and writes the Program's syntax and position
+ * fields. Validate the existing graph before those operations can reach an
+ * accessor or inherited syntax field. The post-parse pass skips these same
+ * generic defenses, so a large reused tree is not walked twice.
+ *
+ * @param {unknown} program
+ * @returns {void}
+ */
+function validateReusableProgram(program) {
+  checkUntrustedAstDescriptors(program);
+
+  if (!isScriptProgram(program)) {
+    throw new TypeError('Expected parser to return a script Program node');
+  }
+
+  checkCustomAstDefenses(/** @type {any} */ (program));
+}
+
+/**
+ * @param {unknown} program
+ * @returns {boolean}
+ */
+function isScriptProgram(program) {
+  return (
+    !!program &&
+    typeof program === 'object' &&
+    /** @type {any} */ (program).type === 'Program' &&
+    /** @type {any} */ (program).sourceType === 'script' &&
+    Array.isArray(/** @type {any} */ (program).body)
+  );
 }
 
 /**
@@ -442,8 +479,17 @@ function checkAcyclicAstChildren(root) {
 
     if (array) {
       for (let index = value.length - 1; index >= 0; index -= 1) {
+        const descriptor = ownArrayElementDescriptor(value, index);
+
+        if (descriptor === undefined) {
+          throw unsupportedEs2015Error(
+            'AST child arrays must contain own data elements',
+            value,
+          );
+        }
+
         pending.push({
-          value: value[index],
+          value: descriptor.value,
           exiting: false,
           structural: true,
         });
@@ -551,10 +597,17 @@ function checkCustomAstDefenses(root) {
       }
 
       for (let index = value.length - 1; index >= 0; index -= 1) {
-        const nestedArray = item.nestedArray || Array.isArray(value[index]);
+        const descriptor = ownArrayElementDescriptor(value, index);
+
+        if (descriptor === undefined) {
+          continue;
+        }
+
+        const element = descriptor.value;
+        const nestedArray = item.nestedArray || Array.isArray(element);
 
         pending.push({
-          value: value[index],
+          value: element,
           parent: nestedArray ? null : item.parent,
           parentKey: nestedArray ? undefined : item.parentKey,
           parentIndex: nestedArray ? undefined : index,
@@ -658,6 +711,29 @@ function isDirectArrayElementKey(key, length) {
     index < length &&
     String(index) === key
   );
+}
+
+/**
+ * Reads an array member through its own descriptor so a sparse array never
+ * falls through to a numeric property on `Array.prototype`.
+ *
+ * @param {any[]} value
+ * @param {number} index
+ * @returns {PropertyDescriptor | undefined}
+ */
+function ownArrayElementDescriptor(value, index) {
+  const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+
+  if (
+    descriptor !== undefined &&
+    !Object.prototype.hasOwnProperty.call(descriptor, 'value')
+  ) {
+    throw untrustedAstSyntaxError(
+      'Untrusted AST array elements must be own data properties',
+    );
+  }
+
+  return descriptor;
 }
 
 /**
@@ -1318,11 +1394,18 @@ function checkStatementPositionFunctionDeclarations(
       }
 
       for (let index = node.length - 1; index >= 0; index -= 1) {
-        const nestedArray = item.nestedArray || Array.isArray(node[index]);
+        const descriptor = ownArrayElementDescriptor(node, index);
+
+        if (descriptor === undefined) {
+          continue;
+        }
+
+        const element = descriptor.value;
+        const nestedArray = item.nestedArray || Array.isArray(element);
 
         pushChild(
           pending,
-          node[index],
+          element,
           strict,
           item.superAllowed,
           item.superCallAllowed,
@@ -3498,8 +3581,10 @@ function validateIdentifierScalarSyntax(node) {
  * @returns {string | undefined}
  */
 function validateUnaryScalarSyntax(node) {
-  return validateRequiredScalar(node, 'operator', (value) =>
-    isAllowedScalarString(value, SUPPORTED_UNARY_OPERATORS),
+  return (
+    validateRequiredScalar(node, 'operator', (value) =>
+      isAllowedScalarString(value, SUPPORTED_UNARY_OPERATORS),
+    ) ?? validateRequiredScalar(node, 'prefix', (value) => value === true)
   );
 }
 
