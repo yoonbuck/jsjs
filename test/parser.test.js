@@ -1968,11 +1968,12 @@ const tests = [
         ...asyncForOf,
         body: [{ ...asyncForOf.body[0], await: false }],
       };
+      const withoutAwait = { ...synchronousForOf.body[0] };
+      Reflect.deleteProperty(withoutAwait, 'await');
       const absentAwaitForOf = {
         ...synchronousForOf,
-        body: [{ ...synchronousForOf.body[0] }],
+        body: [withoutAwait],
       };
-      delete absentAwaitForOf.body[0].await;
 
       assertSame(
         parseScript('', { parse: () => synchronousForOf }).type,

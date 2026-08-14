@@ -249,7 +249,10 @@ const tests = [
         enumerable: false,
         configurable: true,
       });
-      const crossRealmCompletion = evaluateScript(callerRealm, 'ForeignClass();');
+      const crossRealmCompletion = evaluateScript(
+        callerRealm,
+        'ForeignClass();',
+      );
 
       assertSame(crossRealmCompletion.type, 'throw');
       assertSame(
