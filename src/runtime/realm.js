@@ -61,6 +61,10 @@ import {
   createIteratorIntrinsics,
   installIteratorMethods,
 } from '../builtins/iterator.js';
+import {
+  createPromiseIntrinsics,
+  installPromiseConstructor,
+} from '../builtins/promise.js';
 import { GuestErrorSignal } from './completion.js';
 import { StackGuard } from './stack-guard.js';
 import { createAgent } from './agent.js';
@@ -235,6 +239,10 @@ export class Realm {
     const iteratorIntrinsics = createIteratorIntrinsics(this);
     Object.assign(this.intrinsics, iteratorIntrinsics);
     installIteratorMethods(this, iteratorIntrinsics);
+
+    const promiseIntrinsics = createPromiseIntrinsics(this);
+    Object.assign(this.intrinsics, promiseIntrinsics);
+    installPromiseConstructor(this.globalObject, promiseIntrinsics);
   }
 
   /**
