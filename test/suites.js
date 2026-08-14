@@ -80,6 +80,7 @@ import es2015SyntaxIntegration from './es2015-syntax-integration.test.js';
 import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
 import arrayIndex from './array-index.test.js';
+import jobs from './jobs.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -329,4 +330,5 @@ export const PORTABLE_SUITES = Object.freeze([
     file: 'test/array-index.test.js',
     tests: arrayIndex,
   }),
+  Object.freeze({ file: 'test/jobs.test.js', tests: jobs }),
 ]);

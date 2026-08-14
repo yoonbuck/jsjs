@@ -6,3 +6,4 @@ export {
   parseScript,
   Realm,
 } from './api.js';
+export { AgentJobQueue, validateJobHost } from './runtime/jobs.js';
