@@ -190,9 +190,11 @@ export class EngineFunction extends EngineObject {
    */
   callFunction(thisValue, args = []) {
     if (this.functionKind === 'classConstructor') {
-      throw new GuestErrorSignal(
-        'TypeError',
-        `Class constructor ${this.get('name') || '<anonymous>'} cannot be invoked without 'new'`,
+      throw new ThrowSignal(
+        this.realm.createGuestError(
+          'TypeError',
+          "Class constructor cannot be invoked without 'new'",
+        ),
       );
     }
 

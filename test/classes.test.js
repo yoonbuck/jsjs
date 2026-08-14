@@ -200,6 +200,65 @@ const tests = [
     },
   },
   {
+    name: 'class calls ignore mutable names and throw a TypeError',
+    run() {
+      const realm = createRealm();
+      const nameCompletion = evaluateScript(
+        realm,
+        `
+          class C {}
+          var getterCalls = 0;
+          Object.defineProperty(C, 'name', {
+            configurable: true,
+            get: function () {
+              getterCalls += 1;
+              return Symbol('poison');
+            }
+          });
+          var caught;
+          try {
+            C();
+          } catch (error) {
+            caught = error;
+          }
+          [getterCalls, caught.name, caught.message].join(':');
+        `,
+      );
+
+      assertSame(nameCompletion.type, 'normal');
+      assertSame(
+        nameCompletion.value,
+        "0:TypeError:Class constructor cannot be invoked without 'new'",
+      );
+    },
+  },
+  {
+    name: 'class calls create TypeErrors in the callee realm',
+    run() {
+      const calleeRealm = createRealm();
+      const callerRealm = createRealm();
+      const classCompletion = evaluateScript(
+        calleeRealm,
+        'class ForeignClass {}; ForeignClass;',
+      );
+
+      assertSame(classCompletion.type, 'normal');
+      callerRealm.globalObject.defineOwnProperty('ForeignClass', {
+        value: classCompletion.value,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const crossRealmCompletion = evaluateScript(callerRealm, 'ForeignClass();');
+
+      assertSame(crossRealmCompletion.type, 'throw');
+      assertSame(
+        /** @type {any} */ (crossRealmCompletion.value).getPrototype(),
+        calleeRealm.intrinsics.typeErrorPrototype,
+      );
+    },
+  },
+  {
     name: 'class constructors and methods inherit restricted caller and arguments properties',
     run() {
       assertSame(
