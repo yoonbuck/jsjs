@@ -25,14 +25,10 @@
 
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { parseScript } from '../../src/parser.js';
 import {
   ES5_SELECTION_FILE,
   buildUpstreamSubset,
-  isCandidatePath,
-  matchExclusion,
   parseEs5Selection,
-  scanFrontmatter,
   serializeUpstreamSubset,
 } from './es5-selection.js';
 import {
@@ -41,6 +37,10 @@ import {
   upstreamSubsetPaths,
 } from './upstream.js';
 import { assertPinnedCheckout, readTest262Pin } from './upstream-run.js';
+import {
+  parsesUnderEngineGrammar,
+  selectPaths,
+} from './upstream-select-paths.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
@@ -59,28 +59,6 @@ const HARNESS_DIRECTORY = 'harness';
  */
 function readRepositoryFile(path) {
   return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
-}
-
-/**
- * Whether a source parses under the engine's supported grammar — ES5.1 plus the
- * lexical declarations the engine now accepts. Using the engine's own
- * `parseScript` (rather than a bare Acorn call at a fixed `ecmaVersion`) keeps
- * selection honest as the grammar grows: whatever the engine can parse is
- * exactly what is in scope. Selection asks only the yes/no question, so a parse
- * failure — including the engine's ES2015-not-yet-supported early errors and
- * its stack-overflow-to-`SyntaxError` conversion — is a "no", never a throw.
- *
- * @param {string} source
- * @returns {boolean}
- */
-function parsesUnderEngineGrammar(source) {
-  try {
-    parseScript(source);
-
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -155,50 +133,6 @@ async function readHarnessParsing(checkoutPath) {
 }
 
 /**
- * Applies the selection policy to the pinned tree and returns the selected
- * paths, sorted. The policy must receive both each file's frontmatter and its
- * known-good identity before deciding whether to admit it, so this intentionally
- * reads every upstream test rather than using a structural prefilter.
- *
- * @param {{
- *   checkoutPath: string,
- *   policy: import('./es5-selection.js').Es5SelectionPolicy,
- *   previouslySelected: ReadonlySet<string>,
- * }} options
- * @returns {Promise<string[]>}
- */
-async function selectPaths(options) {
-  const { checkoutPath, policy, previouslySelected } = options;
-  const files = await listTestFiles(checkoutPath);
-  const harnessParsing = await readHarnessParsing(checkoutPath);
-  /** @type {string[]} */
-  const selected = [];
-
-  for (const path of files) {
-    const source = await readRepositoryFile(`${checkoutPath}/${path}`);
-    const frontmatter = scanFrontmatter(source);
-    const info = {
-      declaresFeatures: frontmatter.hasFeatures,
-      features: frontmatter.features,
-      isModule: frontmatter.isModule,
-      parsesUnderEngineGrammar: parsesUnderEngineGrammar(source),
-      includesParseUnderEngineGrammar: frontmatter.includes.every(
-        (name) => harnessParsing.get(name) !== false,
-      ),
-    };
-
-    if (
-      isCandidatePath(path, info, policy, previouslySelected) &&
-      matchExclusion(path, policy.exclusions) === null
-    ) {
-      selected.push(path);
-    }
-  }
-
-  return selected;
-}
-
-/**
  * @param {readonly string[]} argv
  * @returns {Promise<number>}
  */
@@ -224,10 +158,16 @@ export async function main(argv = []) {
     );
   }
   const previouslySelected = new Set(upstreamSubsetPaths(knownGoodSubset));
+  const [files, harnessParsing] = await Promise.all([
+    listTestFiles(pin.checkoutPath),
+    readHarnessParsing(pin.checkoutPath),
+  ]);
   const paths = await selectPaths({
-    checkoutPath: pin.checkoutPath,
+    files,
     policy,
     previouslySelected,
+    harnessParsing,
+    readSource: (path) => readRepositoryFile(`${pin.checkoutPath}/${path}`),
   });
   const subset = buildUpstreamSubset({
     repository: pin.repository,

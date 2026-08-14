@@ -200,25 +200,40 @@ const tests = [
     },
   },
   {
-    name: 'class constructors and methods omit own restricted caller and arguments properties',
+    name: 'class constructors and methods inherit restricted caller and arguments properties',
     run() {
       assertSame(
         run(`
+          function inspect(target) {
+            var callerRead;
+            var callerWrite;
+            var argumentsRead;
+            var argumentsWrite;
+            try { target.caller; } catch (error) { callerRead = error.name; }
+            try { target.caller = 1; } catch (error) { callerWrite = error.name; }
+            try { target.arguments; } catch (error) { argumentsRead = error.name; }
+            try { target.arguments = 1; } catch (error) { argumentsWrite = error.name; }
+            return [
+              target.hasOwnProperty('caller'),
+              target.hasOwnProperty('arguments'),
+              callerRead,
+              callerWrite,
+              argumentsRead,
+              argumentsWrite,
+              target.hasOwnProperty('caller'),
+              target.hasOwnProperty('arguments')
+            ].join(':');
+          }
           class C {
             constructor() {}
             method() {}
             static staticMethod() {}
           }
-          [
-            C.prototype.method.hasOwnProperty('caller'),
-            C.prototype.method.hasOwnProperty('arguments'),
-            C.staticMethod.hasOwnProperty('caller'),
-            C.staticMethod.hasOwnProperty('arguments'),
-            C.hasOwnProperty('caller'),
-            C.hasOwnProperty('arguments')
-          ].join(':');
+          inspect(C.prototype.method) + '|' + inspect(C.staticMethod) + '|' + inspect(C);
         `),
-        'false:false:false:false:false:false',
+        'false:false:TypeError:TypeError:TypeError:TypeError:false:false|' +
+          'false:false:TypeError:TypeError:TypeError:TypeError:false:false|' +
+          'false:false:TypeError:TypeError:TypeError:TypeError:false:false',
       );
     },
   },

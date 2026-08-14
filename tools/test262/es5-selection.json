@@ -779,11 +779,6 @@
       "reason": "Test includes an ES2015 built-in (`Symbol`, `Reflect`, `Number.EPSILON`, `Number.MAX_SAFE_INTEGER`, …; ES2015 §19–26) that ES5.1 §15 does not define; the guarded case throws `ReferenceError` before the ES5.1-correct path is reached."
     },
     {
-      "path": "test/built-ins/Function/prototype/caller-arguments/accessor-properties.js",
-      "category": "post-es5-semantics",
-      "reason": "Asserts ES2015 AddRestrictedFunctionProperties (§9.2.7 / §19.2.3) — `Function.prototype` carries own `caller`/`arguments` %ThrowTypeError% accessor properties; ES5.1 §13.2.3 poisons `caller`/`arguments` only on individual strict functions, so `Function.prototype` has no such own accessors here."
-    },
-    {
       "path": "test/built-ins/Function/prototype/length.js",
       "category": "post-es5-semantics",
       "reason": "ES5.1 §15.3.5.1 gives every built-in function a `length` that is {writable:false, enumerable:false, configurable:false} and defines no `name` own property; ES2015 §19.2.4 made `length` configurable and added `name`, so `delete fn.length` / a `name` property is post-ES5."
@@ -1692,11 +1687,6 @@
       "path": "test/built-ins/Symbol/species/builtin-getter-name.js",
       "category": "post-es5-builtin",
       "reason": "ES2015 §21.2.4.2/§22.1.2.5/§23.1.2.2/§23.2.2.2 define `get [Symbol.species]` accessors on `Array`, `Map`, `Promise`, `RegExp`, and `Set`. This engine defines the `@@species` value (issue #43) but neither the accessors nor the `Map`/`Promise`/`Set` constructors the test reads."
-    },
-    {
-      "path": "test/built-ins/ThrowTypeError/unique-per-realm-function-proto.js",
-      "category": "post-es5-semantics",
-      "reason": "ES5.1 §13.2.3 (and §15.3.4.5.1/2 for bound functions) give strict-mode/bound functions own `caller`/`arguments` poison accessor properties; ES2015 §16.2 removed them as forbidden extensions, so the \"no own property\" assertion is post-ES5."
     },
     {
       "path": "test/harness/assert-throws-same-realm.js",
@@ -3002,11 +2992,6 @@
       "path": "test/staging/sm/extensions/arraybuffer-prototype.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `ArrayBuffer`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/extensions/builtin-function-arguments-caller.js",
-      "category": "post-es5-semantics",
-      "reason": "Relies on non-strict `Function.prototype.caller`/`.arguments` value-tracking (returning the actual caller function/arguments object), a legacy extension later semi-standardized by ES2015+ Annex B.2.1; ES5.1 defines no such properties on ordinary function objects (only the poison-pill `arguments.callee`/`.caller` on the arguments object itself, per ES5.1 §10.6)."
     },
     {
       "path": "test/staging/sm/extensions/censor-strict-caller.js",

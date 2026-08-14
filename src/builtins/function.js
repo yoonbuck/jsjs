@@ -134,6 +134,22 @@ class BoundFunction extends NativeFunction {
  */
 export function createFunctionIntrinsics(realm) {
   const { functionPrototype } = realm.intrinsics;
+  const thrower = /** @type {CallableLike | undefined} */ (
+    realm.intrinsics.throwTypeErrorFunction
+  );
+
+  if (thrower === undefined) {
+    throw new TypeError('Realm is missing required %ThrowTypeError% intrinsic');
+  }
+
+  const restricted = {
+    get: thrower,
+    set: thrower,
+    enumerable: false,
+    configurable: false,
+  };
+  functionPrototype.defineOwnProperty('caller', restricted);
+  functionPrototype.defineOwnProperty('arguments', restricted);
 
   const functionConstructor = realm.createNativeFunction({
     name: 'Function',

@@ -35,6 +35,10 @@ const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 
 const KNOWN_GOOD_PATH_COUNT = 12434;
 
+const GENERATED_PATH_COUNT = 14096;
+
+const ISSUE_25_EXPANSION_PATH_COUNT = 1662;
+
 const ISSUE_25_EXPANSION_FEATURES = Object.freeze([
   'arrow-function',
   'class',
@@ -55,6 +59,7 @@ const SYMBOL_SPECIES_SUBCLASSING_PATH =
  * sorted by repository-relative path.
  */
 const SUPPORTED_PATHS = Object.freeze([
+  'test/built-ins/Function/prototype/caller-arguments/accessor-properties.js',
   'test/language/computed-property-names/class/method/constructor.js',
   'test/language/computed-property-names/class/static/method-prototype.js',
   'test/language/destructuring/binding/initialization-requires-object-coercible-null.js',
@@ -253,6 +258,21 @@ export default [
         baselinePaths.length,
         KNOWN_GOOD_PATH_COUNT,
         'the preserved known-good subset must retain its path count',
+      );
+      assertSame(
+        currentPaths.size,
+        GENERATED_PATH_COUNT,
+        'the generated selection must retain its exact pinned path count',
+      );
+      assertSame(
+        nonbaselinePaths.length,
+        ISSUE_25_EXPANSION_PATH_COUNT,
+        'the generated selection must retain every pinned issue #25 expansion path',
+      );
+      assertSame(
+        currentPaths.size - baselinePaths.length,
+        ISSUE_25_EXPANSION_PATH_COUNT,
+        'the generated total must consist of the pinned baseline plus the pinned expansion',
       );
       assertSame(
         missing.length,

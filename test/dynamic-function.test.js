@@ -365,15 +365,21 @@ const tests = [
     },
   },
   {
-    name: 'a non-strict dynamic function has no own caller/arguments properties',
+    name: 'a non-strict dynamic function keeps writable caller/arguments data extensions',
     run() {
       assertNormal(
         run(
           'var f = new Function("return 1;");' +
-            'typeof Object.getOwnPropertyDescriptor(f, "caller") + "," +' +
-            'typeof Object.getOwnPropertyDescriptor(f, "arguments");',
+            'var caller = Object.getOwnPropertyDescriptor(f, "caller");' +
+            'var argumentsDescriptor = Object.getOwnPropertyDescriptor(f, "arguments");' +
+            'f.caller = 1; f.arguments = 2;' +
+            '[' +
+            'caller.value === undefined, caller.writable, caller.enumerable, caller.configurable,' +
+            'argumentsDescriptor.value === undefined, argumentsDescriptor.writable, argumentsDescriptor.enumerable, argumentsDescriptor.configurable,' +
+            'f.caller, f.arguments' +
+            '].join(":");',
         ),
-        'undefined,undefined',
+        'true:true:false:true:true:true:false:true:1:2',
       );
     },
   },

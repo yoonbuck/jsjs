@@ -47,6 +47,51 @@ const tests = [
     },
   },
   {
+    name: 'Function prototype owns realm-local restricted caller and arguments accessors',
+    run() {
+      const realm = createRealm();
+      const functionPrototype = realm.intrinsics.functionPrototype;
+      const thrower = realm.intrinsics.throwTypeErrorFunction;
+      const caller = functionPrototype.getOwnProperty('caller');
+      const argumentsDescriptor = functionPrototype.getOwnProperty('arguments');
+
+      assertSame(caller === undefined, false, 'caller descriptor must exist');
+      assertSame(
+        argumentsDescriptor === undefined,
+        false,
+        'arguments descriptor must exist',
+      );
+
+      if (caller === undefined || argumentsDescriptor === undefined) {
+        return;
+      }
+
+      for (const descriptor of [caller, argumentsDescriptor]) {
+        assertSame(descriptor.enumerable, false);
+        assertSame(descriptor.configurable, false);
+        assertSame(descriptor.get, thrower);
+        assertSame(descriptor.set, thrower);
+        assertSame(
+          Object.prototype.hasOwnProperty.call(descriptor, 'value'),
+          false,
+        );
+      }
+
+      assertSame(caller.get, argumentsDescriptor.get);
+      assertSame(caller.set, argumentsDescriptor.set);
+
+      const otherRealm = createRealm();
+      const otherCaller =
+        otherRealm.intrinsics.functionPrototype.getOwnProperty('caller');
+
+      assertSame(otherCaller === undefined, false);
+
+      if (otherCaller !== undefined) {
+        assertSame(caller.get === otherCaller.get, false);
+      }
+    },
+  },
+  {
     name: 'dynamic Function construction compiles and runs guest source',
     run() {
       assertSame(run('Function("return 1;")();'), 1);

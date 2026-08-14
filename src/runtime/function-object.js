@@ -145,11 +145,10 @@ export class EngineFunction extends EngineObject {
       });
     }
 
-    // ECMA-262's strict ordinary-function steps define non-configurable,
-    // non-enumerable accessor properties for "caller" and "arguments" that
-    // both read and write through the realm's shared %ThrowTypeError%
-    // intrinsic. ES2015 methods, arrows, and class constructors must instead
-    // omit those own properties even though they are strict.
+    // Strict ordinary functions retain own poison accessors, while sloppy
+    // ordinary functions retain writable data extensions that shadow the
+    // restricted accessors inherited from %Function.prototype%. Methods,
+    // arrows, and class constructors omit both own properties.
     if (strict && functionKind === 'normal') {
       const thrower = /** @type {EngineFunction | undefined} */ (
         realm.intrinsics.throwTypeErrorFunction
@@ -172,6 +171,15 @@ export class EngineFunction extends EngineObject {
       };
       this.defineOwnProperty('caller', poisonPill);
       this.defineOwnProperty('arguments', poisonPill);
+    } else if (functionKind === 'normal') {
+      const extension = {
+        value: undefined,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      };
+      this.defineOwnProperty('caller', extension);
+      this.defineOwnProperty('arguments', extension);
     }
   }
 

@@ -6,6 +6,7 @@ import {
   buildUpstreamSubset,
   deriveGroupName,
   isCandidatePath,
+  isStructurallyEligiblePath,
   isSelectedPath,
   matchExclusion,
   parseEs5Selection,
@@ -725,6 +726,74 @@ export default [
           policy,
         ),
         true,
+      );
+    },
+  },
+  {
+    name: 'isStructurallyEligiblePath uses only path policy before source decisions',
+    run: () => {
+      const exactPath = 'test/built-ins/Array/exact-exclusion.js';
+      const prefixPath = 'test/built-ins/Array/prefix-exclusion/case.js';
+      const eligiblePath = 'test/built-ins/Array/prototype/push/case.js';
+      const policy = parseEs5Selection(
+        policyText({
+          exclusions: [
+            {
+              path: exactPath,
+              category: 'post-es5-semantics',
+              reason: 'Exact path remains classified.',
+            },
+            {
+              prefix: 'test/built-ins/Array/prefix-exclusion',
+              category: 'post-es5-semantics',
+              reason: 'Prefix remains classified.',
+            },
+          ],
+        }),
+      );
+
+      assertSame(isStructurallyEligiblePath(eligiblePath, policy), true);
+      assertSame(isStructurallyEligiblePath(exactPath, policy), false);
+      assertSame(isStructurallyEligiblePath(prefixPath, policy), false);
+      assertSame(
+        isStructurallyEligiblePath('test/built-ins/Map/case.js', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('test/language/export/case.js', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('test/intl402/case.js', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('test/built-ins/Array/case.txt', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('harness/assert.js', policy),
+        false,
+      );
+      assertSame(
+        isCandidatePath(
+          eligiblePath,
+          { ...CANDIDATE_INFO, isModule: true },
+          policy,
+          new Set([eligiblePath]),
+        ),
+        false,
+        'module metadata must be decided after the path-only structural gate',
+      );
+      assertSame(
+        isCandidatePath(
+          eligiblePath,
+          { ...CANDIDATE_INFO, parsesUnderEngineGrammar: false },
+          policy,
+          new Set([eligiblePath]),
+        ),
+        false,
+        'parser metadata must be decided after the path-only structural gate',
       );
     },
   },
