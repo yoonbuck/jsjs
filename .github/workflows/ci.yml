@@ -159,7 +159,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Install the JavaScriptCore shell
-        run: sudo apt-get update && sudo apt-get install --yes libjavascriptcoregtk-4.1-bin && sudo ln --symbolic --force /usr/bin/jsc-4.1 /usr/local/bin/jsc
+        run: sudo apt-get update && sudo apt-get install --yes libjavascriptcoregtk-bin
+      - name: Verify the JavaScriptCore shell
+        run: test -x /usr/bin/jsc
       - name: Run JavaScriptCore suites
         run: npm run test:jsc
 

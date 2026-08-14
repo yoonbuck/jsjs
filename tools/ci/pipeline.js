@@ -103,15 +103,16 @@ export const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
 /**
- * Ubuntu 24.04 ships the JavaScriptCoreGTK shell under a versioned executable
- * name. The symlink lives in `/usr/local/bin`, which GitHub Actions exposes to
- * every later step, so the portable test command can consistently invoke `jsc`.
+ * Ubuntu Noble's JavaScriptCoreGTK shell package provides the unversioned
+ * `/usr/bin/jsc` executable directly. Keep the package command and executable
+ * check separate so the workflow proves the package's contract without
+ * manufacturing a version-specific symlink.
  */
-export const JSC_INSTALL_COMMAND = [
-  'sudo apt-get update',
-  'sudo apt-get install --yes libjavascriptcoregtk-4.1-bin',
-  'sudo ln --symbolic --force /usr/bin/jsc-4.1 /usr/local/bin/jsc',
-].join(' && ');
+export const JSC_INSTALL_COMMAND =
+  'sudo apt-get update && sudo apt-get install --yes libjavascriptcoregtk-bin';
+
+/** The executable supplied by `JSC_INSTALL_COMMAND` on Ubuntu Noble. */
+export const JSC_EXECUTABLE_CHECK = 'test -x /usr/bin/jsc';
 
 /**
  * Every action the workflow uses, pinned to an immutable commit SHA. The
@@ -294,6 +295,7 @@ export function createCiJobs(test262) {
       'JavaScriptCore tests',
       [
         runStep('Install the JavaScriptCore shell', JSC_INSTALL_COMMAND),
+        runStep('Verify the JavaScriptCore shell', JSC_EXECUTABLE_CHECK),
         runStep('Run JavaScriptCore suites', 'npm run test:jsc'),
       ],
       ['vendor'],

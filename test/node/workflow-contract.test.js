@@ -74,11 +74,9 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
 const BROWSER_INSTALL_COMMAND =
   'npx playwright install --with-deps --only-shell chromium';
 
-const JSC_INSTALL_COMMAND = [
-  'sudo apt-get update',
-  'sudo apt-get install --yes libjavascriptcoregtk-4.1-bin',
-  'sudo ln --symbolic --force /usr/bin/jsc-4.1 /usr/local/bin/jsc',
-].join(' && ');
+const JSC_INSTALL_COMMAND =
+  'sudo apt-get update && sudo apt-get install --yes libjavascriptcoregtk-bin';
+const JSC_EXECUTABLE_CHECK = 'test -x /usr/bin/jsc';
 
 /**
  * Representative fixtures for each ES5 Date family the engine completed.
@@ -373,6 +371,7 @@ export default [
     name: 'the required JavaScriptCore job installs a shell and runs the portable suite',
     run: async () => {
       const { workflow } = await readWorkflow();
+      const testingDoc = await readRepositoryFile('docs/testing.md');
       const job = requireJob(workflow, 'test-jsc');
       const commands = runCommands(job);
 
@@ -385,9 +384,25 @@ export default [
       );
       assertSame(
         commands.indexOf(JSC_INSTALL_COMMAND) <
+          commands.indexOf(JSC_EXECUTABLE_CHECK),
+        true,
+        `test-jsc must verify ${JSC_EXECUTABLE_CHECK} after installation`,
+      );
+      assertSame(
+        commands.indexOf(JSC_EXECUTABLE_CHECK) <
           commands.indexOf('npm run test:jsc'),
         true,
-        'the JavaScriptCore shell must be installed before the JSC suite runs',
+        'the JavaScriptCore shell must be verified before the JSC suite runs',
+      );
+      assertSame(
+        testingDoc.includes(JSC_INSTALL_COMMAND),
+        true,
+        'docs/testing.md must document the exact JavaScriptCore install command CI uses',
+      );
+      assertSame(
+        testingDoc.includes('/usr/bin/jsc'),
+        true,
+        'docs/testing.md must document the JavaScriptCore executable CI verifies',
       );
     },
   },

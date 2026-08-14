@@ -312,12 +312,17 @@ Two properties are asserted by `test/node/workflow-contract.test.js`:
 
 ### JSC in CI
 
-`test-jsc` is required. On Ubuntu 24.04 it installs
-`libjavascriptcoregtk-4.1-bin` and exposes `/usr/bin/jsc-4.1` as `jsc` through
-`/usr/local/bin`, so the later `npm run test:jsc` step does not depend on shell
-state from installation. The byte-identical-output guarantee between Node,
-Chromium, and `jsc` is enforced by `test/test262-runner.test.js`, which runs
-under all three runners.
+`test-jsc` is required. On Ubuntu Noble it runs this deterministic install
+command:
+
+```sh
+sudo apt-get update && sudo apt-get install --yes libjavascriptcoregtk-bin
+```
+
+That package provides `/usr/bin/jsc` directly; CI verifies that executable
+before running `npm run test:jsc`. The byte-identical-output guarantee between
+Node, Chromium, and `jsc` is enforced by `test/test262-runner.test.js`, which
+runs under all three runners.
 
 ## Troubleshooting
 
