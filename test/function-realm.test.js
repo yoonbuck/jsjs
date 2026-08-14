@@ -87,7 +87,7 @@ export default [
       const bind = callable(realm.intrinsics.functionPrototype.get('bind'));
       let bound = target;
 
-      for (let index = 0; index < 30_000; index += 1) {
+      for (let index = 0; index < 30000; index += 1) {
         bound = callable(bind.callFunction(bound, [null]));
       }
 

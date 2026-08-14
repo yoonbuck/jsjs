@@ -441,8 +441,10 @@ export default [
       });
       let laterRan = false;
       realm.agent.enqueueJob(
-        createJob(realm, 'malformed-completion', () =>
-          /** @type {any} */ ({ type: 'invalid', value: undefined }),
+        createJob(
+          realm,
+          'malformed-completion',
+          () => /** @type {any} */ ({ type: 'invalid', value: undefined }),
         ),
       );
       realm.agent.enqueueJob(

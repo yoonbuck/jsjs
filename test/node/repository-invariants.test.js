@@ -1531,6 +1531,65 @@ export default [
     },
   },
   {
+    name: 'layer-1 Agent Jobs and Promise documentation publishes its stable boundary',
+    run: async () => {
+      const readme = await readSource('README.md');
+      const testing = await readSource('docs/testing.md');
+      const conformance = await readSource('docs/conformance.md');
+
+      assertSame(
+        readme.includes('realm.agent.runJobs()'),
+        true,
+        'README must document deterministic manual Agent job draining',
+      );
+      assertSame(
+        readme.includes('jobHost.scheduleMicrotask'),
+        true,
+        'README must document the optional jobHost scheduler interface',
+      );
+      assertSame(
+        testing.includes('test/ci/es2015-promise-test262.test.js'),
+        true,
+        'docs/testing.md must name the focused ES2015 Promise Test262 suite',
+      );
+      assertSame(
+        testing.includes('TZ=UTC'),
+        true,
+        'docs/testing.md must document UTC for the focused Promise Test262 suite',
+      );
+
+      for (const contract of [
+        'Agent Jobs',
+        'ES2015 Promise constructor',
+        'reactions',
+        'thenable assimilation',
+        'combinators',
+        'async $DONE',
+        'Generators and modules are not implemented.',
+      ]) {
+        assertSame(
+          conformance.includes(contract),
+          true,
+          `docs/conformance.md must document the layer-1 ${contract} boundary`,
+        );
+      }
+
+      for (const [file, source] of [
+        ['README.md', readme],
+        ['docs/testing.md', testing],
+        ['docs/conformance.md', conformance],
+      ]) {
+        assertSame(
+          /\b(?:implements|supports)\b[^\n]*\b(?:generators?|modules?)\b/iu.test(
+            source,
+          ),
+          false,
+          `${file} must not claim generators or modules are implemented`,
+        );
+      }
+    },
+  },
+  {
     name: 'markdownTableFirstColumnUnderHeading throws when heading or table is missing',
     run: async () => {
       assertThrows(
