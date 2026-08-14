@@ -99,6 +99,14 @@ function getStrictParser() {
 export function parseScript(source, options = {}) {
   const { parse = parseWithScriptParser, ...parserOptions } = options;
   const hasCustomParse = parse !== parseWithScriptParser;
+  // `parserOptions` has exactly the own enumerable properties that the spread
+  // below forwards to Acorn. An inherited `program` is therefore irrelevant,
+  // while even an own `undefined` or `null` value makes this parser result
+  // untrusted: Acorn can append to a supplied Program object.
+  const hasCustomProgram = Object.prototype.propertyIsEnumerable.call(
+    parserOptions,
+    'program',
+  );
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
@@ -119,7 +127,12 @@ export function parseScript(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
-  return validateScriptProgram(program, source, false, hasCustomParse);
+  return validateScriptProgram(
+    program,
+    source,
+    false,
+    hasCustomParse || hasCustomProgram,
+  );
 }
 
 /**

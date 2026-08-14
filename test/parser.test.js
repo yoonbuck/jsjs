@@ -434,6 +434,41 @@ const tests = [
     },
   },
   {
+    name: 'a caller-supplied Acorn program with an evaluator-reachable cycle rejects before evaluation',
+    run() {
+      const consequent = /** @type {any} */ ({
+        type: 'IfStatement',
+        test: { type: 'Literal', value: true },
+        consequent: null,
+        alternate: null,
+      });
+      consequent.consequent = consequent;
+      const program = parseScript('');
+      program.body.push(consequent);
+
+      assertThrows(() => parseScript('0;', { program }), SyntaxError);
+      assertThrows(
+        () => evaluateScript(createRealm(), '0;', { program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'a caller-supplied Acorn program rejects AST nodes hidden in metadata',
+    run() {
+      const program = parseScript('{}');
+      program.body[0].metadata = {
+        hidden: { type: 'BlockStatement', body: [] },
+      };
+
+      assertThrows(() => parseScript('0;', { program }), SyntaxError);
+      assertThrows(
+        () => evaluateScript(createRealm(), '0;', { program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
     name: 'custom parser rejects a statement node on a direct expression edge',
     run() {
       const program = expressionProgram({
