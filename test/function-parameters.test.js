@@ -193,6 +193,62 @@ const tests = [
     },
   },
   {
+    name: 'arguments objects retain their realm intrinsic Array values iterator',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        `
+          var saved = Array.prototype.values;
+          var getterCalls = 0;
+          Object.defineProperty(Array.prototype, Symbol.iterator, {
+            configurable: true,
+            get: () => {
+              getterCalls += 1;
+              return function () {};
+            }
+          });
+          function mapped(value) {
+            return arguments[Symbol.iterator] === saved;
+          }
+          function unmapped(value = 1) {
+            return arguments[Symbol.iterator] === saved;
+          }
+          var beforeDelete = mapped(1) + ':' + unmapped(1);
+          delete Array.prototype[Symbol.iterator];
+          var afterDelete = mapped(1) + ':' + unmapped(1);
+          beforeDelete + ':' + afterDelete + ':' + getterCalls;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'true:true:true:true:0');
+
+      const firstRealm = createRealm();
+      const secondRealm = createRealm();
+      const firstArrayValues = evaluateScript(
+        firstRealm,
+        'Array.prototype.values;',
+      ).value;
+      const secondArrayValues = evaluateScript(
+        secondRealm,
+        'Array.prototype.values;',
+      ).value;
+      const firstArgumentsIterator = evaluateScript(
+        firstRealm,
+        'function first() { return arguments[Symbol.iterator]; } first();',
+      ).value;
+      const secondArgumentsIterator = evaluateScript(
+        secondRealm,
+        'function second() { return arguments[Symbol.iterator]; } second();',
+      ).value;
+
+      assertSame(firstArgumentsIterator, firstArrayValues);
+      assertSame(secondArgumentsIterator, secondArrayValues);
+      assertSame(firstArgumentsIterator === secondArgumentsIterator, false);
+    },
+  },
+  {
     name: 'parameter expressions get arguments even when the body lexically declares that name',
     run() {
       assertSame(

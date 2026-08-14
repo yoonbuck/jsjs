@@ -734,8 +734,19 @@ export function createArgumentsObject(functionObject, args, env, mapped) {
   // arguments object gets an `@@iterator` data property whose value is the
   // intrinsic %Array.prototype.values%, so `for (x of arguments)` works.
   const iteratorSymbol = functionObject.realm.agent.wellKnownSymbols.iterator;
+  const arrayValuesFunction =
+    /** @type {import('../builtins/shared.js').NativeFunction | undefined} */ (
+      functionObject.realm.intrinsics.arrayValuesFunction
+    );
+
+  if (arrayValuesFunction === undefined) {
+    throw new TypeError(
+      'Realm is missing required %Array.prototype.values% intrinsic',
+    );
+  }
+
   argumentsObject.defineOwnProperty(iteratorSymbol, {
-    value: functionObject.realm.intrinsics.arrayPrototype.get(iteratorSymbol),
+    value: arrayValuesFunction,
     writable: true,
     enumerable: false,
     configurable: true,
