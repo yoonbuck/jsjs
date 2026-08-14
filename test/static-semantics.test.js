@@ -1,5 +1,6 @@
-import { assertSame } from './harness/assert.js';
+import { assertSame, assertThrows } from './harness/assert.js';
 import { parseScript } from '../src/parser.js';
+import { UnsupportedNodeError } from '../src/runtime/errors.js';
 import {
   boundNames,
   isConstantDeclaration,
@@ -123,6 +124,22 @@ const tests = [
         }).join(','),
         'a,b,rest',
       );
+    },
+  },
+  {
+    name: 'boundNames rejects cyclic binding patterns instead of returning incomplete names',
+    run() {
+      const pattern = /** @type {any} */ ({
+        type: 'ArrayPattern',
+        elements: /** @type {any[]} */ ([]),
+      });
+      pattern.elements.push(pattern);
+
+      const error = /** @type {any} */ (
+        assertThrows(() => boundNames(pattern), UnsupportedNodeError)
+      );
+
+      assertSame(error.nodeType, 'ArrayPattern');
     },
   },
   {

@@ -51,11 +51,29 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
 export function boundNames(node) {
   /** @type {string[]} */
   const names = [];
-  /** @type {any[]} */
-  const pending = [node];
+  /** @type {{ node: any, exiting: boolean }[]} */
+  const pending = [{ node, exiting: false }];
+  const visiting = new WeakSet();
 
   while (pending.length > 0) {
-    const current = pending.pop();
+    const { node: current, exiting } =
+      /** @type {{ node: any, exiting: boolean }} */ (pending.pop());
+
+    if (!current || typeof current !== 'object') {
+      throw createUnsupportedNodeError(current);
+    }
+
+    if (exiting) {
+      visiting.delete(current);
+      continue;
+    }
+
+    if (visiting.has(current)) {
+      throw createUnsupportedNodeError(current);
+    }
+
+    visiting.add(current);
+    pending.push({ node: current, exiting: true });
 
     switch (current.type) {
       case 'Identifier':
@@ -76,19 +94,22 @@ export function boundNames(node) {
           index >= 0;
           index -= 1
         ) {
-          pending.push(current.declarations[index].id);
+          pending.push({
+            node: current.declarations[index].id,
+            exiting: false,
+          });
         }
         break;
       case 'AssignmentPattern':
-        pending.push(current.left);
+        pending.push({ node: current.left, exiting: false });
         break;
       case 'RestElement':
-        pending.push(current.argument);
+        pending.push({ node: current.argument, exiting: false });
         break;
       case 'ArrayPattern':
         for (let index = current.elements.length - 1; index >= 0; index -= 1) {
           if (current.elements[index] !== null) {
-            pending.push(current.elements[index]);
+            pending.push({ node: current.elements[index], exiting: false });
           }
         }
         break;
@@ -101,9 +122,9 @@ export function boundNames(node) {
           const property = current.properties[index];
 
           if (property.type === 'Property') {
-            pending.push(property.value);
+            pending.push({ node: property.value, exiting: false });
           } else if (property.type === 'RestElement') {
-            pending.push(property);
+            pending.push({ node: property, exiting: false });
           } else {
             throw createUnsupportedNodeError(property);
           }

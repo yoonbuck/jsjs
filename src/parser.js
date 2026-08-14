@@ -180,6 +180,7 @@ function validateScriptProgram(program, source, strict = false) {
     throw new TypeError('Expected parser to return a script Program node');
   }
 
+  checkAcyclicAstChildren(/** @type {any} */ (program));
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
     source,
@@ -187,6 +188,81 @@ function validateScriptProgram(program, source, strict = false) {
   );
 
   return /** @type {any} */ (program);
+}
+
+/**
+ * Rejects a custom parser result whose evaluator-relevant child graph has a
+ * back-edge. An active-path set, rather than a global visited set, permits
+ * legitimate shared nodes in a DAG (notably Acorn's shorthand property
+ * key/value identity) while rejecting a node or child array that reaches an
+ * ancestor. The explicit enter/exit worklist avoids recursive host stack use.
+ *
+ * @param {any} root
+ * @returns {void}
+ */
+function checkAcyclicAstChildren(root) {
+  /** @type {{ value: unknown, exiting: boolean, structural: boolean }[]} */
+  const pending = [{ value: root, exiting: false, structural: true }];
+  const visitingNodes = new WeakSet();
+  const visitingArrays = new WeakSet();
+
+  while (pending.length > 0) {
+    const item =
+      /** @type {{ value: unknown, exiting: boolean, structural: boolean }} */ (
+        pending.pop()
+      );
+    const value = item.value;
+
+    if (!value || typeof value !== 'object' || !item.structural) {
+      continue;
+    }
+
+    const array = Array.isArray(value);
+    const node = !array && typeof (/** @type {any} */ (value).type) === 'string';
+
+    if (!array && !node) {
+      continue;
+    }
+
+    const visiting = array ? visitingArrays : visitingNodes;
+
+    if (item.exiting) {
+      visiting.delete(value);
+      continue;
+    }
+
+    if (visiting.has(value)) {
+      throw unsupportedEs2015Error('cyclic AST child graph', value);
+    }
+
+    visiting.add(value);
+    pending.push({ value, exiting: true, structural: true });
+
+    if (array) {
+      for (let index = value.length - 1; index >= 0; index -= 1) {
+        pending.push({
+          value: value[index],
+          exiting: false,
+          structural: true,
+        });
+      }
+      continue;
+    }
+
+    const keys = Object.keys(value);
+
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      const key = keys[index];
+
+      if (AST_CHILD_PROPERTY_KEYS.has(key)) {
+        pending.push({
+          value: value[key],
+          exiting: false,
+          structural: true,
+        });
+      }
+    }
+  }
 }
 
 /**
@@ -442,6 +518,51 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
  * @type {ReadonlySet<string>}
  */
 const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
+
+/**
+ * The ESTree fields that can recursively contain evaluator-relevant AST nodes
+ * or their direct child lists. Metadata stays outside this boundary: it is
+ * still inspected by the main capability walk for hidden AST nodes, but a
+ * self-referential metadata record cannot make a well-formed syntax tree
+ * cyclic.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const AST_CHILD_PROPERTY_KEYS = new Set([
+  'alternate',
+  'argument',
+  'arguments',
+  'block',
+  'body',
+  'callee',
+  'cases',
+  'consequent',
+  'declarations',
+  'discriminant',
+  'elements',
+  'expression',
+  'expressions',
+  'finalizer',
+  'handler',
+  'id',
+  'init',
+  'key',
+  'label',
+  'left',
+  'object',
+  'param',
+  'params',
+  'properties',
+  'property',
+  'quasi',
+  'quasis',
+  'right',
+  'superClass',
+  'tag',
+  'test',
+  'update',
+  'value',
+]);
 
 /**
  * Rejects a `FunctionDeclaration` that sits in a statement position the ES5.1

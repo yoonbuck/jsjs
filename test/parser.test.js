@@ -391,40 +391,21 @@ const tests = [
     },
   },
   {
-    name: 'a cyclic custom AST terminates instead of running away',
+    name: 'cyclic custom AST child graphs reject at the parser boundary',
     run() {
-      // `parseScript` accepts a custom `parse` hook, so the walk cannot
-      // assume the tree it is handed is acyclic. A cycle must not spin
-      // forever or overflow the stack.
-      const block = /** @type {any} */ ({
-        type: 'BlockStatement',
-        body: /** @type {any[]} */ ([]),
-      });
-      block.body.push(block);
-
-      const cyclic = {
-        type: 'Program',
-        sourceType: 'script',
-        body: [block],
-      };
-
-      const program = parseScript('', { parse: () => cyclic });
-
-      assertSame(program.type, 'Program');
-
-      const parameter = /** @type {any} */ ({
+      const pattern = /** @type {any} */ ({
         type: 'ArrayPattern',
         elements: /** @type {any[]} */ ([]),
       });
-      parameter.elements.push(parameter);
-      const cyclicParameter = {
+      pattern.elements.push(pattern);
+      const directNodeCycle = {
         type: 'Program',
         sourceType: 'script',
         body: [
           {
             type: 'FunctionDeclaration',
             id: { type: 'Identifier', name: 'f' },
-            params: [parameter],
+            params: [pattern],
             generator: false,
             async: false,
             expression: false,
@@ -433,9 +414,22 @@ const tests = [
         ],
       };
 
-      assertSame(
-        parseScript('', { parse: () => cyclicParameter }).type,
-        'Program',
+      assertThrows(
+        () => parseScript('', { parse: () => directNodeCycle }),
+        SyntaxError,
+      );
+
+      const cyclicChildArray = /** @type {any[]} */ ([]);
+      cyclicChildArray.push(cyclicChildArray);
+      const childArrayCycle = {
+        type: 'Program',
+        sourceType: 'script',
+        body: cyclicChildArray,
+      };
+
+      assertThrows(
+        () => parseScript('', { parse: () => childArrayCycle }),
+        SyntaxError,
       );
     },
   },
