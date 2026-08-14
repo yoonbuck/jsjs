@@ -455,7 +455,7 @@ export default [
     },
   },
   {
-    name: 'Promise adoption preserves separate promise identity and eventual state',
+    name: 'Promise adoption observes the intrinsic then and preserves identity',
     run: () => {
       const realm = createRealm();
       const pendingSource = createPendingPromise(realm, 'pendingSource');
@@ -481,14 +481,17 @@ export default [
 
       assertSame(pendingTarget.promise === pendingSource.promise, false);
       assertSame(pendingTarget.promise.promiseState, 'pending');
+      assertSame(fulfilledTarget.promise.promiseState, 'pending');
+      assertSame(rejectedTarget.promise.promiseState, 'pending');
+
+      pendingSource.resolve.callFunction(undefined, ['later']);
+      assertSame(realm.agent.runJobs().failures.length, 0);
+      assertSame(pendingTarget.promise.promiseState, 'fulfilled');
+      assertSame(pendingTarget.promise.promiseResult, 'later');
       assertSame(fulfilledTarget.promise.promiseState, 'fulfilled');
       assertSame(fulfilledTarget.promise.promiseResult, 'yes');
       assertSame(rejectedTarget.promise.promiseState, 'rejected');
       assertSame(rejectedTarget.promise.promiseResult, 'no');
-
-      pendingSource.resolve.callFunction(undefined, ['later']);
-      assertSame(pendingTarget.promise.promiseState, 'fulfilled');
-      assertSame(pendingTarget.promise.promiseResult, 'later');
     },
   },
   {

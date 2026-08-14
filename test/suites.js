@@ -83,6 +83,7 @@ import arrayIndex from './array-index.test.js';
 import jobs from './jobs.test.js';
 import functionRealm from './function-realm.test.js';
 import promiseCore from './promise-core.test.js';
+import promiseReactions from './promise-reactions.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -340,5 +341,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/promise-core.test.js',
     tests: promiseCore,
+  }),
+  Object.freeze({
+    file: 'test/promise-reactions.test.js',
+    tests: promiseReactions,
   }),
 ]);

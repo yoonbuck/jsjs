@@ -1,7 +1,14 @@
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
-import { isCallable } from '../runtime/descriptors.js';
+import { toObject } from '../runtime/conversion.js';
+import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import { EngineObject } from '../runtime/object.js';
-import { PromiseObject, createResolvingFunctions } from '../runtime/promise.js';
+import {
+  PromiseObject,
+  createResolvingFunctions,
+  newPromiseCapability,
+  performPromiseThen,
+  speciesConstructor,
+} from '../runtime/promise.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -64,6 +71,114 @@ export function createPromiseIntrinsics(realm) {
     enumerable: false,
     configurable: true,
   });
+  defineBuiltinMethod(
+    promisePrototype,
+    'then',
+    realm.createNativeFunction({
+      name: 'then',
+      length: 2,
+      call(thisValue, args) {
+        if (!(thisValue instanceof PromiseObject)) {
+          throw new GuestErrorSignal(
+            'TypeError',
+            'Promise.prototype.then called on an incompatible receiver',
+          );
+        }
+
+        const constructor = speciesConstructor(
+          thisValue,
+          promiseConstructor,
+          realm,
+        );
+        const resultCapability = newPromiseCapability(constructor, realm);
+        return performPromiseThen(
+          thisValue,
+          args[0],
+          args[1],
+          resultCapability,
+          realm,
+        );
+      },
+    }),
+  );
+  defineBuiltinMethod(
+    promisePrototype,
+    'catch',
+    realm.createNativeFunction({
+      name: 'catch',
+      length: 1,
+      call(thisValue, args) {
+        const then = toObject(realm, thisValue).get('then');
+        if (!isCallable(then)) {
+          throw new GuestErrorSignal(
+            'TypeError',
+            'Promise.prototype.catch receiver has a non-callable then',
+          );
+        }
+
+        return then.callFunction(thisValue, [undefined, args[0]]);
+      },
+    }),
+  );
+  promiseConstructor.defineOwnProperty(realm.agent.wellKnownSymbols.species, {
+    get: realm.createNativeFunction({
+      name: '[Symbol.species]',
+      length: 0,
+      call(thisValue) {
+        return thisValue;
+      },
+    }),
+    enumerable: false,
+    configurable: true,
+  });
+  defineBuiltinMethod(
+    promiseConstructor,
+    'resolve',
+    realm.createNativeFunction({
+      name: 'resolve',
+      length: 1,
+      call(thisValue, args) {
+        if (!isConstructor(thisValue)) {
+          throw new GuestErrorSignal(
+            'TypeError',
+            'Promise.resolve called on a non-constructor',
+          );
+        }
+
+        const resolution = args[0];
+        if (
+          resolution instanceof PromiseObject &&
+          resolution.get('constructor') === thisValue
+        ) {
+          return resolution;
+        }
+
+        const capability = newPromiseCapability(thisValue, realm);
+        capability.resolve.callFunction(undefined, [resolution]);
+        return capability.promise;
+      },
+    }),
+  );
+  defineBuiltinMethod(
+    promiseConstructor,
+    'reject',
+    realm.createNativeFunction({
+      name: 'reject',
+      length: 1,
+      call(thisValue, args) {
+        if (!isConstructor(thisValue)) {
+          throw new GuestErrorSignal(
+            'TypeError',
+            'Promise.reject called on a non-constructor',
+          );
+        }
+
+        const capability = newPromiseCapability(thisValue, realm);
+        capability.reject.callFunction(undefined, [args[0]]);
+        return capability.promise;
+      },
+    }),
+  );
 
   return { promisePrototype, promiseConstructor };
 }
@@ -110,4 +225,19 @@ function abruptValue(realm, error) {
   }
 
   throw error;
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {string | symbol} name
+ * @param {import('./shared.js').NativeFunction} method
+ * @returns {void}
+ */
+function defineBuiltinMethod(target, name, method) {
+  target.defineOwnProperty(name, {
+    value: method,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
 }

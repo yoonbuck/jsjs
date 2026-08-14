@@ -16,6 +16,7 @@ import { isRealm } from './realm.js';
  *   capability: PromiseCapabilityRecord | null,
  *   type: 'fulfill' | 'reject',
  *   handler: CallableLike | null,
+ *   currentRealm: Realm,
  * }} PromiseReactionRecord
  *
  * @typedef {{
@@ -42,8 +43,6 @@ export class PromiseObject extends EngineObject {
     /** @type {PromiseReactionRecord[]} */
     this.promiseRejectReactions = [];
     this.promiseIsHandled = false;
-    /** @type {PromiseObject[]} */
-    this.promiseAdoptionTargets = [];
   }
 }
 
@@ -100,6 +99,153 @@ export function newPromiseCapability(constructor, currentRealm) {
 
 /**
  * @param {PromiseObject} promise
+ * @param {unknown} onFulfilled
+ * @param {unknown} onRejected
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {Realm} currentRealm
+ * @returns {EngineObject}
+ */
+export function performPromiseThen(
+  promise,
+  onFulfilled,
+  onRejected,
+  resultCapability,
+  currentRealm,
+) {
+  const fulfillReaction = {
+    capability: resultCapability,
+    type: /** @type {const} */ ('fulfill'),
+    handler: isCallable(onFulfilled) ? onFulfilled : null,
+    currentRealm,
+  };
+  const rejectReaction = {
+    capability: resultCapability,
+    type: /** @type {const} */ ('reject'),
+    handler: isCallable(onRejected) ? onRejected : null,
+    currentRealm,
+  };
+
+  if (promise.promiseState === 'pending') {
+    promise.promiseFulfillReactions.push(fulfillReaction);
+    promise.promiseRejectReactions.push(rejectReaction);
+  } else if (promise.promiseState === 'fulfilled') {
+    promise.realm.agent.enqueueJob(
+      newPromiseReactionJob(
+        fulfillReaction,
+        promise.promiseResult,
+        currentRealm,
+      ),
+    );
+  } else {
+    promise.realm.agent.enqueueJob(
+      newPromiseReactionJob(
+        rejectReaction,
+        promise.promiseResult,
+        currentRealm,
+      ),
+    );
+  }
+
+  if (promise.promiseState === 'rejected' && !promise.promiseIsHandled) {
+    trackPromiseRejection(promise, 'handle');
+  }
+  promise.promiseIsHandled = true;
+
+  return resultCapability.promise;
+}
+
+/**
+ * @param {PromiseReactionRecord} reaction
+ * @param {unknown} argument
+ * @param {Realm} currentRealm
+ * @returns {import('./jobs.js').JobRecord}
+ */
+export function newPromiseReactionJob(reaction, argument, currentRealm) {
+  const jobRealm = getReactionJobRealm(reaction.handler, currentRealm);
+
+  return {
+    realm: jobRealm,
+    arguments: [],
+    kind: 'promise-reaction',
+    callback() {
+      /** @type {unknown} */
+      let handlerResult;
+
+      if (reaction.handler === null) {
+        if (reaction.type === 'reject') {
+          return callPromiseCapability(
+            reaction.capability,
+            'reject',
+            argument,
+            /** @type {Realm} */ (jobRealm ?? currentRealm),
+          );
+        }
+
+        return callPromiseCapability(
+          reaction.capability,
+          'resolve',
+          argument,
+          /** @type {Realm} */ (jobRealm ?? currentRealm),
+        );
+      }
+
+      try {
+        handlerResult = reaction.handler.callFunction(undefined, [argument]);
+      } catch (error) {
+        return callPromiseCapability(
+          reaction.capability,
+          'reject',
+          abruptValue(/** @type {Realm} */ (jobRealm), error),
+          /** @type {Realm} */ (jobRealm),
+        );
+      }
+
+      return callPromiseCapability(
+        reaction.capability,
+        'resolve',
+        handlerResult,
+        /** @type {Realm} */ (jobRealm),
+      );
+    },
+  };
+}
+
+/**
+ * @param {EngineObject} object
+ * @param {unknown} defaultConstructor
+ * @param {Realm} currentRealm
+ * @returns {unknown}
+ */
+export function speciesConstructor(object, defaultConstructor, currentRealm) {
+  const constructor = object.get('constructor');
+
+  if (constructor === undefined) {
+    return defaultConstructor;
+  }
+  if (!(constructor instanceof EngineObject)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Promise constructor property is not an object',
+    );
+  }
+
+  const species = constructor.get(currentRealm.agent.wellKnownSymbols.species);
+
+  if (species === undefined || species === null) {
+    return defaultConstructor;
+  }
+  if (!isConstructor(species)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Promise species constructor is not a constructor',
+    );
+  }
+
+  return species;
+}
+
+/**
+ * @param {PromiseObject} promise
  * @param {Realm} currentRealm
  * @returns {{ resolve: CallableLike, reject: CallableLike }}
  */
@@ -137,11 +283,6 @@ export function createResolvingFunctions(promise, currentRealm) {
         then = resolution.get('then');
       } catch (error) {
         rejectPromise(promise, abruptValue(currentRealm, error));
-        return undefined;
-      }
-
-      if (hasMissingPromiseThen(resolution, then)) {
-        adoptPromise(promise, resolution);
         return undefined;
       }
 
@@ -250,46 +391,6 @@ function getThenableJobRealm(then, currentRealm) {
 }
 
 /**
- * Task 4 installs Promise.prototype.then. Until then, guest Promise objects
- * need this bridge to preserve Promise adoption. Ordinary Get happens first,
- * so any own or inherited then property keeps its standard thenable behavior;
- * installing the intrinsic naturally makes the bridge condition false.
- *
- * @param {EngineObject} resolution
- * @param {unknown} then
- * @returns {resolution is PromiseObject}
- */
-function hasMissingPromiseThen(resolution, then) {
-  return (
-    resolution instanceof PromiseObject &&
-    then === undefined &&
-    resolution.getProperty('then') === undefined &&
-    resolution.realm.intrinsics.promisePrototype instanceof EngineObject &&
-    resolution.realm.intrinsics.promisePrototype.getOwnProperty('then') ===
-      undefined
-  );
-}
-
-/**
- * @param {PromiseObject} target
- * @param {PromiseObject} source
- * @returns {void}
- */
-function adoptPromise(target, source) {
-  if (source.promiseState === 'pending') {
-    source.promiseAdoptionTargets.push(target);
-    return;
-  }
-
-  if (source.promiseState === 'fulfilled') {
-    fulfillPromise(target, source.promiseResult);
-    return;
-  }
-
-  rejectPromise(target, source.promiseResult);
-}
-
-/**
  * @param {PromiseObject} promise
  * @param {'fulfilled' | 'rejected'} state
  * @param {unknown} result
@@ -304,23 +405,98 @@ function settlePromise(promise, state, result) {
     state === 'fulfilled'
       ? promise.promiseFulfillReactions
       : promise.promiseRejectReactions;
-  const adoptionTargets = promise.promiseAdoptionTargets;
   promise.promiseFulfillReactions = [];
   promise.promiseRejectReactions = [];
-  promise.promiseAdoptionTargets = [];
   promise.promiseState = state;
   promise.promiseResult = result;
 
-  // Promise reaction registration is added with Promise.prototype.then. The
-  // lists still clear here so settling preserves the one-way slot invariant.
-  void reactions;
+  triggerPromiseReactions(reactions, result);
+  if (state === 'rejected' && !promise.promiseIsHandled) {
+    trackPromiseRejection(promise, 'reject');
+  }
+}
 
-  for (const target of adoptionTargets) {
-    if (state === 'fulfilled') {
-      fulfillPromise(target, result);
-    } else {
-      rejectPromise(target, result);
+/**
+ * @param {PromiseReactionRecord[]} reactions
+ * @param {unknown} argument
+ * @returns {void}
+ */
+function triggerPromiseReactions(reactions, argument) {
+  let didThrow = false;
+  /** @type {unknown} */
+  let firstError;
+
+  for (const reaction of reactions) {
+    try {
+      reaction.currentRealm.agent.enqueueJob(
+        newPromiseReactionJob(reaction, argument, reaction.currentRealm),
+      );
+    } catch (error) {
+      if (!didThrow) {
+        didThrow = true;
+        firstError = error;
+      }
     }
+  }
+
+  if (didThrow) {
+    throw firstError;
+  }
+}
+
+/**
+ * @param {CallableLike | null} handler
+ * @param {Realm} currentRealm
+ * @returns {Realm | null}
+ */
+function getReactionJobRealm(handler, currentRealm) {
+  if (handler === null) {
+    return null;
+  }
+
+  const realmCompletion = getFunctionRealm(handler);
+  if (realmCompletion.type === 'normal' && isRealm(realmCompletion.value)) {
+    return realmCompletion.value;
+  }
+
+  return currentRealm;
+}
+
+/**
+ * @param {PromiseCapabilityRecord | null} capability
+ * @param {'resolve' | 'reject'} operation
+ * @param {unknown} value
+ * @param {Realm} realm
+ * @returns {{ type: 'normal' | 'throw', value: unknown }}
+ */
+function callPromiseCapability(capability, operation, value, realm) {
+  if (capability === null) {
+    return createNormalCompletion(undefined);
+  }
+
+  try {
+    capability[operation].callFunction(undefined, [value]);
+    return createNormalCompletion(undefined);
+  } catch (error) {
+    return { type: 'throw', value: abruptValue(realm, error) };
+  }
+}
+
+/**
+ * @param {PromiseObject} promise
+ * @param {'reject' | 'handle'} operation
+ * @returns {void}
+ */
+function trackPromiseRejection(promise, operation) {
+  const tracker = promise.realm.agent.jobHost?.promiseRejectionTracker;
+  if (tracker === undefined) {
+    return;
+  }
+
+  try {
+    tracker(promise, operation);
+  } catch (error) {
+    promise.realm.agent.recordHostHookFailure(error);
   }
 }
 
