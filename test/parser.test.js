@@ -511,6 +511,184 @@ const tests = [
     },
   },
   {
+    name: 'a token callback cannot invalidate a prevalidated caller-supplied Acorn program',
+    run() {
+      const program = parseScript('1 + 2;');
+      let callbackCalls = 0;
+
+      assertThrows(
+        () =>
+          parseScript('0;', {
+            program,
+            onToken() {
+              callbackCalls += 1;
+              program.body[0].expression.operator = '**';
+            },
+          }),
+        SyntaxError,
+      );
+      assertSame(callbackCalls > 0, true);
+    },
+  },
+  {
+    name: 'a token callback cannot install a Program getter that Acorn executes',
+    run() {
+      const program = parseScript('1 + 2;');
+      let callbackCalls = 0;
+      let getterCalls = 0;
+      let thrown;
+
+      try {
+        parseScript('0;', {
+          program,
+          onToken() {
+            callbackCalls += 1;
+
+            if (callbackCalls === 1) {
+              Object.defineProperty(program, 'body', {
+                get() {
+                  getterCalls += 1;
+                  throw new Error('Program.body getter must not execute');
+                },
+                enumerable: true,
+                configurable: true,
+              });
+            }
+          },
+        });
+      } catch (error) {
+        thrown = error;
+      }
+
+      assertSame(callbackCalls > 0, true);
+      assertSame(getterCalls, 0);
+      assertSame(thrown instanceof SyntaxError, true);
+    },
+  },
+  {
+    name: 'caller-supplied Program append bypasses an own body push method',
+    run() {
+      const program = parseScript('existing;');
+      let pushCalls = 0;
+
+      Object.defineProperty(program.body, 'push', {
+        value() {
+          pushCalls += 1;
+          return this.length;
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      const result = parseScript('added;', { program });
+
+      assertSame(pushCalls, 0);
+      assertSame(result === program, false);
+      assertSame(program.body.length, 1);
+      assertSame(result.body.length, 2);
+      assertSame(result.body[0].expression.name, 'existing');
+      assertSame(result.body[1].expression.name, 'added');
+      assertSame(result.sourceType, 'script');
+    },
+  },
+  {
+    name: 'caller-supplied Program append never invokes an inherited range setter',
+    run() {
+      const program = parseScript('existing;');
+      let setterCalls = 0;
+      let thrown;
+
+      program.range = Object.create({
+        /** @param {unknown} _value */
+        set 1(_value) {
+          setterCalls += 1;
+        },
+      });
+
+      try {
+        parseScript('added;', { program });
+      } catch (error) {
+        thrown = error;
+      }
+
+      assertSame(setterCalls, 0);
+      assertSame(thrown instanceof TypeError, true);
+      assertSame(program.body.length, 1);
+    },
+  },
+  {
+    name: 'caller-supplied Program missing loc or range rejects without partial mutation',
+    run() {
+      for (const missingField of ['loc', 'range']) {
+        const program = parseScript('existing;');
+        const originalEnd = program.end;
+        let thrown;
+
+        delete program[missingField];
+
+        try {
+          parseScript('added;', { program });
+        } catch (error) {
+          thrown = error;
+        }
+
+        assertSame(program.body.length, 1, missingField);
+        assertSame(program.end, originalEnd, missingField);
+        assertSame(thrown instanceof TypeError, true, missingField);
+      }
+    },
+  },
+  {
+    name: 'caller-supplied Program append preserves the combined directive prologue',
+    run() {
+      const openPrologue = parseScript('"existing";');
+      const openResult = parseScript('"appended"; var value = 1;', {
+        program: openPrologue,
+      });
+
+      assertSame(openResult.body[0].directive, 'existing');
+      assertSame(openResult.body[1].directive, 'appended');
+      assertSame(openResult.sourceType, 'script');
+
+      const closedPrologue = parseScript('existing;');
+      const closedResult = parseScript('"use strict"; appended;', {
+        program: closedPrologue,
+      });
+
+      assertSame(closedResult.body[1].directive, undefined);
+      assertSame(closedResult.sourceType, 'script');
+
+      const forgedPrologue = parseScript('existing;');
+      forgedPrologue.body[0].directive = 'forged';
+      const forgedResult = parseScript('"use strict"; appended;', {
+        program: forgedPrologue,
+      });
+
+      assertSame(forgedResult.body[1].directive, undefined);
+    },
+  },
+  {
+    name: 'a custom parser still receives and may return its program option',
+    run() {
+      const program = expressionProgram({ type: 'Literal', value: 1 });
+      let receivedProgram;
+      const result = parseScript('', {
+        program,
+        /**
+         * @param {string} _source
+         * @param {any} parserOptions
+         */
+        parse(_source, parserOptions) {
+          receivedProgram = parserOptions.program;
+          return program;
+        },
+      });
+
+      assertSame(receivedProgram, program);
+      assertSame(result, program);
+    },
+  },
+  {
     name: 'a caller-supplied Acorn program rejects AST nodes hidden in metadata',
     run() {
       const program = parseScript('{}');

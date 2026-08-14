@@ -107,15 +107,18 @@ export function parseScript(source, options = {}) {
     parserOptions,
     'program',
   );
-  const preflightProgram =
+  const hasReusableProgram =
     !hasCustomParse && hasCustomProgram && Boolean(parserOptions.program);
+  const reusableProgram = hasReusableProgram
+    ? parserOptions.program
+    : undefined;
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
   }
 
-  if (preflightProgram) {
-    validateReusableProgram(parserOptions.program);
+  if (hasReusableProgram) {
+    delete parserOptions.program;
   }
 
   let program;
@@ -133,12 +136,20 @@ export function parseScript(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
+  if (hasReusableProgram) {
+    validateReusableProgram(reusableProgram);
+    program = mergeReusableProgram(
+      /** @type {any} */ (reusableProgram),
+      program,
+    );
+  }
+
   return validateScriptProgram(
     program,
     source,
     false,
     hasCustomParse || hasCustomProgram,
-    preflightProgram,
+    hasReusableProgram,
   );
 }
 
@@ -189,7 +200,7 @@ export function parseEval(source, strict = false) {
  * @param {string} source
  * @param {boolean} [strict=false]
  * @param {boolean} [customAst=false]
- * @param {boolean} [customAstPrevalidated=false]
+ * @param {boolean} [customAstValidated=false]
  * @returns {any}
  */
 function validateScriptProgram(
@@ -197,9 +208,9 @@ function validateScriptProgram(
   source,
   strict = false,
   customAst = false,
-  customAstPrevalidated = false,
+  customAstValidated = false,
 ) {
-  if (customAst && !customAstPrevalidated) {
+  if (customAst && !customAstValidated) {
     checkUntrustedAstDescriptors(program);
   }
 
@@ -207,7 +218,7 @@ function validateScriptProgram(
     throw new TypeError('Expected parser to return a script Program node');
   }
 
-  if (customAst && !customAstPrevalidated) {
+  if (customAst && !customAstValidated) {
     checkCustomAstDefenses(/** @type {any} */ (program));
   }
 
@@ -222,11 +233,11 @@ function validateScriptProgram(
 }
 
 /**
- * Acorn reuses `options.program` directly: it reads and appends to `body`,
- * adapts its directive prologue, and writes the Program's syntax and position
- * fields. Validate the existing graph before those operations can reach an
- * accessor or inherited syntax field. The post-parse pass skips these same
- * generic defenses, so a large reused tree is not walked twice.
+ * Validates a Program supplied for Acorn-style statement appending. parseScript
+ * never gives this graph to Acorn: callbacks run while Acorn builds a separate
+ * Program, then this validation observes their final mutations before a safe
+ * merge. Requiring Acorn's location shape also turns malformed reuse targets
+ * into a parser-boundary TypeError without partially writing to them.
  *
  * @param {unknown} program
  * @returns {void}
@@ -238,7 +249,204 @@ function validateReusableProgram(program) {
     throw new TypeError('Expected parser to return a script Program node');
   }
 
+  if (!hasReusableProgramPositionShape(/** @type {any} */ (program))) {
+    throw new TypeError(
+      'Expected a reusable Acorn Program with locations and ranges',
+    );
+  }
+
   checkCustomAstDefenses(/** @type {any} */ (program));
+}
+
+/**
+ * @param {any} program
+ * @returns {boolean}
+ */
+function hasReusableProgramPositionShape(program) {
+  const loc = ownDataPropertyValue(program, 'loc');
+  const range = ownDataPropertyValue(program, 'range');
+
+  return (
+    isOwnNonnegativeInteger(program, 'start') &&
+    isOwnNonnegativeInteger(program, 'end') &&
+    !!loc &&
+    typeof loc === 'object' &&
+    isSourcePosition(ownDataPropertyValue(loc, 'start')) &&
+    isSourcePosition(ownDataPropertyValue(loc, 'end')) &&
+    Array.isArray(range) &&
+    isOwnNonnegativeInteger(range, '0') &&
+    isOwnNonnegativeInteger(range, '1')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSourcePosition(value) {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    isOwnPositiveInteger(value, 'line') &&
+    isOwnNonnegativeInteger(value, 'column')
+  );
+}
+
+/**
+ * @param {object} value
+ * @param {string} key
+ * @returns {unknown}
+ */
+function ownDataPropertyValue(value, key) {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+
+  return descriptor !== undefined &&
+    Object.prototype.hasOwnProperty.call(descriptor, 'value')
+    ? descriptor.value
+    : undefined;
+}
+
+/**
+ * @param {object} value
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isOwnNonnegativeInteger(value, key) {
+  const field = ownDataPropertyValue(value, key);
+
+  return Number.isInteger(field) && /** @type {number} */ (field) >= 0;
+}
+
+/**
+ * @param {object} value
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isOwnPositiveInteger(value, key) {
+  const field = ownDataPropertyValue(value, key);
+
+  return Number.isInteger(field) && /** @type {number} */ (field) > 0;
+}
+
+/**
+ * Produces an Acorn-owned Program and body without writing to the supplied
+ * Program or calling any method on its graph.
+ *
+ * @param {any} existingProgram
+ * @param {any} parsedProgram
+ * @returns {any}
+ */
+function mergeReusableProgram(existingProgram, parsedProgram) {
+  const existingBody = /** @type {any[]} */ (
+    ownDataPropertyValue(existingProgram, 'body')
+  );
+  const parsedBody = /** @type {any[]} */ (
+    ownDataPropertyValue(parsedProgram, 'body')
+  );
+  const mergedBody = /** @type {any[]} */ ([]);
+  const existingLength = ownArrayLength(existingBody);
+  const parsedLength = ownArrayLength(parsedBody);
+
+  for (let index = 0; index < existingLength; index += 1) {
+    defineArrayElement(
+      mergedBody,
+      mergedBody.length,
+      ownDenseArrayElementValue(existingBody, index),
+    );
+  }
+
+  if (!hasOpenDirectivePrologue(existingBody)) {
+    for (let index = 0; index < parsedLength; index += 1) {
+      const statement = ownDenseArrayElementValue(parsedBody, index);
+
+      if (statement && typeof statement === 'object') {
+        Reflect.deleteProperty(statement, 'directive');
+      }
+    }
+  }
+
+  for (let index = 0; index < parsedLength; index += 1) {
+    defineArrayElement(
+      mergedBody,
+      mergedBody.length,
+      ownDenseArrayElementValue(parsedBody, index),
+    );
+  }
+
+  Object.defineProperty(parsedProgram, 'body', {
+    value: mergedBody,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+
+  return parsedProgram;
+}
+
+/**
+ * @param {any[]} body
+ * @returns {number}
+ */
+function ownArrayLength(body) {
+  const length = ownDataPropertyValue(body, 'length');
+
+  if (!Number.isSafeInteger(length) || /** @type {number} */ (length) < 0) {
+    throw new TypeError('Expected Program body to be an ordinary array');
+  }
+
+  return /** @type {number} */ (length);
+}
+
+/**
+ * @param {any[]} body
+ * @returns {boolean}
+ */
+function hasOpenDirectivePrologue(body) {
+  const length = ownArrayLength(body);
+
+  for (let index = 0; index < length; index += 1) {
+    const statement = ownDenseArrayElementValue(body, index);
+    const expression =
+      statement && typeof statement === 'object'
+        ? ownDataPropertyValue(statement, 'expression')
+        : undefined;
+    const directive =
+      statement && typeof statement === 'object'
+        ? Object.getOwnPropertyDescriptor(statement, 'directive')
+        : undefined;
+
+    if (
+      !statement ||
+      typeof statement !== 'object' ||
+      ownDataPropertyValue(statement, 'type') !== 'ExpressionStatement' ||
+      !expression ||
+      typeof expression !== 'object' ||
+      ownDataPropertyValue(expression, 'type') !== 'Literal' ||
+      typeof ownDataPropertyValue(expression, 'value') !== 'string' ||
+      directive === undefined ||
+      !Object.prototype.hasOwnProperty.call(directive, 'value') ||
+      typeof (/** @type {PropertyDescriptor} */ (directive).value) !== 'string'
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * @param {any[]} target
+ * @param {number} index
+ * @param {unknown} value
+ * @returns {void}
+ */
+function defineArrayElement(target, index, value) {
+  Object.defineProperty(target, String(index), {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
 }
 
 /**
@@ -734,6 +942,23 @@ function ownArrayElementDescriptor(value, index) {
   }
 
   return descriptor;
+}
+
+/**
+ * @param {any[]} value
+ * @param {number} index
+ * @returns {unknown}
+ */
+function ownDenseArrayElementValue(value, index) {
+  const descriptor = ownArrayElementDescriptor(value, index);
+
+  if (descriptor === undefined) {
+    throw untrustedAstSyntaxError(
+      'AST child arrays must contain own data elements',
+    );
+  }
+
+  return descriptor.value;
 }
 
 /**
