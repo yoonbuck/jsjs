@@ -6,9 +6,9 @@
  * parse/runtime expectations, and record shapes. Which tests run is decided by
  * `selection.js`, which this module drives so no adapter has to. It touches no
  * host API — file access arrives through an injected `Test262Host`, and the
- * engine arrives through an injected `{ createRealm, evaluateScript }` pair — so
- * Node, JavaScriptCore, and browser adapters can stay thin and cannot drift
- * apart on test semantics.
+ * engine arrives through an injected Test262 engine bridge — so Node,
+ * JavaScriptCore, and browser adapters can stay thin and cannot drift apart on
+ * test semantics.
  *
  * Each (file, variant) pair runs in its own realm. Includes are evaluated as
  * separate scripts before the test source, in declaration order, so a broken
@@ -41,6 +41,11 @@ export { DEFAULT_INCLUDES };
  * @typedef {import('./metadata.js').Test262Variant} Test262Variant
  * @typedef {import('./report.js').Test262TestRecord} Test262TestRecord
  * @typedef {import('./report.js').Test262SummaryRecord} Test262SummaryRecord
+ * @typedef {{ type: string, value: unknown }} CompletionRecord
+ * @typedef {{
+ *   processed: number,
+ *   failures: readonly { error: unknown }[],
+ * }} JobDrainReport
  *
  * @typedef {{
  *   readTest(file: string): string | Promise<string>,
@@ -51,7 +56,9 @@ export { DEFAULT_INCLUDES };
  *
  * @typedef {{
  *   createRealm(): any,
- *   evaluateScript(realm: any, source: string): { type: string, value: unknown },
+ *   evaluateScript(realm: any, source: string): CompletionRecord,
+ *   installDone?: (realm: any, onDone: (value: unknown) => void) => void,
+ *   runJobs?: (realm: any) => JobDrainReport,
  * }} Test262Engine
  *
  * @typedef {{
@@ -84,7 +91,6 @@ export { DEFAULT_INCLUDES };
  */
 export const UNSUPPORTED_FLAGS = Object.freeze([
   'module',
-  'async',
   'CanBlockIsFalse',
   'CanBlockIsTrue',
   'non-deterministic',
@@ -306,6 +312,19 @@ async function runVariant({
 
   const realm = engine.createRealm();
 
+  if (metadata.flags.includes('async')) {
+    return runAsyncVariant({
+      engine,
+      host,
+      file,
+      source,
+      metadata,
+      variant,
+      includes,
+      realm,
+    });
+  }
+
   for (const name of includes) {
     /** @type {string} */
     let includeSource;
@@ -409,6 +428,215 @@ async function runVariant({
         'wrong-error-type',
         `expected ${negative.type}, got ${describeGuestValue(outcome.value)}`,
       );
+}
+
+/**
+ * Runs the Test262 async protocol entirely inside the guest engine. The single
+ * checkpoint is intentional: Agent.runJobs drains jobs appended while it runs,
+ * so no host Promise or timer is needed to observe guest completion.
+ *
+ * @param {{
+ *   engine: Test262Engine,
+ *   host: Test262Host,
+ *   file: string,
+ *   source: string,
+ *   metadata: Test262Metadata,
+ *   variant: Test262Variant,
+ *   includes: readonly string[],
+ *   realm: any,
+ * }} options
+ * @returns {Promise<Test262TestRecord>}
+ */
+async function runAsyncVariant({
+  engine,
+  host,
+  file,
+  source,
+  metadata,
+  variant,
+  includes,
+  realm,
+}) {
+  const features = metadata.features;
+  /**
+   * @param {string} reason
+   * @param {string} message
+   * @returns {Test262TestRecord}
+   */
+  const failed = (reason, message) =>
+    createTestRecord({
+      file,
+      variant,
+      status: 'failed',
+      reason,
+      message,
+      features,
+    });
+
+  if (
+    typeof engine.installDone !== 'function' ||
+    typeof engine.runJobs !== 'function'
+  ) {
+    return failed(
+      'engine-error',
+      'async Test262 execution requires installDone and runJobs engine hooks',
+    );
+  }
+
+  let doneCount = 0;
+  /** @type {unknown} */
+  let doneValue;
+
+  try {
+    engine.installDone(realm, (value) => {
+      doneCount += 1;
+      doneValue = value;
+    });
+  } catch (error) {
+    return failed('engine-error', describeHostError(error));
+  }
+
+  for (const name of includes) {
+    /** @type {string} */
+    let includeSource;
+
+    try {
+      includeSource = await host.readInclude(name);
+    } catch (error) {
+      return failed(
+        'load-error',
+        `cannot load include ${name}: ${describeHostError(error)}`,
+      );
+    }
+
+    /** @type {{ type: string, value: unknown }} */
+    let includeResult;
+
+    try {
+      includeResult = engine.evaluateScript(realm, includeSource);
+    } catch (error) {
+      return failed(
+        'harness-error',
+        `include ${name} failed: ${describeHostError(error)}`,
+      );
+    }
+
+    if (includeResult.type === 'throw') {
+      return failed(
+        'harness-error',
+        `include ${name} threw: ${describeGuestValue(includeResult.value)}`,
+      );
+    }
+  }
+
+  const testSource =
+    variant === 'strict' ? `${STRICT_DIRECTIVE}${source}` : source;
+  /** @type {{ phase: 'parse' | 'runtime' | null, error?: Error, value?: unknown }} */
+  let outcome;
+
+  try {
+    const result = engine.evaluateScript(realm, testSource);
+    outcome =
+      result.type === 'throw'
+        ? { phase: 'runtime', value: result.value }
+        : { phase: null };
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) {
+      return failed('engine-error', describeHostError(error));
+    }
+
+    outcome = { phase: 'parse', error };
+  }
+
+  const negative = metadata.negative;
+
+  if (negative !== null) {
+    if (outcome.phase === null) {
+      return failed(
+        'expected-error-not-thrown',
+        `expected a ${negative.phase}-phase ${negative.type}`,
+      );
+    }
+
+    if (outcome.phase !== negative.phase) {
+      return failed(
+        'wrong-error-phase',
+        `expected a ${negative.phase}-phase error, got a ${outcome.phase}-phase error`,
+      );
+    }
+
+    if (outcome.phase === 'parse') {
+      const name =
+        outcome.error instanceof Error ? outcome.error.name : 'Error';
+
+      return name === negative.type
+        ? createTestRecord({ file, variant, status: 'passed', features })
+        : failed('wrong-error-type', `expected ${negative.type}, got ${name}`);
+    }
+
+    const match = matchErrorType(realm, outcome.value, negative.type);
+
+    if (match === 'unresolved') {
+      return failed(
+        'unresolved-error-type',
+        `${negative.type} is not a constructor binding in the test realm`,
+      );
+    }
+
+    return match === 'match'
+      ? createTestRecord({ file, variant, status: 'passed', features })
+      : failed(
+          'wrong-error-type',
+          `expected ${negative.type}, got ${describeGuestValue(outcome.value)}`,
+        );
+  }
+
+  if (outcome.phase === 'parse') {
+    return failed('parse-error', describeHostError(outcome.error));
+  }
+
+  if (outcome.phase === 'runtime') {
+    return failed('unexpected-throw', describeGuestValue(outcome.value));
+  }
+
+  /** @type {JobDrainReport} */
+  let jobReport;
+
+  try {
+    jobReport = engine.runJobs(realm);
+  } catch (error) {
+    return failed('engine-error', describeHostError(error));
+  }
+
+  if (
+    jobReport === null ||
+    typeof jobReport !== 'object' ||
+    !Array.isArray(jobReport.failures)
+  ) {
+    return failed(
+      'engine-error',
+      'runJobs returned an invalid Job Drain report',
+    );
+  }
+
+  if (jobReport.failures.length > 0) {
+    return failed(
+      'job-error',
+      describeGuestValue(jobReport.failures[0]?.error),
+    );
+  }
+
+  if (doneCount === 0) {
+    return failed('async-incomplete', '$DONE was not called');
+  }
+
+  if (doneCount > 1) {
+    return failed('async-duplicate', '$DONE was called more than once');
+  }
+
+  return doneValue === undefined
+    ? createTestRecord({ file, variant, status: 'passed', features })
+    : failed('async-error', describeGuestValue(doneValue));
 }
 
 /**

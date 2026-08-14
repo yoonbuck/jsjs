@@ -754,6 +754,44 @@ export default [
     },
   },
   {
+    name: 'every Test262 execution entry point uses the portable engine bridge',
+    run: async () => {
+      const expectedImports = new Map([
+        ['tools/test262/adapters/node.js', '../engine.js'],
+        ['tools/test262/adapters/jsc-run.js', '../engine.js'],
+        ['tools/test262/upstream-run.js', './engine.js'],
+        ['test/test262-async.test.js', '../tools/test262/engine.js'],
+      ]);
+      /** @type {string[]} */
+      const violations = [];
+
+      for (const [file, specifier] of expectedImports) {
+        const source = await readSource(file);
+
+        if (!importSpecifiers(source).includes(specifier)) {
+          violations.push(`${file} does not import ${specifier}`);
+        }
+        if (!source.includes('createJsjsTest262Engine')) {
+          violations.push(`${file} does not use createJsjsTest262Engine`);
+        }
+        if (
+          file !== 'test/test262-async.test.js' &&
+          importSpecifiers(source).some((entry) =>
+            entry.includes('src/index.js'),
+          )
+        ) {
+          violations.push(`${file} still assembles its own engine bridge`);
+        }
+      }
+
+      assertSame(
+        violations.join('\n'),
+        '',
+        'Test262 runners must share the realm-owned async engine bridge',
+      );
+    },
+  },
+  {
     // `parseUpstreamSubset` proves the manifest is well-formed; it has no
     // opinion on which named groups must exist. Without this check, deleting
     // or emptying one of the groups a milestone report names would still pass

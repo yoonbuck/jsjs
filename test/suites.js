@@ -35,6 +35,7 @@ import templateLiterals from './template-literals.test.js';
 import arrowFunctions from './arrow-functions.test.js';
 import classes from './classes.test.js';
 import test262Runner from './test262-runner.test.js';
+import test262Async from './test262-async.test.js';
 import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
@@ -156,6 +157,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,
+  }),
+  Object.freeze({
+    file: 'test/test262-async.test.js',
+    tests: test262Async,
   }),
   Object.freeze({
     file: 'test/es5-selection.test.js',

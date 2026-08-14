@@ -1,5 +1,6 @@
 import { assertSame, assertThrows } from './harness/assert.js';
 import { createRealm, evaluateScript } from '../src/index.js';
+import { createJsjsTest262Engine } from '../tools/test262/engine.js';
 import {
   Test262MetadataError,
   expandVariants,
@@ -45,9 +46,10 @@ import { createFixtureTest262Host } from './harness/test262-host.js';
  * @typedef {import('../tools/test262/runner.js').Test262Host} Test262Host
  */
 
-const engine = { createRealm, evaluateScript };
+const engine = createJsjsTest262Engine();
 
 const FIXTURE_TESTS = [
+  'test/async-promise.js',
   'test/feature-skip.js',
   'test/includes.js',
   'test/no-strict.js',
@@ -158,6 +160,8 @@ function summarizeRecords(records) {
 }
 
 const FIXTURE_TEST_LINES = [
+  '{"type":"test","file":"test/async-promise.js","variant":"non-strict","status":"passed"}',
+  '{"type":"test","file":"test/async-promise.js","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/feature-skip.js","variant":null,"status":"skipped","reason":"unsupported-feature","message":"unsupported features: Proxy, Reflect","features":["Proxy","Reflect"]}',
   '{"type":"test","file":"test/includes.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/includes.js","variant":"strict","status":"passed"}',
@@ -182,7 +186,7 @@ const FIXTURE_MALFORMED_LINES = [
 /** The default selection: exactly what `npm run test262:fixtures` writes. */
 const FIXTURE_REPORT = [
   ...FIXTURE_TEST_LINES,
-  '{"type":"summary","total":14,"passed":13,"failed":0,"skipped":1}',
+  '{"type":"summary","total":16,"passed":15,"failed":0,"skipped":1}',
   '',
 ].join('\n');
 
@@ -190,7 +194,7 @@ const FIXTURE_REPORT = [
 const FIXTURE_MALFORMED_REPORT = [
   ...FIXTURE_MALFORMED_LINES,
   ...FIXTURE_TEST_LINES,
-  '{"type":"summary","total":16,"passed":13,"failed":2,"skipped":1}',
+  '{"type":"summary","total":18,"passed":15,"failed":2,"skipped":1}',
   '',
 ].join('\n');
 
@@ -1164,11 +1168,11 @@ export default [
       });
 
       assertSame(inventory.files.join(','), FIXTURE_INVENTORY_PATHS.join(','));
-      assertSame(inventory.totals.files, 11);
+      assertSame(inventory.totals.files, 12);
       assertSame(
         inventory.totals.records,
-        15,
-        'nine fixture tests expand into fifteen (file, variant) records',
+        17,
+        'ten fixture tests expand into seventeen (file, variant) records',
       );
       assertSame(inventory.totals.malformed, 2);
       assertSame(inventory.malformed.join(','), FIXTURE_MALFORMED.join(','));
@@ -1269,19 +1273,19 @@ export default [
         ).records,
       });
 
-      assertSame(coverage.files.total, 11);
-      assertSame(coverage.files.selected, 9);
+      assertSame(coverage.files.total, 12);
+      assertSame(coverage.files.selected, 10);
       assertSame(
         coverage.files.attempted,
-        8,
+        9,
         'the feature-skipped file is selected but never attempted',
       );
-      assertSame(coverage.files.passed, 8);
+      assertSame(coverage.files.passed, 9);
       assertSame(coverage.files.malformed, 2);
-      assertSame(coverage.records.total, 15);
-      assertSame(coverage.records.selected, 15);
-      assertSame(coverage.records.attempted, 13);
-      assertSame(coverage.records.passed, 13);
+      assertSame(coverage.records.total, 17);
+      assertSame(coverage.records.selected, 17);
+      assertSame(coverage.records.attempted, 15);
+      assertSame(coverage.records.passed, 15);
     },
   },
   {
@@ -1304,12 +1308,12 @@ export default [
         ).records,
       });
 
-      assertSame(coverage.files.selectedPercent, 81.818);
-      assertSame(coverage.files.attemptedPercent, 72.727);
-      assertSame(coverage.files.passedPercent, 72.727);
+      assertSame(coverage.files.selectedPercent, 83.333);
+      assertSame(coverage.files.attemptedPercent, 75);
+      assertSame(coverage.files.passedPercent, 75);
       assertSame(coverage.records.selectedPercent, 100);
-      assertSame(coverage.records.attemptedPercent, 86.667);
-      assertSame(coverage.records.passedPercent, 86.667);
+      assertSame(coverage.records.attemptedPercent, 88.235);
+      assertSame(coverage.records.passedPercent, 88.235);
 
       const empty = summarizeTest262Coverage({
         inventory: await collectTest262Inventory({
@@ -1347,9 +1351,9 @@ export default [
       assertSame(
         formatCoverageLines(coverage).join('\n'),
         [
-          '{"type":"inventory","files":11,"records":15,"malformed":2}',
-          '{"type":"coverage","scope":"files","total":11,"selected":9,"attempted":8,"passed":8,"selectedPercent":81.818,"attemptedPercent":72.727,"passedPercent":72.727}',
-          '{"type":"coverage","scope":"records","total":15,"selected":15,"attempted":13,"passed":13,"selectedPercent":100,"attemptedPercent":86.667,"passedPercent":86.667}',
+          '{"type":"inventory","files":12,"records":17,"malformed":2}',
+          '{"type":"coverage","scope":"files","total":12,"selected":10,"attempted":9,"passed":9,"selectedPercent":83.333,"attemptedPercent":75,"passedPercent":75}',
+          '{"type":"coverage","scope":"records","total":17,"selected":17,"attempted":15,"passed":15,"selectedPercent":100,"attemptedPercent":88.235,"passedPercent":88.235}',
         ].join('\n'),
       );
     },
@@ -1383,10 +1387,10 @@ export default [
         [
           '| Denominator     | Whole suite | Selected | Attempted | Passed | Passing |',
           '| --------------- | ----------- | -------- | --------- | ------ | ------- |',
-          '| Files           | 11          | 9        | 8         | 8      | 72.727% |',
-          '| (file, variant) | 15          | 15       | 13        | 13     | 86.667% |',
+          '| Files           | 12          | 10       | 9         | 9      | 75%     |',
+          '| (file, variant) | 17          | 17       | 15        | 15     | 88.235% |',
           '',
-          '2 of the 11 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.',
+          '2 of the 12 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.',
           'Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).',
         ].join('\n'),
       );

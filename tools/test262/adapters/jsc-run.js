@@ -15,8 +15,8 @@
  * how many tests failed.
  */
 
-import { createRealm, evaluateScript } from '../../../src/index.js';
 import { formatJscError, signalJscFailure } from '../../jsc/exit.js';
+import { createJsjsTest262Engine } from '../engine.js';
 import { runTest262 } from '../runner.js';
 import { createJscTest262Host } from './jsc.js';
 import { moduleUrl, resolveRelativePath } from './paths.js';
@@ -36,7 +36,7 @@ const host = createJscTest262Host({
 // Promise chaining rather than top level await: the project's host floor is
 // ES2020, where top level await does not exist yet.
 runTest262({
-  engine: { createRealm, evaluateScript },
+  engine: createJsjsTest262Engine(),
   host,
   supportedFeatures: /** @type {string[] | undefined} */ (
     globalThis.jsjsTest262Features

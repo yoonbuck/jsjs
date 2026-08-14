@@ -1,5 +1,6 @@
 {
   "tests": [
+    "test/async-promise.js",
     "test/feature-skip.js",
     "test/includes.js",
     "test/no-strict.js",

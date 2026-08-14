@@ -20,7 +20,7 @@
 
 import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { createRealm, evaluateScript } from '../../../src/index.js';
+import { createJsjsTest262Engine } from '../engine.js';
 import { runTest262 } from '../runner.js';
 import {
   DEFAULT_HARNESS_DIRECTORY,
@@ -78,7 +78,7 @@ export async function main(argv) {
     manifestText: await readFeaturesManifestText(),
   });
   const { lines, failed } = await runTest262({
-    engine: { createRealm, evaluateScript },
+    engine: createJsjsTest262Engine(),
     host,
     paths: options.paths,
     includeMalformed: options.includeMalformed,
