@@ -2657,11 +2657,7 @@ function validateEvaluatorChildEdges(node) {
       );
     case 'ForInStatement':
     case 'ForOfStatement':
-      return (
-        validateRequiredChild(node, 'left', isForInOfLeftNodeOrUnknown) ??
-        validateRequiredChild(node, 'right', isExpressionNodeOrUnknown) ??
-        validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
-      );
+      return validateForInOfEdges(node);
     case 'BreakStatement':
     case 'ContinueStatement':
       return validateOptionalChild(node, 'label', isIdentifierNodeOrUnknown);
@@ -2864,6 +2860,26 @@ function validateMemberExpressionEdges(node) {
     : node.computed === false
       ? validateRequiredChild(node, 'property', isIdentifierNodeOrUnknown)
       : invalidEvaluatorChild(node, 'computed');
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateForInOfEdges(node) {
+  if (
+    node.type === 'ForOfStatement' &&
+    Object.prototype.hasOwnProperty.call(node, 'await') &&
+    node.await !== false
+  ) {
+    return 'async for-of is not supported';
+  }
+
+  return (
+    validateRequiredChild(node, 'left', isForInOfLeftNodeOrUnknown) ??
+    validateRequiredChild(node, 'right', isExpressionNodeOrUnknown) ??
+    validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
+  );
 }
 
 /**

@@ -1934,6 +1934,70 @@ const tests = [
     },
   },
   {
+    name: 'custom async for-of ASTs reject while ordinary for-of remains supported',
+    run() {
+      const asyncForOf = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ForOfStatement',
+            await: true,
+            left: {
+              type: 'VariableDeclaration',
+              kind: 'var',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: 'value' },
+                  init: null,
+                },
+              ],
+            },
+            right: { type: 'ArrayExpression', elements: [] },
+            body: { type: 'EmptyStatement' },
+          },
+        ],
+      };
+
+      assertThrows(
+        () => parseScript('', { parse: () => asyncForOf }),
+        SyntaxError,
+      );
+      const synchronousForOf = {
+        ...asyncForOf,
+        body: [{ ...asyncForOf.body[0], await: false }],
+      };
+      const absentAwaitForOf = {
+        ...synchronousForOf,
+        body: [{ ...synchronousForOf.body[0] }],
+      };
+      delete absentAwaitForOf.body[0].await;
+
+      assertSame(
+        parseScript('', { parse: () => synchronousForOf }).type,
+        'Program',
+      );
+      assertSame(
+        parseScript('', { parse: () => absentAwaitForOf }).type,
+        'Program',
+      );
+      for (const awaitValue of [undefined, null, 0, true]) {
+        const malformedForOf = {
+          ...synchronousForOf,
+          body: [{ ...synchronousForOf.body[0], await: awaitValue }],
+        };
+
+        assertThrows(
+          () => parseScript('', { parse: () => malformedForOf }),
+          SyntaxError,
+        );
+      }
+
+      assertSame(parseScript('for (var value of []) {}').type, 'Program');
+    },
+  },
+  {
     name: 'generator and async forms remain unsupported around arrow parameters',
     run() {
       for (const source of [
