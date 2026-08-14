@@ -15,9 +15,10 @@
  *   implements the feature and must throw, or fail to parse, on one that does
  *   not. `runFeatureProbe` executes it for real, so a probe that cannot run is
  *   a failed claim rather than a passing test.
- * - `tests` names the upstream tests, tagged with this feature, that back the
- *   claim. The full local CI contract checks each one really carries the tag at
- *   the pinned revision and really passes once the feature is allowed.
+ * - `tests` names the upstream tests that back the claim. The full local CI
+ *   contract checks that each one carries the feature tag and passes at the
+ *   pinned revision, except for its small documented set of pinned metadata
+ *   exceptions where no standalone upstream tag exists.
  *
  * This module owns parsing, validation, and probe execution only, exactly like
  * `selection.js` owns the test-selection manifest: it touches no filesystem, so

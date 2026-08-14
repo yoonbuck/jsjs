@@ -44,11 +44,14 @@ class BoundFunction extends NativeFunction {
       targetLength > boundArgs.length ? targetLength - boundArgs.length : 0;
     /** @type {import('./shared.js').NativeFunctionOptions['construct']} */
     let construct;
+    /** @type {BoundFunction | undefined} */
+    let boundFunction;
 
     if (isConstructor(target)) {
-      construct = (args) => {
+      construct = (args, _functionObject, newTarget) => {
         const result = target.constructFunction(
           combineArguments(boundArgs, args),
+          newTarget === boundFunction ? target : newTarget,
         );
 
         if (!(result instanceof EngineObject)) {
@@ -73,11 +76,16 @@ class BoundFunction extends NativeFunction {
         );
       },
       construct,
+      // `construct` above delegates with the corrected target/newTarget pair,
+      // so NativeFunction's ordinary allocation retargeting must not rewrite
+      // an explicit object the target returns.
+      retargetConstructionResult: false,
     });
 
     this.boundTargetFunction = target;
     this.boundThis = boundThis;
     this.boundArguments = [...boundArgs];
+    boundFunction = this;
 
     const thrower = /** @type {CallableLike} */ (
       realm.intrinsics.throwTypeErrorFunction
@@ -130,6 +138,22 @@ class BoundFunction extends NativeFunction {
  */
 export function createFunctionIntrinsics(realm) {
   const { functionPrototype } = realm.intrinsics;
+  const thrower = /** @type {CallableLike | undefined} */ (
+    realm.intrinsics.throwTypeErrorFunction
+  );
+
+  if (thrower === undefined) {
+    throw new TypeError('Realm is missing required %ThrowTypeError% intrinsic');
+  }
+
+  const restricted = {
+    get: thrower,
+    set: thrower,
+    enumerable: false,
+    configurable: true,
+  };
+  functionPrototype.defineOwnProperty('caller', restricted);
+  functionPrototype.defineOwnProperty('arguments', restricted);
 
   const functionConstructor = realm.createNativeFunction({
     name: 'Function',

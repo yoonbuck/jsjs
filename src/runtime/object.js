@@ -554,6 +554,34 @@ export class EngineObject {
 }
 
 /**
+ * Applies the ES object integrity levels shared by Object.seal, Object.freeze,
+ * and engine-created immutable objects.
+ *
+ * @param {EngineObject} object
+ * @param {'sealed' | 'frozen'} level
+ * @returns {EngineObject}
+ */
+export function setIntegrityLevel(object, level) {
+  if (level !== 'sealed' && level !== 'frozen') {
+    throw new TypeError(`Unsupported integrity level ${level}`);
+  }
+
+  for (const name of object.ownPropertyKeys()) {
+    const descriptor = object.getOwnProperty(name);
+    object.defineOwnProperty(
+      name,
+      level === 'frozen' && isDataDescriptor(descriptor)
+        ? { writable: false, configurable: false }
+        : { configurable: false },
+      true,
+    );
+  }
+
+  object.preventExtensions();
+  return object;
+}
+
+/**
  * Computes the `ForInStatement` enumeration order (ECMA-262 12.6.4): every
  * enumerable string-keyed own property across `object`'s prototype chain,
  * each name visited at most once. A name already seen anywhere earlier in

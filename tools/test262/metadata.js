@@ -119,7 +119,7 @@ export function parseTest262Metadata(source) {
     throw new Test262MetadataError('Unterminated Test262 frontmatter block');
   }
 
-  const lines = source.slice(bodyStart, end).split('\n');
+  const lines = source.slice(bodyStart, end).split(/\r\n?|\n/);
 
   return buildMetadata(parseBlock(lines));
 }

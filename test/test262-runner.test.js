@@ -260,6 +260,25 @@ export default [
     },
   },
   {
+    name: 'metadata parses CR-only Test262 frontmatter',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        [
+          '/*---',
+          'description: CR-only frontmatter',
+          'includes: [assert.js]',
+          'flags: [onlyStrict]',
+          '---*/',
+          'var value = 1;',
+        ].join('\r'),
+      );
+
+      assertSame(metadata.description, 'CR-only frontmatter');
+      assertSame(JSON.stringify(metadata.includes), '["assert.js"]');
+      assertSame(JSON.stringify(metadata.flags), '["onlyStrict"]');
+    },
+  },
+  {
     name: 'metadata folds a single blank line in a folded block scalar to one newline',
     run: () => {
       const metadata = parseTest262Metadata(

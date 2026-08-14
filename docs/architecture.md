@@ -1,9 +1,9 @@
 # Architecture
 
-jsjs is an ES5.1 JavaScript engine — extended with ES2015 lexical declarations
-(`let`/`const`, block scope, the temporal dead zone, and per-iteration bindings)
-and block-level function declarations — written in plain ES2020 JavaScript with
-JSDoc types. The same source
+jsjs is an ES5.1 JavaScript engine — extended with ES2015 lexical declarations,
+iteration, arrows, classes, computed names, destructuring, non-simple
+parameters, iterable spread, and template literals — written in plain ES2020
+JavaScript with JSDoc types. The same source
 runs in Node, in a browser, and in the JavaScriptCore (`jsc`) shell: nothing in
 `src/` imports a host module, and guest behaviour never leans on host `eval`,
 `Function`, or host objects.
@@ -13,26 +13,17 @@ runs in Node, in a browser, and in the JavaScriptCore (`jsc`) shell: nothing in
 Source enters through `evaluateScript(realm, source)`, which:
 
 1. **Parses** via `src/parser.js` — Acorn configured at `ecmaVersion: 6`,
-   `sourceType: 'script'`. The grammar the engine accepts is ES5.1 plus the
-   ES2015 lexical-declaration syntax (`let`, `const`, block scope, and
-   block-level function declarations) and nothing else. Raising `ecmaVersion` to
-   6 hands Acorn's own ES2015 scope analysis the static redeclaration early
-   errors (a `let` colliding with a `var`, two `let`s of the same name in a
-   block) and re-applies the reserved-word rule to escaped identifiers itself, so
-   the hand-written `ecmaVersion < 6` escaped-identifier plugin was deleted as
-   obsolete. A parse-time early-error pass then walks the tree and rejects every
-   other ES2015 construct the evaluator does not implement — classes, arrow
-   functions, template literals, `for`-`of`, generators, destructuring patterns,
-   rest/spread, `new.target`, computed/shorthand/method properties,
-   binary and octal numeric literals, and `\u{…}` code-point escapes. Module
-   syntax (`import`/`export`) and the ES2017 `async`/`await` forms never reach
-   that pass — the vendored Acorn refuses them itself, `import`/`export` because
-   the parser runs with `sourceType: 'script'` and `async`/`await` because they
-   are not ES6 syntax at `ecmaVersion: 6` — so the grammar the parser bounds is
-   exactly the grammar the evaluator runs. A rejection at the top level surfaces
-   as the host `SyntaxError` every parse failure raises; source reaching the
-   parser through `eval` or the dynamic `Function` constructor gets a catchable
-   guest `SyntaxError` instead.
+   `sourceType: 'script'`. Its ES2015 capability pass admits lexical declarations,
+   block-level function declarations, `for`-`of`, arrows, class
+   declarations/expressions and ES2015 methods,
+   computed property names, destructuring, default/rest parameters, array/call/
+   construction spread, and template/tagged-template expressions. Acorn supplies
+   redeclaration early errors; the engine validates each supported AST shape
+   before evaluation. It still rejects generators/yield, async/await, modules,
+   `new.target`, object rest/spread, class fields/private names/static blocks/
+   decorators, binary/octal literals, and `\u{…}` escapes. A top-level rejection
+   is a host `SyntaxError`; `eval` and dynamic `Function` convert it into a
+   catchable guest `SyntaxError`.
 2. **Hoists** via `src/evaluator/declarations.js` —
    `globalDeclarationInstantiation` (ES2015 §15.1.8) walks the AST, using the
    spec's static-semantics name walks in `src/evaluator/static-semantics.js` to
@@ -44,6 +35,13 @@ Source enters through `evaluateScript(realm, source)`, which:
    `evaluateStatementList` walks the body left to right with explicit completion
    propagation, entering a fresh lexical environment for each block, `switch`
    case block, `try` part, and loop iteration that declares `let`/`const`.
+
+Expression evaluation dispatches the admitted forms in
+`src/evaluator/expressions.js`. `patterns.js` supplies declaration,
+parameter, and assignment pattern algorithms; `iteration.js` consumes spread
+and array-pattern iterators; `classes.js` owns class definition/construction;
+and `property-name.js` evaluates computed keys once before their definition.
+This keeps the parser's shape gate and the evaluator's semantic paths aligned.
 
 A well-formed script produces either a `'normal'` completion or a `'throw'`
 completion carrying the thrown guest value. Guest throws are values, not host
@@ -195,31 +193,25 @@ Two rules come with that:
 
 `EngineObject#ownPropertyKeys()` returns keys in ECMA-262 9.1.12
 `OrdinaryOwnPropertyKeys` order: array-index string keys first in ascending
-numeric order, then every other key in creation order (this engine has no
-symbols yet, so the symbol bucket ES2015 defines is currently always empty).
+numeric order, then other string keys in creation order, then symbol keys in
+creation order.
 `Object.keys`, `Object.getOwnPropertyNames`, `for-in` (`enumerableKeysForIn`),
 and `JSON.stringify` all read through this one method, so they share the
 order automatically.
 
 ### Method `[[HomeObject]]` and `super` (`src/runtime/function-object.js`, `src/runtime/super-reference.js`)
 
-Object-literal `get`/`set` accessors carry an ES2015 `[[HomeObject]]`
-internal slot (`EngineFunction#homeObject`) pointing at the object literal
-they were defined in, and are created non-constructible
-(`createFunctionObject(..., { isMethod: true, ... })` sets
-`EngineFunction#_isConstructor = false`, matching ES2015 `FunctionCreate`'s
-`Method` kind). `super.prop`/`super[expr]` inside such an accessor resolves
-through `SuperReferenceBase` (`src/runtime/super-reference.js`): the property
-lookup starts at `homeObject.getPrototype()`, but the accessor's own `this`
-stays the receiver for both the read and the write — implemented by
-`setPropertyWithReceiver`, a receiver-aware sibling of `EngineObject#put`
-used only by this path. Parsing `super` needs no help from the engine: at
-`ecmaVersion: 6` Acorn tokenizes the keyword itself and applies its own
-`Super`-node handling, `allowSuper` scope tracking, and early errors, so the
-`ecmaVersion: 5` plugin that used to restore the token was deleted along with
-the escaped-identifier one when the parser moved to ES6. `super(...)`
-(`SuperCall`) is not implemented — it is
-only valid in a derived class constructor, and classes are issue #25.
+Object-literal methods/accessors and class methods/accessors carry an ES2015
+`[[HomeObject]]` (`EngineFunction#homeObject`) and are non-constructible.
+`super.prop`/`super[expr]` resolves through `SuperReferenceBase`: lookup starts
+at the home object's prototype while reads and writes preserve the original
+receiver. Derived constructors additionally use `constructSuper` to initialize
+their uninitialized `this`.
+
+An arrow deliberately has **no** `[[HomeObject]]`, own `this`, or own
+`arguments`. Its closure resolves `this`, `arguments`, and `super` from the
+enclosing execution environment; an arrow inside a method therefore uses that
+method's home object without acquiring one of its own.
 
 ### Environment records (`src/runtime/environment.js`)
 
@@ -248,12 +240,33 @@ fresh `DeclarativeEnvironmentRecord` chained onto the running execution
 context's environment; a `for` loop with a lexical head gets a **new binding
 environment per iteration** (and `for`-`in` a fresh one per enumerated name), so
 a closure created in one iteration captures that iteration's binding rather than
-a single shared one. A **non-strict** function body likewise runs in a lexical
-environment layered over its activation (variable) environment, keeping the
-body's `let`/`const` names distinct from its parameters and `var`s (ES2015
-§9.2.12 step 30); a **strict** function reuses the variable environment as its
-lexical environment (step 31), which is unobservable because the parse-time
-early errors keep the two records' binding sets disjoint.
+a single shared one. Non-simple functions create a parameter environment before
+their body environment: defaults run left to right, earlier parameters are
+visible, later parameters remain in the TDZ, and body `var`/function declarations
+do not leak backwards into defaults. Rest parameters are realm-owned arrays.
+The distinct body environment keeps body lexical declarations and `var`s
+separate from parameter bindings; simple parameter lists retain the compatible
+activation path. Arrows reuse parameter instantiation but create no own
+`arguments` or `this` binding.
+
+Class declarations are lexical declarations too: instantiation creates a
+**mutable**, uninitialized binding, so the class name is in the TDZ while its
+heritage and body are evaluated; after successful class evaluation initializes
+it, a later assignment to that declaration is ordinary mutable-binding
+assignment. A named class expression instead creates a distinct, inner
+**immutable** name binding for its own heritage and body. That inner name has
+the same evaluation-time TDZ, rejects reassignment after initialization, and
+does not leak into the surrounding scope.
+
+### Template-object ownership (`src/runtime/realm.js`, `src/evaluator/expressions.js`)
+
+Each `Realm` owns `templateObjects`, a `WeakMap` from parsed
+`TemplateLiteral` AST nodes to realm-owned `EngineArray` template objects.
+Tagged-template evaluation gets the cached frozen cooked/raw arrays before
+calling the tag; repeated evaluation of one parse site in one realm preserves
+identity, while a distinct AST node or realm gets a distinct object. Untagged
+templates evaluate substitutions left to right and concatenate cooked text after
+`ToString` conversion.
 
 ### References (`src/runtime/reference.js`)
 
@@ -479,7 +492,23 @@ value }` when the script throws a guest error. The thrown value is a guest error
 object (an `EngineObject`), not a host exception.
 
 `parserOptions` is forwarded to Acorn and merged with the engine's defaults
-(`ecmaVersion: 6`, `sourceType: 'script'`).
+(`ecmaVersion: 6`, `sourceType: 'script'`). A caller-supplied Acorn `program`
+is the exception: before parser callbacks run, `parseScript` makes and validates
+a descriptor-safe snapshot of its AST nodes and structural arrays. Parsing then
+uses that snapshot's directive prologue to inherit strictness, and returns a
+fresh Program whose body contains the snapshotted statements followed by the
+newly parsed statements. Callback mutations affect only the ignored original;
+the supplied Program is not mutated by the engine. The snapshot clones ordinary
+object and array data while preserving cycles and shared references, but rejects
+function-valued state before callbacks because ESTree does not require it. The
+combined Program is also checked for duplicate lexical declarations and
+lexical/`var` conflicts across the append boundary. A custom `parse` hook still
+receives its options unchanged, but its returned Program graph is
+descriptor-safely snapshotted before any shape, capability, or early-error
+validation. The resulting ordinary nodes and arrays retain safe RegExp literals,
+cycles, and shared references for validation while dropping scanned non-index
+array metadata, so `parseScript` returns a fresh graph rather than preserving
+the hook's object identity.
 
 Multiple `evaluateScript` calls against the same realm share state:
 
@@ -494,11 +523,13 @@ console.log(result); // { type: 'normal', value: 42 }
 
 ### `parseScript(source, parserOptions?): Program`
 
-Parses `source` as a script and returns an Acorn AST. The grammar is ES5.1 plus
-ES2015 lexical declarations and block-level function declarations; the engine's
-unsupported-ES2015 early errors apply, so any other ES2015 construct is
-rejected. Throws a host `SyntaxError` (not a
-guest error) on invalid input.
+Parses `source` as a script and returns an Acorn AST. The supported ES2015
+grammar is the capability set listed under [Source flow](#source-flow), including
+lexical and block-level function declarations, arrows, classes, templates,
+destructuring, parameter and spread syntax, and enhanced object literals.
+Neighboring ES2015 forms outside that list are rejected by the engine's
+capability pass. Throws a host `SyntaxError` (not a guest error) on invalid
+input.
 
 ### `createAgent(): Agent`
 

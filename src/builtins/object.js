@@ -1,4 +1,4 @@
-import { EngineObject } from '../runtime/object.js';
+import { EngineObject, setIntegrityLevel } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isDataDescriptor } from '../runtime/descriptors.js';
@@ -35,6 +35,32 @@ export function createObjectIntrinsics(realm) {
     return toObject(realm, value);
   }
 
+  /**
+   * Object's construct path differs from its call path when reached through a
+   * derived class: `super(value)` must allocate from the active new target
+   * rather than returning an object argument unchanged.
+   *
+   * @param {readonly unknown[]} args
+   * @param {import('./shared.js').NativeFunction} functionObject
+   * @param {unknown} newTarget
+   * @returns {EngineObject}
+   */
+  function constructObject(args, functionObject, newTarget) {
+    if (newTarget === functionObject) {
+      return createObject(args);
+    }
+
+    const candidate =
+      newTarget instanceof EngineObject
+        ? newTarget.get('prototype')
+        : undefined;
+    return new EngineObject(
+      candidate instanceof EngineObject ? candidate : objectPrototype,
+      'Object',
+      realm.agent,
+    );
+  }
+
   const objectConstructor = realm.createNativeFunction({
     name: 'Object',
     length: 1,
@@ -42,8 +68,8 @@ export function createObjectIntrinsics(realm) {
     call(_thisValue, args) {
       return createObject(args);
     },
-    construct(args) {
-      return createObject(args);
+    construct(args, functionObject, newTarget) {
+      return constructObject(args, functionObject, newTarget);
     },
   });
 
@@ -350,29 +376,12 @@ function installObjectReflectionMethods(realm, objectConstructor) {
   defineNativeMethod(realm, objectConstructor, 'seal', 1, (_this, args) => {
     const object = requireObjectArgument(args[0]);
 
-    for (const name of object.ownPropertyKeys()) {
-      object.defineOwnProperty(name, { configurable: false }, true);
-    }
-
-    object.preventExtensions();
-    return object;
+    return setIntegrityLevel(object, 'sealed');
   });
   defineNativeMethod(realm, objectConstructor, 'freeze', 1, (_this, args) => {
     const object = requireObjectArgument(args[0]);
 
-    for (const name of object.ownPropertyKeys()) {
-      const descriptor = object.getOwnProperty(name);
-      object.defineOwnProperty(
-        name,
-        isDataDescriptor(descriptor)
-          ? { writable: false, configurable: false }
-          : { configurable: false },
-        true,
-      );
-    }
-
-    object.preventExtensions();
-    return object;
+    return setIntegrityLevel(object, 'frozen');
   });
   defineNativeMethod(
     realm,

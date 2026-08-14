@@ -415,6 +415,90 @@ const tests = [
       assertNormal(run('function f() {} f.arguments;'), undefined);
     },
   },
+  {
+    name: 'ordinary strict functions keep own poison accessors while sloppy functions keep data extensions',
+    run() {
+      const realm = createRealm();
+
+      assertNormal(
+        runIn(
+          realm,
+          'function strictFunction() { "use strict"; } function sloppyFunction() {}',
+        ),
+        undefined,
+      );
+
+      const strictFunction = /** @type {EngineObject} */ (
+        realm.globalObject.get('strictFunction')
+      );
+      const sloppyFunction = /** @type {EngineObject} */ (
+        realm.globalObject.get('sloppyFunction')
+      );
+      const thrower = realm.intrinsics.throwTypeErrorFunction;
+      const strictCaller = strictFunction.getOwnProperty('caller');
+      const strictArguments = strictFunction.getOwnProperty('arguments');
+      const sloppyCaller = sloppyFunction.getOwnProperty('caller');
+      const sloppyArguments = sloppyFunction.getOwnProperty('arguments');
+
+      assertSame(strictCaller === undefined, false);
+      assertSame(strictArguments === undefined, false);
+
+      if (strictCaller === undefined || strictArguments === undefined) {
+        return;
+      }
+
+      for (const descriptor of [strictCaller, strictArguments]) {
+        assertSame(descriptor.enumerable, false);
+        assertSame(descriptor.configurable, false);
+        assertSame(descriptor.get, thrower);
+        assertSame(descriptor.set, thrower);
+      }
+
+      assertGuestThrow(
+        runIn(realm, 'strictFunction.caller;'),
+        'TypeError',
+        realm,
+      );
+      assertGuestThrow(
+        runIn(realm, 'strictFunction.caller = 1;'),
+        'TypeError',
+        realm,
+      );
+      assertGuestThrow(
+        runIn(realm, 'strictFunction.arguments;'),
+        'TypeError',
+        realm,
+      );
+      assertGuestThrow(
+        runIn(realm, 'strictFunction.arguments = 1;'),
+        'TypeError',
+        realm,
+      );
+
+      assertSame(sloppyCaller === undefined, false);
+      assertSame(sloppyArguments === undefined, false);
+
+      if (sloppyCaller === undefined || sloppyArguments === undefined) {
+        return;
+      }
+
+      for (const descriptor of [sloppyCaller, sloppyArguments]) {
+        assertSame(descriptor.value, undefined);
+        assertSame(descriptor.writable, true);
+        assertSame(descriptor.enumerable, false);
+        assertSame(descriptor.configurable, true);
+      }
+
+      assertNormal(
+        runIn(
+          realm,
+          'sloppyFunction.caller = 1; sloppyFunction.arguments = 2; ' +
+            'sloppyFunction.caller + ":" + sloppyFunction.arguments;',
+        ),
+        '1:2',
+      );
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // Poison-pill on strict function arguments object
@@ -431,14 +515,14 @@ const tests = [
     },
   },
   {
-    name: 'inside strict function, arguments.caller throws TypeError',
+    name: 'inside strict function, arguments.caller is absent',
     run() {
       const realm = createRealm();
       const result = runIn(
         realm,
-        '(function() { "use strict"; return arguments.caller; })();',
+        '(function() { "use strict"; return "caller" in arguments; })();',
       );
-      assertGuestThrow(result, 'TypeError', realm);
+      assertNormal(result, false);
     },
   },
   {

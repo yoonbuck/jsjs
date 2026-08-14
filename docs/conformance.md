@@ -5,32 +5,25 @@ engine implements, and the live coverage numbers produced by the Test262 suite.
 
 ## Supported subset
 
-This engine implements the ES5.1 language and standard library **plus ES2015
-lexical declarations**: `let` and `const` bindings, block scope, the temporal
-dead zone (a `ReferenceError` on access before initialization), `const`
-assignment errors, per-iteration `for`/`for-in` loop bindings, and lexical
-scope for blocks, `switch` case blocks, `try` parts, function bodies, `eval`
-code, and the global environment. It also implements the ES2015 **iteration
-protocol**: the `Iterator`/`Iterable` abstract operations, `%IteratorPrototype%`,
-the Array and String iterators reachable through `Array.prototype`
-`values`/`keys`/`entries`/`@@iterator` and `String.prototype[@@iterator]`, the
-`arguments` object's `@@iterator`, and the `for`-`of` statement — including
-per-iteration lexical bindings and `IteratorClose` on `break`, `return`,
-`throw`, and labeled abrupt completions. It also accepts ES2015 **block-level
-function declarations**, scoping them to their block and implementing the Annex
-B.3.3 sloppy-mode `var`-alias so `{ function f(){} } f()` still resolves while
-`if (false) { function g(){} } typeof g` is `'undefined'`. Nothing else from
-ES2015 is implemented: the parser accepts the syntax above and rejects every
-other ES2015 construct — classes, arrow functions, template literals,
-generators, destructuring and default/rest patterns, spread,
-`new.target`, modules, computed/shorthand/method object properties,
-binary and octal numeric literals, and `\u{…}` code-point escapes (plus the
-ES2017 `async`/`await` forms) — so the grammar the engine parses is exactly the
-grammar it runs. The ES2015 RegExp flags `u` and `y` are likewise rejected, but
-by the engine's own ES5.1 flag validation (`src/runtime/regexp-syntax.js`)
-rather than by that pass. A rejection at the top level is the host `SyntaxError`
-every parse failure raises; source reaching the parser through `eval` or the
-dynamic `Function` constructor becomes a catchable guest `SyntaxError` instead.
+This engine implements the ES5.1 language and standard library plus ES2015
+lexical declarations (`let`/`const`, TDZ, and per-iteration bindings), the
+iteration protocol and `for`-`of`, and block-level function declarations. The
+limited Annex B statement-position forms remain unsupported (see
+[Limitations](limitations.md#annex-b-statement-position-function-declarations-are-limited)).
+It also implements issue #25's ES2015 syntax surface: arrow functions; classes,
+inheritance, `super`, and computed method names; computed object names;
+destructuring declarations, assignments, and parameters; default and rest
+parameters; iterable spread in arrays, calls, and construction; and template
+literals including tagged-template cooked/raw objects and realm-local
+parse-site caching.
+
+The parser's capability gate admits only those forms, so grammar and evaluation
+move together. It still rejects generators/yield, async/await, modules,
+`new.target`, object rest/spread, later class fields/private names/static
+blocks/decorators, binary/octal literals, and `\u{…}` code-point escapes. The
+ES2015 RegExp flags `u` and `y` are rejected by ES5.1 flag validation. A
+top-level rejection is a host `SyntaxError`; source parsed through `eval` or the
+dynamic `Function` constructor receives a catchable guest `SyntaxError`.
 
 Fixtures deliberately stay inside what the engine implements today: `var`,
 `let`, `const`, function declarations and expressions, object and array literals
@@ -116,54 +109,54 @@ see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only
 `tools/test262/es5-selection.json` is the policy that decides which upstream
 tests are in scope; `tools/test262/es5-selection.js` implements it as pure,
 host-free code so the decisions can be tested without a checkout, and
-`npm run test262:select` applies it to the pinned tree and writes
+`TZ=UTC npm run test262:select` applies it to the pinned tree and writes
 `upstream-subset.json`. The policy is data, not prose:
-`npm run test262:select:check` re-derives the manifest without writing and fails if the
-committed one has drifted, so the selection can never quietly diverge from the
-rules that justify it.
+`TZ=UTC npm run test262:select:check` re-derives the manifest without writing
+and fails if the committed one has drifted, so the selection can never quietly
+diverge from the rules that justify it.
 
 A file is a candidate only if it survives every filter:
 
 - **Path policy.** `test/intl402` is excluded wholesale — it is a different
-  specification. Under `test/language`, six directories name syntax ES5.1 does
-  not have at all (`computed-property-names`, `destructuring`, `export`,
-  `import`, `module-code`, `rest-parameters`). `test/staging` is not excluded
-  wholesale: it is upstream's non-normative scratch area, largely runnable
-  ES5.1-era regression tests inherited from SpiderMonkey, so it is a normal
-  candidate directory and anything in it that must not run is carved out by
-  the classified exclusions below like any other file. Under `test/built-ins`, an
-  allow-list of 29 constructors and namespace objects names the ES5.1 standard
-  library plus `Symbol` and the Array/String iterator prototypes, so a post-ES5
-  global like `Proxy` is out of scope by construction rather than by 500
-  individual entries.
-- **Metadata.** Anything flagged `module` is out. A test that declares a
-  `features:` tag is out too, unless a **feature area** claims it: an entry in
-  the policy's `featureAreas` naming a directory prefix and the exact tags the
-  engine implements there. A tagged test is a candidate only when an area
-  covers its path _and_ claims every tag the test declares, so claiming
-  `Symbol` earns coverage under `test/built-ins/Symbol` without dragging in
-  the thousands of `Symbol`-tagged tests elsewhere in the tree, and a test
-  under that prefix that also needs `cross-realm` or `Symbol.matchAll` stays
-  out. Every claimed tag also carries an executable probe in the
-  [Feature manifest](#feature-manifest), so a claim the engine cannot back is
-  a failing test rather than a comment.
+  specification. Under `test/language`, only `export`, `import`, and
+  `module-code` remain directory exclusions. The former broad
+  `computed-property-names`, `destructuring`, and `rest-parameters` exclusions
+  are gone; their supported forms flow through narrow feature-area prefixes.
+  `test/staging` remains a normal candidate directory with individual
+  classifications. Under `test/built-ins`, an allow-list names the ES5.1
+  library plus Symbol and iterator prototypes, keeping a global such as `Proxy`
+  out of scope by construction. This path-only gate, including exact
+  classifications, runs before the selector reads a test source.
+- **Known-good baseline and metadata.** The exact paths in
+  `tools/test262/known-good-subset.json` are retained after the path, module,
+  grammar, and exclusion guards. A path outside that baseline must declare a
+  `features:` tag that includes at least one policy `expansionFeatures` entry,
+  and a **feature area** must cover its path _and_ claim every tag it declares.
+  This permits the narrow issue #25 syntax expansion without making a grammar
+  widening a semantic claim: newly parseable untagged tests and unrelated
+  tagged tests such as `Symbol.species` stay out. It also keeps a candidate
+  that additionally needs `cross-realm` or `Symbol.matchAll` out. Every claimed
+  tag carries an executable probe in the [Feature manifest](#feature-manifest),
+  so a claim the engine cannot back is a failing test rather than a comment.
 
-  The claims today are the twelve ES2015 Symbol tags — `Symbol` and the eleven
-  well-known symbol tags — plus `const`, `for-of`, and `let`. Symbol claims are
-  scoped to the implemented Symbol and iterator built-ins; the grammar claims
-  are scoped to `test/language`. Every tag declared by a test must still be
-  claimed, so neighboring syntax such as destructuring remains excluded.
+  In addition to the Symbol and lexical/iteration tags, the manifest claims the
+  exact syntax tags `arrow-function`, `class`, `computed-property-names`,
+  `default-parameters`, `destructuring-assignment`,
+  `destructuring-binding`, `rest-parameters`, `spread-syntax`, and `template`.
+  Feature areas scope tagged selection to the relevant syntax directories; the
+  broad `test/language` claim remains limited to the earlier lexical and
+  iteration tags. The pin has no standalone `spread-syntax` tag and its only
+  `template` tag also needs unsupported `new.target`, so their semantic backing
+  tests are documented exact metadata exceptions rather than claims for those
+  neighboring features.
 
-- **An engine-grammar parse filter.** Every remaining file — and every harness
-  file it `includes` — is parsed with the engine's own `parseScript` (the same
-  grammar the engine runs, currently ES5.1 plus ES2015 lexical declarations,
-  block-level function declarations, and `for`-`of`). A file that will not parse
-  under that grammar is testing syntax this engine is not required to accept, so
-  it is excluded structurally rather than by name. Routing the filter through the
-  engine itself is what keeps the policy honest as both the pin and the grammar
-  move: new upstream tests written in still-unsupported syntax drop out
-  automatically, and each syntax milestone widens the selection by construction
-  rather than by a hand-tuned `ecmaVersion`.
+- **Engine grammar filter.** Every remaining file and harness include is parsed
+  with the engine's own `parseScript`. A file that fails the parser's supported
+  shape gate is excluded structurally rather than by name. Grammar acceptance
+  alone never expands the subset: only a retained known-good path or a declared,
+  exact feature-area expansion can do that. The path policy, module flag, and
+  classified exclusions continue to prevent unsupported neighbors from becoming
+  claims.
 - **Classified exclusions.** What survives all of the above but still must not
   run is carved out one path (or prefix) at a time, each with a category and a
   written reason.
@@ -176,21 +169,20 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 611 classified exclusions break down as:
+editions deliberately changed. The 652 classified exclusions break down as:
 
-| Category             | Count | What it means                                                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 344   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1. Every entry cites the clause that makes it right.                                                                                                                                                                                                                                                                 |
-| `post-es5-builtin`   | 201   | A built-in or member ES5.1 does not define at all, carved out by prefix where the per-constructor allow-list cannot drop a single member.                                                                                                                                                                                                                                                         |
-| `post-es5-syntax`    | 31    | Syntax outside ES5.1 that the structural parse filter does not catch on its own.                                                                                                                                                                                                                                                                                                                  |
-| `host-dependent`     | 33    | The result depends on the host environment (locale, timezone database, wall clock), so the test cannot have a fixed expectation here.                                                                                                                                                                                                                                                             |
-| `engine-deviation`   | 2     | This engine knowingly differs from what ES5.1 asks. Each entry names a heading in [docs/limitations.md](limitations.md) that documents the choice — a deviation that is not written down is indistinguishable from a bug. Both remaining entries are the same cause: the vendored parser lexes `IdentifierName` with the modern `ID_Continue` property instead of ES5.1 7.6's general categories. |
+| Category             | Count | What it means                                                                                |
+| -------------------- | ----- | -------------------------------------------------------------------------------------------- |
+| `post-es5-semantics` | 333   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1.              |
+| `post-es5-builtin`   | 259   | A built-in or member ES5.1 does not define.                                                  |
+| `post-es5-syntax`    | 25    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
+| `host-dependent`     | 33    | The result depends on a host facility or environment.                                        |
+| `engine-deviation`   | 2     | This engine knowingly differs from ES5.1; each entry names a limitation heading.             |
 
 The distinction that matters is between the first four categories and the last.
 The first four say _the test is not about ES5.1_; only `engine-deviation` says
 _this engine does not do what ES5.1 asks_, and every one of them is documented
-in [docs/limitations.md](limitations.md). Only two exclusions claim that, and
-they share one cause. Deviations that are real but that no excluded test
+in [docs/limitations.md](limitations.md). Deviations that are real but that no excluded test
 measures — such as the `\$` identity-escape carve-out, which makes tests pass
 rather than fail — are catalogued in
 [docs/limitations.md](limitations.md) regardless. Two categories — `post-es5-syntax` and
@@ -227,17 +219,18 @@ fresh realm. A probe is not a placeholder: it must complete normally on an
 engine that implements the feature and must throw, or fail to parse, on one that
 does not, and `featureProbeTestSource` renders it as a `raw` Test262 file tagged
 with the feature so the same skip decision a real tagged test would earn is
-exercised end to end. `tests` names upstream tests that really carry the tag;
-`npm run ci:contract` reads each one out of the pinned checkout, asserts the tag
-is really there, and asserts the test really passes once the feature is allowed.
-A feature therefore cannot be claimed by editing a list.
+exercised end to end. `tests` normally names upstream tests that carry the tag;
+the full contract permits only two exact pinned metadata exceptions:
+`spread-syntax` is backed by a `Symbol.iterator` spread test because the pin has
+no spread tag, and `template` is backed by an untagged cache test because the
+only template-tagged file also requires `new.target`. Every backing test still
+runs successfully, so neither exception claims its missing neighboring feature.
 
-The manifest currently claims fifteen ES2015 tags: `const`, `for-of`, `let`,
-`Symbol`, and the eleven well-known symbol tags (`Symbol.hasInstance`,
-`Symbol.isConcatSpreadable`, `Symbol.iterator`, `Symbol.match`,
-`Symbol.replace`, `Symbol.search`, `Symbol.species`, `Symbol.split`,
-`Symbol.toPrimitive`, `Symbol.toStringTag`, `Symbol.unscopables`). Every other
-tag is unclaimed and a test that declares one is skipped rather than run.
+The manifest claims `const`, `for-of`, `let`, Symbol and its well-known tags,
+plus `arrow-function`, `class`, `computed-property-names`,
+`default-parameters`, `destructuring-assignment`, `destructuring-binding`,
+`rest-parameters`, `spread-syntax`, and `template`. Every other tag is
+unclaimed and a test that declares one is skipped rather than run.
 
 The manifest and the selection policy's feature areas are deliberately two
 different gates. The manifest decides which tags may _run_; a feature area
@@ -342,11 +335,11 @@ implemented:
 
 ## Coverage
 
-The numbers below are generated: `npm run test262:upstream` runs the pinned
+The numbers below are generated: `TZ=UTC npm run test262:upstream` runs the pinned
 subset against `tc39/test262` at the revision `package.json` names, writes every
 per-test record to [`docs/test262-report.jsonl`](test262-report.jsonl), and
-rewrites this block from the same run. `npm run test262:upstream:check` fails if
-either artifact has drifted, and the `test262-upstream` job fails CI the same way,
+rewrites this block from the same run. `TZ=UTC npm run test262:upstream:check`
+fails if either artifact has drifted, and the `test262-upstream` job fails CI the same way,
 so no number here can outlive the run that produced it. The run refuses to start
 outside a UTC time zone, because a few selected tests read the host's local
 offset (see
@@ -380,14 +373,26 @@ so none of the issue's upstream coverage is silently lost:
 Reproduce locally: `node test/run-ci-contract.js` (requires the pinned
 upstream checkout at `vendor/test262`; see the Test262 section above).
 
+Issue #25 syntax coverage is similarly focused in
+`test/ci/es2015-syntax-test262.test.js`. Its pinned list exercises arrow lexical
+`this` and non-construction; class inheritance, computed instance/static names,
+including computed ordinary `['constructor']` methods and computed static
+`['prototype']` TypeErrors, and derived `super`; computed-key ordering;
+default-parameter TDZ/order;
+destructuring binding/assignment ordering and iterator abrupt completion;
+realm-owned rest arrays; iterable spread call order; and tagged-template
+cooked/raw identity and caching. It also classifies, rather than claims, public
+static class fields and tagged-template invalid escapes that depend on the
+remaining unsupported class-field and Unicode/legacy-escape forms.
+
 <!-- test262-coverage:begin -->
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 12,434   | 12,434    | 12,434 | 23.209% |
-| (file, variant) | 102,906     | 23,643   | 23,643    | 23,643 | 22.975% |
+| Files           | 53,575      | 14,096   | 14,096    | 14,096 | 26.311% |
+| (file, variant) | 102,908     | 26,836   | 26,836    | 26,836 | 26.078% |
 
-4 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
+3 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
 
 <!-- test262-coverage:end -->
@@ -401,17 +406,18 @@ seen on tests that ran, and `untagged` counts records that carried no tag at all
 The baseline and feature lines provide the measured totals without inventing a
 per-feature pass table the runner does not produce.
 
-The selected subset is small by construction: every path in it was verified to
-pass with this engine, so the low whole-suite percentage is an honest statement
-of how much of Test262 an engine at this language level — ES5.1 plus ES2015
-lexical declarations, block-level function declarations, Symbols, iterators, and
-`for`-`of` — has been pointed at, not a pass rate over tests it was never asked
-to run.
+The selected subset is deterministic and the required UTC upstream job verifies
+every selected path with this engine. Its whole-suite percentage is an honest
+statement of how much of Test262 an engine at this language level — ES5.1 plus
+ES2015 lexical declarations, iteration, the supported syntax forms, and
+Symbols — has been pointed at, not a pass rate over tests it was never asked to
+run.
 
 ## Policy artifacts
 
 - Selection policy: [`tools/test262/es5-selection.json`](../tools/test262/es5-selection.json)
 - Selection implementation: [`tools/test262/es5-selection.js`](../tools/test262/es5-selection.js)
+- Known-good subset: [`tools/test262/known-good-subset.json`](../tools/test262/known-good-subset.json)
 - Feature manifest: [`tools/test262/features.json`](../tools/test262/features.json)
 - Detailed report: [`docs/test262-report.jsonl`](test262-report.jsonl)
 - Upstream subset manifest: [`tools/test262/upstream-subset.json`](../tools/test262/upstream-subset.json)

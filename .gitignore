@@ -1,5 +1,7 @@
 node_modules/
 /vendor/
 /.superpowers/
+/task-9-brief.md
+/task-9-report.md
 # Generated benchmark reports and raw CPU/allocation profiling evidence.
 /.benchmark-results/

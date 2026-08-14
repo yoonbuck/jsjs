@@ -9,27 +9,25 @@
  * `*-run.js`/`*-select.js` entry points), it touches no filesystem and no host
  * API: it parses text and computes, so it is importable from any host and
  * testable without a checkout. The Node entry point `upstream-select.js` walks
- * the tree, parses each file with the engine's own `parseScript`, and
- * reads/writes files; it hands this module strings and booleans.
+ * the tree, parses each file with the engine's own `parseScript`, reads the
+ * known-good subset, and hands this module strings, booleans, and that path set.
  *
- * The policy expresses four structural filters as data — excluded top-level
- * directories, the allowed `test/built-ins/<name>` list, the excluded
- * `test/language/<dir>` list, and (applied by the caller) the "parses under the
- * engine's supported grammar" and "frontmatter carries no `module` flag"
- * filters — plus a
+ * The policy expresses path-only structural filters as data — excluded
+ * top-level directories, the allowed `test/built-ins/<name>` list, the excluded
+ * `test/language/<dir>` list, and exact classified exclusions — plus a
  * `featureAreas` list that names, per directory prefix, exactly which Test262
- * `features:` tags the engine is willing to run there, and an `exclusions`
- * array that records, with a category and a cited reason, every remaining
- * file that is out of scope because it asserts post-ES5 behaviour, needs a
- * host facility, needs `Date`, or exercises a documented intentional
- * deviation. The structural filters produce the candidate set; the exclusions
- * carve the classified failures out of it.
+ * `features:` tags the engine is willing to run there. Source-dependent
+ * decisions ("source parses under the engine's supported grammar", "frontmatter
+ * carries no `module` flag", and claimed feature tags) deliberately remain
+ * separate, so a caller can eliminate impossible paths without reading them.
  *
  * `featureAreas` is what lets a post-ES5.1 feature the engine has actually
- * implemented earn coverage without reopening the whole tree. A tagged test
- * is in scope only where an area covers its path *and* claims every tag it
- * declares, so adding one feature cannot silently pull in the thousands of
- * tests elsewhere that happen to share a tag.
+ * implemented earn coverage without reopening the whole tree. The
+ * `expansionFeatures` boundary says which tags can add paths beyond the
+ * known-good subset. A new tagged test is in scope only where an area covers its
+ * path, claims every tag it declares, and the declaration includes at least one
+ * expansion tag, so adding grammar support cannot silently pull in thousands of
+ * untagged tests or unrelated tagged tests elsewhere in the tree.
  */
 
 import { sortStrings } from './selection.js';
@@ -39,7 +37,7 @@ import { UPSTREAM_SUBSET_VERSION } from './upstream.js';
 export const ES5_SELECTION_FILE = 'tools/test262/es5-selection.json';
 
 /** The only policy schema version this tooling understands. */
-export const ES5_SELECTION_VERSION = 1;
+export const ES5_SELECTION_VERSION = 2;
 
 /**
  * The exclusion categories the policy may use, and nothing else. Every
@@ -66,6 +64,7 @@ const POLICY_KEYS = Object.freeze([
   'builtins',
   'excludedLanguageDirectories',
   'featureAreas',
+  'expansionFeatures',
   'exclusions',
 ]);
 
@@ -74,6 +73,9 @@ const EXCLUSION_KEYS = Object.freeze(['path', 'prefix', 'category', 'reason']);
 const FEATURE_AREA_KEYS = Object.freeze(['prefix', 'features', 'reason']);
 
 const TEST_ROOT = 'test/';
+
+/** Paths are never implicitly known-good when callers omit the baseline. */
+const EMPTY_PREVIOUSLY_SELECTED = new Set();
 
 /**
  * @typedef {{
@@ -95,6 +97,7 @@ const TEST_ROOT = 'test/';
  *   builtins: readonly string[],
  *   excludedLanguageDirectories: readonly string[],
  *   featureAreas: readonly Es5FeatureArea[],
+ *   expansionFeatures: readonly string[],
  *   exclusions: readonly Es5Exclusion[],
  * }} Es5SelectionPolicy
  *
@@ -170,6 +173,11 @@ export function parseEs5Selection(text) {
     { requireTestPrefix: false, allowEmpty: true },
   );
   const featureAreas = parseFeatureAreas(record.featureAreas);
+  const expansionFeatures = parseStringList(
+    record.expansionFeatures,
+    'expansionFeatures',
+    { requireTestPrefix: false, allowEmpty: false },
+  );
   const exclusions = parseExclusions(record.exclusions);
 
   rejectDeadFeatureAreas(featureAreas, exclusions);
@@ -180,6 +188,7 @@ export function parseEs5Selection(text) {
     builtins: Object.freeze(builtins),
     excludedLanguageDirectories: Object.freeze(excludedLanguageDirectories),
     featureAreas: Object.freeze(featureAreas),
+    expansionFeatures: Object.freeze(expansionFeatures),
     exclusions: Object.freeze(exclusions),
   });
 }
@@ -490,26 +499,15 @@ function parseFlowSequence(match) {
 }
 
 /**
- * Whether a path survives the structural filters. Exclusions are applied
- * separately by {@link isSelectedPath}, because the candidate set is what the
- * classification is measured against and the exclusions are what carve it down.
- *
- * A test that declares `features:` is out of scope by default — the engine
- * makes no blanket claim about any optional feature. A **feature area**
- * (`featureAreas` in the policy) is the narrow, reviewable exception: inside
- * one named prefix, and only for the tags that area lists, a tagged test
- * becomes an ordinary candidate again. Both halves matter. Requiring the
- * prefix keeps a claim like `Symbol` from dragging in every `Symbol`-tagged
- * test across the whole tree; requiring *every* declared tag to be claimed
- * keeps a test that also needs `cross-realm` or `Symbol.matchAll` out, so an
- * area can never admit more than it says it does.
+ * Whether a path can reach source-dependent selection. This gate must stay
+ * metadata-free: callers use it before reading upstream test sources, while
+ * `isCandidatePath` applies frontmatter, parser, and harness decisions later.
  *
  * @param {string} path Repository-relative upstream path, e.g. `test/built-ins/Array/x.js`.
- * @param {Es5CandidateInfo} info
  * @param {Es5SelectionPolicy} policy
  * @returns {boolean}
  */
-export function isCandidatePath(path, info, policy) {
+export function isStructurallyEligiblePath(path, policy) {
   if (!path.startsWith(TEST_ROOT) || !path.endsWith('.js')) {
     return false;
   }
@@ -533,12 +531,49 @@ export function isCandidatePath(path, info, policy) {
     return false;
   }
 
+  return matchExclusion(path, policy.exclusions) === null;
+}
+
+/**
+ * Whether a path and its source-derived information survive the selection
+ * policy. Every known-good path is retained after the structural guards below.
+ * A path outside that baseline must declare at least one `expansionFeatures`
+ * tag and must be fully claimed by a matching **feature area**
+ * (`featureAreas` in the policy). Both halves matter. Requiring the expansion
+ * tag keeps a grammar widening from dragging in newly parseable untagged tests
+ * or unrelated tagged tests such as `Symbol.species`; requiring the prefix and
+ * *every* declared tag keeps a test that also needs `cross-realm` or
+ * `Symbol.matchAll` out. Every remaining file and harness include must parse
+ * under the engine grammar.
+ *
+ * @param {string} path Repository-relative upstream path, e.g. `test/built-ins/Array/x.js`.
+ * @param {Es5CandidateInfo} info
+ * @param {Es5SelectionPolicy} policy
+ * @param {ReadonlySet<string>} [previouslySelected] Known-good subset paths.
+ * @returns {boolean}
+ */
+export function isCandidatePath(
+  path,
+  info,
+  policy,
+  previouslySelected = EMPTY_PREVIOUSLY_SELECTED,
+) {
+  if (!isStructurallyEligiblePath(path, policy)) {
+    return false;
+  }
+
   if (info.isModule) {
     return false;
   }
 
-  if (info.declaresFeatures && !isClaimedByFeatureArea(path, info, policy)) {
-    return false;
+  if (!previouslySelected.has(path)) {
+    if (
+      !info.declaresFeatures ||
+      !info.features.some((name) => policy.expansionFeatures.includes(name)) ||
+      !isClaimedByFeatureArea(path, info, policy)
+    ) {
+      return false;
+    }
   }
 
   return info.parsesUnderEngineGrammar && info.includesParseUnderEngineGrammar;
@@ -604,19 +639,21 @@ export function matchExclusion(path, exclusions) {
 }
 
 /**
- * Whether a path is in the final selection: a structural candidate that no
- * exclusion removes.
+ * Whether a path is in the final selection.
  *
  * @param {string} path
  * @param {Es5CandidateInfo} info
  * @param {Es5SelectionPolicy} policy
+ * @param {ReadonlySet<string>} [previouslySelected] Known-good subset paths.
  * @returns {boolean}
  */
-export function isSelectedPath(path, info, policy) {
-  return (
-    isCandidatePath(path, info, policy) &&
-    matchExclusion(path, policy.exclusions) === null
-  );
+export function isSelectedPath(
+  path,
+  info,
+  policy,
+  previouslySelected = EMPTY_PREVIOUSLY_SELECTED,
+) {
+  return isCandidatePath(path, info, policy, previouslySelected);
 }
 
 /**

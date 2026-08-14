@@ -44,7 +44,7 @@ export function isCallable(value) {
 /**
  * @param {unknown} value
  * @returns {value is CallableLike & {
- *   constructFunction: (args?: readonly unknown[]) => unknown,
+ *   constructFunction: (args?: readonly unknown[], newTarget?: unknown) => unknown,
  * }}
  */
 export function isConstructor(value) {

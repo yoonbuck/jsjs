@@ -292,6 +292,121 @@ const tests = [
       );
     },
   },
+  {
+    name: 'direct eval retains super property and call access in object methods',
+    run() {
+      assertNormal(
+        run(
+          'var base = { value: 40, m: function () { return this.offset + 1; } };' +
+            'var object = { __proto__: base, offset: 1, method() {' +
+            '  return eval("super.value + super.m()");' +
+            '} }; object.method();',
+        ),
+        42,
+      );
+    },
+  },
+  {
+    name: 'direct eval retains super property and call access in class methods and lexical arrows',
+    run() {
+      assertNormal(
+        run(
+          'class Base { m() { return this.value + 1; } }' +
+            'class Derived extends Base {' +
+            '  constructor() { super(); this.value = 41; }' +
+            '  m() { return (() => eval("super.m()"))(); }' +
+            '} new Derived().m();',
+        ),
+        42,
+      );
+    },
+  },
+  {
+    name: 'direct eval can call super in a derived constructor',
+    run() {
+      assertNormal(
+        run(
+          'class Base { constructor(value) { this.value = value; } }' +
+            'class Derived extends Base {' +
+            '  constructor() { eval("super(42)"); }' +
+            '} new Derived().value;',
+        ),
+        42,
+      );
+    },
+  },
+  {
+    name: 'direct eval can call super through a lexical arrow in a derived constructor',
+    run() {
+      assertNormal(
+        run(
+          'class Base { constructor(value) { this.value = value; } }' +
+            'class Derived extends Base {' +
+            '  constructor() { (() => eval("super(42)"))(); }' +
+            '} new Derived().value;',
+        ),
+        42,
+      );
+    },
+  },
+  {
+    name: 'direct eval rejects super calls in base constructors with a realm-local SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(
+          realm,
+          'class Base { constructor() { eval("super()"); } } new Base();',
+        ),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'direct eval rejects super properties in non-method functions with a realm-local SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(
+          realm,
+          'function ordinary() { eval("super.value"); } ordinary();',
+        ),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'indirect eval does not retain a method super context',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(
+          realm,
+          'var object = { method() { return (0, eval)("super.value"); } }; object.method();',
+        ),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'indirect eval does not retain a derived constructor super context',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(
+          realm,
+          'class Base {} class Derived extends Base {' +
+            '  constructor() { (0, eval)("super()"); }' +
+            '} new Derived();',
+        ),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
 
   {
     name: 'direct eval var inside a catch block hoists into the enclosing function scope',

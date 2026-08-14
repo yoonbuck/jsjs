@@ -529,6 +529,14 @@ engine's, so it is one of the few places where hosts still differ. An embedder
 that injects its own parser through `options.parse` is excluded from the
 conversion — its defects stay its own.
 
+Custom parser results and caller-supplied reusable `Program` objects have one
+additional boundary: evaluator-reachable AST nodes and their structural child
+arrays must form a tree, so the same object cannot occupy two syntax positions.
+Native Acorn trees already satisfy this invariant. Shared or cyclic structural
+identities are rejected with a `SyntaxError` before static semantics or
+evaluation; arbitrary metadata outside the evaluator child fields may still
+share and cycle.
+
 The same conversion covers the **early-error pass** that runs just after, where
 `checkRegularExpressionLiteral` re-validates every regular expression literal
 against the ES5.1 grammar with a second recursive descent over the same guest
@@ -569,44 +577,42 @@ in `src/parser.js`; the iterative walks are `EngineObject#getProperty`
 `src/evaluator/static-semantics.js`.
 **Verification:** `evaluateScript(realm, 'try { (function f(){ f(); })() } catch (e) { e.name }')` → `{ type: 'normal', value: 'RangeError' }`.
 
-### ES2015 syntax beyond lexical and block-level function declarations is rejected at parse time
+### Annex B statement-position function declarations are limited
 
-The engine implements ES2015 lexical declarations (`let`, `const`, block scope)
-and block-level function declarations, but no other ES2015 feature, so its
-parser accepts that syntax and rejects every other ES2015 construct at parse
-time. Most are refused by the engine's own early-error pass
-(`checkUnsupportedEs2015Node`): classes, arrow functions, template and tagged
-template literals, `for`-`of`, generators and `yield`, destructuring patterns
-(object, array, and default/rest/assignment patterns), spread elements,
-`new.target`, computed/shorthand/method object properties, binary (`0b`) and
-octal (`0o`) numeric literals, and `\u{…}` code-point escapes in strings and
-identifiers. Two families never reach that pass, because the vendored Acorn
-refuses them itself before it runs: module syntax
-(`import`/`export`/`import()`), rejected because the parser is configured with
-`sourceType: 'script'`, and the ES2017 `async`/`await` forms, which are not ES6
-syntax at `ecmaVersion: 6`. Their entries in the pass's rejection table are
-defensive — kept so a later `sourceType`/`ecmaVersion` change cannot let one
-slip through silently — not reached on any accepted parse. The ES2015 RegExp
-flags `u` and `y` are likewise rejected, but by the engine's existing ES5.1 flag
-validation in `src/runtime/regexp-syntax.js`, not by either mechanism above.
-Annex B.3.4 direct `if`-body function declarations
-(`if (condition) function f() {}`) are also rejected in sloppy as well as strict
-code until their conditional var-scoped replacement semantics are implemented;
-accepting the syntax without those semantics would leave the declaration
-silently mis-scoped.
+This is a legacy Annex B boundary, separate from issue #25's ES2015 syntax
+surface. The engine supports block-level function declarations and their
+applicable Annex B.3.3 aliases, but does not implement every web-legacy
+statement-position extension. A `FunctionDeclaration` directly in an iteration
+or `with` body is rejected in every mode. A direct `if` or `else` branch is also
+rejected, including sloppy `if (condition) function f() {}`: Annex B.3.4
+specifies semantics for that form, but the evaluator does not implement them.
+Put the declaration in a block instead. The separate sloppy, statement-list
+labelled-function case remains supported where Annex B.3.2 permits it.
 
-This is a limitation rather than a deviation: a full ES2015 engine accepts all
-of them, and the engine rejects them only because the evaluator does not yet
-implement them. Rejecting at the parser keeps the grammar the engine parses
-identical to the grammar it runs — a construct that would misbehave at runtime
-is refused up front with a message naming what is missing — rather than parsing
-a form the evaluator would then mishandle. A top-level `evaluateScript` call
-surfaces the rejection as the host `SyntaxError` that every parse failure
-raises; guest code that reaches the parser through `eval` or `Function` gets a
-catchable guest `SyntaxError`.
+**Backing code:** `src/parser.js`
+(`checkStatementPositionFunctionDeclarations`).
+**Verification:** `evaluateScript(realm, 'if (true) function f() {}')` throws a
+host `SyntaxError`.
 
-**Backing code:** `src/parser.js` (`checkUnsupportedEs2015Node` and
-`UNSUPPORTED_ES2015_NODE_MESSAGES`).
-**Verification:**
-`evaluateScript(realm, 'try { eval("class C {}"); "ok" } catch (e) { e.constructor.name }')`
-→ `{ type: 'normal', value: 'SyntaxError' }`.
+### Remaining unsupported syntax is rejected at parse time
+
+The engine now accepts the issue #25 ES2015 syntax surface: arrows, classes and
+derived construction, computed object/class method names, destructuring,
+default/rest parameters, iterable array/call/construction spread, and template
+literals. The capability gate still rejects exactly these neighboring forms:
+
+- generators and `yield`;
+- async functions and `await`;
+- modules, `import`, `export`, and dynamic `import()`;
+- `new.target`, including inside arrows;
+- object rest and object spread;
+- later class forms: public/private fields, private methods, static blocks, and
+  decorators;
+- binary (`0b`) and octal (`0o`) numeric literals; and
+- Unicode code-point escapes (`\u{…}`) in strings and identifiers.
+
+`sourceType: 'script'` makes modules fail in Acorn, and `ecmaVersion: 6` rejects
+async forms before the engine's capability pass. The remaining forms are guarded
+by `src/parser.js` shape validation, so the grammar it accepts is the grammar the
+evaluator can execute. A top-level parse failure is a host `SyntaxError`; code
+reached through `eval` or `Function` receives a catchable guest `SyntaxError`.

@@ -49,29 +49,276 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  * @returns {string[]}
  */
 export function boundNames(node) {
+  /** @type {string[]} */
+  const names = [];
+  /** @type {{ node: any, exiting: boolean }[]} */
+  const pending = [{ node, exiting: false }];
+  const visiting = new WeakSet();
+
+  while (pending.length > 0) {
+    const { node: current, exiting } =
+      /** @type {{ node: any, exiting: boolean }} */ (pending.pop());
+
+    if (!current || typeof current !== 'object') {
+      throw createUnsupportedNodeError(current);
+    }
+
+    if (exiting) {
+      visiting.delete(current);
+      continue;
+    }
+
+    if (visiting.has(current)) {
+      throw createUnsupportedNodeError(current);
+    }
+
+    visiting.add(current);
+    pending.push({ node: current, exiting: true });
+
+    switch (current.type) {
+      case 'Identifier':
+        names.push(current.name);
+        break;
+      case 'FunctionDeclaration':
+        // ES2015 grammar allows an anonymous `export default function () {}`,
+        // whose BoundNames is the synthetic `"*default*"`, but this engine
+        // parses no module grammar, so `node.id` is always present here.
+        names.push(current.id.name);
+        break;
+      case 'ClassDeclaration':
+        names.push(current.id.name);
+        break;
+      case 'VariableDeclaration':
+        for (
+          let index = current.declarations.length - 1;
+          index >= 0;
+          index -= 1
+        ) {
+          pending.push({
+            node: current.declarations[index].id,
+            exiting: false,
+          });
+        }
+        break;
+      case 'AssignmentPattern':
+        pending.push({ node: current.left, exiting: false });
+        break;
+      case 'RestElement':
+        pending.push({ node: current.argument, exiting: false });
+        break;
+      case 'ArrayPattern':
+        for (let index = current.elements.length - 1; index >= 0; index -= 1) {
+          if (current.elements[index] !== null) {
+            pending.push({ node: current.elements[index], exiting: false });
+          }
+        }
+        break;
+      case 'ObjectPattern':
+        for (
+          let index = current.properties.length - 1;
+          index >= 0;
+          index -= 1
+        ) {
+          const property = current.properties[index];
+
+          if (property.type === 'Property') {
+            pending.push({ node: property.value, exiting: false });
+          } else if (property.type === 'RestElement') {
+            pending.push({ node: property, exiting: false });
+          } else {
+            throw createUnsupportedNodeError(property);
+          }
+        }
+        break;
+      default:
+        throw createUnsupportedNodeError(current);
+    }
+  }
+
+  return names;
+}
+
+/** @type {readonly any[]} */
+const EMPTY_BOUND_NAME_CHILDREN = Object.freeze([]);
+
+/**
+ * Summarizes the concatenation of several BoundNames lists without expanding
+ * repeated aliases in an AST DAG. Each graph node is classified once, then a
+ * capped occurrence count is propagated from the roots through every semantic
+ * edge. Repeating the same node in two positions therefore still makes each of
+ * its names duplicate, while a recursively shared pattern takes work
+ * proportional to the graph rather than to its expanded tree.
+ *
+ * The returned `names` set contains each bound name once. `duplicate` reports
+ * whether any name occurs more than once in the conceptual concatenated list.
+ * Cycles and unsupported binding nodes fail exactly as `boundNames` does.
+ *
+ * @param {readonly any[]} nodes
+ * @returns {{ names: Set<string>, duplicate: boolean }}
+ */
+export function summarizeBoundNames(nodes) {
+  /** @type {WeakMap<object, readonly any[]>} */
+  const children = new WeakMap();
+  /** @type {WeakMap<object, 1 | 2>} */
+  const occurrences = new WeakMap();
+  const visiting = new WeakSet();
+  const completed = new WeakSet();
+  /** @type {{ node: any, exiting: boolean }[]} */
+  const pending = [];
+  /** @type {any[]} */
+  const discoveryOrder = [];
+  /** @type {any[]} */
+  const postorder = [];
+
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    pending.push({ node: nodes[index], exiting: false });
+  }
+
+  while (pending.length > 0) {
+    const { node: current, exiting } =
+      /** @type {{ node: any, exiting: boolean }} */ (pending.pop());
+
+    if (!current || typeof current !== 'object') {
+      throw createUnsupportedNodeError(current);
+    }
+
+    if (exiting) {
+      visiting.delete(current);
+      completed.add(current);
+      postorder.push(current);
+      continue;
+    }
+
+    if (completed.has(current)) {
+      continue;
+    }
+
+    if (visiting.has(current)) {
+      throw createUnsupportedNodeError(current);
+    }
+
+    const currentChildren = boundNameChildren(current);
+    visiting.add(current);
+    children.set(current, currentChildren);
+    discoveryOrder.push(current);
+    pending.push({ node: current, exiting: true });
+
+    for (let index = currentChildren.length - 1; index >= 0; index -= 1) {
+      if (currentChildren[index] !== null) {
+        pending.push({ node: currentChildren[index], exiting: false });
+      }
+    }
+  }
+
+  for (let index = 0; index < nodes.length; index += 1) {
+    addBoundNameOccurrences(occurrences, nodes[index], 1);
+  }
+
+  for (let index = postorder.length - 1; index >= 0; index -= 1) {
+    const current = postorder[index];
+    const count = occurrences.get(current);
+
+    if (count === undefined) {
+      continue;
+    }
+
+    const currentChildren = /** @type {readonly any[]} */ (
+      children.get(current)
+    );
+
+    for (
+      let childIndex = 0;
+      childIndex < currentChildren.length;
+      childIndex += 1
+    ) {
+      const child = currentChildren[childIndex];
+
+      if (child !== null) {
+        addBoundNameOccurrences(occurrences, child, count);
+      }
+    }
+  }
+
+  const names = new Set();
+  let duplicate = false;
+
+  for (const current of discoveryOrder) {
+    const name = directlyBoundName(current);
+
+    if (name === undefined) {
+      continue;
+    }
+
+    if (occurrences.get(current) === 2 || names.has(name)) {
+      duplicate = true;
+    }
+
+    names.add(name);
+  }
+
+  return { names, duplicate };
+}
+
+/**
+ * @param {any} node
+ * @returns {readonly any[]}
+ */
+function boundNameChildren(node) {
   switch (node.type) {
     case 'Identifier':
-      return [node.name];
     case 'FunctionDeclaration':
-      // ES2015 grammar allows an anonymous `export default function () {}`,
-      // whose BoundNames is the synthetic `"*default*"`, but this engine
-      // parses no module grammar, so `node.id` is always present here.
-      return [node.id.name];
+    case 'ClassDeclaration':
+      return EMPTY_BOUND_NAME_CHILDREN;
     case 'VariableDeclaration': {
-      /** @type {string[]} */
-      const names = [];
-      for (const declarator of node.declarations) {
-        // ES5/ES2015 destructuring patterns (`BindingPattern`) are a later
-        // grammar this engine's parser does not produce; `boundNames`
-        // recurses through `declarator.id` anyway so a future `Identifier`-
-        // only declarator keeps working unchanged.
-        names.push(...boundNames(declarator.id));
+      /** @type {any[]} */
+      const declarationIds = [];
+
+      for (let index = 0; index < node.declarations.length; index += 1) {
+        declarationIds.push(node.declarations[index].id);
       }
-      return names;
+
+      return declarationIds;
     }
+    case 'AssignmentPattern':
+      return [node.left];
+    case 'RestElement':
+      return [node.argument];
+    case 'ArrayPattern':
+      return node.elements;
+    case 'ObjectPattern':
+      return node.properties;
+    case 'Property':
+      return [node.value];
     default:
       throw createUnsupportedNodeError(node);
   }
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function directlyBoundName(node) {
+  switch (node.type) {
+    case 'Identifier':
+      return node.name;
+    case 'FunctionDeclaration':
+    case 'ClassDeclaration':
+      return node.id.name;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * @param {WeakMap<object, 1 | 2>} occurrences
+ * @param {object} node
+ * @param {1 | 2} count
+ * @returns {void}
+ */
+function addBoundNameOccurrences(occurrences, node, count) {
+  const previous = occurrences.get(node);
+  occurrences.set(node, previous === undefined ? count : 2);
 }
 
 /**
@@ -123,7 +370,10 @@ function reverseFrom(items, start) {
  */
 function collectOrdered(seed, classify) {
   /** @type {any[]} */
-  const pending = [...seed];
+  const pending = [];
+  for (let index = 0; index < seed.length; index += 1) {
+    pending.push(seed[index]);
+  }
   reverseFrom(pending, 0);
   /** @type {any[]} */
   const results = [];
@@ -166,8 +416,8 @@ function collectOrdered(seed, classify) {
 function pushVarScopeContainerChildren(node, pending) {
   switch (node.type) {
     case 'BlockStatement':
-      for (const statement of node.body) {
-        pending.push(statement);
+      for (let index = 0; index < node.body.length; index += 1) {
+        pending.push(node.body[index]);
       }
       return true;
     case 'IfStatement':
@@ -205,9 +455,14 @@ function pushVarScopeContainerChildren(node, pending) {
       }
       return true;
     case 'SwitchStatement':
-      for (const switchCase of node.cases) {
-        for (const statement of switchCase.consequent) {
-          pending.push(statement);
+      for (let caseIndex = 0; caseIndex < node.cases.length; caseIndex += 1) {
+        const consequent = node.cases[caseIndex].consequent;
+        for (
+          let statementIndex = 0;
+          statementIndex < consequent.length;
+          statementIndex += 1
+        ) {
+          pending.push(consequent[statementIndex]);
         }
       }
       return true;
@@ -307,7 +562,8 @@ export function varDeclaredNames(statements) {
 /**
  * The declaration `item` contributes to `lexicallyScopedDeclarations`, or
  * `null`. Implements ES2015 §13.2.6's `StatementListItem` cases directly (a
- * `let`/`const` declaration, or a `FunctionDeclaration`) plus its
+ * `let`/`const` declaration, a `ClassDeclaration`, or a
+ * `FunctionDeclaration`) plus its
  * `LabelledStatement` bridge into §13.13.7: a chain of `LabeledStatement`
  * wrappers around a `FunctionDeclaration` contributes that
  * `FunctionDeclaration`, unwrapped iteratively (a `while` loop over `.body`,
@@ -331,6 +587,10 @@ function lexicalDeclarationOf(item) {
     return item;
   }
 
+  if (item.type === 'ClassDeclaration') {
+    return item;
+  }
+
   if (item.type === 'LabeledStatement') {
     let body = item.body;
 
@@ -346,7 +606,8 @@ function lexicalDeclarationOf(item) {
 
 /**
  * ES2015 §13.2.6 (`LexicallyScopedDeclarations`) over `statements`, a
- * `StatementList`: the `let`/`const` declarations and `FunctionDeclaration`s
+ * `StatementList`: the `let`/`const` declarations, `ClassDeclaration`s, and
+ * `FunctionDeclaration`s
  * that are direct items of `statements` itself, plus any reached by
  * unwrapping a `LabeledStatement` chain rooted at a direct item (see
  * `lexicalDeclarationOf`), in source order. This does **not** descend into a
@@ -387,7 +648,8 @@ export function lexicallyDeclaredNames(statements) {
 
 /**
  * The declaration `item` contributes to `topLevelLexicallyScopedDeclarations`,
- * or `null`. ES2015 §13.2.8: a `let`/`const` declaration contributes; a
+ * or `null`. ES2015 §13.2.8: a `let`/`const` or `ClassDeclaration`
+ * contributes; a
  * `FunctionDeclaration` — var-scoped at the top level, per §13.2.8's explicit
  * `HoistableDeclaration` exclusion — contributes nothing here, whether direct
  * or reached through a label (a `Statement`, which a `LabeledStatement` is,
@@ -399,7 +661,10 @@ export function lexicallyDeclaredNames(statements) {
  * @returns {any}
  */
 function topLevelLexicalDeclarationOf(item) {
-  if (item.type === 'VariableDeclaration' && item.kind !== 'var') {
+  if (
+    (item.type === 'VariableDeclaration' && item.kind !== 'var') ||
+    item.type === 'ClassDeclaration'
+  ) {
     return item;
   }
 
@@ -408,7 +673,8 @@ function topLevelLexicalDeclarationOf(item) {
 
 /**
  * ES2015 §13.2.8 (`TopLevelLexicallyScopedDeclarations`) over `statements`, a
- * `Program`/function body's `StatementList`: the `let`/`const` declarations
+ * `Program`/function body's `StatementList`: the `let`/`const` and class
+ * declarations
  * that are direct items of `statements`, in source order. Unlike
  * `lexicallyScopedDeclarations`, a top-level `FunctionDeclaration` is
  * excluded — see the note on §13.2.7 this engine mirrors: "At the top level
@@ -422,7 +688,8 @@ export function topLevelLexicallyScopedDeclarations(statements) {
   /** @type {any[]} */
   const declarations = [];
 
-  for (const item of statements) {
+  for (let index = 0; index < statements.length; index += 1) {
+    const item = statements[index];
     const declaration = topLevelLexicalDeclarationOf(item);
 
     if (declaration !== null) {
@@ -471,7 +738,8 @@ export function topLevelVarScopedDeclarations(statements) {
   /** @type {any[]} */
   const results = [];
 
-  for (const item of statements) {
+  for (let index = 0; index < statements.length; index += 1) {
+    const item = statements[index];
     const functionDeclaration = topLevelFunctionDeclarationOf(item);
 
     if (functionDeclaration !== null) {
@@ -479,8 +747,13 @@ export function topLevelVarScopedDeclarations(statements) {
       continue;
     }
 
-    for (const declaration of varScopedDeclarations([item])) {
-      results.push(declaration);
+    const scopedDeclarations = varScopedDeclarations([item]);
+    for (
+      let declarationIndex = 0;
+      declarationIndex < scopedDeclarations.length;
+      declarationIndex += 1
+    ) {
+      results.push(scopedDeclarations[declarationIndex]);
     }
   }
 

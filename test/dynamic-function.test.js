@@ -106,6 +106,26 @@ const tests = [
     },
   },
   {
+    name: 'dynamic functions support default destructuring and rest parameters',
+    run() {
+      assertNormal(
+        run(
+          'new Function("a = 1", "{ b } = { b: a + 1 }", "...rest", ' +
+            '"return a + \\":\\" + b + \\":\\" + rest.join(\\",\\") + \\":\\" + arguments.length;")' +
+            '(undefined, undefined, 3, 4);',
+        ),
+        '1:2:3,4:4',
+      );
+      assertNormal(
+        run(
+          'new Function("a", "b = 1", "c", "return 0;").length + ":" +' +
+            'new Function("{ a }", "return a;").length;',
+        ),
+        '1:1',
+      );
+    },
+  },
+  {
     name: 'comments and line terminators are allowed inside the parameter text',
     run() {
       assertNormal(
@@ -345,15 +365,21 @@ const tests = [
     },
   },
   {
-    name: 'a non-strict dynamic function has no own caller/arguments properties',
+    name: 'a non-strict dynamic function keeps writable caller/arguments data extensions',
     run() {
       assertNormal(
         run(
           'var f = new Function("return 1;");' +
-            'typeof Object.getOwnPropertyDescriptor(f, "caller") + "," +' +
-            'typeof Object.getOwnPropertyDescriptor(f, "arguments");',
+            'var caller = Object.getOwnPropertyDescriptor(f, "caller");' +
+            'var argumentsDescriptor = Object.getOwnPropertyDescriptor(f, "arguments");' +
+            'f.caller = 1; f.arguments = 2;' +
+            '[' +
+            'caller.value === undefined, caller.writable, caller.enumerable, caller.configurable,' +
+            'argumentsDescriptor.value === undefined, argumentsDescriptor.writable, argumentsDescriptor.enumerable, argumentsDescriptor.configurable,' +
+            'f.caller, f.arguments' +
+            '].join(":");',
         ),
-        'undefined,undefined',
+        'true:true:false:true:true:true:false:true:1:2',
       );
     },
   },
@@ -379,6 +405,28 @@ const tests = [
       const realm = createRealm();
       assertGuestThrow(
         runIn(realm, 'new Function("a", "a", "\\"use strict\\"; return a;");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'a dynamic non-simple parameter list rejects a use strict directive',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'new Function("a = 1", "\\"use strict\\"; return a;");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'a dynamic non-simple parameter list rejects duplicate bound names',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, 'new Function("a = 1", "a", "return a;");'),
         'SyntaxError',
         realm,
       );

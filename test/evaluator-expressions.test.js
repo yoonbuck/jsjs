@@ -356,7 +356,7 @@ const tests = [
     },
   },
   {
-    name: 'assigning to anything other than an identifier or member expression throws an explicit unsupported-node error',
+    name: 'assigning to an unsupported target throws an explicit unsupported-node error',
     run() {
       // An ES5 parser rejects every other assignment target itself, so the
       // evaluator's guard is exercised with a synthetic node.
@@ -375,7 +375,11 @@ const tests = [
             {
               type: 'AssignmentExpression',
               operator: '=',
-              left: { type: 'ArrayPattern', elements: [] },
+              left: {
+                type: 'CallExpression',
+                callee: { type: 'Identifier', name: 'target' },
+                arguments: [],
+              },
               right: { type: 'Literal', value: 1 },
             },
             context,
@@ -383,7 +387,7 @@ const tests = [
         Error,
       );
       assertSame(error.name, 'UnsupportedNodeError');
-      assertSame(/** @type {any} */ (error).nodeType, 'ArrayPattern');
+      assertSame(/** @type {any} */ (error).nodeType, 'CallExpression');
     },
   },
   {

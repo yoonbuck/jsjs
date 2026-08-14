@@ -1,7 +1,11 @@
 import { EngineObject } from './object.js';
-import { isAccessorDescriptor } from './descriptors.js';
+import { isAccessorDescriptor, isConstructor } from './descriptors.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
 import { toObject } from './conversion.js';
+import {
+  bindThisValue,
+  createFunctionExecutionEnvironment,
+} from './environment.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -13,16 +17,28 @@ import { toObject } from './conversion.js';
  *   functionObject: EngineFunction,
  *   thisValue: unknown,
  *   args: readonly unknown[],
+ *   functionEnvironment: import('./environment.js').FunctionExecutionEnvironment,
  * ) => Completion} FunctionBodyExecutor
  *
  * @typedef {{
  *   realm: Realm,
+ *   formalParameters: readonly any[],
  *   parameterNames: readonly string[],
+ *   expectedArgumentCount: number,
+ *   simpleParameterList: boolean,
  *   scope: EnvironmentRecordLike,
  *   strict: boolean,
  *   execute: FunctionBodyExecutor,
  *   name?: string,
  *   isMethod?: boolean,
+ *   createPrototype?: boolean,
+ *   functionKind?: 'normal' | 'method' | 'arrow' | 'classConstructor',
+ *   thisMode?: 'global' | 'strict' | 'lexical',
+ *   constructible?: boolean,
+ *   enclosingFunctionEnvironment?: import('./environment.js').FunctionExecutionEnvironment,
+ *   methodHomeObject?: EngineObject,
+ *   constructorKind?: 'base' | 'derived' | undefined,
+ *   defaultDerivedConstructor?: boolean,
  * }} EngineFunctionOptions
  */
 
@@ -42,32 +58,66 @@ export class EngineFunction extends EngineObject {
    */
   constructor({
     realm,
+    formalParameters,
     parameterNames,
+    expectedArgumentCount,
+    simpleParameterList,
     scope,
     strict,
     execute,
     name = '',
     isMethod = false,
+    functionKind = isMethod ? 'method' : 'normal',
+    thisMode = functionKind === 'arrow'
+      ? 'lexical'
+      : strict
+        ? 'strict'
+        : 'global',
+    constructible = functionKind === 'normal' ||
+      functionKind === 'classConstructor',
+    createPrototype = constructible,
+    enclosingFunctionEnvironment = undefined,
+    methodHomeObject = undefined,
+    constructorKind = undefined,
+    defaultDerivedConstructor = false,
   }) {
     super(realm.intrinsics.functionPrototype, 'Function');
 
     /** @type {Realm} */
     this.realm = realm;
+    /** @type {readonly any[]} */
+    this.formalParameters = formalParameters;
     /** @type {readonly string[]} */
     this.parameterNames = parameterNames;
+    /** @type {number} */
+    this.expectedArgumentCount = expectedArgumentCount;
+    /** @type {boolean} */
+    this.simpleParameterList = simpleParameterList;
     /** @type {EnvironmentRecordLike} */
     this.scope = scope;
     /** @type {boolean} */
     this.strict = strict;
     /** @type {boolean} */
-    this._isConstructor = !isMethod;
+    this._isConstructor = constructible;
+    /** @type {'normal' | 'method' | 'arrow' | 'classConstructor'} */
+    this.functionKind = functionKind;
+    /** @type {'global' | 'strict' | 'lexical'} */
+    this.thisMode = thisMode;
+    /** @type {import('./environment.js').FunctionExecutionEnvironment | undefined} */
+    this.enclosingFunctionEnvironment = enclosingFunctionEnvironment;
     /** @type {FunctionBodyExecutor} */
     this._execute = execute;
-    /** @type {EngineObject | undefined} */
-    this.homeObject = undefined;
+    /** @type {'base' | 'derived' | undefined} */
+    this.constructorKind = constructorKind;
+    /** @type {boolean} */
+    this.defaultDerivedConstructor = defaultDerivedConstructor;
+
+    if (methodHomeObject !== undefined && functionKind !== 'arrow') {
+      this.methodHomeObject = methodHomeObject;
+    }
 
     this.defineOwnProperty('length', {
-      value: parameterNames.length,
+      value: expectedArgumentCount,
       writable: false,
       enumerable: false,
       configurable: true,
@@ -79,27 +129,27 @@ export class EngineFunction extends EngineObject {
       configurable: true,
     });
 
-    const prototype = new EngineObject(realm.intrinsics.objectPrototype);
-    prototype.defineOwnProperty('constructor', {
-      value: this,
-      writable: true,
-      enumerable: false,
-      configurable: true,
-    });
-    this.defineOwnProperty('prototype', {
-      value: prototype,
-      writable: true,
-      enumerable: false,
-      configurable: false,
-    });
+    if (createPrototype) {
+      const prototype = new EngineObject(realm.intrinsics.objectPrototype);
+      prototype.defineOwnProperty('constructor', {
+        value: this,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      this.defineOwnProperty('prototype', {
+        value: prototype,
+        writable: true,
+        enumerable: false,
+        configurable: false,
+      });
+    }
 
-    // ECMA-262 13.2 strict-function-only steps: define non-configurable,
-    // non-enumerable accessor properties for "caller" and "arguments" that
-    // both read and write through the realm's shared %ThrowTypeError%
-    // intrinsic. Non-strict functions have no such own properties, so
-    // reading nonStrictFn.caller/.arguments returns undefined via ordinary
-    // property lookup miss.
-    if (strict) {
+    // Strict ordinary functions retain own poison accessors, while sloppy
+    // ordinary functions retain writable data extensions that shadow the
+    // restricted accessors inherited from %Function.prototype%. Methods,
+    // arrows, and class constructors omit both own properties.
+    if (strict && functionKind === 'normal') {
       const thrower = /** @type {EngineFunction | undefined} */ (
         realm.intrinsics.throwTypeErrorFunction
       );
@@ -121,6 +171,15 @@ export class EngineFunction extends EngineObject {
       };
       this.defineOwnProperty('caller', poisonPill);
       this.defineOwnProperty('arguments', poisonPill);
+    } else if (functionKind === 'normal') {
+      const extension = {
+        value: undefined,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      };
+      this.defineOwnProperty('caller', extension);
+      this.defineOwnProperty('arguments', extension);
     }
   }
 
@@ -130,35 +189,21 @@ export class EngineFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = []) {
-    let completion;
-    const guard = this.realm.stackGuard;
-
-    // One guest activation, one frame in the realm's stack budget. The guard
-    // raises its `RangeError` signal *before* the body builds an activation
-    // environment, so the caller's boundary converts it into a catchable guest
-    // error with a frame's worth of host stack to spare.
-    guard.enter();
-
-    try {
-      completion = this._execute(this, this.resolveThisValue(thisValue), args);
-    } catch (error) {
-      if (error instanceof ThrowSignal) {
-        throw error;
-      }
-
-      if (error instanceof GuestErrorSignal) {
-        // Convert the pre-construction signal into a fully-built guest error
-        // object and re-throw as a ThrowSignal so the evaluator's throw
-        // machinery and try/catch handling can intercept it.
-        throw new ThrowSignal(
-          this.realm.createGuestError(error.typeName, error.guestMessage),
-        );
-      }
-
-      throw error;
-    } finally {
-      guard.exit();
+    if (this.functionKind === 'classConstructor') {
+      throw new ThrowSignal(
+        this.realm.createGuestError(
+          'TypeError',
+          "Class constructor cannot be invoked without 'new'",
+        ),
+      );
     }
+
+    const functionEnvironment = this.functionExecutionEnvironment(thisValue);
+    const completion = this.executeWithFunctionEnvironment(
+      functionEnvironment.thisValue,
+      args,
+      functionEnvironment,
+    );
 
     if (completion.type === 'return') {
       return completion.value;
@@ -181,25 +226,172 @@ export class EngineFunction extends EngineObject {
   }
 
   /**
-   * Implements ECMA-262 13.2.2 `[[Construct]]`: build an object that
-   * inherits from the function's `prototype` property (falling back to the
-   * realm's `%Object.prototype%` when that property is not an object), run
-   * the function with the new object as `this`, and keep the new object
-   * unless the body returned an object of its own.
+   * Implements ordinary and class `[[Construct]]`. Ordinary functions allocate
+   * through the supplied `newTarget`; class base constructors bind that
+   * allocation before their body, while derived constructors defer binding until
+   * `super(...)` initializes it.
    *
    * @param {readonly unknown[]} [args=[]]
+   * @param {unknown} [newTarget=this]
    * @returns {EngineObject}
    */
-  constructFunction(args = []) {
-    const prototypeProperty = this.get('prototype');
-    const prototype =
-      prototypeProperty instanceof EngineObject
-        ? prototypeProperty
-        : this.realm.intrinsics.objectPrototype;
-    const instance = new EngineObject(prototype);
+  constructFunction(args = [], newTarget = this) {
+    if (!this._isConstructor) {
+      throw new GuestErrorSignal('TypeError', 'Function is not a constructor');
+    }
+
+    if (this.functionKind === 'classConstructor') {
+      return this.constructClass(args, newTarget);
+    }
+
+    const instance = ordinaryCreateFromConstructor(
+      newTarget,
+      this.realm.intrinsics.objectPrototype,
+      this.realm.agent,
+    );
     const result = this.callFunction(instance, args);
 
     return result instanceof EngineObject ? result : instance;
+  }
+
+  /**
+   * @param {unknown} thisValue
+   * @returns {import('./environment.js').FunctionExecutionEnvironment}
+   */
+  functionExecutionEnvironment(thisValue) {
+    if (this.thisMode === 'lexical') {
+      if (this.enclosingFunctionEnvironment === undefined) {
+        throw new GuestErrorSignal(
+          'ReferenceError',
+          'This binding is not available',
+        );
+      }
+
+      return this.enclosingFunctionEnvironment;
+    }
+
+    return createFunctionExecutionEnvironment({
+      outer: this.enclosingFunctionEnvironment,
+      thisStatus: 'initialized',
+      thisValue: this.resolveThisValue(thisValue),
+      homeObject: this.methodHomeObject,
+    });
+  }
+
+  /**
+   * @param {unknown} thisValue
+   * @param {readonly unknown[]} args
+   * @param {import('./environment.js').FunctionExecutionEnvironment} functionEnvironment
+   * @param {FunctionBodyExecutor} [execute=this._execute]
+   * @returns {Completion}
+   */
+  executeWithFunctionEnvironment(
+    thisValue,
+    args,
+    functionEnvironment,
+    execute = this._execute,
+  ) {
+    const guard = this.realm.stackGuard;
+    guard.enter();
+
+    try {
+      return execute(this, thisValue, args, functionEnvironment);
+    } catch (error) {
+      if (error instanceof ThrowSignal) {
+        throw error;
+      }
+
+      if (error instanceof GuestErrorSignal) {
+        throw new ThrowSignal(
+          this.realm.createGuestError(error.typeName, error.guestMessage),
+        );
+      }
+
+      throw error;
+    } finally {
+      guard.exit();
+    }
+  }
+
+  /**
+   * @param {readonly unknown[]} args
+   * @param {unknown} newTarget
+   * @returns {EngineObject}
+   */
+  constructClass(args, newTarget) {
+    const derived = this.constructorKind === 'derived';
+    const instance = derived
+      ? undefined
+      : ordinaryCreateFromConstructor(
+          newTarget,
+          this.realm.intrinsics.objectPrototype,
+          this.realm.agent,
+        );
+    const functionEnvironment = createFunctionExecutionEnvironment({
+      outer: this.enclosingFunctionEnvironment,
+      thisStatus: derived ? 'uninitialized' : 'initialized',
+      thisValue: instance,
+      newTarget,
+      homeObject: this.methodHomeObject,
+      activeConstructor: derived ? this : undefined,
+    });
+    const completion = this.defaultDerivedConstructor
+      ? this.executeWithFunctionEnvironment(
+          undefined,
+          args,
+          functionEnvironment,
+          (_functionObject, _thisValue, values, environment) => {
+            constructSuper(values, environment);
+            return { type: 'normal', value: undefined };
+          },
+        )
+      : this.executeWithFunctionEnvironment(
+          instance,
+          args,
+          functionEnvironment,
+        );
+
+    if (completion.type === 'throw') {
+      throw new ThrowSignal(completion.value);
+    }
+
+    if (completion.type !== 'normal' && completion.type !== 'return') {
+      throw new TypeError(
+        `Unexpected ${completion.type} completion from a class constructor body`,
+      );
+    }
+
+    const value = completion.type === 'return' ? completion.value : undefined;
+
+    if (!derived) {
+      return value instanceof EngineObject
+        ? value
+        : /** @type {EngineObject} */ (instance);
+    }
+
+    if (value instanceof EngineObject) {
+      return value;
+    }
+
+    if (value !== undefined) {
+      throw new ThrowSignal(
+        this.realm.createGuestError(
+          'TypeError',
+          'Derived constructors may only return object or undefined values',
+        ),
+      );
+    }
+
+    if (functionEnvironment.thisStatus !== 'initialized') {
+      throw new ThrowSignal(
+        this.realm.createGuestError(
+          'ReferenceError',
+          "Must call super constructor in derived class before accessing 'this'",
+        ),
+      );
+    }
+
+    return /** @type {EngineObject} */ (functionEnvironment.thisValue);
   }
 
   /**
@@ -251,7 +443,7 @@ export class EngineFunction extends EngineObject {
    * @returns {unknown}
    */
   resolveThisValue(thisValue) {
-    if (this.strict) {
+    if (this.thisMode === 'strict') {
       return thisValue;
     }
 
@@ -265,6 +457,51 @@ export class EngineFunction extends EngineObject {
 
     return toObject(this.realm, thisValue);
   }
+}
+
+/**
+ * Allocates an ordinary object from `newTarget.prototype`, falling back to the
+ * realm's intrinsic object prototype when the property is not an engine object.
+ *
+ * @param {unknown} newTarget
+ * @param {EngineObject} fallbackPrototype
+ * @param {import('./agent.js').Agent} agent
+ * @returns {EngineObject}
+ */
+function ordinaryCreateFromConstructor(newTarget, fallbackPrototype, agent) {
+  const candidate =
+    newTarget instanceof EngineObject ? newTarget.get('prototype') : undefined;
+  const prototype =
+    candidate instanceof EngineObject ? candidate : fallbackPrototype;
+  return new EngineObject(prototype, 'Object', agent);
+}
+
+/**
+ * Implements the shared runtime portion of a derived constructor's `super(...)`
+ * evaluation. The evaluator expands arguments first; this helper reads the
+ * currently executing derived constructor's current prototype, constructs it
+ * with the active new target, and binds the resulting `this` exactly once.
+ *
+ * @param {readonly unknown[]} args
+ * @param {import('./environment.js').FunctionExecutionEnvironment} functionEnvironment
+ * @returns {unknown}
+ */
+export function constructSuper(args, functionEnvironment) {
+  const superConstructor =
+    functionEnvironment.activeConstructor?.getPrototype();
+
+  if (!isConstructor(superConstructor)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Super constructor is not a constructor',
+    );
+  }
+
+  const value = superConstructor.constructFunction(
+    args,
+    functionEnvironment.newTarget,
+  );
+  return bindThisValue(functionEnvironment, value);
 }
 
 /**
@@ -410,17 +647,18 @@ export class ArgumentsObject extends EngineObject {
 /**
  * Builds the `arguments` object for one activation (ECMA-262 10.6): a
  * `length` of the actual argument count, one index property per passed
- * argument, and a `callee` back-reference to the running function. Index
- * properties are walked from the last argument down so that duplicate
- * formal parameter names map to their *last* occurrence, matching the
- * specified `MakeArgGetter`/`MakeArgSetter` loop.
+ * argument. A mapped object receives a `callee` back-reference; an unmapped
+ * object receives the ES2015 poison pill instead. Index properties are walked
+ * from the last argument down so duplicate formal names map only their *last*
+ * occurrence, matching the specified `MakeArgGetter`/`MakeArgSetter` loop.
  *
  * @param {EngineFunction} functionObject
  * @param {readonly unknown[]} args
  * @param {EnvironmentRecordLike} env
+ * @param {boolean} mapped
  * @returns {ArgumentsObject}
  */
-export function createArgumentsObject(functionObject, args, env) {
+export function createArgumentsObject(functionObject, args, env, mapped) {
   const argumentsObject = new ArgumentsObject(
     functionObject.realm.intrinsics.objectPrototype,
     env,
@@ -433,10 +671,6 @@ export function createArgumentsObject(functionObject, args, env) {
     configurable: true,
   });
 
-  const parameterNames = functionObject.parameterNames;
-  /** @type {Set<string>} */
-  const mappedNames = new Set();
-
   for (let index = args.length - 1; index >= 0; index -= 1) {
     const key = String(index);
 
@@ -446,24 +680,31 @@ export function createArgumentsObject(functionObject, args, env) {
       enumerable: true,
       configurable: true,
     });
+  }
 
-    if (functionObject.strict || index >= parameterNames.length) {
-      continue;
-    }
+  if (mapped) {
+    const parameterNames = functionObject.parameterNames;
+    /** @type {Set<string>} */
+    const mappedNames = new Set();
 
-    const parameterName = parameterNames[index];
+    for (let index = parameterNames.length - 1; index >= 0; index -= 1) {
+      const parameterName = parameterNames[index];
 
-    if (!mappedNames.has(parameterName)) {
+      if (mappedNames.has(parameterName)) {
+        continue;
+      }
+
       mappedNames.add(parameterName);
-      argumentsObject.mapParameter(key, parameterName);
+
+      if (index < args.length) {
+        argumentsObject.mapParameter(String(index), parameterName);
+      }
     }
   }
 
-  if (functionObject.strict) {
-    // ECMA-262 10.6 strict-arguments steps: "callee" and "caller" become
-    // non-configurable accessor properties that each throw a TypeError on
-    // read or write.  The shared %ThrowTypeError% intrinsic is used so every
-    // strict arguments object in the same realm shares the same thrower.
+  if (!mapped) {
+    // ES2015 §9.4.4.6: unmapped arguments objects use the realm's shared
+    // %ThrowTypeError% intrinsic for their `callee` poison-pill property.
     const thrower = /** @type {EngineFunction | undefined} */ (
       functionObject.realm.intrinsics.throwTypeErrorFunction
     );
@@ -484,7 +725,6 @@ export function createArgumentsObject(functionObject, args, env) {
       configurable: false,
     };
     argumentsObject.defineOwnProperty('callee', poisonPill);
-    argumentsObject.defineOwnProperty('caller', poisonPill);
   } else {
     argumentsObject.defineOwnProperty('callee', {
       value: functionObject,
@@ -498,8 +738,19 @@ export function createArgumentsObject(functionObject, args, env) {
   // arguments object gets an `@@iterator` data property whose value is the
   // intrinsic %Array.prototype.values%, so `for (x of arguments)` works.
   const iteratorSymbol = functionObject.realm.agent.wellKnownSymbols.iterator;
+  const arrayValuesFunction =
+    /** @type {import('../builtins/shared.js').NativeFunction | undefined} */ (
+      functionObject.realm.intrinsics.arrayValuesFunction
+    );
+
+  if (arrayValuesFunction === undefined) {
+    throw new TypeError(
+      'Realm is missing required %Array.prototype.values% intrinsic',
+    );
+  }
+
   argumentsObject.defineOwnProperty(iteratorSymbol, {
-    value: functionObject.realm.intrinsics.arrayPrototype.get(iteratorSymbol),
+    value: arrayValuesFunction,
     writable: true,
     enumerable: false,
     configurable: true,

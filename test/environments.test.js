@@ -6,11 +6,15 @@ import {
   DeclarativeEnvironmentRecord,
   GlobalEnvironmentRecord,
   ObjectEnvironmentRecord,
+  bindThisValue,
+  createFunctionExecutionEnvironment,
   getIdentifierReference,
   newDeclarativeEnvironment,
   newObjectEnvironment,
 } from '../src/runtime/environment.js';
-import { GuestErrorSignal } from '../src/runtime/completion.js';
+import { GuestErrorSignal, ThrowSignal } from '../src/runtime/completion.js';
+import { parseScript } from '../src/parser.js';
+import { createFunctionObject } from '../src/evaluator/declarations.js';
 
 const tests = [
   {
@@ -913,6 +917,103 @@ const tests = [
       const env = new GlobalEnvironmentRecord(globalObject);
 
       assertSame(env.canDeclareGlobalFunction('stillNoOwnProperty'), false);
+    },
+  },
+  {
+    name: 'function execution environments stop super lookup at ordinary calls while direct and nested arrows reuse a method record',
+    run() {
+      const realm = createRealm();
+      const superBase = new EngineObject(null);
+      const homeObject = new EngineObject(superBase);
+      const receiver = new EngineObject(null);
+      superBase.defineOwnProperty('value', {
+        value: 7,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const methodEnvironment = createFunctionExecutionEnvironment({
+        thisStatus: 'initialized',
+        thisValue: receiver,
+        homeObject,
+      });
+      const ordinaryEnvironment = createFunctionExecutionEnvironment({
+        outer: methodEnvironment,
+        thisStatus: 'initialized',
+        thisValue: receiver,
+      });
+      const program = parseScript(
+        'var object = { method() { return () => (() => super.value)(); } };',
+      );
+      const arrow =
+        program.body[0].declarations[0].init.properties[0].value.body.body[0]
+          .argument;
+
+      /** @param {import('../src/runtime/environment.js').FunctionExecutionEnvironment} functionEnvironment */
+      function createArrow(functionEnvironment) {
+        return createFunctionObject(arrow, realm.globalEnvironment, {
+          realm,
+          env: realm.globalEnvironment,
+          variableEnv: realm.globalEnvironment,
+          strict: false,
+          thisValue: receiver,
+          functionEnvironment,
+        });
+      }
+
+      assertSame(createArrow(methodEnvironment).callFunction(undefined), 7);
+      const error = /** @type {any} */ (
+        assertThrows(
+          () => createArrow(ordinaryEnvironment).callFunction(undefined),
+          ThrowSignal,
+        )
+      );
+      assertSame(error.value.get('name'), 'ReferenceError');
+    },
+  },
+  {
+    name: 'arrows defer an uninitialized lexical this until a ThisExpression evaluates it',
+    run() {
+      const realm = createRealm();
+      const enclosingFunctionEnvironment = createFunctionExecutionEnvironment({
+        thisStatus: 'uninitialized',
+      });
+      const unusedThisArrow = parseScript('(() => 1);').body[0].expression;
+      const usedThisArrow = parseScript('(() => this);').body[0].expression;
+
+      /** @param {any} node */
+      function createArrow(node) {
+        return createFunctionObject(node, realm.globalEnvironment, {
+          realm,
+          env: realm.globalEnvironment,
+          variableEnv: realm.globalEnvironment,
+          strict: false,
+          thisValue: 'stale context this',
+          functionEnvironment: enclosingFunctionEnvironment,
+        });
+      }
+
+      assertSame(createArrow(unusedThisArrow).callFunction(undefined), 1);
+      const error = /** @type {any} */ (
+        assertThrows(
+          () => createArrow(usedThisArrow).callFunction(undefined),
+          ThrowSignal,
+        )
+      );
+      assertSame(error.value.get('name'), 'ReferenceError');
+    },
+  },
+  {
+    name: 'bindThisValue returns the newly initialized this value',
+    run() {
+      const environment = createFunctionExecutionEnvironment({
+        thisStatus: 'uninitialized',
+      });
+      const value = new EngineObject(null);
+
+      assertSame(bindThisValue(environment, value), value);
+      assertSame(environment.thisStatus, 'initialized');
+      assertSame(environment.thisValue, value);
     },
   },
 ];

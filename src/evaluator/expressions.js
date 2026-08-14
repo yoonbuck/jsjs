@@ -7,6 +7,8 @@ import {
 import {
   getIdentifierBindingValue,
   getIdentifierReference,
+  getThisBinding,
+  getSuperHomeObject,
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
@@ -18,8 +20,8 @@ import {
   toInt32,
   toNumber,
   toObject,
-  toString,
   toPropertyKey,
+  toString,
 } from '../runtime/conversion.js';
 import {
   abstractEqualityComparison,
@@ -44,10 +46,12 @@ import {
 } from '../runtime/errors.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { SuperReferenceBase } from '../runtime/super-reference.js';
+import { constructSuper } from '../runtime/function-object.js';
 import {
   createFunctionObject,
-  isAnonymousFunctionExpression,
+  evaluateNamedExpression,
 } from './declarations.js';
+import { evaluateClassDefinition } from './classes.js';
 // Direct-eval interception (see isDirectEvalCall) calls into the eval
 // implementation. This closes a loop through the pre-existing intra-evaluator
 // cycle expressions <-> declarations <-> statements; performEval is a
@@ -59,9 +63,28 @@ import {
 // nothing from the evaluator, and no module here reaches realm.js.
 import { performEval } from './eval.js';
 import { createRegExpFromPattern } from '../builtins/regexp.js';
+import { assignPattern } from './patterns.js';
+import { iterableToList } from './iteration.js';
+import {
+  evaluatePropertyName,
+  functionNameFromPropertyKey,
+} from './property-name.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
+ */
+
+/**
+ * @typedef {
+ *   | { kind: 'reference', reference: Reference }
+ *   | { kind: 'member', baseValue: unknown, propertyValue: unknown }
+ *   | {
+ *       kind: 'superMember',
+ *       homeObject: EngineObject,
+ *       thisValue: unknown,
+ *       propertyValue: unknown,
+ *     }
+ * } PreparedAssignmentTarget
  */
 
 const SUPPORTED_BINARY_OPERATORS = new Set([
@@ -107,10 +130,14 @@ export const EXPRESSION_TYPES = new Set([
   'CallExpression',
   'MemberExpression',
   'FunctionExpression',
+  'ArrowFunctionExpression',
+  'ClassExpression',
   'ObjectExpression',
   'ArrayExpression',
   'NewExpression',
   'SequenceExpression',
+  'TemplateLiteral',
+  'TaggedTemplateExpression',
 ]);
 
 /**
@@ -142,7 +169,7 @@ export function evaluateExpression(node, context) {
       case 'Identifier':
         return getIdentifierReference(context.env, node.name, context.strict);
       case 'ThisExpression':
-        return context.thisValue;
+        return getContextThisBinding(context);
       case 'UnaryExpression':
         return evaluateUnaryExpression(node, context);
       case 'BinaryExpression':
@@ -161,6 +188,10 @@ export function evaluateExpression(node, context) {
         return evaluateMemberExpression(node, context);
       case 'FunctionExpression':
         return evaluateFunctionExpression(node, context);
+      case 'ArrowFunctionExpression':
+        return evaluateArrowFunctionExpression(node, context);
+      case 'ClassExpression':
+        return evaluateClassDefinition(node, context);
       case 'ObjectExpression':
         return evaluateObjectExpression(node, context);
       case 'ArrayExpression':
@@ -169,6 +200,10 @@ export function evaluateExpression(node, context) {
         return evaluateNewExpression(node, context);
       case 'SequenceExpression':
         return evaluateSequenceExpression(node, context);
+      case 'TemplateLiteral':
+        return evaluateTemplateLiteral(node, context);
+      case 'TaggedTemplateExpression':
+        return evaluateTaggedTemplateExpression(node, context);
       default:
         throw createUnsupportedNodeError(node);
     }
@@ -222,6 +257,84 @@ export function evaluateExpressionValue(node, context) {
 
   const result = evaluateExpression(node, context);
   return result instanceof Reference ? getValue(result) : result;
+}
+
+/**
+ * Evaluates an assignment target far enough to preserve its observable base and
+ * property-expression order, while allowing destructuring to defer property-key
+ * conversion until the pattern algorithm is ready to perform `PutValue`.
+ *
+ * Ordinary assignment keeps using `evaluateExpression`, so this representation
+ * is confined to destructuring assignment targets.
+ *
+ * @param {any} target
+ * @param {EvaluationContext} context
+ * @returns {PreparedAssignmentTarget}
+ */
+export function prepareAssignmentTarget(target, context) {
+  if (target.type === 'Identifier') {
+    return {
+      kind: 'reference',
+      reference: /** @type {Reference} */ (evaluateExpression(target, context)),
+    };
+  }
+
+  if (target.type !== 'MemberExpression') {
+    throw createUnsupportedNodeError(target);
+  }
+
+  if (target.object.type === 'Super') {
+    return {
+      kind: 'superMember',
+      homeObject: getSuperHomeObject(context.functionEnvironment),
+      thisValue: getContextThisBinding(context),
+      propertyValue: evaluateMemberPropertyValue(target, context),
+    };
+  }
+
+  return {
+    kind: 'member',
+    baseValue: evaluateExpressionValue(target.object, context),
+    propertyValue: evaluateMemberPropertyValue(target, context),
+  };
+}
+
+/**
+ * Completes a prepared destructuring assignment target and applies `PutValue`.
+ * For member targets this is intentionally where `ToPropertyKey` occurs.
+ *
+ * @param {PreparedAssignmentTarget} prepared
+ * @param {unknown} value
+ * @param {EvaluationContext} context
+ * @returns {void}
+ */
+export function applyPreparedAssignmentTarget(prepared, value, context) {
+  switch (prepared.kind) {
+    case 'reference':
+      putValue(prepared.reference, value);
+      return;
+    case 'member':
+      putValue(
+        createOrdinaryMemberReference(
+          prepared.baseValue,
+          prepared.propertyValue,
+          context,
+        ),
+        value,
+      );
+      return;
+    case 'superMember':
+      putValue(
+        createSuperMemberReference(
+          prepared.homeObject,
+          prepared.thisValue,
+          prepared.propertyValue,
+          context,
+        ),
+        value,
+      );
+      return;
+  }
 }
 
 /**
@@ -509,6 +622,16 @@ function evaluateConditionalExpression(node, context) {
  * @returns {unknown}
  */
 function evaluateAssignmentExpression(node, context) {
+  if (node.left.type === 'ObjectPattern' || node.left.type === 'ArrayPattern') {
+    if (node.operator !== '=') {
+      throw createUnsupportedOperatorError('assignment', node.operator);
+    }
+
+    const value = evaluateExpressionValue(node.right, context);
+    assignPattern(node.left, value, context);
+    return value;
+  }
+
   if (
     node.left.type !== 'Identifier' &&
     node.left.type !== 'MemberExpression'
@@ -522,11 +645,8 @@ function evaluateAssignmentExpression(node, context) {
 
   if (node.operator === '=') {
     const value =
-      node.left.type === 'Identifier' &&
-      isAnonymousFunctionExpression(node.right)
-        ? createFunctionObject(node.right, context.env, context, {
-            name: node.left.name,
-          })
+      node.left.type === 'Identifier'
+        ? evaluateNamedExpression(node.right, context, node.left.name)
         : evaluateExpressionValue(node.right, context);
     putValue(reference, value);
     return value;
@@ -593,6 +713,10 @@ function evaluateUpdateExpression(node, context) {
  * @returns {unknown}
  */
 function evaluateCallExpression(node, context) {
+  if (node.callee.type === 'Super') {
+    return evaluateSuperCallExpression(node, context);
+  }
+
   const calleeReference = evaluateExpression(node.callee, context);
   const callee =
     calleeReference instanceof Reference
@@ -615,6 +739,35 @@ function evaluateCallExpression(node, context) {
   return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
     callee
   ).callFunction(thisValue, args);
+}
+
+/**
+ * Evaluates a direct `super(...args)` call in a derived constructor. Argument
+ * expansion is deliberately shared with ordinary calls and construction; the
+ * runtime helper owns superclass construction, active new-target propagation,
+ * and exactly-once `this` initialization.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateSuperCallExpression(node, context) {
+  const functionEnvironment = context.functionEnvironment;
+
+  if (
+    functionEnvironment === undefined ||
+    functionEnvironment.activeConstructor === undefined
+  ) {
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      "'super' call is only valid in a derived constructor",
+    );
+  }
+
+  return constructSuper(
+    evaluateArguments(node.arguments, context),
+    functionEnvironment,
+  );
 }
 
 /**
@@ -663,6 +816,78 @@ function evaluateSequenceExpression(node, context) {
   }
 
   return value;
+}
+
+/**
+ * Evaluates an untagged template literal. Invalid cooked values are only
+ * representable in tagged templates, but retain this check for custom parser
+ * output and to keep a malformed tree from being interpreted as "undefined".
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {string}
+ */
+function evaluateTemplateLiteral(node, context) {
+  let value = requiredCookedTemplateValue(node.quasis[0]);
+
+  for (let index = 0; index < node.expressions.length; index += 1) {
+    value += toString(
+      evaluateExpressionValue(node.expressions[index], context),
+    );
+    value += requiredCookedTemplateValue(node.quasis[index + 1]);
+  }
+
+  return value;
+}
+
+/**
+ * Evaluates a tagged template expression. In particular, the callability
+ * check follows substitution evaluation, matching ordinary call argument
+ * ordering while retaining the tag reference receiver.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateTaggedTemplateExpression(node, context) {
+  const tagReference = evaluateExpression(node.tag, context);
+  const tag =
+    tagReference instanceof Reference ? getValue(tagReference) : tagReference;
+  const thisValue = referenceThisValue(tagReference);
+  /** @type {unknown[]} */
+  const args = [context.realm.getTemplateObject(node.quasi)];
+
+  for (const expression of node.quasi.expressions) {
+    args.push(evaluateExpressionValue(expression, context));
+  }
+
+  if (!isCallable(tag)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      `${describeCallee(node.tag)} is not a function`,
+    );
+  }
+
+  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
+    tag
+  ).callFunction(thisValue, args);
+}
+
+/**
+ * @param {any} element
+ * @returns {string}
+ */
+function requiredCookedTemplateValue(element) {
+  const cooked = element?.value?.cooked;
+
+  if (typeof cooked !== 'string') {
+    throw new GuestErrorSignal(
+      'SyntaxError',
+      'Invalid cooked value in untagged template literal',
+    );
+  }
+
+  return cooked;
 }
 
 /**
@@ -754,7 +979,18 @@ function evaluateArguments(nodes, context) {
   const args = [];
 
   for (const argument of nodes) {
-    args.push(evaluateExpressionValue(argument, context));
+    if (argument.type === 'SpreadElement') {
+      const values = iterableToList(
+        context.realm,
+        evaluateExpressionValue(argument.argument, context),
+      );
+
+      for (const value of values) {
+        args.push(value);
+      }
+    } else {
+      args.push(evaluateExpressionValue(argument, context));
+    }
   }
 
   return args;
@@ -793,57 +1029,96 @@ function evaluateMemberExpression(node, context) {
   }
 
   const baseValue = evaluateExpressionValue(node.object, context);
-  const propertyKey = node.computed
-    ? evaluateExpressionValue(node.property, context)
-    : node.property.name;
+  const propertyValue = evaluateMemberPropertyValue(node, context);
 
-  checkObjectCoercible(baseValue);
-
-  return new Reference(
-    toObjectBase(context.realm, baseValue),
-    toPropertyKey(propertyKey),
-    context.strict,
-    baseValue,
-  );
+  return createOrdinaryMemberReference(baseValue, propertyValue, context);
 }
 
 /**
  * Evaluates a `super.prop`/`super[expr]` `MemberExpression` (ECMA-262
  * 12.3.5): resolves ES2015 `GetSuperBase` off the currently executing
- * method's `[[HomeObject]]` and builds a `SuperReferenceBase` so
+ * function execution record's method HomeObject and builds a
+ * `SuperReferenceBase` so
  * `GetValue`/`PutValue` read and write through the home object's
  * *prototype* while keeping the method's own `this` as the receiver. A
- * missing `homeObject` (an ordinary function, reached only if some future
- * syntax addition parses `super` somewhere Acorn's own `allowSuper` check
- * should have already rejected) is defense in depth: it throws the same
- * guest `ReferenceError` a real engine's static early error would have
- * produced, documented as an intentional runtime fallback for what the
- * specification instead catches at parse time.
+ * missing `homeObject` marks an ordinary-function lexical boundary. The
+ * runtime check is defense in depth for custom ASTs that evade the parser's
+ * static early-error gate.
  *
  * @param {any} node
  * @param {EvaluationContext} context
  * @returns {Reference}
  */
 function evaluateSuperMemberExpression(node, context) {
-  const homeObject = context.homeObject;
+  const homeObject = getSuperHomeObject(context.functionEnvironment);
+  const thisValue = getContextThisBinding(context);
+  const propertyValue = evaluateMemberPropertyValue(node, context);
 
-  if (!(homeObject instanceof EngineObject)) {
-    throw new GuestErrorSignal(
-      'ReferenceError',
-      "'super' keyword is only valid inside a method",
-    );
-  }
+  return createSuperMemberReference(
+    homeObject,
+    thisValue,
+    propertyValue,
+    context,
+  );
+}
 
-  const propertyKey = node.computed
-    ? toPropertyKey(evaluateExpressionValue(node.property, context))
+/**
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateMemberPropertyValue(node, context) {
+  return node.computed
+    ? evaluateExpressionValue(node.property, context)
     : node.property.name;
+}
+
+/**
+ * @param {unknown} baseValue
+ * @param {unknown} propertyValue
+ * @param {EvaluationContext} context
+ * @returns {Reference}
+ */
+function createOrdinaryMemberReference(baseValue, propertyValue, context) {
+  checkObjectCoercible(baseValue);
 
   return new Reference(
-    new SuperReferenceBase(homeObject, context.thisValue),
-    propertyKey,
+    toObjectBase(context.realm, baseValue),
+    toPropertyKey(propertyValue),
     context.strict,
-    context.thisValue,
+    baseValue,
   );
+}
+
+/**
+ * @param {EngineObject} homeObject
+ * @param {unknown} thisValue
+ * @param {unknown} propertyValue
+ * @param {EvaluationContext} context
+ * @returns {Reference}
+ */
+function createSuperMemberReference(
+  homeObject,
+  thisValue,
+  propertyValue,
+  context,
+) {
+  return new Reference(
+    new SuperReferenceBase(homeObject, thisValue),
+    toPropertyKey(propertyValue),
+    context.strict,
+    thisValue,
+  );
+}
+
+/**
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function getContextThisBinding(context) {
+  return context.functionEnvironment === undefined
+    ? context.thisValue
+    : getThisBinding(context.functionEnvironment);
 }
 
 /**
@@ -901,6 +1176,24 @@ function evaluateFunctionExpression(node, context) {
 }
 
 /**
+ * Arrows capture the running function execution environment through
+ * `createFunctionObject`; unlike a normal expression they introduce neither an
+ * own this/arguments binding nor an own HomeObject.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {import('../runtime/function-object.js').EngineFunction}
+ */
+function evaluateArrowFunctionExpression(node, context) {
+  return createFunctionObject(node, context.env, context, {
+    functionKind: 'arrow',
+    thisMode: 'lexical',
+    constructible: false,
+    createPrototype: false,
+  });
+}
+
+/**
  * Evaluates an object literal (ECMA-262 11.1.5). Each property is defined
  * with `[[DefineOwnProperty]]` rather than `[[Put]]`, so literal
  * properties are unaffected by inherited setters and accessor pairs for
@@ -914,21 +1207,51 @@ function evaluateObjectExpression(node, context) {
   const object = new EngineObject(context.realm.intrinsics.objectPrototype);
 
   for (const property of node.properties) {
-    if (property.type !== 'Property' || property.computed) {
-      // ES5 object literals only have plain `Property` members with
-      // literal keys; spread, shorthand methods, and computed keys are
-      // later-edition forms.
+    if (property.type !== 'Property') {
       throw createUnsupportedNodeError(property);
     }
 
-    const key = evaluatePropertyKey(property.key);
+    const key = evaluatePropertyName(property.key, property.computed, context);
 
     if (property.kind === 'init') {
-      const value = isAnonymousFunctionExpression(property.value)
-        ? createFunctionObject(property.value, context.env, context, {
-            name: key,
-          })
-        : evaluateExpressionValue(property.value, context);
+      if (property.method) {
+        const method = createFunctionObject(
+          property.value,
+          context.env,
+          context,
+          {
+            name: functionNameFromPropertyKey(key),
+            isMethod: true,
+            homeObject: object,
+            createPrototype: false,
+          },
+        );
+        object.defineOwnProperty(key, {
+          value: method,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        continue;
+      }
+
+      const prototypeSetter =
+        !property.computed && !property.shorthand && key === '__proto__';
+
+      if (prototypeSetter) {
+        const value = evaluateExpressionValue(property.value, context);
+
+        if (value === null || value instanceof EngineObject) {
+          object.setPrototypeOf(value);
+        }
+        continue;
+      }
+
+      const value = evaluateNamedExpression(
+        property.value,
+        context,
+        functionNameFromPropertyKey(key),
+      );
 
       object.defineOwnProperty(key, {
         value,
@@ -948,9 +1271,10 @@ function evaluateObjectExpression(node, context) {
       context.env,
       context,
       {
-        name: `${property.kind} ${key}`,
+        name: functionNameFromPropertyKey(key, property.kind),
         isMethod: true,
         homeObject: object,
+        createPrototype: false,
       },
     );
     object.defineOwnProperty(key, {
@@ -964,30 +1288,10 @@ function evaluateObjectExpression(node, context) {
 }
 
 /**
- * Converts an object literal's property-name node to its string property
- * key: identifier names are used verbatim, and literal names go through
- * `ToString` so `{1: x}` and `{"1": x}` name the same property.
- *
- * @param {any} node
- * @returns {string}
- */
-function evaluatePropertyKey(node) {
-  if (node.type === 'Identifier') {
-    return node.name;
-  }
-
-  if (node.type === 'Literal' && !node.regex) {
-    return toString(node.value);
-  }
-
-  throw createUnsupportedNodeError(node);
-}
-
-/**
  * Evaluates an array literal (ECMA-262 11.1.4). Elisions define no
- * property — leaving a hole the array still counts in `length` — so the
- * literal's `length` is set from the element list after the present
- * elements have been defined.
+ * property — leaving a hole the array still counts in `length`. Spread values
+ * are appended at a running guest index, so explicit holes and an iterable's
+ * materialized values compose without using the AST element count as length.
  *
  * @param {any} node
  * @param {EvaluationContext} context
@@ -995,16 +1299,30 @@ function evaluatePropertyKey(node) {
  */
 function evaluateArrayExpression(node, context) {
   const array = new EngineArray(context.realm.intrinsics.arrayPrototype);
+  let index = 0;
 
-  for (let index = 0; index < node.elements.length; index += 1) {
-    const element = node.elements[index];
-
+  for (const element of node.elements) {
     if (element === null) {
+      index += 1;
       continue;
     }
 
     if (element.type === 'SpreadElement') {
-      throw createUnsupportedNodeError(element);
+      const values = iterableToList(
+        context.realm,
+        evaluateExpressionValue(element.argument, context),
+      );
+
+      for (const value of values) {
+        array.defineOwnProperty(String(index), {
+          value,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        index += 1;
+      }
+      continue;
     }
 
     array.defineOwnProperty(String(index), {
@@ -1013,9 +1331,10 @@ function evaluateArrayExpression(node, context) {
       enumerable: true,
       configurable: true,
     });
+    index += 1;
   }
 
-  array.defineOwnProperty('length', { value: node.elements.length });
+  array.defineOwnProperty('length', { value: index });
 
   return array;
 }

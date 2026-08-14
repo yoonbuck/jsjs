@@ -1,7 +1,9 @@
-import { assertSame } from './harness/assert.js';
+import { assertSame, assertThrows } from './harness/assert.js';
 import { parseScript } from '../src/parser.js';
+import { UnsupportedNodeError } from '../src/runtime/errors.js';
 import {
   boundNames,
+  summarizeBoundNames,
   isConstantDeclaration,
   varDeclaredNames,
   varScopedDeclarations,
@@ -89,6 +91,118 @@ const tests = [
 
       const constNode = lexicalDeclaration('c', 'const');
       assertSame(JSON.stringify(boundNames(constNode)), '["c"]');
+    },
+  },
+  {
+    name: 'boundNames of nested binding patterns preserves source order',
+    run() {
+      assertSame(
+        boundNames({
+          type: 'ArrayPattern',
+          elements: [
+            { type: 'Identifier', name: 'a' },
+            {
+              type: 'AssignmentPattern',
+              left: {
+                type: 'ObjectPattern',
+                properties: [
+                  {
+                    type: 'Property',
+                    kind: 'init',
+                    computed: false,
+                    key: { type: 'Identifier', name: 'x' },
+                    value: { type: 'Identifier', name: 'b' },
+                  },
+                ],
+              },
+              right: { type: 'Literal', value: 1 },
+            },
+            {
+              type: 'RestElement',
+              argument: { type: 'Identifier', name: 'rest' },
+            },
+          ],
+        }).join(','),
+        'a,b,rest',
+      );
+    },
+  },
+  {
+    name: 'boundNames rejects cyclic binding patterns instead of returning incomplete names',
+    run() {
+      const pattern = /** @type {any} */ ({
+        type: 'ArrayPattern',
+        elements: /** @type {any[]} */ ([]),
+      });
+      pattern.elements.push(pattern);
+
+      const error = /** @type {any} */ (
+        assertThrows(() => boundNames(pattern), UnsupportedNodeError)
+      );
+
+      assertSame(error.nodeType, 'ArrayPattern');
+    },
+  },
+  {
+    name: 'summarizeBoundNames counts shared pattern aliases without expanding them',
+    run() {
+      const property = {
+        type: 'Property',
+        kind: 'init',
+        computed: false,
+        method: false,
+        shorthand: false,
+        key: { type: 'Identifier', name: 'key' },
+        value: {
+          type: 'AssignmentPattern',
+          left: { type: 'Identifier', name: 'value' },
+          right: { type: 'Literal', value: 1 },
+        },
+      };
+      const pattern = {
+        type: 'ArrayPattern',
+        elements: [
+          { type: 'ObjectPattern', properties: [property] },
+          {
+            type: 'RestElement',
+            argument: { type: 'Identifier', name: 'rest' },
+          },
+        ],
+      };
+      const summary = summarizeBoundNames([pattern, pattern]);
+
+      assertSame(summarizeBoundNames([pattern]).duplicate, false);
+      assertSame([...summary.names].join(','), 'value,rest');
+      assertSame(summary.duplicate, true);
+    },
+  },
+  {
+    name: 'summarizeBoundNames rejects cycles through pattern properties',
+    run() {
+      const pattern = /** @type {any} */ ({
+        type: 'ObjectPattern',
+        properties: [],
+      });
+      const property = { type: 'Property', value: pattern };
+      pattern.properties.push(property);
+
+      const error = /** @type {any} */ (
+        assertThrows(() => summarizeBoundNames([pattern]), UnsupportedNodeError)
+      );
+
+      assertSame(error.nodeType, 'ObjectPattern');
+    },
+  },
+  {
+    name: 'boundNames of a ClassDeclaration is its own name',
+    run() {
+      assertSame(
+        boundNames({
+          type: 'ClassDeclaration',
+          id: { type: 'Identifier', name: 'C' },
+        }).join(','),
+        'C',
+      );
     },
   },
 

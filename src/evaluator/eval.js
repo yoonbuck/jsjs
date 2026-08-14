@@ -60,7 +60,10 @@
  */
 
 import { parseEval } from '../parser.js';
-import { newDeclarativeEnvironment } from '../runtime/environment.js';
+import {
+  createFunctionExecutionEnvironment,
+  newDeclarativeEnvironment,
+} from '../runtime/environment.js';
 import { EMPTY, GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
 import { hasUseStrictDirective } from './directive.js';
 import { evaluateStatementList } from './statements.js';
@@ -100,7 +103,11 @@ export function performEval(x, callerContext) {
   let program;
 
   try {
-    program = parseEval(x, inheritedStrict);
+    program = parseEval(x, inheritedStrict, {
+      superAllowed: callerContext.functionEnvironment?.homeObject !== undefined,
+      superCallAllowed:
+        callerContext.functionEnvironment?.activeConstructor !== undefined,
+    });
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new GuestErrorSignal('SyntaxError', error.message);
@@ -127,6 +134,12 @@ export function performEval(x, callerContext) {
   // variable environment too (step 14), so nothing it declares leaks.
   const lexicalEnv = newDeclarativeEnvironment(callerContext.env);
   const variableEnvBase = strict ? lexicalEnv : callerContext.variableEnv;
+  const functionEnvironment =
+    callerContext.functionEnvironment ??
+    createFunctionExecutionEnvironment({
+      thisStatus: 'initialized',
+      thisValue: callerContext.thisValue,
+    });
 
   // The variable environment is always a declarative or global environment
   // record: eval's *variable* environment is never a `with` object environment
@@ -144,6 +157,7 @@ export function performEval(x, callerContext) {
     variableEnv,
     strict,
     thisValue: callerContext.thisValue,
+    functionEnvironment,
   };
 
   evalDeclarationInstantiation(program, evalContext, variableEnv);

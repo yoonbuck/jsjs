@@ -13,7 +13,8 @@
  * @returns {boolean}
  */
 export function hasUseStrictDirective(statements) {
-  for (const statement of statements) {
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index];
     if (statement.directive === undefined) {
       return false;
     }

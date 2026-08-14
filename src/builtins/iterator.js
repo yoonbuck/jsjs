@@ -33,6 +33,7 @@ import { charCodeOfCodeUnit, codeUnitsBetween } from '../runtime/code-units.js';
  *   iteratorPrototype: EngineObject,
  *   arrayIteratorPrototype: EngineObject,
  *   stringIteratorPrototype: EngineObject,
+ *   arrayValuesFunction: NativeFunction,
  * }} IteratorIntrinsics
  */
 
@@ -84,6 +85,17 @@ export function createIteratorIntrinsics(realm) {
     toStringTagSymbol,
     'Array Iterator',
   );
+  const arrayValuesFunction = realm.createNativeFunction({
+    name: 'values',
+    length: 0,
+    call(thisValue) {
+      return new ArrayIterator(
+        arrayIteratorPrototype,
+        toObject(realm, thisValue),
+        'value',
+      );
+    },
+  });
 
   const stringIteratorPrototype = new EngineObject(iteratorPrototype);
   defineBuiltinMethod(
@@ -103,7 +115,12 @@ export function createIteratorIntrinsics(realm) {
     'String Iterator',
   );
 
-  return { iteratorPrototype, arrayIteratorPrototype, stringIteratorPrototype };
+  return {
+    iteratorPrototype,
+    arrayIteratorPrototype,
+    stringIteratorPrototype,
+    arrayValuesFunction,
+  };
 }
 
 /**
@@ -119,19 +136,12 @@ export function createIteratorIntrinsics(realm) {
 export function installIteratorMethods(realm, intrinsics) {
   const iteratorSymbol = realm.agent.wellKnownSymbols.iterator;
   const { arrayPrototype, stringPrototype } = realm.intrinsics;
-  const { arrayIteratorPrototype, stringIteratorPrototype } = intrinsics;
+  const {
+    arrayIteratorPrototype,
+    stringIteratorPrototype,
+    arrayValuesFunction,
+  } = intrinsics;
 
-  const values = realm.createNativeFunction({
-    name: 'values',
-    length: 0,
-    call(thisValue) {
-      return new ArrayIterator(
-        arrayIteratorPrototype,
-        toObject(realm, thisValue),
-        'value',
-      );
-    },
-  });
   const keys = realm.createNativeFunction({
     name: 'keys',
     length: 0,
@@ -155,12 +165,12 @@ export function installIteratorMethods(realm, intrinsics) {
     },
   });
 
-  defineBuiltinMethod(arrayPrototype, 'values', values);
+  defineBuiltinMethod(arrayPrototype, 'values', arrayValuesFunction);
   defineBuiltinMethod(arrayPrototype, 'keys', keys);
   defineBuiltinMethod(arrayPrototype, 'entries', entries);
   // §22.1.3.30: Array.prototype[@@iterator] is the very same function object as
   // Array.prototype.values, not a distinct wrapper.
-  defineBuiltinMethod(arrayPrototype, iteratorSymbol, values);
+  defineBuiltinMethod(arrayPrototype, iteratorSymbol, arrayValuesFunction);
 
   defineBuiltinMethod(
     stringPrototype,

@@ -663,6 +663,120 @@ export class GlobalEnvironmentRecord {
  */
 
 /**
+ * The function-specific portion of an execution context. Ordinary calls create
+ * a fresh record; arrows retain the record from their enclosing execution.
+ *
+ * @typedef {{
+ *   outer: FunctionExecutionEnvironment | undefined,
+ *   thisStatus: 'lexical' | 'uninitialized' | 'initialized',
+ *   thisValue: unknown,
+ *   homeObject?: EngineObject,
+ *   newTarget?: unknown,
+ *   activeConstructor?: import('./function-object.js').EngineFunction,
+ * }} FunctionExecutionEnvironment
+ */
+
+/**
+ * @param {{
+ *   outer?: FunctionExecutionEnvironment,
+ *   thisStatus: 'lexical' | 'uninitialized' | 'initialized',
+ *   thisValue?: unknown,
+ *   homeObject?: EngineObject,
+ *   newTarget?: unknown,
+ *   activeConstructor?: import('./function-object.js').EngineFunction,
+ * }} options
+ * @returns {FunctionExecutionEnvironment}
+ */
+export function createFunctionExecutionEnvironment({
+  outer = undefined,
+  thisStatus,
+  thisValue = undefined,
+  homeObject = undefined,
+  newTarget = undefined,
+  activeConstructor = undefined,
+}) {
+  /** @type {FunctionExecutionEnvironment} */
+  const environment = {
+    outer,
+    thisStatus,
+    thisValue,
+    newTarget,
+  };
+
+  if (homeObject !== undefined) {
+    environment.homeObject = homeObject;
+  }
+
+  if (activeConstructor !== undefined) {
+    environment.activeConstructor = activeConstructor;
+  }
+
+  return environment;
+}
+
+/**
+ * @param {FunctionExecutionEnvironment | undefined} functionEnvironment
+ * @returns {unknown}
+ */
+export function getThisBinding(functionEnvironment) {
+  let current = functionEnvironment;
+
+  while (current !== undefined) {
+    if (current.thisStatus === 'initialized') {
+      return current.thisValue;
+    }
+
+    if (current.thisStatus === 'uninitialized') {
+      throw new GuestErrorSignal(
+        'ReferenceError',
+        "Must call super constructor in derived class before accessing 'this'",
+      );
+    }
+
+    current = current.outer;
+  }
+
+  throw new GuestErrorSignal('ReferenceError', 'This binding is not available');
+}
+
+/**
+ * @param {FunctionExecutionEnvironment} functionEnvironment
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+export function bindThisValue(functionEnvironment, value) {
+  if (functionEnvironment.thisStatus !== 'uninitialized') {
+    throw new GuestErrorSignal(
+      'ReferenceError',
+      'This binding has already been initialized',
+    );
+  }
+
+  functionEnvironment.thisValue = value;
+  functionEnvironment.thisStatus = 'initialized';
+  return value;
+}
+
+/**
+ * Arrows reuse their enclosing function execution record, so a method
+ * HomeObject must be present on the supplied record itself. An ordinary
+ * function creates its own record and therefore stops lexical `super` lookup.
+ *
+ * @param {FunctionExecutionEnvironment | undefined} functionEnvironment
+ * @returns {EngineObject}
+ */
+export function getSuperHomeObject(functionEnvironment) {
+  if (functionEnvironment?.homeObject instanceof EngineObject) {
+    return functionEnvironment.homeObject;
+  }
+
+  throw new GuestErrorSignal(
+    'ReferenceError',
+    "'super' keyword is only valid inside a method",
+  );
+}
+
+/**
  * @param {EnvironmentRecordLike | null} outer
  * @returns {DeclarativeEnvironmentRecord}
  */

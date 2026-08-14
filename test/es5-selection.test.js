@@ -6,6 +6,7 @@ import {
   buildUpstreamSubset,
   deriveGroupName,
   isCandidatePath,
+  isStructurallyEligiblePath,
   isSelectedPath,
   matchExclusion,
   parseEs5Selection,
@@ -13,6 +14,41 @@ import {
   serializeUpstreamSubset,
 } from '../tools/test262/es5-selection.js';
 import { parseUpstreamSubset } from '../tools/test262/upstream.js';
+
+const ES2015_SYNTAX_FEATURES = Object.freeze([
+  'arrow-function',
+  'class',
+  'computed-property-names',
+  'default-parameters',
+  'destructuring-assignment',
+  'destructuring-binding',
+  'rest-parameters',
+  'spread-syntax',
+  'template',
+]);
+
+const SELECTION_SYNTAX_FEATURES = Object.freeze(
+  ES2015_SYNTAX_FEATURES.filter(
+    (feature) => feature !== 'spread-syntax' && feature !== 'template',
+  ),
+);
+
+const UNSUPPORTED_NEIGHBOR_FEATURES = Object.freeze([
+  'async-iteration',
+  'async-functions',
+  'class-fields-private',
+  'class-fields-public',
+  'class-methods-private',
+  'class-static-block',
+  'class-static-fields-private',
+  'class-static-fields-public',
+  'class-static-methods-private',
+  'decorators',
+  'generators',
+  'new.target',
+  'object-rest',
+  'object-spread',
+]);
 
 /**
  * A minimal, well-formed policy the predicate and grouping tests build on.
@@ -24,6 +60,7 @@ import { parseUpstreamSubset } from '../tools/test262/upstream.js';
  *   builtins: string[],
  *   excludedLanguageDirectories: string[],
  *   featureAreas: object[],
+ *   expansionFeatures: string[],
  *   exclusions: object[],
  * }>} [overrides]
  * @returns {string}
@@ -41,6 +78,9 @@ function policyText(overrides = {}) {
       'module-code',
     ],
     featureAreas: overrides.featureAreas ?? [],
+    expansionFeatures: overrides.expansionFeatures ?? [
+      ...ES2015_SYNTAX_FEATURES,
+    ],
     exclusions: overrides.exclusions ?? [],
   });
 }
@@ -52,6 +92,16 @@ const CANDIDATE_INFO = Object.freeze({
   parsesUnderEngineGrammar: true,
   includesParseUnderEngineGrammar: true,
 });
+
+/**
+ * @param {string} path
+ * @param {Parameters<typeof isCandidatePath>[1]} info
+ * @param {Parameters<typeof isCandidatePath>[2]} policy
+ * @returns {boolean}
+ */
+function isKnownGoodCandidate(path, info, policy) {
+  return isCandidatePath(path, info, policy, new Set([path]));
+}
 
 /**
  * A policy that claims one feature area, for the feature-gate tests.
@@ -71,7 +121,122 @@ function featureAreaPolicyText() {
   });
 }
 
+/**
+ * A portable model of the exact syntax claim boundary. The Node-only CI
+ * contract separately asserts that the committed JSON policy has this shape.
+ *
+ * @returns {string}
+ */
+function es2015SyntaxPolicyText() {
+  return policyText({
+    excludedLanguageDirectories: ['export', 'import', 'module-code'],
+    featureAreas: [
+      {
+        prefix: 'test/language/expressions',
+        features: [...SELECTION_SYNTAX_FEATURES],
+        reason: 'The supported ES2015 expression syntax forms are implemented.',
+      },
+    ],
+  });
+}
+
 export default [
+  {
+    name: 'the ES2015 syntax policy contract claims only the supported surface',
+    run: () => {
+      const policy = parseEs5Selection(es2015SyntaxPolicyText());
+      const languageAreas = policy.featureAreas.filter((area) =>
+        area.prefix.startsWith('test/language/'),
+      );
+      const claimedSyntaxFeatures = [
+        ...new Set(
+          languageAreas.flatMap((area) =>
+            area.features.filter((feature) =>
+              SELECTION_SYNTAX_FEATURES.includes(feature),
+            ),
+          ),
+        ),
+      ].sort();
+
+      assertSame(
+        JSON.stringify(policy.excludedLanguageDirectories),
+        JSON.stringify(['export', 'import', 'module-code']),
+        'the policy must remove only the obsolete computed-property-names, destructuring, and rest-parameters directory exclusions',
+      );
+      assertSame(
+        JSON.stringify(claimedSyntaxFeatures),
+        JSON.stringify(SELECTION_SYNTAX_FEATURES),
+        'the policy must claim each selected ES2015 syntax tag exactly once through narrow language prefixes',
+      );
+      assertSame(
+        policy.featureAreas
+          .find((area) => area.prefix === 'test/language')
+          ?.features.some((feature) =>
+            SELECTION_SYNTAX_FEATURES.includes(feature),
+          ) ?? false,
+        false,
+        'the policy must not reopen all of test/language for the newly claimed ES2015 syntax',
+      );
+
+      for (const neighbor of UNSUPPORTED_NEIGHBOR_FEATURES) {
+        assertSame(
+          languageAreas.some((area) => area.features.includes(neighbor)),
+          false,
+          `the policy must not claim neighboring unsupported feature ${neighbor}`,
+        );
+      }
+
+      /** @type {readonly (readonly [string, readonly string[]])[]} */
+      const unsupportedCases = [
+        [
+          'test/language/expressions/arrow-function/neighbor.js',
+          ['arrow-function', 'new.target'],
+        ],
+        [
+          'test/language/expressions/class/neighbor.js',
+          ['class', 'class-static-fields-public'],
+        ],
+        [
+          'test/language/expressions/object/neighbor.js',
+          ['computed-property-names', 'object-spread'],
+        ],
+        [
+          'test/language/expressions/function/neighbor.js',
+          ['async-functions', 'default-parameters'],
+        ],
+        [
+          'test/language/expressions/class/neighbor-generator.js',
+          ['class', 'generators'],
+        ],
+      ];
+
+      for (const [path, features] of unsupportedCases) {
+        assertSame(
+          isCandidatePath(
+            path,
+            { ...CANDIDATE_INFO, declaresFeatures: true, features },
+            policy,
+          ),
+          false,
+          `the policy must exclude ${features.join(', ')} from ${path}`,
+        );
+      }
+      assertSame(
+        isCandidatePath(
+          'test/language/expressions/class/module-neighbor.js',
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['class'],
+            isModule: true,
+          },
+          policy,
+        ),
+        false,
+        'the policy must exclude module-flagged syntax even under a claimed prefix',
+      );
+    },
+  },
   {
     name: 'es5-selection parses a well-formed policy and freezes it',
     run: () => {
@@ -136,7 +301,7 @@ export default [
     run: () => {
       const text = policyText().replace(
         `"version":${ES5_SELECTION_VERSION}`,
-        '"version":2',
+        `"version":${ES5_SELECTION_VERSION + 1}`,
       );
 
       assertThrows(() => parseEs5Selection(text), Es5SelectionError);
@@ -412,12 +577,117 @@ export default [
       const policy = parseEs5Selection(policyText());
 
       assertSame(
-        isCandidatePath(
+        isKnownGoodCandidate(
           'test/built-ins/Array/prototype/push/S15.4.4.7_A1.js',
           CANDIDATE_INFO,
           policy,
         ),
         true,
+      );
+    },
+  },
+  {
+    name: 'isCandidatePath preserves a known-good untagged test that the engine grammar accepts',
+    run: () => {
+      const policy = parseEs5Selection(policyText());
+      const path =
+        'test/built-ins/Array/prototype/reverse/array-has-one-entry.js';
+      const engineCandidate = {
+        declaresFeatures: false,
+        features: Object.freeze([]),
+        isModule: false,
+        parsesUnderEngineGrammar: true,
+        includesParseUnderEngineGrammar: true,
+      };
+
+      assertSame(
+        isKnownGoodCandidate(path, engineCandidate, policy),
+        true,
+        'an untagged test must remain selected when the engine parser accepts it',
+      );
+    },
+  },
+  {
+    name: 'the selection policy records the exact issue #25 expansion feature boundary',
+    run: () => {
+      const policy = parseEs5Selection(policyText());
+
+      assertSame(
+        JSON.stringify(policy.expansionFeatures),
+        JSON.stringify(ES2015_SYNTAX_FEATURES),
+        'the issue #25 expansion boundary must be an exact sorted policy list',
+      );
+    },
+  },
+  {
+    name: 'a nonbaseline untagged candidate is rejected while a known-good untagged path remains selected',
+    run: () => {
+      const policy = parseEs5Selection(policyText());
+      const path =
+        'test/built-ins/Array/prototype/reverse/array-has-one-entry.js';
+
+      assertSame(
+        isCandidatePath(path, CANDIDATE_INFO, policy, new Set()),
+        false,
+        'a newly parseable untagged path must not expand the known-good selection',
+      );
+      assertSame(
+        isCandidatePath(path, CANDIDATE_INFO, policy, new Set([path])),
+        true,
+        'a known-good untagged path must remain selected',
+      );
+    },
+  },
+  {
+    name: 'a nonbaseline Symbol.species Test262 case remains rejected without an expansion tag',
+    run: () => {
+      const policy = parseEs5Selection(
+        policyText({
+          builtins: ['Array', 'Object', 'String', 'Symbol'],
+          featureAreas: [
+            {
+              prefix: 'test/built-ins/Symbol',
+              features: ['Symbol.species'],
+              reason: 'The legacy Symbol feature area claims this tag.',
+            },
+          ],
+        }),
+      );
+
+      assertSame(
+        isCandidatePath(
+          'test/built-ins/Symbol/species/subclassing.js',
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['Symbol.species'],
+          },
+          policy,
+          new Set(),
+        ),
+        false,
+        'a feature area alone must not admit the pinned Symbol.species subclassing test',
+      );
+    },
+  },
+  {
+    name: 'a nonbaseline issue #25-tagged candidate is admitted by its exact feature area',
+    run: () => {
+      const policy = parseEs5Selection(es2015SyntaxPolicyText());
+
+      assertSame(
+        isCandidatePath(
+          'test/language/expressions/class/method/strict.js',
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['class'],
+          },
+          policy,
+          new Set(),
+        ),
+        true,
+        'an issue #25 tag claimed by the matching feature area must expand the subset',
       );
     },
   },
@@ -450,12 +720,80 @@ export default [
         false,
       );
       assertSame(
-        isCandidatePath(
+        isKnownGoodCandidate(
           'test/language/expressions/addition/x.js',
           CANDIDATE_INFO,
           policy,
         ),
         true,
+      );
+    },
+  },
+  {
+    name: 'isStructurallyEligiblePath uses only path policy before source decisions',
+    run: () => {
+      const exactPath = 'test/built-ins/Array/exact-exclusion.js';
+      const prefixPath = 'test/built-ins/Array/prefix-exclusion/case.js';
+      const eligiblePath = 'test/built-ins/Array/prototype/push/case.js';
+      const policy = parseEs5Selection(
+        policyText({
+          exclusions: [
+            {
+              path: exactPath,
+              category: 'post-es5-semantics',
+              reason: 'Exact path remains classified.',
+            },
+            {
+              prefix: 'test/built-ins/Array/prefix-exclusion',
+              category: 'post-es5-semantics',
+              reason: 'Prefix remains classified.',
+            },
+          ],
+        }),
+      );
+
+      assertSame(isStructurallyEligiblePath(eligiblePath, policy), true);
+      assertSame(isStructurallyEligiblePath(exactPath, policy), false);
+      assertSame(isStructurallyEligiblePath(prefixPath, policy), false);
+      assertSame(
+        isStructurallyEligiblePath('test/built-ins/Map/case.js', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('test/language/export/case.js', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('test/intl402/case.js', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('test/built-ins/Array/case.txt', policy),
+        false,
+      );
+      assertSame(
+        isStructurallyEligiblePath('harness/assert.js', policy),
+        false,
+      );
+      assertSame(
+        isCandidatePath(
+          eligiblePath,
+          { ...CANDIDATE_INFO, isModule: true },
+          policy,
+          new Set([eligiblePath]),
+        ),
+        false,
+        'module metadata must be decided after the path-only structural gate',
+      );
+      assertSame(
+        isCandidatePath(
+          eligiblePath,
+          { ...CANDIDATE_INFO, parsesUnderEngineGrammar: false },
+          policy,
+          new Set([eligiblePath]),
+        ),
+        false,
+        'parser metadata must be decided after the path-only structural gate',
       );
     },
   },
@@ -501,7 +839,7 @@ export default [
       const policy = parseEs5Selection(featureAreaPolicyText());
 
       assertSame(
-        isCandidatePath(
+        isKnownGoodCandidate(
           'test/built-ins/Symbol/symbol.js',
           { ...CANDIDATE_INFO, declaresFeatures: true, features: ['Symbol'] },
           policy,
@@ -509,7 +847,7 @@ export default [
         true,
       );
       assertSame(
-        isCandidatePath(
+        isKnownGoodCandidate(
           'test/built-ins/Symbol/iterator/prop-desc.js',
           {
             ...CANDIDATE_INFO,
@@ -608,12 +946,12 @@ export default [
     },
   },
   {
-    name: 'a feature area still leaves an untagged test in scope',
+    name: 'a feature area still retains a known-good untagged test',
     run: () => {
       const policy = parseEs5Selection(featureAreaPolicyText());
 
       assertSame(
-        isCandidatePath(
+        isKnownGoodCandidate(
           'test/built-ins/Array/prototype/push/S15.4.4.7_A1.js',
           CANDIDATE_INFO,
           policy,
@@ -641,7 +979,7 @@ export default [
         features: ['Symbol.iterator'],
       };
 
-      assertSame(isCandidatePath(path, info, policy), true);
+      assertSame(isKnownGoodCandidate(path, info, policy), true);
       const error = assertThrows(
         () =>
           parseEs5Selection(
@@ -691,7 +1029,7 @@ export default [
       );
 
       assertSame(
-        isCandidatePath(path, info, policyWithoutExclusion),
+        isKnownGoodCandidate(path, info, policyWithoutExclusion),
         true,
         `${path} declares only ${feature} and is included by the feature area before its unsupported Proxy dependency is classified`,
       );
@@ -711,7 +1049,7 @@ export default [
       const exclusion = matchExclusion(path, policy.exclusions);
 
       assertSame(
-        isSelectedPath(path, info, policy),
+        isSelectedPath(path, info, policy, new Set([path])),
         false,
         `${path} declares only ${feature} and would be included by the feature area, but must be excluded as post-es5-builtin because it constructs unsupported Proxy`,
       );

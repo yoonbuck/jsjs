@@ -27,6 +27,7 @@ import { runTest262File } from '../../tools/test262/runner.js';
 import { TEST262_REPORT_FILE } from '../../tools/ci/pipeline.js';
 import {
   ES5_SELECTION_FILE,
+  matchExclusion,
   parseEs5Selection,
 } from '../../tools/test262/es5-selection.js';
 import {
@@ -47,6 +48,7 @@ import {
   FEATURES_MANIFEST_FILE,
   featureNames,
   parseFeatureManifest,
+  runFeatureProbe,
 } from '../../tools/test262/features.js';
 import {
   UPSTREAM_SUBSET_FILE,
@@ -74,6 +76,130 @@ const TAGGED_UPSTREAM_EXAMPLE = Object.freeze({
 });
 
 const engine = { createRealm, evaluateScript };
+
+const ES2015_SYNTAX_FEATURES = Object.freeze([
+  'arrow-function',
+  'class',
+  'computed-property-names',
+  'default-parameters',
+  'destructuring-assignment',
+  'destructuring-binding',
+  'rest-parameters',
+  'spread-syntax',
+  'template',
+]);
+
+const SELECTION_SYNTAX_FEATURES = Object.freeze(
+  ES2015_SYNTAX_FEATURES.filter(
+    (feature) => feature !== 'spread-syntax' && feature !== 'template',
+  ),
+);
+
+const UNSUPPORTED_NEIGHBOR_FEATURES = Object.freeze([
+  'async-iteration',
+  'async-functions',
+  'class-fields-private',
+  'class-fields-public',
+  'class-methods-private',
+  'class-static-block',
+  'class-static-fields-private',
+  'class-static-fields-public',
+  'class-static-methods-private',
+  'decorators',
+  'generators',
+  'new.target',
+  'object-rest',
+  'object-spread',
+]);
+
+/**
+ * The pinned Test262 metadata has no `spread-syntax` tag and assigns its sole
+ * `template` tag to a test that also needs unsupported `new.target`. These exact
+ * untagged tests are kept as semantic backing evidence; every other feature
+ * test must carry its claimed tag.
+ *
+ * @type {Readonly<Record<string, readonly string[]>>}
+ */
+const UNTAGGED_FEATURE_BACKING_TESTS = Object.freeze({
+  'spread-syntax': Object.freeze([
+    'test/language/expressions/array/spread-mult-iter.js',
+  ]),
+  template: Object.freeze([
+    'test/language/expressions/tagged-template/cache-same-site.js',
+  ]),
+});
+
+const REQUIRED_UNSUPPORTED_SELECTION_CLASSIFICATIONS = Object.freeze([
+  Object.freeze({
+    path: 'test/built-ins/Array/prototype/flatMap/call-with-boolean.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/built-ins/Function/prototype/toString/line-terminator-normalisation-CR.js',
+    category: 'post-es5-semantics',
+  }),
+  Object.freeze({
+    path: 'test/harness/asyncHelpers-asyncTest-without-async-flag.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/language/eval-code/direct/arrow-fn-a-following-parameter-is-named-arguments-arrow-func-declare-arguments-assign.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/language/statements/async-function/cptn-decl.js',
+    category: 'post-es5-syntax',
+  }),
+  Object.freeze({
+    path: 'test/language/statements/class/subclass/builtin-objects/Map/regular-subclassing.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/Array/toSpliced.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/Map/iterable.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/Promise/bug-1288382.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/Proxy/ownkeys-linear.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/Reflect/set.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/Set/union.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/TypedArray/values.js',
+    category: 'post-es5-builtin',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/class/newTargetEval.js',
+    category: 'post-es5-syntax',
+  }),
+  Object.freeze({
+    path: 'test/staging/sm/object/hasOwn.js',
+    category: 'post-es5-builtin',
+  }),
+]);
+
+/**
+ * @param {string} feature
+ * @param {string} file
+ * @returns {boolean}
+ */
+function isUntaggedFeatureBackingTest(feature, file) {
+  return UNTAGGED_FEATURE_BACKING_TESTS[feature]?.includes(file) ?? false;
+}
 
 /**
  * @param {string} path Repository-relative.
@@ -335,6 +461,8 @@ export default [
       );
       /** @type {string[]} */
       const dead = [];
+      /** @type {string[]} */
+      const neighbors = [];
 
       for (const area of policy.featureAreas) {
         const paths = selected.filter(
@@ -344,6 +472,13 @@ export default [
 
         for (const path of paths) {
           const metadata = parseTest262Metadata(await host.readTest(path));
+          const mostSpecificArea = policy.featureAreas
+            .filter(
+              (candidate) =>
+                path === candidate.prefix ||
+                path.startsWith(`${candidate.prefix}/`),
+            )
+            .sort((left, right) => right.prefix.length - left.prefix.length)[0];
 
           if (
             metadata.features.length > 0 &&
@@ -352,7 +487,17 @@ export default [
             )
           ) {
             admitsTaggedPath = true;
-            break;
+          }
+
+          if (
+            mostSpecificArea?.prefix === area.prefix &&
+            metadata.features.some(
+              (feature) => !area.features.includes(feature),
+            )
+          ) {
+            neighbors.push(
+              `${area.prefix}: ${path} -> ${metadata.features.join(', ')}`,
+            );
           }
         }
 
@@ -366,6 +511,106 @@ export default [
         '',
         `feature areas with no tagged selected path:\n${dead.join('\n')}`,
       );
+      assertSame(
+        neighbors.join('\n'),
+        '',
+        `a most-specific feature prefix admitted an unclaimed neighboring feature:\n${neighbors.join('\n')}`,
+      );
+    },
+  },
+  {
+    name: 'the ES2015 syntax probes execute and their language areas exclude unsupported neighbors',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const syntaxFeatures = manifest.features.filter((feature) =>
+        ES2015_SYNTAX_FEATURES.includes(feature.name),
+      );
+      const policy = parseEs5Selection(
+        await readRepositoryFile(ES5_SELECTION_FILE),
+      );
+      const languageAreas = policy.featureAreas.filter((area) =>
+        area.prefix.startsWith('test/language/'),
+      );
+      const syntaxAreas = policy.featureAreas.filter(
+        (area) =>
+          area.prefix.startsWith('test/language/') &&
+          area.features.some((feature) =>
+            ES2015_SYNTAX_FEATURES.includes(feature),
+          ),
+      );
+      const claimedSyntaxFeatures = [
+        ...new Set(
+          languageAreas.flatMap((area) =>
+            area.features.filter((feature) =>
+              SELECTION_SYNTAX_FEATURES.includes(feature),
+            ),
+          ),
+        ),
+      ].sort();
+
+      assertSame(
+        JSON.stringify(syntaxFeatures.map((feature) => feature.name)),
+        JSON.stringify(ES2015_SYNTAX_FEATURES),
+        'the supported syntax probes must use the exact approved Test262 feature names',
+      );
+      assertSame(
+        JSON.stringify(policy.excludedLanguageDirectories),
+        JSON.stringify(['export', 'import', 'module-code']),
+        `${ES5_SELECTION_FILE} must remove only the obsolete computed-property-names, destructuring, and rest-parameters directory exclusions`,
+      );
+      assertSame(
+        JSON.stringify(claimedSyntaxFeatures),
+        JSON.stringify(SELECTION_SYNTAX_FEATURES),
+        `${ES5_SELECTION_FILE} must claim each selected ES2015 syntax tag exactly once through narrow language prefixes`,
+      );
+      assertSame(
+        policy.featureAreas
+          .find((area) => area.prefix === 'test/language')
+          ?.features.some((feature) =>
+            SELECTION_SYNTAX_FEATURES.includes(feature),
+          ) ?? false,
+        false,
+        `${ES5_SELECTION_FILE} must not reopen all of test/language for the newly claimed ES2015 syntax`,
+      );
+
+      for (const feature of syntaxFeatures) {
+        const result = runFeatureProbe({ engine, feature });
+
+        assertSame(
+          result.outcome,
+          'completed',
+          `${feature.name} must execute its semantic probe: ${result.message}`,
+        );
+      }
+
+      for (const neighbor of UNSUPPORTED_NEIGHBOR_FEATURES) {
+        assertSame(
+          syntaxAreas.some((area) => area.features.includes(neighbor)),
+          false,
+          `a syntax feature area must not claim unsupported neighboring feature ${neighbor}`,
+        );
+      }
+    },
+  },
+  {
+    name: 'known unsupported untagged candidates have exact policy classifications',
+    run: async () => {
+      const policy = parseEs5Selection(
+        await readRepositoryFile(ES5_SELECTION_FILE),
+      );
+
+      for (const {
+        path,
+        category,
+      } of REQUIRED_UNSUPPORTED_SELECTION_CLASSIFICATIONS) {
+        assertSame(
+          matchExclusion(path, policy.exclusions)?.category,
+          category,
+          `${path} must remain classified as ${category}`,
+        );
+      }
     },
   },
   {
@@ -755,7 +1000,7 @@ export default [
     },
   },
   {
-    name: 'every feature the manifest declares is backed by upstream tests tagged with it that really pass',
+    name: 'every feature manifest claim has tagged or documented untagged upstream evidence that passes',
     run: async () => {
       const { checkoutPath } = await readTest262Pin();
       const manifest = parseFeatureManifest(
@@ -769,9 +1014,10 @@ export default [
           const metadata = parseTest262Metadata(await host.readTest(file));
 
           assertSame(
-            metadata.features.includes(feature.name),
+            metadata.features.includes(feature.name) ||
+              isUntaggedFeatureBackingTest(feature.name, file),
             true,
-            `${file} is not tagged with ${feature.name} upstream`,
+            `${file} is neither tagged with ${feature.name} nor an exact documented metadata exception`,
           );
 
           const records = await runTest262File({
@@ -781,7 +1027,8 @@ export default [
             // A backing test may declare another implemented prerequisite
             // (the pinned `for-of` example also needs `Symbol.iterator`).
             // The metadata assertion above still proves this test backs the
-            // feature currently being checked.
+            // feature currently being checked. The two exact metadata exceptions
+            // above are still run for their direct semantic coverage.
             supportedFeatures,
           });
 

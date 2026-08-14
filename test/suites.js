@@ -27,7 +27,13 @@ import evaluatorExpressions from './evaluator-expressions.test.js';
 import evaluatorStatements from './evaluator-statements.test.js';
 import withStatements from './with-statement.test.js';
 import functions from './functions.test.js';
+import functionParameters from './function-parameters.test.js';
 import objectArrayLiterals from './object-array-literals.test.js';
+import spread from './spread.test.js';
+import enhancedObjectLiterals from './enhanced-object-literals.test.js';
+import templateLiterals from './template-literals.test.js';
+import arrowFunctions from './arrow-functions.test.js';
+import classes from './classes.test.js';
 import test262Runner from './test262-runner.test.js';
 import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
@@ -68,7 +74,9 @@ import jsonStringify from './json-stringify.test.js';
 import es2015ObjectFunction from './es2015-object-function.test.js';
 import iterators from './iterators.test.js';
 import forOf from './for-of.test.js';
+import destructuring from './destructuring.test.js';
 import es2015RuntimeIntegration from './es2015-runtime-integration.test.js';
+import es2015SyntaxIntegration from './es2015-syntax-integration.test.js';
 import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
 import arrayIndex from './array-index.test.js';
@@ -119,9 +127,27 @@ export const PORTABLE_SUITES = Object.freeze([
   }),
   Object.freeze({ file: 'test/functions.test.js', tests: functions }),
   Object.freeze({
+    file: 'test/function-parameters.test.js',
+    tests: functionParameters,
+  }),
+  Object.freeze({
     file: 'test/object-array-literals.test.js',
     tests: objectArrayLiterals,
   }),
+  Object.freeze({ file: 'test/spread.test.js', tests: spread }),
+  Object.freeze({
+    file: 'test/enhanced-object-literals.test.js',
+    tests: enhancedObjectLiterals,
+  }),
+  Object.freeze({
+    file: 'test/template-literals.test.js',
+    tests: templateLiterals,
+  }),
+  Object.freeze({
+    file: 'test/arrow-functions.test.js',
+    tests: arrowFunctions,
+  }),
+  Object.freeze({ file: 'test/classes.test.js', tests: classes }),
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,
@@ -280,8 +306,16 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: forOf,
   }),
   Object.freeze({
+    file: 'test/destructuring.test.js',
+    tests: destructuring,
+  }),
+  Object.freeze({
     file: 'test/es2015-runtime-integration.test.js',
     tests: es2015RuntimeIntegration,
+  }),
+  Object.freeze({
+    file: 'test/es2015-syntax-integration.test.js',
+    tests: es2015SyntaxIntegration,
   }),
   Object.freeze({
     file: 'test/benchmark-core.test.js',

@@ -29,12 +29,18 @@ import {
   blockDeclarationInstantiation,
   evaluateVariableDeclaration,
 } from './declarations.js';
+import { evaluateClassDefinition } from './classes.js';
 import {
   boundNames,
   isConstantDeclaration,
   lexicallyScopedDeclarations,
 } from './static-semantics.js';
 import { strictEqualityComparison } from '../runtime/operators.js';
+import {
+  assignBindingPattern,
+  assignPattern,
+  initializeBindingPattern,
+} from './patterns.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -52,6 +58,7 @@ export const STATEMENT_TYPES = new Set([
   'BlockStatement',
   'VariableDeclaration',
   'FunctionDeclaration',
+  'ClassDeclaration',
   'IfStatement',
   'WhileStatement',
   'DoWhileStatement',
@@ -100,6 +107,8 @@ export function evaluateStatement(node, context, labelSet = []) {
         return evaluateVariableDeclaration(node, context);
       case 'FunctionDeclaration':
         return evaluateFunctionDeclaration(node, context);
+      case 'ClassDeclaration':
+        return evaluateClassDeclaration(node, context);
       case 'IfStatement':
         return evaluateIfStatement(node, context);
       case 'WhileStatement':
@@ -241,6 +250,30 @@ function evaluateFunctionDeclaration(node, context) {
     context.variableEnv.setMutableBinding(name, value, false);
   }
 
+  return createNormalCompletion(EMPTY);
+}
+
+/**
+ * A class declaration's mutable lexical binding is created uninitialized by
+ * declaration instantiation. Evaluate the definition first so a failing
+ * heritage or element leaves that binding in its TDZ, then initialize it.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {Completion}
+ */
+function evaluateClassDeclaration(node, context) {
+  const value = evaluateClassDefinition(node, context, node.id.name);
+  const reference = getIdentifierReference(
+    context.env,
+    node.id.name,
+    context.strict,
+  );
+  const environment =
+    /** @type {{ initializeBinding(name: string, value: unknown): void }} */ (
+      reference.base
+    );
+  environment.initializeBinding(node.id.name, value);
   return createNormalCompletion(EMPTY);
 }
 
@@ -629,9 +662,14 @@ function evaluateForInStatement(node, context, labelSet) {
         } else {
           iterationEnv.createMutableBinding(name, false);
         }
-        iterationEnv.initializeBinding(name, key);
       }
       iterationContext = { ...context, env: iterationEnv };
+      initializeBindingPattern(
+        node.left.declarations[0].id,
+        key,
+        iterationEnv,
+        iterationContext,
+      );
     } else {
       assignForInTarget(node.left, key, context);
     }
@@ -680,9 +718,22 @@ function evaluateForInStatement(node, context, labelSet) {
  */
 function assignForInTarget(left, key, context) {
   if (left.type === 'VariableDeclaration') {
-    const name = left.declarations[0].id.name;
-    const reference = getIdentifierReference(context.env, name, context.strict);
-    putValue(reference, key);
+    const pattern = left.declarations[0].id;
+    if (pattern.type === 'Identifier') {
+      const reference = getIdentifierReference(
+        context.env,
+        pattern.name,
+        context.strict,
+      );
+      putValue(reference, key);
+    } else {
+      assignBindingPattern(pattern, key, context);
+    }
+    return;
+  }
+
+  if (left.type === 'ObjectPattern' || left.type === 'ArrayPattern') {
+    assignPattern(left, key, context);
     return;
   }
 
@@ -830,9 +881,15 @@ function bindForOfIteration(left, nextValue, context, isLexical, isConst) {
     } else {
       iterationEnv.createMutableBinding(name, false);
     }
-    iterationEnv.initializeBinding(name, nextValue);
   }
-  return { ...context, env: iterationEnv };
+  const iterationContext = { ...context, env: iterationEnv };
+  initializeBindingPattern(
+    left.declarations[0].id,
+    nextValue,
+    iterationEnv,
+    iterationContext,
+  );
+  return iterationContext;
 }
 
 /**
