@@ -6,6 +6,7 @@ import {
 import { isCallable, isConstructor } from './descriptors.js';
 import { getFunctionRealm } from './function-realm.js';
 import { EngineObject } from './object.js';
+import { isRealm } from './realm.js';
 
 /**
  * @typedef {import('./descriptors.js').CallableLike} CallableLike
@@ -130,17 +131,17 @@ export function createResolvingFunctions(promise, currentRealm) {
         return undefined;
       }
 
-      if (resolution instanceof PromiseObject) {
-        adoptPromise(promise, resolution);
-        return undefined;
-      }
-
       /** @type {unknown} */
       let then;
       try {
         then = resolution.get('then');
       } catch (error) {
         rejectPromise(promise, abruptValue(currentRealm, error));
+        return undefined;
+      }
+
+      if (hasMissingPromiseThen(resolution, then)) {
+        adoptPromise(promise, resolution);
         return undefined;
       }
 
@@ -202,9 +203,7 @@ export function newPromiseResolveThenableJob(
   then,
   currentRealm = promise.realm,
 ) {
-  const realmCompletion = getFunctionRealm(then);
-  const jobRealm =
-    realmCompletion.type === 'normal' ? realmCompletion.value : currentRealm;
+  const jobRealm = getThenableJobRealm(then, currentRealm);
 
   return {
     realm: /** @type {Realm} */ (jobRealm),
@@ -230,6 +229,45 @@ export function newPromiseResolveThenableJob(
       return createNormalCompletion(undefined);
     },
   };
+}
+
+/**
+ * A normal GetFunctionRealm completion is only successful when it carries an
+ * actual Realm. A malformed internal callable exotic falls back to the
+ * resolving function's captured Realm instead of creating a null-Realm job.
+ *
+ * @param {CallableLike} then
+ * @param {Realm} currentRealm
+ * @returns {Realm}
+ */
+function getThenableJobRealm(then, currentRealm) {
+  const realmCompletion = getFunctionRealm(then);
+  if (realmCompletion.type === 'normal' && isRealm(realmCompletion.value)) {
+    return realmCompletion.value;
+  }
+
+  return currentRealm;
+}
+
+/**
+ * Task 4 installs Promise.prototype.then. Until then, guest Promise objects
+ * need this bridge to preserve Promise adoption. Ordinary Get happens first,
+ * so any own or inherited then property keeps its standard thenable behavior;
+ * installing the intrinsic naturally makes the bridge condition false.
+ *
+ * @param {EngineObject} resolution
+ * @param {unknown} then
+ * @returns {resolution is PromiseObject}
+ */
+function hasMissingPromiseThen(resolution, then) {
+  return (
+    resolution instanceof PromiseObject &&
+    then === undefined &&
+    resolution.getProperty('then') === undefined &&
+    resolution.realm.intrinsics.promisePrototype instanceof EngineObject &&
+    resolution.realm.intrinsics.promisePrototype.getOwnProperty('then') ===
+      undefined
+  );
 }
 
 /**

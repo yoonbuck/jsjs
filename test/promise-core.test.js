@@ -275,6 +275,29 @@ export default [
     },
   },
   {
+    name: 'Promise keeps a thenable resolution when its executor later throws',
+    run: () => {
+      const realm = createRealm();
+      const promise = assertPromiseObject(
+        evaluateScript(
+          realm,
+          [
+            'var p = new Promise(function (resolve) {',
+            '  resolve({ then: function (resolve) { resolve("resolved"); } });',
+            '  throw "executor";',
+            '});',
+            'p;',
+          ].join('\n'),
+        ).value,
+      );
+
+      assertSame(promise.promiseState, 'pending');
+      assertSame(realm.agent.runJobs().failures.length, 0);
+      assertSame(promise.promiseState, 'fulfilled');
+      assertSame(promise.promiseResult, 'resolved');
+    },
+  },
+  {
     name: 'Promise resolving functions reject self-resolution with their Realm TypeError',
     run: () => {
       const realm = createRealm();
@@ -332,6 +355,71 @@ export default [
 
       assertSame(promise.promiseState, 'rejected');
       assertSame(promise.promiseResult, realm.globalObject.get('getterError'));
+    },
+  },
+  {
+    name: 'Promise observes an own throwing then getter before adopting a Promise',
+    run: () => {
+      const realm = createRealm();
+      const promise = assertPromiseObject(
+        evaluateScript(
+          realm,
+          [
+            'var source = new Promise(function (resolve) { resolve("source"); });',
+            'var ownThenError = new Error("own then getter");',
+            'Object.defineProperty(source, "then", {',
+            '  get: function () { throw ownThenError; }',
+            '});',
+            'var target = new Promise(function (resolve) { resolve(source); });',
+            'target;',
+          ].join('\n'),
+        ).value,
+      );
+
+      assertSame(promise.promiseState, 'rejected');
+      assertSame(promise.promiseResult, realm.globalObject.get('ownThenError'));
+    },
+  },
+  {
+    name: 'Promise fulfills with a Promise that has an own non-callable then',
+    run: () => {
+      const realm = createRealm();
+      const promise = assertPromiseObject(
+        evaluateScript(
+          realm,
+          [
+            'var source = new Promise(function (resolve) { resolve("source"); });',
+            'source.then = 1;',
+            'var target = new Promise(function (resolve) { resolve(source); });',
+            'target;',
+          ].join('\n'),
+        ).value,
+      );
+
+      assertSame(promise.promiseState, 'fulfilled');
+      assertSame(promise.promiseResult, realm.globalObject.get('source'));
+    },
+  },
+  {
+    name: 'Promise enqueues an own callable then before temporary Promise adoption',
+    run: () => {
+      const realm = createRealm();
+      const promise = assertPromiseObject(
+        evaluateScript(
+          realm,
+          [
+            'var source = new Promise(function (resolve) { resolve("source"); });',
+            'source.then = function (resolve) { resolve("own then"); };',
+            'var target = new Promise(function (resolve) { resolve(source); });',
+            'target;',
+          ].join('\n'),
+        ).value,
+      );
+
+      assertSame(promise.promiseState, 'pending');
+      assertSame(realm.agent.runJobs().failures.length, 0);
+      assertSame(promise.promiseState, 'fulfilled');
+      assertSame(promise.promiseResult, 'own then');
     },
   },
   {
@@ -466,6 +554,44 @@ export default [
       const thenable = new EngineObject(realm.intrinsics.objectPrototype);
       thenable.defineOwnProperty('then', {
         value: abruptThen,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      resolve.callFunction(undefined, [thenable]);
+      assertSame(agent.runJobs().failures.length, 0);
+      assertSame(observedRealm, realm);
+      assertSame(promise.promiseState, 'fulfilled');
+      assertSame(promise.promiseResult, 'fallback');
+    },
+  },
+  {
+    name: 'Promise thenable jobs guard a malformed normal Realm lookup from creating a null-Realm job',
+    run: () => {
+      const agent = createAgent();
+      const realm = createRealm({ agent });
+      const { promise, resolve } = createPendingPromise(realm, 'target');
+      let observedRealm = null;
+      const malformedThen = {
+        /**
+         * @param {unknown} _thisValue
+         * @param {readonly unknown[]} args
+         * @returns {unknown}
+         */
+        callFunction(_thisValue, args) {
+          observedRealm = agent.currentJobRealm;
+          return /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+            args[0]
+          ).callFunction(undefined, ['fallback']);
+        },
+        getFunctionRealm() {
+          return { type: 'normal', value: null };
+        },
+      };
+      const thenable = new EngineObject(realm.intrinsics.objectPrototype);
+      thenable.defineOwnProperty('then', {
+        value: malformedThen,
         writable: true,
         enumerable: true,
         configurable: true,

@@ -1,11 +1,7 @@
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
 import { isCallable } from '../runtime/descriptors.js';
 import { EngineObject } from '../runtime/object.js';
-import {
-  PromiseObject,
-  createResolvingFunctions,
-  rejectPromise,
-} from '../runtime/promise.js';
+import { PromiseObject, createResolvingFunctions } from '../runtime/promise.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -53,7 +49,9 @@ export function createPromiseIntrinsics(realm) {
           resolvingFunctions.reject,
         ]);
       } catch (error) {
-        rejectPromise(promise, abruptValue(realm, error));
+        resolvingFunctions.reject.callFunction(undefined, [
+          abruptValue(realm, error),
+        ]);
       }
 
       return promise;
