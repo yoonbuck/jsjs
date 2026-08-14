@@ -1159,36 +1159,25 @@ function untrustedAstSyntaxError(message) {
 }
 
 /**
- * Rejects a custom parser result whose evaluator-relevant child graph has a
- * back-edge. An active-path set, rather than a global visited set, permits
- * legitimate shared nodes in a DAG (notably Acorn's shorthand property
- * key/value identity) while rejecting a node or child array that reaches an
- * ancestor. Completed values are memoized separately so recursively shared
- * DAGs remain linear without hiding a back-edge on the active path. The
- * identity-only completed set is safe in this cycle-only prepass; the later
- * semantic walks retain their parent, position, pattern, strict, and super
- * context keys. The explicit enter/exit worklist avoids recursive host stack
- * use.
+ * Requires a custom parser's evaluator-relevant child graph to be a tree.
+ * Native Acorn output has this shape, while rejecting shared nodes and child
+ * arrays at the untrusted boundary prevents later tree-oriented static
+ * semantics from expanding a compact DAG exponentially. Metadata is outside
+ * `AST_CHILD_PROPERTY_KEYS`, so it may still share or cycle. The explicit
+ * worklist avoids recursive host stack use.
  *
  * @param {any} root
  * @returns {void}
  */
-function checkAcyclicAstChildren(root) {
-  /** @type {{ value: unknown, exiting: boolean, structural: boolean }[]} */
-  const pending = [{ value: root, exiting: false, structural: true }];
-  const visitingNodes = new WeakSet();
-  const visitingArrays = new WeakSet();
-  const completedNodes = new WeakSet();
-  const completedArrays = new WeakSet();
+function checkStructuralAstTree(root) {
+  /** @type {unknown[]} */
+  const pending = [root];
+  const seen = new WeakSet();
 
   while (pending.length > 0) {
-    const item =
-      /** @type {{ value: unknown, exiting: boolean, structural: boolean }} */ (
-        pending.pop()
-      );
-    const value = item.value;
+    const value = pending.pop();
 
-    if (!value || typeof value !== 'object' || !item.structural) {
+    if (!value || typeof value !== 'object') {
       continue;
     }
 
@@ -1200,25 +1189,14 @@ function checkAcyclicAstChildren(root) {
       continue;
     }
 
-    const visiting = array ? visitingArrays : visitingNodes;
-    const completed = array ? completedArrays : completedNodes;
-
-    if (item.exiting) {
-      visiting.delete(value);
-      completed.add(value);
-      continue;
+    if (seen.has(value)) {
+      throw unsupportedEs2015Error(
+        'Custom AST must be a structural tree',
+        value,
+      );
     }
 
-    if (visiting.has(value)) {
-      throw unsupportedEs2015Error('cyclic AST child graph', value);
-    }
-
-    if (completed.has(value)) {
-      continue;
-    }
-
-    visiting.add(value);
-    pending.push({ value, exiting: true, structural: true });
+    seen.add(value);
 
     if (array) {
       for (let index = value.length - 1; index >= 0; index -= 1) {
@@ -1231,11 +1209,7 @@ function checkAcyclicAstChildren(root) {
           );
         }
 
-        pending.push({
-          value: descriptor.value,
-          exiting: false,
-          structural: true,
-        });
+        pending.push(descriptor.value);
       }
       continue;
     }
@@ -1246,11 +1220,7 @@ function checkAcyclicAstChildren(root) {
       const key = keys[index];
 
       if (typeof key === 'string' && AST_CHILD_PROPERTY_KEYS.has(key)) {
-        pending.push({
-          value: /** @type {any} */ (value)[key],
-          exiting: false,
-          structural: true,
-        });
+        pending.push(/** @type {any} */ (value)[key]);
       }
     }
   }
@@ -1266,7 +1236,7 @@ function checkAcyclicAstChildren(root) {
  * @returns {void}
  */
 function checkCustomAstDefenses(root) {
-  checkAcyclicAstChildren(root);
+  checkStructuralAstTree(root);
 
   /** @type {{ value: unknown, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
@@ -2301,6 +2271,7 @@ function checkStatementPositionFunctionDeclarations(
     }
 
     checkFunctionDeclarationPosition(node, strict);
+    checkStrictWithStatement(node, strict);
     checkRegularExpressionLiteral(node);
     checkUnsupportedEs2015Node(
       node,
@@ -2488,6 +2459,14 @@ function childScopeStrictness(node, strict) {
   }
 
   if (
+    node.type === 'ClassDeclaration' ||
+    node.type === 'ClassExpression' ||
+    node.type === 'ClassBody'
+  ) {
+    return true;
+  }
+
+  if (
     node.type === 'FunctionDeclaration' ||
     node.type === 'FunctionExpression' ||
     (node.type === 'ArrowFunctionExpression' &&
@@ -2500,15 +2479,25 @@ function childScopeStrictness(node, strict) {
     );
   }
 
-  if (node.type === 'ClassBody') {
-    return true;
-  }
-
   if (node.type === 'Program') {
     return Array.isArray(node.body) && hasUseStrictDirective(node.body);
   }
 
   return false;
+}
+
+/**
+ * Acorn rejects source-text `with` statements while parsing strict code. Apply
+ * the same early error when a custom parser supplies an otherwise valid tree.
+ *
+ * @param {any} node
+ * @param {boolean} strict
+ * @returns {void}
+ */
+function checkStrictWithStatement(node, strict) {
+  if (strict && node.type === 'WithStatement') {
+    throw unsupportedEs2015Error("'with' in strict mode", node);
+  }
 }
 
 /**

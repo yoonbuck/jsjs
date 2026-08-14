@@ -110,7 +110,7 @@ const tests = [
     },
   },
   {
-    name: 'parseScript validates shared AST nodes in each parent context',
+    name: 'custom parser rejects one structural node in multiple parent positions',
     run() {
       const property = {
         type: 'Property',
@@ -146,7 +146,7 @@ const tests = [
     },
   },
   {
-    name: 'parseScript validates a recursively shared two-edge AST DAG in linear work',
+    name: 'custom parser structural children must form a tree',
     run() {
       /** @type {any} */
       let expression = { type: 'Literal', value: 1 };
@@ -174,7 +174,16 @@ const tests = [
       };
 
       try {
-        assertSame(parseScript('', { parse: () => program }).type, 'Program');
+        const error = /** @type {any} */ (
+          assertThrows(
+            () => parseScript('', { parse: () => program }),
+            SyntaxError,
+          )
+        );
+
+        if (!error.message.includes('tree')) {
+          throw new Error(`Expected structural tree rejection, got ${error}`);
+        }
       } finally {
         Reflect.ownKeys = ownKeys;
       }
@@ -187,34 +196,12 @@ const tests = [
     },
   },
   {
-    name: 'duplicate-name checks bound work for recursively shared parameter patterns',
+    name: 'custom parser rejects shared binding DAGs before BoundNames expansion',
     run() {
-      const property = {
-        type: 'Property',
-        kind: 'init',
-        computed: false,
-        method: false,
-        shorthand: false,
-        key: { type: 'Identifier', name: 'key' },
-        value: {
-          type: 'AssignmentPattern',
-          left: { type: 'Identifier', name: 'value' },
-          right: { type: 'Literal', value: 1 },
-        },
-      };
       /** @type {any} */
-      let pattern = {
-        type: 'ArrayPattern',
-        elements: [
-          { type: 'ObjectPattern', properties: [property] },
-          {
-            type: 'RestElement',
-            argument: { type: 'Identifier', name: 'rest' },
-          },
-        ],
-      };
+      let pattern = { type: 'Identifier', name: 'value' };
 
-      for (let depth = 0; depth < 14; depth += 1) {
+      for (let depth = 0; depth < 20; depth += 1) {
         pattern = { type: 'ArrayPattern', elements: [pattern, pattern] };
       }
 
@@ -223,18 +210,22 @@ const tests = [
         sourceType: 'script',
         body: [
           {
-            type: 'FunctionDeclaration',
-            id: { type: 'Identifier', name: 'f' },
-            params: [pattern],
-            generator: false,
-            async: false,
-            expression: false,
-            body: { type: 'BlockStatement', body: [] },
+            type: 'VariableDeclaration',
+            kind: 'let',
+            declarations: [
+              {
+                type: 'VariableDeclarator',
+                id: pattern,
+                init: { type: 'ArrayExpression', elements: [] },
+              },
+            ],
           },
         ],
       };
       const push = Array.prototype.push;
       let pushCalls = 0;
+      /** @type {unknown} */
+      let parseError;
 
       Array.prototype.push = function countedPush(
         /** @type {any[]} */ ...values
@@ -244,10 +235,76 @@ const tests = [
       };
 
       try {
-        assertThrows(
-          () => parseScript('', { parse: () => program }),
-          SyntaxError,
+        parseScript('', { parse: () => program });
+      } catch (error) {
+        parseError = error;
+      } finally {
+        Array.prototype.push = push;
+      }
+
+      if (pushCalls >= 1000) {
+        throw new Error(
+          `Expected fewer than 1000 worklist pushes, got ${pushCalls}`,
         );
+      }
+
+      assertSame(parseError instanceof SyntaxError, true);
+      if (
+        !(
+          /** @type {SyntaxError} */ (parseError).message.includes(
+            'structural tree',
+          )
+        )
+      ) {
+        throw new Error(
+          `Expected structural tree rejection, got ${parseError}`,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom parser rejects N functions sharing one N-deep parameter pattern in bounded work',
+    run() {
+      const size = 64;
+      /** @type {any} */
+      let sharedPattern = { type: 'Identifier', name: 'value' };
+
+      for (let depth = 0; depth < size; depth += 1) {
+        sharedPattern = {
+          type: 'ArrayPattern',
+          elements: [sharedPattern],
+        };
+      }
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: Array.from({ length: size }, (_, index) => ({
+          type: 'FunctionDeclaration',
+          id: { type: 'Identifier', name: `f${index}` },
+          params: [sharedPattern],
+          generator: false,
+          async: false,
+          expression: false,
+          body: { type: 'BlockStatement', body: [] },
+        })),
+      };
+      const push = Array.prototype.push;
+      let pushCalls = 0;
+      /** @type {unknown} */
+      let parseError;
+
+      Array.prototype.push = function countedPush(
+        /** @type {any[]} */ ...values
+      ) {
+        pushCalls += 1;
+        return push.apply(this, values);
+      };
+
+      try {
+        parseScript('', { parse: () => program });
+      } catch (error) {
+        parseError = error;
       } finally {
         Array.prototype.push = push;
       }
@@ -257,49 +314,23 @@ const tests = [
           `Expected fewer than 2000 worklist pushes, got ${pushCalls}`,
         );
       }
-    },
-  },
-  {
-    name: 'duplicate-name checks count the same pattern in distinct parameter positions',
-    run() {
-      const shared = {
-        type: 'ObjectPattern',
-        properties: [
-          {
-            type: 'Property',
-            kind: 'init',
-            computed: false,
-            method: false,
-            shorthand: true,
-            key: { type: 'Identifier', name: 'value' },
-            value: { type: 'Identifier', name: 'value' },
-          },
-        ],
-      };
-      const program = {
-        type: 'Program',
-        sourceType: 'script',
-        body: [
-          {
-            type: 'FunctionDeclaration',
-            id: { type: 'Identifier', name: 'f' },
-            params: [shared, shared],
-            generator: false,
-            async: false,
-            expression: false,
-            body: { type: 'BlockStatement', body: [] },
-          },
-        ],
-      };
 
-      assertThrows(
-        () => parseScript('', { parse: () => program }),
-        SyntaxError,
-      );
+      assertSame(parseError instanceof SyntaxError, true);
+      if (
+        !(
+          /** @type {SyntaxError} */ (parseError).message.includes(
+            'structural tree',
+          )
+        )
+      ) {
+        throw new Error(
+          `Expected structural tree rejection, got ${parseError}`,
+        );
+      }
     },
   },
   {
-    name: 'parseScript indexes repeated-node validation contexts without linear scans',
+    name: 'custom parser rejects repeated nodes in one structural child list',
     run() {
       const shared = { type: 'Literal', value: 1 };
       const program = expressionProgram({
@@ -324,7 +355,16 @@ const tests = [
       };
 
       try {
-        assertSame(parseScript('', { parse: () => program }).type, 'Program');
+        const error = /** @type {any} */ (
+          assertThrows(
+            () => parseScript('', { parse: () => program }),
+            SyntaxError,
+          )
+        );
+
+        if (!error.message.includes('structural tree')) {
+          throw new Error(`Expected structural tree rejection, got ${error}`);
+        }
       } finally {
         Array.prototype[Symbol.iterator] = arrayIterator;
       }
@@ -337,7 +377,7 @@ const tests = [
     },
   },
   {
-    name: 'parseScript rechecks a shared subtree when inherited strictness changes',
+    name: 'custom parser rejects a structural node shared across strict contexts',
     run() {
       const sharedDeclaration = {
         type: 'VariableDeclaration',
@@ -377,10 +417,15 @@ const tests = [
         ],
       };
 
-      assertThrows(
-        () => parseScript('', { parse: () => program }),
-        SyntaxError,
+      const error = /** @type {any} */ (
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        )
       );
+      if (!error.message.includes('structural tree')) {
+        throw new Error(`Expected structural tree rejection, got ${error}`);
+      }
     },
   },
   {
@@ -966,24 +1011,26 @@ const tests = [
     },
   },
   {
-    name: 'reusable Program snapshots preserve shared nodes while isolating callback mutation',
+    name: 'reusable Program snapshots reject shared structural nodes before callbacks',
     run() {
       const program = parseScript('function existing(value) { return value; }');
       const declaration = program.body[0];
       declaration.id = declaration.params[0];
+      let callbackCalls = 0;
 
-      const result = parseScript('added;', {
-        program,
-        onToken() {
-          declaration.id.name = 'mutated';
-        },
-      });
-      const copiedDeclaration = result.body[0];
-
-      assertSame(declaration.id.name, 'mutated');
-      assertSame(copiedDeclaration.id.name, 'value');
-      assertSame(copiedDeclaration.id === copiedDeclaration.params[0], true);
-      assertSame(result.body[1].expression.name, 'added');
+      assertThrows(
+        () =>
+          parseScript('added;', {
+            program,
+            onToken() {
+              callbackCalls += 1;
+              declaration.id.name = 'mutated';
+            },
+          }),
+        SyntaxError,
+      );
+      assertSame(callbackCalls, 0);
+      assertSame(declaration.id.name, 'value');
     },
   },
   {
@@ -2540,6 +2587,97 @@ const tests = [
         () => parseScript('', { parse: () => programFor(cyclic) }),
         SyntaxError,
       );
+    },
+  },
+  {
+    name: 'custom class heritage expressions enforce strict function parameter errors',
+    run() {
+      assertThrows(
+        () => parseScript('class C extends (function(a, a) {}) {}'),
+        SyntaxError,
+      );
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ClassDeclaration',
+            id: { type: 'Identifier', name: 'C' },
+            superClass: {
+              type: 'FunctionExpression',
+              id: null,
+              params: [
+                { type: 'Identifier', name: 'a' },
+                { type: 'Identifier', name: 'a' },
+              ],
+              generator: false,
+              async: false,
+              expression: false,
+              body: { type: 'BlockStatement', body: [] },
+            },
+            body: { type: 'ClassBody', body: [] },
+          },
+        ],
+      };
+
+      assertParserAndEvaluatorSyntaxError(program);
+    },
+  },
+  {
+    name: 'custom class methods reject WithStatement in their strict context',
+    run() {
+      assertThrows(
+        () => parseScript('class C { method() { with ({}) {} } }'),
+        SyntaxError,
+      );
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ClassDeclaration',
+            id: { type: 'Identifier', name: 'C' },
+            superClass: null,
+            body: {
+              type: 'ClassBody',
+              body: [
+                {
+                  type: 'MethodDefinition',
+                  key: { type: 'Identifier', name: 'method' },
+                  computed: false,
+                  static: false,
+                  kind: 'method',
+                  value: {
+                    type: 'FunctionExpression',
+                    id: null,
+                    params: [],
+                    generator: false,
+                    async: false,
+                    expression: false,
+                    body: {
+                      type: 'BlockStatement',
+                      body: [
+                        {
+                          type: 'WithStatement',
+                          object: {
+                            type: 'ObjectExpression',
+                            properties: [],
+                          },
+                          body: { type: 'EmptyStatement' },
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      assertParserAndEvaluatorSyntaxError(program);
     },
   },
   {

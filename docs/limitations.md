@@ -529,6 +529,14 @@ engine's, so it is one of the few places where hosts still differ. An embedder
 that injects its own parser through `options.parse` is excluded from the
 conversion — its defects stay its own.
 
+Custom parser results and caller-supplied reusable `Program` objects have one
+additional boundary: evaluator-reachable AST nodes and their structural child
+arrays must form a tree, so the same object cannot occupy two syntax positions.
+Native Acorn trees already satisfy this invariant. Shared or cyclic structural
+identities are rejected with a `SyntaxError` before static semantics or
+evaluation; arbitrary metadata outside the evaluator child fields may still
+share and cycle.
+
 The same conversion covers the **early-error pass** that runs just after, where
 `checkRegularExpressionLiteral` re-validates every regular expression literal
 against the ES5.1 grammar with a second recursive descent over the same guest
