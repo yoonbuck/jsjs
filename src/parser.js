@@ -190,6 +190,10 @@ function validateScriptProgram(
   strict = false,
   customAst = false,
 ) {
+  if (customAst) {
+    checkUntrustedAstDescriptors(program);
+  }
+
   if (
     !program ||
     typeof program !== 'object' ||
@@ -208,9 +212,183 @@ function validateScriptProgram(
     /** @type {any} */ (program),
     source,
     strict,
+    customAst,
   );
 
   return /** @type {any} */ (program);
+}
+
+/**
+ * Rejects descriptor and prototype tricks in untrusted parser output before a
+ * later shape or early-error helper can read guest-owned syntax state. Every
+ * own data property is followed, including non-enumerable and symbol keys, so
+ * metadata cannot hide an AST node from the capability boundary. A global
+ * visited set intentionally permits a cyclic metadata container; structural
+ * child cycles remain the responsibility of `checkAcyclicAstChildren`.
+ *
+ * @param {unknown} root
+ * @returns {void}
+ */
+function checkUntrustedAstDescriptors(root) {
+  /** @type {unknown[]} */
+  const pending = [root];
+  /** @type {WeakSet<object>} */
+  const seen = new WeakSet();
+
+  while (pending.length > 0) {
+    const value = pending.pop();
+
+    if (!value || typeof value !== 'object') {
+      continue;
+    }
+
+    if (seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+
+    if (
+      Array.isArray(value) &&
+      Object.getPrototypeOf(value) !== Array.prototype &&
+      Object.getPrototypeOf(value) !== null
+    ) {
+      throw untrustedAstSyntaxError(
+        'Untrusted AST arrays must not have custom prototypes',
+      );
+    }
+
+    const keys = Reflect.ownKeys(value);
+
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+
+      if (descriptor === undefined) {
+        continue;
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST properties must be own data properties',
+        );
+      }
+
+      pending.push(descriptor.value);
+    }
+
+    const type = Object.getOwnPropertyDescriptor(value, 'type');
+
+    if (type === undefined) {
+      if (hasInheritedAstSyntaxField(value, 'type')) {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST syntax fields must not be inherited',
+        );
+      }
+      continue;
+    }
+
+    if (typeof type.value !== 'string') {
+      continue;
+    }
+
+    for (const field of UNTRUSTED_AST_SYNTAX_FIELD_NAMES) {
+      if (
+        field !== 'type' &&
+        Object.getOwnPropertyDescriptor(value, field) === undefined &&
+        hasInheritedAstSyntaxField(value, field)
+      ) {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST syntax fields must not be inherited',
+        );
+      }
+    }
+
+    checkUntrustedAstSourceLocation(value);
+  }
+}
+
+/**
+ * The parser's positioned-error helpers read `loc.start.line` and
+ * `loc.start.column` after the main capability walk. Keep those records
+ * descriptor-safe too, without treating unrelated literal values such as a
+ * `RegExp` as AST records.
+ *
+ * @param {object} node
+ * @returns {void}
+ */
+function checkUntrustedAstSourceLocation(node) {
+  const loc = Object.getOwnPropertyDescriptor(node, 'loc');
+
+  if (
+    loc === undefined ||
+    !Object.prototype.hasOwnProperty.call(loc, 'value') ||
+    !loc.value ||
+    typeof loc.value !== 'object'
+  ) {
+    return;
+  }
+
+  for (const endpoint of ['start', 'end']) {
+    const position = Object.getOwnPropertyDescriptor(loc.value, endpoint);
+
+    if (position === undefined) {
+      if (hasInheritedAstSyntaxField(loc.value, endpoint)) {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST syntax fields must not be inherited',
+        );
+      }
+      continue;
+    }
+
+    if (
+      !Object.prototype.hasOwnProperty.call(position, 'value') ||
+      !position.value ||
+      typeof position.value !== 'object'
+    ) {
+      continue;
+    }
+
+    for (const field of ['line', 'column']) {
+      if (
+        Object.getOwnPropertyDescriptor(position.value, field) === undefined &&
+        hasInheritedAstSyntaxField(position.value, field)
+      ) {
+        throw untrustedAstSyntaxError(
+          'Untrusted AST syntax fields must not be inherited',
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Checks an object's prototype chain without reading a potentially accessor
+ * backed field.
+ *
+ * @param {object} value
+ * @param {string} field
+ * @returns {boolean}
+ */
+function hasInheritedAstSyntaxField(value, field) {
+  let prototype = Object.getPrototypeOf(value);
+
+  while (prototype !== null) {
+    if (Object.prototype.hasOwnProperty.call(prototype, field)) {
+      return true;
+    }
+
+    prototype = Object.getPrototypeOf(prototype);
+  }
+
+  return false;
+}
+
+/**
+ * @param {string} message
+ * @returns {SyntaxError}
+ */
+function untrustedAstSyntaxError(message) {
+  return new SyntaxError(message);
 }
 
 /**
@@ -273,12 +451,12 @@ function checkAcyclicAstChildren(root) {
       continue;
     }
 
-    const keys = Object.keys(value);
+    const keys = Reflect.ownKeys(value);
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       const key = keys[index];
 
-      if (AST_CHILD_PROPERTY_KEYS.has(key)) {
+      if (typeof key === 'string' && AST_CHILD_PROPERTY_KEYS.has(key)) {
         pending.push({
           value: /** @type {any} */ (value)[key],
           exiting: false,
@@ -384,10 +562,30 @@ function checkCustomAstDefenses(root) {
           patternContext: item.patternContext,
         });
       }
+
+      const keys = Reflect.ownKeys(value);
+
+      for (let index = keys.length - 1; index >= 0; index -= 1) {
+        const key = keys[index];
+
+        if (key === 'length' || isDirectArrayElementKey(key, value.length)) {
+          continue;
+        }
+
+        pending.push({
+          value: /** @type {any} */ (value)[key],
+          parent: value,
+          parentKey: typeof key === 'string' ? key : undefined,
+          parentIndex: undefined,
+          nestedArray: item.nestedArray,
+          patternContext: item.patternContext,
+        });
+      }
+
       continue;
     }
 
-    const keys = Object.keys(value);
+    const keys = Reflect.ownKeys(value);
     const typedNode = typeof value.type === 'string';
 
     if (typedNode) {
@@ -396,6 +594,12 @@ function checkCustomAstDefenses(root) {
           'AST nodes cannot appear in nested arrays',
           value,
         );
+      }
+
+      const scalarMessage = validateEvaluatorScalarSyntax(value);
+
+      if (scalarMessage !== undefined) {
+        throw unsupportedEs2015Error(scalarMessage, value);
       }
 
       const childMessage = validateEvaluatorChildEdges(value);
@@ -419,19 +623,41 @@ function checkCustomAstDefenses(root) {
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       const key = keys[index];
+      const parentKey = typeof key === 'string' ? key : undefined;
 
       pending.push({
         value: value[key],
         parent: value,
-        parentKey: key,
+        parentKey,
         parentIndex: undefined,
         nestedArray: item.nestedArray,
-        patternContext: typedNode
-          ? patternContextForChild(value, key, item.patternContext)
-          : item.patternContext,
+        patternContext:
+          typedNode && parentKey !== undefined
+            ? patternContextForChild(value, parentKey, item.patternContext)
+            : item.patternContext,
       });
     }
   }
+}
+
+/**
+ * @param {string | symbol} key
+ * @param {number} length
+ * @returns {boolean}
+ */
+function isDirectArrayElementKey(key, length) {
+  if (typeof key !== 'string') {
+    return false;
+  }
+
+  const index = Number(key);
+
+  return (
+    Number.isInteger(index) &&
+    index >= 0 &&
+    index < length &&
+    String(index) === key
+  );
 }
 
 /**
@@ -758,6 +984,174 @@ const AST_CHILD_PROPERTY_KEYS = new Set([
 ]);
 
 /**
+ * Own fields that can affect parsing or evaluation when attached to a typed
+ * ESTree node. Untrusted nodes may omit fields that their individual shape
+ * allows, but cannot source one from a prototype.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const UNTRUSTED_AST_SYNTAX_FIELD_NAMES = new Set([
+  ...AST_CHILD_PROPERTY_KEYS,
+  'type',
+  'sourceType',
+  'directive',
+  'kind',
+  'name',
+  'operator',
+  'prefix',
+  'computed',
+  'optional',
+  'generator',
+  'async',
+  'expression',
+  'method',
+  'shorthand',
+  'static',
+  'await',
+  'raw',
+  'regex',
+  'tail',
+  'bigint',
+  'start',
+  'end',
+  'line',
+  'column',
+  'loc',
+  'range',
+  ...UNSUPPORTED_CLASS_DEFINITION_FIELDS,
+  ...UNSUPPORTED_CLASS_METHOD_FIELDS,
+  ...UNSUPPORTED_CLASS_METHOD_FUNCTION_FIELDS,
+]);
+
+const SUPPORTED_UNARY_OPERATORS = new Set([
+  'delete',
+  'typeof',
+  'void',
+  '!',
+  '-',
+  '+',
+  '~',
+]);
+
+const SUPPORTED_BINARY_OPERATORS = new Set([
+  '+',
+  '-',
+  '*',
+  '/',
+  '%',
+  '==',
+  '!=',
+  '===',
+  '!==',
+  '<',
+  '<=',
+  '>',
+  '>=',
+  '<<',
+  '>>',
+  '>>>',
+  '&',
+  '^',
+  '|',
+  'in',
+  'instanceof',
+]);
+
+const SUPPORTED_LOGICAL_OPERATORS = new Set(['&&', '||']);
+
+const SUPPORTED_ASSIGNMENT_OPERATORS = new Set([
+  '=',
+  '+=',
+  '-=',
+  '*=',
+  '/=',
+  '%=',
+  '<<=',
+  '>>=',
+  '>>>=',
+  '&=',
+  '^=',
+  '|=',
+]);
+
+const SUPPORTED_UPDATE_OPERATORS = new Set(['++', '--']);
+
+const SUPPORTED_VARIABLE_DECLARATION_KINDS = new Set(['var', 'let', 'const']);
+
+/**
+ * Untrusted AST scalar syntax is capability-gated here rather than delegated to
+ * evaluator switches. Every evaluator-recognized node has an explicit entry;
+ * entries with no scalar state use the shared no-op validator.
+ *
+ * @type {ReadonlyMap<string, (node: any) => string | undefined>}
+ */
+const UNTRUSTED_AST_SCALAR_VALIDATORS = new Map([
+  ['Program', validateProgramScalarSyntax],
+  ['ExpressionStatement', validateExpressionStatementScalarSyntax],
+  ['EmptyStatement', validateNoScalarSyntax],
+  ['BlockStatement', validateNoScalarSyntax],
+  ['VariableDeclaration', validateVariableDeclarationScalarSyntax],
+  ['FunctionDeclaration', validateFunctionScalarSyntax],
+  ['ClassDeclaration', validateNoScalarSyntax],
+  ['IfStatement', validateNoScalarSyntax],
+  ['WhileStatement', validateNoScalarSyntax],
+  ['DoWhileStatement', validateNoScalarSyntax],
+  ['ForStatement', validateNoScalarSyntax],
+  ['ForInStatement', validateNoScalarSyntax],
+  ['ForOfStatement', validateForOfScalarSyntax],
+  ['BreakStatement', validateNoScalarSyntax],
+  ['ContinueStatement', validateNoScalarSyntax],
+  ['ReturnStatement', validateNoScalarSyntax],
+  ['ThrowStatement', validateNoScalarSyntax],
+  ['TryStatement', validateNoScalarSyntax],
+  ['SwitchStatement', validateNoScalarSyntax],
+  ['LabeledStatement', validateNoScalarSyntax],
+  ['DebuggerStatement', validateNoScalarSyntax],
+  ['WithStatement', validateNoScalarSyntax],
+  ['Literal', validateLiteralScalarSyntax],
+  ['Identifier', validateIdentifierScalarSyntax],
+  ['ThisExpression', validateNoScalarSyntax],
+  ['UnaryExpression', validateUnaryScalarSyntax],
+  ['BinaryExpression', validateBinaryScalarSyntax],
+  ['LogicalExpression', validateLogicalScalarSyntax],
+  ['ConditionalExpression', validateNoScalarSyntax],
+  ['AssignmentExpression', validateAssignmentScalarSyntax],
+  ['UpdateExpression', validateUpdateScalarSyntax],
+  ['CallExpression', validateCallScalarSyntax],
+  ['MemberExpression', validateMemberScalarSyntax],
+  ['FunctionExpression', validateFunctionScalarSyntax],
+  ['ArrowFunctionExpression', validateArrowScalarSyntax],
+  ['ClassExpression', validateNoScalarSyntax],
+  ['ClassBody', validateNoScalarSyntax],
+  ['MethodDefinition', validateMethodDefinitionScalarSyntax],
+  ['ObjectExpression', validateNoScalarSyntax],
+  ['ArrayExpression', validateNoScalarSyntax],
+  ['NewExpression', validateNoScalarSyntax],
+  ['SequenceExpression', validateNoScalarSyntax],
+  ['VariableDeclarator', validateNoScalarSyntax],
+  ['SwitchCase', validateNoScalarSyntax],
+  ['CatchClause', validateNoScalarSyntax],
+  ['Property', validatePropertyScalarSyntax],
+  ['Super', validateNoScalarSyntax],
+  ['SpreadElement', validateNoScalarSyntax],
+  ['TemplateLiteral', validateNoScalarSyntax],
+  ['TemplateElement', validateTemplateElementScalarSyntax],
+  ['TaggedTemplateExpression', validateNoScalarSyntax],
+  ['YieldExpression', validateNoScalarSyntax],
+  ['AwaitExpression', validateNoScalarSyntax],
+  ['ObjectPattern', validateNoScalarSyntax],
+  ['ArrayPattern', validateNoScalarSyntax],
+  ['AssignmentPattern', validateNoScalarSyntax],
+  ['RestElement', validateNoScalarSyntax],
+  ['MetaProperty', validateNoScalarSyntax],
+  ['ImportDeclaration', validateNoScalarSyntax],
+  ['ImportExpression', validateNoScalarSyntax],
+  ['ExportNamedDeclaration', validateNoScalarSyntax],
+  ['ExportDefaultDeclaration', validateNoScalarSyntax],
+  ['ExportAllDeclaration', validateNoScalarSyntax],
+]);
+
+/**
  * Property keys that hold source-position metadata rather than child nodes.
  * Trusted Acorn output is walked only through its AST proper; the custom-parser
  * defensive phase above is responsible for inspecting arbitrary metadata.
@@ -814,7 +1208,12 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @param {boolean} rootStrict
  * @returns {void}
  */
-function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
+function checkStatementPositionFunctionDeclarations(
+  root,
+  source,
+  rootStrict,
+  allOwnKeys = false,
+) {
   /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
     {
@@ -986,20 +1385,27 @@ function checkStatementPositionFunctionDeclarations(root, source, rootStrict) {
       item.superCallAllowed,
       item.classDerived,
     );
-    const keys = Object.keys(node);
+    const keys = allOwnKeys ? Reflect.ownKeys(node) : Object.keys(node);
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
-      if (!NODE_POSITION_KEYS.has(keys[index])) {
+      const key = keys[index];
+      const parentKey = typeof key === 'string' ? key : undefined;
+
+      if (typeof key !== 'string' || !NODE_POSITION_KEYS.has(key)) {
         pushChild(
           pending,
-          node[keys[index]],
+          node[key],
           childStrict,
           childSuperAllowed,
           childSuperCallAllowed,
-          classDerivedForChild(node, keys[index], item.classDerived),
+          parentKey === undefined
+            ? item.classDerived
+            : classDerivedForChild(node, parentKey, item.classDerived),
           node,
-          keys[index],
-          patternContextForChild(node, keys[index], item.patternContext),
+          parentKey,
+          parentKey === undefined
+            ? item.patternContext
+            : patternContextForChild(node, parentKey, item.patternContext),
         );
       }
     }
@@ -2975,6 +3381,407 @@ function isSupportedExpressionNode(node) {
     typeof node.type === 'string' &&
     SUPPORTED_EXPRESSION_TYPES.has(node.type)
   );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateEvaluatorScalarSyntax(node) {
+  const validator = UNTRUSTED_AST_SCALAR_VALIDATORS.get(node.type);
+
+  return validator === undefined ? undefined : validator(node);
+}
+
+/**
+ * @param {any} _node
+ * @returns {string | undefined}
+ */
+function validateNoScalarSyntax(_node) {
+  return undefined;
+}
+
+/**
+ * @param {unknown} value
+ * @param {ReadonlySet<string>} allowed
+ * @returns {boolean}
+ */
+function isAllowedScalarString(value, allowed) {
+  return typeof value === 'string' && allowed.has(value);
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateProgramScalarSyntax(node) {
+  return validateRequiredScalar(
+    node,
+    'sourceType',
+    (value) => value === 'script',
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateExpressionStatementScalarSyntax(node) {
+  return validateOptionalScalar(
+    node,
+    'directive',
+    (value) => typeof value === 'string',
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateVariableDeclarationScalarSyntax(node) {
+  return validateRequiredScalar(node, 'kind', (value) =>
+    isAllowedScalarString(value, SUPPORTED_VARIABLE_DECLARATION_KINDS),
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateFunctionScalarSyntax(node) {
+  return (
+    validateRequiredScalar(node, 'generator', (value) => value === false) ??
+    validateOptionalScalar(node, 'async', (value) => value === false) ??
+    validateRequiredScalar(node, 'expression', (value) => value === false)
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateArrowScalarSyntax(node) {
+  return (
+    validateRequiredScalar(node, 'id', (value) => value === null) ??
+    validateRequiredScalar(node, 'generator', (value) => value === false) ??
+    validateOptionalScalar(node, 'async', (value) => value === false) ??
+    validateRequiredScalar(
+      node,
+      'expression',
+      (value) => typeof value === 'boolean',
+    )
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateForOfScalarSyntax(node) {
+  return validateOptionalScalar(node, 'await', (value) => value === false);
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateIdentifierScalarSyntax(node) {
+  return validateRequiredScalar(
+    node,
+    'name',
+    (value) => typeof value === 'string',
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateUnaryScalarSyntax(node) {
+  return validateRequiredScalar(node, 'operator', (value) =>
+    isAllowedScalarString(value, SUPPORTED_UNARY_OPERATORS),
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateBinaryScalarSyntax(node) {
+  return validateRequiredScalar(node, 'operator', (value) =>
+    isAllowedScalarString(value, SUPPORTED_BINARY_OPERATORS),
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateLogicalScalarSyntax(node) {
+  return validateRequiredScalar(node, 'operator', (value) =>
+    isAllowedScalarString(value, SUPPORTED_LOGICAL_OPERATORS),
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateAssignmentScalarSyntax(node) {
+  return validateRequiredScalar(node, 'operator', (value) =>
+    isAllowedScalarString(value, SUPPORTED_ASSIGNMENT_OPERATORS),
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateUpdateScalarSyntax(node) {
+  return (
+    validateRequiredScalar(node, 'operator', (value) =>
+      isAllowedScalarString(value, SUPPORTED_UPDATE_OPERATORS),
+    ) ??
+    validateRequiredScalar(
+      node,
+      'prefix',
+      (value) => typeof value === 'boolean',
+    )
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateCallScalarSyntax(node) {
+  return validateOptionalScalar(node, 'optional', (value) => value === false);
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateMemberScalarSyntax(node) {
+  return (
+    validateRequiredScalar(
+      node,
+      'computed',
+      (value) => typeof value === 'boolean',
+    ) ?? validateOptionalScalar(node, 'optional', (value) => value === false)
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateMethodDefinitionScalarSyntax(node) {
+  return (
+    validateRequiredScalar(
+      node,
+      'computed',
+      (value) => typeof value === 'boolean',
+    ) ??
+    validateRequiredScalar(
+      node,
+      'static',
+      (value) => typeof value === 'boolean',
+    ) ??
+    validateRequiredScalar(
+      node,
+      'kind',
+      (value) =>
+        value === 'constructor' ||
+        value === 'method' ||
+        value === 'get' ||
+        value === 'set',
+    )
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validatePropertyScalarSyntax(node) {
+  return (
+    validateRequiredScalar(
+      node,
+      'computed',
+      (value) => typeof value === 'boolean',
+    ) ??
+    validateRequiredScalar(
+      node,
+      'method',
+      (value) => typeof value === 'boolean',
+    ) ??
+    validateRequiredScalar(
+      node,
+      'shorthand',
+      (value) => typeof value === 'boolean',
+    ) ??
+    validateRequiredScalar(
+      node,
+      'kind',
+      (value) => value === 'init' || value === 'get' || value === 'set',
+    )
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateLiteralScalarSyntax(node) {
+  const regex = Object.getOwnPropertyDescriptor(node, 'regex');
+
+  if (
+    regex !== undefined &&
+    (!Object.prototype.hasOwnProperty.call(regex, 'value') ||
+      !isRegexLiteralRecord(regex.value))
+  ) {
+    return invalidEvaluatorScalar(node, 'regex');
+  }
+
+  const rawMessage = validateOptionalScalar(
+    node,
+    'raw',
+    (value) => typeof value === 'string',
+  );
+
+  if (rawMessage !== undefined) {
+    return rawMessage;
+  }
+
+  const bigintMessage = validateOptionalScalar(
+    node,
+    'bigint',
+    (value) => value === undefined,
+  );
+
+  if (bigintMessage !== undefined) {
+    return bigintMessage;
+  }
+
+  return validateRequiredScalar(
+    node,
+    'value',
+    (value) =>
+      regex !== undefined ||
+      value === null ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean',
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isRegexLiteralRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const pattern = Object.getOwnPropertyDescriptor(value, 'pattern');
+  const flags = Object.getOwnPropertyDescriptor(value, 'flags');
+
+  return (
+    pattern !== undefined &&
+    flags !== undefined &&
+    Object.prototype.hasOwnProperty.call(pattern, 'value') &&
+    Object.prototype.hasOwnProperty.call(flags, 'value') &&
+    typeof pattern.value === 'string' &&
+    typeof flags.value === 'string'
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateTemplateElementScalarSyntax(node) {
+  const tailMessage = validateRequiredScalar(
+    node,
+    'tail',
+    (value) => typeof value === 'boolean',
+  );
+
+  if (tailMessage !== undefined) {
+    return tailMessage;
+  }
+
+  const value = Object.getOwnPropertyDescriptor(node, 'value');
+
+  if (
+    value === undefined ||
+    !Object.prototype.hasOwnProperty.call(value, 'value') ||
+    !value.value ||
+    typeof value.value !== 'object' ||
+    Array.isArray(value.value)
+  ) {
+    return invalidEvaluatorScalar(node, 'value');
+  }
+
+  const raw = Object.getOwnPropertyDescriptor(value.value, 'raw');
+  const cooked = Object.getOwnPropertyDescriptor(value.value, 'cooked');
+
+  return raw === undefined ||
+    cooked === undefined ||
+    !Object.prototype.hasOwnProperty.call(raw, 'value') ||
+    !Object.prototype.hasOwnProperty.call(cooked, 'value') ||
+    typeof raw.value !== 'string' ||
+    (typeof cooked.value !== 'string' &&
+      cooked.value !== null &&
+      cooked.value !== undefined)
+    ? invalidEvaluatorScalar(node, 'value')
+    : undefined;
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
+function validateRequiredScalar(node, field, accepts) {
+  const descriptor = Object.getOwnPropertyDescriptor(node, field);
+
+  return descriptor !== undefined &&
+    Object.prototype.hasOwnProperty.call(descriptor, 'value') &&
+    accepts(descriptor.value)
+    ? undefined
+    : invalidEvaluatorScalar(node, field);
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
+function validateOptionalScalar(node, field, accepts) {
+  const descriptor = Object.getOwnPropertyDescriptor(node, field);
+
+  if (descriptor === undefined) {
+    return undefined;
+  }
+
+  return Object.prototype.hasOwnProperty.call(descriptor, 'value') &&
+    accepts(descriptor.value)
+    ? undefined
+    : invalidEvaluatorScalar(node, field);
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @returns {string}
+ */
+function invalidEvaluatorScalar(node, field) {
+  return `${node.type}.${field} has unsupported scalar syntax`;
 }
 
 /**

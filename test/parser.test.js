@@ -469,6 +469,280 @@ const tests = [
     },
   },
   {
+    name: 'a caller-supplied Acorn program rejects a nonenumerable evaluator child before evaluation',
+    run() {
+      const program = parseScript('({ value: 1 });');
+      const object = program.body[0].expression;
+
+      Object.defineProperty(object, 'properties', {
+        value: [
+          {
+            type: 'SpreadElement',
+            argument: { type: 'Identifier', name: 'source' },
+          },
+        ],
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      assertThrows(() => parseScript('0;', { program }), SyntaxError);
+      assertThrows(
+        () => evaluateScript(createRealm(), '0;', { program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom and caller-supplied ASTs reject inherited for-of await syntax',
+    run() {
+      /** @returns {any} */
+      function inheritedAwaitForOf() {
+        return Object.assign(Object.create({ await: true }), {
+          type: 'ForOfStatement',
+          left: {
+            type: 'VariableDeclaration',
+            kind: 'var',
+            declarations: [
+              {
+                type: 'VariableDeclarator',
+                id: { type: 'Identifier', name: 'value' },
+                init: null,
+              },
+            ],
+          },
+          right: { type: 'ArrayExpression', elements: [] },
+          body: { type: 'EmptyStatement' },
+        });
+      }
+
+      const customProgram = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [inheritedAwaitForOf()],
+      };
+      assertParserAndEvaluatorSyntaxError(customProgram);
+
+      const program = parseScript('for (var value of []) {}');
+      Object.setPrototypeOf(program.body[0], { await: true });
+      assertThrows(() => parseScript('0;', { program }), SyntaxError);
+      assertThrows(
+        () => evaluateScript(createRealm(), '0;', { program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom parser rejects structural accessors without invoking their getters',
+    run() {
+      let getterCalls = 0;
+      const expression = { type: 'ObjectExpression' };
+
+      Object.defineProperty(expression, 'properties', {
+        get() {
+          getterCalls += 1;
+          throw new Error('structural getter must not execute');
+        },
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertThrows(
+        () => parseScript('', { parse: () => expressionProgram(expression) }),
+        SyntaxError,
+      );
+      assertSame(getterCalls, 0);
+    },
+  },
+  {
+    name: 'custom parser rejects AST nodes hidden in nonenumerable and symbol metadata',
+    run() {
+      /** @returns {any} */
+      function hiddenBlock() {
+        return { type: 'BlockStatement', body: [] };
+      }
+
+      const nonenumerable = expressionProgram({ type: 'Literal', value: 0 });
+      Object.defineProperty(nonenumerable.body[0], 'metadata', {
+        value: { hidden: hiddenBlock() },
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const symbol = Symbol('metadata');
+      const symbolMetadata = expressionProgram({ type: 'Literal', value: 0 });
+      symbolMetadata.body[0][symbol] = { hidden: hiddenBlock() };
+
+      assertParserAndEvaluatorSyntaxError(nonenumerable);
+      assertParserAndEvaluatorSyntaxError(symbolMetadata);
+    },
+  },
+  {
+    name: 'a caller-supplied Acorn program rejects unsupported binary scalar syntax before evaluator dispatch',
+    run() {
+      const program = parseScript('1 + 2;');
+      program.body[0].expression.operator = '**';
+
+      assertThrows(() => parseScript('0;', { program }), SyntaxError);
+      assertThrows(
+        () => evaluateScript(createRealm(), '0;', { program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom parser rejects optional member call and chain syntax flags',
+    run() {
+      /** @returns {any} */
+      function memberExpression() {
+        return {
+          type: 'MemberExpression',
+          object: { type: 'Literal', value: 'value' },
+          property: { type: 'Identifier', name: 'length' },
+          computed: false,
+          optional: true,
+        };
+      }
+
+      const functionExpression = {
+        type: 'FunctionExpression',
+        id: null,
+        params: [],
+        generator: false,
+        expression: false,
+        body: { type: 'BlockStatement', body: [] },
+      };
+      const malformed = [
+        memberExpression(),
+        {
+          type: 'CallExpression',
+          callee: functionExpression,
+          arguments: [],
+          optional: true,
+        },
+        {
+          type: 'ChainExpression',
+          expression: memberExpression(),
+        },
+      ];
+
+      for (const expression of malformed) {
+        assertParserAndEvaluatorSyntaxError(expressionProgram(expression));
+      }
+    },
+  },
+  {
+    name: 'custom parser rejects malformed evaluator scalar fields and operators',
+    run() {
+      const malformedPrograms = [
+        expressionProgram({
+          type: 'UnaryExpression',
+          operator: 'await',
+          argument: { type: 'Literal', value: 1 },
+        }),
+        expressionProgram({
+          type: 'LogicalExpression',
+          operator: '??',
+          left: { type: 'Literal', value: 1 },
+          right: { type: 'Literal', value: 2 },
+        }),
+        expressionProgram({
+          type: 'AssignmentExpression',
+          operator: '**=',
+          left: { type: 'Identifier', name: 'value' },
+          right: { type: 'Literal', value: 2 },
+        }),
+        expressionProgram({
+          type: 'UpdateExpression',
+          operator: '+',
+          prefix: 'true',
+          argument: { type: 'Identifier', name: 'value' },
+        }),
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'VariableDeclaration',
+              kind: 'using',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: 'value' },
+                  init: null,
+                },
+              ],
+            },
+          ],
+        },
+        expressionProgram({
+          type: 'Literal',
+          value: /x/,
+          raw: '/x/',
+          regex: { pattern: 1, flags: 'g' },
+        }),
+        expressionProgram({
+          type: 'TemplateLiteral',
+          expressions: [],
+          quasis: [
+            {
+              type: 'TemplateElement',
+              value: { raw: 'x', cooked: 'x' },
+              tail: 'true',
+            },
+          ],
+        }),
+      ];
+
+      for (const program of malformedPrograms) {
+        assertParserAndEvaluatorSyntaxError(program);
+      }
+    },
+  },
+  {
+    name: 'custom parser preserves supported omitted optional syntax fields',
+    run() {
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'CallExpression',
+              callee: {
+                type: 'MemberExpression',
+                object: { type: 'Literal', value: 'value' },
+                property: { type: 'Identifier', name: 'length' },
+                computed: false,
+              },
+              arguments: [],
+            },
+          },
+          {
+            type: 'ForOfStatement',
+            left: {
+              type: 'VariableDeclaration',
+              kind: 'var',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: 'value' },
+                  init: null,
+                },
+              ],
+            },
+            right: { type: 'ArrayExpression', elements: [] },
+            body: { type: 'EmptyStatement' },
+          },
+        ],
+      };
+
+      assertSame(parseScript('', { parse: () => program }).type, 'Program');
+    },
+  },
+  {
     name: 'custom parser rejects a statement node on a direct expression edge',
     run() {
       const program = expressionProgram({
