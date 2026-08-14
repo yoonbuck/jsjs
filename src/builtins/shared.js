@@ -102,6 +102,13 @@ export class NativeFunction extends EngineObject {
   }
 
   /**
+   * @returns {import('../runtime/function-realm.js').JobCompletion}
+   */
+  getFunctionRealm() {
+    return { type: 'normal', value: this.realm };
+  }
+
+  /**
    * @param {readonly unknown[]} [args=[]]
    * @param {unknown} [newTarget=this]
    * @returns {unknown}

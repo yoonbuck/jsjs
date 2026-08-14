@@ -130,6 +130,20 @@ class BoundFunction extends NativeFunction {
 
     return target.hasInstance(value);
   }
+
+  /**
+   * @returns {import('../runtime/function-realm.js').JobCompletion}
+   */
+  getFunctionRealm() {
+    /** @type {CallableLike} */
+    let target = this.boundTargetFunction;
+
+    while (target instanceof BoundFunction) {
+      target = target.boundTargetFunction;
+    }
+
+    return target.getFunctionRealm();
+  }
 }
 
 /**

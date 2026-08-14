@@ -81,6 +81,7 @@ import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
 import arrayIndex from './array-index.test.js';
 import jobs from './jobs.test.js';
+import functionRealm from './function-realm.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -331,4 +332,8 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: arrayIndex,
   }),
   Object.freeze({ file: 'test/jobs.test.js', tests: jobs }),
+  Object.freeze({
+    file: 'test/function-realm.test.js',
+    tests: functionRealm,
+  }),
 ]);

@@ -6,7 +6,7 @@ import { GuestErrorSignal } from '../runtime/completion.js';
 /**
  * @typedef {{
  *   objectPrototype: EngineObject,
- *   functionPrototype: EngineObject,
+ *   functionPrototype: IntrinsicFunctionPrototype,
  *   arrayPrototype: EngineObject,
  *   stringPrototype: EnginePrimitiveObject,
  *   numberPrototype: EnginePrimitiveObject,
@@ -65,12 +65,14 @@ export function createFundamentalIntrinsics(agent) {
   };
 }
 
-class IntrinsicFunctionPrototype extends EngineObject {
+export class IntrinsicFunctionPrototype extends EngineObject {
   /**
    * @param {EngineObject} objectPrototype
    */
   constructor(objectPrototype) {
     super(objectPrototype, 'Function');
+    /** @type {import('../runtime/realm.js').Realm | undefined} */
+    this.realm = undefined;
     this._isConstructor = false;
     this.defineOwnProperty('length', {
       value: 0,
@@ -91,6 +93,21 @@ class IntrinsicFunctionPrototype extends EngineObject {
    */
   callFunction() {
     return undefined;
+  }
+
+  /**
+   * @returns {import('../runtime/function-realm.js').JobCompletion}
+   */
+  getFunctionRealm() {
+    return { type: 'normal', value: this.realm };
+  }
+
+  /**
+   * @param {import('../runtime/realm.js').Realm} realm
+   * @returns {void}
+   */
+  setRealm(realm) {
+    this.realm = realm;
   }
 
   /**

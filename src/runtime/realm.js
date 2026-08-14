@@ -114,6 +114,7 @@ export class Realm {
     this.intrinsics = /** @type {any} */ (
       createFundamentalIntrinsics(this.agent)
     );
+    this.intrinsics.functionPrototype.setRealm(this);
     this.globalObject = new EngineObject(this.intrinsics.objectPrototype);
     defineGlobalValueProperties(this.globalObject);
     this.globalEnvironment = new GlobalEnvironmentRecord(this.globalObject);
