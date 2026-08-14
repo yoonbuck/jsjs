@@ -2651,7 +2651,7 @@ function validateEvaluatorChildEdges(node) {
     case 'ForStatement':
       return (
         validateOptionalChild(node, 'init', isForInitializerNodeOrUnknown) ??
-        validateOptionalChild(node, 'test', isExpressionNodeOrUnknown) ??
+        validateNullableChild(node, 'test', isExpressionNodeOrUnknown) ??
         validateOptionalChild(node, 'update', isExpressionNodeOrUnknown) ??
         validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
       );
@@ -2668,8 +2668,8 @@ function validateEvaluatorChildEdges(node) {
     case 'TryStatement':
       return (
         validateRequiredChild(node, 'block', isBlockStatementOrUnknown) ??
-        validateOptionalChild(node, 'handler', isCatchClauseOrUnknown) ??
-        validateOptionalChild(node, 'finalizer', isBlockStatementOrUnknown)
+        validateNullableChild(node, 'handler', isCatchClauseOrUnknown) ??
+        validateNullableChild(node, 'finalizer', isBlockStatementOrUnknown)
       );
     case 'CatchClause':
       return (
@@ -2686,7 +2686,7 @@ function validateEvaluatorChildEdges(node) {
       );
     case 'SwitchCase':
       return (
-        validateOptionalChild(node, 'test', isExpressionNodeOrUnknown) ??
+        validateNullableChild(node, 'test', isExpressionNodeOrUnknown) ??
         validateChildList(node, 'consequent', isStatementNodeOrUnknown)
       );
     case 'LabeledStatement':
@@ -2808,6 +2808,20 @@ function validateOptionalChild(node, field, accepts) {
  * @param {(value: unknown) => boolean} accepts
  * @returns {string | undefined}
  */
+function validateNullableChild(node, field, accepts) {
+  const value = node[field];
+
+  return value === null || accepts(value)
+    ? undefined
+    : invalidEvaluatorChild(node, field);
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
 function validateChildList(node, field, accepts) {
   const values = node[field];
 
@@ -2875,11 +2889,44 @@ function validateForInOfEdges(node) {
     return 'async for-of is not supported';
   }
 
+  const leftMessage = validateForInOfLeft(node);
+
+  if (leftMessage !== undefined) {
+    return leftMessage;
+  }
+
   return (
-    validateRequiredChild(node, 'left', isForInOfLeftNodeOrUnknown) ??
     validateRequiredChild(node, 'right', isExpressionNodeOrUnknown) ??
     validateRequiredChild(node, 'body', isStatementNodeOrUnknown)
   );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateForInOfLeft(node) {
+  const left = node.left;
+
+  if (left?.type !== 'VariableDeclaration') {
+    return isForInOfLeftNodeOrUnknown(left)
+      ? undefined
+      : invalidEvaluatorChild(node, 'left');
+  }
+
+  if (!Array.isArray(left.declarations) || left.declarations.length !== 1) {
+    return invalidEvaluatorChild(node, 'left');
+  }
+
+  const [declarator] = left.declarations;
+
+  if (isUnknownAstNode(declarator)) {
+    return undefined;
+  }
+
+  return declarator?.type === 'VariableDeclarator' && declarator.init === null
+    ? undefined
+    : invalidEvaluatorChild(node, 'left');
 }
 
 /**

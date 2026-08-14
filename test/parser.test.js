@@ -522,6 +522,91 @@ const tests = [
     },
   },
   {
+    name: 'custom parser requires evaluator null sentinels and nonempty for-in-of declarations',
+    run() {
+      /** @param {any} left */
+      function forOfProgram(left) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ForOfStatement',
+              left,
+              right: { type: 'ArrayExpression', elements: [] },
+              body: { type: 'EmptyStatement' },
+            },
+          ],
+        };
+      }
+
+      const malformedPrograms = [
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'ForStatement',
+              init: null,
+              test: undefined,
+              update: null,
+              body: { type: 'EmptyStatement' },
+            },
+          ],
+        },
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'TryStatement',
+              block: { type: 'BlockStatement', body: [] },
+              handler: undefined,
+              finalizer: null,
+            },
+          ],
+        },
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'SwitchStatement',
+              discriminant: { type: 'Literal', value: 0 },
+              cases: [
+                {
+                  type: 'SwitchCase',
+                  test: undefined,
+                  consequent: [],
+                },
+              ],
+            },
+          ],
+        },
+        forOfProgram({
+          type: 'VariableDeclaration',
+          kind: 'var',
+          declarations: [],
+        }),
+        forOfProgram({
+          type: 'VariableDeclaration',
+          kind: 'var',
+          declarations: [
+            {
+              type: 'VariableDeclarator',
+              id: { type: 'Identifier', name: 'value' },
+              init: { type: 'Literal', value: 0 },
+            },
+          ],
+        }),
+      ];
+
+      for (const program of malformedPrograms) {
+        assertParserAndEvaluatorSyntaxError(program);
+      }
+    },
+  },
+  {
     name: 'a statement-position function declaration is still rejected when deeply nested',
     run() {
       // The depth fix must not cost reach: the offending node here sits
