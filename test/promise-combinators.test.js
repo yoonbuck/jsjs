@@ -95,6 +95,93 @@ export default [
     },
   },
   {
+    name: 'Promise.all rejects an abrupt final capability resolve after iteration completes',
+    run: () => {
+      const realm = createRealm();
+
+      assertNormalValue(
+        evaluateScript(
+          realm,
+          [
+            'var thrown = "resolve failure";',
+            'var rejects = 0;',
+            'var closes = 0;',
+            'function C(executor) {',
+            '  return new Promise(function (_resolve, reject) {',
+            '    executor(function () { throw thrown; }, function (reason) {',
+            '      rejects = rejects + 1;',
+            '      reject(reason);',
+            '    });',
+            '  });',
+            '}',
+            'C.resolve = Promise.resolve;',
+            'var iterable = {};',
+            'iterable[Symbol.iterator] = function () {',
+            '  return {',
+            '    next: function () { return { done: true }; },',
+            '    return: function () { closes = closes + 1; return {}; }',
+            '  };',
+            '};',
+            'var result = Promise.all.call(C, iterable);',
+            'var observed;',
+            'result.then(undefined, function (reason) { observed = reason; });',
+            'undefined;',
+          ].join('\n'),
+        ),
+        undefined,
+      );
+
+      assertSame(realm.agent.runJobs().failures.length, 0);
+      assertNormalValue(
+        evaluateScript(realm, 'closes + ":" + rejects + ":" + observed'),
+        '0:1:resolve failure',
+      );
+    },
+  },
+  {
+    name: 'Promise.all rejects an abrupt final resolve element capability call',
+    run: () => {
+      const realm = createRealm();
+
+      assertNormalValue(
+        evaluateScript(
+          realm,
+          [
+            'var thrown = "resolve element failure";',
+            'var rejects = 0;',
+            'var resolveElement;',
+            'function C(executor) {',
+            '  return new Promise(function (_resolve, reject) {',
+            '    executor(function () { throw thrown; }, function (reason) {',
+            '      rejects = rejects + 1;',
+            '      reject(reason);',
+            '    });',
+            '  });',
+            '}',
+            'C.resolve = function () {',
+            '  return { then: function (resolve) { resolveElement = resolve; } };',
+            '};',
+            'var result = Promise.all.call(C, [1]);',
+            'var observed;',
+            'result.then(undefined, function (reason) { observed = reason; });',
+            'undefined;',
+          ].join('\n'),
+        ),
+        undefined,
+      );
+      assertNormalValue(
+        evaluateScript(realm, 'resolveElement("value");'),
+        undefined,
+      );
+
+      assertSame(realm.agent.runJobs().failures.length, 0);
+      assertNormalValue(
+        evaluateScript(realm, 'rejects + ":" + observed'),
+        '1:resolve element failure',
+      );
+    },
+  },
+  {
     name: 'Promise.all retains duplicate values and assimilates thenables',
     run: () => {
       const realm = createRealm();

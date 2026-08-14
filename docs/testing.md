@@ -212,7 +212,8 @@ also requires unsupported `new.target`.
 
 Agent Jobs and Promise work uses a separate small pinned suite. It covers the
 ES2015 Promise constructor, `then` reaction identity and throwing handlers,
-thenable adoption, `resolve`, `all`, `race`, and `Symbol.species`:
+thenable adoption, abrupt final `all` capability resolution, `resolve`, `all`,
+`race`, `Symbol.species`, and `Promise.prototype[Symbol.toStringTag]`:
 
 ```sh
 TZ=UTC node test/run-node.js test/ci/es2015-promise-test262.test.js

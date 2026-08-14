@@ -1,7 +1,8 @@
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
+import { ThrowSignal } from '../src/runtime/completion.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { newPromiseCapability } from '../src/runtime/promise.js';
-import { assertSame } from './harness/assert.js';
+import { assertSame, assertThrows } from './harness/assert.js';
 
 /**
  * @param {{ type: string, value: unknown }} completion
@@ -172,6 +173,29 @@ export default [
     },
   },
   {
+    name: 'Promise Symbol intrinsic properties expose exact descriptors and getter name',
+    run: () => {
+      const realm = createRealm();
+
+      assertNormalValue(
+        evaluateScript(
+          realm,
+          [
+            'var tag = Object.getOwnPropertyDescriptor(',
+            '  Promise.prototype, Symbol.toStringTag',
+            ');',
+            'var species = Object.getOwnPropertyDescriptor(Promise, Symbol.species);',
+            'Promise.prototype[Symbol.toStringTag] + ":" +',
+            'tag.writable + ":" + tag.enumerable + ":" + tag.configurable + ":" +',
+            'species.get.name + ":" + (species.set === undefined) + ":" +',
+            'species.enumerable + ":" + species.configurable;',
+          ].join('\n'),
+        ),
+        'Promise:false:false:true:get [Symbol.species]:true:false:true',
+      );
+    },
+  },
+  {
     name: 'Promise constructs with the requested newTarget prototype',
     run: () => {
       const realm = createRealm();
@@ -187,6 +211,77 @@ export default [
           ].join('\n'),
         ),
         true,
+      );
+    },
+  },
+  {
+    name: 'Promise uses the foreign newTarget Realm intrinsic for invalid prototypes',
+    run: () => {
+      const agent = createAgent();
+      const constructorRealm = createRealm({ agent });
+      const newTargetRealm = createRealm({ agent });
+      const promiseConstructor =
+        /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
+          constructorRealm.globalObject.get('Promise')
+        );
+      const executor = constructorRealm.createNativeFunction({
+        name: 'executor',
+        length: 2,
+        call() {
+          return undefined;
+        },
+      });
+
+      for (const prototype of ['null', '1']) {
+        const foreignNewTarget =
+          /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+            evaluateScript(
+              newTargetRealm,
+              `function Foreign(executor) {} Foreign.prototype = ${prototype}; Foreign;`,
+            ).value
+          );
+        const promise = assertPromiseObject(
+          promiseConstructor.constructFunction([executor], foreignNewTarget),
+        );
+
+        assertSame(
+          promise.getPrototype(),
+          newTargetRealm.intrinsics.promisePrototype,
+        );
+        assertSame(
+          promise.getPrototype() ===
+            constructorRealm.intrinsics.promisePrototype,
+          false,
+        );
+      }
+
+      const abruptNewTarget =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction & {
+         *   getFunctionRealm: () => { type: 'throw', value: unknown },
+         * }} */ (
+          evaluateScript(
+            newTargetRealm,
+            'function Abrupt(executor) {} Abrupt.prototype = 1; Abrupt;',
+          ).value
+        );
+      const abrupt = newTargetRealm.createGuestError(
+        'TypeError',
+        'abrupt newTarget Realm lookup',
+      );
+      abruptNewTarget.getFunctionRealm = () => ({
+        type: 'throw',
+        value: abrupt,
+      });
+
+      assertSame(
+        /** @type {ThrowSignal} */ (
+          assertThrows(
+            () =>
+              promiseConstructor.constructFunction([executor], abruptNewTarget),
+            ThrowSignal,
+          )
+        ).value,
+        abrupt,
       );
     },
   },

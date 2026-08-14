@@ -1,4 +1,5 @@
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { createAbruptRealmCallable } from '../src/runtime/function-realm.js';
 import { PromiseObject } from '../src/runtime/promise.js';
@@ -398,6 +399,63 @@ export default [
     },
   },
   {
+    name: 'pending reaction abrupt lookup uses the settlement Realm',
+    run: () => {
+      const agent = createAgent();
+      const settlementRealm = createRealm({ agent });
+      const registrationRealm = createRealm({ agent });
+      const lookupErrorRealm = createRealm({ agent });
+      const observedJobRealms = observeReactionJobRealms(agent);
+      const pending = createPendingPromise(settlementRealm, 'pending');
+      const registrationThen =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            registrationRealm.intrinsics.promisePrototype
+          ).get('then')
+        );
+      let handlerContext = null;
+      const abruptHandler = {
+        callFunction() {
+          handlerContext = agent.currentJobRealm;
+          throw new GuestErrorSignal('TypeError', 'handler failure');
+        },
+        getFunctionRealm() {
+          return {
+            type: 'throw',
+            value: lookupErrorRealm.createGuestError(
+              'TypeError',
+              'lookup failure',
+            ),
+          };
+        },
+      };
+      const child = promiseObject(
+        registrationThen.callFunction(pending.promise, [abruptHandler]),
+      );
+
+      pending.resolve.callFunction(undefined, ['settled']);
+      assertSame(agent.runJobs().failures.length, 0);
+      assertSame(observedJobRealms.length, 1);
+      assertSame(observedJobRealms[0], settlementRealm);
+      assertSame(handlerContext, settlementRealm);
+      assertSame(child.promiseState, 'rejected');
+      assertSame(
+        /** @type {EngineObject} */ (child.promiseResult).getPrototype(),
+        settlementRealm.intrinsics.typeErrorPrototype,
+      );
+      assertSame(
+        /** @type {EngineObject} */ (child.promiseResult).getPrototype() ===
+          registrationRealm.intrinsics.typeErrorPrototype,
+        false,
+      );
+      assertSame(
+        /** @type {EngineObject} */ (child.promiseResult).getPrototype() ===
+          lookupErrorRealm.intrinsics.typeErrorPrototype,
+        false,
+      );
+    },
+  },
+  {
     name: 'thenable jobs use the foreign then Realm and lookup Realm fallback',
     run: () => {
       const agent = createAgent();
@@ -480,6 +538,65 @@ export default [
       assertSame(events[1][1], 'handle');
       assertSame(realm.agent.runJobs().failures.length, 0);
       assertSame(events.length, 2);
+    },
+  },
+  {
+    name: 'scheduler failure reports a rejection handle before manual reaction recovery',
+    run: () => {
+      const schedulerError = new Error('scheduler failed');
+      /** @type {Array<'reject' | 'handle'>} */
+      const events = [];
+      const realm = createRealm({
+        jobHost: {
+          scheduleMicrotask() {
+            throw schedulerError;
+          },
+          promiseRejectionTracker(_promise, operation) {
+            events.push(operation);
+          },
+        },
+      });
+      const rejected = promiseObject(
+        evaluateScript(
+          realm,
+          'var rejected = Promise.reject("reason"); rejected;',
+        ).value,
+      );
+      const then =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (realm.intrinsics.promisePrototype).get(
+            'then',
+          )
+        );
+      let calls = 0;
+      const handler = realm.createNativeFunction({
+        name: 'handler',
+        length: 1,
+        call() {
+          calls += 1;
+          return undefined;
+        },
+      });
+
+      assertSame(
+        assertThrows(
+          () =>
+            then.callFunction(rejected, [
+              undefined,
+              /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+                handler
+              ),
+            ]),
+          Error,
+        ),
+        schedulerError,
+      );
+      assertSame(events.join(','), 'reject,handle');
+      assertSame(rejected.promiseIsHandled, true);
+      assertSame(realm.agent.checkpointState, 'idle');
+      assertSame(realm.agent.runJobs().failures.length, 0);
+      assertSame(calls, 1);
+      assertSame(events.join(','), 'reject,handle');
     },
   },
   {

@@ -152,6 +152,47 @@ export default [
     },
   },
   {
+    name: 'Agent queue drains a bounded FIFO without front removal',
+    run: () => {
+      const realm = createRealm();
+      const queue = realm.agent._jobQueue;
+      const originalShift = queue.jobs.shift;
+      let shiftCalls = 0;
+      queue.jobs.shift = function () {
+        shiftCalls += 1;
+        return originalShift.call(this);
+      };
+      /** @type {number[]} */
+      const order = [];
+
+      for (let index = 0; index < 2048; index += 1) {
+        realm.agent.enqueueJob(
+          createJob(realm, `bounded-${index}`, () => {
+            order.push(index);
+            return createNormalCompletion(undefined);
+          }),
+        );
+      }
+
+      assertSame(realm.agent.runJobs().processed, 2048);
+      assertSame(order.length, 2048);
+      assertSame(order[0], 0);
+      assertSame(order[1023], 1023);
+      assertSame(order[2047], 2047);
+      assertSame(shiftCalls, 0);
+      assertSame(queue.jobs.length, 0);
+
+      realm.agent.enqueueJob(
+        createJob(realm, 'after-bounded', () => {
+          order.push(2048);
+          return createNormalCompletion(undefined);
+        }),
+      );
+      assertSame(realm.agent.runJobs().processed, 1);
+      assertSame(order[2048], 2048);
+    },
+  },
+  {
     name: 'invalid Job Record fields leave the queue and checkpoint unchanged',
     run: () => {
       const realm = createRealm();

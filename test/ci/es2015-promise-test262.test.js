@@ -9,8 +9,11 @@ import {
 
 const FOCUSED_PATHS = Object.freeze([
   'test/built-ins/Promise/Symbol.species/prop-desc.js',
+  'test/built-ins/Promise/all/capability-resolve-throws-no-close.js',
+  'test/built-ins/Promise/all/capability-resolve-throws-reject.js',
   'test/built-ins/Promise/all/resolve-non-thenable.js',
   'test/built-ins/Promise/constructor.js',
+  'test/built-ins/Promise/prototype/Symbol.toStringTag.js',
   'test/built-ins/Promise/prototype/then/rxn-handler-identity.js',
   'test/built-ins/Promise/prototype/then/rxn-handler-thrower.js',
   'test/built-ins/Promise/race/resolved-sequence.js',
@@ -35,7 +38,11 @@ export default [
         engine: createJsjsTest262Engine(),
         host: createNodeTest262Host({ root: pin.checkoutPath }),
         paths: FOCUSED_PATHS,
-        supportedFeatures: ['Symbol.species'],
+        supportedFeatures: [
+          'Symbol.iterator',
+          'Symbol.species',
+          'Symbol.toStringTag',
+        ],
         skipFeatures: [],
       });
       const problems = records.filter((record) => record.status !== 'passed');

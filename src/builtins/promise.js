@@ -1,7 +1,9 @@
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
 import { toObject } from '../runtime/conversion.js';
 import { isCallable, isConstructor } from '../runtime/descriptors.js';
+import { getFunctionRealm } from '../runtime/function-realm.js';
 import { EngineObject } from '../runtime/object.js';
+import { isRealm } from '../runtime/realm.js';
 import { getIterator } from '../runtime/iterator.js';
 import {
   PromiseObject,
@@ -74,6 +76,12 @@ export function createPromiseIntrinsics(realm) {
     enumerable: false,
     configurable: true,
   });
+  promisePrototype.defineOwnProperty(realm.agent.wellKnownSymbols.toStringTag, {
+    value: 'Promise',
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
   defineBuiltinMethod(
     promisePrototype,
     'then',
@@ -125,7 +133,7 @@ export function createPromiseIntrinsics(realm) {
   );
   promiseConstructor.defineOwnProperty(realm.agent.wellKnownSymbols.species, {
     get: realm.createNativeFunction({
-      name: '[Symbol.species]',
+      name: 'get [Symbol.species]',
       length: 0,
       call(thisValue) {
         return thisValue;
@@ -271,7 +279,27 @@ function prototypeFromNewTarget(newTarget, defaultPrototype) {
   }
 
   const prototype = newTarget.get('prototype');
-  return prototype instanceof EngineObject ? prototype : defaultPrototype;
+  if (prototype instanceof EngineObject) {
+    return prototype;
+  }
+  if (!isCallable(newTarget)) {
+    return defaultPrototype;
+  }
+
+  const realmCompletion = getFunctionRealm(newTarget);
+  if (realmCompletion.type === 'throw') {
+    throw new ThrowSignal(realmCompletion.value);
+  }
+  if (!isRealm(realmCompletion.value)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Promise newTarget Realm lookup did not return a Realm',
+    );
+  }
+
+  return /** @type {EngineObject} */ (
+    realmCompletion.value.intrinsics.promisePrototype
+  );
 }
 
 /**

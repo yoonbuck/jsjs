@@ -43,6 +43,7 @@ export class AgentJobQueue {
     this.agent = agent;
     /** @type {JobRecord[]} */
     this.jobs = [];
+    this.jobHead = 0;
     /** @type {JobFailure[]} */
     this.failures = [];
     /** @type {'idle' | 'scheduled' | 'draining'} */
@@ -81,8 +82,9 @@ export class AgentJobQueue {
     let processed = 0;
 
     try {
-      while (this.jobs.length > 0) {
-        const job = /** @type {JobRecord} */ (this.jobs.shift());
+      while (this.jobHead < this.jobs.length) {
+        const job = /** @type {JobRecord} */ (this.jobs[this.jobHead]);
+        this.jobHead += 1;
         processed += 1;
         const previousRealm = this.jobRealm;
         let failed = false;
@@ -115,6 +117,8 @@ export class AgentJobQueue {
         }
       }
     } finally {
+      this.jobs = [];
+      this.jobHead = 0;
       this.scheduledGeneration = null;
       this.checkpointState = 'idle';
       this.jobRealm = null;

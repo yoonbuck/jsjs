@@ -19,7 +19,6 @@ import { isRealm } from './realm.js';
  *   capability: PromiseCapabilityRecord | null,
  *   type: 'fulfill' | 'reject',
  *   handler: CallableLike | null,
- *   currentRealm: Realm,
  * }} PromiseReactionRecord
  *
  * @typedef {{
@@ -47,6 +46,9 @@ export class PromiseObject extends EngineObject {
     this.promiseRejectReactions = [];
     this.promiseIsHandled = false;
     this.promiseRejectionHandleReported = false;
+    this.promiseReactionEnqueueInProgress = false;
+    /** @type {import('./jobs.js').JobRecord[]} */
+    this.promiseReactionJobs = [];
   }
 }
 
@@ -138,7 +140,7 @@ export function performPromiseAll(
     if (next === false) {
       remainingElementsCount.value -= 1;
       if (remainingElementsCount.value === 0) {
-        resultCapability.resolve.callFunction(undefined, [values]);
+        resolvePromiseAllCapability(resultCapability, values, currentRealm);
       }
       return resultCapability.promise;
     }
@@ -277,18 +279,17 @@ export function performPromiseThen(
     capability: resultCapability,
     type: /** @type {const} */ ('fulfill'),
     handler: isCallable(onFulfilled) ? onFulfilled : null,
-    currentRealm,
   };
   const rejectReaction = {
     capability: resultCapability,
     type: /** @type {const} */ ('reject'),
     handler: isCallable(onRejected) ? onRejected : null,
-    currentRealm,
   };
 
   if (promise.promiseState === 'pending') {
     promise.promiseFulfillReactions.push(fulfillReaction);
     promise.promiseRejectReactions.push(rejectReaction);
+    markPromiseHandled(promise);
   } else if (promise.promiseState === 'fulfilled') {
     promise.realm.agent.enqueueJob(
       newPromiseReactionJob(
@@ -297,25 +298,15 @@ export function performPromiseThen(
         currentRealm,
       ),
     );
+    markPromiseHandled(promise);
   } else {
-    promise.realm.agent.enqueueJob(
-      newPromiseReactionJob(
-        rejectReaction,
-        promise.promiseResult,
-        currentRealm,
-      ),
+    enqueueRejectedPromiseReaction(
+      promise,
+      rejectReaction,
+      promise.promiseResult,
+      currentRealm,
     );
   }
-
-  if (
-    promise.promiseState === 'rejected' &&
-    !promise.promiseIsHandled &&
-    !promise.promiseRejectionHandleReported
-  ) {
-    promise.promiseRejectionHandleReported = true;
-    trackPromiseRejection(promise, 'handle');
-  }
-  promise.promiseIsHandled = true;
 
   return resultCapability.promise;
 }
@@ -434,12 +425,13 @@ export function createResolvingFunctions(promise, currentRealm) {
             'TypeError',
             'Cannot resolve a Promise with itself',
           ),
+          currentRealm,
         );
         return undefined;
       }
 
       if (!(resolution instanceof EngineObject)) {
-        fulfillPromise(promise, resolution);
+        fulfillPromise(promise, resolution, currentRealm);
         return undefined;
       }
 
@@ -448,12 +440,12 @@ export function createResolvingFunctions(promise, currentRealm) {
       try {
         then = resolution.get('then');
       } catch (error) {
-        rejectPromise(promise, abruptValue(currentRealm, error));
+        rejectPromise(promise, abruptValue(currentRealm, error), currentRealm);
         return undefined;
       }
 
       if (!isCallable(then)) {
-        fulfillPromise(promise, resolution);
+        fulfillPromise(promise, resolution, currentRealm);
         return undefined;
       }
 
@@ -471,7 +463,7 @@ export function createResolvingFunctions(promise, currentRealm) {
         return undefined;
       }
       alreadyResolved.value = true;
-      rejectPromise(promise, args[0]);
+      rejectPromise(promise, args[0], currentRealm);
       return undefined;
     },
   });
@@ -514,12 +506,32 @@ function createPromiseAllResolveElementFunction(
       remainingElementsCount.value -= 1;
 
       if (remainingElementsCount.value === 0) {
-        resultCapability.resolve.callFunction(undefined, [values]);
+        resolvePromiseAllCapability(resultCapability, values, currentRealm);
       }
 
       return undefined;
     },
   });
+}
+
+/**
+ * `PerformPromiseAll` turns an abrupt final capability resolve into exactly one
+ * rejection of that capability. Its callers have already finished iteration, so
+ * this deliberately does not use `IteratorClose`.
+ *
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {EngineArray} values
+ * @param {Realm} currentRealm
+ * @returns {void}
+ */
+function resolvePromiseAllCapability(resultCapability, values, currentRealm) {
+  try {
+    resultCapability.resolve.callFunction(undefined, [values]);
+  } catch (error) {
+    resultCapability.reject.callFunction(undefined, [
+      abruptValue(currentRealm, error),
+    ]);
+  }
 }
 
 /**
@@ -586,19 +598,21 @@ function rejectAfterIteratorClose(
 /**
  * @param {PromiseObject} promise
  * @param {unknown} value
+ * @param {Realm} [currentRealm]
  * @returns {void}
  */
-export function fulfillPromise(promise, value) {
-  settlePromise(promise, 'fulfilled', value);
+export function fulfillPromise(promise, value, currentRealm = promise.realm) {
+  settlePromise(promise, 'fulfilled', value, currentRealm);
 }
 
 /**
  * @param {PromiseObject} promise
  * @param {unknown} reason
+ * @param {Realm} [currentRealm]
  * @returns {void}
  */
-export function rejectPromise(promise, reason) {
-  settlePromise(promise, 'rejected', reason);
+export function rejectPromise(promise, reason, currentRealm = promise.realm) {
+  settlePromise(promise, 'rejected', reason, currentRealm);
 }
 
 /**
@@ -664,9 +678,10 @@ function getThenableJobRealm(then, currentRealm) {
  * @param {PromiseObject} promise
  * @param {'fulfilled' | 'rejected'} state
  * @param {unknown} result
+ * @param {Realm} currentRealm
  * @returns {void}
  */
-function settlePromise(promise, state, result) {
+function settlePromise(promise, state, result, currentRealm) {
   if (promise.promiseState !== 'pending') {
     return;
   }
@@ -680,26 +695,28 @@ function settlePromise(promise, state, result) {
   promise.promiseState = state;
   promise.promiseResult = result;
 
-  triggerPromiseReactions(reactions, result);
+  triggerPromiseReactions(promise, reactions, result, currentRealm);
   if (state === 'rejected' && !promise.promiseIsHandled) {
     trackPromiseRejection(promise, 'reject');
   }
 }
 
 /**
+ * @param {PromiseObject} promise
  * @param {PromiseReactionRecord[]} reactions
  * @param {unknown} argument
+ * @param {Realm} currentRealm
  * @returns {void}
  */
-function triggerPromiseReactions(reactions, argument) {
+function triggerPromiseReactions(promise, reactions, argument, currentRealm) {
   let didThrow = false;
   /** @type {unknown} */
   let firstError;
 
   for (const reaction of reactions) {
     try {
-      reaction.currentRealm.agent.enqueueJob(
-        newPromiseReactionJob(reaction, argument, reaction.currentRealm),
+      promise.realm.agent.enqueueJob(
+        newPromiseReactionJob(reaction, argument, currentRealm),
       );
     } catch (error) {
       if (!didThrow) {
@@ -767,6 +784,80 @@ function trackPromiseRejection(promise, operation) {
     tracker(promise, operation);
   } catch (error) {
     promise.realm.agent.recordHostHookFailure(error);
+  }
+}
+
+/**
+ * @param {PromiseObject} promise
+ * @returns {void}
+ */
+function markPromiseHandled(promise) {
+  if (promise.promiseIsHandled) {
+    return;
+  }
+
+  promise.promiseIsHandled = true;
+  if (
+    promise.promiseState === 'rejected' &&
+    !promise.promiseRejectionHandleReported
+  ) {
+    promise.promiseRejectionHandleReported = true;
+    trackPromiseRejection(promise, 'handle');
+  }
+}
+
+/**
+ * The rejection tracker can synchronously attach another handler. Buffer jobs
+ * until the original handler is retained so that tracking precedes scheduling
+ * without reversing their registration order.
+ *
+ * @param {PromiseObject} promise
+ * @param {PromiseReactionRecord} reaction
+ * @param {unknown} argument
+ * @param {Realm} currentRealm
+ * @returns {void}
+ */
+function enqueueRejectedPromiseReaction(
+  promise,
+  reaction,
+  argument,
+  currentRealm,
+) {
+  const job = newPromiseReactionJob(reaction, argument, currentRealm);
+  if (promise.promiseReactionEnqueueInProgress) {
+    promise.promiseReactionJobs.push(job);
+    return;
+  }
+
+  promise.promiseReactionEnqueueInProgress = true;
+  promise.promiseReactionJobs.push(job);
+  let didThrow = false;
+  /** @type {unknown} */
+  let firstError;
+
+  try {
+    markPromiseHandled(promise);
+    for (
+      let index = 0;
+      index < promise.promiseReactionJobs.length;
+      index += 1
+    ) {
+      try {
+        promise.realm.agent.enqueueJob(promise.promiseReactionJobs[index]);
+      } catch (error) {
+        if (!didThrow) {
+          didThrow = true;
+          firstError = error;
+        }
+      }
+    }
+  } finally {
+    promise.promiseReactionJobs = [];
+    promise.promiseReactionEnqueueInProgress = false;
+  }
+
+  if (didThrow) {
+    throw firstError;
   }
 }
 
