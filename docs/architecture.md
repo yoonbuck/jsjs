@@ -497,7 +497,11 @@ a descriptor-safe snapshot of its AST nodes and structural arrays. Parsing then
 uses that snapshot's directive prologue to inherit strictness, and returns a
 fresh Program whose body contains the snapshotted statements followed by the
 newly parsed statements. Callback mutations affect only the ignored original;
-the supplied Program is not mutated by the engine. A custom `parse` hook still
+the supplied Program is not mutated by the engine. The snapshot clones ordinary
+object and array data while preserving cycles and shared references, but rejects
+function-valued state before callbacks because ESTree does not require it. The
+combined Program is also checked for duplicate lexical declarations and
+lexical/`var` conflicts across the append boundary. A custom `parse` hook still
 receives its options unchanged.
 
 Multiple `evaluateScript` calls against the same realm share state:

@@ -7,7 +7,11 @@ import {
   UnsupportedNodeError,
 } from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
-import { boundNames } from './evaluator/static-semantics.js';
+import {
+  boundNames,
+  topLevelLexicallyDeclaredNames,
+  topLevelVarDeclaredNames,
+} from './evaluator/static-semantics.js';
 import {
   parseFlags,
   RegExpSyntaxError,
@@ -192,6 +196,7 @@ export function parseScript(source, options = {}) {
       /** @type {any} */ (reusableProgramSnapshot),
       program,
     );
+    checkProgramDeclarationEarlyErrors(program.body);
   }
 
   return validateScriptProgram(
@@ -289,7 +294,9 @@ function validateScriptProgram(
  * without invoking accessors. Non-index array properties are omitted so a
  * shadowed `map`, `every`, or iterator cannot become executable validation
  * state; their detached values are still scanned to ensure the omission cannot
- * hide an AST node.
+ * hide an AST node or function. Functions are rejected everywhere because no
+ * evaluator-relevant ESTree value requires one and retaining one would preserve
+ * caller-owned executable state.
  *
  * Reflection is unavoidable for Proxy inputs, but no ordinary property read or
  * caller-supplied method is used.
@@ -310,6 +317,12 @@ function snapshotReusableProgram(program) {
    * @returns {unknown}
    */
   function copyValue(value) {
+    if (typeof value === 'function') {
+      throw untrustedAstSyntaxError(
+        'Reusable Program values must not be functions',
+      );
+    }
+
     if (!value || typeof value !== 'object') {
       return value;
     }
@@ -470,7 +483,13 @@ function checkOmittedArrayMetadata(roots) {
   while (pending.length > 0) {
     const value = pending.pop();
 
-    if (!value || (typeof value !== 'object' && typeof value !== 'function')) {
+    if (typeof value === 'function') {
+      throw untrustedAstSyntaxError(
+        'Reusable Program values must not be functions',
+      );
+    }
+
+    if (!value || typeof value !== 'object') {
       continue;
     }
 
@@ -656,6 +675,33 @@ function mergeReusableProgram(existingProgram, parsedProgram) {
   });
 
   return parsedProgram;
+}
+
+/**
+ * Applies ScriptBody's declaration early errors to the combined Program. Acorn
+ * checks each separately parsed half, so only the merge boundary can introduce
+ * a duplicate lexical name or a lexical/var conflict.
+ *
+ * The shared top-level static semantics preserve the important distinctions:
+ * classes and destructuring contribute all bound lexical names, direct and
+ * labelled functions are var-scoped, and block functions stay out of the
+ * top-level var list so Annex B eligibility is not approximated here.
+ *
+ * @param {readonly any[]} body
+ * @returns {void}
+ */
+function checkProgramDeclarationEarlyErrors(body) {
+  const lexicalNames = topLevelLexicallyDeclaredNames(body);
+  const varNames = new Set(topLevelVarDeclaredNames(body));
+  const seenLexicalNames = new Set();
+
+  for (const name of lexicalNames) {
+    if (seenLexicalNames.has(name) || varNames.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+
+    seenLexicalNames.add(name);
+  }
 }
 
 /**

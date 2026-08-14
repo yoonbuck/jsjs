@@ -593,7 +593,7 @@ const tests = [
     },
   },
   {
-    name: 'reusable Program snapshots omit other structural-array method shadows',
+    name: 'reusable Program snapshots reject structural-array method shadows',
     run() {
       const program = parseScript('function existing(value) { return value; }');
       const declaration = program.body[0];
@@ -610,18 +610,10 @@ const tests = [
         });
       }
 
-      const result = parseScript('added;', { program });
+      assertThrows(() => parseScript('added;', { program }), SyntaxError);
 
       assertSame(methodCalls, 0);
       assertSame(declaration.generator, false);
-      assertSame(result.body[0].generator, false);
-      for (const method of ['map', 'every', 'some', 'includes']) {
-        assertSame(
-          Object.prototype.hasOwnProperty.call(result.body[0].params, method),
-          false,
-          method,
-        );
-      }
     },
   },
   {
@@ -639,6 +631,73 @@ const tests = [
       });
 
       assertThrows(() => parseScript('added;', { program }), SyntaxError);
+    },
+  },
+  {
+    name: 'reusable Program snapshots reject function-valued metadata before callbacks',
+    run() {
+      for (const key of ['metadata', Symbol('metadata')]) {
+        const program = parseScript('existing;');
+        const callbackTarget = /** @type {any} */ (() => {});
+        let callbackCalls = 0;
+
+        Object.defineProperty(program.body[0], key, {
+          value: callbackTarget,
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        });
+
+        assertThrows(
+          () =>
+            parseScript('added;', {
+              program,
+              onToken() {
+                callbackCalls += 1;
+                callbackTarget.hidden = {
+                  type: 'UnsupportedCallbackNode',
+                };
+              },
+            }),
+          SyntaxError,
+        );
+        assertSame(callbackCalls, 0);
+        assertSame(
+          Object.prototype.hasOwnProperty.call(callbackTarget, 'hidden'),
+          false,
+        );
+      }
+    },
+  },
+  {
+    name: 'reusable Program snapshots preserve RegExp literals and clone cyclic shared metadata',
+    run() {
+      const program = parseScript('/source/gi;');
+      const shared = { note: 'original' };
+      const metadata = /** @type {any} */ ({
+        values: [shared, shared],
+      });
+      metadata.self = metadata;
+      program.body[0].metadata = metadata;
+
+      const result = parseScript('added;', {
+        program,
+        onToken() {
+          shared.note = 'mutated';
+        },
+      });
+      const copiedMetadata = result.body[0].metadata;
+      const copiedLiteral = result.body[0].expression;
+
+      assertSame(copiedMetadata === metadata, false);
+      assertSame(copiedMetadata.values === metadata.values, false);
+      assertSame(copiedMetadata.values[0] === shared, false);
+      assertSame(copiedMetadata.values[0], copiedMetadata.values[1]);
+      assertSame(copiedMetadata.self, copiedMetadata);
+      assertSame(copiedMetadata.values[0].note, 'original');
+      assertSame(copiedLiteral.type, 'Literal');
+      assertSame(copiedLiteral.regex.pattern, 'source');
+      assertSame(copiedLiteral.regex.flags, 'gi');
     },
   },
   {
@@ -663,7 +722,7 @@ const tests = [
     },
   },
   {
-    name: 'caller-supplied Program append bypasses an own body push method',
+    name: 'caller-supplied Program rejects an own body push method without invoking it',
     run() {
       const program = parseScript('existing;');
       let pushCalls = 0;
@@ -677,15 +736,10 @@ const tests = [
         configurable: true,
       });
 
-      const result = parseScript('added;', { program });
+      assertThrows(() => parseScript('added;', { program }), SyntaxError);
 
       assertSame(pushCalls, 0);
-      assertSame(result === program, false);
       assertSame(program.body.length, 1);
-      assertSame(result.body.length, 2);
-      assertSame(result.body[0].expression.name, 'existing');
-      assertSame(result.body[1].expression.name, 'added');
-      assertSame(result.sourceType, 'script');
     },
   },
   {
@@ -762,6 +816,48 @@ const tests = [
       });
 
       assertSame(forgedResult.body[1].directive, undefined);
+    },
+  },
+  {
+    name: 'caller-supplied Program append rejects cross-boundary declaration conflicts',
+    run() {
+      const rejected = [
+        ['"use strict"; let x;', 'let x;'],
+        ['"use strict"; let x;', 'var x;'],
+        ['"use strict"; var x;', 'let x;'],
+        ['"use strict"; class Example {}', 'let Example;'],
+        ['"use strict"; let { value: renamed } = source;', 'var renamed;'],
+        ['label: function labelled() {}', 'let labelled;'],
+      ];
+
+      for (const [existingSource, appendedSource] of rejected) {
+        assertThrows(
+          () =>
+            parseScript(appendedSource, {
+              program: parseScript(existingSource),
+            }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'caller-supplied Program append preserves repeated var and function declarations',
+    run() {
+      const allowed = [
+        ['"use strict"; var x;', 'var x;'],
+        ['function repeated() {}', 'function repeated() {}'],
+        ['var shared;', 'function shared() {}'],
+        ['{ function blockScoped() {} }', 'let blockScoped;'],
+      ];
+
+      for (const [existingSource, appendedSource] of allowed) {
+        const result = parseScript(appendedSource, {
+          program: parseScript(existingSource),
+        });
+
+        assertSame(result.type, 'Program');
+      }
     },
   },
   {
