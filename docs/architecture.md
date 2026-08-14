@@ -522,11 +522,12 @@ console.log(result); // { type: 'normal', value: 42 }
 
 ### `parseScript(source, parserOptions?): Program`
 
-Parses `source` as a script and returns an Acorn AST. The grammar is ES5.1 plus
-ES2015 lexical declarations and block-level function declarations; the engine's
-unsupported-ES2015 early errors apply, so any other ES2015 construct is
-rejected. Throws a host `SyntaxError` (not a
-guest error) on invalid input.
+Parses `source` as a script and returns an Acorn AST. The supported ES2015
+grammar is the capability set listed under [Source flow](#source-flow), including
+lexical declarations, arrows, classes, templates, destructuring, parameter and
+spread syntax, and enhanced object literals. Neighboring ES2015 forms outside
+that list are rejected by the engine's capability pass. Throws a host
+`SyntaxError` (not a guest error) on invalid input.
 
 ### `createAgent(): Agent`
 
