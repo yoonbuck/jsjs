@@ -145,13 +145,12 @@ export class EngineFunction extends EngineObject {
       });
     }
 
-    // ECMA-262 13.2 strict-function-only steps: define non-configurable,
+    // ECMA-262's strict ordinary-function steps define non-configurable,
     // non-enumerable accessor properties for "caller" and "arguments" that
     // both read and write through the realm's shared %ThrowTypeError%
-    // intrinsic. Non-strict functions have no such own properties, so
-    // reading nonStrictFn.caller/.arguments returns undefined via ordinary
-    // property lookup miss.
-    if (strict) {
+    // intrinsic. ES2015 methods, arrows, and class constructors must instead
+    // omit those own properties even though they are strict.
+    if (strict && functionKind === 'normal') {
       const thrower = /** @type {EngineFunction | undefined} */ (
         realm.intrinsics.throwTypeErrorFunction
       );

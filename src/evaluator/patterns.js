@@ -10,7 +10,11 @@ import {
 } from '../runtime/iterator.js';
 import { Reference, getValue, putValue } from '../runtime/reference.js';
 import { evaluateNamedExpression } from './declarations.js';
-import { evaluateExpression, evaluateExpressionValue } from './expressions.js';
+import {
+  applyPreparedAssignmentTarget,
+  evaluateExpressionValue,
+  prepareAssignmentTarget,
+} from './expressions.js';
 import { evaluatePropertyName } from './property-name.js';
 
 /**
@@ -58,14 +62,13 @@ export function initializeBindingPattern(pattern, value, env, context) {
 export function assignPattern(pattern, value, context) {
   applyPattern(pattern, value, context, {
     prepare(target) {
-      return /** @type {import('../runtime/reference.js').Reference} */ (
-        evaluateExpression(target, context)
-      );
+      return prepareAssignmentTarget(target, context);
     },
     apply(prepared, nextValue) {
-      putValue(
-        /** @type {import('../runtime/reference.js').Reference} */ (prepared),
+      applyPreparedAssignmentTarget(
+        /** @type {any} */ (prepared),
         nextValue,
+        context,
       );
     },
   });

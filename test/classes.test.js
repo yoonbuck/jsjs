@@ -200,6 +200,29 @@ const tests = [
     },
   },
   {
+    name: 'class constructors and methods omit own restricted caller and arguments properties',
+    run() {
+      assertSame(
+        run(`
+          class C {
+            constructor() {}
+            method() {}
+            static staticMethod() {}
+          }
+          [
+            C.prototype.method.hasOwnProperty('caller'),
+            C.prototype.method.hasOwnProperty('arguments'),
+            C.staticMethod.hasOwnProperty('caller'),
+            C.staticMethod.hasOwnProperty('arguments'),
+            C.hasOwnProperty('caller'),
+            C.hasOwnProperty('arguments')
+          ].join(':');
+        `),
+        'false:false:false:false:false:false',
+      );
+    },
+  },
+  {
     name: 'computed class names evaluate once left to right and preserve method names',
     run() {
       const realm = createRealm();

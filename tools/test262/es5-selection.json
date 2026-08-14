@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "excludedDirectories": ["test/intl402"],
   "builtins": [
     "Array",
@@ -175,6 +175,17 @@
       ],
       "reason": "ES2015 function declarations support defaults, destructuring, and rest parameters. Generator and async function forms remain unclaimed."
     }
+  ],
+  "expansionFeatures": [
+    "arrow-function",
+    "class",
+    "computed-property-names",
+    "default-parameters",
+    "destructuring-assignment",
+    "destructuring-binding",
+    "rest-parameters",
+    "spread-syntax",
+    "template"
   ],
   "exclusions": [
     {

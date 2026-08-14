@@ -250,6 +250,59 @@ const tests = [
     },
   },
   {
+    name: 'array destructuring assignment defers target key coercion until after iterator completion',
+    run() {
+      assertSame(
+        val(
+          createRealm(),
+          `
+            var log = [];
+            function source() {
+              log.push('source');
+              var iterator = {
+                next: function () {
+                  log.push('iterator-step');
+                  return {
+                    get done() {
+                      log.push('iterator-done');
+                      return true;
+                    }
+                  };
+                }
+              };
+              var value = {};
+              value[Symbol.iterator] = function () {
+                log.push('iterator');
+                return iterator;
+              };
+              return value;
+            }
+            function target() {
+              log.push('target');
+              return target = {
+                set q(value) {
+                  log.push('set');
+                }
+              };
+            }
+            function targetKey() {
+              log.push('target-key');
+              return {
+                toString: function () {
+                  log.push('target-key-tostring');
+                  return 'q';
+                }
+              };
+            }
+            [target()[targetKey()]] = source();
+            log.join(',');
+          `,
+        ),
+        'source,iterator,target,target-key,iterator-step,iterator-done,target-key-tostring,set',
+      );
+    },
+  },
+  {
     name: 'anonymous function defaults receive the identifier target name',
     run() {
       assertSame(

@@ -102,6 +102,19 @@ const tests = [
     },
   },
   {
+    name: 'strict arrows omit own restricted caller and arguments properties',
+    run() {
+      assertSame(
+        run(`
+          "use strict";
+          var arrow = () => {};
+          arrow.hasOwnProperty('caller') + ':' + arrow.hasOwnProperty('arguments');
+        `),
+        'false:false',
+      );
+    },
+  },
+  {
     name: 'call apply and bind cannot replace an arrow lexical this',
     run() {
       assertSame(

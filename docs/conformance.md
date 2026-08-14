@@ -126,17 +126,17 @@ A file is a candidate only if it survives every filter:
   classifications. Under `test/built-ins`, an allow-list names the ES5.1
   library plus Symbol and iterator prototypes, keeping a global such as `Proxy`
   out of scope by construction.
-- **Metadata.** Anything flagged `module` is out. A test that declares a
-  `features:` tag is out too, unless a **feature area** claims it: an entry in
-  the policy's `featureAreas` naming a directory prefix and the exact tags the
-  engine implements there. A tagged test is a candidate only when an area
-  covers its path _and_ claims every tag the test declares, so claiming
-  `Symbol` earns coverage under `test/built-ins/Symbol` without dragging in
-  the thousands of `Symbol`-tagged tests elsewhere in the tree, and a test
-  under that prefix that also needs `cross-realm` or `Symbol.matchAll` stays
-  out. Every claimed tag also carries an executable probe in the
-  [Feature manifest](#feature-manifest), so a claim the engine cannot back is
-  a failing test rather than a comment.
+- **Known-good baseline and metadata.** The exact paths in
+  `tools/test262/known-good-subset.json` are retained after the path, module,
+  grammar, and exclusion guards. A path outside that baseline must declare a
+  `features:` tag that includes at least one policy `expansionFeatures` entry,
+  and a **feature area** must cover its path _and_ claim every tag it declares.
+  This permits the narrow issue #25 syntax expansion without making a grammar
+  widening a semantic claim: newly parseable untagged tests and unrelated
+  tagged tests such as `Symbol.species` stay out. It also keeps a candidate
+  that additionally needs `cross-realm` or `Symbol.matchAll` out. Every claimed
+  tag carries an executable probe in the [Feature manifest](#feature-manifest),
+  so a claim the engine cannot back is a failing test rather than a comment.
 
   In addition to the Symbol and lexical/iteration tags, the manifest claims the
   exact syntax tags `arrow-function`, `class`, `computed-property-names`,
@@ -151,10 +151,11 @@ A file is a candidate only if it survives every filter:
 
 - **Engine grammar filter.** Every remaining file and harness include is parsed
   with the engine's own `parseScript`. A file that fails the parser's supported
-  shape gate is excluded structurally rather than by name; known-good untagged
-  paths remain selected when the engine gains a supported grammar form. The
-  path policy, exact feature-area tags, module flag, and classified exclusions
-  continue to prevent unsupported neighbors from becoming claims.
+  shape gate is excluded structurally rather than by name. Grammar acceptance
+  alone never expands the subset: only a retained known-good path or a declared,
+  exact feature-area expansion can do that. The path policy, module flag, and
+  classified exclusions continue to prevent unsupported neighbors from becoming
+  claims.
 - **Classified exclusions.** What survives all of the above but still must not
   run is carved out one path (or prefix) at a time, each with a category and a
   written reason.
@@ -415,6 +416,7 @@ run.
 
 - Selection policy: [`tools/test262/es5-selection.json`](../tools/test262/es5-selection.json)
 - Selection implementation: [`tools/test262/es5-selection.js`](../tools/test262/es5-selection.js)
+- Known-good subset: [`tools/test262/known-good-subset.json`](../tools/test262/known-good-subset.json)
 - Feature manifest: [`tools/test262/features.json`](../tools/test262/features.json)
 - Detailed report: [`docs/test262-report.jsonl`](test262-report.jsonl)
 - Upstream subset manifest: [`tools/test262/upstream-subset.json`](../tools/test262/upstream-subset.json)

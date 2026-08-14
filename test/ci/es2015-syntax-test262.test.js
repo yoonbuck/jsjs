@@ -25,11 +25,11 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
+import { scanFrontmatter } from '../../tools/test262/es5-selection.js';
 
-const PRE_TASK9_BASELINE_SUBSET_FILE =
-  'test/fixtures/test262-upstream-subset-238eee.json';
+const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 
-const PRE_TASK9_BASELINE_PATH_COUNT = 12434;
+const KNOWN_GOOD_PATH_COUNT = 12434;
 
 /**
  * Positive and negative upstream files for the implemented language forms,
@@ -43,11 +43,16 @@ const SUPPORTED_PATHS = Object.freeze([
   'test/language/expressions/array/spread-mult-iter.js',
   'test/language/expressions/arrow-function/lexical-this.js',
   'test/language/expressions/arrow-function/throw-new.js',
+  'test/language/expressions/assignment/destructuring/iterator-destructuring-property-reference-target-evaluation-order.js',
   'test/language/expressions/assignment/dstr/array-elem-iter-thrw-close.js',
   'test/language/expressions/assignment/dstr/obj-prop-put-order.js',
   'test/language/expressions/call/spread-err-sngl-err-itr-step.js',
   'test/language/expressions/class/accessor-name-inst/computed.js',
   'test/language/expressions/class/accessor-name-static/computed.js',
+  'test/language/expressions/class/method-static/forbidden-ext/b1/cls-expr-meth-static-forbidden-ext-direct-access-prop-arguments.js',
+  'test/language/expressions/class/method-static/forbidden-ext/b1/cls-expr-meth-static-forbidden-ext-direct-access-prop-caller.js',
+  'test/language/expressions/class/method/forbidden-ext/b1/cls-expr-meth-forbidden-ext-direct-access-prop-arguments.js',
+  'test/language/expressions/class/method/forbidden-ext/b1/cls-expr-meth-forbidden-ext-direct-access-prop-caller.js',
   'test/language/expressions/function/dflt-params-arg-val-undefined.js',
   'test/language/expressions/function/dflt-params-ref-later.js',
   'test/language/expressions/function/dflt-params-rest.js',
@@ -57,6 +62,10 @@ const SUPPORTED_PATHS = Object.freeze([
   'test/language/expressions/tagged-template/cache-same-site.js',
   'test/language/expressions/template-literal/evaluation-order.js',
   'test/language/rest-parameters/rest-parameters-produce-an-array.js',
+  'test/language/statements/class/method-static/forbidden-ext/b1/cls-decl-meth-static-forbidden-ext-direct-access-prop-arguments.js',
+  'test/language/statements/class/method-static/forbidden-ext/b1/cls-decl-meth-static-forbidden-ext-direct-access-prop-caller.js',
+  'test/language/statements/class/method/forbidden-ext/b1/cls-decl-meth-forbidden-ext-direct-access-prop-arguments.js',
+  'test/language/statements/class/method/forbidden-ext/b1/cls-decl-meth-forbidden-ext-direct-access-prop-caller.js',
   'test/language/statements/class/subclass/derived-class-return-override-catch-super.js',
 ]);
 
@@ -164,10 +173,11 @@ export default [
     },
   },
   {
-    name: 'generated selection retains every path from the pre-Task 9 known-good subset',
+    name: 'generated selection retains every path from the known-good subset',
     run: async () => {
-      const [baselineText, currentText] = await Promise.all([
-        readFile(PRE_TASK9_BASELINE_SUBSET_FILE, 'utf8'),
+      const [pin, baselineText, currentText] = await Promise.all([
+        readTest262Pin(),
+        readFile(KNOWN_GOOD_SUBSET_FILE, 'utf8'),
         readFile('tools/test262/upstream-subset.json', 'utf8'),
       ]);
       const baselinePaths = upstreamSubsetPaths(
@@ -177,16 +187,34 @@ export default [
         upstreamSubsetPaths(parseUpstreamSubset(currentText)),
       );
       const missing = baselinePaths.filter((path) => !currentPaths.has(path));
+      const baselinePathSet = new Set(baselinePaths);
+      const nonbaselinePaths = [...currentPaths].filter(
+        (path) => !baselinePathSet.has(path),
+      );
+      const nonbaselineSources = await Promise.all(
+        nonbaselinePaths.map((path) =>
+          readFile(`${pin.checkoutPath}/${path}`, 'utf8'),
+        ),
+      );
+      const nonbaselineUntagged = nonbaselinePaths.filter(
+        (path, index) =>
+          !scanFrontmatter(nonbaselineSources[index]).hasFeatures,
+      );
 
       assertSame(
         baselinePaths.length,
-        PRE_TASK9_BASELINE_PATH_COUNT,
-        'the preserved baseline fixture must retain its known-good path count',
+        KNOWN_GOOD_PATH_COUNT,
+        'the preserved known-good subset must retain its path count',
       );
       assertSame(
         missing.length,
         0,
         `current selection dropped pre-Task 9 paths: ${JSON.stringify(missing)}`,
+      );
+      assertSame(
+        nonbaselineUntagged.length,
+        0,
+        `generated selection admitted nonbaseline untagged paths: ${JSON.stringify(nonbaselineUntagged.slice(0, 10))}`,
       );
     },
   },

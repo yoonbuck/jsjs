@@ -74,6 +74,19 @@ import {
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
  */
 
+/**
+ * @typedef {
+ *   | { kind: 'reference', reference: Reference }
+ *   | { kind: 'member', baseValue: unknown, propertyValue: unknown }
+ *   | {
+ *       kind: 'superMember',
+ *       homeObject: EngineObject,
+ *       thisValue: unknown,
+ *       propertyValue: unknown,
+ *     }
+ * } PreparedAssignmentTarget
+ */
+
 const SUPPORTED_BINARY_OPERATORS = new Set([
   '+',
   '-',
@@ -244,6 +257,84 @@ export function evaluateExpressionValue(node, context) {
 
   const result = evaluateExpression(node, context);
   return result instanceof Reference ? getValue(result) : result;
+}
+
+/**
+ * Evaluates an assignment target far enough to preserve its observable base and
+ * property-expression order, while allowing destructuring to defer property-key
+ * conversion until the pattern algorithm is ready to perform `PutValue`.
+ *
+ * Ordinary assignment keeps using `evaluateExpression`, so this representation
+ * is confined to destructuring assignment targets.
+ *
+ * @param {any} target
+ * @param {EvaluationContext} context
+ * @returns {PreparedAssignmentTarget}
+ */
+export function prepareAssignmentTarget(target, context) {
+  if (target.type === 'Identifier') {
+    return {
+      kind: 'reference',
+      reference: /** @type {Reference} */ (evaluateExpression(target, context)),
+    };
+  }
+
+  if (target.type !== 'MemberExpression') {
+    throw createUnsupportedNodeError(target);
+  }
+
+  if (target.object.type === 'Super') {
+    return {
+      kind: 'superMember',
+      homeObject: getSuperHomeObject(context.functionEnvironment),
+      thisValue: getContextThisBinding(context),
+      propertyValue: evaluateMemberPropertyValue(target, context),
+    };
+  }
+
+  return {
+    kind: 'member',
+    baseValue: evaluateExpressionValue(target.object, context),
+    propertyValue: evaluateMemberPropertyValue(target, context),
+  };
+}
+
+/**
+ * Completes a prepared destructuring assignment target and applies `PutValue`.
+ * For member targets this is intentionally where `ToPropertyKey` occurs.
+ *
+ * @param {PreparedAssignmentTarget} prepared
+ * @param {unknown} value
+ * @param {EvaluationContext} context
+ * @returns {void}
+ */
+export function applyPreparedAssignmentTarget(prepared, value, context) {
+  switch (prepared.kind) {
+    case 'reference':
+      putValue(prepared.reference, value);
+      return;
+    case 'member':
+      putValue(
+        createOrdinaryMemberReference(
+          prepared.baseValue,
+          prepared.propertyValue,
+          context,
+        ),
+        value,
+      );
+      return;
+    case 'superMember':
+      putValue(
+        createSuperMemberReference(
+          prepared.homeObject,
+          prepared.thisValue,
+          prepared.propertyValue,
+          context,
+        ),
+        value,
+      );
+      return;
+  }
 }
 
 /**
@@ -938,18 +1029,9 @@ function evaluateMemberExpression(node, context) {
   }
 
   const baseValue = evaluateExpressionValue(node.object, context);
-  const propertyKey = node.computed
-    ? evaluateExpressionValue(node.property, context)
-    : node.property.name;
+  const propertyValue = evaluateMemberPropertyValue(node, context);
 
-  checkObjectCoercible(baseValue);
-
-  return new Reference(
-    toObjectBase(context.realm, baseValue),
-    toPropertyKey(propertyKey),
-    context.strict,
-    baseValue,
-  );
+  return createOrdinaryMemberReference(baseValue, propertyValue, context);
 }
 
 /**
@@ -970,14 +1052,60 @@ function evaluateMemberExpression(node, context) {
 function evaluateSuperMemberExpression(node, context) {
   const homeObject = getSuperHomeObject(context.functionEnvironment);
   const thisValue = getContextThisBinding(context);
+  const propertyValue = evaluateMemberPropertyValue(node, context);
 
-  const propertyKey = node.computed
-    ? toPropertyKey(evaluateExpressionValue(node.property, context))
+  return createSuperMemberReference(
+    homeObject,
+    thisValue,
+    propertyValue,
+    context,
+  );
+}
+
+/**
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {unknown}
+ */
+function evaluateMemberPropertyValue(node, context) {
+  return node.computed
+    ? evaluateExpressionValue(node.property, context)
     : node.property.name;
+}
+
+/**
+ * @param {unknown} baseValue
+ * @param {unknown} propertyValue
+ * @param {EvaluationContext} context
+ * @returns {Reference}
+ */
+function createOrdinaryMemberReference(baseValue, propertyValue, context) {
+  checkObjectCoercible(baseValue);
 
   return new Reference(
+    toObjectBase(context.realm, baseValue),
+    toPropertyKey(propertyValue),
+    context.strict,
+    baseValue,
+  );
+}
+
+/**
+ * @param {EngineObject} homeObject
+ * @param {unknown} thisValue
+ * @param {unknown} propertyValue
+ * @param {EvaluationContext} context
+ * @returns {Reference}
+ */
+function createSuperMemberReference(
+  homeObject,
+  thisValue,
+  propertyValue,
+  context,
+) {
+  return new Reference(
     new SuperReferenceBase(homeObject, thisValue),
-    propertyKey,
+    toPropertyKey(propertyValue),
     context.strict,
     thisValue,
   );
