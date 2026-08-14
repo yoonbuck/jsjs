@@ -638,7 +638,7 @@ export default [
     },
   },
   {
-    name: 'a nonbaseline Symbol.species candidate remains rejected despite a legacy feature area',
+    name: 'a nonbaseline Symbol.species Test262 case remains rejected without an expansion tag',
     run: () => {
       const policy = parseEs5Selection(
         policyText({
@@ -655,7 +655,7 @@ export default [
 
       assertSame(
         isCandidatePath(
-          'test/built-ins/Symbol/species/constructor.js',
+          'test/built-ins/Symbol/species/subclassing.js',
           {
             ...CANDIDATE_INFO,
             declaresFeatures: true,
@@ -665,7 +665,7 @@ export default [
           new Set(),
         ),
         false,
-        'a legacy feature area alone must not admit a nonbaseline Symbol.species path',
+        'a feature area alone must not admit the pinned Symbol.species subclassing test',
       );
     },
   },

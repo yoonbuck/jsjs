@@ -25,11 +25,30 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
-import { scanFrontmatter } from '../../tools/test262/es5-selection.js';
+import {
+  isCandidatePath,
+  parseEs5Selection,
+  scanFrontmatter,
+} from '../../tools/test262/es5-selection.js';
 
 const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 
 const KNOWN_GOOD_PATH_COUNT = 12434;
+
+const ISSUE_25_EXPANSION_FEATURES = Object.freeze([
+  'arrow-function',
+  'class',
+  'computed-property-names',
+  'default-parameters',
+  'destructuring-assignment',
+  'destructuring-binding',
+  'rest-parameters',
+  'spread-syntax',
+  'template',
+]);
+
+const SYMBOL_SPECIES_SUBCLASSING_PATH =
+  'test/built-ins/Symbol/species/subclassing.js';
 
 /**
  * Positive and negative upstream files for the implemented language forms,
@@ -173,13 +192,20 @@ export default [
     },
   },
   {
-    name: 'generated selection retains every path from the known-good subset',
+    name: 'generated selection retains its baseline and issue #25 expansion boundary',
     run: async () => {
-      const [pin, baselineText, currentText] = await Promise.all([
-        readTest262Pin(),
-        readFile(KNOWN_GOOD_SUBSET_FILE, 'utf8'),
-        readFile('tools/test262/upstream-subset.json', 'utf8'),
-      ]);
+      const pin = await readTest262Pin();
+      const [policyText, baselineText, currentText, symbolSpeciesSource] =
+        await Promise.all([
+          readFile('tools/test262/es5-selection.json', 'utf8'),
+          readFile(KNOWN_GOOD_SUBSET_FILE, 'utf8'),
+          readFile('tools/test262/upstream-subset.json', 'utf8'),
+          readFile(
+            `${pin.checkoutPath}/${SYMBOL_SPECIES_SUBCLASSING_PATH}`,
+            'utf8',
+          ),
+        ]);
+      const policy = parseEs5Selection(policyText);
       const baselinePaths = upstreamSubsetPaths(
         parseUpstreamSubset(baselineText),
       );
@@ -196,10 +222,32 @@ export default [
           readFile(`${pin.checkoutPath}/${path}`, 'utf8'),
         ),
       );
-      const nonbaselineUntagged = nonbaselinePaths.filter(
+      const nonbaselineFrontmatter = nonbaselineSources.map(scanFrontmatter);
+      const nonbaselineWithoutExpansionFeature = nonbaselinePaths.filter(
         (path, index) =>
-          !scanFrontmatter(nonbaselineSources[index]).hasFeatures,
+          !nonbaselineFrontmatter[index].features.some((feature) =>
+            policy.expansionFeatures.includes(feature),
+          ),
       );
+      const nonbaselineOutsideClaimedFeatureArea = nonbaselinePaths.filter(
+        (path, index) => {
+          const frontmatter = nonbaselineFrontmatter[index];
+
+          return !isCandidatePath(
+            path,
+            {
+              declaresFeatures: frontmatter.hasFeatures,
+              features: frontmatter.features,
+              isModule: frontmatter.isModule,
+              parsesUnderEngineGrammar: true,
+              includesParseUnderEngineGrammar: true,
+            },
+            policy,
+            baselinePathSet,
+          );
+        },
+      );
+      const symbolSpeciesFrontmatter = scanFrontmatter(symbolSpeciesSource);
 
       assertSame(
         baselinePaths.length,
@@ -212,9 +260,50 @@ export default [
         `current selection dropped pre-Task 9 paths: ${JSON.stringify(missing)}`,
       );
       assertSame(
-        nonbaselineUntagged.length,
+        JSON.stringify(policy.expansionFeatures),
+        JSON.stringify(ISSUE_25_EXPANSION_FEATURES),
+        'issue #25 must retain this exact sorted expansion feature boundary',
+      );
+      assertSame(
+        nonbaselineWithoutExpansionFeature.length,
         0,
-        `generated selection admitted nonbaseline untagged paths: ${JSON.stringify(nonbaselineUntagged.slice(0, 10))}`,
+        `generated selection admitted nonbaseline paths without an issue #25 expansion tag: ${JSON.stringify(nonbaselineWithoutExpansionFeature.slice(0, 10))}`,
+      );
+      assertSame(
+        nonbaselineOutsideClaimedFeatureArea.length,
+        0,
+        `generated selection admitted nonbaseline paths outside their exact claimed feature area: ${JSON.stringify(nonbaselineOutsideClaimedFeatureArea.slice(0, 10))}`,
+      );
+      assertSame(
+        JSON.stringify(symbolSpeciesFrontmatter.features),
+        JSON.stringify(['Symbol.species']),
+        'the pinned Symbol.species subclassing case must retain its actual metadata',
+      );
+      assertSame(
+        baselinePathSet.has(SYMBOL_SPECIES_SUBCLASSING_PATH),
+        false,
+        'the pinned Symbol.species subclassing case must be nonbaseline',
+      );
+      assertSame(
+        currentPaths.has(SYMBOL_SPECIES_SUBCLASSING_PATH),
+        false,
+        'the current subset must exclude the pinned Symbol.species subclassing case',
+      );
+      assertSame(
+        isCandidatePath(
+          SYMBOL_SPECIES_SUBCLASSING_PATH,
+          {
+            declaresFeatures: symbolSpeciesFrontmatter.hasFeatures,
+            features: symbolSpeciesFrontmatter.features,
+            isModule: symbolSpeciesFrontmatter.isModule,
+            parsesUnderEngineGrammar: true,
+            includesParseUnderEngineGrammar: true,
+          },
+          policy,
+          baselinePathSet,
+        ),
+        false,
+        'the committed policy must reject the pinned nonbaseline Symbol.species subclassing case',
       );
     },
   },
