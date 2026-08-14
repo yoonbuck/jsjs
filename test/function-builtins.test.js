@@ -68,7 +68,7 @@ const tests = [
 
       for (const descriptor of [caller, argumentsDescriptor]) {
         assertSame(descriptor.enumerable, false);
-        assertSame(descriptor.configurable, false);
+        assertSame(descriptor.configurable, true);
         assertSame(descriptor.get, thrower);
         assertSame(descriptor.set, thrower);
         assertSame(

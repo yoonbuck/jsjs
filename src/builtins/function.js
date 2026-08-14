@@ -146,7 +146,7 @@ export function createFunctionIntrinsics(realm) {
     get: thrower,
     set: thrower,
     enumerable: false,
-    configurable: false,
+    configurable: true,
   };
   functionPrototype.defineOwnProperty('caller', restricted);
   functionPrototype.defineOwnProperty('arguments', restricted);

@@ -59,7 +59,9 @@ const SYMBOL_SPECIES_SUBCLASSING_PATH =
  * sorted by repository-relative path.
  */
 const SUPPORTED_PATHS = Object.freeze([
+  'test/built-ins/Function/prototype/arguments/prop-desc.js',
   'test/built-ins/Function/prototype/caller-arguments/accessor-properties.js',
+  'test/built-ins/Function/prototype/caller/prop-desc.js',
   'test/language/computed-property-names/class/method/constructor.js',
   'test/language/computed-property-names/class/static/method-prototype.js',
   'test/language/destructuring/binding/initialization-requires-object-coercible-null.js',
