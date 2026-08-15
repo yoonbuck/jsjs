@@ -2914,36 +2914,6 @@
       "reason": "Relies on U+2028/U+2029 being valid inside a string literal, an ES2019 grammar change (\"JSON superset\") that let LineTerminator code points other than LF/CR appear unescaped in string literals; ES5.1 §7.8.4 treats U+2028/U+2029 as unterminated-string-producing line terminators inside string literals."
     },
     {
-      "path": "test/staging/sm/expressions/destructuring-array-default-call.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/expressions/destructuring-array-default-function-nested.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/expressions/destructuring-array-default-function.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/expressions/destructuring-array-default-simple.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/expressions/destructuring-array-default-yield.js",
-      "category": "post-es5-syntax",
-      "reason": "The shared sm harness file `sm/non262-expressions-shell.js` this test includes uses `class`, an ES2015 reserved word with no ES5.1 binding form, so the shared file fails to parse at ES5 and every test that includes it is unrunnable at ES5."
-    },
-    {
-      "path": "test/staging/sm/expressions/object-literal-__proto__.js",
-      "category": "post-es5-semantics",
-      "reason": "ES2015 Annex B B.3.1 gives `__proto__:` in an object literal prototype-mutation semantics; ES5.1 §11.1.5 treats `__proto__` as an ordinary own property, which is what this engine does."
-    },
-    {
       "path": "test/staging/sm/extensions/TypedArray-set-object-funky-length-detaches.js",
       "category": "post-es5-builtin",
       "reason": "Depends on the typed array family (`Int8Array`/etc.), an ES2015 builtin absent from ES5.1."
