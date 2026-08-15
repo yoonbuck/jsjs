@@ -289,10 +289,12 @@ enter the generated broad selection.
 
 Test262's `async` and `module` metadata are flags, not feature names: `async`
 selects the `$DONE` runner protocol, while `module` selects module parsing and
-loading. Neither invents a broad feature probe. The UTC
-`test262:upstream`/`test262:upstream:check` pair owns the broad report and
-generated coverage block. Unsupported async functions, async generators and
-iteration, and dynamic import remain excluded from both release paths.
+loading. Neither invents a broad feature probe. The
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` and
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`
+commands own the broad report and generated coverage block. Unsupported async
+functions, async generators and iteration, and dynamic import remain excluded
+from both release paths.
 
 ## How the ES5 selection is derived
 
@@ -354,7 +356,8 @@ A file is a candidate only if it survives every filter:
 That selects roughly a fifth of the upstream suite, and every selected record
 passes. The exact counts are not repeated here on purpose: they are live numbers,
 so they live in the generated [Coverage](#coverage) block where
-`npm run test262:upstream:check` keeps them honest, and nowhere else.
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`
+keeps them honest, and nowhere else.
 
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
@@ -527,19 +530,23 @@ implemented:
 
 ## Coverage
 
-The numbers below are generated: `TZ=UTC npm run test262:upstream` runs the pinned
-subset against `tc39/test262` at the revision `package.json` names, writes every
-per-test record to [`docs/test262-report.jsonl`](test262-report.jsonl), and
-rewrites this block from the same run. `TZ=UTC npm run test262:upstream:check`
-fails if either artifact has drifted, and the `test262-upstream` job fails CI the same way,
-so no number here can outlive the run that produced it. The run refuses to start
-outside a UTC time zone, because a few selected tests read the host's local
-offset (see
+The numbers below are generated:
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` runs the
+pinned subset against `tc39/test262` at the revision `package.json` names, writes
+every per-test record to
+[`docs/test262-report.jsonl`](test262-report.jsonl), and rewrites this block from
+the same run.
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`
+fails if either artifact has drifted, and the `test262-upstream` job fails CI the
+same way, so no number here can outlive the run that produced it. The run refuses
+to start outside a UTC time zone, because a few selected tests read the host's
+local offset (see
 [the offsetless-date deviation](limitations.md#the-clock-and-the-local-time-zone-come-from-the-host)),
 so the committed artifacts are a pure function of the engine and the pinned tree,
 not of the machine that generated them; CI pins `TZ=UTC` for the same reason.
-Regenerate with `TZ=UTC npm run test262:upstream`. The denominators are
-defined exactly under
+Regenerate with
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`. The
+denominators are defined exactly under
 [What the coverage numbers count](#what-the-coverage-numbers-count).
 
 ## ES2015 focused coverage

@@ -259,6 +259,7 @@ jobs:
       - name: Run the pinned Test262 subset
         run: npm run test262:upstream
         env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
           TZ: 'UTC'
       - name: Check for stale exclusions
         run: npm run test262:exclusions:check

@@ -479,6 +479,43 @@ export default [
     },
   },
   {
+    name: 'only the broad Test262 execution step receives the exact required Node heap allowance',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, 'test262-upstream');
+      const runStep = job.steps.find(
+        (/** @type {any} */ step) => step.run === 'npm run test262:upstream',
+      );
+
+      assertSame(
+        runStep !== undefined,
+        true,
+        'the broad Test262 execution step must exist',
+      );
+      assertSame(
+        workflow.env === undefined,
+        true,
+        'the heap allowance must not be workflow-global',
+      );
+      assertSame(
+        job.env === undefined,
+        true,
+        'the heap allowance must not be job-global',
+      );
+      assertSame(
+        JSON.stringify(Object.keys(runStep.env ?? {}).sort()),
+        '["NODE_OPTIONS","TZ"]',
+        'the broad execution step must have exactly NODE_OPTIONS and TZ',
+      );
+      assertSame(
+        runStep.env.NODE_OPTIONS,
+        '--max-old-space-size=4096',
+        'the broad execution step must use the proven 4096 MiB heap allowance',
+      );
+      assertSame(runStep.env.TZ, 'UTC');
+    },
+  },
+  {
     name: 'the Test262 job checks out the pinned upstream revision and publishes its report even on failure',
     run: async () => {
       const { workflow } = await readWorkflow();

@@ -38,43 +38,43 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 
 ## Commands
 
-| Command                                 | What it does                                                                                                                                                                                                                    |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                              | The Node suites, then the Test262 fixture suite through the CLI                                                                                                                                                                 |
-| `npm run test:node`                     | Every portable suite plus the Node-only suites in `test/node/`                                                                                                                                                                  |
-| `npm run test:browser`                  | Every portable suite in the headless Chromium shell via Playwright                                                                                                                                                              |
-| `npm run test:jsc`                      | Every portable suite in the `jsc` shell                                                                                                                                                                                         |
-| `npm run test262:fixtures`              | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                                                                                        |
-| `npm run test262:fixtures:manifest`     | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
-| `TZ=UTC npm run test262:es2015-release` | Focused pinned Promise+generator+module Test262 release gate; does not rewrite broad reports or selection                                                                                                                       |
-| `TZ=UTC npm run test262:upstream`       | The pinned upstream subset from a real `tc39/test262` checkout; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                         |
-| `TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
-| `TZ=UTC npm run test262:select`         | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
-| `TZ=UTC npm run test262:select:check`   | The same derivation, writing nothing: fails if the committed subset is stale                                                                                                                                                    |
-| `npm run test262:exclusions:check`      | Runs every per-file exclusion; fails on stale exclusions, missing policy paths, or a missing/wrong pinned checkout                                                                                                              |
-| `npm run test262:jsc`                   | The fixture suite under the `jsc` shell                                                                                                                                                                                         |
-| `npm run benchmark`                     | Run Node, Chromium, and `jsc` with shared run metadata, atomically promoting the validated report set to `.benchmark-results/`                                                                                                  |
-| `npm run benchmark:node`                | Run only the Node host benchmark and write `node.json` under the default ignored benchmark output directory                                                                                                                     |
-| `npm run benchmark:browser`             | Run only the Chromium host benchmark and write `chromium.json` under the default ignored benchmark output directory                                                                                                             |
-| `npm run benchmark:jsc`                 | Run only the `jsc` host benchmark and write `jsc.json` under the default ignored benchmark output directory                                                                                                                     |
-| `npm run benchmark:smoke`               | Run the smoke profile under Node and write a seven-workload validated report to `.benchmark-results/smoke/node.json`                                                                                                            |
-| `npm run benchmark:summary`             | Reject mixed/stale host runs, then atomically write deterministic `summary.json` plus metadata-bearing `summary.csv`                                                                                                            |
-| `npm run benchmark:compare`             | Audit ordered baseline/candidate capture-root pairs and decide regression, improvement, underpowered, or within measured noise from repeated samples alone                                                                      |
-| `npm run profile:node`                  | Invoke the Node CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                                                                                               |
-| `npm run profile:browser`               | Invoke the Chromium CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                                                                                           |
-| `npm run profile:smoke`                 | Capture a checked one-iteration Node CPU profile of steady `arithmetic-loops` to `.benchmark-results/profile-smoke`                                                                                                             |
-| `npm run profile:analyze`               | Analyze paired schema-2 CPU/allocation sidecars with checksum correlation and equal-observation, interpreter-only hotspot shares; rejects a pair with a zero non-`host` denominator and writes only below `.benchmark-results/` |
-| `npm run ci:contract`                   | The full local CI contract: every command CI runs, for real                                                                                                                                                                     |
-| `npm run typecheck`                     | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                                                                                                     |
-| `npm run format`                        | Prettier `--check` over the entire repository                                                                                                                                                                                   |
-| `npm run lint`                          | ESLint (flat config) over the repository                                                                                                                                                                                        |
-| `npm run vendor:sync`                   | Refresh `vendor/` from the dependency versions pinned in `package.json`                                                                                                                                                         |
-| `npm run vendor:check`                  | Verify `vendor/` matches the pinned versions (fails if stale)                                                                                                                                                                   |
-| `npm run unicode:generate`              | Regenerate `src/builtins/unicode-case-data.js` from the Unicode Character Database                                                                                                                                              |
-| `npm run unicode:check`                 | Verify `src/builtins/unicode-case-data.js` is up to date (fails if stale)                                                                                                                                                       |
-| `npm run ci:generate`                   | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                                                                                                                               |
-| `npm run ci:check`                      | Verify the committed CI workflow matches the pipeline definition (fails if stale)                                                                                                                                               |
-| `npm run prepare`                       | Runs automatically on `npm install`; equivalent to `vendor:sync`                                                                                                                                                                |
+| Command                                                                        | What it does                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                                                                     | The Node suites, then the Test262 fixture suite through the CLI                                                                                                                                                                 |
+| `npm run test:node`                                                            | Every portable suite plus the Node-only suites in `test/node/`                                                                                                                                                                  |
+| `npm run test:browser`                                                         | Every portable suite in the headless Chromium shell via Playwright                                                                                                                                                              |
+| `npm run test:jsc`                                                             | Every portable suite in the `jsc` shell                                                                                                                                                                                         |
+| `npm run test262:fixtures`                                                     | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                                                                                        |
+| `npm run test262:fixtures:manifest`                                            | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
+| `TZ=UTC npm run test262:es2015-release`                                        | Focused pinned Promise+generator+module Test262 release gate; does not rewrite broad reports or selection                                                                                                                       |
+| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | The pinned upstream subset from a real `tc39/test262` checkout; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                         |
+| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
+| `TZ=UTC npm run test262:select`                                                | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
+| `TZ=UTC npm run test262:select:check`                                          | The same derivation, writing nothing: fails if the committed subset is stale                                                                                                                                                    |
+| `npm run test262:exclusions:check`                                             | Runs every per-file exclusion; fails on stale exclusions, missing policy paths, or a missing/wrong pinned checkout                                                                                                              |
+| `npm run test262:jsc`                                                          | The fixture suite under the `jsc` shell                                                                                                                                                                                         |
+| `npm run benchmark`                                                            | Run Node, Chromium, and `jsc` with shared run metadata, atomically promoting the validated report set to `.benchmark-results/`                                                                                                  |
+| `npm run benchmark:node`                                                       | Run only the Node host benchmark and write `node.json` under the default ignored benchmark output directory                                                                                                                     |
+| `npm run benchmark:browser`                                                    | Run only the Chromium host benchmark and write `chromium.json` under the default ignored benchmark output directory                                                                                                             |
+| `npm run benchmark:jsc`                                                        | Run only the `jsc` host benchmark and write `jsc.json` under the default ignored benchmark output directory                                                                                                                     |
+| `npm run benchmark:smoke`                                                      | Run the smoke profile under Node and write a seven-workload validated report to `.benchmark-results/smoke/node.json`                                                                                                            |
+| `npm run benchmark:summary`                                                    | Reject mixed/stale host runs, then atomically write deterministic `summary.json` plus metadata-bearing `summary.csv`                                                                                                            |
+| `npm run benchmark:compare`                                                    | Audit ordered baseline/candidate capture-root pairs and decide regression, improvement, underpowered, or within measured noise from repeated samples alone                                                                      |
+| `npm run profile:node`                                                         | Invoke the Node CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                                                                                               |
+| `npm run profile:browser`                                                      | Invoke the Chromium CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                                                                                           |
+| `npm run profile:smoke`                                                        | Capture a checked one-iteration Node CPU profile of steady `arithmetic-loops` to `.benchmark-results/profile-smoke`                                                                                                             |
+| `npm run profile:analyze`                                                      | Analyze paired schema-2 CPU/allocation sidecars with checksum correlation and equal-observation, interpreter-only hotspot shares; rejects a pair with a zero non-`host` denominator and writes only below `.benchmark-results/` |
+| `npm run ci:contract`                                                          | The full local CI contract: every command CI runs, for real                                                                                                                                                                     |
+| `npm run typecheck`                                                            | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                                                                                                     |
+| `npm run format`                                                               | Prettier `--check` over the entire repository                                                                                                                                                                                   |
+| `npm run lint`                                                                 | ESLint (flat config) over the repository                                                                                                                                                                                        |
+| `npm run vendor:sync`                                                          | Refresh `vendor/` from the dependency versions pinned in `package.json`                                                                                                                                                         |
+| `npm run vendor:check`                                                         | Verify `vendor/` matches the pinned versions (fails if stale)                                                                                                                                                                   |
+| `npm run unicode:generate`                                                     | Regenerate `src/builtins/unicode-case-data.js` from the Unicode Character Database                                                                                                                                              |
+| `npm run unicode:check`                                                        | Verify `src/builtins/unicode-case-data.js` is up to date (fails if stale)                                                                                                                                                       |
+| `npm run ci:generate`                                                          | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                                                                                                                               |
+| `npm run ci:check`                                                             | Verify the committed CI workflow matches the pipeline definition (fails if stale)                                                                                                                                               |
+| `npm run prepare`                                                              | Runs automatically on `npm install`; equivalent to `vendor:sync`                                                                                                                                                                |
 
 ## Suite organization
 
@@ -186,14 +186,15 @@ The upstream revision is pinned in `package.json` under the `test262` key:
 
 ### Running the upstream suite
 
-`TZ=UTC npm run test262:upstream` runs the pinned subset against a real
-`tc39/test262` checkout. It refuses to run unless the tree's `HEAD` is exactly
-the pinned revision and UTC is active. Reproduce a CI run locally:
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` runs
+the pinned subset against a real `tc39/test262` checkout. It refuses to run
+unless the tree's `HEAD` is exactly the pinned revision and UTC is active.
+Reproduce a CI run locally:
 
 ```sh
 git clone --filter=blob:none https://github.com/tc39/test262.git vendor/test262
 git -C vendor/test262 checkout b363f29d3c43c626dc852744ad64a0b48a003693
-TZ=UTC npm run test262:upstream
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
 ```
 
 The report goes to `docs/test262-report.jsonl`, and a compact coverage summary
@@ -331,7 +332,7 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 - `tools/test262/upstream-subset.json` — the checked-in selection (generated by
   `TZ=UTC npm run test262:select`)
 - The `<!-- test262-coverage:begin/end -->` block in `docs/conformance.md` — rewritten by
-  `TZ=UTC npm run test262:upstream`
+  `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`
 
 ## CI jobs
 
@@ -354,10 +355,12 @@ Every push and pull request against `main` runs twelve jobs:
 | `test262-fixtures`       | `npm run test262:fixtures` (local fixture tree)                                 | `vendor`   |
 | `test262-es2015-release` | `npm run test262:es2015-release` (focused pinned Promise+generator+module gate) | `vendor`   |
 | `benchmark-smoke`        | `npm run benchmark:smoke` (correctness-only smoke run)                          | `vendor`   |
-| `test262-upstream`       | `npm run test262:upstream` (pinned upstream subset)                             | `vendor`   |
+| `test262-upstream`       | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`        | `vendor`   |
 
 Each job runs on `ubuntu-latest` with Node 20 (via `actions/setup-node` with the
 built-in npm cache) and `npm ci`.
+Only the broad `test262-upstream` execution step receives the 4096 MiB Node heap
+allowance; focused Test262 jobs remain unchanged.
 
 `benchmark-smoke` does not upload timing artifacts and does not enforce
 thresholds, baselines, or regression decisions; those semantics are intentionally

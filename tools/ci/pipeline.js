@@ -367,6 +367,7 @@ export function createCiJobs(test262) {
           'npm run test262:select:check',
         ),
         runStep('Run the pinned Test262 subset', 'npm run test262:upstream', {
+          NODE_OPTIONS: '--max-old-space-size=4096',
           TZ: 'UTC',
         }),
         runStep(
