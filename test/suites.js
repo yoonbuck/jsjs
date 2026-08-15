@@ -22,6 +22,7 @@ import moduleLoader from './module-loader.test.js';
 import moduleLinker from './module-linker.test.js';
 import moduleEvaluation from './module-evaluation.test.js';
 import moduleNamespace from './module-namespace.test.js';
+import moduleApi from './module-api.test.js';
 import runtimeRecords from './runtime-records.test.js';
 import objects from './objects.test.js';
 import objectHotPathIntegration from './object-hot-path-integration.test.js';
@@ -125,6 +126,7 @@ export const PORTABLE_SUITES = Object.freeze([
     file: 'test/module-namespace.test.js',
     tests: moduleNamespace,
   }),
+  Object.freeze({ file: 'test/module-api.test.js', tests: moduleApi }),
   Object.freeze({
     file: 'test/runtime-records.test.js',
     tests: runtimeRecords,

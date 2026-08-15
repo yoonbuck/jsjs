@@ -21,8 +21,8 @@ iteration methods, and the non-global dynamic `%GeneratorFunction%`
 constructor.
 
 The parser's capability gate admits only those forms, so grammar and evaluation
-move together. It still rejects async functions/generators and `await`, modules,
-`new.target`, object rest/spread, later class fields/private names/static
+move together. `parseScript` still rejects async functions/generators and
+`await`, dynamic `import()`, `new.target`, object rest/spread, later class fields/private names/static
 blocks/decorators, binary/octal literals, and `\u{…}` code-point escapes. The
 ES2015 RegExp flags `u` and `y` are rejected by ES5.1 flag validation. A
 top-level rejection is a host `SyntaxError`; source parsed through `eval`,
@@ -92,11 +92,10 @@ with `TZ=UTC`.
 
 ### Layer-1 exclusions
 
-The Layer-1 boundary remains: Generators and modules are not implemented.
+The Layer-1 boundary remains: generators are not implemented by this layer.
 Synchronous generators are the separate Layer-2 contract below. Async functions,
-async generators and iteration, modules and dynamic import, broad Test262
-selection expansion, and regenerated broad Test262 coverage artifacts remain
-outside Layer 1.
+async generators and iteration, dynamic import, broad Test262 selection
+expansion, and regenerated broad Test262 coverage artifacts remain outside Layer 1.
 
 ## Layer 2: Synchronous generators
 
@@ -173,8 +172,30 @@ This suite passes only `generators`, `Symbol.iterator`, and
 `Symbol.toStringTag` as its local supported-feature set. It does not add
 `generators` to `tools/test262/features.json`, enter the broad selection, or
 regenerate `docs/test262-report.jsonl` or this document's generated coverage
-block. Async functions/generators and iteration, modules/dynamic import, and
+block. Async functions/generators and iteration, dynamic import, and
 post-ES2015 iterator/generator helper APIs remain unsupported.
+
+## Layer 3: Static modules and focused Test262
+
+Static ES2015 modules are parsed by `parseModule` and loaded only through
+`createModuleLoader(realm, { resolve, load })`; `loadAndEvaluate` returns the
+module namespace. Canonical identifier identity, source-order serial hooks,
+immutable parsed records, graph-before-link transactionality, strict synchronous
+evaluation, exact cached guest failures, and constrained live module namespace
+exotics are the Layer-3 contract. Static modules remain loader-only and do not add dynamic import.
+
+The loader rejects synchronous same-identifier reentry only in
+`load(identifier)`'s dynamic extent. After a host hook returns a PromiseLike,
+concurrent same-identifier roots deduplicate to identical record and namespace
+identity. Async same-identifier self-await is an undetectable `ModuleHost`
+contract violation, never claimed diagnosed; different identifiers remain
+allowed.
+
+`TZ=UTC npm run test262:modules` runs the focused fixed module roots from the
+exact pinned checkout. Its explicit `Symbol.toStringTag` allowlist is local to
+the suite; Test262's `module` flag supplies module metadata, so no bare module
+feature probe is added. This focused check does not broaden the generated
+selection, global feature manifest, or report/coverage artifacts.
 
 Fixtures deliberately stay inside what the engine implements today: `var`,
 `let`, `const`, function declarations and expressions, object and array literals

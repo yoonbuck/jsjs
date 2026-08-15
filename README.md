@@ -90,26 +90,53 @@ optional at the embedding boundary only in the sense that omitting the whole
 [docs/conformance.md](docs/conformance.md) for Agent Job, Promise, rejection
 tracker, and async Test262 behavior.
 
+### Static modules
+
+Static ES2015 modules are available only through the loader boundary:
+
+```js
+import { createModuleLoader, createRealm } from './src/index.js';
+
+const loader = createModuleLoader(createRealm(), {
+  resolve(specifier, referrer) {
+    return new URL(specifier, referrer ?? 'file:///app/').href;
+  },
+  load(identifier) {
+    return sources.get(identifier);
+  },
+});
+const namespace = await loader.loadAndEvaluate('./entry.js');
+```
+
+`parseModule(source)` validates module source without evaluating it.
+`createModuleLoader(realm, { resolve, load })` owns canonical identifiers,
+loading, linking, and evaluation; `ModuleLoader` and `ModuleLoaderError` are
+also public for embedding type checks and error handling. See
+[docs/architecture.md](docs/architecture.md#static-module-api-and-contract) for
+the exact contract. The engine still rejects async functions/generators and
+`await`, and does not implement dynamic `import()`.
+
 ## Commands
 
-| Command                     | What it does                                                   |
-| --------------------------- | -------------------------------------------------------------- |
-| `npm test`                  | The Node suites, then the Test262 fixture suite                |
-| `npm run test:node`         | Every portable suite plus the Node-only suites in `test/node/` |
-| `npm run test:browser`      | Every portable suite in headless Chromium via Playwright       |
-| `npm run test:jsc`          | Every portable suite in the `jsc` shell                        |
-| `npm run typecheck`         | `tsc` in checkJs mode                                          |
-| `npm run format`            | Prettier `--check` over the repository                         |
-| `npm run lint`              | ESLint only                                                    |
-| `npm run vendor:sync`       | Refresh `vendor/` from pinned dependencies                     |
-| `npm run ci:contract`       | Full local CI contract: every command CI runs, for real        |
-| `npm run benchmark`         | Cross-runtime benchmark CLI across Node, Chromium, and `jsc`   |
-| `npm run benchmark:node`    | Benchmark only the Node host                                   |
-| `npm run benchmark:browser` | Benchmark only the Chromium host                               |
-| `npm run benchmark:jsc`     | Benchmark only the `jsc` host                                  |
-| `npm run benchmark:smoke`   | Correctness-only Node smoke benchmark                          |
-| `npm run benchmark:summary` | Aggregate compatible host reports into JSON and CSV            |
-| `npm run benchmark:compare` | Gate repeated counterbalanced captures for a real difference   |
+| Command                          | What it does                                                   |
+| -------------------------------- | -------------------------------------------------------------- |
+| `npm test`                       | The Node suites, then the Test262 fixture suite                |
+| `npm run test:node`              | Every portable suite plus the Node-only suites in `test/node/` |
+| `npm run test:browser`           | Every portable suite in headless Chromium via Playwright       |
+| `npm run test:jsc`               | Every portable suite in the `jsc` shell                        |
+| `TZ=UTC npm run test262:modules` | Focused pinned ES2015 static-module Test262 suite              |
+| `npm run typecheck`              | `tsc` in checkJs mode                                          |
+| `npm run format`                 | Prettier `--check` over the repository                         |
+| `npm run lint`                   | ESLint only                                                    |
+| `npm run vendor:sync`            | Refresh `vendor/` from pinned dependencies                     |
+| `npm run ci:contract`            | Full local CI contract: every command CI runs, for real        |
+| `npm run benchmark`              | Cross-runtime benchmark CLI across Node, Chromium, and `jsc`   |
+| `npm run benchmark:node`         | Benchmark only the Node host                                   |
+| `npm run benchmark:browser`      | Benchmark only the Chromium host                               |
+| `npm run benchmark:jsc`          | Benchmark only the `jsc` host                                  |
+| `npm run benchmark:smoke`        | Correctness-only Node smoke benchmark                          |
+| `npm run benchmark:summary`      | Aggregate compatible host reports into JSON and CSV            |
+| `npm run benchmark:compare`      | Gate repeated counterbalanced captures for a real difference   |
 
 The full command list, Test262 runner options, suite organization, CI jobs, and
 troubleshooting are in [docs/testing.md](docs/testing.md). Benchmark
@@ -127,8 +154,11 @@ rest parameters, spread, and templates. A small pinned suite in
 classified-neighbor cases. The checkout-dependent
 `test/ci/es2015-generator-test262.test.js` separately runs focused generator
 coverage with an explicit feature allowlist, without broadening the global
-feature manifest or regenerated coverage artifacts. Conformance methodology,
-live coverage, and the detailed report are in
+feature manifest or regenerated coverage artifacts.
+`test/ci/es2015-module-test262.test.js` similarly runs focused static-module
+coverage with its explicit `Symbol.toStringTag` allowlist. It does not add a
+bare module feature probe, broaden selection, or rewrite generated reports.
+Conformance methodology, live coverage, and the detailed report are in
 [docs/conformance.md](docs/conformance.md).
 
 ## Architecture
@@ -145,7 +175,7 @@ removal of the strict duplicate-property early error) and known limitations —
 ordinary synchronous evaluation is bounded by an engine-owned budget of 500
 engine frames, raising a catchable guest `RangeError` before the host stack
 fails. Generator suspension itself retains only heap-resident frames. The
-engine still rejects async functions/generators and `await`, modules,
+engine still rejects async functions/generators and `await`, dynamic `import()`,
 `new.target`, object rest/spread, later class forms, binary/octal literals, and
 Unicode code-point escapes, and it omits later iterator/generator helpers. The
 full

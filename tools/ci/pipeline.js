@@ -236,7 +236,7 @@ export function toGithubSlug(repository) {
 }
 
 /**
- * The eleven checks CI runs as distinct jobs.
+ * The twelve checks CI runs as distinct jobs.
  *
  * `ci-drift` runs `ci:check`, which is what makes this module the source of
  * truth rather than a convention: a hand-edited workflow fails CI. `vendor`
@@ -245,8 +245,10 @@ export function toGithubSlug(repository) {
  * what actually verifies the vendored parser build before anything else spends
  * CI time.
  *
- * The two Test262 jobs are deliberately separate. `test262-fixtures` runs the
+ * The three Test262 jobs are deliberately separate. `test262-fixtures` runs the
  * local hand-written fixture tree, which exercises the runner's semantics.
+ * `test262-modules` checks out the exact pinned tree for the focused static
+ * module suite. It never runs broad selection or writes broad report artifacts.
  * `test262-upstream` checks out the real `tc39/test262` tree at exactly the
  * pinned revision and runs the curated subset against it, which exercises the
  * engine — and uploads its report even on failure, because a red conformance run
@@ -306,6 +308,34 @@ export function createCiJobs(test262) {
       [runStep('Run the local fixture suite', 'npm run test262:fixtures')],
       ['vendor'],
     ),
+    Object.freeze({
+      id: 'test262-modules',
+      name: 'Pinned Test262 static modules',
+      needs: Object.freeze(['vendor']),
+      steps: Object.freeze([
+        usesStep('Check out the project', 'actions/checkout', {
+          'persist-credentials': 'false',
+        }),
+        usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
+          repository: upstreamSlug,
+          ref: test262.revision,
+          path: test262.checkoutPath,
+          'persist-credentials': 'false',
+        }),
+        usesStep('Set up Node', 'actions/setup-node', {
+          'node-version': NODE_VERSION,
+          cache: 'npm',
+        }),
+        runStep('Install dependencies', 'npm ci'),
+        runStep(
+          'Run focused static-module Test262',
+          'npm run test262:modules',
+          {
+            TZ: 'UTC',
+          },
+        ),
+      ]),
+    }),
     job(
       'benchmark-smoke',
       'Benchmark smoke',

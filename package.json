@@ -9,6 +9,7 @@
     "test:jsc": "npm run vendor:sync && jsc -m test/run-jsc.js",
     "test262:fixtures": "node tools/test262/adapters/node.js --root=test/fixtures/test262 --features=fixture-subset",
     "test262:fixtures:manifest": "node tools/test262/adapters/node.js --root=test/fixtures/test262",
+    "test262:modules": "node test/run-node.js test/ci/es2015-module-test262.test.js",
     "test262:upstream": "node tools/test262/upstream-run.js",
     "test262:upstream:check": "node tools/test262/upstream-run.js --check",
     "test262:select": "node tools/test262/upstream-select.js",

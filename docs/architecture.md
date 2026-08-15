@@ -2,8 +2,9 @@
 
 jsjs is an ES5.1 JavaScript engine — extended with ES2015 lexical declarations,
 iteration, arrows, classes, computed names, destructuring, non-simple
-parameters, iterable spread, template literals, and synchronous generators —
-written in plain ES2020 JavaScript with JSDoc types. The same source
+parameters, iterable spread, template literals, synchronous generators, and
+static modules — written in plain ES2020 JavaScript with JSDoc types. The same
+source
 runs in Node, in a browser, and in the JavaScriptCore (`jsc`) shell: nothing in
 `src/` imports a host module, and guest behaviour never leans on host `eval`,
 `Function`, or host objects.
@@ -21,7 +22,7 @@ Source enters through `evaluateScript(realm, source)`, which:
    generator declarations/expressions/object/class methods, and `yield`/`yield*`
    inside their bodies. Acorn supplies redeclaration early errors; the engine
    validates each supported AST shape before evaluation. It still rejects
-   async functions/generators and `await`, modules, `new.target`, object
+   async functions/generators and `await`, dynamic `import()`, `new.target`, object
    rest/spread, class fields/private names/static blocks/decorators, binary/octal
    literals, and `\u{…}` escapes. A top-level rejection is a host `SyntaxError`;
    `eval`, dynamic `Function`, and dynamic `%GeneratorFunction%` convert it into
@@ -565,7 +566,16 @@ and the URI functions are self-contained implementations.
 The public API is exported from `src/index.js`:
 
 ```js
-export { createRealm, evaluateScript, parseScript, Realm } from './api.js';
+export {
+  createModuleLoader,
+  createRealm,
+  evaluateScript,
+  ModuleLoader,
+  ModuleLoaderError,
+  parseModule,
+  parseScript,
+  Realm,
+} from './api.js';
 ```
 
 ### `createRealm(options?): Realm`
@@ -632,6 +642,41 @@ destructuring, parameter and spread syntax, and enhanced object literals.
 Neighboring ES2015 forms outside that list are rejected by the engine's
 capability pass. Throws a host `SyntaxError` (not a guest error) on invalid
 input.
+
+### Static module API and contract
+
+`parseModule(source, parserOptions?)` parses and validates a static ES2015
+module and returns an owned immutable AST. `createModuleLoader(realm, {
+resolve, load })` creates the loader for that Realm; `ModuleLoader` and
+`ModuleLoaderError` are public classes, and
+`ModuleLoader#loadAndEvaluate(specifier, referrer?)` is the public loading
+entry point. Parsed records, link status, DFS fields, environments, entry
+arrays, and namespace constructors are intentionally internal.
+
+The loader canonicalizes identifiers, so the same canonical identifier within
+one loader and Realm has one record and namespace identity. It calls host
+`resolve`/`load` hooks serially in source order, caches an immutable validated
+parsed record after source acquisition, and retries only the failed acquisition,
+parse, link, or evaluation boundary without corrupting a successful cache.
+Graph discovery finishes before linking commits, so a failed link leaves no
+partial graph state. Evaluation is strict and synchronous; a guest evaluation
+failure is cached and rethrown with its exact guest-value identity. Namespace
+objects are the constrained module namespace exotics: null-prototype,
+non-extensible, ordered, live, TDZ-aware exports with their specified descriptor,
+mutation, deletion, and `@@toStringTag` behavior. The loader uses host Promises
+only at the loader boundary, never to evaluate guest code.
+
+The loader's reentry rule is deliberately narrow. A synchronous same-identifier
+call in `load(identifier)`'s dynamic extent receives a typed rejection. Once a
+host hook has returned a PromiseLike, concurrent same-identifier roots
+deduplicate to the same record and namespace identity. Async same-identifier
+self-await is an undetectable `ModuleHost` contract violation and is never
+claimed to be diagnosed; different-identifier reentrancy remains allowed and
+deduplicated. The synchronous typed rejection preserves cleanup so retries work.
+
+Layer 3 excludes dynamic `import()`, `import.meta`, top-level `await`, import
+assertions/attributes, Node/browser resolution policy, import maps, non-JS
+modules, and cross-loader or cross-Realm identity.
 
 ### `createAgent(): Agent`
 
