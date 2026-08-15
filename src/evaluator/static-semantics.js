@@ -1166,10 +1166,11 @@ function pushNestedBlockLists(list, enclosingLexical, worklist) {
 
 /**
  * ES2015 Annex B.3.3 (Block-Level Function Declarations Web Legacy
- * Compatibility Semantics): the `FunctionDeclaration` nodes directly contained
- * in a `Block`, `switch` `CaseBlock`, or `try` part anywhere within
+ * Compatibility Semantics): the ordinary `FunctionDeclaration` nodes directly
+ * contained in a `Block`, `switch` `CaseBlock`, or `try` part anywhere within
  * `statements` (without crossing a function boundary) that are *eligible* for a
- * var-scoped alias of the same name, returned in source order.
+ * var-scoped alias of the same name, returned in source order. Generator
+ * declarations are not part of the Annex B grammar and never receive an alias.
  *
  * Eligibility is a property of each declaration node, not of its name: two
  * block functions may share a name yet differ in eligibility, and only the
@@ -1215,7 +1216,10 @@ export function annexBBlockFunctionDeclarations(statements, outerLexicalNames) {
       );
 
     for (const declaration of lexicallyScopedDeclarations(scope.list)) {
-      if (declaration.type !== 'FunctionDeclaration') {
+      if (
+        declaration.type !== 'FunctionDeclaration' ||
+        declaration.generator === true
+      ) {
         continue;
       }
 

@@ -13,6 +13,7 @@ import {
   topLevelVarScopedDeclarations,
   topLevelLexicallyDeclaredNames,
   topLevelLexicallyScopedDeclarations,
+  annexBBlockFunctionDeclarations,
   containsYield,
 } from '../src/evaluator/static-semantics.js';
 
@@ -503,6 +504,20 @@ const tests = [
       const declarations = topLevelVarScopedDeclarations([node]);
       assertSame(declarations.length, 1);
       assertSame(tag(declarations[0]), 'VariableDeclaration(deepest)');
+    },
+  },
+  {
+    name: 'Annex B block-function eligibility excludes generator declarations',
+    run() {
+      const declarations = annexBBlockFunctionDeclarations(
+        body('{ function ordinary() {} function* generator() {} }'),
+        new Set(),
+      );
+
+      assertSame(
+        JSON.stringify(declarations.map((declaration) => declaration.id.name)),
+        '["ordinary"]',
+      );
     },
   },
   {

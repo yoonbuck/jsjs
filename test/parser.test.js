@@ -558,6 +558,60 @@ const tests = [
     },
   },
   {
+    name: 'custom AST labels admit only sloppy ordinary function declarations',
+    run() {
+      /**
+       * @param {boolean} generator
+       * @param {boolean} strict
+       */
+      function labelledFunctionProgram(generator, strict) {
+        const labelled = {
+          type: 'LabeledStatement',
+          label: { type: 'Identifier', name: 'label' },
+          body: {
+            type: 'FunctionDeclaration',
+            id: { type: 'Identifier', name: 'declaration' },
+            params: [],
+            generator,
+            async: false,
+            expression: false,
+            body: { type: 'BlockStatement', body: [] },
+          },
+        };
+        const body = strict
+          ? [
+              {
+                type: 'ExpressionStatement',
+                expression: { type: 'Literal', value: 'use strict' },
+                directive: 'use strict',
+              },
+              labelled,
+            ]
+          : [labelled];
+
+        return { type: 'Program', sourceType: 'script', body };
+      }
+
+      assertSame(
+        parseScript('', {
+          parse: () => labelledFunctionProgram(false, false),
+        }).type,
+        'Program',
+      );
+
+      for (const program of [
+        labelledFunctionProgram(true, false),
+        labelledFunctionProgram(true, true),
+        labelledFunctionProgram(false, true),
+      ]) {
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
     name: 'a direct if-body function is rejected in sloppy and strict code until Annex B.3.4 is implemented',
     run() {
       const rejected = [

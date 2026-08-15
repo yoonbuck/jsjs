@@ -211,6 +211,53 @@ const tests = [
     },
   },
   {
+    name: 'ordinary class and rebound functions retain bound metadata and behavior',
+    run() {
+      assertSame(
+        run(`
+          function ordinary(a, b) {
+            return this.base + a + b;
+          }
+          var ordinaryBound = ordinary.bind({ base: 1 }, 2);
+          var rebound = ordinaryBound.bind(null, 3);
+          class Pair {
+            constructor(a, b) {
+              this.total = a + b;
+            }
+          }
+          var BoundPair = Pair.bind(null, 4);
+          var pair = new BoundPair(5);
+          var classCallError;
+          try {
+            BoundPair(5);
+          } catch (error) {
+            classCallError = error.name;
+          }
+          [
+            Object.getPrototypeOf(ordinaryBound) ===
+              Object.getPrototypeOf(ordinary),
+            ordinaryBound.name,
+            ordinaryBound.length,
+            ordinaryBound(3),
+            Object.getPrototypeOf(rebound) ===
+              Object.getPrototypeOf(ordinaryBound),
+            rebound.name,
+            rebound.length,
+            rebound(),
+            Object.getPrototypeOf(BoundPair) === Object.getPrototypeOf(Pair),
+            BoundPair.name,
+            BoundPair.length,
+            pair.total,
+            pair instanceof Pair,
+            pair instanceof BoundPair,
+            classCallError
+          ].join(':');
+        `),
+        'true:bound ordinary:1:6:true:bound bound ordinary:0:6:true:bound Pair:1:9:true:true:TypeError',
+      );
+    },
+  },
+  {
     name: 'Function prototype methods reject incompatible receivers and propagate throws',
     run() {
       assertSame(

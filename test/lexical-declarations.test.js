@@ -312,6 +312,42 @@ const tests = [
     },
   },
   {
+    name: 'a block generator stays local without an Annex B alias at global scope',
+    run() {
+      assertNormal(
+        run(`
+          var inside;
+          {
+            function* blockGenerator() { return 1; }
+            inside = typeof blockGenerator + ':' +
+              blockGenerator().next().value;
+          }
+          inside + ':' + typeof blockGenerator;
+        `),
+        'function:1:undefined',
+      );
+    },
+  },
+  {
+    name: 'a block generator stays local without an Annex B alias in an ordinary function',
+    run() {
+      assertNormal(
+        run(`
+          (function () {
+            var inside;
+            {
+              function* blockGenerator() { return 2; }
+              inside = typeof blockGenerator + ':' +
+                blockGenerator().next().value;
+            }
+            return inside + ':' + typeof blockGenerator;
+          })();
+        `),
+        'function:2:undefined',
+      );
+    },
+  },
+  {
     name: 'Annex B.3.3: a sloppy block function in a dead branch aliases to undefined',
     run() {
       assertNormal(run('if (false) { function f() {} } typeof f'), 'undefined');

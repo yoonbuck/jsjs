@@ -2638,10 +2638,10 @@ function checkFunctionDeclarationPosition(node, strict) {
     return;
   }
 
-  if (node.type === 'LabeledStatement' && strict) {
+  if (node.type === 'LabeledStatement') {
     const offending = resolveBodyFunctionDeclaration(node);
 
-    if (offending) {
+    if (offending && (strict || offending.fn.generator === true)) {
       throw statementPositionFunctionError(
         'the body of a labelled statement',
         offending.fn,

@@ -237,6 +237,66 @@ const tests = [
     },
   },
   {
+    name: 'bound generators retain generator lineage metadata and call behavior',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evalValue(
+          realm,
+          `
+            function* source(first, second) {
+              yield first + second;
+            }
+            var bound = source.bind({ ignored: true }, 4);
+            var constructError;
+            try {
+              new bound(5);
+            } catch (error) {
+              constructError = error.name;
+            }
+            [
+              Object.getPrototypeOf(bound) === Object.getPrototypeOf(source),
+              bound.constructor === source.constructor,
+              Object.prototype.toString.call(bound),
+              bound.name,
+              bound.length,
+              bound.hasOwnProperty('prototype'),
+              bound(5).next().value,
+              constructError
+            ].join(':');
+          `,
+        ),
+        'true:true:[object GeneratorFunction]:bound source:1:false:9:TypeError',
+      );
+    },
+  },
+  {
+    name: 'a block generator stays local without an Annex B alias in a generator function',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evalValue(
+          realm,
+          `
+            function* outer() {
+              var inside;
+              {
+                function* blockGenerator() { return 3; }
+                inside = typeof blockGenerator + ':' +
+                  blockGenerator().next().value;
+              }
+              return inside + ':' + typeof blockGenerator;
+            }
+            outer().next().value;
+          `,
+        ),
+        'function:3:undefined',
+      );
+    },
+  },
+  {
     name: 'generator state methods implement completed and suspended-start behavior',
     run() {
       const realm = createRealm();
