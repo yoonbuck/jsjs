@@ -149,23 +149,24 @@ export function getIterator(realm, obj, method) {
 }
 
 /**
- * ECMA-262 §7.4.2 `IteratorNext ( iteratorRecord [ , value ] )`: call the
- * record's captured `next` method on its iterator, forwarding `value` only when
- * the caller supplied one, and require the result to be an object.
+ * Calls an iterator method with the same argument and result validation used by
+ * `IteratorNext`. Delegated `yield` uses this for dynamically resolved
+ * `throw`/`return` methods as well as the Iterator Record's captured `next`.
  *
- * @param {IteratorRecord} record
+ * @param {EngineObject} iterator
+ * @param {unknown} method
  * @param {{ value: unknown }} [sent] The value to forward to `next`, wrapped so
  *   forwarding `undefined` stays distinguishable from forwarding nothing.
  * @returns {EngineObject}
  */
-export function iteratorNext(record, sent) {
-  if (!isCallable(record.nextMethod)) {
+export function iteratorNextWithMethod(iterator, method, sent) {
+  if (!isCallable(method)) {
     throw new GuestErrorSignal('TypeError', 'iterator.next is not a function');
   }
 
-  const nextMethod = /** @type {CallableLike} */ (record.nextMethod);
-  const result = nextMethod.callFunction(
-    record.iterator,
+  const iteratorMethod = /** @type {CallableLike} */ (method);
+  const result = iteratorMethod.callFunction(
+    iterator,
     sent === undefined ? [] : [sent.value],
   );
 
@@ -174,6 +175,19 @@ export function iteratorNext(record, sent) {
   }
 
   return result;
+}
+
+/**
+ * ECMA-262 §7.4.2 `IteratorNext ( iteratorRecord [ , value ] )`: call the
+ * record's captured `next` method on its iterator, forwarding `value` only when
+ * the caller supplied one, and require the result to be an object.
+ *
+ * @param {IteratorRecord} record
+ * @param {{ value: unknown }} [sent]
+ * @returns {EngineObject}
+ */
+export function iteratorNext(record, sent) {
+  return iteratorNextWithMethod(record.iterator, record.nextMethod, sent);
 }
 
 /**

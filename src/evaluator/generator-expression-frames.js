@@ -40,10 +40,12 @@ import {
 } from '../runtime/operators.js';
 import {
   createUnsupportedNodeError,
-  createUnsupportedOperationError,
   createUnsupportedOperatorError,
 } from '../runtime/errors.js';
-import { GuestErrorSignal } from '../runtime/completion.js';
+import {
+  GuestErrorSignal,
+  createReturnCompletion,
+} from '../runtime/completion.js';
 import { SuperReferenceBase } from '../runtime/super-reference.js';
 import { constructSuper } from '../runtime/function-object.js';
 import {
@@ -53,7 +55,16 @@ import {
   evaluateExpressionValue,
 } from './expressions.js';
 import { iterableToList } from './iteration.js';
-import { iteratorStep, iteratorValue } from '../runtime/iterator.js';
+import {
+  getIterator,
+  getMethod,
+  iteratorClose,
+  iteratorComplete,
+  iteratorNext,
+  iteratorNextWithMethod,
+  iteratorStep,
+  iteratorValue,
+} from '../runtime/iterator.js';
 import { performEval } from './eval.js';
 import {
   functionNameFromPropertyKey,
@@ -114,6 +125,20 @@ import {
  *   resultMode: ExpressionResultMode,
  *   phase: 'start' | 'argument' | 'suspended',
  * }} YieldFrame
+ * @typedef {{
+ *   kind: 'yield-delegate',
+ *   node: any,
+ *   context: EvaluationContext,
+ *   phase:
+ *     | 'get-iterator'
+ *     | 'resume-next'
+ *     | 'resume-throw'
+ *     | 'resume-return'
+ *     | 'inspect-result',
+ *   iteratorRecord: IteratorRecord | null,
+ *   resumeKind: 'normal' | 'throw' | 'return' | null,
+ *   result: EngineObject | null,
+ * }} YieldDelegateFrame
  * @typedef {{
  *   kind: 'binary',
  *   node: any,
@@ -340,7 +365,7 @@ import {
  *   | ObjectPatternFrame | ObjectPatternPropertyFrame | ArrayPatternFrame}
  *   GeneratorPatternFrame
  * @typedef {SyncExpressionFrame | SyncNamedExpressionFrame
- *   | YieldFrame | BinaryFrame | LogicalFrame
+ *   | YieldFrame | YieldDelegateFrame | BinaryFrame | LogicalFrame
  *   | ConditionalFrame | SequenceFrame | MemberFrame | AssignmentFrame
  *   | UnaryFrame | UpdateFrame | CallFrame | NewFrame | ArrayLiteralFrame
  *   | TemplateFrame | TaggedTemplateFrame | ObjectLiteralFrame
@@ -389,7 +414,17 @@ export function createGeneratorExpressionFrame(
 
   switch (node.type) {
     case 'YieldExpression':
-      return { kind: 'yield', node, context, resultMode, phase: 'start' };
+      return node.delegate
+        ? {
+            kind: 'yield-delegate',
+            node,
+            context,
+            phase: 'get-iterator',
+            iteratorRecord: null,
+            resumeKind: null,
+            result: null,
+          }
+        : { kind: 'yield', node, context, resultMode, phase: 'start' };
     case 'BinaryExpression':
       return {
         kind: 'binary',
@@ -700,6 +735,8 @@ export function dispatchGeneratorExpressionFrame(execution, frame) {
       return dispatchSyncNamedExpression(execution, frame);
     case 'yield':
       return dispatchYield(execution, frame);
+    case 'yield-delegate':
+      return dispatchYieldDelegate(execution, frame);
     case 'binary':
       return dispatchBinary(execution, frame);
     case 'logical':
@@ -783,10 +820,6 @@ function dispatchSyncNamedExpression(execution, frame) {
  * @returns {GeneratorFrameAction}
  */
 function dispatchYield(execution, frame) {
-  if (frame.node.delegate) {
-    throw createUnsupportedOperationError('yield*');
-  }
-
   if (frame.phase === 'start') {
     if (frame.node.argument === null || frame.node.argument === undefined) {
       frame.phase = 'suspended';
@@ -820,6 +853,281 @@ function dispatchYield(execution, frame) {
         type: 'pop',
         result: { type: 'completion', completion },
       };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {YieldDelegateFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchYieldDelegate(execution, frame) {
+  if (frame.phase === 'get-iterator') {
+    if (execution.output === null) {
+      return pushExpression(frame.node.argument, frame.context, 'value');
+    }
+
+    const operand = takeGeneratorOutput(execution);
+
+    if (operand.type === 'completion') {
+      return { type: 'pop', result: operand };
+    }
+
+    if (operand.type !== 'value') {
+      throw new TypeError('Delegated yield operand expected a value');
+    }
+
+    const iteratorResult = captureGeneratorOperation(execution.realm, () =>
+      getIterator(execution.realm, operand.value),
+    );
+
+    if (iteratorResult.type === 'completion') {
+      return { type: 'pop', result: iteratorResult };
+    }
+
+    if (iteratorResult.type !== 'value') {
+      throw new TypeError('Delegated yield expected an iterator record');
+    }
+
+    frame.iteratorRecord = /** @type {IteratorRecord} */ (iteratorResult.value);
+    frame.phase = 'resume-next';
+    return callDelegatedIteratorMethod(
+      execution,
+      frame,
+      'normal',
+      requireDelegatedIterator(frame).nextMethod,
+    );
+  }
+
+  if (frame.phase === 'inspect-result') {
+    return inspectDelegatedResult(execution, frame);
+  }
+
+  if (frame.phase !== 'resume-next') {
+    throw new TypeError(`Delegated yield stopped in ${frame.phase}`);
+  }
+
+  const completion = takeGeneratorInput(execution);
+
+  if (completion.type === 'normal') {
+    return callDelegatedIteratorMethod(
+      execution,
+      frame,
+      'normal',
+      requireDelegatedIterator(frame).nextMethod,
+      { value: completion.value },
+    );
+  }
+
+  if (completion.type === 'throw') {
+    frame.phase = 'resume-throw';
+    return resumeDelegatedThrow(execution, frame, completion.value);
+  }
+
+  frame.phase = 'resume-return';
+  return resumeDelegatedReturn(execution, frame, completion.value);
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {YieldDelegateFrame} frame
+ * @param {unknown} value
+ * @returns {GeneratorFrameAction}
+ */
+function resumeDelegatedThrow(execution, frame, value) {
+  const iteratorRecord = requireDelegatedIterator(frame);
+  const methodResult = captureGeneratorOperation(execution.realm, () =>
+    getMethod(execution.realm, iteratorRecord.iterator, 'throw'),
+  );
+
+  if (methodResult.type === 'completion') {
+    return { type: 'pop', result: methodResult };
+  }
+
+  if (methodResult.type !== 'value') {
+    throw new TypeError('Delegated throw lookup returned an invalid result');
+  }
+
+  if (methodResult.value === undefined) {
+    return {
+      type: 'pop',
+      result: captureGeneratorOperation(execution.realm, () => {
+        iteratorClose(execution.realm, iteratorRecord, false);
+        throw new GuestErrorSignal(
+          'TypeError',
+          'The iterator does not provide a throw method',
+        );
+      }),
+    };
+  }
+
+  return callDelegatedIteratorMethod(
+    execution,
+    frame,
+    'throw',
+    methodResult.value,
+    { value },
+  );
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {YieldDelegateFrame} frame
+ * @param {unknown} value
+ * @returns {GeneratorFrameAction}
+ */
+function resumeDelegatedReturn(execution, frame, value) {
+  const iteratorRecord = requireDelegatedIterator(frame);
+  const methodResult = captureGeneratorOperation(execution.realm, () =>
+    getMethod(execution.realm, iteratorRecord.iterator, 'return'),
+  );
+
+  if (methodResult.type === 'completion') {
+    return { type: 'pop', result: methodResult };
+  }
+
+  if (methodResult.type !== 'value') {
+    throw new TypeError('Delegated return lookup returned an invalid result');
+  }
+
+  if (methodResult.value === undefined) {
+    return {
+      type: 'pop',
+      result: {
+        type: 'completion',
+        completion: createReturnCompletion(value),
+      },
+    };
+  }
+
+  return callDelegatedIteratorMethod(
+    execution,
+    frame,
+    'return',
+    methodResult.value,
+    { value },
+  );
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {YieldDelegateFrame} frame
+ * @param {'normal' | 'throw' | 'return'} resumeKind
+ * @param {unknown} method
+ * @param {{ value: unknown }} [sent]
+ * @returns {GeneratorFrameAction}
+ */
+function callDelegatedIteratorMethod(
+  execution,
+  frame,
+  resumeKind,
+  method,
+  sent,
+) {
+  const iteratorRecord = requireDelegatedIterator(frame);
+  const methodResult = captureGeneratorOperation(execution.realm, () =>
+    resumeKind === 'normal'
+      ? iteratorNext(iteratorRecord, sent)
+      : iteratorNextWithMethod(iteratorRecord.iterator, method, sent),
+  );
+
+  if (methodResult.type === 'completion') {
+    return { type: 'pop', result: methodResult };
+  }
+
+  if (
+    methodResult.type !== 'value' ||
+    !(methodResult.value instanceof EngineObject)
+  ) {
+    throw new TypeError('Delegated iterator method returned an invalid result');
+  }
+
+  frame.resumeKind = resumeKind;
+  frame.result = methodResult.value;
+  frame.phase = 'inspect-result';
+  return inspectDelegatedResult(execution, frame);
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {YieldDelegateFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function inspectDelegatedResult(execution, frame) {
+  const result = requireDelegatedResult(frame);
+  const doneResult = captureGeneratorOperation(execution.realm, () =>
+    iteratorComplete(result),
+  );
+
+  if (doneResult.type === 'completion') {
+    return { type: 'pop', result: doneResult };
+  }
+
+  if (doneResult.type !== 'value' || typeof doneResult.value !== 'boolean') {
+    throw new TypeError(
+      'Delegated iterator done check returned an invalid result',
+    );
+  }
+
+  const valueResult = captureGeneratorOperation(execution.realm, () =>
+    iteratorValue(result),
+  );
+
+  if (valueResult.type === 'completion') {
+    return { type: 'pop', result: valueResult };
+  }
+
+  if (valueResult.type !== 'value') {
+    throw new TypeError('Delegated iterator value returned an invalid result');
+  }
+
+  const resumeKind = frame.resumeKind;
+
+  if (resumeKind === null) {
+    throw new TypeError('Delegated iterator result lost its resume kind');
+  }
+
+  frame.result = null;
+  frame.resumeKind = null;
+
+  if (doneResult.value) {
+    requireDelegatedIterator(frame).done = true;
+    return resumeKind === 'return'
+      ? {
+          type: 'pop',
+          result: {
+            type: 'completion',
+            completion: createReturnCompletion(valueResult.value),
+          },
+        }
+      : finishValue(valueResult.value);
+  }
+
+  frame.phase = 'resume-next';
+  return { type: 'yield', value: valueResult.value };
+}
+
+/**
+ * @param {YieldDelegateFrame} frame
+ * @returns {IteratorRecord}
+ */
+function requireDelegatedIterator(frame) {
+  if (frame.iteratorRecord === null) {
+    throw new TypeError('Delegated yield lost its iterator record');
+  }
+
+  return frame.iteratorRecord;
+}
+
+/**
+ * @param {YieldDelegateFrame} frame
+ * @returns {EngineObject}
+ */
+function requireDelegatedResult(frame) {
+  if (frame.result === null) {
+    throw new TypeError('Delegated yield lost its iterator result');
+  }
+
+  return frame.result;
 }
 
 /**
