@@ -22,14 +22,16 @@ import {
  *   root: string | URL,
  *   harnessDirectory?: string,
  *   fetchImpl?: (input: string) => Promise<{ ok: boolean, status: number, text(): Promise<string> }>,
+ *   resolvePath?: (root: string, path: string) => string,
  * }} options
  * @returns {Test262Host}
  */
 export function createBrowserTest262Host(options) {
-  const root = toDirectoryUrl(options.root);
+  const root = toDirectoryRoot(options.root);
   const harnessDirectory =
     options.harnessDirectory ?? DEFAULT_HARNESS_DIRECTORY;
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const resolvePath = options.resolvePath ?? resolveBrowserPath;
 
   if (typeof fetchImpl !== 'function') {
     throw new TypeError(
@@ -42,8 +44,7 @@ export function createBrowserTest262Host(options) {
    * @returns {Promise<string>}
    */
   const readText = async (path) => {
-    const url = new URL(path, root).href;
-    const response = await fetchImpl(url);
+    const response = await fetchImpl(resolvePath(root, path));
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} for ${path}`);
@@ -54,6 +55,9 @@ export function createBrowserTest262Host(options) {
 
   return {
     readTest(file) {
+      return readText(file);
+    },
+    readModule(file) {
       return readText(file);
     },
     readInclude(name) {
@@ -67,14 +71,19 @@ export function createBrowserTest262Host(options) {
 
 /**
  * @param {string | URL} root
- * @returns {URL}
+ * @returns {string}
  */
-function toDirectoryUrl(root) {
-  const base =
-    typeof globalThis.location === 'undefined'
-      ? undefined
-      : globalThis.location.href;
-  const text = root instanceof URL ? root.href : root;
+function toDirectoryRoot(root) {
+  const text = typeof root === 'string' ? root : root.href;
 
-  return new URL(text.endsWith('/') ? text : `${text}/`, base);
+  return text.endsWith('/') ? text : `${text}/`;
+}
+
+/**
+ * @param {string} root
+ * @param {string} path
+ * @returns {string}
+ */
+function resolveBrowserPath(root, path) {
+  return `${root}${path}`;
 }

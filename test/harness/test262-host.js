@@ -1,6 +1,7 @@
 /**
  * Picks the Test262 host implementation for the runtime the shared test suite
- * happens to be running in.
+ * happens to be running in. Each returned host includes the same module-source
+ * reader as the shared runner's other Test262 operations.
  *
  * The suite itself must stay portable, so it cannot import a Node module
  * directly: `test/test262-runner.test.js` runs in Node, in a browser through

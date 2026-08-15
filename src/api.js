@@ -1,13 +1,25 @@
-import { parseScript } from './parser.js';
+import { parseModule, parseScript } from './parser.js';
 import { createRealm, Realm } from './runtime/realm.js';
 import { Agent, createAgent } from './runtime/agent.js';
+import { createModuleLoader, ModuleLoader } from './runtime/module-loader.js';
+import { ModuleLoaderError } from './runtime/module-record.js';
 import { EMPTY, ThrowSignal, GuestErrorSignal } from './runtime/completion.js';
 import { globalDeclarationInstantiation } from './evaluator/declarations.js';
 import { evaluateStatementList } from './evaluator/statements.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import { createFunctionExecutionEnvironment } from './runtime/environment.js';
 
-export { parseScript, createRealm, Realm, Agent, createAgent };
+export {
+  parseModule,
+  parseScript,
+  createRealm,
+  Realm,
+  Agent,
+  createAgent,
+  createModuleLoader,
+  ModuleLoader,
+  ModuleLoaderError,
+};
 
 /**
  * Parses `source` as a script and evaluates it against `realm`.

@@ -16,6 +16,13 @@
 import foundation from './foundation.test.js';
 import staticSemantics from './static-semantics.test.js';
 import parser from './parser.test.js';
+import moduleParser from './module-parser.test.js';
+import modulePaths from './module-paths.test.js';
+import moduleLoader from './module-loader.test.js';
+import moduleLinker from './module-linker.test.js';
+import moduleEvaluation from './module-evaluation.test.js';
+import moduleNamespace from './module-namespace.test.js';
+import moduleApi from './module-api.test.js';
 import runtimeRecords from './runtime-records.test.js';
 import objects from './objects.test.js';
 import objectHotPathIntegration from './object-hot-path-integration.test.js';
@@ -36,6 +43,7 @@ import arrowFunctions from './arrow-functions.test.js';
 import classes from './classes.test.js';
 import test262Runner from './test262-runner.test.js';
 import test262Async from './test262-async.test.js';
+import moduleTest262 from './module-test262.test.js';
 import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
@@ -106,6 +114,19 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: staticSemantics,
   }),
   Object.freeze({ file: 'test/parser.test.js', tests: parser }),
+  Object.freeze({ file: 'test/module-parser.test.js', tests: moduleParser }),
+  Object.freeze({ file: 'test/module-paths.test.js', tests: modulePaths }),
+  Object.freeze({ file: 'test/module-loader.test.js', tests: moduleLoader }),
+  Object.freeze({ file: 'test/module-linker.test.js', tests: moduleLinker }),
+  Object.freeze({
+    file: 'test/module-evaluation.test.js',
+    tests: moduleEvaluation,
+  }),
+  Object.freeze({
+    file: 'test/module-namespace.test.js',
+    tests: moduleNamespace,
+  }),
+  Object.freeze({ file: 'test/module-api.test.js', tests: moduleApi }),
   Object.freeze({
     file: 'test/runtime-records.test.js',
     tests: runtimeRecords,
@@ -167,6 +188,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/test262-async.test.js',
     tests: test262Async,
+  }),
+  Object.freeze({
+    file: 'test/module-test262.test.js',
+    tests: moduleTest262,
   }),
   Object.freeze({
     file: 'test/es5-selection.test.js',

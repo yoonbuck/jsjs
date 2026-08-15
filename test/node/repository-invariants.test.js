@@ -1531,12 +1531,13 @@ export default [
     },
   },
   {
-    name: 'published Agent Jobs, Promise, and synchronous generator documentation preserves layer boundaries',
+    name: 'published Agent Jobs, Promise, generator, and static-module documentation preserves layer boundaries',
     run: async () => {
       const readme = await readSource('README.md');
       const testing = await readSource('docs/testing.md');
       const conformance = await readSource('docs/conformance.md');
       const normalizedReadme = readme.replace(/\s+/gu, ' ').trim();
+      const normalizedConformance = conformance.replace(/\s+/gu, ' ').trim();
 
       assertSame(
         readme.includes('realm.agent.runJobs()'),
@@ -1607,10 +1608,10 @@ export default [
         'Promise `Symbol.species` selects the derived Promise constructor',
         'promiseRejectionTracker(promise, operation)',
         'async $DONE',
-        'Generators and modules are not implemented.',
+        'Static modules remain loader-only and do not add dynamic import.',
       ]) {
         assertSame(
-          conformance.includes(contract),
+          normalizedConformance.includes(contract),
           true,
           `docs/conformance.md must document the layer-1 ${contract} boundary`,
         );
@@ -1624,11 +1625,11 @@ export default [
         'README must affirm the synchronous ES2015 generator implementation after prose normalization',
       );
       assertSame(
-        /\bengine still rejects async functions\/generators and `await`, modules\b/iu.test(
+        /\bengine still rejects async functions\/generators and `await`,.*dynamic `import\(\)`/iu.test(
           normalizedReadme,
         ),
         true,
-        'README must retain the async function, async generator, and module exclusions',
+        'README must retain the async function, async generator, await, and dynamic-import exclusions',
       );
       assertSame(
         /\bfocused generator coverage\b[^.]*\bwithout broadening the global feature manifest or regenerated coverage artifacts\b/iu.test(
@@ -1648,10 +1649,6 @@ export default [
         [
           'async functions or generators are implemented',
           /\b(?:implements|supports)\b[^.]*\basync (?:functions?|generators?|iteration)\b/iu,
-        ],
-        [
-          'modules or module loading are implemented',
-          /\b(?:implements|supports|loads?)\b[^.]*\b(?:modules?|module (?:loading|loaders?)|dynamic import)\b/iu,
         ],
         [
           'generators are integrated into the broad feature manifest or generated report',

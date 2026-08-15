@@ -1,0 +1,340 @@
+import { assertSame, assertThrows } from './harness/assert.js';
+import { createRealm } from '../src/index.js';
+import { parseModule, parseScript } from '../src/parser.js';
+import { SourceTextModuleRecord } from '../src/runtime/module-record.js';
+
+export default [
+  {
+    name: 'parseModule validates ES2015 module AST and extracts ordered entries',
+    run() {
+      const ast = parseModule(
+        'import d, { x as y } from "a"; export { y as z }; export * from "b";',
+      );
+      assertSame(ast.sourceType, 'module');
+      const record = new SourceTextModuleRecord({
+        realm: createRealm(),
+        identifier: 'root',
+        ast,
+      });
+      assertSame(record.requestedModules.join(','), 'a,b');
+      assertSame(record.importEntries[0].importName, 'default');
+      assertSame(record.importEntries[1].localName, 'y');
+      assertSame(record.localExportEntries[0].exportName, 'z');
+      assertSame(record.starExportEntries[0].moduleRequest, 'b');
+      assertSame(Object.isFrozen(record.requestedModules), true);
+      assertSame(Object.isFrozen(record.importEntries[0]), true);
+    },
+  },
+  {
+    name: 'parseModule rejects foreign accessors and later module syntax',
+    run() {
+      assertThrows(
+        () =>
+          parseModule('export const x = 1;', {
+            parse() {
+              return {
+                type: 'Program',
+                sourceType: 'module',
+                body: [],
+                get loc() {
+                  return null;
+                },
+              };
+            },
+          }),
+        SyntaxError,
+      );
+      assertThrows(() => parseModule('import("a")'), Error);
+      assertThrows(() => parseModule('export * as ns from "a"'), Error);
+    },
+  },
+  {
+    name: 'parseModule snapshots custom AST graphs before validation',
+    run() {
+      const ast = parseScript('const preserved = 1;');
+      ast.sourceType = 'module';
+      const originalBody = ast.body;
+      const parsed = parseModule('', { parse: () => ast });
+
+      assertSame(parsed === ast, false);
+      assertSame(ast.body, originalBody);
+      assertSame(ast.body[0].type, 'VariableDeclaration');
+
+      /** @type {any[]} */
+      const body = [];
+      Object.defineProperty(body, '0', {
+        get() {
+          return { type: 'EmptyStatement' };
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      const accessorAst = {
+        type: 'Program',
+        sourceType: 'module',
+        body,
+      };
+
+      assertThrows(
+        () => parseModule('', { parse: () => accessorAst }),
+        SyntaxError,
+      );
+      assertSame(
+        typeof Object.getOwnPropertyDescriptor(body, '0')?.get,
+        'function',
+      );
+    },
+  },
+  {
+    name: 'parseModule rejects duplicate exported names from custom ASTs',
+    run() {
+      const ast = parseModule(
+        'export const local = 1; export { local as alias };',
+      );
+      ast.body[1].specifiers[0].exported.name = 'local';
+
+      assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              return ast;
+            },
+          }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'parseModule rejects duplicate import and top-level bindings from custom ASTs',
+    run() {
+      const importCollision = parseModule(
+        'import { imported as local } from "dep"; const declared = 1;',
+      );
+      importCollision.body[1].declarations[0].id.name = 'local';
+
+      assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              return importCollision;
+            },
+          }),
+        SyntaxError,
+      );
+
+      const duplicateFunctions = parseModule(
+        'function first() {} function second() {}',
+      );
+      duplicateFunctions.body[1].id.name = 'first';
+
+      assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              return duplicateFunctions;
+            },
+          }),
+        SyntaxError,
+      );
+
+      const nestedVarCollision = parseModule(
+        'if (true) var outer; let local = 1;',
+      );
+      nestedVarCollision.body[1].declarations[0].id.name = 'outer';
+
+      assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              return nestedVarCollision;
+            },
+          }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'parseModule records named and anonymous default generator declarations',
+    run() {
+      for (const [source, localName] of [
+        ['export default function* named() { yield 1; }', 'named'],
+        ['export default function* () { yield 1; }', '*default*'],
+      ]) {
+        const ast = parseModule(source);
+        const record = new SourceTextModuleRecord({
+          realm: createRealm(),
+          identifier: source,
+          ast,
+        });
+
+        assertSame(ast.body[0].declaration.generator, true);
+        assertSame(record.localExportEntries[0].localName, localName);
+      }
+
+      assertThrows(
+        () => parseModule('export default async function* later() {}'),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'SourceTextModuleRecord classifies ES2015 static entry forms',
+    run() {
+      const record = new SourceTextModuleRecord({
+        realm: createRealm(),
+        identifier: 'entries',
+        ast: parseModule(`
+          import defaultName from "default";
+          import * as namespaceName from "namespace";
+          import { original as local } from "named";
+          export const first = 1, second = 2;
+          export default function () {}
+          export { local as renamed };
+          export { sourceName as reexported } from "indirect";
+        `),
+      });
+
+      assertSame(
+        record.requestedModules.join(','),
+        'default,namespace,named,indirect',
+      );
+      assertSame(record.importEntries[0].kind, 'named');
+      assertSame(record.importEntries[0].importName, 'default');
+      assertSame(record.importEntries[1].kind, 'namespace');
+      assertSame(record.importEntries[1].localName, 'namespaceName');
+      assertSame(record.importEntries[2].importName, 'original');
+      assertSame(record.localExportEntries[0].exportName, 'first');
+      assertSame(record.localExportEntries[1].localName, 'second');
+      assertSame(record.localExportEntries[2].localName, '*default*');
+      assertSame(record.localExportEntries[2].exportName, 'default');
+      assertSame(record.localExportEntries[3].exportName, 'renamed');
+      assertSame(record.indirectExportEntries[0].moduleRequest, 'indirect');
+      assertSame(record.indirectExportEntries[0].importName, 'sourceName');
+      assertSame(Object.isFrozen(record.importEntries), true);
+      assertSame(Object.isFrozen(record.localExportEntries), true);
+      assertSame(Object.isFrozen(record.indirectExportEntries[0]), true);
+      assertSame(Object.isFrozen(record.starExportEntries), true);
+      assertSame(
+        Object.keys(record.importEntries[0]).join(','),
+        'moduleRequest,importName,localName,kind',
+      );
+      assertSame(
+        Object.keys(record.localExportEntries[0]).join(','),
+        'exportName,localName',
+      );
+      assertSame(Object.isFrozen(record.ast), false);
+      assertThrows(() => record.getNamespace(), TypeError);
+
+      for (const source of ['export default class {}', 'export default 1']) {
+        const defaultRecord = new SourceTextModuleRecord({
+          realm: createRealm(),
+          identifier: source,
+          ast: parseModule(source),
+        });
+        assertSame(defaultRecord.localExportEntries[0].localName, '*default*');
+      }
+
+      for (const [source, localName] of [
+        ['export default function namedFunction() {}', 'namedFunction'],
+        ['export default class NamedClass {}', 'NamedClass'],
+      ]) {
+        const defaultRecord = new SourceTextModuleRecord({
+          realm: createRealm(),
+          identifier: source,
+          ast: parseModule(source),
+        });
+        assertSame(defaultRecord.localExportEntries[0].localName, localName);
+      }
+    },
+  },
+  {
+    name: 'parseModule rejects unsupported nested custom-parser module nodes',
+    run() {
+      /** @param {any[]} body */
+      const parseModuleAst = (body) =>
+        parseModule('', {
+          parse() {
+            return { type: 'Program', sourceType: 'module', body };
+          },
+        });
+
+      assertThrows(
+        () =>
+          parseModuleAst([
+            {
+              type: 'ExpressionStatement',
+              expression: {
+                type: 'ImportExpression',
+                source: { type: 'Literal', value: 'a' },
+              },
+            },
+          ]),
+        Error,
+      );
+      assertThrows(
+        () =>
+          parseModuleAst([
+            {
+              type: 'ExpressionStatement',
+              expression: {
+                type: 'MetaProperty',
+                meta: { type: 'Identifier', name: 'import' },
+                property: { type: 'Identifier', name: 'meta' },
+              },
+            },
+          ]),
+        Error,
+      );
+      assertThrows(
+        () =>
+          parseModuleAst([
+            {
+              type: 'ExportNamedDeclaration',
+              declaration: { type: 'VariableDeclaration' },
+              specifiers: [],
+              source: null,
+            },
+          ]),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'parseModule rejects exported export-all declarations from custom parsers',
+    run() {
+      assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              return {
+                type: 'Program',
+                sourceType: 'module',
+                body: [
+                  {
+                    type: 'ExportAllDeclaration',
+                    source: { type: 'Literal', value: 'a' },
+                    exported: { type: 'Identifier', name: 'ns' },
+                  },
+                ],
+              };
+            },
+          }),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'SourceTextModuleRecord retains duplicate module requests in source order',
+    run() {
+      const record = new SourceTextModuleRecord({
+        realm: createRealm(),
+        identifier: 'duplicate-requests',
+        ast: parseModule(
+          'import "a"; import "a"; export { x as y } from "a"; export * from "a";',
+        ),
+      });
+
+      assertSame(record.requestedModules.join(','), 'a,a,a,a');
+    },
+  },
+];

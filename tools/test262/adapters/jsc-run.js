@@ -6,8 +6,8 @@
  * The shell has no argument vector, so configuration comes from globals the
  * launcher can set (`jsjsTest262Root`, `jsjsTest262Features`) and otherwise
  * falls back to the checked-in fixture tree. Selection, execution, and report
- * formatting all come from the shared `runTest262`, so this file only prints
- * and signals.
+ * formatting all come from the shared `runTest262`; the host also supplies
+ * static-module dependency reads, so this file only prints and signals.
  *
  * Failure signalling is `tools/jsc/exit.js`'s, shared with `test/jsc-runner.js`
  * rather than reimplemented: `quit(1)` from a promise reaction is inert on the

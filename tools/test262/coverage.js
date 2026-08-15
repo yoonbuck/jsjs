@@ -33,7 +33,11 @@ import {
   expandVariants,
   parseTest262Metadata,
 } from './metadata.js';
-import { sortTestPaths } from './selection.js';
+import {
+  isTest262FixtureDependencyPath,
+  sortTestPaths,
+  TEST262_FIXTURE_SUFFIX,
+} from './selection.js';
 
 /**
  * The file whose generated block carries the compact coverage summary.
@@ -90,7 +94,7 @@ export function readGeneratedBlock(document) {
  * this suffix. Counting them as tests would inflate the denominator with files
  * no engine is expected to pass.
  */
-export const NON_TEST_SUFFIX = '_FIXTURE.js';
+export const NON_TEST_SUFFIX = TEST262_FIXTURE_SUFFIX;
 
 /** The upstream directory that holds tests; everything else is tooling. */
 export const TEST_ROOT_PREFIX = 'test/';
@@ -150,7 +154,7 @@ export function isTest262TestPath(path) {
     typeof path === 'string' &&
     path.startsWith(TEST_ROOT_PREFIX) &&
     path.endsWith('.js') &&
-    !path.endsWith(NON_TEST_SUFFIX)
+    !isTest262FixtureDependencyPath(path)
   );
 }
 
@@ -167,7 +171,9 @@ export function isTest262TestPath(path) {
 export async function collectTest262Inventory(options) {
   const { host } = options;
   const paths = sortTestPaths(
-    options.paths ?? (await listTest262TestPaths(host)),
+    (options.paths ?? (await listTest262TestPaths(host))).filter(
+      (path) => !isTest262FixtureDependencyPath(path),
+    ),
   );
   /** @type {Map<string, number>} */
   const variants = new Map();

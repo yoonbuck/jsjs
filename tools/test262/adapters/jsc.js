@@ -43,6 +43,9 @@ export function createJscTest262Host(options) {
     readTest(file) {
       return readFileImpl(`${root}${file}`);
     },
+    readModule(file) {
+      return readFileImpl(`${root}${file}`);
+    },
     readInclude(name) {
       return readFileImpl(`${root}${harnessDirectory}/${name}`);
     },

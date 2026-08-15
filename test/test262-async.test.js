@@ -17,6 +17,12 @@ function inMemoryHost(files, includes = {}) {
       }
       return files[file];
     },
+    readModule(file) {
+      if (!Object.prototype.hasOwnProperty.call(files, file)) {
+        throw new Error(`missing module fixture: ${file}`);
+      }
+      return files[file];
+    },
     readInclude(name) {
       return includes[name] ?? '';
     },

@@ -29,10 +29,12 @@ import {
   formatReportLines,
 } from './report.js';
 import {
+  isTest262FixtureDependencyPath,
   resolveTest262Paths,
   sortStrings,
   sortTestPaths,
 } from './selection.js';
+import { resolveTest262ModulePath } from './module-paths.js';
 
 export { DEFAULT_INCLUDES };
 
@@ -50,13 +52,33 @@ export { DEFAULT_INCLUDES };
  * @typedef {{
  *   readTest(file: string): string | Promise<string>,
  *   readInclude(name: string): string | Promise<string>,
+ *   readModule(file: string, referrer: string | null): string | Promise<string>,
  *   readManifest?: () => string | Promise<string>,
  *   listTests?: () => readonly string[] | Promise<readonly string[]>,
  * }} Test262Host
  *
  * @typedef {{
+ *   phase: null,
+ * } | {
+ *   phase: 'parse',
+ *   error: Error,
+ * } | {
+ *   phase: 'resolution' | 'runtime',
+ *   value: unknown,
+ * }} ModuleTest262Outcome
+ *
+ * @typedef {{
  *   createRealm(): any,
  *   evaluateScript(realm: any, source: string): CompletionRecord,
+ *   evaluateModule?: (
+ *     realm: any,
+ *     source: string,
+ *     identifier: string,
+ *     host: {
+ *       resolve(specifier: string, referrer: string | null): string,
+ *       load(identifier: string): string | Promise<string>,
+ *     },
+ *   ) => Promise<ModuleTest262Outcome>,
  *   installDone?: (realm: any, onDone: (value: unknown) => void) => void,
  *   runJobs?: (realm: any) => JobDrainReport,
  * }} Test262Engine
@@ -90,7 +112,6 @@ export { DEFAULT_INCLUDES };
  * failure that says nothing about the engine's actual conformance.
  */
 export const UNSUPPORTED_FLAGS = Object.freeze([
-  'module',
   'CanBlockIsFalse',
   'CanBlockIsTrue',
   'non-deterministic',
@@ -202,6 +223,11 @@ export async function runTest262Suite(options) {
  */
 export async function runTest262File(options) {
   const { engine, host, file } = options;
+
+  if (isTest262FixtureDependencyPath(file)) {
+    return [];
+  }
+
   /** @type {string} */
   let source;
 
@@ -312,6 +338,19 @@ async function runVariant({
 
   const realm = engine.createRealm();
 
+  if (metadata.flags.includes('module')) {
+    return runModuleVariant({
+      engine,
+      host,
+      file,
+      source,
+      metadata,
+      variant,
+      includes,
+      realm,
+    });
+  }
+
   if (metadata.flags.includes('async')) {
     return runAsyncVariant({
       engine,
@@ -377,7 +416,176 @@ async function runVariant({
     outcome = { phase: 'parse', error };
   }
 
-  const negative = metadata.negative;
+  return recordSynchronousOutcome({
+    file,
+    variant,
+    features,
+    realm,
+    negative: metadata.negative,
+    outcome,
+  });
+}
+
+/**
+ * Runs a static-module test after normal harness files have populated the
+ * module Realm's global object.
+ *
+ * @param {{
+ *   engine: Test262Engine,
+ *   host: Test262Host,
+ *   file: string,
+ *   source: string,
+ *   metadata: Test262Metadata,
+ *   variant: Test262Variant,
+ *   includes: readonly string[],
+ *   realm: any,
+ * }} options
+ * @returns {Promise<Test262TestRecord>}
+ */
+async function runModuleVariant({
+  engine,
+  host,
+  file,
+  source,
+  metadata,
+  variant,
+  includes,
+  realm,
+}) {
+  const features = metadata.features;
+  /**
+   * @param {string} reason
+   * @param {string} message
+   * @returns {Test262TestRecord}
+   */
+  const failed = (reason, message) =>
+    createTestRecord({
+      file,
+      variant,
+      status: 'failed',
+      reason,
+      message,
+      features,
+    });
+
+  if (typeof engine.evaluateModule !== 'function') {
+    return failed(
+      'engine-error',
+      'module Test262 execution requires an evaluateModule engine hook',
+    );
+  }
+
+  for (const name of includes) {
+    /** @type {string} */
+    let includeSource;
+
+    try {
+      includeSource = await host.readInclude(name);
+    } catch (error) {
+      return failed(
+        'load-error',
+        `cannot load include ${name}: ${describeHostError(error)}`,
+      );
+    }
+
+    /** @type {{ type: string, value: unknown }} */
+    let includeResult;
+
+    try {
+      includeResult = engine.evaluateScript(realm, includeSource);
+    } catch (error) {
+      return failed(
+        'harness-error',
+        `include ${name} failed: ${describeHostError(error)}`,
+      );
+    }
+
+    if (includeResult.type === 'throw') {
+      return failed(
+        'harness-error',
+        `include ${name} threw: ${describeGuestValue(includeResult.value)}`,
+      );
+    }
+  }
+
+  /** @type {Map<string, string | null>} */
+  const referrers = new Map();
+  /** @type {ModuleTest262Outcome} */
+  let outcome;
+
+  try {
+    outcome = await engine.evaluateModule(realm, source, file, {
+      resolve(specifier, referrer) {
+        if (referrer === null) {
+          return file;
+        }
+
+        const identifier = resolveTest262ModulePath(specifier, referrer);
+
+        if (!referrers.has(identifier)) {
+          referrers.set(identifier, referrer);
+        }
+
+        return identifier;
+      },
+      load(identifier) {
+        return host.readModule(identifier, referrers.get(identifier) ?? null);
+      },
+    });
+  } catch (error) {
+    return failed('engine-error', describeHostError(error));
+  }
+
+  return recordSynchronousOutcome({
+    file,
+    variant,
+    features,
+    realm,
+    negative: metadata.negative,
+    outcome,
+  });
+}
+
+/**
+ * Applies Test262's ordinary and negative-expectation record rules to a
+ * synchronous script or static-module outcome.
+ *
+ * @param {{
+ *   file: string,
+ *   variant: Test262Variant,
+ *   features: readonly string[],
+ *   realm: any,
+ *   negative: Test262Metadata['negative'],
+ *   outcome: {
+ *     phase: 'parse' | 'resolution' | 'runtime' | null,
+ *     error?: Error,
+ *     value?: unknown,
+ *   },
+ * }} options
+ * @returns {Test262TestRecord}
+ */
+function recordSynchronousOutcome({
+  file,
+  variant,
+  features,
+  realm,
+  negative,
+  outcome,
+}) {
+  /**
+   * @param {string} reason
+   * @param {string} message
+   * @returns {Test262TestRecord}
+   */
+  const failed = (reason, message) =>
+    createTestRecord({
+      file,
+      variant,
+      status: 'failed',
+      reason,
+      message,
+      features,
+    });
 
   if (negative === null) {
     if (outcome.phase === null) {

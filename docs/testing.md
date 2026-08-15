@@ -46,6 +46,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test:jsc`                      | Every portable suite in the `jsc` shell                                                                                                                                                                                         |
 | `npm run test262:fixtures`              | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                                                                                        |
 | `npm run test262:fixtures:manifest`     | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
+| `TZ=UTC npm run test262:modules`        | Focused pinned static-module Test262 roots; does not rewrite broad reports or selection                                                                                                                                         |
 | `TZ=UTC npm run test262:upstream`       | The pinned upstream subset from a real `tc39/test262` checkout; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                         |
 | `TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
 | `TZ=UTC npm run test262:select`         | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
@@ -84,11 +85,11 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 default work from it. `test/node/repository-invariants.test.js` fails if a suite
 file exists that no runner registers.
 
-The registry currently lists 79 portable suites covering the parser, static
+The registry currently lists 80 portable suites covering the parser, static
 semantics, runtime records, objects, environments, evaluator, ES5 built-ins,
 ES2015 syntax/runtime integration, Symbols and iteration, Agent Jobs and
-Promises, benchmark/profile core, and synchronous generator function, runtime,
-yield, control-flow, delegation, and stack behavior.
+Promises, static modules, benchmark/profile core, and synchronous generator
+function, runtime, yield, control-flow, delegation, and stack behavior.
 
 ### Node-only suites (`test/node/`)
 
@@ -142,6 +143,13 @@ generator suite. It runs its fixed pinned paths through the same engine bridge,
 Node host, and Test262 runner with an explicit generator/Symbol feature set. It
 is registered only with `test/run-ci-contract.js`, never the portable or Node
 registries.
+
+`test/ci/es2015-module-test262.test.js` is the checkout-dependent Layer-3
+static-module suite. `npm run test262:modules` runs its fixed paths under
+`TZ=UTC` with an explicit `Symbol.toStringTag` allowlist. It is registered only
+with `test/run-ci-contract.js`, never the portable or Node registries, and it
+does not broaden `tools/test262/features.json`, the generated upstream
+selection, or `docs/test262-report.jsonl`.
 
 Nothing in the full contract is conditional. A missing browser or a missing
 upstream checkout fails with the exact command needed to fix it, because a skip
@@ -245,6 +253,22 @@ This Layer-2 command does not add `generators` to
 block, or make a broad conformance claim. Run it directly as shown; broad
 artifact regeneration remains release work owned by exact-SHA CI.
 
+### Focused ES2015 static-module Test262 suite
+
+The static-module layer has its own fixed-path checkout-dependent suite:
+
+```sh
+TZ=UTC npm run test262:modules
+```
+
+It covers imports and exports, namespace `Symbol.toStringTag`, instantiation
+errors, cycles, strict `this`, and live export bindings at the exact pinned
+revision. It passes only `Symbol.toStringTag` as a local supported-feature set:
+Test262 module tests are represented by the `module` flag, so this suite does
+not add a bare module feature probe. It neither broadens the global feature
+manifest or generated selection nor rewrites
+`docs/test262-report.jsonl` or the generated conformance block.
+
 ### Fixture vs. upstream suites
 
 The local fixture tree (`test/fixtures/test262`) is run by
@@ -315,7 +339,7 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 `npm run ci:generate` rewrites the committed file; `npm run ci:check` fails
 (without writing) if the two have drifted.
 
-Every push and pull request against `main` runs eleven jobs:
+Every push and pull request against `main` runs twelve jobs:
 
 | Job                | What it runs                                           | Depends on |
 | ------------------ | ------------------------------------------------------ | ---------- |
@@ -328,6 +352,7 @@ Every push and pull request against `main` runs eleven jobs:
 | `test-browser`     | `npm run test:browser` (Playwright headless Chromium)  | `vendor`   |
 | `test-jsc`         | `npm run test:jsc` (JavaScriptCoreGTK shell)           | `vendor`   |
 | `test262-fixtures` | `npm run test262:fixtures` (local fixture tree)        | `vendor`   |
+| `test262-modules`  | `npm run test262:modules` (focused pinned module tree) | `vendor`   |
 | `benchmark-smoke`  | `npm run benchmark:smoke` (correctness-only smoke run) | `vendor`   |
 | `test262-upstream` | `npm run test262:upstream` (pinned upstream subset)    | `vendor`   |
 

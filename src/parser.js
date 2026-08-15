@@ -8,9 +8,11 @@ import {
 } from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import {
+  boundNames,
   summarizeBoundNames,
   topLevelLexicallyDeclaredNames,
   topLevelVarDeclaredNames,
+  varDeclaredNames,
 } from './evaluator/static-semantics.js';
 import {
   parseFlags,
@@ -22,6 +24,13 @@ const HostRegExp = RegExp;
 const PARSER_OPTIONS = Object.freeze({
   ecmaVersion: 6,
   sourceType: 'script',
+  locations: true,
+  ranges: true,
+});
+
+const MODULE_PARSER_OPTIONS = Object.freeze({
+  ecmaVersion: 6,
+  sourceType: 'module',
   locations: true,
   ranges: true,
 });
@@ -282,6 +291,40 @@ export function parseScript(source, options = {}) {
 }
 
 /**
+ * Parses ES2015 module source into an engine-owned, descriptor-safe Program.
+ *
+ * @param {string} source
+ * @param {Record<string, unknown>} [options]
+ * @returns {any}
+ */
+export function parseModule(source, options = {}) {
+  const { parse = parseWithScriptParser, ...parserOptions } = options;
+
+  if (typeof parse !== 'function') {
+    throw new TypeError('Expected options.parse to be a function');
+  }
+
+  let program;
+
+  try {
+    program = parse(source, {
+      ...parserOptions,
+      ...MODULE_PARSER_OPTIONS,
+    });
+  } catch (error) {
+    throw asParseFailure(error, parse === parseWithScriptParser);
+  }
+
+  const customAst = parse !== parseWithScriptParser;
+
+  if (customAst) {
+    program = snapshotProgramGraph(program);
+  }
+
+  return validateModuleProgram(program, customAst);
+}
+
+/**
  * Parses dynamic `eval` source as a `Program` (ECMA-262 15.1.2.1 step 2).
  *
  * When `strict` is true the forced-strict parser is used so a strict eval
@@ -379,6 +422,181 @@ function validateScriptProgram(
   checkProgramDeclarationEarlyErrors(/** @type {any} */ (program).body);
 
   return /** @type {any} */ (program);
+}
+
+/**
+ * Validates the ES2015 module-only portion of a Program. Module records retain
+ * this owned AST for later linking and evaluation, so module syntax gets its
+ * own capability boundary rather than being admitted through script validation.
+ *
+ * @param {unknown} program
+ * @param {boolean} customAst
+ * @returns {any}
+ */
+function validateModuleProgram(program, customAst) {
+  checkUntrustedAstDescriptors(program);
+
+  if (!isModuleProgram(program)) {
+    throw new TypeError('Expected parser to return a module Program node');
+  }
+
+  const body = /** @type {any[]} */ (
+    ownDataPropertyValue(/** @type {object} */ (program), 'body')
+  );
+
+  for (let index = 0; index < body.length; index += 1) {
+    validateModuleItem(body[index], customAst);
+  }
+  checkModuleDeclarationEarlyErrors(body);
+
+  return /** @type {any} */ (program);
+}
+
+/**
+ * Applies ModuleItemList's export-name and top-level binding early errors after
+ * a custom parser result has been snapshotted and shape-validated. Function
+ * declarations are lexical in a module, unlike their script top-level role.
+ *
+ * @param {readonly any[]} body
+ * @returns {void}
+ */
+function checkModuleDeclarationEarlyErrors(body) {
+  const exportedNames = new Set();
+  const lexicalNames = new Set();
+  const varNames = new Set();
+
+  /** @param {string} name */
+  const addExportName = (name) => {
+    if (exportedNames.has(name)) {
+      throw new SyntaxError(`Duplicate export '${name}'`);
+    }
+
+    exportedNames.add(name);
+  };
+
+  /** @param {string} name */
+  const addLexicalName = (name) => {
+    if (lexicalNames.has(name) || varNames.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+
+    lexicalNames.add(name);
+  };
+
+  /** @param {string} name */
+  const addVarName = (name) => {
+    if (lexicalNames.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+
+    varNames.add(name);
+  };
+
+  /**
+   * @param {any} declaration
+   * @returns {void}
+   */
+  const addDeclarationBindings = (declaration) => {
+    const varDeclaration =
+      moduleField(declaration, 'type') === 'VariableDeclaration' &&
+      moduleField(declaration, 'kind') === 'var';
+    const names = boundNames(declaration);
+
+    for (const name of names) {
+      if (varDeclaration) {
+        addVarName(name);
+      } else {
+        addLexicalName(name);
+      }
+    }
+  };
+
+  /**
+   * @param {any} declaration
+   * @returns {void}
+   */
+  const addDeclarationExports = (declaration) => {
+    for (const name of boundNames(declaration)) {
+      addExportName(name);
+    }
+  };
+
+  /**
+   * @param {any} statement
+   * @returns {void}
+   */
+  const addStatementVarBindings = (statement) => {
+    for (const name of varDeclaredNames([statement])) {
+      addVarName(name);
+    }
+  };
+
+  for (const item of body) {
+    switch (moduleField(item, 'type')) {
+      case 'ImportDeclaration':
+        for (const specifier of /** @type {any[]} */ (
+          moduleField(item, 'specifiers')
+        )) {
+          addLexicalName(
+            /** @type {string} */ (
+              moduleField(
+                /** @type {object} */ (moduleField(specifier, 'local')),
+                'name',
+              )
+            ),
+          );
+        }
+        break;
+      case 'ExportNamedDeclaration': {
+        const declaration = moduleField(item, 'declaration');
+
+        if (declaration !== null) {
+          addDeclarationBindings(declaration);
+          addDeclarationExports(declaration);
+        }
+
+        for (const specifier of /** @type {any[]} */ (
+          moduleField(item, 'specifiers')
+        )) {
+          addExportName(
+            /** @type {string} */ (
+              moduleField(
+                /** @type {object} */ (moduleField(specifier, 'exported')),
+                'name',
+              )
+            ),
+          );
+        }
+        break;
+      }
+      case 'ExportDefaultDeclaration': {
+        addExportName('default');
+        const declaration = /** @type {any} */ (
+          moduleField(item, 'declaration')
+        );
+        const type = moduleField(declaration, 'type');
+
+        if (
+          (type === 'FunctionDeclaration' || type === 'ClassDeclaration') &&
+          moduleField(declaration, 'id') !== null
+        ) {
+          addDeclarationBindings(declaration);
+        }
+        break;
+      }
+      default:
+        addStatementVarBindings(item);
+        if (
+          (moduleField(item, 'type') === 'VariableDeclaration' &&
+            moduleField(item, 'kind') !== 'var') ||
+          moduleField(item, 'type') === 'FunctionDeclaration' ||
+          moduleField(item, 'type') === 'ClassDeclaration'
+        ) {
+          addDeclarationBindings(item);
+        }
+        break;
+    }
+  }
 }
 
 /**
@@ -983,6 +1201,325 @@ function isScriptProgram(program) {
     /** @type {any} */ (program).sourceType === 'script' &&
     Array.isArray(/** @type {any} */ (program).body)
   );
+}
+
+/**
+ * @param {unknown} program
+ * @returns {boolean}
+ */
+function isModuleProgram(program) {
+  return (
+    !!program &&
+    typeof program === 'object' &&
+    ownDataPropertyValue(/** @type {object} */ (program), 'type') ===
+      'Program' &&
+    ownDataPropertyValue(/** @type {object} */ (program), 'sourceType') ===
+      'module' &&
+    Array.isArray(ownDataPropertyValue(/** @type {object} */ (program), 'body'))
+  );
+}
+
+/**
+ * @param {any} node
+ * @param {boolean} customAst
+ * @returns {void}
+ */
+function validateModuleItem(node, customAst) {
+  if (!node || typeof node !== 'object') {
+    throw new UnsupportedNodeError(String(node));
+  }
+
+  switch (moduleField(node, 'type')) {
+    case 'ImportDeclaration':
+      validateImportDeclaration(node);
+      return;
+    case 'ExportNamedDeclaration':
+      validateExportNamedDeclaration(node, customAst);
+      return;
+    case 'ExportDefaultDeclaration':
+      validateExportDefaultDeclaration(node, customAst);
+      return;
+    case 'ExportAllDeclaration':
+      validateExportAllDeclaration(node);
+      return;
+    default:
+      // Module bodies may contain ordinary statements. Their runtime support is
+      // established by the script parser; module declarations are the new
+      // syntax boundary owned by this entry point.
+      {
+        const type = moduleField(node, 'type');
+
+        if (typeof type !== 'string' || !SUPPORTED_STATEMENT_TYPES.has(type)) {
+          throw new UnsupportedNodeError(String(type));
+        }
+
+        if (customAst) {
+          validateCustomModuleStatement(node);
+        }
+      }
+      return;
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateImportDeclaration(node) {
+  rejectModuleAttributes(node);
+
+  const specifiers = moduleField(node, 'specifiers');
+
+  if (
+    !isModuleStringLiteral(moduleField(node, 'source')) ||
+    !Array.isArray(specifiers)
+  ) {
+    throw new UnsupportedNodeError('ImportDeclaration');
+  }
+
+  for (const specifier of specifiers) {
+    validateImportSpecifier(specifier);
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateImportSpecifier(node) {
+  if (
+    !node ||
+    typeof node !== 'object' ||
+    !isModuleIdentifier(moduleField(node, 'local'))
+  ) {
+    throw new UnsupportedNodeError('ImportSpecifier');
+  }
+
+  switch (moduleField(node, 'type')) {
+    case 'ImportDefaultSpecifier':
+    case 'ImportNamespaceSpecifier':
+      return;
+    case 'ImportSpecifier':
+      if (isModuleIdentifier(moduleField(node, 'imported'))) {
+        return;
+      }
+      break;
+    default:
+      break;
+  }
+
+  throw new UnsupportedNodeError(String(moduleField(node, 'type')));
+}
+
+/**
+ * @param {any} node
+ * @param {boolean} customAst
+ * @returns {void}
+ */
+function validateExportNamedDeclaration(node, customAst) {
+  rejectModuleAttributes(node);
+  const source = moduleField(node, 'source');
+  const declaration = moduleField(node, 'declaration');
+  const specifiers = moduleField(node, 'specifiers');
+
+  if (
+    (source !== null && !isModuleStringLiteral(source)) ||
+    !Array.isArray(specifiers) ||
+    (declaration !== null && !isModuleDeclaration(declaration)) ||
+    (declaration !== null && specifiers.length !== 0) ||
+    (source !== null && declaration !== null)
+  ) {
+    throw new UnsupportedNodeError('ExportNamedDeclaration');
+  }
+
+  for (const specifier of specifiers) {
+    if (
+      !specifier ||
+      typeof specifier !== 'object' ||
+      moduleField(specifier, 'type') !== 'ExportSpecifier' ||
+      !isModuleIdentifier(moduleField(specifier, 'local')) ||
+      !isModuleIdentifier(moduleField(specifier, 'exported'))
+    ) {
+      throw new UnsupportedNodeError(
+        String(
+          specifier && typeof specifier === 'object'
+            ? moduleField(specifier, 'type')
+            : specifier,
+        ),
+      );
+    }
+  }
+
+  if (customAst && declaration !== null) {
+    validateCustomModuleStatement(declaration);
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {boolean} customAst
+ * @returns {void}
+ */
+function validateExportDefaultDeclaration(node, customAst) {
+  rejectModuleAttributes(node);
+  const declaration = moduleField(node, 'declaration');
+
+  if (
+    !declaration ||
+    typeof declaration !== 'object' ||
+    !isModuleDefaultDeclaration(declaration)
+  ) {
+    throw new UnsupportedNodeError('ExportDefaultDeclaration');
+  }
+
+  if (customAst) {
+    validateCustomModuleDefaultDeclaration(declaration);
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateExportAllDeclaration(node) {
+  rejectModuleAttributes(node);
+
+  if (
+    !isModuleStringLiteral(moduleField(node, 'source')) ||
+    Object.getOwnPropertyDescriptor(node, 'exported') !== undefined
+  ) {
+    throw new UnsupportedNodeError('ExportAllDeclaration');
+  }
+}
+
+/**
+ * Runs the established custom-AST shape and early-error passes beneath a
+ * module declaration without making module declarations themselves look like
+ * script syntax.
+ *
+ * @param {any} statement
+ * @returns {void}
+ */
+function validateCustomModuleStatement(statement) {
+  const program = { type: 'Program', sourceType: 'script', body: [statement] };
+
+  checkCustomAstDefenses(program);
+  checkStatementPositionFunctionDeclarations(program, '', true, true);
+  checkProgramDeclarationEarlyErrors(program.body);
+}
+
+/**
+ * Validates default-export children at an expression position. Anonymous
+ * default function and class declarations are represented as expressions only
+ * for this validation wrapper; the retained module AST is never changed.
+ *
+ * @param {any} declaration
+ * @returns {void}
+ */
+function validateCustomModuleDefaultDeclaration(declaration) {
+  const expression =
+    declaration.type === 'FunctionDeclaration'
+      ? { ...declaration, type: 'FunctionExpression' }
+      : declaration.type === 'ClassDeclaration'
+        ? { ...declaration, type: 'ClassExpression' }
+        : declaration;
+
+  validateCustomModuleStatement({
+    type: 'ExpressionStatement',
+    expression,
+  });
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isModuleDeclaration(node) {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  const type = moduleField(node, 'type');
+
+  return (
+    type === 'VariableDeclaration' ||
+    (type === 'FunctionDeclaration' &&
+      isModuleIdentifier(moduleField(node, 'id'))) ||
+    (type === 'ClassDeclaration' && isModuleIdentifier(moduleField(node, 'id')))
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isModuleDefaultDeclaration(node) {
+  const type = moduleField(node, 'type');
+
+  if (type === 'FunctionDeclaration') {
+    const id = moduleField(node, 'id');
+    return (
+      (id === null || isModuleIdentifier(id)) &&
+      moduleField(node, 'async') !== true
+    );
+  }
+  if (type === 'ClassDeclaration') {
+    const id = moduleField(node, 'id');
+    return (
+      (id === null || isModuleIdentifier(id)) &&
+      moduleField(node, 'generator') !== true &&
+      moduleField(node, 'async') !== true
+    );
+  }
+
+  return typeof type === 'string' && SUPPORTED_EXPRESSION_TYPES.has(type);
+}
+
+/**
+ * @param {unknown} node
+ * @returns {boolean}
+ */
+function isModuleStringLiteral(node) {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    moduleField(node, 'type') === 'Literal' &&
+    typeof moduleField(node, 'value') === 'string'
+  );
+}
+
+/**
+ * @param {unknown} node
+ * @returns {boolean}
+ */
+function isModuleIdentifier(node) {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    moduleField(node, 'type') === 'Identifier' &&
+    typeof moduleField(node, 'name') === 'string'
+  );
+}
+
+/**
+ * @param {object} node
+ * @param {string} field
+ * @returns {unknown}
+ */
+function moduleField(node, field) {
+  return ownDataPropertyValue(node, field);
+}
+
+/**
+ * @param {object} node
+ * @returns {void}
+ */
+function rejectModuleAttributes(node) {
+  for (const field of ['assertions', 'attributes']) {
+    if (Object.getOwnPropertyDescriptor(node, field) !== undefined) {
+      throw new UnsupportedNodeError(field);
+    }
+  }
 }
 
 /**
