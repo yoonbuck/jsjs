@@ -99,17 +99,30 @@ export default [
           handlerRealm,
           `
             var callbackLog = [];
+            var sharedLog = [];
             var callback = function (value) {
               var created = [];
               callbackLog.push(value + ":" + (created instanceof Array));
+              sharedLog.push("constructor:" + value);
               callbackArray = created;
               return created;
             };
+            Promise.resolve("handler").then(function (value) {
+              sharedLog.push("handler:" + value);
+            });
+            undefined;
           `,
         ),
         undefined,
       );
       const callback = handlerRealm.globalObject.get('callback');
+      const sharedLog = handlerRealm.globalObject.get('sharedLog');
+      constructorRealm.globalObject.defineOwnProperty('sharedLog', {
+        value: sharedLog,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       constructorRealm.globalObject.defineOwnProperty('handler', {
         value: callback,
         writable: true,
@@ -129,7 +142,12 @@ export default [
       );
       const derived = constructorRealm.globalObject.get('derived');
 
-      assertSame(agent.runJobs().failures.length, 0);
+      const runResult = agent.runJobs();
+      assertSame(runResult.failures.length, 0);
+      assertNormal(
+        evaluateScript(handlerRealm, 'sharedLog.join(",")'),
+        'handler:handler,constructor:1',
+      );
       assertNormal(
         evaluateScript(handlerRealm, 'callbackLog.join(",")'),
         '1:true',
