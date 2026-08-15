@@ -78,8 +78,19 @@ export class SourceTextModuleRecord {
     this.dfsIndex = undefined;
     this.dfsAncestorIndex = undefined;
     this.dfsOnStack = false;
+    /** @type {SourceTextModuleRecord | null} */
+    this.evaluationSccRoot = null;
+    /** @type {ReadonlyArray<SourceTextModuleRecord>} */
+    this.evaluationSccMembers = [];
     /** @type {ReadonlyArray<ResolvedImportEntry>} */
     this.resolvedImportEntries = [];
+    /** @type {'unevaluated' | 'evaluating' | 'evaluated' | 'errored'} */
+    this.evaluationStatus = 'unevaluated';
+    /** @type {{ type: 'normal' | 'throw', value: unknown } | null} */
+    this.evaluationCompletion = null;
+    this.evaluationBodyCompleted = false;
+    /** @type {ModuleLoaderError | null} */
+    this.evaluationError = null;
   }
 
   /**

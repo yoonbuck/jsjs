@@ -1,4 +1,6 @@
 import { parseModule } from '../parser.js';
+import { evaluateModuleGraph } from '../evaluator/modules.js';
+import { ThrowSignal } from './completion.js';
 import { linkModuleGraph } from './module-linker.js';
 import { ModuleLoaderError, SourceTextModuleRecord } from './module-record.js';
 import { isRealm } from './realm.js';
@@ -91,8 +93,8 @@ export class ModuleLoader {
   }
 
   /**
-   * Acquires and links the source graph. Evaluation and its namespace result are
-   * added at this one host-facing boundary by later module tasks.
+   * Acquires, links, and evaluates the source graph. Namespace construction is
+   * added at this one host-facing boundary by the later namespace task.
    *
    * @param {string} specifier
    * @param {string | null} [referrer=null]
@@ -101,8 +103,43 @@ export class ModuleLoader {
   async loadAndEvaluate(specifier, referrer = null) {
     const record = await loadModuleGraph(this, specifier, referrer);
     linkModuleGraph(record);
+    try {
+      evaluateModuleGraph(record);
+    } catch (error) {
+      if (
+        error instanceof ThrowSignal &&
+        record.evaluationCompletion?.type === 'throw'
+      ) {
+        throw cachedEvaluationError(record);
+      }
+
+      throw asModuleLoaderError('evaluate', record.identifier, error);
+    }
     return undefined;
   }
+}
+
+/**
+ * @param {SourceTextModuleRecord} record
+ * @returns {ModuleLoaderError}
+ */
+function cachedEvaluationError(record) {
+  if (record.evaluationError !== null) {
+    return record.evaluationError;
+  }
+
+  const completion = record.evaluationCompletion;
+  if (completion?.type !== 'throw') {
+    throw new TypeError('Evaluation failure is missing an abrupt completion');
+  }
+
+  const error = new ModuleLoaderError({
+    phase: 'evaluate',
+    identifier: record.identifier,
+    value: completion.value,
+  });
+  record.evaluationError = error;
+  return error;
 }
 
 /**

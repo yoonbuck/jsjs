@@ -746,7 +746,10 @@ export function evaluateNamedExpression(node, context, name) {
     return createFunctionObject(node, context.env, context, { name });
   }
 
-  if (isAnonymousClassExpression(node)) {
+  if (
+    isAnonymousClassExpression(node) ||
+    (node.type === 'ClassDeclaration' && node.id === null)
+  ) {
     return evaluateClassDefinition(node, context, name);
   }
 

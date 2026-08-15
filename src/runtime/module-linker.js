@@ -192,6 +192,9 @@ function linkRecord(record, transaction) {
     return;
   }
 
+  /** @type {SourceTextModuleRecord[]} */
+  const sccMembers = [];
+
   while (transaction.stack.length > 0) {
     const member = transaction.stack.pop();
 
@@ -201,8 +204,14 @@ function linkRecord(record, transaction) {
 
     member.dfsOnStack = false;
     member.status = 'linked';
+    sccMembers.push(member);
 
     if (member === record) {
+      const frozenMembers = Object.freeze(sccMembers);
+      for (const sccMember of frozenMembers) {
+        sccMember.evaluationSccRoot = record;
+        sccMember.evaluationSccMembers = frozenMembers;
+      }
       return;
     }
   }
@@ -522,6 +531,9 @@ class LinkTransaction {
       record.dfsIndex = undefined;
       record.dfsAncestorIndex = undefined;
       record.dfsOnStack = false;
+      record.evaluationSccRoot = null;
+      record.evaluationSccMembers = [];
+      record.evaluationBodyCompleted = false;
       record.resolvedImportEntries = [];
     }
 
