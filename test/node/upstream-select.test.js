@@ -14,6 +14,8 @@ const ELIGIBLE_PATH = 'test/built-ins/Array/eligible.js';
 const ORDINARY_PATH = 'test/built-ins/Array/ordinary.js';
 const GENERATOR_DECLARATION_PATH =
   'test/built-ins/Array/generator-declaration.js';
+const YIELD_FREE_GENERATOR_PATH =
+  'test/built-ins/Array/yield-free-generator.js';
 const OBJECT_GENERATOR_PATH = 'test/built-ins/Array/object-generator.js';
 const CLASS_GENERATOR_PATH = 'test/built-ins/Array/class-generator.js';
 const HARNESS_USER_PATH = 'test/built-ins/Array/generator-harness.js';
@@ -48,6 +50,10 @@ const GENERATOR_SOURCES = new Map([
   [
     GENERATOR_DECLARATION_PATH,
     `${COMPUTED_PROPERTY_FRONTMATTER}function* generated() { yield 1; }`,
+  ],
+  [
+    YIELD_FREE_GENERATOR_PATH,
+    `${COMPUTED_PROPERTY_FRONTMATTER}function* empty() {}`,
   ],
   [
     OBJECT_GENERATOR_PATH,
