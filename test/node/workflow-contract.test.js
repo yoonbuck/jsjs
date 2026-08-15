@@ -794,21 +794,22 @@ export default [
         JSON.stringify(generatorAreas.map((area) => area.prefix)),
         JSON.stringify(generatorPaths),
       );
-      assertSame(
-        generatorAreas.every(
-          (area) =>
-            area.prefix.endsWith('.js') &&
-            area.features.includes('generators') &&
-            area.features.every((feature) =>
-              [
-                'Symbol.toStringTag',
-                'computed-property-names',
-                'generators',
-              ].includes(feature),
-            ),
-        ),
-        true,
-      );
+      for (const record of ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records) {
+        const area = generatorAreas.find(
+          (candidate) => candidate.prefix === record.path,
+        );
+
+        assertSame(
+          JSON.stringify(area?.features),
+          JSON.stringify([...record.features].sort()),
+          `${record.path} area features must equal its pinned metadata exactly`,
+        );
+        assertSame(
+          area?.generatorSyntax,
+          true,
+          `${record.path} must carry exact-file generator syntax authorization`,
+        );
+      }
       assertSame(
         policy.featureAreas.some((area) =>
           [

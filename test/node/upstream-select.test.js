@@ -4,7 +4,7 @@ import {
   parseEs5Selection,
 } from '../../tools/test262/es5-selection.js';
 import {
-  parsesUnderEngineGrammar,
+  inspectEngineGrammar,
   selectPaths,
 } from '../../tools/test262/upstream-select-paths.js';
 
@@ -80,7 +80,10 @@ const GENERATOR_SOURCES = new Map([
 /**
  * @param {Map<string, string>} sources
  * @param {import('../../tools/test262/es5-selection.js').Es5SelectionPolicy} policy
- * @param {ReadonlyMap<string, boolean>} [harnessParsing]
+ * @param {ReadonlyMap<string, {
+ *   parsesUnderEngineGrammar: boolean,
+ *   usesGeneratorSyntax: boolean,
+ * }>} [harnessParsing]
  */
 function selectKnownGood(sources, policy, harnessParsing = new Map()) {
   return selectPaths({
@@ -107,6 +110,14 @@ const GENERATOR_HARNESS_USER_SOURCES = new Map([
 includes: [${GENERATOR_HARNESS}]
 ---*/
 var ordinary = 1;`,
+  ],
+  [
+    FOCUSED_TAGGED_GENERATOR_PATH,
+    `/*---
+features: [generators]
+includes: [${GENERATOR_HARNESS}]
+---*/
+function* focused() { yield 1; }`,
   ],
 ]);
 
@@ -174,16 +185,19 @@ export default [
           {
             prefix: FOCUSED_TAGGED_GENERATOR_PATH,
             features: ['generators'],
+            generatorSyntax: true,
             reason: 'Exact focused tagged generator root.',
           },
           {
             prefix: FOCUSED_UNTAGGED_CLASS_GENERATOR_PATH,
-            features: ['generators'],
+            features: [],
+            generatorSyntax: true,
             reason: 'Exact focused untagged class generator root.',
           },
           {
             prefix: FOCUSED_UNTAGGED_OBJECT_GENERATOR_PATH,
-            features: ['generators'],
+            features: [],
+            generatorSyntax: true,
             reason: 'Exact focused untagged object generator root.',
           },
           {
@@ -244,6 +258,21 @@ export default [
           FOCUSED_UNTAGGED_OBJECT_GENERATOR_PATH,
         ]),
       );
+      assertSame(
+        JSON.stringify(
+          policy.featureAreas
+            .filter((area) =>
+              [
+                FOCUSED_TAGGED_GENERATOR_PATH,
+                FOCUSED_UNTAGGED_CLASS_GENERATOR_PATH,
+                FOCUSED_UNTAGGED_OBJECT_GENERATOR_PATH,
+              ].includes(area.prefix),
+            )
+            .map((area) => area.features),
+        ),
+        '[["generators"],[],[]]',
+        'syntax authorization must preserve each pinned metadata feature list',
+      );
     },
   },
   {
@@ -263,33 +292,38 @@ export default [
     },
   },
   {
-    name: 'upstream selection applies the generator boundary to harness includes',
+    name: 'generator-bearing harnesses require the including exact-file authorization',
     run: async () => {
-      const generatorHarnessSource =
-        'function* harnessGenerator() { yield 1; }';
-      const deferred = await selectKnownGood(
-        GENERATOR_HARNESS_USER_SOURCES,
-        POLICY,
-        new Map([
-          [
-            GENERATOR_HARNESS,
-            parsesUnderEngineGrammar(generatorHarnessSource, POLICY),
-          ],
-        ]),
+      const policy = createPolicy(
+        ['computed-property-names', 'generators'],
+        [
+          {
+            prefix: FOCUSED_TAGGED_GENERATOR_PATH,
+            features: ['generators'],
+            generatorSyntax: true,
+            reason: 'Exact focused generator root.',
+          },
+        ],
       );
-      const enabled = await selectKnownGood(
+      const selected = await selectKnownGood(
         GENERATOR_HARNESS_USER_SOURCES,
-        GENERATOR_POLICY,
+        policy,
         new Map([
           [
             GENERATOR_HARNESS,
-            parsesUnderEngineGrammar(generatorHarnessSource, GENERATOR_POLICY),
+            inspectEngineGrammar(
+              'function* harnessGenerator() { yield 1; }',
+              policy,
+            ),
           ],
         ]),
       );
 
-      assertSame(JSON.stringify(deferred), '[]');
-      assertSame(JSON.stringify(enabled), JSON.stringify([HARNESS_USER_PATH]));
+      assertSame(
+        JSON.stringify(selected),
+        JSON.stringify([FOCUSED_TAGGED_GENERATOR_PATH]),
+        'an ordinary baseline candidate must not inherit generator syntax from the global expansion, while the exact authorized root remains eligible',
+      );
     },
   },
 ];

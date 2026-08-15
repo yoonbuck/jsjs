@@ -256,6 +256,101 @@ export default [
     },
   },
   {
+    name: 'generator syntax authorization is explicit and exact-file only',
+    run: () => {
+      const exactPath = 'test/built-ins/Array/generator.js';
+      const policy = parseEs5Selection(
+        policyText({
+          featureAreas: [
+            {
+              prefix: exactPath,
+              features: [],
+              generatorSyntax: true,
+              reason:
+                'The pinned file is syntax-authorized but declares no metadata features.',
+            },
+          ],
+        }),
+      );
+      const area = policy.featureAreas[0];
+
+      assertSame(JSON.stringify(area.features), '[]');
+      assertSame(area.generatorSyntax, true);
+      assertSame(
+        isKnownGoodCandidate(
+          exactPath,
+          { ...CANDIDATE_INFO, usesGeneratorSyntax: true },
+          policy,
+        ),
+        true,
+        'syntax authorization must not invent a metadata feature',
+      );
+      assertSame(
+        isKnownGoodCandidate(
+          `${exactPath}/descendant.js`,
+          { ...CANDIDATE_INFO, usesGeneratorSyntax: true },
+          policy,
+        ),
+        false,
+        'exact-file syntax authorization must not match a descendant',
+      );
+
+      const metadataOnlyPolicy = parseEs5Selection(
+        policyText({
+          featureAreas: [
+            {
+              prefix: exactPath,
+              features: ['generators'],
+              reason:
+                'A metadata feature claim does not authorize generator syntax.',
+            },
+          ],
+        }),
+      );
+
+      assertSame(
+        isKnownGoodCandidate(
+          exactPath,
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['generators'],
+            usesGeneratorSyntax: true,
+          },
+          metadataOnlyPolicy,
+        ),
+        false,
+        'features: [generators] must not double as syntax authorization',
+      );
+
+      for (const featureArea of [
+        {
+          prefix: 'test/built-ins/Array',
+          features: ['class'],
+          generatorSyntax: true,
+          reason: 'A directory must not authorize generator syntax.',
+        },
+        {
+          prefix: exactPath,
+          features: [],
+          generatorSyntax: false,
+          reason: 'The optional authorization is true or absent.',
+        },
+        {
+          prefix: exactPath,
+          features: [],
+          generatorSyntax: 'true',
+          reason: 'The optional authorization is a boolean.',
+        },
+      ]) {
+        assertThrows(
+          () => parseEs5Selection(policyText({ featureAreas: [featureArea] })),
+          Es5SelectionError,
+        );
+      }
+    },
+  },
+  {
     name: 'es5-selection rejects invalid JSON',
     run: () => {
       assertThrows(() => parseEs5Selection('{not json'), Es5SelectionError);

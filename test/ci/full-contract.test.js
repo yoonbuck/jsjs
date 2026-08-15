@@ -533,7 +533,7 @@ export default [
       assertSame(
         JSON.stringify(selectedGeneratorPaths),
         JSON.stringify(generatorPaths),
-        'generator syntax must require an exact-file generators claim; broad computed-property areas must not admit pinned class/object neighbors',
+        'the eleven exact syntax-authorized roots must be the only generator selection delta',
       );
 
       for (const { path, features, flags } of generatorRelease.records) {
@@ -541,16 +541,18 @@ export default [
         const area = exactGeneratorAreas.find(
           (candidate) => candidate.prefix === path,
         );
-        const expectedAreaFeatures = [
-          ...new Set([...features, 'generators']),
-        ].sort();
 
         assertSame(JSON.stringify(metadata.features), JSON.stringify(features));
         assertSame(JSON.stringify(metadata.flags), JSON.stringify(flags));
         assertSame(
           JSON.stringify(area?.features),
-          JSON.stringify(expectedAreaFeatures),
-          `${path} must claim its pinned metadata and required generator syntax`,
+          JSON.stringify([...features].sort()),
+          `${path} area features must equal its pinned metadata exactly`,
+        );
+        assertSame(
+          area?.generatorSyntax,
+          true,
+          `${path} must carry exact-file generator syntax authorization`,
         );
       }
 

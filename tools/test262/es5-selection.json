@@ -59,46 +59,55 @@
     {
       "prefix": "test/built-ins/GeneratorFunction/invoked-as-constructor-no-arguments.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
       "prefix": "test/built-ins/GeneratorFunction/invoked-as-function-multiple-arguments.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
       "prefix": "test/built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js",
       "features": ["Symbol.toStringTag", "generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; it claims only its generators and Symbol.toStringTag metadata."
     },
     {
       "prefix": "test/built-ins/GeneratorPrototype/next/consecutive-yields.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
       "prefix": "test/built-ins/GeneratorPrototype/next/from-state-executing.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
       "prefix": "test/built-ins/GeneratorPrototype/return/from-state-suspended-start.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
       "prefix": "test/built-ins/GeneratorPrototype/return/try-finally-within-try.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
       "prefix": "test/built-ins/GeneratorPrototype/throw/from-state-suspended-start.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
       "prefix": "test/built-ins/GeneratorPrototype/throw/try-catch-within-try.js",
       "features": ["generators"],
+      "generatorSyntax": true,
       "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
     },
     {
@@ -141,13 +150,15 @@
     },
     {
       "prefix": "test/language/computed-property-names/class/method/generator.js",
-      "features": ["generators"],
-      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata, while the exact-file claim records its required generator syntax."
+      "features": [],
+      "generatorSyntax": true,
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its metadata feature list stays empty while generatorSyntax independently authorizes its grammar."
     },
     {
       "prefix": "test/language/computed-property-names/object/method/generator.js",
-      "features": ["generators"],
-      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata, while the exact-file claim records its required generator syntax."
+      "features": [],
+      "generatorSyntax": true,
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its metadata feature list stays empty while generatorSyntax independently authorizes its grammar."
     },
     {
       "prefix": "test/language/destructuring/binding",
