@@ -8,9 +8,11 @@ import {
 } from './runtime/errors.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import {
+  boundNames,
   summarizeBoundNames,
   topLevelLexicallyDeclaredNames,
   topLevelVarDeclaredNames,
+  varDeclaredNames,
 } from './evaluator/static-semantics.js';
 import {
   parseFlags,
@@ -445,8 +447,156 @@ function validateModuleProgram(program, customAst) {
   for (let index = 0; index < body.length; index += 1) {
     validateModuleItem(body[index], customAst);
   }
+  checkModuleDeclarationEarlyErrors(body);
 
   return /** @type {any} */ (program);
+}
+
+/**
+ * Applies ModuleItemList's export-name and top-level binding early errors after
+ * a custom parser result has been snapshotted and shape-validated. Function
+ * declarations are lexical in a module, unlike their script top-level role.
+ *
+ * @param {readonly any[]} body
+ * @returns {void}
+ */
+function checkModuleDeclarationEarlyErrors(body) {
+  const exportedNames = new Set();
+  const lexicalNames = new Set();
+  const varNames = new Set();
+
+  /** @param {string} name */
+  const addExportName = (name) => {
+    if (exportedNames.has(name)) {
+      throw new SyntaxError(`Duplicate export '${name}'`);
+    }
+
+    exportedNames.add(name);
+  };
+
+  /** @param {string} name */
+  const addLexicalName = (name) => {
+    if (lexicalNames.has(name) || varNames.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+
+    lexicalNames.add(name);
+  };
+
+  /** @param {string} name */
+  const addVarName = (name) => {
+    if (lexicalNames.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+
+    varNames.add(name);
+  };
+
+  /**
+   * @param {any} declaration
+   * @returns {void}
+   */
+  const addDeclarationBindings = (declaration) => {
+    const varDeclaration =
+      moduleField(declaration, 'type') === 'VariableDeclaration' &&
+      moduleField(declaration, 'kind') === 'var';
+    const names = boundNames(declaration);
+
+    for (const name of names) {
+      if (varDeclaration) {
+        addVarName(name);
+      } else {
+        addLexicalName(name);
+      }
+    }
+  };
+
+  /**
+   * @param {any} declaration
+   * @returns {void}
+   */
+  const addDeclarationExports = (declaration) => {
+    for (const name of boundNames(declaration)) {
+      addExportName(name);
+    }
+  };
+
+  /**
+   * @param {any} statement
+   * @returns {void}
+   */
+  const addStatementVarBindings = (statement) => {
+    for (const name of varDeclaredNames([statement])) {
+      addVarName(name);
+    }
+  };
+
+  for (const item of body) {
+    switch (moduleField(item, 'type')) {
+      case 'ImportDeclaration':
+        for (const specifier of /** @type {any[]} */ (
+          moduleField(item, 'specifiers')
+        )) {
+          addLexicalName(
+            /** @type {string} */ (
+              moduleField(
+                /** @type {object} */ (moduleField(specifier, 'local')),
+                'name',
+              )
+            ),
+          );
+        }
+        break;
+      case 'ExportNamedDeclaration': {
+        const declaration = moduleField(item, 'declaration');
+
+        if (declaration !== null) {
+          addDeclarationBindings(declaration);
+          addDeclarationExports(declaration);
+        }
+
+        for (const specifier of /** @type {any[]} */ (
+          moduleField(item, 'specifiers')
+        )) {
+          addExportName(
+            /** @type {string} */ (
+              moduleField(
+                /** @type {object} */ (moduleField(specifier, 'exported')),
+                'name',
+              )
+            ),
+          );
+        }
+        break;
+      }
+      case 'ExportDefaultDeclaration': {
+        addExportName('default');
+        const declaration = /** @type {any} */ (
+          moduleField(item, 'declaration')
+        );
+        const type = moduleField(declaration, 'type');
+
+        if (
+          (type === 'FunctionDeclaration' || type === 'ClassDeclaration') &&
+          moduleField(declaration, 'id') !== null
+        ) {
+          addDeclarationBindings(declaration);
+        }
+        break;
+      }
+      default:
+        addStatementVarBindings(item);
+        if (
+          (moduleField(item, 'type') === 'VariableDeclaration' &&
+            moduleField(item, 'kind') !== 'var') ||
+          moduleField(item, 'type') === 'FunctionDeclaration' ||
+          moduleField(item, 'type') === 'ClassDeclaration'
+        ) {
+          addDeclarationBindings(item);
+        }
+        break;
+    }
+  }
 }
 
 /**
@@ -1306,7 +1456,14 @@ function isModuleDeclaration(node) {
 function isModuleDefaultDeclaration(node) {
   const type = moduleField(node, 'type');
 
-  if (type === 'FunctionDeclaration' || type === 'ClassDeclaration') {
+  if (type === 'FunctionDeclaration') {
+    const id = moduleField(node, 'id');
+    return (
+      (id === null || isModuleIdentifier(id)) &&
+      moduleField(node, 'async') !== true
+    );
+  }
+  if (type === 'ClassDeclaration') {
     const id = moduleField(node, 'id');
     return (
       (id === null || isModuleIdentifier(id)) &&

@@ -63,4 +63,42 @@ export default [
       assertSame(escaping.message.includes('above the Test262 root'), true);
     },
   },
+  {
+    name: 'portable module paths reject encoded structural traversal and separators',
+    run: () => {
+      for (const specifier of [
+        './%2e%2e/escaped.js',
+        './%2E%2e/escaped.js',
+        './nested%2fchild.js',
+        './nested%2Fchild.js',
+        './nested%5cchild.js',
+        './nested%5Cchild.js',
+      ]) {
+        const error = captureError(() =>
+          resolveTest262ModulePath(
+            specifier,
+            'test/language/module-code/root.js',
+          ),
+        );
+
+        assertSame(error.message.includes('encoded'), true);
+      }
+
+      assertSame(
+        resolveTest262ModulePath(
+          './literal%25name.js',
+          'test/language/module-code/root.js',
+        ),
+        'test/language/module-code/literal%25name.js',
+      );
+
+      const encodedReferrer = captureError(() =>
+        resolveTest262ModulePath(
+          './child.js',
+          'test/language/module-code/%2e%2e/root.js',
+        ),
+      );
+      assertSame(encodedReferrer.message.includes('encoded'), true);
+    },
+  },
 ];

@@ -93,8 +93,6 @@ export class SourceTextModuleRecord {
     /** @type {{ type: 'normal' | 'throw', value: unknown } | null} */
     this.evaluationCompletion = null;
     this.evaluationBodyCompleted = false;
-    /** @type {ModuleLoaderError | null} */
-    this.evaluationError = null;
   }
 
   /**

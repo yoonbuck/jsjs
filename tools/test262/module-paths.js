@@ -18,6 +18,8 @@ export function resolveTest262ModulePath(specifier, referrer) {
   if (typeof referrer !== 'string' || referrer === '') {
     throw new TypeError('Test262 module referrer must be a non-empty string');
   }
+  rejectEncodedStructuralPath(specifier);
+  rejectEncodedStructuralPath(referrer);
   if (!isRelativeSpecifier(specifier)) {
     throw new TypeError(
       `Test262 module specifier must be relative: ${specifier}`,
@@ -59,4 +61,30 @@ export function resolveTest262ModulePath(specifier, referrer) {
  */
 function isRelativeSpecifier(specifier) {
   return specifier.startsWith('./') || specifier.startsWith('../');
+}
+
+/**
+ * Rejects percent encodings that a URL-oriented host may later interpret as a
+ * separator or dot segment, after this portable string resolver has returned.
+ *
+ * @param {string} path
+ * @returns {void}
+ */
+function rejectEncodedStructuralPath(path) {
+  for (const segment of path.split('/')) {
+    if (/%(?:2f|5c)/iu.test(segment)) {
+      throw new RangeError(
+        'Test262 module request cannot contain encoded path separators',
+      );
+    }
+
+    if (/%2e/iu.test(segment)) {
+      const decodedDots = segment.replace(/%2e/giu, '.');
+      if (decodedDots === '.' || decodedDots === '..') {
+        throw new RangeError(
+          'Test262 module request cannot contain encoded dot segments',
+        );
+      }
+    }
+  }
 }

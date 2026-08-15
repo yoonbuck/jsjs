@@ -367,10 +367,7 @@ export default [
       });
 
       const rootError = await rejected(loader.loadAndEvaluate('root'));
-      const last = loader.records.get('last');
-      if (last === undefined) {
-        throw new Error('Expected last module record');
-      }
+      const last = await loadModuleGraph(loader, 'last');
 
       assertSame(rootError.value, thrown);
       assertSame(last.evaluationStatus, 'errored');
@@ -438,10 +435,7 @@ export default [
       );
       const a = await loadModuleGraph(loader, 'a');
       const c = await loadModuleGraph(loader, 'c');
-      const d = loader.records.get('d');
-      if (d === undefined) {
-        throw new Error('Expected d module record');
-      }
+      const d = await loadModuleGraph(loader, 'd');
       linkModuleGraph(a);
       linkModuleGraph(c);
       realm.globalObject.defineOwnProperty('markerA', {

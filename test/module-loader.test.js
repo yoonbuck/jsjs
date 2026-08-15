@@ -211,6 +211,88 @@ export default [
     },
   },
   {
+    name: 'loader ignores public registry mutation and property injection',
+    async run() {
+      const realm = createRealm();
+      let loads = 0;
+      const loader = createModuleLoader(realm, {
+        resolve() {
+          return 'root';
+        },
+        load() {
+          loads += 1;
+          return 'runs += 1; export const value = runs;';
+        },
+      });
+      realm.globalObject.defineOwnProperty('runs', {
+        value: 0,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const first = await loader.loadAndEvaluate('root');
+      const publicLoader = /** @type {any} */ (loader);
+      for (const field of [
+        'records',
+        'resolveInFlight',
+        'loadInFlight',
+        'graphInFlight',
+        'completedGraphs',
+        'graphDependencies',
+        'cycleOwners',
+        'activeLoadIdentifiers',
+        'evaluationErrors',
+      ]) {
+        const value = publicLoader[field];
+        if (
+          value !== null &&
+          typeof value === 'object' &&
+          typeof value.clear === 'function'
+        ) {
+          value.clear();
+        }
+        publicLoader[field] = new Map();
+      }
+
+      const second = await loader.loadAndEvaluate('root');
+
+      assertSame(second, first);
+      assertSame(second.get('value'), 1);
+      assertSame(loads, 1);
+      assertSame(realm.globalObject.get('runs'), 1);
+    },
+  },
+  {
+    name: 'loader keeps evaluation failures cached despite record mutation',
+    async run() {
+      const marker = {};
+      const realm = createRealm();
+      const loader = createModuleLoader(realm, {
+        resolve() {
+          return 'root';
+        },
+        load() {
+          return 'throw marker;';
+        },
+      });
+      realm.globalObject.defineOwnProperty('marker', {
+        value: marker,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const record = await loadModuleGraph(loader, 'root');
+      const first = await rejected(loader.loadAndEvaluate('root'));
+      /** @type {any} */ (record).evaluationError = null;
+      const second = await rejected(loader.loadAndEvaluate('root'));
+
+      assertSame(second, first);
+      assertSame(second.value, marker);
+    },
+  },
+  {
     name: 'loader shares a pending canonical source acquisition with concurrent callers',
     async run() {
       const source = deferred();

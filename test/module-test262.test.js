@@ -281,4 +281,30 @@ export default [
       );
     },
   },
+  {
+    name: 'encoded structural module requests fail before host readModule',
+    run: async () => {
+      for (const specifier of [
+        './%2e%2e/escaped_FIXTURE.js',
+        './nested%2Fchild_FIXTURE.js',
+        './nested%5cchild_FIXTURE.js',
+      ]) {
+        const files = new Map([
+          [
+            ROOT,
+            moduleFixture(
+              'encoded structural module request',
+              `import "${specifier}";`,
+            ),
+          ],
+        ]);
+        const { run, reads } = await runModuleFixture(files);
+
+        assertSame(run.summary.failed, 1);
+        assertSame(run.records[0].reason, 'engine-error');
+        assertSame(reads.get(ROOT), 1);
+        assertSame(reads.size, 1);
+      }
+    },
+  },
 ];

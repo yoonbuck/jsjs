@@ -44,8 +44,23 @@ import { isRealm } from './realm.js';
  * }} ModuleLoaderBindings
  */
 
-/** @type {WeakMap<ModuleLoader, ModuleLoaderBindings>} */
-const MODULE_LOADER_BINDINGS = new WeakMap();
+/**
+ * @typedef {{
+ *   bindings: ModuleLoaderBindings,
+ *   records: Map<string, SourceTextModuleRecord>,
+ *   resolveInFlight: Map<string, Map<string | null, Promise<string>>>,
+ *   loadInFlight: Map<string, Promise<SourceTextModuleRecord>>,
+ *   graphInFlight: Map<string, Promise<SourceTextModuleRecord>>,
+ *   completedGraphs: Set<string>,
+ *   graphDependencies: Map<string, Set<string>>,
+ *   cycleOwners: Map<string, string>,
+ *   activeLoadIdentifiers: Set<string>,
+ *   evaluationErrors: WeakMap<SourceTextModuleRecord, ModuleLoaderError>,
+ * }} ModuleLoaderState
+ */
+
+/** @type {WeakMap<ModuleLoader, ModuleLoaderState>} */
+const MODULE_LOADER_STATE = new WeakMap();
 
 /**
  * Constructs a module loader bound to one Realm.
@@ -70,26 +85,18 @@ export class ModuleLoader {
     if (!isRealm(realm)) {
       throw new TypeError('Expected realm to be a Realm');
     }
-    MODULE_LOADER_BINDINGS.set(
-      this,
-      Object.freeze({ realm, ...validateModuleHost(host) }),
-    );
-    /** @type {Map<string, SourceTextModuleRecord>} */
-    this.records = new Map();
-    /** @type {Map<string, Map<string | null, Promise<string>>>} */
-    this.resolveInFlight = new Map();
-    /** @type {Map<string, Promise<SourceTextModuleRecord>>} */
-    this.loadInFlight = new Map();
-    /** @type {Map<string, Promise<SourceTextModuleRecord>>} */
-    this.graphInFlight = new Map();
-    /** @type {Set<string>} */
-    this.completedGraphs = new Set();
-    /** @type {Map<string, Set<string>>} */
-    this.graphDependencies = new Map();
-    /** @type {Map<string, string>} */
-    this.cycleOwners = new Map();
-    /** @type {Set<string>} */
-    this.activeLoadIdentifiers = new Set();
+    MODULE_LOADER_STATE.set(this, {
+      bindings: Object.freeze({ realm, ...validateModuleHost(host) }),
+      records: new Map(),
+      resolveInFlight: new Map(),
+      loadInFlight: new Map(),
+      graphInFlight: new Map(),
+      completedGraphs: new Set(),
+      graphDependencies: new Map(),
+      cycleOwners: new Map(),
+      activeLoadIdentifiers: new Set(),
+      evaluationErrors: new WeakMap(),
+    });
   }
 
   /**
@@ -110,7 +117,7 @@ export class ModuleLoader {
         error instanceof ThrowSignal &&
         record.evaluationCompletion?.type === 'throw'
       ) {
-        throw cachedEvaluationError(record);
+        throw cachedEvaluationError(this, record);
       }
 
       throw asModuleLoaderError('evaluate', record.identifier, error);
@@ -120,12 +127,16 @@ export class ModuleLoader {
 }
 
 /**
+ * @param {ModuleLoader} loader
  * @param {SourceTextModuleRecord} record
  * @returns {ModuleLoaderError}
  */
-function cachedEvaluationError(record) {
-  if (record.evaluationError !== null) {
-    return record.evaluationError;
+function cachedEvaluationError(loader, record) {
+  const errors = moduleLoaderState(loader).evaluationErrors;
+  const cached = errors.get(record);
+
+  if (cached !== undefined) {
+    return cached;
   }
 
   const completion = record.evaluationCompletion;
@@ -138,7 +149,7 @@ function cachedEvaluationError(record) {
     identifier: record.identifier,
     value: completion.value,
   });
-  record.evaluationError = error;
+  errors.set(record, error);
   return error;
 }
 
@@ -185,10 +196,11 @@ export async function loadModuleGraph(loader, specifier, referrer = null) {
  */
 function resolveModule(loader, specifier, referrer) {
   const bindings = moduleLoaderBindings(loader);
-  let byReferrer = loader.resolveInFlight.get(specifier);
+  const state = moduleLoaderState(loader);
+  let byReferrer = state.resolveInFlight.get(specifier);
   if (byReferrer === undefined) {
     byReferrer = new Map();
-    loader.resolveInFlight.set(specifier, byReferrer);
+    state.resolveInFlight.set(specifier, byReferrer);
   }
 
   const pending = byReferrer.get(referrer);
@@ -212,7 +224,7 @@ function resolveModule(loader, specifier, referrer) {
     .finally(() => {
       byReferrer.delete(referrer);
       if (byReferrer.size === 0) {
-        loader.resolveInFlight.delete(specifier);
+        state.resolveInFlight.delete(specifier);
       }
     });
 
@@ -228,9 +240,11 @@ function resolveModule(loader, specifier, referrer) {
  * @returns {Promise<SourceTextModuleRecord>}
  */
 function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
+  const state = moduleLoaderState(loader);
+
   if (ancestors.has(identifier)) {
     registerCycle(loader, ancestors, identifier);
-    const cyclicRecord = loader.records.get(identifier);
+    const cyclicRecord = state.records.get(identifier);
     if (cyclicRecord === undefined) {
       throw new Error('Expected parsed cyclic module record');
     }
@@ -241,7 +255,7 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
     addGraphDependency(loader, parentIdentifier, identifier);
   }
 
-  const cycleOwner = loader.cycleOwners.get(identifier);
+  const cycleOwner = state.cycleOwners.get(identifier);
   if (cycleOwner !== undefined && cycleOwner !== identifier) {
     // This request is already inside the owner graph's traversal. Waiting for
     // the owner here would make a later duplicate request edge await the graph
@@ -250,17 +264,17 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
     // enough for that internal edge; the owner completes the SCC graph before
     // an external root is allowed to observe it.
     if (ancestors.has(cycleOwner)) {
-      const cyclicRecord = loader.records.get(identifier);
+      const cyclicRecord = state.records.get(identifier);
       if (cyclicRecord === undefined) {
         throw new Error('Expected parsed cyclic module record');
       }
       return Promise.resolve(cyclicRecord);
     }
 
-    const ownerGraph = loader.graphInFlight.get(cycleOwner);
+    const ownerGraph = state.graphInFlight.get(cycleOwner);
     if (ownerGraph !== undefined) {
       return ownerGraph.then(() => {
-        const cyclicRecord = loader.records.get(identifier);
+        const cyclicRecord = state.records.get(identifier);
         if (cyclicRecord === undefined) {
           throw new Error('Expected parsed cyclic module record');
         }
@@ -269,12 +283,12 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
     }
   }
 
-  const cached = loader.records.get(identifier);
-  if (loader.completedGraphs.has(identifier) && cached !== undefined) {
+  const cached = state.records.get(identifier);
+  if (state.completedGraphs.has(identifier) && cached !== undefined) {
     return Promise.resolve(cached);
   }
 
-  const pending = loader.graphInFlight.get(identifier);
+  const pending = state.graphInFlight.get(identifier);
   if (pending !== undefined) {
     const cycle =
       parentIdentifier === undefined
@@ -319,10 +333,10 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
       }
 
       record.resolvedRequestedModules = Object.freeze(resolvedRequests);
-      const cycleOwner = loader.cycleOwners.get(identifier);
+      const cycleOwner = state.cycleOwners.get(identifier);
       if (cycleOwner === undefined || cycleOwner === identifier) {
         completeCycle(loader, identifier);
-        loader.completedGraphs.add(identifier);
+        state.completedGraphs.add(identifier);
       }
       return record;
     })
@@ -331,11 +345,11 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
       throw error;
     })
     .finally(() => {
-      loader.graphInFlight.delete(identifier);
-      loader.graphDependencies.delete(identifier);
+      state.graphInFlight.delete(identifier);
+      state.graphDependencies.delete(identifier);
     });
 
-  loader.graphInFlight.set(identifier, graph);
+  state.graphInFlight.set(identifier, graph);
   return graph;
 }
 
@@ -346,12 +360,13 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
  */
 function acquireSourceRecord(loader, identifier) {
   const bindings = moduleLoaderBindings(loader);
-  const cached = loader.records.get(identifier);
+  const state = moduleLoaderState(loader);
+  const cached = state.records.get(identifier);
   if (cached !== undefined) {
     return Promise.resolve(cached);
   }
 
-  if (loader.activeLoadIdentifiers.has(identifier)) {
+  if (state.activeLoadIdentifiers.has(identifier)) {
     return Promise.reject(
       new ModuleLoaderError({
         phase: 'load',
@@ -361,7 +376,7 @@ function acquireSourceRecord(loader, identifier) {
     );
   }
 
-  const pending = loader.loadInFlight.get(identifier);
+  const pending = state.loadInFlight.get(identifier);
   if (pending !== undefined) {
     return pending;
   }
@@ -369,13 +384,13 @@ function acquireSourceRecord(loader, identifier) {
   const source = Promise.resolve()
     .then(async () => {
       let result;
-      loader.activeLoadIdentifiers.add(identifier);
+      state.activeLoadIdentifiers.add(identifier);
       try {
         result = bindings.load.call(bindings.receiver, identifier);
       } catch (error) {
         throw asModuleLoaderError('load', identifier, error);
       } finally {
-        loader.activeLoadIdentifiers.delete(identifier);
+        state.activeLoadIdentifiers.delete(identifier);
       }
 
       try {
@@ -394,17 +409,17 @@ function acquireSourceRecord(loader, identifier) {
           identifier,
           ast,
         });
-        loader.records.set(identifier, record);
+        state.records.set(identifier, record);
         return record;
       } catch (error) {
         throw asModuleLoaderError('load', identifier, error);
       }
     })
     .finally(() => {
-      loader.loadInFlight.delete(identifier);
+      state.loadInFlight.delete(identifier);
     });
 
-  loader.loadInFlight.set(identifier, source);
+  state.loadInFlight.set(identifier, source);
   return source;
 }
 
@@ -435,14 +450,22 @@ function validateModuleHost(host) {
 
 /**
  * @param {ModuleLoader} loader
+ * @returns {ModuleLoaderState}
+ */
+function moduleLoaderState(loader) {
+  const state = MODULE_LOADER_STATE.get(loader);
+  if (state === undefined) {
+    throw new TypeError('Expected loader to be a ModuleLoader');
+  }
+  return state;
+}
+
+/**
+ * @param {ModuleLoader} loader
  * @returns {ModuleLoaderBindings}
  */
 function moduleLoaderBindings(loader) {
-  const bindings = MODULE_LOADER_BINDINGS.get(loader);
-  if (bindings === undefined) {
-    throw new TypeError('Expected loader to be a ModuleLoader');
-  }
-  return bindings;
+  return moduleLoaderState(loader).bindings;
 }
 
 /**
@@ -518,7 +541,7 @@ function asModuleLoaderError(phase, identifier, error) {
  * @returns {string | undefined}
  */
 function currentActiveLoadIdentifier(loader) {
-  for (const identifier of loader.activeLoadIdentifiers) {
+  for (const identifier of moduleLoaderState(loader).activeLoadIdentifiers) {
     return identifier;
   }
   return undefined;
@@ -532,9 +555,10 @@ function currentActiveLoadIdentifier(loader) {
  */
 async function awaitCycleOwner(loader, identifier, graph) {
   const record = await graph;
-  const owner = loader.cycleOwners.get(identifier);
+  const state = moduleLoaderState(loader);
+  const owner = state.cycleOwners.get(identifier);
   if (owner !== undefined && owner !== identifier) {
-    const ownerGraph = loader.graphInFlight.get(owner);
+    const ownerGraph = state.graphInFlight.get(owner);
     if (ownerGraph !== undefined) {
       await ownerGraph;
     }
@@ -570,16 +594,17 @@ function registerCycle(loader, ancestors, identifier) {
  * @returns {void}
  */
 function registerCycleMembers(loader, members, identifier) {
+  const state = moduleLoaderState(loader);
   let owner = identifier;
   for (const member of members) {
-    const existingOwner = loader.cycleOwners.get(member);
+    const existingOwner = state.cycleOwners.get(member);
     if (existingOwner !== undefined) {
       owner = existingOwner;
       break;
     }
   }
   for (const member of members) {
-    loader.cycleOwners.set(member, owner);
+    state.cycleOwners.set(member, owner);
   }
 }
 
@@ -589,10 +614,11 @@ function registerCycleMembers(loader, members, identifier) {
  * @returns {void}
  */
 function completeCycle(loader, identifier) {
-  for (const [member, owner] of loader.cycleOwners) {
+  const state = moduleLoaderState(loader);
+  for (const [member, owner] of state.cycleOwners) {
     if (owner === identifier) {
-      loader.completedGraphs.add(member);
-      loader.cycleOwners.delete(member);
+      state.completedGraphs.add(member);
+      state.cycleOwners.delete(member);
     }
   }
 }
@@ -603,17 +629,18 @@ function completeCycle(loader, identifier) {
  * @returns {void}
  */
 function resetFailedCycle(loader, identifier) {
+  const state = moduleLoaderState(loader);
   const members = [identifier];
-  for (const [member, owner] of loader.cycleOwners) {
+  for (const [member, owner] of state.cycleOwners) {
     if (owner === identifier) {
       members.push(member);
-      loader.cycleOwners.delete(member);
+      state.cycleOwners.delete(member);
     }
   }
 
   for (const member of members) {
-    loader.completedGraphs.delete(member);
-    const record = loader.records.get(member);
+    state.completedGraphs.delete(member);
+    const record = state.records.get(member);
     if (record !== undefined) {
       record.resolvedRequestedModules = [];
     }
@@ -627,10 +654,11 @@ function resetFailedCycle(loader, identifier) {
  * @returns {void}
  */
 function addGraphDependency(loader, parent, child) {
-  let children = loader.graphDependencies.get(parent);
+  const state = moduleLoaderState(loader);
+  let children = state.graphDependencies.get(parent);
   if (children === undefined) {
     children = new Set();
-    loader.graphDependencies.set(parent, children);
+    state.graphDependencies.set(parent, children);
   }
   children.add(child);
 }
@@ -642,6 +670,7 @@ function addGraphDependency(loader, parent, child) {
  * @returns {string[] | undefined}
  */
 function graphDependencyPath(loader, start, target) {
+  const state = moduleLoaderState(loader);
   /** @type {Array<[string, string[]]>} */
   const pending = [[start, [start]]];
   const visited = new Set();
@@ -659,7 +688,7 @@ function graphDependencyPath(loader, start, target) {
       continue;
     }
     visited.add(identifier);
-    const children = loader.graphDependencies.get(identifier);
+    const children = state.graphDependencies.get(identifier);
     if (children !== undefined) {
       for (const child of children) {
         pending.push([child, [...path, child]]);
