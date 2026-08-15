@@ -1,0 +1,886 @@
+import { assertSame } from './harness/assert.js';
+import { createRealm } from '../src/runtime/realm.js';
+import { evaluateScript } from '../src/api.js';
+import { EngineObject } from '../src/runtime/object.js';
+
+/**
+ * @param {string} source
+ * @returns {unknown}
+ */
+function run(source) {
+  const completion = evaluateScript(createRealm(), source);
+
+  if (completion.type !== 'normal') {
+    const detail =
+      completion.value instanceof EngineObject
+        ? `: ${String(completion.value.get('name'))}: ${String(
+            completion.value.get('message'),
+          )}`
+        : `: ${String(completion.value)}`;
+    throw new Error(
+      `Expected normal completion, got ${completion.type}${detail}`,
+    );
+  }
+
+  return completion.value;
+}
+
+/** @type {import('./harness/runner.js').TestCase[]} */
+const tests = [
+  {
+    name: 'blocks declarations and if branches resume in their retained lexical context',
+    run() {
+      assertSame(
+        run(`
+          var outer = 'outer';
+          function* g() {
+            yield 'entry';
+            {
+              let outer = yield 'binding';
+              if (yield 'test') {
+                yield 'then:' + outer;
+              } else {
+                yield 'else:' + outer;
+              }
+            }
+            return outer;
+          }
+
+          var yes = g();
+          var yesEntry = yes.next();
+          var yesBinding = yes.next();
+          var yesTest = yes.next('inner');
+          var yesBranch = yes.next(true);
+          var yesResult = yes.next();
+
+          var no = g();
+          var noEntry = no.next();
+          var noBinding = no.next();
+          var noTest = no.next('other');
+          var noBranch = no.next(false);
+          var noResult = no.next();
+
+          [
+            yesEntry.value,
+            yesBinding.value,
+            yesTest.value,
+            yesBranch.value,
+            yesResult.value,
+            yesResult.done,
+            noEntry.value,
+            noBinding.value,
+            noTest.value,
+            noBranch.value,
+            noResult.value,
+            noResult.done
+          ].join('|');
+        `),
+        'entry|binding|test|then:inner|outer|true|' +
+          'entry|binding|test|else:other|outer|true',
+      );
+    },
+  },
+  {
+    name: 'while do-while and ordinary for retain each phase without repeated evaluation',
+    run() {
+      assertSame(
+        run(`
+          var log = [];
+          function mark(label) {
+            log.push(label);
+            return label;
+          }
+          function* g() {
+            var i = 0;
+            while (((yield mark('while-test:' + i)), i < 2)) {
+              yield mark('while-body:' + i);
+              i = i + 1;
+            }
+
+            var d = 0;
+            do {
+              yield mark('do-body:' + d);
+              d = d + 1;
+            } while (((yield mark('do-test:' + d)), d < 2));
+
+            var f = 0;
+            for (
+              yield mark('for-init');
+              ((yield mark('for-test:' + f)), f < 2);
+              ((yield mark('for-update:' + f)), f = f + 1)
+            ) {
+              yield mark('for-body:' + f);
+            }
+            return log.join(',');
+          }
+
+          var iterator = g();
+          var yielded = [];
+          var step = iterator.next();
+          while (!step.done) {
+            yielded.push(step.value);
+            step = iterator.next();
+          }
+          yielded.join(',') + '|' + step.value;
+        `),
+        'while-test:0,while-body:0,while-test:1,while-body:1,while-test:2,' +
+          'do-body:0,do-test:1,do-body:1,do-test:2,' +
+          'for-init,for-test:0,for-body:0,for-update:0,' +
+          'for-test:1,for-body:1,for-update:1,for-test:2|' +
+          'while-test:0,while-body:0,while-test:1,while-body:1,while-test:2,' +
+          'do-body:0,do-test:1,do-body:1,do-test:2,' +
+          'for-init,for-test:0,for-body:0,for-update:0,' +
+          'for-test:1,for-body:1,for-update:1,for-test:2',
+      );
+    },
+  },
+  {
+    name: 'lexical for creates per-iteration environments across every suspension',
+    run() {
+      assertSame(
+        run(`
+          function* g() {
+            var closures = [];
+            for (
+              let i = yield 'init';
+              ((yield 'test:' + i), i < 3);
+              ((yield 'update:' + i), i = i + 1)
+            ) {
+              closures.push(function () { return i; });
+              yield 'body:' + i;
+            }
+            return [
+              closures[0](),
+              closures[1](),
+              closures[2]()
+            ].join(',');
+          }
+
+          var iterator = g();
+          var yielded = [];
+          var step = iterator.next();
+          yielded.push(step.value);
+          step = iterator.next(0);
+          while (!step.done) {
+            yielded.push(step.value);
+            step = iterator.next();
+          }
+          yielded.join(',') + '|' + step.value;
+        `),
+        'init,test:0,body:0,update:0,test:1,body:1,update:1,' +
+          'test:2,body:2,update:2,test:3|0,1,2',
+      );
+    },
+  },
+  {
+    name: 'for-in resumes its right target and body and preserves lexical captures',
+    run() {
+      assertSame(
+        run(`
+          var source = { a: 1, b: 2 };
+          function* targets() {
+            var holder = {};
+            var order = [];
+            for (holder[yield 'target'] in (yield 'right')) {
+              var current =
+                order.length === 0 ? holder.first : holder.second;
+              order.push(current);
+              yield 'body:' + current;
+            }
+            return holder.first + ',' + holder.second + '|' + order.join(',');
+          }
+
+          var iterator = targets();
+          var right = iterator.next();
+          var firstTarget = iterator.next(source);
+          var firstBody = iterator.next('first');
+          var secondTarget = iterator.next();
+          var secondBody = iterator.next('second');
+          var targetResult = iterator.next();
+
+          function* lexical() {
+            var closures = [];
+            for (let key in { left: 1, right: 2 }) {
+              closures.push(function () { return key; });
+              yield 'lexical:' + key;
+            }
+            return closures[0]() + ',' + closures[1]();
+          }
+          var lexicalIterator = lexical();
+          var lexicalFirst = lexicalIterator.next();
+          var lexicalSecond = lexicalIterator.next();
+          var lexicalResult = lexicalIterator.next();
+
+          [
+            right.value,
+            firstTarget.value,
+            firstBody.value,
+            secondTarget.value,
+            secondBody.value,
+            targetResult.value,
+            lexicalFirst.value,
+            lexicalSecond.value,
+            lexicalResult.value
+          ].join('|');
+        `),
+        'right|target|body:a|target|body:b|a,b|a,b|' +
+          'lexical:left|lexical:right|left,right',
+      );
+    },
+  },
+  {
+    name: 'for-of resumes its right target and body and preserves lexical captures',
+    run() {
+      assertSame(
+        run(`
+          var source = [10, 20];
+          function* targets() {
+            var holder = {};
+            var order = [];
+            for (holder[yield 'target'] of (yield 'right')) {
+              var current =
+                order.length === 0 ? holder.first : holder.second;
+              order.push(current);
+              yield 'body:' + current;
+            }
+            return holder.first + ',' + holder.second + '|' + order.join(',');
+          }
+
+          var iterator = targets();
+          var right = iterator.next();
+          var firstTarget = iterator.next(source);
+          var firstBody = iterator.next('first');
+          var secondTarget = iterator.next();
+          var secondBody = iterator.next('second');
+          var targetResult = iterator.next();
+
+          function* lexical() {
+            var closures = [];
+            for (let value of [3, 4]) {
+              closures.push(function () { return value; });
+              yield 'lexical:' + value;
+            }
+            return closures[0]() + ',' + closures[1]();
+          }
+          var lexicalIterator = lexical();
+          var lexicalFirst = lexicalIterator.next();
+          var lexicalSecond = lexicalIterator.next();
+          var lexicalResult = lexicalIterator.next();
+
+          [
+            right.value,
+            firstTarget.value,
+            firstBody.value,
+            secondTarget.value,
+            secondBody.value,
+            targetResult.value,
+            lexicalFirst.value,
+            lexicalSecond.value,
+            lexicalResult.value
+          ].join('|');
+        `),
+        'right|target|body:10|target|body:20|10,20|10,20|' +
+          'lexical:3|lexical:4|3,4',
+      );
+    },
+  },
+  {
+    name: 'for-of closes abrupt consumers with exact throw precedence and not iterator faults',
+    run() {
+      assertSame(
+        run(`
+          function make(mode) {
+            var log = { next: 0, close: 0 };
+            var iterable = {};
+            iterable[Symbol.iterator] = function () {
+              var index = 0;
+              var iterator = {};
+              iterator.next = function () {
+                log.next = log.next + 1;
+                if (mode === 'next-throw') {
+                  throw 'next-error';
+                }
+                if (mode === 'value-throw') {
+                  var broken = { done: false };
+                  Object.defineProperty(broken, 'value', {
+                    get: function () { throw 'value-error'; }
+                  });
+                  return broken;
+                }
+                if (index < 2) {
+                  index = index + 1;
+                  return { value: index, done: false };
+                }
+                return { done: true };
+              };
+              iterator['return'] = function () {
+                log.close = log.close + 1;
+                if (mode === 'return-throw') {
+                  throw 'close-error';
+                }
+                return {};
+              };
+              return iterator;
+            };
+            return { iterable: iterable, log: log };
+          }
+
+          function* consume(iterable) {
+            for (var value of iterable) {
+              yield value;
+            }
+            return 'natural';
+          }
+
+          var normal = make('normal');
+          var normalIterator = consume(normal.iterable);
+          var normalPause = normalIterator.next();
+          var normalReturn = normalIterator.return(42);
+
+          var throwingClose = make('return-throw');
+          var throwIterator = consume(throwingClose.iterable);
+          throwIterator.next();
+          var original = {};
+          var originalWon = false;
+          try {
+            throwIterator.throw(original);
+          } catch (error) {
+            originalWon = error === original;
+          }
+
+          var replacingClose = make('return-throw');
+          var returnIterator = consume(replacingClose.iterable);
+          returnIterator.next();
+          var closeWon = false;
+          try {
+            returnIterator.return(9);
+          } catch (error) {
+            closeWon = error === 'close-error';
+          }
+
+          var nextFault = make('next-throw');
+          var nextFaultCaught = false;
+          try {
+            consume(nextFault.iterable).next();
+          } catch (error) {
+            nextFaultCaught = error === 'next-error';
+          }
+
+          var valueFault = make('value-throw');
+          var valueFaultCaught = false;
+          try {
+            consume(valueFault.iterable).next();
+          } catch (error) {
+            valueFaultCaught = error === 'value-error';
+          }
+
+          [
+            normalPause.value,
+            normal.log.close,
+            normalReturn.value,
+            normalReturn.done,
+            throwingClose.log.close,
+            originalWon,
+            replacingClose.log.close,
+            closeWon,
+            nextFault.log.close,
+            nextFaultCaught,
+            valueFault.log.close,
+            valueFaultCaught
+          ].join(':');
+        `),
+        '1:1:42:true:1:true:1:true:0:true:0:true',
+      );
+    },
+  },
+  {
+    name: 'switch resumes discriminants tests and fallthrough without re-evaluation',
+    run() {
+      assertSame(
+        run(`
+          var log = [];
+          function mark(label) {
+            log.push(label);
+            return label;
+          }
+          function* g() {
+            switch (yield mark('discriminant')) {
+              case (yield mark('case-a')):
+                yield mark('body-a');
+              case (yield mark('case-b')):
+                yield mark('body-b');
+                break;
+              default:
+                yield mark('body-default');
+              case (yield mark('case-c')):
+                yield mark('body-c');
+            }
+            return log.join(',');
+          }
+
+          var first = g();
+          first.next();
+          first.next('a');
+          first.next('a');
+          first.next();
+          var firstResult = first.next();
+
+          log = [];
+          var second = g();
+          second.next();
+          second.next('b');
+          second.next('a');
+          second.next('b');
+          var secondResult = second.next();
+
+          log = [];
+          var third = g();
+          third.next();
+          third.next('c');
+          third.next('a');
+          third.next('b');
+          third.next('c');
+          var thirdResult = third.next();
+
+          log = [];
+          var fallback = g();
+          fallback.next();
+          fallback.next('none');
+          fallback.next('a');
+          fallback.next('b');
+          fallback.next('c');
+          fallback.next();
+          var fallbackResult = fallback.next();
+
+          [
+            firstResult.value,
+            secondResult.value,
+            thirdResult.value,
+            fallbackResult.value
+          ].join('|');
+        `),
+        'discriminant,case-a,body-a,body-b|' +
+          'discriminant,case-a,case-b,body-b|' +
+          'discriminant,case-a,case-b,case-c,body-c|' +
+          'discriminant,case-a,case-b,case-c,body-default,body-c',
+      );
+    },
+  },
+  {
+    name: 'labels route owned and propagated break and continue across suspended loops',
+    run() {
+      assertSame(
+        run(`
+          function* g() {
+            block: {
+              yield 'block';
+              break block;
+              yield 'wrong-block';
+            }
+
+            for (var k = 0; k < 2; k = k + 1) {
+              yield 'plain-break';
+              break;
+            }
+
+            outer: for (var i = 0; i < 3; i = i + 1) {
+              for (var j = 0; j < 3; j = j + 1) {
+                yield i + ':' + j;
+                if (j === 0) {
+                  continue;
+                }
+                if (i === 0) {
+                  continue outer;
+                }
+                break outer;
+              }
+            }
+            return 'done';
+          }
+
+          var iterator = g();
+          var yielded = [];
+          var step = iterator.next();
+          while (!step.done) {
+            yielded.push(step.value);
+            step = iterator.next();
+          }
+          yielded.join(',') + '|' + step.value;
+        `),
+        'block,plain-break,0:0,0:1,1:0,1:1|done',
+      );
+    },
+  },
+  {
+    name: 'with resumes its object and body while retaining only the derived environment',
+    run() {
+      assertSame(
+        run(`
+          var object = {
+            value: 7,
+            method: function () { return this === object; }
+          };
+          function* g() {
+            var receiver;
+            with (yield 'object') {
+              yield 'body:' + value;
+              receiver = method();
+            }
+            return receiver + ':' + typeof value;
+          }
+
+          var iterator = g();
+          var objectStep = iterator.next();
+          var bodyStep = iterator.next(object);
+          var result = iterator.next();
+          [
+            objectStep.value,
+            bodyStep.value,
+            result.value,
+            result.done
+          ].join('|');
+        `),
+        'object|body:7|true:undefined|true',
+      );
+    },
+  },
+  {
+    name: 'injected throw enters catch while return bypasses catch and both run yielding finally',
+    run() {
+      assertSame(
+        run(`
+          function* g() {
+            try {
+              yield 'try';
+            } catch (error) {
+              yield 'catch:' + error;
+            } finally {
+              yield 'finally';
+            }
+            return 'done';
+          }
+
+          var normal = g();
+          var normalTry = normal.next();
+          var normalFinally = normal.next();
+          var normalResult = normal.next();
+
+          var thrown = g();
+          var thrownTry = thrown.next();
+          var thrownCatch = thrown.throw('boom');
+          var thrownFinally = thrown.next();
+          var thrownResult = thrown.next();
+
+          var returned = g();
+          var returnedTry = returned.next();
+          var returnedFinally = returned.return('returned');
+          var returnedResult = returned.next();
+
+          [
+            normalTry.value,
+            normalFinally.value,
+            normalResult.value,
+            normalResult.done,
+            thrownTry.value,
+            thrownCatch.value,
+            thrownFinally.value,
+            thrownResult.value,
+            thrownResult.done,
+            returnedTry.value,
+            returnedFinally.value,
+            returnedFinally.done,
+            returnedResult.value,
+            returnedResult.done
+          ].join('|');
+        `),
+        'try|finally|done|true|' +
+          'try|catch:boom|finally|done|true|' +
+          'try|finally|false|returned|true',
+      );
+    },
+  },
+  {
+    name: 'throw and return injected inside catch unwind through a yielding finally',
+    run() {
+      assertSame(
+        run(`
+          function* g() {
+            try {
+              yield 'try';
+            } catch (error) {
+              yield 'catch:' + error;
+              yield 'catch-after';
+            } finally {
+              yield 'finally';
+            }
+            return 'done';
+          }
+
+          var throwing = g();
+          throwing.next();
+          var throwingCatch = throwing.throw('first');
+          var throwingFinally = throwing.throw('second');
+          var secondWon = false;
+          try {
+            throwing.next();
+          } catch (error) {
+            secondWon = error === 'second';
+          }
+
+          var returning = g();
+          returning.next();
+          var returningCatch = returning.throw('first');
+          var returningFinally = returning.return(17);
+          var returningResult = returning.next();
+
+          [
+            throwingCatch.value,
+            throwingFinally.value,
+            secondWon,
+            returningCatch.value,
+            returningFinally.value,
+            returningFinally.done,
+            returningResult.value,
+            returningResult.done
+          ].join('|');
+        `),
+        'catch:first|finally|true|catch:first|finally|false|17|true',
+      );
+    },
+  },
+  {
+    name: 'yielding finally restores pending abrupt completions unless its own abrupt replaces them',
+    run() {
+      assertSame(
+        run(`
+          function* preserveThrow() {
+            try {
+              yield 'try';
+            } finally {
+              yield 'finally';
+            }
+          }
+          var original = {};
+          var preserved = preserveThrow();
+          preserved.next();
+          var preservedFinally = preserved.throw(original);
+          var preservedThrow = false;
+          try {
+            preserved.next();
+          } catch (error) {
+            preservedThrow = error === original;
+          }
+
+          function* replaceWithReturn() {
+            try {
+              yield 'try';
+            } finally {
+              yield 'finally';
+              return 'replacement-return';
+            }
+          }
+          var replacingReturn = replaceWithReturn();
+          replacingReturn.next();
+          var returnFinally = replacingReturn.return('pending-return');
+          var returnResult = replacingReturn.next();
+
+          function* replaceWithThrow() {
+            try {
+              yield 'try';
+            } finally {
+              yield 'finally';
+              throw 'replacement-throw';
+            }
+          }
+          var replacingThrow = replaceWithThrow();
+          replacingThrow.next();
+          var throwFinally = replacingThrow.return('pending-return');
+          var replacementThrow = false;
+          try {
+            replacingThrow.next();
+          } catch (error) {
+            replacementThrow = error === 'replacement-throw';
+          }
+
+          function* pendingReturn() {
+            try {
+              return 'pending';
+            } finally {
+              yield 'finally';
+              yield 'after-finally';
+            }
+          }
+          var injectedThrow = pendingReturn();
+          var injectedThrowFinally = injectedThrow.next();
+          var injectedThrowWon = false;
+          try {
+            injectedThrow.throw('injected-throw');
+          } catch (error) {
+            injectedThrowWon = error === 'injected-throw';
+          }
+
+          var injectedReturn = pendingReturn();
+          var injectedReturnFinally = injectedReturn.next();
+          var injectedReturnResult = injectedReturn.return('injected-return');
+
+          [
+            preservedFinally.value,
+            preservedThrow,
+            returnFinally.value,
+            returnResult.value,
+            returnResult.done,
+            throwFinally.value,
+            replacementThrow,
+            injectedThrowFinally.value,
+            injectedThrowWon,
+            injectedReturnFinally.value,
+            injectedReturnResult.value,
+            injectedReturnResult.done
+          ].join('|');
+        `),
+        'finally|true|finally|replacement-return|true|' +
+          'finally|true|finally|true|finally|injected-return|true',
+      );
+    },
+  },
+  {
+    name: 'nested try catch finally retains each pending completion across suspension',
+    run() {
+      assertSame(
+        run(`
+          function* g() {
+            try {
+              try {
+                yield 'inner-try';
+              } finally {
+                yield 'inner-finally';
+              }
+            } catch (error) {
+              yield 'outer-catch:' + error;
+            } finally {
+              yield 'outer-finally';
+            }
+            return 'done';
+          }
+
+          var iterator = g();
+          var inner = iterator.next();
+          var innerFinally = iterator.throw('reason');
+          var outerCatch = iterator.next();
+          var outerFinally = iterator.next();
+          var result = iterator.next();
+          [
+            inner.value,
+            innerFinally.value,
+            outerCatch.value,
+            outerFinally.value,
+            result.value,
+            result.done
+          ].join('|');
+        `),
+        'inner-try|inner-finally|outer-catch:reason|outer-finally|done|true',
+      );
+    },
+  },
+  {
+    name: 'break continue and return unwind through yielding finally blocks',
+    run() {
+      assertSame(
+        run(`
+          function* loops() {
+            for (var i = 0; i < 3; i = i + 1) {
+              try {
+                if (i === 0) {
+                  continue;
+                }
+                break;
+              } finally {
+                yield 'finally:' + i;
+              }
+            }
+            yield 'after-loop';
+            return 'loop-done';
+          }
+          var loopIterator = loops();
+          var continueFinally = loopIterator.next();
+          var breakFinally = loopIterator.next();
+          var afterLoop = loopIterator.next();
+          var loopResult = loopIterator.next();
+
+          function* returning() {
+            try {
+              return 'return-done';
+            } finally {
+              yield 'return-finally';
+            }
+          }
+          var returnIterator = returning();
+          var returnFinally = returnIterator.next();
+          var returnResult = returnIterator.next();
+
+          [
+            continueFinally.value,
+            breakFinally.value,
+            afterLoop.value,
+            loopResult.value,
+            loopResult.done,
+            returnFinally.value,
+            returnResult.value,
+            returnResult.done
+          ].join('|');
+        `),
+        'finally:0|finally:1|after-loop|loop-done|true|' +
+          'return-finally|return-done|true',
+      );
+    },
+  },
+  {
+    name: 'guest reentrant next throw and return report TypeError without corrupting execution',
+    run() {
+      assertSame(
+        run(`
+          var iterator;
+          var errors = [];
+          function attempt(kind) {
+            try {
+              if (kind === 'next') {
+                iterator.next();
+              } else if (kind === 'throw') {
+                iterator.throw('nested');
+              } else {
+                iterator.return('nested');
+              }
+              errors.push(kind + ':missing');
+            } catch (error) {
+              errors.push(kind + ':' + error.name);
+            }
+            return kind;
+          }
+          function* g() {
+            yield attempt('next');
+            yield attempt('throw');
+            yield attempt('return');
+            return errors.join(',');
+          }
+
+          iterator = g();
+          var nextStep = iterator.next();
+          var throwStep = iterator.next();
+          var returnStep = iterator.next();
+          var result = iterator.next();
+          [
+            nextStep.value,
+            throwStep.value,
+            returnStep.value,
+            result.value,
+            result.done
+          ].join('|');
+        `),
+        'next|throw|return|' +
+          'next:TypeError,throw:TypeError,return:TypeError|true',
+      );
+    },
+  },
+];
+
+export default tests;

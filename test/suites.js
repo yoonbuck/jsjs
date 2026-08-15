@@ -89,6 +89,7 @@ import promiseCombinators from './promise-combinators.test.js';
 import generatorRuntime from './generator-runtime.test.js';
 import generatorYield from './generator-yield.test.js';
 import generatorStack from './generator-stack.test.js';
+import generatorControlFlow from './generator-control-flow.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -370,5 +371,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/generator-stack.test.js',
     tests: generatorStack,
+  }),
+  Object.freeze({
+    file: 'test/generator-control-flow.test.js',
+    tests: generatorControlFlow,
   }),
 ]);

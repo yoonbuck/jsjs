@@ -97,7 +97,11 @@ export class GeneratorExecution {
       const frame = this.frames[this.frames.length - 1];
 
       if (frame === undefined) {
-        return completeFromMachine(this.output);
+        const output = this.output;
+        this.frames.length = 0;
+        this.output = null;
+        this.input = null;
+        return completeFromMachine(output);
       }
 
       const action = dispatchGeneratorFrame(this, frame);
