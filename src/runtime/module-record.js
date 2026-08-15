@@ -68,6 +68,8 @@ export class SourceTextModuleRecord {
     this.localExportEntries = Object.freeze(localExportEntries);
     this.indirectExportEntries = Object.freeze(indirectExportEntries);
     this.starExportEntries = Object.freeze(starExportEntries);
+    /** @type {ReadonlyArray<ResolvedModuleRequest>} */
+    this.resolvedRequestedModules = [];
 
     this.environment = null;
     /** @type {any} */
@@ -86,6 +88,43 @@ export class SourceTextModuleRecord {
     }
 
     throw new TypeError('Module namespace is not initialized');
+  }
+}
+
+/**
+ * @typedef {{
+ *   specifier: string,
+ *   identifier: string,
+ *   module: SourceTextModuleRecord,
+ * }} ResolvedModuleRequest
+ */
+
+/**
+ * A failure crossing the portable module host boundary.
+ */
+export class ModuleLoaderError extends Error {
+  /**
+   * @param {{
+   *   phase: 'resolve' | 'load' | 'parse' | 'link' | 'evaluate',
+   *   identifier?: string,
+   *   cause?: unknown,
+   *   value?: unknown,
+   * }} options
+   */
+  constructor(options) {
+    super(`Module ${options.phase} failed`);
+    this.name = 'ModuleLoaderError';
+    this.phase = options.phase;
+
+    if (options.identifier !== undefined) {
+      this.identifier = options.identifier;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'cause')) {
+      this.cause = options.cause;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'value')) {
+      this.value = options.value;
+    }
   }
 }
 
