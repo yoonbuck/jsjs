@@ -1,10 +1,7 @@
 import { parseModule, parseScript } from './parser.js';
 import { createRealm, Realm } from './runtime/realm.js';
 import { Agent, createAgent } from './runtime/agent.js';
-import {
-  createModuleLoader,
-  ModuleLoader,
-} from './runtime/module-loader.js';
+import { createModuleLoader, ModuleLoader } from './runtime/module-loader.js';
 import { ModuleLoaderError } from './runtime/module-record.js';
 import { EMPTY, ThrowSignal, GuestErrorSignal } from './runtime/completion.js';
 import { globalDeclarationInstantiation } from './evaluator/declarations.js';

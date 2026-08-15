@@ -1211,6 +1211,39 @@ export default [
     },
   },
   {
+    name: 'browser adapter reads modules through an injected URL-free resolver',
+    run: async () => {
+      /** @type {string[]} */
+      const reads = [];
+      const browser = createBrowserTest262Host({
+        root: '/fixtures/test262',
+        resolvePath(root, path) {
+          return `${root}${path}`;
+        },
+        fetchImpl: async (path) => {
+          reads.push(path);
+          return {
+            ok: true,
+            status: 200,
+            text: async () => 'export const value = 42;',
+          };
+        },
+      });
+
+      assertSame(
+        await browser.readModule(
+          'test/language/module-code/basic_FIXTURE.js',
+          'test/language/module-code/basic.js',
+        ),
+        'export const value = 42;',
+      );
+      assertSame(
+        reads.join(','),
+        '/fixtures/test262/test/language/module-code/basic_FIXTURE.js',
+      );
+    },
+  },
+  {
     name: 'the shared run produces the deterministic fixture report every adapter prints',
     run: async () => {
       const host = await createFixtureTest262Host();

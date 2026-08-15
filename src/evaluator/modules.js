@@ -263,7 +263,11 @@ function evaluateModuleItem(item, record, context) {
         ? createNormalCompletion(EMPTY)
         : evaluateModuleDeclaration(item.declaration, context);
     case 'ExportDefaultDeclaration':
-      return evaluateDefaultExportDeclaration(item.declaration, record, context);
+      return evaluateDefaultExportDeclaration(
+        item.declaration,
+        record,
+        context,
+      );
     default:
       return evaluateModuleDeclaration(item, context);
   }
