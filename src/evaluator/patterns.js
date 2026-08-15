@@ -19,12 +19,73 @@ import { evaluatePropertyName } from './property-name.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
+ * @typedef {import('../runtime/realm.js').Realm} Realm
  * @typedef {import('../runtime/environment.js').EnvironmentRecordLike} EnvironmentRecordLike
+ * @typedef {import('../runtime/iterator.js').IteratorRecord} IteratorRecord
+ * @typedef {{ type: string, value: unknown, target?: string | undefined }}
+ *   Completion
  * @typedef {{
  *   prepare(target: any): unknown,
  *   apply(prepared: unknown, value: unknown): void,
  * }} PatternTargetOperations
  */
+
+/**
+ * @param {Realm} realm
+ * @param {unknown} value
+ * @returns {IteratorRecord}
+ */
+export function createPatternIterator(realm, value) {
+  return getIterator(realm, value);
+}
+
+/**
+ * @param {Realm} realm
+ * @param {IteratorRecord} record
+ * @param {Completion} completion
+ * @returns {Completion}
+ */
+export function closePatternIterator(realm, record, completion) {
+  iteratorClose(realm, record, completion.type === 'throw');
+  return completion;
+}
+
+/**
+ * @param {EnvironmentRecordLike} env
+ * @param {string} name
+ * @param {unknown} value
+ * @returns {void}
+ */
+export function initializePatternIdentifier(env, name, value) {
+  const reference = getIdentifierReference(env, name, false);
+  const record =
+    /** @type {{ initializeBinding(name: string, value: unknown): void }} */ (
+      reference.base
+    );
+  record.initializeBinding(
+    /** @type {string} */ (reference.referencedName),
+    value,
+  );
+}
+
+/**
+ * @param {unknown} prepared
+ * @param {unknown} value
+ * @param {EvaluationContext} context
+ * @returns {void}
+ */
+export function assignPreparedPatternTarget(prepared, value, context) {
+  applyPreparedAssignmentTarget(/** @type {any} */ (prepared), value, context);
+}
+
+/**
+ * @param {Realm} realm
+ * @param {unknown} value
+ * @returns {import('../runtime/object.js').EngineObject}
+ */
+export function patternObjectValue(realm, value) {
+  return toObject(realm, value);
+}
 
 /**
  * @param {any} pattern
@@ -41,11 +102,8 @@ export function initializeBindingPattern(pattern, value, env, context) {
     apply(prepared, nextValue) {
       const reference =
         /** @type {import('../runtime/reference.js').Reference} */ (prepared);
-      const record =
-        /** @type {{ initializeBinding(name: string, value: unknown): void }} */ (
-          reference.base
-        );
-      record.initializeBinding(
+      initializePatternIdentifier(
+        /** @type {EnvironmentRecordLike} */ (reference.base),
         /** @type {string} */ (reference.referencedName),
         nextValue,
       );
@@ -65,11 +123,7 @@ export function assignPattern(pattern, value, context) {
       return prepareAssignmentTarget(target, context);
     },
     apply(prepared, nextValue) {
-      applyPreparedAssignmentTarget(
-        /** @type {any} */ (prepared),
-        nextValue,
-        context,
-      );
+      assignPreparedPatternTarget(prepared, nextValue, context);
     },
   });
 }
@@ -207,7 +261,7 @@ function evaluatePatternDefault(pattern, context) {
  * @returns {void}
  */
 function applyObjectPattern(pattern, value, context, targetOperations) {
-  const object = toObject(context.realm, value);
+  const object = patternObjectValue(context.realm, value);
 
   for (const property of pattern.properties) {
     if (property.type !== 'Property') {
@@ -240,7 +294,7 @@ function applyObjectPattern(pattern, value, context, targetOperations) {
  * @returns {void}
  */
 function applyArrayPattern(pattern, value, context, targetOperations) {
-  const record = getIterator(context.realm, value);
+  const record = createPatternIterator(context.realm, value);
   let done = false;
 
   for (const element of pattern.elements) {
@@ -253,7 +307,10 @@ function applyArrayPattern(pattern, value, context, targetOperations) {
         );
       } catch (error) {
         if (!done) {
-          iteratorClose(context.realm, record, true);
+          closePatternIterator(context.realm, record, {
+            type: 'throw',
+            value: error,
+          });
         }
         throw error;
       }
@@ -295,7 +352,10 @@ function applyArrayPattern(pattern, value, context, targetOperations) {
           : preparePatternTarget(element, targetOperations);
     } catch (error) {
       if (!done) {
-        iteratorClose(context.realm, record, true);
+        closePatternIterator(context.realm, record, {
+          type: 'throw',
+          value: error,
+        });
       }
       throw error;
     }
@@ -323,13 +383,19 @@ function applyArrayPattern(pattern, value, context, targetOperations) {
       );
     } catch (error) {
       if (!done) {
-        iteratorClose(context.realm, record, true);
+        closePatternIterator(context.realm, record, {
+          type: 'throw',
+          value: error,
+        });
       }
       throw error;
     }
   }
 
   if (!done) {
-    iteratorClose(context.realm, record, false);
+    closePatternIterator(context.realm, record, {
+      type: 'normal',
+      value: undefined,
+    });
   }
 }

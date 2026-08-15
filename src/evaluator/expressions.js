@@ -1204,7 +1204,7 @@ function evaluateArrowFunctionExpression(node, context) {
  * @returns {EngineObject}
  */
 function evaluateObjectExpression(node, context) {
-  const object = new EngineObject(context.realm.intrinsics.objectPrototype);
+  const object = createObjectLiteral(context);
 
   for (const property of node.properties) {
     if (property.type !== 'Property') {
@@ -1215,25 +1215,7 @@ function evaluateObjectExpression(node, context) {
 
     if (property.kind === 'init') {
       if (property.method) {
-        const method = createFunctionObject(
-          property.value,
-          context.env,
-          context,
-          {
-            name: functionNameFromPropertyKey(key),
-            isMethod: true,
-            functionKind:
-              property.value.generator === true ? 'generatorMethod' : 'method',
-            homeObject: object,
-            createPrototype: property.value.generator === true,
-          },
-        );
-        object.defineOwnProperty(key, {
-          value: method,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
+        defineObjectLiteralProperty(object, property, key, undefined, context);
         continue;
       }
 
@@ -1242,10 +1224,7 @@ function evaluateObjectExpression(node, context) {
 
       if (prototypeSetter) {
         const value = evaluateExpressionValue(property.value, context);
-
-        if (value === null || value instanceof EngineObject) {
-          object.setPrototypeOf(value);
-        }
+        defineObjectLiteralProperty(object, property, key, value, context);
         continue;
       }
 
@@ -1254,39 +1233,101 @@ function evaluateObjectExpression(node, context) {
         context,
         functionNameFromPropertyKey(key),
       );
+      defineObjectLiteralProperty(object, property, key, value, context);
+      continue;
+    }
 
+    defineObjectLiteralProperty(object, property, key, undefined, context);
+  }
+
+  return object;
+}
+
+/**
+ * @param {EvaluationContext} context
+ * @returns {EngineObject}
+ */
+export function createObjectLiteral(context) {
+  return new EngineObject(context.realm.intrinsics.objectPrototype);
+}
+
+/**
+ * Applies one already-keyed object-literal property definition. Expression
+ * evaluation stays with the caller so resumable and synchronous evaluators
+ * share the descriptor, naming, and HomeObject rules.
+ *
+ * @param {EngineObject} object
+ * @param {any} property
+ * @param {string | symbol} key
+ * @param {unknown} value
+ * @param {EvaluationContext} context
+ * @returns {void}
+ */
+export function defineObjectLiteralProperty(
+  object,
+  property,
+  key,
+  value,
+  context,
+) {
+  if (property.kind === 'init') {
+    if (property.method) {
+      const method = createFunctionObject(
+        property.value,
+        context.env,
+        context,
+        {
+          name: functionNameFromPropertyKey(key),
+          isMethod: true,
+          functionKind:
+            property.value.generator === true ? 'generatorMethod' : 'method',
+          homeObject: object,
+          createPrototype: property.value.generator === true,
+        },
+      );
       object.defineOwnProperty(key, {
-        value,
+        value: method,
         writable: true,
         enumerable: true,
         configurable: true,
       });
-      continue;
+      return;
     }
 
-    if (property.kind !== 'get' && property.kind !== 'set') {
-      throw createUnsupportedNodeError(property);
+    const prototypeSetter =
+      !property.computed && !property.shorthand && key === '__proto__';
+
+    if (prototypeSetter) {
+      if (value === null || value instanceof EngineObject) {
+        object.setPrototypeOf(value);
+      }
+      return;
     }
 
-    const accessor = createFunctionObject(
-      property.value,
-      context.env,
-      context,
-      {
-        name: functionNameFromPropertyKey(key, property.kind),
-        isMethod: true,
-        homeObject: object,
-        createPrototype: false,
-      },
-    );
     object.defineOwnProperty(key, {
-      ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
+      value,
+      writable: true,
       enumerable: true,
       configurable: true,
     });
+    return;
   }
 
-  return object;
+  if (property.kind !== 'get' && property.kind !== 'set') {
+    throw createUnsupportedNodeError(property);
+  }
+
+  const accessor = createFunctionObject(property.value, context.env, context, {
+    name: functionNameFromPropertyKey(key, property.kind),
+    isMethod: true,
+    homeObject: object,
+    createPrototype: false,
+  });
+  object.defineOwnProperty(key, {
+    ...(property.kind === 'get' ? { get: accessor } : { set: accessor }),
+    enumerable: true,
+    configurable: true,
+  });
 }
 
 /**

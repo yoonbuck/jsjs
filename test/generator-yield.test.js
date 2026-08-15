@@ -779,6 +779,543 @@ const tests = [
     },
   },
   {
+    name: 'binding patterns suspend in nested defaults computed keys and rest positions',
+    run() {
+      assertSame(
+        run(`
+          var log = [];
+          function mark(label, value) {
+            log.push(label);
+            return value;
+          }
+          function* declaration(source) {
+            var [
+              a = yield mark('a-default', 1),
+              { b = yield mark('b-default', 2) },
+              ...rest
+            ] = source;
+            let {
+              [yield mark('object-key', 3)]: c =
+                yield mark('c-default', 4)
+            } = {};
+            const [d = yield mark('d-default', 5)] = [];
+            return [
+              a,
+              b,
+              c,
+              d,
+              rest.length,
+              log.join(',')
+            ].join(':');
+          }
+          var iterator = declaration([
+            undefined,
+            { b: undefined },
+            8,
+            9
+          ]);
+          var first = iterator.next();
+          var second = iterator.next(10);
+          var third = iterator.next(20);
+          var fourth = iterator.next('missing');
+          var fifth = iterator.next(30);
+          var result = iterator.next(40);
+          [
+            first.value,
+            second.value,
+            third.value,
+            fourth.value,
+            fifth.value,
+            result.value,
+            result.done
+          ].join('|');
+        `),
+        '1|2|3|4|5|10:20:30:40:2:a-default,b-default,object-key,c-default,d-default|true',
+      );
+    },
+  },
+  {
+    name: 'resumable pattern defaults preserve anonymous inferred names',
+    run() {
+      assertSame(
+        run(`
+          function Base() {}
+          function* namedDefaults() {
+            var [
+              fn = function () {},
+              gen = function* () {},
+              Klass = class extends (yield Base) {}
+            ] = [];
+            return [
+              fn.name,
+              gen.name,
+              Klass.name,
+              Object.getPrototypeOf(Klass) === Base
+            ].join(':');
+          }
+          var iterator = namedDefaults();
+          var first = iterator.next();
+          var result = iterator.next(Base);
+          [
+            first.value === Base,
+            first.done,
+            result.value,
+            result.done
+          ].join('|');
+        `),
+        'true|false|fn:gen:Klass:true|true',
+      );
+    },
+  },
+  {
+    name: 'assignment patterns retain prepared targets and exact default order',
+    run() {
+      assertSame(
+        run(`
+          var log = [];
+          var holder = {};
+          var key = {
+            toString: function () {
+              log.push('coerce-key');
+              return 'slot';
+            }
+          };
+          function target() {
+            log.push('target-base');
+            return holder;
+          }
+          function targetKey() {
+            log.push('target-key');
+            return 'target-ready';
+          }
+          function defaultValue() {
+            log.push('default');
+            return 'default-ready';
+          }
+          var iterable = {};
+          iterable[Symbol.iterator] = function () {
+            log.push('iterator');
+            return {
+              next: function () {
+                log.push('next');
+                return { value: undefined, done: false };
+              },
+              return: function () {
+                log.push('close');
+                return {};
+              }
+            };
+          };
+          function* assignment(source) {
+            [target()[yield targetKey()] = yield defaultValue()] = source;
+            return source;
+          }
+          var iterator = assignment(iterable);
+          var first = iterator.next();
+          var second = iterator.next(key);
+          var result = iterator.next(7);
+          [
+            first.value,
+            second.value,
+            result.value === iterable,
+            result.done,
+            holder.slot,
+            log.join(',')
+          ].join(':');
+        `),
+        'target-ready:default-ready:true:true:7:iterator,target-base,target-key,next,default,coerce-key,close',
+      );
+    },
+  },
+  {
+    name: 'object assignment patterns evaluate each key target and default once',
+    run() {
+      assertSame(
+        run(`
+          var log = [];
+          var holder = {};
+          function sourceKey() {
+            log.push('source-key');
+            return 'source-key-ready';
+          }
+          function target() {
+            log.push('target-base');
+            return holder;
+          }
+          function targetKey() {
+            log.push('target-key');
+            return 'target-key-ready';
+          }
+          function defaultValue() {
+            log.push('default');
+            return 'default-ready';
+          }
+          function* assignment(source) {
+            ({
+              [yield sourceKey()]:
+                target()[yield targetKey()] = yield defaultValue()
+            } = source);
+          }
+          var iterator = assignment({});
+          var first = iterator.next();
+          var second = iterator.next('missing');
+          var third = iterator.next('written');
+          var result = iterator.next(9);
+          [
+            first.value,
+            second.value,
+            third.value,
+            result.done,
+            holder.written,
+            log.join(',')
+          ].join(':');
+        `),
+        'source-key-ready:target-key-ready:default-ready:true:9:source-key,target-base,target-key,default',
+      );
+    },
+  },
+  {
+    name: 'injected throw closes a pattern iterator and keeps the original throw',
+    run() {
+      assertSame(
+        run(`
+          var closeCalls = 0;
+          var original = {};
+          var closeError = {};
+          var iterable = {};
+          iterable[Symbol.iterator] = function () {
+            return {
+              next: function () {
+                return { value: undefined, done: false };
+              },
+              return: function () {
+                closeCalls += 1;
+                throw closeError;
+              }
+            };
+          };
+          function* declaration(source) {
+            var [value = yield 'default-ready'] = source;
+            return value;
+          }
+          var iterator = declaration(iterable);
+          var first = iterator.next();
+          var caught;
+          try {
+            iterator.throw(original);
+          } catch (error) {
+            caught = error;
+          }
+          [
+            first.value,
+            first.done,
+            caught === original,
+            closeCalls
+          ].join(':');
+        `),
+        'default-ready:false:true:1',
+      );
+    },
+  },
+  {
+    name: 'injected return closes a suspended target and close failure wins',
+    run() {
+      assertSame(
+        run(`
+          var nextCalls = 0;
+          var closeCalls = 0;
+          var closeError = {};
+          var holder = {};
+          var iterable = {};
+          iterable[Symbol.iterator] = function () {
+            return {
+              next: function () {
+                nextCalls += 1;
+                return { value: 1, done: false };
+              },
+              return: function () {
+                closeCalls += 1;
+                throw closeError;
+              }
+            };
+          };
+          function* assignment(source) {
+            [holder[yield 'target-ready']] = source;
+            return 'unreachable';
+          }
+          var iterator = assignment(iterable);
+          var first = iterator.next();
+          var caught;
+          try {
+            iterator.return(42);
+          } catch (error) {
+            caught = error;
+          }
+          [
+            first.value,
+            caught === closeError,
+            nextCalls,
+            closeCalls,
+            'written' in holder
+          ].join(':');
+        `),
+        'target-ready:true:0:1:false',
+      );
+    },
+  },
+  {
+    name: 'object literals suspend keys and values without entering generator methods',
+    run() {
+      assertSame(
+        run(`
+          var parent = { value: 9 };
+          function* build() {
+            return {
+              __proto__: parent,
+              [yield 'key']: yield 'value',
+              *[yield 'method-name']() {
+                yield super.value;
+              }
+            };
+          }
+          var iterator = build();
+          var first = iterator.next();
+          var second = iterator.next('answer');
+          var third = iterator.next(42);
+          var result = iterator.next('run');
+          var object = result.value;
+          var data = Object.getOwnPropertyDescriptor(object, 'answer');
+          var method = Object.getOwnPropertyDescriptor(object, 'run');
+          var nested = object.run();
+          var nestedFirst = nested.next();
+          var nestedResult = nested.next();
+          [
+            first.value,
+            second.value,
+            third.value,
+            result.done,
+            object.answer,
+            object.run.name,
+            data.writable,
+            data.enumerable,
+            data.configurable,
+            method.writable,
+            method.enumerable,
+            method.configurable,
+            nestedFirst.value,
+            nestedFirst.done,
+            nestedResult.done
+          ].join(':');
+        `),
+        'key:value:method-name:true:42:run:true:true:true:true:true:true:9:false:true',
+      );
+    },
+  },
+  {
+    name: 'resumable object properties infer anonymous definition names',
+    run() {
+      assertSame(
+        run(`
+          function Base() {}
+          function* build() {
+            return {
+              [yield 'function-key']: function () {},
+              [yield 'generator-key']: function* () {},
+              [yield 'class-key']: class extends (yield Base) {}
+            };
+          }
+          var iterator = build();
+          var first = iterator.next();
+          var second = iterator.next('fn');
+          var third = iterator.next('gen');
+          var fourth = iterator.next('Klass');
+          var result = iterator.next(Base);
+          var object = result.value;
+          [
+            first.value,
+            second.value,
+            third.value,
+            fourth.value === Base,
+            object.fn.name,
+            object.gen.name,
+            object.Klass.name,
+            Object.getPrototypeOf(object.Klass) === Base,
+            result.done
+          ].join(':');
+        `),
+        'function-key:generator-key:class-key:true:fn:gen:Klass:true:true',
+      );
+    },
+  },
+  {
+    name: 'resumable assignment infers an anonymous class name',
+    run() {
+      assertSame(
+        run(`
+          function Base() {}
+          function* assign() {
+            var Assigned;
+            Assigned = class extends (yield Base) {};
+            return Assigned.name;
+          }
+          var iterator = assign();
+          var first = iterator.next();
+          var result = iterator.next(Base);
+          [
+            first.value === Base,
+            result.value,
+            result.done
+          ].join(':');
+        `),
+        'true:Assigned:true',
+      );
+    },
+  },
+  {
+    name: 'class heritage and computed names suspend once in source order',
+    run() {
+      assertSame(
+        run(`
+          var order = [];
+          function mark(label, value) {
+            order.push(label);
+            return value;
+          }
+          class Base {
+            base() {
+              return this === undefined;
+            }
+            static get value() {
+              return 11;
+            }
+          }
+          function* build(BaseValue) {
+            var C = class extends (yield mark('heritage', BaseValue)) {
+              [yield mark('instance-name', 'instance-ready')]() {
+                return super.base();
+              }
+              static *[yield mark('generator-name', 'generator-ready')]() {
+                yield super.value;
+              }
+            };
+            return C;
+          }
+          var iterator = build(Base);
+          var first = iterator.next();
+          var second = iterator.next(Base);
+          var third = iterator.next('method');
+          var result = iterator.next('produce');
+          var C = result.value;
+          var instance = new C();
+          var instanceDescriptor =
+            Object.getOwnPropertyDescriptor(C.prototype, 'method');
+          var staticDescriptor =
+            Object.getOwnPropertyDescriptor(C, 'produce');
+          var detached = C.prototype.method;
+          var nested = C.produce();
+          var nestedFirst = nested.next();
+          var nestedResult = nested.next();
+          [
+            first.value === Base,
+            second.value,
+            third.value,
+            result.done,
+            C.name,
+            order.join(','),
+            Object.getPrototypeOf(C) === Base,
+            Object.getPrototypeOf(C.prototype) === Base.prototype,
+            instance instanceof Base,
+            detached(),
+            instanceDescriptor.writable,
+            instanceDescriptor.enumerable,
+            instanceDescriptor.configurable,
+            staticDescriptor.writable,
+            staticDescriptor.enumerable,
+            staticDescriptor.configurable,
+            C.prototype.produce === undefined,
+            nestedFirst.value,
+            nestedFirst.done,
+            nestedResult.done
+          ].join(':');
+        `),
+        'true:instance-ready:generator-ready:true:C:heritage,instance-name,generator-name:true:true:true:true:true:false:true:true:false:true:true:11:false:true',
+      );
+    },
+  },
+  {
+    name: 'named class expressions retain their TDZ and inner binding across suspension',
+    run() {
+      assertSame(
+        run(`
+          function Base() {}
+          function* invalid() {
+            return class Inner extends (yield Inner) {};
+          }
+          var invalidIterator = invalid();
+          var errorName = '';
+          try {
+            invalidIterator.next();
+          } catch (error) {
+            errorName = error.name;
+          }
+
+          function* stable() {
+            return class Inner extends (yield Base) {
+              static self() {
+                return Inner;
+              }
+            };
+          }
+          var stableIterator = stable();
+          var first = stableIterator.next();
+          var result = stableIterator.next(Base);
+          var ClassValue = result.value;
+          [
+            errorName,
+            first.value === Base,
+            result.done,
+            ClassValue.name,
+            ClassValue.self() === ClassValue,
+            typeof Inner
+          ].join(':');
+        `),
+        'ReferenceError:true:true:Inner:true:undefined',
+      );
+    },
+  },
+  {
+    name: 'class declarations resume heritage and computed names before initialization',
+    run() {
+      assertSame(
+        run(`
+          function Base() {}
+          function* declaration() {
+            class Declared extends (yield Base) {
+              [yield 'method-ready']() {
+                return 7;
+              }
+            }
+            return Declared;
+          }
+          var iterator = declaration();
+          var first = iterator.next();
+          var second = iterator.next(Base);
+          var result = iterator.next('method');
+          var Declared = result.value;
+          [
+            first.value === Base,
+            second.value,
+            result.done,
+            Declared.name,
+            Object.getPrototypeOf(Declared) === Base,
+            new Declared().method()
+          ].join(':');
+        `),
+        'true:method-ready:true:Declared:true:7',
+      );
+    },
+  },
+  {
     name: 'yield-free bridge converts guest throws and guest errors into machine completions',
     run() {
       assertSame(

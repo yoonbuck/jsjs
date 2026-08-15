@@ -12,7 +12,14 @@ import {
   applyVariableDeclaratorValue,
   evaluateNamedExpression,
 } from './declarations.js';
-import { createGeneratorExpressionFrame } from './generator-expression-frames.js';
+import { evaluateExpressionValue } from './expressions.js';
+import {
+  createGeneratorExpressionFrame,
+  createGeneratorClassFrame,
+  createGeneratorPatternFrame,
+  createNamedGeneratorExpressionFrame,
+} from './generator-expression-frames.js';
+import { initializePatternIdentifier } from './patterns.js';
 import {
   captureGeneratorOperation,
   generatorContainsYield,
@@ -51,7 +58,7 @@ import {
  *   node: any,
  *   context: EvaluationContext,
  *   index: number,
- *   phase: 'next' | 'initializer',
+ *   phase: 'next' | 'initializer' | 'pattern',
  *   reference: Reference | null,
  * }} VariableDeclarationFrame
  * @typedef {{
@@ -67,13 +74,19 @@ import {
  *   phase: 'start' | 'argument',
  * }} ThrowStatementFrame
  * @typedef {{
+ *   kind: 'class-declaration',
+ *   node: any,
+ *   context: EvaluationContext,
+ *   phase: 'start' | 'definition',
+ * }} ClassDeclarationFrame
+ * @typedef {{
  *   kind: 'empty-statement',
  *   node: any,
  *   context: EvaluationContext,
  * }} EmptyStatementFrame
  * @typedef {StatementListFrame | SyncStatementFrame | ExpressionStatementFrame
  *   | VariableDeclarationFrame | ReturnStatementFrame | ThrowStatementFrame
- *   | EmptyStatementFrame} GeneratorStatementFrame
+ *   | ClassDeclarationFrame | EmptyStatementFrame} GeneratorStatementFrame
  */
 
 /**
@@ -127,6 +140,8 @@ export function createGeneratorStatementFrame(node, context) {
       return { kind: 'return-statement', node, context, phase: 'start' };
     case 'ThrowStatement':
       return { kind: 'throw-statement', node, context, phase: 'start' };
+    case 'ClassDeclaration':
+      return { kind: 'class-declaration', node, context, phase: 'start' };
     default:
       throw createUnsupportedNodeError(node);
   }
@@ -151,6 +166,8 @@ export function dispatchGeneratorStatementFrame(execution, frame) {
       return dispatchReturnStatement(execution, frame);
     case 'throw-statement':
       return dispatchThrowStatement(execution, frame);
+    case 'class-declaration':
+      return dispatchClassDeclaration(execution, frame);
     case 'empty-statement':
       return {
         type: 'pop',
@@ -178,6 +195,7 @@ export function isGeneratorStatementFrame(frame) {
     case 'variable-declaration':
     case 'return-statement':
     case 'throw-statement':
+    case 'class-declaration':
     case 'empty-statement':
       return true;
     default:
@@ -305,36 +323,35 @@ function dispatchVariableDeclaration(execution, frame) {
       throw new TypeError('Variable initializer expected a value');
     }
 
-    const declarator = frame.node.declarations[frame.index];
-    const applied = captureGeneratorOperation(execution.realm, () => {
-      applyVariableDeclaratorValue(
-        frame.node.kind,
-        declarator,
-        result.value,
-        frame.context,
-        frame.reference,
-      );
-    });
+    const action = applyOrPushVariableDeclarator(
+      execution,
+      frame,
+      result.value,
+    );
 
-    if (applied.type === 'completion') {
-      return { type: 'pop', result: applied };
+    if (action !== null) {
+      return action;
+    }
+  } else if (frame.phase === 'pattern') {
+    const result = takeGeneratorOutput(execution);
+
+    if (result.type === 'completion') {
+      return { type: 'pop', result };
     }
 
-    frame.index += 1;
-    frame.phase = 'next';
-    frame.reference = null;
+    if (result.type !== 'value') {
+      throw new TypeError('Variable binding pattern did not complete');
+    }
+
+    finishVariableDeclarator(frame);
   }
 
   while (frame.index < frame.node.declarations.length) {
     const declarator = frame.node.declarations[frame.index];
 
-    if (declarator.id.type !== 'Identifier') {
-      throw createUnsupportedNodeError(declarator.id);
-    }
-
     if (declarator.init !== null && declarator.init !== undefined) {
       frame.reference =
-        frame.node.kind === 'var'
+        frame.node.kind === 'var' && declarator.id.type === 'Identifier'
           ? getIdentifierReference(
               frame.context.env,
               declarator.id.name,
@@ -342,13 +359,18 @@ function dispatchVariableDeclaration(execution, frame) {
             )
           : null;
 
-      if (!generatorContainsYield(declarator.init, frame.context)) {
+      if (
+        !generatorContainsYield(declarator.init, frame.context) &&
+        !generatorContainsYield(declarator.id, frame.context)
+      ) {
         const evaluated = captureGeneratorOperation(execution.realm, () =>
-          evaluateNamedExpression(
-            declarator.init,
-            frame.context,
-            declarator.id.name,
-          ),
+          declarator.id.type === 'Identifier'
+            ? evaluateNamedExpression(
+                declarator.init,
+                frame.context,
+                declarator.id.name,
+              )
+            : evaluateExpressionValue(declarator.init, frame.context),
         );
 
         if (evaluated.type === 'completion') {
@@ -359,33 +381,34 @@ function dispatchVariableDeclaration(execution, frame) {
           throw new TypeError('Variable initializer expected a value');
         }
 
-        const applied = captureGeneratorOperation(execution.realm, () => {
-          applyVariableDeclaratorValue(
-            frame.node.kind,
-            declarator,
-            evaluated.value,
-            frame.context,
-            frame.reference,
-          );
-        });
+        const action = applyOrPushVariableDeclarator(
+          execution,
+          frame,
+          evaluated.value,
+        );
 
-        if (applied.type === 'completion') {
-          return { type: 'pop', result: applied };
+        if (action !== null) {
+          return action;
         }
 
-        frame.index += 1;
-        frame.reference = null;
         continue;
       }
 
       frame.phase = 'initializer';
       return {
         type: 'push',
-        frame: createGeneratorExpressionFrame(
-          declarator.init,
-          frame.context,
-          'value',
-        ),
+        frame:
+          declarator.id.type === 'Identifier'
+            ? createNamedGeneratorExpressionFrame(
+                declarator.init,
+                frame.context,
+                declarator.id.name,
+              )
+            : createGeneratorExpressionFrame(
+                declarator.init,
+                frame.context,
+                'value',
+              ),
       };
     }
 
@@ -406,6 +429,110 @@ function dispatchVariableDeclaration(execution, frame) {
     }
 
     frame.index += 1;
+  }
+
+  return {
+    type: 'pop',
+    result: {
+      type: 'completion',
+      completion: createNormalCompletion(EMPTY),
+    },
+  };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {VariableDeclarationFrame} frame
+ * @param {unknown} value
+ * @returns {GeneratorFrameAction | null}
+ */
+function applyOrPushVariableDeclarator(execution, frame, value) {
+  const declarator = frame.node.declarations[frame.index];
+
+  if (
+    declarator.id.type !== 'Identifier' &&
+    generatorContainsYield(declarator.id, frame.context)
+  ) {
+    frame.phase = 'pattern';
+    return {
+      type: 'push',
+      frame: createGeneratorPatternFrame(
+        declarator.id,
+        value,
+        frame.context,
+        frame.node.kind === 'var'
+          ? { kind: 'binding-assignment' }
+          : { kind: 'binding-initialization', env: frame.context.env },
+      ),
+    };
+  }
+
+  const applied = captureGeneratorOperation(execution.realm, () => {
+    applyVariableDeclaratorValue(
+      frame.node.kind,
+      declarator,
+      value,
+      frame.context,
+      frame.reference,
+    );
+  });
+
+  if (applied.type === 'completion') {
+    return { type: 'pop', result: applied };
+  }
+
+  finishVariableDeclarator(frame);
+  return null;
+}
+
+/**
+ * @param {VariableDeclarationFrame} frame
+ * @returns {void}
+ */
+function finishVariableDeclarator(frame) {
+  frame.index += 1;
+  frame.phase = 'next';
+  frame.reference = null;
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {ClassDeclarationFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchClassDeclaration(execution, frame) {
+  if (frame.phase === 'start') {
+    frame.phase = 'definition';
+    return {
+      type: 'push',
+      frame: createGeneratorClassFrame(
+        frame.node,
+        frame.context,
+        frame.node.id.name,
+      ),
+    };
+  }
+
+  const result = takeGeneratorOutput(execution);
+
+  if (result.type === 'completion') {
+    return { type: 'pop', result };
+  }
+
+  if (result.type !== 'value') {
+    throw new TypeError('Class declaration expected a constructor value');
+  }
+
+  const initialized = captureGeneratorOperation(execution.realm, () => {
+    initializePatternIdentifier(
+      frame.context.env,
+      frame.node.id.name,
+      result.value,
+    );
+  });
+
+  if (initialized.type === 'completion') {
+    return { type: 'pop', result: initialized };
   }
 
   return {

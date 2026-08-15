@@ -32,7 +32,7 @@ export function evaluatePropertyName(node, computed, context) {
  */
 export function propertyNameFromValue(node, computed, value) {
   if (computed) {
-    return toPropertyKey(value);
+    return toEvaluatedPropertyKey(value);
   }
 
   if (node.type === 'Identifier') {
@@ -44,6 +44,14 @@ export function propertyNameFromValue(node, computed, value) {
   }
 
   throw createUnsupportedNodeError(node);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string | symbol}
+ */
+export function toEvaluatedPropertyKey(value) {
+  return toPropertyKey(value);
 }
 
 /**
