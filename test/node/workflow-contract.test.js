@@ -82,7 +82,7 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
   'test-browser': 'npm run test:browser',
   'test-jsc': 'npm run test:jsc',
   'test262-fixtures': 'npm run test262:fixtures',
-  'test262-modules': 'npm run test262:modules',
+  'test262-es2015-release': 'npm run test262:es2015-release',
   'test262-upstream': 'npm run test262:upstream',
   'benchmark-smoke': 'npm run benchmark:smoke',
 });
@@ -432,11 +432,11 @@ export default [
     },
   },
   {
-    name: 'the focused module Test262 job checks out the pinned revision without broad artifact work',
+    name: 'the focused ES2015 Test262 release job checks out the pinned revision and runs all async runtime suites',
     run: async () => {
       const { workflow } = await readWorkflow();
       const packageManifest = await readPackageManifest();
-      const job = requireJob(workflow, 'test262-modules');
+      const job = requireJob(workflow, 'test262-es2015-release');
       const checkouts = usesSteps(job, 'actions/checkout');
       const upstream = checkouts.filter(
         (step) => step.with?.repository !== undefined,
@@ -450,23 +450,31 @@ export default [
 
       const commands = runCommands(job);
       const runStep = job.steps.find(
-        (/** @type {any} */ step) => step.run === 'npm run test262:modules',
+        (/** @type {any} */ step) =>
+          step.run === 'npm run test262:es2015-release',
       );
 
+      assertSame(job.name, 'Pinned Test262 ES2015 async runtime and modules');
+      assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
+      assertSame(
+        packageManifest.scripts['test262:es2015-release'],
+        'node test/run-node.js test/ci/es2015-promise-test262.test.js test/ci/es2015-generator-test262.test.js test/ci/es2015-module-test262.test.js',
+        'the release script must run Promise, generator, and module suites',
+      );
       assertSame(
         runStep?.env?.TZ,
         'UTC',
-        'the focused module suite must run under TZ=UTC',
+        'the focused release suites must run under TZ=UTC',
       );
       assertSame(
         commands.includes('npm run test262:upstream'),
         false,
-        'the focused module job must not run the broad upstream suite',
+        'the focused release job must not run the broad upstream suite',
       );
       assertSame(
         commands.some((command) => command.includes(TEST262_REPORT_FILE)),
         false,
-        'the focused module job must not rewrite or check the broad report',
+        'the focused release job must not rewrite or check the broad report',
       );
     },
   },

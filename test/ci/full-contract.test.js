@@ -884,6 +884,22 @@ export default [
     },
   },
   {
+    name: 'npm run test262:es2015-release passes all focused async runtime suites without skips',
+    run: () => {
+      const results = parseJsonLines(npmRun('test262:es2015-release'));
+
+      assertSame(results.length, 3);
+      assertSame(
+        results.map((result) => result.status).join(','),
+        'passed,passed,passed',
+      );
+      assertSame(
+        results.map((result) => result.name).join(' | '),
+        'focused ES2015 Promise upstream Test262 files all pass | focused ES2015 generator upstream Test262 files all pass | focused ES2015 static-module Test262 roots all pass at the pinned revision',
+      );
+    },
+  },
+  {
     name: 'npm run test:browser launches the configured headless browser for real',
     run: () => {
       const results = parseJsonLines(

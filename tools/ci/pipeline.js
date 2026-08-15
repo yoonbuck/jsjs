@@ -247,8 +247,9 @@ export function toGithubSlug(repository) {
  *
  * The three Test262 jobs are deliberately separate. `test262-fixtures` runs the
  * local hand-written fixture tree, which exercises the runner's semantics.
- * `test262-modules` checks out the exact pinned tree for the focused static
- * module suite. It never runs broad selection or writes broad report artifacts.
+ * `test262-es2015-release` checks out the exact pinned tree for the focused
+ * Promise, generator, and static module suites. It never runs broad selection or
+ * writes broad report artifacts.
  * `test262-upstream` checks out the real `tc39/test262` tree at exactly the
  * pinned revision and runs the curated subset against it, which exercises the
  * engine — and uploads its report even on failure, because a red conformance run
@@ -309,8 +310,8 @@ export function createCiJobs(test262) {
       ['vendor'],
     ),
     Object.freeze({
-      id: 'test262-modules',
-      name: 'Pinned Test262 static modules',
+      id: 'test262-es2015-release',
+      name: 'Pinned Test262 ES2015 async runtime and modules',
       needs: Object.freeze(['vendor']),
       steps: Object.freeze([
         usesStep('Check out the project', 'actions/checkout', {
@@ -328,8 +329,8 @@ export function createCiJobs(test262) {
         }),
         runStep('Install dependencies', 'npm ci'),
         runStep(
-          'Run focused static-module Test262',
-          'npm run test262:modules',
+          'Run focused ES2015 async runtime and module Test262',
+          'npm run test262:es2015-release',
           {
             TZ: 'UTC',
           },
