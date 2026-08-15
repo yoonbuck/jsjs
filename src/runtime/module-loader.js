@@ -93,12 +93,12 @@ export class ModuleLoader {
   }
 
   /**
-   * Acquires, links, and evaluates the source graph. Namespace construction is
-   * added at this one host-facing boundary by the later namespace task.
+   * Acquires, links, and evaluates the source graph, then returns its cached
+   * module namespace.
    *
    * @param {string} specifier
    * @param {string | null} [referrer=null]
-   * @returns {Promise<undefined>}
+   * @returns {Promise<any>}
    */
   async loadAndEvaluate(specifier, referrer = null) {
     const record = await loadModuleGraph(this, specifier, referrer);
@@ -115,7 +115,7 @@ export class ModuleLoader {
 
       throw asModuleLoaderError('evaluate', record.identifier, error);
     }
-    return undefined;
+    return record.getNamespace();
   }
 }
 

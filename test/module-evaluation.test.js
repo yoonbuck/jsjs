@@ -62,15 +62,17 @@ export default [
     },
   },
   {
-    name: 'public module evaluation returns undefined after one synchronous evaluation',
+    name: 'public module evaluation returns one cached namespace after synchronous evaluation',
     async run() {
       const loader = loaderFor({
         root: 'import { value } from "dep"; export const result = value;',
         dep: 'export const value = 42;',
       });
 
-      assertSame(await loader.loadAndEvaluate('root'), undefined);
-      assertSame(await loader.loadAndEvaluate('root'), undefined);
+      const first = await loader.loadAndEvaluate('root');
+
+      assertSame(first.get('result'), 42);
+      assertSame(await loader.loadAndEvaluate('root'), first);
     },
   },
   {
@@ -411,10 +413,12 @@ export default [
         configurable: true,
       });
 
-      assertSame(await loader.loadAndEvaluate('a'), undefined);
+      const aNamespace = await loader.loadAndEvaluate('a');
       assertSame(realm.globalObject.get('runs'), 1);
-      assertSame(await loader.loadAndEvaluate('c'), undefined);
+      assertSame(await loader.loadAndEvaluate('a'), aNamespace);
+      const cNamespace = await loader.loadAndEvaluate('c');
       assertSame(realm.globalObject.get('runs'), 1);
+      assertSame(await loader.loadAndEvaluate('c'), cNamespace);
     },
   },
   {

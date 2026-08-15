@@ -639,6 +639,7 @@ export default [
   {
     name: 'loader permits different-identifier reentry from a load hook',
     async run() {
+      /** @type {any} */
       let nested;
       const loader = createModuleLoader(createRealm(), {
         resolve(specifier) {
@@ -654,7 +655,11 @@ export default [
       });
 
       const root = await loadModuleGraph(loader, 'root');
-      assertSame(nested, undefined);
+      if (nested === undefined) {
+        throw new Error('Expected nested module namespace');
+      }
+      assertSame(nested.get('child'), 1);
+      assertSame(nested, await loader.loadAndEvaluate('child'));
       assertSame(root.resolvedRequestedModules[0].module.identifier, 'child');
     },
   },

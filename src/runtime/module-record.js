@@ -1,4 +1,5 @@
 import { boundNames } from '../evaluator/static-semantics.js';
+import { ModuleNamespaceObject } from './module-namespace.js';
 
 /**
  * The static products of parsing an ES2015 source-text module. Linking and
@@ -71,11 +72,14 @@ export class SourceTextModuleRecord {
     /** @type {ReadonlyArray<ResolvedModuleRequest>} */
     this.resolvedRequestedModules = [];
 
+    /** @type {any} */
     this.environment = null;
     /** @type {any} */
     this.namespace = null;
     this.status = 'unlinked';
+    /** @type {number | undefined} */
     this.dfsIndex = undefined;
+    /** @type {number | undefined} */
     this.dfsAncestorIndex = undefined;
     this.dfsOnStack = false;
     /** @type {SourceTextModuleRecord | null} */
@@ -101,7 +105,8 @@ export class SourceTextModuleRecord {
       return this.namespace;
     }
 
-    throw new TypeError('Module namespace is not initialized');
+    this.namespace = new ModuleNamespaceObject(this);
+    return this.namespace;
   }
 }
 
