@@ -10,6 +10,7 @@ import {
   isGeneratorStatementFrame,
 } from './generator-statement-frames.js';
 import { dispatchGeneratorExpressionFrame } from './generator-expression-frames.js';
+import { createYieldClassification } from './static-semantics.js';
 
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
@@ -67,6 +68,16 @@ export class GeneratorExecution {
     this.functionObject = functionObject;
     /** @type {import('../runtime/realm.js').Realm} */
     this.realm = functionObject.realm;
+    let yieldClassification = functionObject.generatorYieldClassification;
+
+    if (yieldClassification === undefined) {
+      yieldClassification = createYieldClassification(body);
+      functionObject.generatorYieldClassification = yieldClassification;
+    }
+
+    /** @type {WeakMap<object, boolean>} */
+    this.yieldClassification = yieldClassification;
+    context.generatorYieldClassification = yieldClassification;
     /** @type {GeneratorFrame[]} */
     this.frames = [createStatementListFrame(body, context)];
     /** @type {GeneratorResumeCompletion | null} */
@@ -127,6 +138,30 @@ export class GeneratorExecution {
  */
 export function createGeneratorExecution(options) {
   return new GeneratorExecution(options);
+}
+
+/**
+ * Reads the immutable classification snapshot installed when this generator
+ * function first creates an execution.
+ *
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {boolean}
+ */
+export function generatorContainsYield(node, context) {
+  const classification = context.generatorYieldClassification;
+
+  if (classification === undefined) {
+    throw new TypeError(
+      'Generator context is missing its yield classification',
+    );
+  }
+
+  return (
+    node !== null &&
+    typeof node === 'object' &&
+    classification.get(node) === true
+  );
 }
 
 /**

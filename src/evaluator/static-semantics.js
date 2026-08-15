@@ -33,9 +33,6 @@
 
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 
-/** @type {WeakMap<object, boolean>} */
-const containsYieldCache = new WeakMap();
-
 /**
  * Returns whether evaluating `node` executes a yield expression in the current
  * function. Nested function bodies are intentionally opaque: callers query a
@@ -49,8 +46,22 @@ export function containsYield(node) {
     return false;
   }
 
-  if (containsYieldCache.has(node)) {
-    return /** @type {boolean} */ (containsYieldCache.get(node));
+  return createYieldClassification(node).get(node) === true;
+}
+
+/**
+ * Takes one immutable-code snapshot of whether each reachable node contains a
+ * yield in the current function.
+ *
+ * @param {any} node
+ * @returns {WeakMap<object, boolean>}
+ */
+export function createYieldClassification(node) {
+  /** @type {WeakMap<object, boolean>} */
+  const classification = new WeakMap();
+
+  if (!node || typeof node !== 'object') {
+    return classification;
   }
 
   /** @type {any[]} */
@@ -91,6 +102,7 @@ export function containsYield(node) {
       }
     } else if (current.type === 'YieldExpression') {
       markPositive(current);
+      children.push(current.argument);
     } else if (isNestedFunctionBoundary(current)) {
       // Nested functions execute only when called, not while creating them.
     } else if (current.type === 'MethodDefinition') {
@@ -103,13 +115,6 @@ export function containsYield(node) {
 
     for (const child of children) {
       if (!child || typeof child !== 'object') {
-        continue;
-      }
-
-      if (containsYieldCache.has(child)) {
-        if (containsYieldCache.get(child)) {
-          markPositive(current);
-        }
         continue;
       }
 
@@ -140,10 +145,10 @@ export function containsYield(node) {
   }
 
   for (const current of visited) {
-    containsYieldCache.set(current, positive.has(current));
+    classification.set(current, positive.has(current));
   }
 
-  return positive.has(node);
+  return classification;
 }
 
 /**

@@ -129,6 +129,8 @@ export class EngineFunction extends EngineObject {
     this._execute = execute;
     /** @type {GeneratorFactory | undefined} */
     this._generatorFactory = generatorFactory;
+    /** @type {WeakMap<object, boolean> | undefined} */
+    this.generatorYieldClassification = undefined;
     /** @type {'base' | 'derived' | undefined} */
     this.constructorKind = constructorKind;
     /** @type {boolean} */

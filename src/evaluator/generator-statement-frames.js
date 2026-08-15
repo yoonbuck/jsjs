@@ -7,7 +7,6 @@ import {
 } from '../runtime/completion.js';
 import { getIdentifierReference } from '../runtime/environment.js';
 import { createUnsupportedNodeError } from '../runtime/errors.js';
-import { containsYield } from './static-semantics.js';
 import { evaluateStatement } from './statements.js';
 import {
   applyVariableDeclaratorValue,
@@ -16,6 +15,7 @@ import {
 import { createGeneratorExpressionFrame } from './generator-expression-frames.js';
 import {
   captureGeneratorOperation,
+  generatorContainsYield,
   takeGeneratorOutput,
 } from './generator-machine.js';
 
@@ -102,7 +102,7 @@ export function createGeneratorStatementFrame(node, context) {
     return { kind: 'empty-statement', node, context };
   }
 
-  if (!containsYield(node)) {
+  if (!generatorContainsYield(node, context)) {
     return { kind: 'sync-statement', node, context };
   }
 
@@ -342,7 +342,7 @@ function dispatchVariableDeclaration(execution, frame) {
             )
           : null;
 
-      if (!containsYield(declarator.init)) {
+      if (!generatorContainsYield(declarator.init, frame.context)) {
         const evaluated = captureGeneratorOperation(execution.realm, () =>
           evaluateNamedExpression(
             declarator.init,

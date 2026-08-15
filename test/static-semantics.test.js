@@ -605,7 +605,46 @@ const tests = [
     },
   },
   {
-    name: 'containsYield caches nested classifications across repeated queries',
+    name: 'containsYield observes a yield added after an earlier query',
+    run() {
+      const expression = /** @type {any} */ ({
+        type: 'BinaryExpression',
+        operator: '+',
+        left: { type: 'Literal', value: 1 },
+        right: { type: 'Literal', value: 2 },
+      });
+
+      assertSame(containsYield(expression), false);
+      expression.right = {
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      };
+      assertSame(containsYield(expression), true);
+    },
+  },
+  {
+    name: 'containsYield observes a yield added inside a previously queried cycle',
+    run() {
+      const expression = /** @type {any} */ ({
+        type: 'BinaryExpression',
+        operator: '+',
+        left: { type: 'Literal', value: 1 },
+        right: null,
+      });
+      expression.right = expression;
+
+      assertSame(containsYield(expression), false);
+      expression.left = {
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      };
+      assertSame(containsYield(expression), true);
+    },
+  },
+  {
+    name: 'containsYield classifies a graph in one bounded traversal',
     run() {
       const depth = 64;
       let edgeReads = 0;
@@ -614,8 +653,6 @@ const tests = [
         delegate: false,
         argument: null,
       });
-      /** @type {any[]} */
-      const nested = [];
 
       for (let index = 0; index < depth; index += 1) {
         const right = expression;
@@ -632,17 +669,10 @@ const tests = [
             return right;
           },
         });
-        nested.push(parent);
         expression = parent;
       }
 
-      for (let repeat = 0; repeat < 8; repeat += 1) {
-        assertSame(containsYield(expression), true);
-      }
-      for (const node of nested) {
-        assertSame(containsYield(node), true);
-      }
-
+      assertSame(containsYield(expression), true);
       assertSame(edgeReads, depth);
     },
   },

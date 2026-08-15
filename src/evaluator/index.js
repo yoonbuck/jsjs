@@ -33,6 +33,7 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  *   thisValue: unknown,
  *   functionEnvironment?: import('../runtime/environment.js').FunctionExecutionEnvironment,
  *   annexBFunctionDeclarations?: Set<any>,
+ *   generatorYieldClassification?: WeakMap<object, boolean>,
  * }} EvaluationContext
  */
 

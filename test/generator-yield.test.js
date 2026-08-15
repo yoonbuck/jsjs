@@ -83,6 +83,31 @@ const tests = [
     },
   },
   {
+    name: 'yield classification snapshots include nested yield arguments',
+    run() {
+      assertSame(
+        run(`
+          function* g() {
+            return yield (yield 1);
+          }
+          var iterator = g();
+          var first = iterator.next();
+          var second = iterator.next(2);
+          var third = iterator.next(3);
+          [
+            first.value,
+            first.done,
+            second.value,
+            second.done,
+            third.value,
+            third.done
+          ].join(':');
+        `),
+        '1:false:2:false:3:true',
+      );
+    },
+  },
+  {
     name: 'resumable declaration lists apply NamedEvaluation before later yields',
     run() {
       assertSame(

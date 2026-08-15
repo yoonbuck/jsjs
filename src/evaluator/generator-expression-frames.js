@@ -43,12 +43,12 @@ import { GuestErrorSignal } from '../runtime/completion.js';
 import { SuperReferenceBase } from '../runtime/super-reference.js';
 import { constructSuper } from '../runtime/function-object.js';
 import { evaluateExpression, evaluateExpressionValue } from './expressions.js';
-import { containsYield } from './static-semantics.js';
 import { iterableToList } from './iteration.js';
 import { performEval } from './eval.js';
 import { propertyNameFromValue } from './property-name.js';
 import {
   captureGeneratorOperation,
+  generatorContainsYield,
   takeGeneratorInput,
   takeGeneratorOutput,
 } from './generator-machine.js';
@@ -235,7 +235,7 @@ export function createGeneratorExpressionFrame(
   context,
   resultMode = 'value',
 ) {
-  if (!containsYield(node)) {
+  if (!generatorContainsYield(node, context)) {
     return { kind: 'sync-expression', node, context, resultMode };
   }
 

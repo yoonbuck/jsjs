@@ -3,6 +3,8 @@ import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { ThrowSignal } from '../src/runtime/completion.js';
+import { createGeneratorExecution } from '../src/evaluator/generator-machine.js';
+import { createGeneratorExpressionFrame } from '../src/evaluator/generator-expression-frames.js';
 
 /**
  * @param {import('../src/runtime/realm.js').Realm} realm
@@ -116,6 +118,79 @@ const tests = [
       const completed = next(iterator, undefined);
       assertSame(completed.get('done'), true);
       assertSame(realm.stackGuard.depth, 0);
+    },
+  },
+  {
+    name: 'generator activations reuse one function-owned yield classification snapshot',
+    run() {
+      const realm = createRealm();
+      const depth = 64;
+      let edgeReads = 0;
+      let expression = /** @type {any} */ ({
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      });
+      /** @type {any[]} */
+      const nested = [];
+
+      for (let index = 0; index < depth; index += 1) {
+        const right = expression;
+        const parent = /** @type {any} */ ({
+          type: 'BinaryExpression',
+          operator: '+',
+          left: { type: 'Literal', value: index },
+        });
+        Object.defineProperty(parent, 'right', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            edgeReads += 1;
+            return right;
+          },
+        });
+        nested.push(parent);
+        expression = parent;
+      }
+
+      const body = [{ type: 'ExpressionStatement', expression }];
+      const functionObject = /** @type {any} */ ({ realm });
+      const firstContext = /** @type {any} */ ({ realm });
+      const first = createGeneratorExecution({
+        functionObject,
+        body,
+        context: firstContext,
+      });
+      const snapshot = first.yieldClassification;
+
+      assertSame(snapshot instanceof WeakMap, true);
+      assertSame(functionObject.generatorYieldClassification, snapshot);
+      assertSame(firstContext.generatorYieldClassification, snapshot);
+      for (let repeat = 0; repeat < 8; repeat += 1) {
+        assertSame(
+          createGeneratorExpressionFrame(expression, firstContext, 'value')
+            .kind,
+          'binary',
+        );
+      }
+      for (const node of nested) {
+        assertSame(snapshot.get(node), true);
+        assertSame(
+          createGeneratorExpressionFrame(node, firstContext, 'value').kind,
+          'binary',
+        );
+      }
+      assertSame(edgeReads, depth);
+
+      const secondContext = /** @type {any} */ ({ realm });
+      const second = createGeneratorExecution({
+        functionObject,
+        body,
+        context: secondContext,
+      });
+      assertSame(second.yieldClassification, snapshot);
+      assertSame(secondContext.generatorYieldClassification, snapshot);
+      assertSame(edgeReads, depth);
     },
   },
 ];
