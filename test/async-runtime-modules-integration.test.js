@@ -68,6 +68,12 @@ export default [
               var step = iterator.next(value + 1);
               log.push("done:" + step.value + ":" + step.done);
             });
+            Promise.resolve("second").then(function (value) {
+              log.push(value);
+            });
+            Promise.resolve("third").then(function (value) {
+              log.push(value);
+            });
             log.push("sync");
             log.join(",");
           `,
@@ -77,7 +83,7 @@ export default [
       assertSame(realm.agent.runJobs().failures.length, 0);
       assertNormal(
         evaluateScript(realm, 'log.join(",")'),
-        'start,sync,resume:2,done:3:true',
+        'start,sync,resume:2,done:3:true,second,third',
       );
     },
   },
@@ -179,7 +185,47 @@ export default [
       );
       assertSame(promise.getPrototype(), realm.intrinsics.promisePrototype);
       assertSame(promise.promiseResult, 3);
+
+      const firstStep = iterator.get('next').callFunction(iterator, []);
+      assertSame(firstStep.get('value'), 1);
+      assertSame(firstStep.get('done'), false);
+      assertSame(firstStep.getPrototype(), realm.intrinsics.objectPrototype);
+      const finalStep = iterator.get('next').callFunction(iterator, []);
+      assertSame(finalStep.get('value'), 2);
+      assertSame(finalStep.get('done'), true);
+
+      realm.globalObject.defineOwnProperty('modulePromise', {
+        value: promise,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertNormal(
+        evaluateScript(
+          realm,
+          `
+            var observedPromiseValue;
+            var observedPromiseArray;
+            modulePromise.then(function (value) {
+              observedPromiseValue = value;
+              observedPromiseArray = [value];
+            });
+            undefined;
+          `,
+        ),
+        undefined,
+      );
       assertSame(realm.agent.runJobs().failures.length, 0);
+      assertNormal(evaluateScript(realm, 'observedPromiseValue'), 3);
+      const observedPromiseArray =
+        /** @type {import('../src/runtime/object.js').EngineObject} */ (
+          realm.globalObject.get('observedPromiseArray')
+        );
+      assertSame(
+        observedPromiseArray.getPrototype(),
+        realm.intrinsics.arrayPrototype,
+      );
+      assertSame(observedPromiseArray.get('0'), 3);
     },
   },
   {
@@ -283,7 +329,10 @@ export default [
           `
             var log = [];
             Promise.resolve().then(function () {
-              log.push("reaction");
+              log.push("first");
+            });
+            Promise.resolve().then(function () {
+              log.push("second");
             });
             undefined;
           `,
@@ -296,10 +345,11 @@ export default [
       );
 
       const namespace = await loader.loadAndEvaluate('root');
+      assertSame(await loader.loadAndEvaluate('root'), namespace);
       assertNormal(evaluateScript(realm, 'log.join(",")'), '');
       assertSame(namespace.get('value'), 7);
       assertSame(realm.agent.runJobs().failures.length, 0);
-      assertNormal(evaluateScript(realm, 'log.join(",")'), 'reaction');
+      assertNormal(evaluateScript(realm, 'log.join(",")'), 'first,second');
     },
   },
 ];
