@@ -65,13 +65,14 @@ const tests = [
     },
   },
   {
-    name: 'yield star captures next once, omits its first argument, and inspects done before value',
+    name: 'yield star captures next once, passes undefined initially, and forwards done-false results',
     run() {
       assertSame(
         run(`
           var log = [];
           var nextGets = 0;
           var calls = 0;
+          var produced = [];
           var iterator = {};
 
           function result(label, value, done) {
@@ -88,6 +89,7 @@ const tests = [
                 return value;
               }
             });
+            produced.push(object);
             return object;
           }
 
@@ -140,18 +142,21 @@ const tests = [
             final.value,
             final.done,
             nextGets,
+            first === produced[0],
+            second === produced[1],
             log.join(',')
           ].join('|');
         `),
-        '1|false|2|false|6|true|1|' +
-          'call1:0:undefined,first:done,first:value,' +
-          'call2:1:undefined,second:done,second:value,' +
-          'call3:1:9,third:done,third:value',
+        '1|false|2|false|6|true|1|true|true|' +
+          'call1:1:undefined,first:done,' +
+          'call2:1:undefined,second:done,' +
+          'call3:1:9,third:done,third:value,' +
+          'first:value,first:done,second:value,second:done',
       );
     },
   },
   {
-    name: 'yield star uses the iterable Agent protocol key and the executing Realm result objects',
+    name: 'yield star preserves a foreign done-false result and uses the executing Realm on completion',
     run() {
       const iterableRealm = createRealm();
       const generatorRealm = createRealm();
@@ -161,28 +166,33 @@ const tests = [
         false,
       );
 
-      const foreignIterable = evaluateNormal(
-        iterableRealm,
-        `
-          (function () {
-            var started = false;
-            var iterator = {
-              next: function (sent) {
-                if (!started) {
-                  started = true;
-                  return { value: 'foreign-yield', done: false };
+      const foreignValues = /** @type {EngineObject} */ (
+        evaluateNormal(
+          iterableRealm,
+          `
+            (function () {
+              var started = false;
+              var yielded = { value: 'foreign-yield', done: false };
+              var iterator = {
+                next: function (sent) {
+                  if (!started) {
+                    started = true;
+                    return yielded;
+                  }
+                  return { value: 'foreign:' + sent, done: true };
                 }
-                return { value: 'foreign:' + sent, done: true };
-              }
-            };
-            var iterable = {};
-            iterable[Symbol.iterator] = function () {
-              return iterator;
-            };
-            return iterable;
-          }());
-        `,
+              };
+              var iterable = {};
+              iterable[Symbol.iterator] = function () {
+                return iterator;
+              };
+              return { iterable: iterable, yielded: yielded };
+            }());
+          `,
+        )
       );
+      const foreignIterable = foreignValues.get('iterable');
+      const foreignYieldResult = foreignValues.get('yielded');
       generatorRealm.globalObject.defineOwnProperty('foreignIterable', {
         value: foreignIterable,
         writable: true,
@@ -201,11 +211,16 @@ const tests = [
       );
       const result = evaluateNormal(generatorRealm, `delegated.next('sent');`);
 
+      assertSame(first, foreignYieldResult);
       assertSame(first instanceof EngineObject, true);
       assertSame(result instanceof EngineObject, true);
       assertSame(
         /** @type {EngineObject} */ (first).getPrototype(),
-        generatorRealm.intrinsics.objectPrototype,
+        iterableRealm.intrinsics.objectPrototype,
+      );
+      assertSame(
+        /** @type {EngineObject} */ (first).agent,
+        iterableRealm.agent,
       );
       assertSame(
         /** @type {EngineObject} */ (result).getPrototype(),
@@ -221,6 +236,90 @@ const tests = [
         'foreign:sent',
       );
       assertSame(/** @type {EngineObject} */ (result).get('done'), true);
+    },
+  },
+  {
+    name: 'delegated throw forwards a done-false result unchanged without reading value',
+    run() {
+      assertSame(
+        run(`
+          var valueReads = 0;
+          var thrownResult = {};
+          Object.defineProperty(thrownResult, 'done', {
+            get: function () {
+              return false;
+            }
+          });
+          Object.defineProperty(thrownResult, 'value', {
+            get: function () {
+              valueReads = valueReads + 1;
+              return 'recovered';
+            }
+          });
+
+          var iterator = {
+            next: function () {
+              return { value: 'start', done: false };
+            },
+            throw: function () {
+              return thrownResult;
+            }
+          };
+          iterator[Symbol.iterator] = function () {
+            return iterator;
+          };
+
+          var delegated = (function* () {
+            yield* iterator;
+          }());
+          delegated.next();
+          var received = delegated.throw('reason');
+          [received === thrownResult, valueReads, received.done].join(':');
+        `),
+        'true:0:false',
+      );
+    },
+  },
+  {
+    name: 'delegated return forwards a done-false result unchanged without reading value',
+    run() {
+      assertSame(
+        run(`
+          var valueReads = 0;
+          var returnedResult = {};
+          Object.defineProperty(returnedResult, 'done', {
+            get: function () {
+              return false;
+            }
+          });
+          Object.defineProperty(returnedResult, 'value', {
+            get: function () {
+              valueReads = valueReads + 1;
+              return 'still-open';
+            }
+          });
+
+          var iterator = {
+            next: function () {
+              return { value: 'start', done: false };
+            },
+            return: function () {
+              return returnedResult;
+            }
+          };
+          iterator[Symbol.iterator] = function () {
+            return iterator;
+          };
+
+          var delegated = (function* () {
+            yield* iterator;
+          }());
+          delegated.next();
+          var received = delegated.return('stop');
+          [received === returnedResult, valueReads, received.done].join(':');
+        `),
+        'true:0:false',
+      );
     },
   },
   {
@@ -774,7 +873,7 @@ const tests = [
               Object.defineProperty(result, 'done', {
                 get: function () {
                   valueDoneReads = valueDoneReads + 1;
-                  return false;
+                  return true;
                 }
               });
               Object.defineProperty(result, 'value', {

@@ -895,6 +895,7 @@ function dispatchYieldDelegate(execution, frame) {
       frame,
       'normal',
       requireDelegatedIterator(frame).nextMethod,
+      { value: undefined },
     );
   }
 
@@ -1068,6 +1069,20 @@ function inspectDelegatedResult(execution, frame) {
     );
   }
 
+  const resumeKind = frame.resumeKind;
+
+  if (resumeKind === null) {
+    throw new TypeError('Delegated iterator result lost its resume kind');
+  }
+
+  frame.result = null;
+  frame.resumeKind = null;
+
+  if (!doneResult.value) {
+    frame.phase = 'resume-next';
+    return { type: 'yield-result', result };
+  }
+
   const valueResult = captureGeneratorOperation(execution.realm, () =>
     iteratorValue(result),
   );
@@ -1080,30 +1095,16 @@ function inspectDelegatedResult(execution, frame) {
     throw new TypeError('Delegated iterator value returned an invalid result');
   }
 
-  const resumeKind = frame.resumeKind;
-
-  if (resumeKind === null) {
-    throw new TypeError('Delegated iterator result lost its resume kind');
-  }
-
-  frame.result = null;
-  frame.resumeKind = null;
-
-  if (doneResult.value) {
-    requireDelegatedIterator(frame).done = true;
-    return resumeKind === 'return'
-      ? {
-          type: 'pop',
-          result: {
-            type: 'completion',
-            completion: createReturnCompletion(valueResult.value),
-          },
-        }
-      : finishValue(valueResult.value);
-  }
-
-  frame.phase = 'resume-next';
-  return { type: 'yield', value: valueResult.value };
+  requireDelegatedIterator(frame).done = true;
+  return resumeKind === 'return'
+    ? {
+        type: 'pop',
+        result: {
+          type: 'completion',
+          completion: createReturnCompletion(valueResult.value),
+        },
+      }
+    : finishValue(valueResult.value);
 }
 
 /**

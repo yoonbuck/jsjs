@@ -19,6 +19,7 @@ import { createYieldClassification } from './static-semantics.js';
  *   GeneratorResumeCompletion
  * @typedef {import('../runtime/generator-object.js').GeneratorMachineResult}
  *   GeneratorMachineResult
+ * @typedef {import('../runtime/object.js').EngineObject} EngineObject
  * @typedef {import('./generator-statement-frames.js').GeneratorStatementFrame}
  *   GeneratorStatementFrame
  * @typedef {import('./generator-expression-frames.js').GeneratorExpressionFrame}
@@ -43,6 +44,7 @@ import { createYieldClassification } from './static-semantics.js';
  *   | { type: 'push', frame: GeneratorFrame }
  *   | { type: 'pop', result: FrameResult }
  *   | { type: 'yield', value: unknown }
+ *   | { type: 'yield-result', result: EngineObject }
  *   | { type: 'complete', completion: {
  *       type: 'normal' | 'return' | 'throw',
  *       value: unknown,
@@ -120,6 +122,7 @@ export class GeneratorExecution {
           this.output = action.result;
           break;
         case 'yield':
+        case 'yield-result':
           this.input = null;
           return action;
         case 'complete':

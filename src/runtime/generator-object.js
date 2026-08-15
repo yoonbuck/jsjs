@@ -16,6 +16,7 @@ import { GuestErrorSignal, ThrowSignal } from './completion.js';
  *
  * @typedef {
  *   | { type: 'yield', value: unknown }
+ *   | { type: 'yield-result', result: EngineObject }
  *   | { type: 'complete', completion: {
  *       type: 'normal' | 'return' | 'throw',
  *       value: unknown,
@@ -89,6 +90,17 @@ export class GeneratorObject extends EngineObject {
       if (result.type === 'yield') {
         this.state = 'suspendedYield';
         return createIterResultObject(this.realm, result.value, false);
+      }
+
+      if (result.type === 'yield-result') {
+        if (!(result.result instanceof EngineObject)) {
+          throw new TypeError(
+            'Generator continuation returned an invalid yield result',
+          );
+        }
+
+        this.state = 'suspendedYield';
+        return result.result;
       }
 
       if (result.type !== 'complete') {
