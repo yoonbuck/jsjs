@@ -167,7 +167,9 @@ export default [
        */
       const originalHost = {
         resolve(specifier, referrer) {
-          originalCalls.push(`resolve:${this === originalHost}:${specifier}:${referrer}`);
+          originalCalls.push(
+            `resolve:${this === originalHost}:${specifier}:${referrer}`,
+          );
           return 'bound';
         },
         load(identifier) {
@@ -436,11 +438,7 @@ export default [
       let scheduledB = false;
       const loader = createModuleLoader(createRealm(), {
         resolve(specifier, referrer) {
-          if (
-            specifier === 'a' &&
-            referrer === 'b' &&
-            scheduledB === false
-          ) {
+          if (specifier === 'a' && referrer === 'b' && scheduledB === false) {
             scheduledB = true;
             Promise.resolve().then(() => {
               delayedB = loadModuleGraph(loader, 'b');

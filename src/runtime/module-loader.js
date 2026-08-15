@@ -200,7 +200,9 @@ function resolveModule(loader, specifier, referrer) {
     .then(() => bindings.resolve.call(bindings.receiver, specifier, referrer))
     .then((identifier) => {
       if (typeof identifier !== 'string' || identifier.length === 0) {
-        throw new TypeError('Module host resolve must return a non-empty string');
+        throw new TypeError(
+          'Module host resolve must return a non-empty string',
+        );
       }
       return identifier;
     })
@@ -296,7 +298,11 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
       const resolvedRequests = [];
 
       for (const request of record.requestedModules) {
-        const childIdentifier = await resolveModule(loader, request, identifier);
+        const childIdentifier = await resolveModule(
+          loader,
+          request,
+          identifier,
+        );
         const child = await acquireModuleGraph(
           loader,
           childIdentifier,
@@ -407,7 +413,10 @@ function acquireSourceRecord(loader, identifier) {
  * @returns {ModuleHostBindings}
  */
 function validateModuleHost(host) {
-  if (host === null || (typeof host !== 'object' && typeof host !== 'function')) {
+  if (
+    host === null ||
+    (typeof host !== 'object' && typeof host !== 'function')
+  ) {
     throw new TypeError('Expected module host object');
   }
 
@@ -482,7 +491,9 @@ function validateModuleSource(result) {
     !Object.prototype.hasOwnProperty.call(descriptor, 'value') ||
     typeof descriptor.value !== 'string'
   ) {
-    throw new TypeError('Module source record sourceText must be a data string');
+    throw new TypeError(
+      'Module source record sourceText must be a data string',
+    );
   }
 
   return descriptor.value;
