@@ -491,24 +491,29 @@ export default [
     },
   },
   {
-    name: 'loader rejects same-identifier reentry from a load hook',
+    name: 'loader rejects synchronous same-identifier reentry without corrupting cache cleanup',
     async run() {
       /** @type {any} */
       let nested;
+      let loads = 0;
       const loader = createModuleLoader(createRealm(), {
         resolve() {
           return 'root';
         },
         async load() {
+          loads += 1;
           nested = await rejected(loader.loadAndEvaluate('root'));
           return 'export const x = 1;';
         },
       });
 
-      await loadModuleGraph(loader, 'root');
+      const outer = await loadModuleGraph(loader, 'root');
+      const cached = await loadModuleGraph(loader, 'root');
       assertSame(nested instanceof ModuleLoaderError, true);
       assertSame(nested.phase, 'load');
       assertSame(nested.identifier, 'root');
+      assertSame(cached, outer);
+      assertSame(loads, 1);
     },
   },
   {

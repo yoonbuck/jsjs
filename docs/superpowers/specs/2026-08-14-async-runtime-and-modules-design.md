@@ -520,14 +520,19 @@ dependency graph loading recurses, so a cycle can observe the same record
 without awaiting its own graph promise.
 
 Dependency discovery walks requested modules serially in source order. This
-chooses deterministic hook invocation over speculative parallelism. Concurrent
-root requests for one canonical identifier await the same in-flight work and
-receive the same eventual record/namespace.
+chooses deterministic hook invocation over speculative parallelism. Typed
+same-loader/same-canonical-id reentrant rejection is guaranteed only
+during the synchronous dynamic extent of `load(identifier)` invocation. Once
+`load` returns a `PromiseLike`, later same-identifier requests, including
+legitimate concurrent roots, deduplicate onto the normal in-flight graph Promise
+and receive identical record/namespace identity.
 
-A `load` hook that reenters the same loader for the same canonical identifier
-before that identifier has produced source is rejected as a typed reentrant-load
-failure instead of deadlocking. Reentrancy for a different canonical identifier
-is allowed and still participates in ordinary deduplication.
+An async hook must not await or reenter the same loader for the identifier whose
+source it is producing. Doing so creates an undetectable host-Promise dependency
+cycle and is a documented `ModuleHost` contract violation, not something the
+engine portably diagnoses. Reentrancy for a different canonical identifier
+remains allowed and deduplicated through the ordinary in-flight maps. A
+synchronous typed rejection does not corrupt error or retry cleanup.
 
 Resolve, load, and parse failures clear the corresponding in-flight entry and
 are not cached, so a later request can retry. A successfully parsed immutable
