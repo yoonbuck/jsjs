@@ -89,6 +89,14 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
     constructorDefinition === undefined
       ? DEFAULT_BASE_CONSTRUCTOR
       : constructorDefinition.value;
+
+  if (constructorNode.generator === true) {
+    throw new GuestErrorSignal(
+      'SyntaxError',
+      'Class constructors cannot be generators',
+    );
+  }
+
   const prototype = new EngineObject(
     instancePrototype,
     'Object',
@@ -155,10 +163,11 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
             ? definition.kind
             : '',
         ),
-        functionKind: 'method',
+        functionKind:
+          definition.value.generator === true ? 'generatorMethod' : 'method',
         thisMode: 'strict',
         constructible: false,
-        createPrototype: false,
+        createPrototype: definition.value.generator === true,
         homeObject: target,
         strict: true,
       },

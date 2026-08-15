@@ -61,6 +61,7 @@ import {
   createIteratorIntrinsics,
   installIteratorMethods,
 } from '../builtins/iterator.js';
+import { createGeneratorIntrinsics } from '../builtins/generator.js';
 import {
   createPromiseIntrinsics,
   installPromiseConstructor,
@@ -239,6 +240,9 @@ export class Realm {
     const iteratorIntrinsics = createIteratorIntrinsics(this);
     Object.assign(this.intrinsics, iteratorIntrinsics);
     installIteratorMethods(this, iteratorIntrinsics);
+
+    const generatorIntrinsics = createGeneratorIntrinsics(this);
+    Object.assign(this.intrinsics, generatorIntrinsics);
 
     const promiseIntrinsics = createPromiseIntrinsics(this);
     Object.assign(this.intrinsics, promiseIntrinsics);

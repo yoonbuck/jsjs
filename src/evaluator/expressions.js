@@ -1222,8 +1222,10 @@ function evaluateObjectExpression(node, context) {
           {
             name: functionNameFromPropertyKey(key),
             isMethod: true,
+            functionKind:
+              property.value.generator === true ? 'generatorMethod' : 'method',
             homeObject: object,
-            createPrototype: false,
+            createPrototype: property.value.generator === true,
           },
         );
         object.defineOwnProperty(key, {

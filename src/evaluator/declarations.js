@@ -16,6 +16,8 @@ import {
   createArgumentsObject,
 } from '../runtime/function-object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { EngineObject } from '../runtime/object.js';
+import { GeneratorObject } from '../runtime/generator-object.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateClassDefinition } from './classes.js';
 import { evaluateStatementList } from './statements.js';
@@ -29,6 +31,7 @@ import {
   topLevelLexicallyScopedDeclarations,
   topLevelVarDeclaredNames,
   topLevelVarScopedDeclarations,
+  containsYield,
 } from './static-semantics.js';
 
 /**
@@ -695,7 +698,7 @@ export function instantiateFunctionObject(node, context) {
  *   name?: string,
  *   isMethod?: boolean,
  *   createPrototype?: boolean,
- *   functionKind?: 'normal' | 'method' | 'arrow' | 'classConstructor',
+ *   functionKind?: import('../runtime/function-object.js').FunctionKind,
  *   thisMode?: 'global' | 'strict' | 'lexical',
  *   constructible?: boolean,
  *   homeObject?: import('../runtime/object.js').EngineObject,
@@ -779,15 +782,27 @@ export function createFunctionObject(node, scope, context, options = {}) {
     options.functionKind ??
     (node.type === 'ArrowFunctionExpression'
       ? 'arrow'
-      : options.isMethod
-        ? 'method'
-        : 'normal');
+      : node.generator === true
+        ? options.isMethod
+          ? 'generatorMethod'
+          : 'generator'
+        : options.isMethod
+          ? 'method'
+          : 'normal');
   const thisMode =
     options.thisMode ??
     (functionKind === 'arrow' ? 'lexical' : strict ? 'strict' : 'global');
   const constructible =
     options.constructible ??
     (functionKind === 'normal' || functionKind === 'classConstructor');
+  const generator =
+    functionKind === 'generator' || functionKind === 'generatorMethod';
+  const generatorFunctionPrototype = generator
+    ? requiredGeneratorIntrinsic(context.realm, 'generatorFunctionPrototype')
+    : undefined;
+  const generatorPrototype = generator
+    ? requiredGeneratorIntrinsic(context.realm, 'generatorPrototype')
+    : undefined;
 
   const functionObject = new EngineFunction({
     realm: context.realm,
@@ -798,8 +813,8 @@ export function createFunctionObject(node, scope, context, options = {}) {
     scope,
     strict,
     name,
-    isMethod: functionKind === 'method',
-    createPrototype: options.createPrototype ?? constructible,
+    isMethod: functionKind === 'method' || functionKind === 'generatorMethod',
+    createPrototype: options.createPrototype ?? (constructible || generator),
     functionKind,
     thisMode,
     constructible,
@@ -807,6 +822,18 @@ export function createFunctionObject(node, scope, context, options = {}) {
     methodHomeObject: functionKind === 'arrow' ? undefined : options.homeObject,
     constructorKind: options.constructorKind,
     defaultDerivedConstructor: options.defaultDerivedConstructor,
+    functionObjectPrototype: generatorFunctionPrototype,
+    prototypeObjectPrototype: generatorPrototype,
+    generatorFactory: generator
+      ? (functionObject, thisValue, args, functionEnvironment) =>
+          createGeneratorObject(
+            node,
+            functionObject,
+            thisValue,
+            args,
+            functionEnvironment,
+          )
+      : undefined,
     execute: (functionObject, thisValue, args, functionEnvironment) =>
       executeFunctionBody(
         node,
@@ -865,6 +892,40 @@ function executeFunctionBody(
   args,
   functionEnvironment,
 ) {
+  const { context, bodyStatements } = createFunctionBodyContext(
+    node,
+    functionObject,
+    thisValue,
+    args,
+    functionEnvironment,
+  );
+
+  if (node.type === 'ArrowFunctionExpression' && node.expression) {
+    return createReturnCompletion(evaluateExpressionValue(node.body, context));
+  }
+
+  return evaluateStatementList(bodyStatements, context);
+}
+
+/**
+ * Builds a function activation through declaration instantiation without
+ * evaluating a body statement. Generator calls retain the resulting context
+ * until their first resume; ordinary functions evaluate it immediately.
+ *
+ * @param {any} node
+ * @param {EngineFunction} functionObject
+ * @param {unknown} thisValue
+ * @param {readonly unknown[]} args
+ * @param {import('../runtime/environment.js').FunctionExecutionEnvironment} functionEnvironment
+ * @returns {{ context: EvaluationContext, bodyStatements: any[] }}
+ */
+export function createFunctionBodyContext(
+  node,
+  functionObject,
+  thisValue,
+  args,
+  functionEnvironment,
+) {
   const functionEnv = newDeclarativeEnvironment(functionObject.scope);
   const parameterEnv = functionObject.simpleParameterList
     ? functionEnv
@@ -903,11 +964,95 @@ function executeFunctionBody(
     context,
   );
 
-  if (node.type === 'ArrowFunctionExpression' && node.expression) {
-    return createReturnCompletion(evaluateExpressionValue(node.body, context));
+  return { context, bodyStatements };
+}
+
+/**
+ * @param {any} node
+ * @param {EngineFunction} functionObject
+ * @param {unknown} thisValue
+ * @param {readonly unknown[]} args
+ * @param {import('../runtime/environment.js').FunctionExecutionEnvironment} functionEnvironment
+ * @returns {GeneratorObject}
+ */
+function createGeneratorObject(
+  node,
+  functionObject,
+  thisValue,
+  args,
+  functionEnvironment,
+) {
+  const { context, bodyStatements } = createFunctionBodyContext(
+    node,
+    functionObject,
+    thisValue,
+    args,
+    functionEnvironment,
+  );
+  const prototype = functionObject.get('prototype');
+  const generatorPrototype =
+    prototype instanceof EngineObject
+      ? prototype
+      : requiredGeneratorIntrinsic(context.realm, 'generatorPrototype');
+  const continuation = containsYield(bodyStatements)
+    ? new YieldingGeneratorPlaceholder()
+    : new YieldFreeGeneratorContinuation(context, bodyStatements);
+
+  return new GeneratorObject(context.realm, generatorPrototype, continuation);
+}
+
+class YieldFreeGeneratorContinuation {
+  /**
+   * @param {EvaluationContext} context
+   * @param {any[]} bodyStatements
+   */
+  constructor(context, bodyStatements) {
+    this.context = context;
+    this.bodyStatements = bodyStatements;
   }
 
-  return evaluateStatementList(bodyStatements, context);
+  /**
+   * @param {import('../runtime/generator-object.js').GeneratorResumeCompletion} completion
+   * @returns {import('../runtime/generator-object.js').GeneratorMachineResult}
+   */
+  resume(completion) {
+    if (completion.type !== 'normal') {
+      return { type: 'complete', completion };
+    }
+
+    return {
+      type: 'complete',
+      completion: evaluateStatementList(this.bodyStatements, this.context),
+    };
+  }
+}
+
+class YieldingGeneratorPlaceholder {
+  /**
+   * @param {import('../runtime/generator-object.js').GeneratorResumeCompletion} _completion
+   * @returns {import('../runtime/generator-object.js').GeneratorMachineResult}
+   */
+  resume(_completion) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Generator suspension is not implemented',
+    );
+  }
+}
+
+/**
+ * @param {import('../runtime/realm.js').Realm} realm
+ * @param {'generatorFunctionPrototype' | 'generatorPrototype'} name
+ * @returns {EngineObject}
+ */
+function requiredGeneratorIntrinsic(realm, name) {
+  const intrinsic = realm.intrinsics[name];
+
+  if (!(intrinsic instanceof EngineObject)) {
+    throw new TypeError(`Realm is missing required %${name}% intrinsic`);
+  }
+
+  return intrinsic;
 }
 
 /**

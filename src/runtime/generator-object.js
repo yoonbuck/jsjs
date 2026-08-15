@@ -1,0 +1,147 @@
+import { EngineObject } from './object.js';
+import { createIterResultObject } from './iterator.js';
+import { GuestErrorSignal, ThrowSignal } from './completion.js';
+
+/**
+ * @typedef {import('./realm.js').Realm} Realm
+ *
+ * @typedef {'suspendedStart' | 'suspendedYield' | 'executing' | 'completed'}
+ *   GeneratorState
+ *
+ * @typedef {
+ *   | { type: 'normal', value: unknown }
+ *   | { type: 'throw', value: unknown }
+ *   | { type: 'return', value: unknown }
+ * } GeneratorResumeCompletion
+ *
+ * @typedef {
+ *   | { type: 'yield', value: unknown }
+ *   | { type: 'complete', completion: {
+ *       type: 'normal' | 'return' | 'throw',
+ *       value: unknown,
+ *     } }
+ * } GeneratorMachineResult
+ *
+ * @typedef {{
+ *   resume(completion: GeneratorResumeCompletion): GeneratorMachineResult,
+ * }} GeneratorContinuation
+ */
+
+/**
+ * The Realm-owned iterator returned from a generator call. Its continuation is
+ * a heap value, so no active evaluator or StackGuard frame survives suspension.
+ */
+export class GeneratorObject extends EngineObject {
+  /**
+   * @param {Realm} realm
+   * @param {EngineObject} prototype
+   * @param {GeneratorContinuation} continuation
+   */
+  constructor(realm, prototype, continuation) {
+    super(prototype, 'Generator', realm.agent);
+
+    /** @type {Realm} */
+    this.realm = realm;
+    /** @type {GeneratorState} */
+    this.state = 'suspendedStart';
+    /** @type {GeneratorContinuation | null} */
+    this.continuation = continuation;
+  }
+
+  /**
+   * @param {GeneratorResumeCompletion} completion
+   * @returns {EngineObject}
+   */
+  resume(completion) {
+    if (this.state === 'executing') {
+      throw new GuestErrorSignal('TypeError', 'Generator is already running');
+    }
+
+    if (this.state === 'completed') {
+      return this.resumeCompleted(completion);
+    }
+
+    if (this.state === 'suspendedStart' && completion.type !== 'normal') {
+      this.complete();
+
+      if (completion.type === 'throw') {
+        throw new ThrowSignal(completion.value);
+      }
+
+      return createIterResultObject(this.realm, completion.value, true);
+    }
+
+    const continuation = this.continuation;
+
+    if (continuation === null) {
+      this.complete();
+      throw new TypeError('Generator has no continuation');
+    }
+
+    const starting = this.state === 'suspendedStart';
+    this.state = 'executing';
+
+    try {
+      const result = continuation.resume(
+        starting ? { type: 'normal', value: undefined } : completion,
+      );
+
+      if (result.type === 'yield') {
+        this.state = 'suspendedYield';
+        return createIterResultObject(this.realm, result.value, false);
+      }
+
+      if (result.type !== 'complete') {
+        throw new TypeError(
+          'Generator continuation returned an invalid result',
+        );
+      }
+
+      this.complete();
+
+      switch (result.completion.type) {
+        case 'normal':
+          return createIterResultObject(this.realm, undefined, true);
+        case 'return':
+          return createIterResultObject(
+            this.realm,
+            result.completion.value,
+            true,
+          );
+        case 'throw':
+          throw new ThrowSignal(result.completion.value);
+      }
+    } catch (error) {
+      this.complete();
+      throw error;
+    }
+
+    throw new TypeError(
+      'Generator continuation returned an invalid completion',
+    );
+  }
+
+  /**
+   * @param {GeneratorResumeCompletion} completion
+   * @returns {EngineObject}
+   */
+  resumeCompleted(completion) {
+    if (completion.type === 'throw') {
+      throw new ThrowSignal(completion.value);
+    }
+
+    return createIterResultObject(
+      this.realm,
+      completion.type === 'return' ? completion.value : undefined,
+      true,
+    );
+  }
+
+  /**
+   * @returns {void}
+   */
+  complete() {
+    this.state = 'completed';
+    this.continuation = null;
+  }
+}

@@ -12,6 +12,8 @@ import {
  * @typedef {import('./realm.js').Realm} Realm
  * @typedef {import('./environment.js').EnvironmentRecordLike} EnvironmentRecordLike
  * @typedef {{ type: string, value: unknown }} Completion
+ * @typedef {'normal' | 'method' | 'arrow' | 'classConstructor'
+ *   | 'generator' | 'generatorMethod'} FunctionKind
  *
  * @typedef {(
  *   functionObject: EngineFunction,
@@ -19,6 +21,13 @@ import {
  *   args: readonly unknown[],
  *   functionEnvironment: import('./environment.js').FunctionExecutionEnvironment,
  * ) => Completion} FunctionBodyExecutor
+ *
+ * @typedef {(
+ *   functionObject: EngineFunction,
+ *   thisValue: unknown,
+ *   args: readonly unknown[],
+ *   functionEnvironment: import('./environment.js').FunctionExecutionEnvironment,
+ * ) => import('./generator-object.js').GeneratorObject} GeneratorFactory
  *
  * @typedef {{
  *   realm: Realm,
@@ -32,13 +41,16 @@ import {
  *   name?: string,
  *   isMethod?: boolean,
  *   createPrototype?: boolean,
- *   functionKind?: 'normal' | 'method' | 'arrow' | 'classConstructor',
+ *   functionKind?: FunctionKind,
  *   thisMode?: 'global' | 'strict' | 'lexical',
  *   constructible?: boolean,
  *   enclosingFunctionEnvironment?: import('./environment.js').FunctionExecutionEnvironment,
  *   methodHomeObject?: EngineObject,
  *   constructorKind?: 'base' | 'derived' | undefined,
  *   defaultDerivedConstructor?: boolean,
+ *   functionObjectPrototype?: EngineObject,
+ *   prototypeObjectPrototype?: EngineObject,
+ *   generatorFactory?: GeneratorFactory,
  * }} EngineFunctionOptions
  */
 
@@ -75,13 +87,21 @@ export class EngineFunction extends EngineObject {
         : 'global',
     constructible = functionKind === 'normal' ||
       functionKind === 'classConstructor',
-    createPrototype = constructible,
+    createPrototype = constructible ||
+      functionKind === 'generator' ||
+      functionKind === 'generatorMethod',
     enclosingFunctionEnvironment = undefined,
     methodHomeObject = undefined,
     constructorKind = undefined,
     defaultDerivedConstructor = false,
+    functionObjectPrototype = undefined,
+    prototypeObjectPrototype = undefined,
+    generatorFactory = undefined,
   }) {
-    super(realm.intrinsics.functionPrototype, 'Function');
+    super(
+      functionObjectPrototype ?? realm.intrinsics.functionPrototype,
+      'Function',
+    );
 
     /** @type {Realm} */
     this.realm = realm;
@@ -99,7 +119,7 @@ export class EngineFunction extends EngineObject {
     this.strict = strict;
     /** @type {boolean} */
     this._isConstructor = constructible;
-    /** @type {'normal' | 'method' | 'arrow' | 'classConstructor'} */
+    /** @type {FunctionKind} */
     this.functionKind = functionKind;
     /** @type {'global' | 'strict' | 'lexical'} */
     this.thisMode = thisMode;
@@ -107,6 +127,8 @@ export class EngineFunction extends EngineObject {
     this.enclosingFunctionEnvironment = enclosingFunctionEnvironment;
     /** @type {FunctionBodyExecutor} */
     this._execute = execute;
+    /** @type {GeneratorFactory | undefined} */
+    this._generatorFactory = generatorFactory;
     /** @type {'base' | 'derived' | undefined} */
     this.constructorKind = constructorKind;
     /** @type {boolean} */
@@ -130,13 +152,19 @@ export class EngineFunction extends EngineObject {
     });
 
     if (createPrototype) {
-      const prototype = new EngineObject(realm.intrinsics.objectPrototype);
-      prototype.defineOwnProperty('constructor', {
-        value: this,
-        writable: true,
-        enumerable: false,
-        configurable: true,
-      });
+      const prototype = new EngineObject(
+        prototypeObjectPrototype ?? realm.intrinsics.objectPrototype,
+      );
+
+      if (functionKind !== 'generator' && functionKind !== 'generatorMethod') {
+        prototype.defineOwnProperty('constructor', {
+          value: this,
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        });
+      }
+
       this.defineOwnProperty('prototype', {
         value: prototype,
         writable: true,
@@ -199,6 +227,43 @@ export class EngineFunction extends EngineObject {
     }
 
     const functionEnvironment = this.functionExecutionEnvironment(thisValue);
+
+    if (
+      this.functionKind === 'generator' ||
+      this.functionKind === 'generatorMethod'
+    ) {
+      const generatorFactory = this._generatorFactory;
+
+      if (generatorFactory === undefined) {
+        throw new TypeError(
+          'Generator function is missing a generator factory',
+        );
+      }
+
+      const completion = this.executeWithFunctionEnvironment(
+        functionEnvironment.thisValue,
+        args,
+        functionEnvironment,
+        (functionObject, resolvedThisValue, receivedArgs, environment) => ({
+          type: 'return',
+          value: generatorFactory(
+            functionObject,
+            resolvedThisValue,
+            receivedArgs,
+            environment,
+          ),
+        }),
+      );
+
+      if (completion.type === 'return') {
+        return completion.value;
+      }
+
+      throw new TypeError(
+        'Generator factory returned an unexpected function completion',
+      );
+    }
+
     const completion = this.executeWithFunctionEnvironment(
       functionEnvironment.thisValue,
       args,
