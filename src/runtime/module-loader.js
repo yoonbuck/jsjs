@@ -23,6 +23,28 @@ import { isRealm } from './realm.js';
  */
 
 /**
+ * @typedef {{
+ *   receiver: any,
+ *   resolve: (
+ *     specifier: string,
+ *     referrer: string | null,
+ *   ) => string | PromiseLike<string>,
+ *   load: (
+ *     identifier: string,
+ *   ) => string | { sourceText: string } | PromiseLike<string | { sourceText: string }>,
+ * }} ModuleHostBindings
+ */
+
+/**
+ * @typedef {ModuleHostBindings & {
+ *   realm: import('./realm.js').Realm,
+ * }} ModuleLoaderBindings
+ */
+
+/** @type {WeakMap<ModuleLoader, ModuleLoaderBindings>} */
+const MODULE_LOADER_BINDINGS = new WeakMap();
+
+/**
  * Constructs a module loader bound to one Realm.
  *
  * @param {import('./realm.js').Realm} realm
@@ -45,8 +67,10 @@ export class ModuleLoader {
     if (!isRealm(realm)) {
       throw new TypeError('Expected realm to be a Realm');
     }
-    this.realm = realm;
-    this.host = validateModuleHost(host);
+    MODULE_LOADER_BINDINGS.set(
+      this,
+      Object.freeze({ realm, ...validateModuleHost(host) }),
+    );
     /** @type {Map<string, SourceTextModuleRecord>} */
     this.records = new Map();
     /** @type {Map<string, Map<string | null, Promise<string>>>} */
@@ -121,6 +145,7 @@ export async function loadModuleGraph(loader, specifier, referrer = null) {
  * @returns {Promise<string>}
  */
 function resolveModule(loader, specifier, referrer) {
+  const bindings = moduleLoaderBindings(loader);
   let byReferrer = loader.resolveInFlight.get(specifier);
   if (byReferrer === undefined) {
     byReferrer = new Map();
@@ -133,7 +158,7 @@ function resolveModule(loader, specifier, referrer) {
   }
 
   const resolution = Promise.resolve()
-    .then(() => loader.host.resolve(specifier, referrer))
+    .then(() => bindings.resolve.call(bindings.receiver, specifier, referrer))
     .then((identifier) => {
       if (typeof identifier !== 'string' || identifier.length === 0) {
         throw new TypeError('Module host resolve must return a non-empty string');
@@ -179,7 +204,13 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
   if (cycleOwner !== undefined && cycleOwner !== identifier) {
     const ownerGraph = loader.graphInFlight.get(cycleOwner);
     if (ownerGraph !== undefined) {
-      return ownerGraph;
+      return ownerGraph.then(() => {
+        const cyclicRecord = loader.records.get(identifier);
+        if (cyclicRecord === undefined) {
+          throw new Error('Expected parsed cyclic module record');
+        }
+        return cyclicRecord;
+      });
     }
   }
 
@@ -255,6 +286,7 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
  * @returns {Promise<SourceTextModuleRecord>}
  */
 function acquireSourceRecord(loader, identifier) {
+  const bindings = moduleLoaderBindings(loader);
   const cached = loader.records.get(identifier);
   if (cached !== undefined) {
     return Promise.resolve(cached);
@@ -280,7 +312,7 @@ function acquireSourceRecord(loader, identifier) {
       let result;
       loader.activeLoadIdentifiers.add(identifier);
       try {
-        result = loader.host.load(identifier);
+        result = bindings.load.call(bindings.receiver, identifier);
       } catch (error) {
         throw asModuleLoaderError('load', identifier, error);
       } finally {
@@ -299,7 +331,7 @@ function acquireSourceRecord(loader, identifier) {
         }
 
         const record = new SourceTextModuleRecord({
-          realm: loader.realm,
+          realm: bindings.realm,
           identifier,
           ast,
         });
@@ -319,7 +351,7 @@ function acquireSourceRecord(loader, identifier) {
 
 /**
  * @param {unknown} host
- * @returns {ModuleHost}
+ * @returns {ModuleHostBindings}
  */
 function validateModuleHost(host) {
   if (host === null || (typeof host !== 'object' && typeof host !== 'function')) {
@@ -327,14 +359,28 @@ function validateModuleHost(host) {
   }
 
   const candidate = /** @type {{ resolve?: unknown, load?: unknown }} */ (host);
-  if (
-    typeof candidate.resolve !== 'function' ||
-    typeof candidate.load !== 'function'
-  ) {
+  const { resolve, load } = candidate;
+  if (typeof resolve !== 'function' || typeof load !== 'function') {
     throw new TypeError('Expected module host resolve and load functions');
   }
 
-  return /** @type {ModuleHost} */ (host);
+  return Object.freeze({
+    receiver: host,
+    resolve: /** @type {ModuleHostBindings['resolve']} */ (resolve),
+    load: /** @type {ModuleHostBindings['load']} */ (load),
+  });
+}
+
+/**
+ * @param {ModuleLoader} loader
+ * @returns {ModuleLoaderBindings}
+ */
+function moduleLoaderBindings(loader) {
+  const bindings = MODULE_LOADER_BINDINGS.get(loader);
+  if (bindings === undefined) {
+    throw new TypeError('Expected loader to be a ModuleLoader');
+  }
+  return bindings;
 }
 
 /**

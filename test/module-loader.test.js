@@ -131,6 +131,84 @@ export default [
     },
   },
   {
+    name: 'loader keeps its original Realm after a Realm replacement attempt',
+    async run() {
+      const originalRealm = createRealm();
+      const replacementRealm = createRealm();
+      const loader = createModuleLoader(originalRealm, {
+        resolve() {
+          return 'm';
+        },
+        load() {
+          return 'export const x = 1;';
+        },
+      });
+
+      try {
+        /** @type {any} */ (loader).realm = replacementRealm;
+      } catch {}
+
+      const record = await loadModuleGraph(loader, 'm');
+      assertSame(record.realm === originalRealm, true);
+    },
+  },
+  {
+    name: 'loader keeps invoking its original hooks after host replacement attempts',
+    async run() {
+      /** @type {string[]} */
+      const originalCalls = [];
+      /** @type {string[]} */
+      const replacementCalls = [];
+      /**
+       * @type {{
+       *   resolve: (specifier: string, referrer: string | null) => string,
+       *   load: (identifier: string) => string,
+       * }}
+       */
+      const originalHost = {
+        resolve(specifier, referrer) {
+          originalCalls.push(`resolve:${this === originalHost}:${specifier}:${referrer}`);
+          return 'bound';
+        },
+        load(identifier) {
+          originalCalls.push(`load:${this === originalHost}:${identifier}`);
+          return 'export const x = 1;';
+        },
+      };
+      /**
+       * @type {{
+       *   resolve: (specifier: string, referrer: string | null) => string,
+       *   load: (identifier: string) => string,
+       * }}
+       */
+      const replacementHost = {
+        resolve() {
+          replacementCalls.push('resolve');
+          return 'replacement';
+        },
+        load() {
+          replacementCalls.push('load');
+          return 'export const replacement = 1;';
+        },
+      };
+      const loader = createModuleLoader(createRealm(), originalHost);
+
+      try {
+        /** @type {any} */ (loader).host = replacementHost;
+      } catch {}
+      originalHost.resolve = replacementHost.resolve;
+      originalHost.load = replacementHost.load;
+
+      const record = await loadModuleGraph(loader, 'raw');
+      assertSame(record.identifier, 'bound');
+      assertSame(
+        originalCalls.join(','),
+        'resolve:true:raw:null,load:true:bound',
+      );
+      assertSame(replacementCalls.join(','), '');
+    },
+  },
+  {
     name: 'loader shares a pending canonical source acquisition with concurrent callers',
     async run() {
       const source = deferred();
@@ -345,6 +423,48 @@ export default [
         loadModuleGraph(loader, 'a'),
         loadModuleGraph(loader, 'b'),
       ]);
+      assertSame(a.resolvedRequestedModules[0].module, b);
+      assertSame(b.resolvedRequestedModules[0].module, a);
+    },
+  },
+  {
+    name: 'loader returns the delayed concurrent cyclic B root record',
+    async run() {
+      const delayedBStarted = deferred();
+      /** @type {Promise<import('../src/runtime/module-record.js').SourceTextModuleRecord> | undefined} */
+      let delayedB;
+      let scheduledB = false;
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier, referrer) {
+          if (
+            specifier === 'a' &&
+            referrer === 'b' &&
+            scheduledB === false
+          ) {
+            scheduledB = true;
+            Promise.resolve().then(() => {
+              delayedB = loadModuleGraph(loader, 'b');
+              delayedBStarted.resolve();
+            });
+          }
+          return specifier;
+        },
+        load(identifier) {
+          return identifier === 'a'
+            ? 'import "b"; export const a = 1;'
+            : 'import "a"; export const b = 1;';
+        },
+      });
+
+      const aGraph = loadModuleGraph(loader, 'a');
+      await delayedBStarted.promise;
+      if (delayedB === undefined) {
+        throw new Error('Expected delayed B root graph');
+      }
+      const [a, b] = await Promise.all([aGraph, delayedB]);
+
+      assertSame(a.identifier, 'a');
+      assertSame(b.identifier, 'b');
       assertSame(a.resolvedRequestedModules[0].module, b);
       assertSame(b.resolvedRequestedModules[0].module, a);
     },

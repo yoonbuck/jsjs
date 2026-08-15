@@ -97,3 +97,37 @@ exit code 0
 ## Concerns
 
 None.
+
+## Fix round 1/5 — RED/GREEN evidence
+
+### RED (before production edits)
+
+```text
+$ node test/run-node.js test/module-loader.test.js
+{"name":"loader keeps its original Realm after a Realm replacement attempt","status":"failed","error":{"name":"Error","message":"Expected false to be the same value as true"}}
+{"name":"loader keeps invoking its original hooks after host replacement attempts","status":"failed","error":{"name":"Error","message":"Expected \"replacement\" to be the same value as \"bound\""}}
+{"name":"loader returns the delayed concurrent cyclic B root record","status":"failed","error":{"name":"Error","message":"Expected \"a\" to be the same value as \"b\""}}
+exit code 1
+```
+
+### GREEN
+
+```text
+$ node test/run-node.js test/module-loader.test.js && node test/run-node.js test/module-parser.test.js
+{"name":"loader keeps its original Realm after a Realm replacement attempt","status":"passed"}
+{"name":"loader keeps invoking its original hooks after host replacement attempts","status":"passed"}
+{"name":"loader returns the delayed concurrent cyclic B root record","status":"passed"}
+24 module-loader results passed; 7 module-parser results passed.
+exit code 0
+
+$ npm run typecheck && npm run lint
+> typecheck
+> tsc -p jsconfig.json
+
+> lint
+> ESLINT_USE_FLAT_CONFIG=true eslint .
+exit code 0
+
+$ npm run test:node
+exit code 0
+```
