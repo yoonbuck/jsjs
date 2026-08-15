@@ -225,7 +225,7 @@ Run:
 ```bash
 npx prettier --write tools/test262/es5-selection.json
 npm run test262:select
-npm run test262:upstream
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
 npm run ci:generate
 ```
 

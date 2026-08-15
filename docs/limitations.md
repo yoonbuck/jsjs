@@ -336,9 +336,10 @@ It is therefore selected rather than excluded, because in the UTC environment CI
 validates in the engine genuinely satisfies it. So that the committed report and
 coverage table stay a pure function of the engine rather than of the contributor's
 clock, `npm run test262:upstream` refuses to run outside UTC and prints the
-`TZ=UTC npm run test262:upstream` invocation to use instead; CI pins the same
-`TZ=UTC`. This is the one file whose result would otherwise move with the host
-zone, so pinning the zone is enough to make the artifacts reproducible.
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`
+invocation to use instead; CI pins the same broad Node environment. This is the
+one file whose result would otherwise move with the host zone, so pinning the
+zone is enough to make the artifacts reproducible.
 
 ### Number-to-string and string-to-number use the host's algorithms
 

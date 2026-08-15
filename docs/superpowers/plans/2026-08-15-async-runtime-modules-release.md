@@ -574,9 +574,9 @@ Expected: the check reports the generated subset is current. Review every newly 
 Run:
 
 ```bash
-TZ=UTC npm run test262:upstream
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
 TZ=UTC npm run test262:exclusions:check
-TZ=UTC npm run test262:upstream:check
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check
 ```
 
 Expected: zero failures, zero stale exclusions, and current generated files. If a newly admitted path fails, classify whether the policy overclaimed it or the merged implementation has a focused integration bug. Narrow an overclaim with a reviewed policy fix; route a substantial missing feature out of release.
@@ -588,7 +588,7 @@ Save hashes, rerun generation, and compare:
 ```bash
 shasum -a 256 tools/test262/upstream-subset.json docs/test262-report.jsonl docs/conformance.md
 TZ=UTC npm run test262:select
-TZ=UTC npm run test262:upstream
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
 shasum -a 256 tools/test262/upstream-subset.json docs/test262-report.jsonl docs/conformance.md
 git diff --check
 ```
@@ -616,7 +616,7 @@ Run:
 
 ```bash
 TZ=UTC npm run test262:select:check
-TZ=UTC npm run test262:upstream:check
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check
 npm run format
 ```
 
@@ -650,7 +650,7 @@ npm run lint
 npm run typecheck
 npm run ci:check
 TZ=UTC npm run test262:select:check
-TZ=UTC npm run test262:upstream:check
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check
 npm run test262:exclusions:check
 ```
 

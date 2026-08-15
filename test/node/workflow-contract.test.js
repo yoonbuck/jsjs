@@ -64,6 +64,8 @@ import {
   ASYNC_RUNTIME_RELEASE_MANIFEST,
   ASYNC_RUNTIME_RELEASE_MANIFEST_FILE,
 } from '../../tools/test262/async-runtime-release-manifest.js';
+import { assertPinnedCheckout } from '../../tools/test262/upstream-run.js';
+import * as ciPipeline from '../../tools/ci/pipeline.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
@@ -503,9 +505,9 @@ export default [
         'the heap allowance must not be job-global',
       );
       assertSame(
-        JSON.stringify(Object.keys(runStep.env ?? {}).sort()),
-        '["NODE_OPTIONS","TZ"]',
-        'the broad execution step must have exactly NODE_OPTIONS and TZ',
+        JSON.stringify(runStep.env),
+        JSON.stringify(ciPipeline.TEST262_UPSTREAM_ENVIRONMENT),
+        'the generated broad execution step must use the authoritative Test262 environment',
       );
       assertSame(
         runStep.env.NODE_OPTIONS,
@@ -513,6 +515,81 @@ export default [
         'the broad execution step must use the proven 4096 MiB heap allowance',
       );
       assertSame(runStep.env.TZ, 'UTC');
+    },
+  },
+  {
+    name: 'the broad Test262 environment helper scopes heap and UTC to broad npm scripts',
+    run: () => {
+      const base = Object.freeze({
+        PATH: '/contract/bin',
+        NODE_OPTIONS: '--trace-warnings',
+        TZ: 'America/Los_Angeles',
+      });
+      const environmentForScript = ciPipeline.environmentForTest262NpmScript;
+
+      assertSame(
+        typeof environmentForScript,
+        'function',
+        'the full contract needs a testable broad-script environment helper',
+      );
+
+      for (const script of ['test262:upstream', 'test262:upstream:check']) {
+        const environment = environmentForScript(script, base);
+
+        assertSame(environment.PATH, base.PATH);
+        assertSame(environment.NODE_OPTIONS, '--max-old-space-size=4096');
+        assertSame(environment.TZ, 'UTC');
+      }
+
+      assertSame(
+        environmentForScript('format', base),
+        base,
+        'unrelated commands must not receive a globally modified environment',
+      );
+    },
+  },
+  {
+    name: 'upstream checkout diagnostics print the exact heap and UTC remediation command',
+    run: async () => {
+      /** @type {unknown} */
+      let error;
+
+      try {
+        await assertPinnedCheckout({
+          repository: 'https://github.com/tc39/test262.git',
+          revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
+          checkoutPath: 'vendor/missing-test262-contract-checkout',
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      assertSame(error instanceof Error, true);
+      assertSame(
+        error instanceof Error &&
+          error.message.includes(
+            'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream',
+          ),
+        true,
+        `missing-checkout remediation was:\n${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    },
+  },
+  {
+    name: 'limitations document gives the exact heap and UTC broad Test262 command',
+    run: async () => {
+      const limitations = await readRepositoryFile('docs/limitations.md');
+      const exact =
+        'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream';
+
+      assertSame(limitations.includes(exact), true);
+      assertSame(
+        limitations.includes('`TZ=UTC npm run test262:upstream`'),
+        false,
+        'the documented broad remediation must not omit the heap allowance',
+      );
     },
   },
   {

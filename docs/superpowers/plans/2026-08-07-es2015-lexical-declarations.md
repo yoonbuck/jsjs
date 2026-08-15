@@ -514,9 +514,9 @@ Then, in order:
    check still reports as `failed`; if its recorded reason is now wrong,
    rewrite the reason instead.
 2. `npm run test262:select` to regenerate `tools/test262/upstream-subset.json`.
-3. `npm run test262:upstream` to regenerate `docs/test262-report.jsonl` and the
+3. `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` to regenerate `docs/test262-report.jsonl` and the
    generated coverage block in `docs/conformance.md`.
-4. `npm run test262:select:check`, `npm run test262:upstream:check`, and
+4. `npm run test262:select:check`, `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`, and
    `npm run test262:exclusions:check` must all pass afterwards.
 
 Every newly selected test that _fails_ is a real conformance defect or a
@@ -554,5 +554,5 @@ Then run, and report the result of each: `npm run format`, `npm run lint`,
 `npm run typecheck`, `npm run test:node`, `npm run test262:fixtures`,
 `npm run test:browser`, `npm run test:jsc` (report it as unavailable if the
 `jsc` binary is absent rather than reporting a pass), `npm run ci:check`,
-`npm run test262:select:check`, `npm run test262:upstream:check`,
+`npm run test262:select:check`, `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`,
 `npm run test262:exclusions:check`, and `npm run ci:contract`.

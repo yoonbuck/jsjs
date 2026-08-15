@@ -24,7 +24,11 @@ import { assertSame } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
 import { parseTest262Metadata } from '../../tools/test262/metadata.js';
 import { runTest262File } from '../../tools/test262/runner.js';
-import { TEST262_REPORT_FILE } from '../../tools/ci/pipeline.js';
+import {
+  TEST262_REPORT_FILE,
+  environmentForTest262NpmScript,
+  formatTest262UpstreamCommand,
+} from '../../tools/ci/pipeline.js';
 import {
   ES5_SELECTION_FILE,
   isStructurallyEligiblePath,
@@ -234,17 +238,15 @@ function readRepositoryFile(path) {
  * @param {string} command
  * @param {readonly string[]} args
  * @param {string} [hint] Appended to the failure message.
+ * @param {Readonly<Record<string, string | undefined>>} [env]
  * @returns {string} stdout
  */
-function run(command, args, hint) {
+function run(command, args, hint, env = process.env) {
   const result = spawnSync(command, [...args], {
     cwd: REPOSITORY_ROOT_PATH,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    // Pin the time zone to UTC so the generated Test262 artifacts are a pure
-    // function of the engine and the pinned tree, matching the CI environment
-    // regardless of the contributor's local zone (see assertUtcTimeZone).
-    env: { ...process.env, TZ: 'UTC' },
+    env,
   });
 
   if (result.error !== undefined) {
@@ -272,7 +274,12 @@ function run(command, args, hint) {
  * @returns {string}
  */
 function npmRun(script, hint) {
-  return run('npm', ['run', '--silent', script], hint);
+  return run(
+    'npm',
+    ['run', '--silent', script],
+    hint,
+    environmentForTest262NpmScript(script, process.env),
+  );
 }
 
 /**
@@ -391,7 +398,7 @@ function npmRunExpectingFailure(script) {
     cwd: REPOSITORY_ROOT_PATH,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, TZ: 'UTC' },
+    env: environmentForTest262NpmScript(script, process.env),
   });
 
   if (result.error !== undefined) {
@@ -954,7 +961,7 @@ export default [
       assertSame(
         committedReport,
         report,
-        `${TEST262_REPORT_FILE} is stale; run npm run test262:upstream`,
+        `${TEST262_REPORT_FILE} is stale; run ${formatTest262UpstreamCommand()}`,
       );
       assertSame(
         stdout.includes(TEST262_REPORT_FILE),
@@ -1111,7 +1118,7 @@ export default [
       assertSame(
         committedCoverageDoc,
         coverageDoc,
-        `${COVERAGE_DOCUMENT_FILE} is stale; run npm run test262:upstream`,
+        `${COVERAGE_DOCUMENT_FILE} is stale; run ${formatTest262UpstreamCommand()}`,
       );
 
       const block = readGeneratedBlock(coverageDoc);

@@ -37,7 +37,10 @@ import { createNodeTest262Host } from './adapters/node.js';
 import { createJsjsTest262Engine } from './engine.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
-import { TEST262_REPORT_FILE } from '../ci/pipeline.js';
+import {
+  TEST262_REPORT_FILE,
+  formatTest262UpstreamCommand,
+} from '../ci/pipeline.js';
 import {
   FEATURES_MANIFEST_FILE,
   featureNames,
@@ -135,6 +138,8 @@ function checkoutHint(pin) {
     'Check the pinned upstream tree out first:',
     `  git clone --filter=blob:none ${pin.repository} ${pin.checkoutPath}`,
     `  git -C ${pin.checkoutPath} checkout ${pin.revision}`,
+    'Then run:',
+    `  ${formatTest262UpstreamCommand()}`,
   ].join('\n');
 }
 
@@ -202,8 +207,8 @@ export function assertUtcTimeZone() {
       `The Test262 report must be generated under UTC, but this process is running in ${zone}.`,
       'Some selected tests read the host time-zone offset, so a non-UTC run writes',
       'artifacts that disagree with the UTC CI run and its byte-for-byte drift check.',
-      'Re-run with the time zone pinned to UTC, exactly as CI does:',
-      '  TZ=UTC npm run test262:upstream',
+      'Re-run with the broad Node environment pinned exactly as CI does:',
+      `  ${formatTest262UpstreamCommand()}`,
     ].join('\n'),
   );
 }
@@ -274,7 +279,9 @@ export async function main(argv = []) {
 
   if (stale.length > 0) {
     process.stderr.write(
-      `${stale.join('\n')}\n${stale.length} generated file(s) are stale; run npm run test262:upstream\n`,
+      `${stale.join('\n')}\n${
+        stale.length
+      } generated file(s) are stale; run ${formatTest262UpstreamCommand()}\n`,
     );
 
     return 1;

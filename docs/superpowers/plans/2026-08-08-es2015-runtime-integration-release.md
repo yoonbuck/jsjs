@@ -324,7 +324,7 @@ Run:
 
 ```bash
 TZ=UTC npm run test262:select
-TZ=UTC npm run test262:upstream
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
 ```
 
 Expected: selection, report, and generated coverage complete successfully.
@@ -335,7 +335,7 @@ Run:
 
 ```bash
 TZ=UTC npm run test262:select:check
-TZ=UTC npm run test262:upstream:check
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check
 npm run test262:exclusions:check
 git --no-pager diff --check
 ```
@@ -389,7 +389,7 @@ Expected: all three report the same portable suite/test totals and zero failures
 
 ```bash
 TZ=UTC npm run test262:fixtures
-TZ=UTC npm run test262:upstream:check
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check
 npm run test262:exclusions:check
 npm run ci:check
 npm run ci:contract

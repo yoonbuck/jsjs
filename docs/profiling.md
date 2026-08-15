@@ -528,8 +528,8 @@ PATH="/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptC
 npm run test262:fixtures
 npm run test262:select
 npm run test262:select:check
-npm run test262:upstream
-npm run test262:upstream:check
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
+NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check
 npm run test262:exclusions:check
 npm run typecheck
 npm run lint

@@ -79,6 +79,48 @@ export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
 export { COVERAGE_DOCUMENT_FILE };
 
 /**
+ * The exact process environment required by broad pinned Test262 runs.
+ *
+ * This is Node tooling policy, not engine/runtime policy: keeping it here lets
+ * the generated workflow, local CI contract, and diagnostics share one value
+ * without introducing host assumptions into portable engine modules.
+ */
+export const TEST262_UPSTREAM_ENVIRONMENT = Object.freeze({
+  NODE_OPTIONS: '--max-old-space-size=4096',
+  TZ: 'UTC',
+});
+
+/**
+ * Adds the broad Test262 environment only for scripts that execute that broad
+ * run. Returning the original environment for every other script makes it
+ * impossible for the local full-contract helper to leak these settings into
+ * unrelated commands.
+ *
+ * @param {string} script
+ * @param {Readonly<Record<string, string | undefined>>} environment
+ * @returns {Readonly<Record<string, string | undefined>>}
+ */
+export function environmentForTest262NpmScript(script, environment) {
+  if (script !== 'test262:upstream' && script !== 'test262:upstream:check') {
+    return environment;
+  }
+
+  return { ...environment, ...TEST262_UPSTREAM_ENVIRONMENT };
+}
+
+/**
+ * Formats the copy-pasteable broad command used in diagnostics and docs.
+ *
+ * @param {string} [script]
+ * @returns {string}
+ */
+export function formatTest262UpstreamCommand(script = 'test262:upstream') {
+  return `${Object.entries(TEST262_UPSTREAM_ENVIRONMENT)
+    .map(([name, value]) => `${name}=${value}`)
+    .join(' ')} npm run ${script}`;
+}
+
+/**
  * The command that fails CI when the committed report or the coverage
  * document's generated block no longer matches what the run just produced. It
  * follows the run in the same job, so it compares a freshly written tree
@@ -366,10 +408,11 @@ export function createCiJobs(test262) {
           'Check the ES5 selection is current',
           'npm run test262:select:check',
         ),
-        runStep('Run the pinned Test262 subset', 'npm run test262:upstream', {
-          NODE_OPTIONS: '--max-old-space-size=4096',
-          TZ: 'UTC',
-        }),
+        runStep(
+          'Run the pinned Test262 subset',
+          'npm run test262:upstream',
+          TEST262_UPSTREAM_ENVIRONMENT,
+        ),
         runStep(
           'Check for stale exclusions',
           'npm run test262:exclusions:check',
