@@ -1531,11 +1531,12 @@ export default [
     },
   },
   {
-    name: 'layer-1 Agent Jobs and Promise documentation publishes its stable boundary',
+    name: 'published Agent Jobs, Promise, and synchronous generator documentation preserves layer boundaries',
     run: async () => {
       const readme = await readSource('README.md');
       const testing = await readSource('docs/testing.md');
       const conformance = await readSource('docs/conformance.md');
+      const normalizedReadme = readme.replace(/\s+/gu, ' ').trim();
 
       assertSame(
         readme.includes('realm.agent.runJobs()'),
@@ -1615,18 +1616,60 @@ export default [
         );
       }
 
-      for (const [file, source] of [
-        ['README.md', readme],
-        ['docs/testing.md', testing],
-        ['docs/conformance.md', conformance],
-      ]) {
-        assertSame(
-          /\b(?:implements|supports)\b[^\n]*\b(?:generators?|modules?)\b/iu.test(
-            source,
-          ),
-          false,
-          `${file} must not claim generators or modules are implemented`,
-        );
+      assertSame(
+        /\bengine implements ES5\.1 plus ES2015\b[^.]*\.\s+It also implements synchronous generator declarations\b/iu.test(
+          normalizedReadme,
+        ),
+        true,
+        'README must affirm the synchronous ES2015 generator implementation after prose normalization',
+      );
+      assertSame(
+        /\bengine still rejects async functions\/generators and `await`, modules\b/iu.test(
+          normalizedReadme,
+        ),
+        true,
+        'README must retain the async function, async generator, and module exclusions',
+      );
+      assertSame(
+        /\bfocused generator coverage\b[^.]*\bwithout broadening the global feature manifest or regenerated coverage artifacts\b/iu.test(
+          normalizedReadme,
+        ),
+        true,
+        'README must keep focused generator coverage separate from broad feature-manifest and report integration',
+      );
+
+      const documentedBoundaries = [
+        ['README.md', normalizedReadme],
+        ['docs/testing.md', testing.replace(/\s+/gu, ' ').trim()],
+        ['docs/conformance.md', conformance.replace(/\s+/gu, ' ').trim()],
+      ];
+      /** @type {Array<[string, RegExp]>} */
+      const forbiddenClaims = [
+        [
+          'async functions or generators are implemented',
+          /\b(?:implements|supports)\b[^.]*\basync (?:functions?|generators?|iteration)\b/iu,
+        ],
+        [
+          'modules or module loading are implemented',
+          /\b(?:implements|supports|loads?)\b[^.]*\b(?:modules?|module (?:loading|loaders?)|dynamic import)\b/iu,
+        ],
+        [
+          'generators are integrated into the broad feature manifest or generated report',
+          /\b(?:generators?|generator coverage)\b[^.]*?(?<!not )(?<!without )\b(?:add(?:ed|s|ing)?|integrat(?:e|ed|es|ing)|broaden(?:ed|s|ing)?|regenerat(?:e|ed|es|ing))\b[^.]*\b(?:global feature manifest|broad (?:coverage )?report|generated coverage (?:report|artifacts?))\b|\b(?:global feature manifest|broad (?:coverage )?report|generated coverage (?:report|artifacts?))\b[^.]*?(?<!not )(?<!without )\b(?:includes?|integrates?|publishes?)\b[^.]*\bgenerators?\b/iu,
+        ],
+        [
+          'generator work completes the final release',
+          /\b(?:generator (?:support|implementation)|Layer-2)\b[^.]*\b(?:is )?(?:complete|completed|final|finalized|release-ready)\b|\bfinal release\b[^.]*\bgenerators?\b/iu,
+        ],
+      ];
+      for (const [claim, pattern] of forbiddenClaims) {
+        for (const [file, source] of documentedBoundaries) {
+          assertSame(
+            pattern.test(source),
+            false,
+            `${file} must not claim ${claim}`,
+          );
+        }
       }
     },
   },
