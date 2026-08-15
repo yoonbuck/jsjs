@@ -13,22 +13,67 @@ import {
   scanFrontmatter,
 } from './es5-selection.js';
 
+const GENERATOR_EXPANSION_FEATURE = 'generators';
+
 /**
- * Whether a source parses under the engine's supported grammar. Selection asks
- * only the yes/no question, so parse failure is a non-candidate rather than a
- * generator failure.
+ * Whether a source parses under the grammar enabled for broad selection.
+ * Production parsing may widen before the corresponding Test262 expansion is
+ * ready, so generator syntax remains outside this boundary until the policy
+ * explicitly enables it. Parse failure is a non-candidate rather than a
+ * selection failure.
  *
  * @param {string} source
+ * @param {import('./es5-selection.js').Es5SelectionPolicy} policy
  * @returns {boolean}
  */
-export function parsesUnderEngineGrammar(source) {
+export function parsesUnderEngineGrammar(source, policy) {
   try {
-    parseScript(source);
+    const program = parseScript(source);
 
-    return true;
+    return (
+      policy.expansionFeatures.includes(GENERATOR_EXPANSION_FEATURE) ||
+      !containsGeneratorSyntax(program)
+    );
   } catch {
     return false;
   }
+}
+
+/**
+ * Detects generator syntax in a trusted Acorn AST without retaining a host call
+ * stack proportional to source depth.
+ *
+ * @param {any} program
+ * @returns {boolean}
+ */
+function containsGeneratorSyntax(program) {
+  const worklist = [program];
+
+  while (worklist.length > 0) {
+    const node = worklist.pop();
+
+    if (node.generator === true || node.type === 'YieldExpression') {
+      return true;
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'loc' || value === null || typeof value !== 'object') {
+        continue;
+      }
+
+      if (Array.isArray(value)) {
+        for (const element of value) {
+          if (element !== null && typeof element === 'object') {
+            worklist.push(element);
+          }
+        }
+      } else {
+        worklist.push(value);
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -62,7 +107,7 @@ export async function selectPaths(options) {
       declaresFeatures: frontmatter.hasFeatures,
       features: frontmatter.features,
       isModule: frontmatter.isModule,
-      parsesUnderEngineGrammar: parsesUnderEngineGrammar(source),
+      parsesUnderEngineGrammar: parsesUnderEngineGrammar(source, policy),
       includesParseUnderEngineGrammar: frontmatter.includes.every(
         (name) => harnessParsing.get(name) !== false,
       ),
