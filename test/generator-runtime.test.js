@@ -145,6 +145,10 @@ const tests = [
         false,
         true,
       );
+      assertSame(
+        generatorFunctionPrototype.getPrototype(),
+        realm.intrinsics.functionPrototype,
+      );
       assertDataDescriptor(
         generatorFunctionPrototype,
         toStringTag,
@@ -189,6 +193,46 @@ const tests = [
       assertSame(
         generatorPrototype.getPrototype(),
         realm.intrinsics.iteratorPrototype,
+      );
+    },
+  },
+  {
+    name: 'GeneratorFunction.prototype is an ordinary non-callable non-constructible object',
+    run() {
+      const realm = createRealm();
+
+      assertSame(
+        evalValue(
+          realm,
+          `
+            (function () {
+              function* sample() {}
+              var prototype = sample.constructor.prototype;
+              var callError;
+              var constructError;
+
+              try {
+                prototype();
+              } catch (error) {
+                callError = error.name;
+              }
+
+              try {
+                new prototype();
+              } catch (error) {
+                constructError = error.name;
+              }
+
+              return [
+                typeof prototype,
+                Object.getPrototypeOf(prototype) === Function.prototype,
+                callError,
+                constructError
+              ].join(':');
+            })();
+          `,
+        ),
+        'object:true:TypeError:TypeError',
       );
     },
   },

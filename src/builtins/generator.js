@@ -1,5 +1,6 @@
 import { EngineObject } from '../runtime/object.js';
 import { GeneratorObject } from '../runtime/generator-object.js';
+import { createDynamicFunction } from '../evaluator/dynamic-function.js';
 import {
   GuestErrorSignal,
   createNormalCompletion,
@@ -43,17 +44,11 @@ export function createGeneratorIntrinsics(realm) {
     name: 'GeneratorFunction',
     length: 1,
     prototype: generatorFunctionPrototype,
-    call() {
-      throw new GuestErrorSignal(
-        'TypeError',
-        'Dynamic GeneratorFunction construction is not implemented',
-      );
+    call(_thisValue, args, functionObject) {
+      return createDynamicFunction(functionObject.realm, args, 'generator');
     },
-    construct() {
-      throw new GuestErrorSignal(
-        'TypeError',
-        'Dynamic GeneratorFunction construction is not implemented',
-      );
+    construct(args, functionObject) {
+      return createDynamicFunction(functionObject.realm, args, 'generator');
     },
   });
   const functionConstructor = realm.intrinsics.functionConstructor;

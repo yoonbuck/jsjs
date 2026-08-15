@@ -86,6 +86,7 @@ import functionRealm from './function-realm.test.js';
 import promiseCore from './promise-core.test.js';
 import promiseReactions from './promise-reactions.test.js';
 import promiseCombinators from './promise-combinators.test.js';
+import generatorFunction from './generator-function.test.js';
 import generatorRuntime from './generator-runtime.test.js';
 import generatorYield from './generator-yield.test.js';
 import generatorStack from './generator-stack.test.js';
@@ -360,6 +361,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/promise-combinators.test.js',
     tests: promiseCombinators,
+  }),
+  Object.freeze({
+    file: 'test/generator-function.test.js',
+    tests: generatorFunction,
   }),
   Object.freeze({
     file: 'test/generator-runtime.test.js',
