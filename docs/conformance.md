@@ -92,10 +92,11 @@ with `TZ=UTC`.
 
 ### Layer-1 exclusions
 
-The Layer-1 boundary remains: generators are not implemented by this layer.
-Synchronous generators are the separate Layer-2 contract below. Async functions,
-async generators and iteration, dynamic import, broad Test262 selection
-expansion, and regenerated broad Test262 coverage artifacts remain outside Layer 1.
+The Layer-1 boundary remains: synchronous generators belong to Layer 2, and
+static modules belong to Layer 3. The Test262 `async` flag here covers only the
+runner's `$DONE` completion protocol. Async functions, async generators and
+iteration, and dynamic import remain unsupported throughout the released
+surface.
 
 ## Layer 2: Synchronous generators
 
@@ -159,21 +160,20 @@ executing Realm's Agent when boxed. This permits cross-Agent delegation while
 preserving a foreign `done: false` result unchanged; results created by the
 outer generator remain in its Realm.
 
-### Focused pinned Test262 coverage and exclusions
+### Pinned Test262 coverage and exclusions
 
-`test/ci/es2015-generator-test262.test.js` runs 11 pinned files (22
-strict/non-strict records) covering dynamic construction, intrinsic
-`@@toStringTag`, consecutive and reentrant resumes, suspended-start abrupt
-resumes, catch/finally injection, and computed object/class generator methods.
-At revision `b363f29d3c43c626dc852744ad64a0b48a003693`, every record passes with
-zero failures and zero skips under `TZ=UTC`.
+`test/ci/es2015-generator-test262.test.js` reads its exact roots from
+`tools/test262/async-runtime-release-manifest.js`. They cover dynamic
+construction, intrinsic `@@toStringTag`, consecutive and reentrant resumes,
+suspended-start abrupt resumes, catch/finally injection, and computed
+object/class generator methods.
 
-This suite passes only `generators`, `Symbol.iterator`, and
-`Symbol.toStringTag` as its local supported-feature set. It does not add
-`generators` to `tools/test262/features.json`, enter the broad selection, or
-regenerate `docs/test262-report.jsonl` or this document's generated coverage
-block. Async functions/generators and iteration, dynamic import, and
-post-ES2015 iterator/generator helper APIs remain unsupported.
+The approved generator roots are both focused release coverage and the complete
+generator contribution to the generated broad selection. Their structured
+policy admits only those exact roots and adds `generators` to the broad feature
+manifest; it does not admit neighboring generator tests. Async functions,
+async generators and iteration, dynamic import, and post-ES2015
+iterator/generator helper APIs remain unsupported.
 
 ## Layer 3: Static modules and focused Test262
 
@@ -192,10 +192,11 @@ contract violation, never claimed diagnosed; different identifiers remain
 allowed.
 
 `TZ=UTC npm run test262:modules` runs the focused fixed module roots from the
-exact pinned checkout. Its explicit `Symbol.toStringTag` allowlist is local to
-the suite; Test262's `module` flag supplies module metadata, so no bare module
-feature probe is added. This focused check does not broaden the generated
-selection, global feature manifest, or report/coverage artifacts.
+exact pinned checkout, and the same suite participates in the combined release
+gate below. Its explicit `Symbol.toStringTag` allowlist is local to the suite.
+Test262's `module` flag supplies module metadata, not a feature name, so no bare
+module feature probe is added. The module roots remain focused-only and do not
+enter the generated broad selection.
 
 Fixtures deliberately stay inside what the engine implements today: `var`,
 `let`, `const`, function declarations and expressions, object and array literals
@@ -275,6 +276,23 @@ property, so every ES5 tag and conversion is unchanged. `@@iterator` is honoured
 too, driving the ES2015 iteration protocol (yoonbuck/jsjs#47). The other eight
 well-known symbols are defined values whose protocols are not yet honoured —
 see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only-toprimitive-tostringtag-and-iterator-are-honoured).
+
+## Layer 4: Integrated pinned release and broad evidence
+
+`TZ=UTC npm run test262:es2015-release` is the combined focused gate against the
+exact pinned checkout. It runs the Promise, generator, and module suites in
+`test/ci/`, with their roots and local feature allowlists owned by
+`tools/test262/async-runtime-release-manifest.js`. Promise roots, including
+records carrying the `async` flag, and module roots remain focused-only. The
+generator roots remain focused too, and exactly the 11 approved roots also
+enter the generated broad selection.
+
+Test262's `async` and `module` metadata are flags, not feature names: `async`
+selects the `$DONE` runner protocol, while `module` selects module parsing and
+loading. Neither invents a broad feature probe. The UTC
+`test262:upstream`/`test262:upstream:check` pair owns the broad report and
+generated coverage block. Unsupported async functions, async generators and
+iteration, and dynamic import remain excluded from both release paths.
 
 ## How the ES5 selection is derived
 
@@ -401,8 +419,10 @@ runs successfully, so neither exception claims its missing neighboring feature.
 The manifest claims `const`, `for-of`, `let`, Symbol and its well-known tags,
 plus `arrow-function`, `class`, `computed-property-names`,
 `default-parameters`, `destructuring-assignment`, `destructuring-binding`,
-`rest-parameters`, `spread-syntax`, and `template`. Every other tag is
-unclaimed and a test that declares one is skipped rather than run.
+`generators`, `rest-parameters`, `spread-syntax`, and `template`. Test262's
+`async` and `module` metadata are flags rather than feature names, so neither
+appears in this manifest. Every other tag is unclaimed and a test that declares
+one is skipped rather than run.
 
 The manifest and the selection policy's feature areas are deliberately two
 different gates. The manifest decides which tags may _run_; a feature area
@@ -561,8 +581,8 @@ remaining unsupported class-field and Unicode/legacy-escape forms.
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 14,096   | 14,096    | 14,096 | 26.311% |
-| (file, variant) | 102,908     | 26,836   | 26,836    | 26,836 | 26.078% |
+| Files           | 53,575      | 14,107   | 14,107    | 14,107 | 26.331% |
+| (file, variant) | 102,908     | 26,858   | 26,858    | 26,858 | 26.099% |
 
 3 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
@@ -582,8 +602,8 @@ The selected subset is deterministic and the required UTC upstream job verifies
 every selected path with this engine. Its whole-suite percentage is an honest
 statement of how much of Test262 an engine at this language level — ES5.1 plus
 ES2015 lexical declarations, iteration, the supported syntax forms, and
-Symbols — has been pointed at, not a pass rate over tests it was never asked to
-run.
+Symbols and the approved generator roots — has been pointed at, not a pass rate
+over tests it was never asked to run.
 
 ## Policy artifacts
 
