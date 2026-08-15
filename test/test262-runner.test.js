@@ -9,6 +9,7 @@ import {
 } from '../tools/test262/metadata.js';
 import {
   DEFAULT_INCLUDES,
+  UNSUPPORTED_FLAGS,
   decideSkip,
   runTest262,
   runTest262Suite,
@@ -453,14 +454,71 @@ export default [
     },
   },
   {
-    name: 'metadata rejects module plus async without focused pinned evidence',
+    name: 'metadata accepts the valid module plus async flag combination',
     run: () => {
-      assertThrows(
-        () =>
-          parseTest262Metadata(
+      const metadata = parseTest262Metadata(
+        '/*---\ndescription: unsupported async module\nflags: [module, async]\n---*/\n',
+      );
+
+      assertSame(JSON.stringify(metadata.flags), '["module","async"]');
+      assertSame(
+        JSON.stringify(UNSUPPORTED_FLAGS),
+        '["CanBlockIsFalse","CanBlockIsTrue","non-deterministic"]',
+      );
+    },
+  },
+  {
+    name: 'the runner skips module plus async before invoking engine hooks',
+    run: async () => {
+      let engineHooks = 0;
+      const metadata = parseTest262Metadata(
+        '/*---\ndescription: unsupported async module\nflags: [module, async]\n---*/\n',
+      );
+      const decision = decideSkip(metadata);
+
+      assertSame(decision?.reason, 'unsupported-flag-combination');
+      assertSame(
+        decision?.message,
+        'unsupported flag combination: module and async',
+      );
+
+      const { records } = await runTest262Suite({
+        engine: {
+          createRealm() {
+            engineHooks += 1;
+            throw new Error('createRealm must not run');
+          },
+          evaluateScript() {
+            engineHooks += 1;
+            throw new Error('evaluateScript must not run');
+          },
+          async evaluateModule() {
+            engineHooks += 1;
+            throw new Error('evaluateModule must not run');
+          },
+          installDone() {
+            engineHooks += 1;
+            throw new Error('installDone must not run');
+          },
+          runJobs() {
+            engineHooks += 1;
+            throw new Error('runJobs must not run');
+          },
+        },
+        host: createMemoryHost({
+          'module-async.js':
             '/*---\ndescription: unsupported async module\nflags: [module, async]\n---*/\n',
-          ),
-        Test262MetadataError,
+        }),
+        paths: ['module-async.js'],
+      });
+
+      assertSame(engineHooks, 0);
+      assertSame(records.length, 1);
+      assertSame(records[0].status, 'skipped');
+      assertSame(records[0].reason, 'unsupported-flag-combination');
+      assertSame(
+        records[0].message,
+        'unsupported flag combination: module and async',
       );
     },
   },

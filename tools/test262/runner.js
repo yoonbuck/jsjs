@@ -131,6 +131,14 @@ const STRICT_DIRECTIVE = '"use strict";\n';
 export function decideSkip(metadata, options = {}) {
   const supportedFeatures = options.supportedFeatures ?? [];
   const skipFeatures = options.skipFeatures ?? [];
+
+  if (metadata.flags.includes('module') && metadata.flags.includes('async')) {
+    return {
+      reason: 'unsupported-flag-combination',
+      message: 'unsupported flag combination: module and async',
+    };
+  }
+
   const flag = metadata.flags.find((name) => UNSUPPORTED_FLAGS.includes(name));
 
   if (flag !== undefined) {

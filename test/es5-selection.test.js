@@ -917,6 +917,39 @@ export default [
     },
   },
   {
+    name: 'an exact-file feature area never matches a descendant path',
+    run: () => {
+      const exactPath = 'test/built-ins/Array/exact.js';
+      const policy = parseEs5Selection(
+        policyText({
+          expansionFeatures: ['class'],
+          featureAreas: [
+            {
+              prefix: exactPath,
+              features: ['class'],
+              reason: 'Only the exact pinned file is approved.',
+            },
+          ],
+        }),
+      );
+
+      assertSame(
+        isCandidatePath(
+          `${exactPath}/descendant.js`,
+          {
+            ...CANDIDATE_INFO,
+            declaresFeatures: true,
+            features: ['class'],
+          },
+          policy,
+          new Set(),
+        ),
+        false,
+        'a .js feature area is an exact path, never a directory prefix',
+      );
+    },
+  },
+  {
     name: 'a feature area never rescues a module, an unparsable file, or a block-style tag',
     run: () => {
       const policy = parseEs5Selection(featureAreaPolicyText());

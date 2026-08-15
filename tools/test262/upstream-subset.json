@@ -3244,6 +3244,27 @@
       ]
     },
     {
+      "name": "built-ins/GeneratorFunction",
+      "summary": "Broad ES5.1 selection over test/built-ins/GeneratorFunction",
+      "paths": [
+        "test/built-ins/GeneratorFunction/invoked-as-constructor-no-arguments.js",
+        "test/built-ins/GeneratorFunction/invoked-as-function-multiple-arguments.js",
+        "test/built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js"
+      ]
+    },
+    {
+      "name": "built-ins/GeneratorPrototype",
+      "summary": "Broad ES5.1 selection over test/built-ins/GeneratorPrototype",
+      "paths": [
+        "test/built-ins/GeneratorPrototype/next/consecutive-yields.js",
+        "test/built-ins/GeneratorPrototype/next/from-state-executing.js",
+        "test/built-ins/GeneratorPrototype/return/from-state-suspended-start.js",
+        "test/built-ins/GeneratorPrototype/return/try-finally-within-try.js",
+        "test/built-ins/GeneratorPrototype/throw/from-state-suspended-start.js",
+        "test/built-ins/GeneratorPrototype/throw/try-catch-within-try.js"
+      ]
+    },
+    {
       "name": "built-ins/Infinity",
       "summary": "Broad ES5.1 selection over test/built-ins/Infinity",
       "paths": [
@@ -8875,6 +8896,14 @@
         "test/language/comments/multi-line-asi-line-feed.js",
         "test/language/comments/multi-line-asi-line-separator.js",
         "test/language/comments/multi-line-asi-paragraph-separator.js"
+      ]
+    },
+    {
+      "name": "language/computed-property-names",
+      "summary": "Broad ES5.1 selection over test/language/computed-property-names",
+      "paths": [
+        "test/language/computed-property-names/class/method/generator.js",
+        "test/language/computed-property-names/object/method/generator.js"
       ]
     },
     {

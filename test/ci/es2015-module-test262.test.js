@@ -10,25 +10,16 @@ import { assertSame } from '../harness/assert.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
 import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
 import { runTest262 } from '../../tools/test262/runner.js';
+import { ASYNC_RUNTIME_RELEASE_MANIFEST } from '../../tools/test262/async-runtime-release-manifest.js';
 import {
   assertPinnedCheckout,
   readTest262Pin,
 } from '../../tools/test262/upstream-run.js';
 
-const FOCUSED_PATHS = Object.freeze([
-  'test/language/module-code/ambiguous-export-bindings/omitted-from-namespace.js',
-  'test/language/module-code/eval-export-dflt-expr-fn-anon.js',
-  'test/language/module-code/eval-gtbndng-indirect-update.js',
-  'test/language/module-code/eval-gtbndng-local-bndng-let.js',
-  'test/language/module-code/eval-this.js',
-  'test/language/module-code/instn-iee-bndng-fun.js',
-  'test/language/module-code/instn-iee-err-dflt-thru-star.js',
-  'test/language/module-code/instn-iee-err-not-found.js',
-  'test/language/module-code/instn-iee-iee-cycle.js',
-  'test/language/module-code/namespace/Symbol.toStringTag.js',
-]);
-
-const SUPPORTED_FEATURES = Object.freeze(['Symbol.toStringTag']);
+const RELEASE = ASYNC_RUNTIME_RELEASE_MANIFEST.module;
+const FOCUSED_PATHS = Object.freeze(
+  RELEASE.records.map((record) => record.path),
+);
 
 export default [
   {
@@ -47,7 +38,7 @@ export default [
         engine: createJsjsTest262Engine(),
         host: createNodeTest262Host({ root: pin.checkoutPath }),
         paths: FOCUSED_PATHS,
-        supportedFeatures: SUPPORTED_FEATURES,
+        supportedFeatures: RELEASE.supportedFeatures,
         skipFeatures: [],
       });
       const problems = records.filter((record) => record.status !== 'passed');

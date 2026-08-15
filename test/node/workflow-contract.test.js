@@ -25,6 +25,7 @@ import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
 import {
   UNSUPPORTED_FLAGS,
+  decideSkip,
   runTest262Suite,
 } from '../../tools/test262/runner.js';
 import {
@@ -59,6 +60,10 @@ import {
   summarizeUpstreamRun,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
+import {
+  ASYNC_RUNTIME_RELEASE_MANIFEST,
+  ASYNC_RUNTIME_RELEASE_MANIFEST_FILE,
+} from '../../tools/test262/async-runtime-release-manifest.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
@@ -140,72 +145,12 @@ const engine = { createRealm, evaluateScript };
 const GENERATOR_PROBE =
   "function* sequence() {\n  var input = yield 1;\n  return input + 1;\n}\nvar iterator = sequence();\nif (iterator[Symbol.iterator]() !== iterator) {\n  throw new Error('generator is not iterable');\n}\nvar first = iterator.next();\nvar second = iterator.next(2);\nif (first.value !== 1 || first.done || second.value !== 3 || !second.done) {\n  throw new Error('generator resume semantics failed');\n}";
 
-const FOCUSED_SUITE_PATHS = Object.freeze({
-  generator: Object.freeze([
-    'test/built-ins/GeneratorFunction/invoked-as-constructor-no-arguments.js',
-    'test/built-ins/GeneratorFunction/invoked-as-function-multiple-arguments.js',
-    'test/built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js',
-    'test/built-ins/GeneratorPrototype/next/consecutive-yields.js',
-    'test/built-ins/GeneratorPrototype/next/from-state-executing.js',
-    'test/built-ins/GeneratorPrototype/return/from-state-suspended-start.js',
-    'test/built-ins/GeneratorPrototype/return/try-finally-within-try.js',
-    'test/built-ins/GeneratorPrototype/throw/from-state-suspended-start.js',
-    'test/built-ins/GeneratorPrototype/throw/try-catch-within-try.js',
-    'test/language/computed-property-names/class/method/generator.js',
-    'test/language/computed-property-names/object/method/generator.js',
-  ]),
-  module: Object.freeze([
-    'test/language/module-code/ambiguous-export-bindings/omitted-from-namespace.js',
-    'test/language/module-code/eval-export-dflt-expr-fn-anon.js',
-    'test/language/module-code/eval-gtbndng-indirect-update.js',
-    'test/language/module-code/eval-gtbndng-local-bndng-let.js',
-    'test/language/module-code/eval-this.js',
-    'test/language/module-code/instn-iee-bndng-fun.js',
-    'test/language/module-code/instn-iee-err-dflt-thru-star.js',
-    'test/language/module-code/instn-iee-err-not-found.js',
-    'test/language/module-code/instn-iee-iee-cycle.js',
-    'test/language/module-code/namespace/Symbol.toStringTag.js',
-  ]),
-  promise: Object.freeze([
-    'test/built-ins/Promise/Symbol.species/prop-desc.js',
-    'test/built-ins/Promise/all/capability-resolve-throws-no-close.js',
-    'test/built-ins/Promise/all/capability-resolve-throws-reject.js',
-    'test/built-ins/Promise/all/resolve-non-thenable.js',
-    'test/built-ins/Promise/constructor.js',
-    'test/built-ins/Promise/prototype/Symbol.toStringTag.js',
-    'test/built-ins/Promise/prototype/then/rxn-handler-identity.js',
-    'test/built-ins/Promise/prototype/then/rxn-handler-thrower.js',
-    'test/built-ins/Promise/race/resolved-sequence.js',
-    'test/built-ins/Promise/resolve-thenable-immed.js',
-    'test/built-ins/Promise/resolve/resolve-thenable.js',
-  ]),
-});
-
 /**
  * @param {string} path Repository-relative.
  * @returns {Promise<string>}
  */
 function readRepositoryFile(path) {
   return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
-}
-
-/**
- * @param {'generator' | 'module' | 'promise'} suite
- * @returns {Promise<string[]>}
- */
-async function readFocusedPaths(suite) {
-  const source = await readRepositoryFile(
-    `test/ci/es2015-${suite}-test262.test.js`,
-  );
-  const block = /const FOCUSED_PATHS = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(
-    source,
-  )?.[1];
-
-  if (block === undefined) {
-    throw new Error(`focused ${suite} suite must declare FOCUSED_PATHS`);
-  }
-
-  return [...block.matchAll(/'([^']+\.js)'/g)].map((match) => match[1]);
 }
 
 /**
@@ -684,6 +629,79 @@ export default [
     },
   },
   {
+    name: 'the async runtime release manifest is host-neutral, immutable, and deterministic',
+    run: async () => {
+      const release = ASYNC_RUNTIME_RELEASE_MANIFEST;
+      const suites = /** @type {const} */ (['generator', 'module', 'promise']);
+      const expectedCounts = Object.freeze({
+        generator: 11,
+        module: 10,
+        promise: 11,
+      });
+      const expectedSupportedFeatures = Object.freeze({
+        generator: ['Symbol.iterator', 'Symbol.toStringTag', 'generators'],
+        module: ['Symbol.toStringTag'],
+        promise: ['Symbol.iterator', 'Symbol.species', 'Symbol.toStringTag'],
+      });
+
+      assertSame(
+        await readRepositoryFile(ASYNC_RUNTIME_RELEASE_MANIFEST_FILE).then(
+          (source) => source.includes('node:'),
+        ),
+        false,
+        'the shared release manifest must stay host-neutral',
+      );
+      assertSame(Object.isFrozen(release), true);
+      assertSame(JSON.stringify(Object.keys(release)), JSON.stringify(suites));
+
+      const allPaths = [];
+
+      for (const suite of suites) {
+        const entry = release[suite];
+        const paths = entry.records.map((record) => record.path);
+
+        assertSame(Object.isFrozen(entry), true);
+        assertSame(Object.isFrozen(entry.records), true);
+        assertSame(Object.isFrozen(entry.supportedFeatures), true);
+        assertSame(entry.records.length, expectedCounts[suite]);
+        assertSame(JSON.stringify(paths), JSON.stringify([...paths].sort()));
+        assertSame(
+          JSON.stringify(entry.supportedFeatures),
+          JSON.stringify(expectedSupportedFeatures[suite]),
+        );
+
+        for (const record of entry.records) {
+          assertSame(Object.isFrozen(record), true);
+          assertSame(Object.isFrozen(record.features), true);
+          assertSame(Object.isFrozen(record.flags), true);
+        }
+
+        allPaths.push(...paths);
+      }
+
+      assertSame(new Set(allPaths).size, allPaths.length);
+      assertSame(
+        release.generator.records.every(
+          (record) => JSON.stringify(record.flags) === '[]',
+        ),
+        true,
+        'focused generator records must assert their exact empty flag lists',
+      );
+      assertSame(
+        release.module.records.every(
+          (record) => JSON.stringify(record.flags) === '["module"]',
+        ),
+        true,
+      );
+      assertSame(
+        release.promise.records.some((record) =>
+          record.flags.includes('async'),
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'the focused async runtime release policy is explicit and deterministic',
     run: async () => {
       const manifest = parseFeatureManifest(
@@ -702,7 +720,11 @@ export default [
       assertSame(generator?.probe, GENERATOR_PROBE);
       assertSame(
         JSON.stringify(generator?.tests),
-        JSON.stringify(FOCUSED_SUITE_PATHS.generator.slice(0, 9)),
+        JSON.stringify(
+          ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records
+            .filter((record) => record.features.includes('generators'))
+            .map((record) => record.path),
+        ),
         'generator probe evidence must be the nine focused roots tagged generators',
       );
       if (generator === undefined) {
@@ -739,29 +761,44 @@ export default [
         'module',
         'promise',
       ])) {
-        const paths = await readFocusedPaths(suite);
-        const expected = FOCUSED_SUITE_PATHS[suite];
+        const paths = ASYNC_RUNTIME_RELEASE_MANIFEST[suite].records.map(
+          (record) => record.path,
+        );
+        const source = await readRepositoryFile(
+          `test/ci/es2015-${suite}-test262.test.js`,
+        );
 
-        assertSame(JSON.stringify(paths), JSON.stringify(expected));
         assertSame(JSON.stringify(paths), JSON.stringify([...paths].sort()));
+        assertSame(
+          source.includes('ASYNC_RUNTIME_RELEASE_MANIFEST'),
+          true,
+          `focused ${suite} suite must consume the shared release manifest`,
+        );
       }
 
-      const allFocusedPaths = Object.values(FOCUSED_SUITE_PATHS).flat();
+      const allFocusedPaths = Object.values(
+        ASYNC_RUNTIME_RELEASE_MANIFEST,
+      ).flatMap((suite) => suite.records.map((record) => record.path));
 
       assertSame(new Set(allFocusedPaths).size, allFocusedPaths.length);
 
+      const generatorPaths =
+        ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records.map(
+          (record) => record.path,
+        );
       const generatorAreas = policy.featureAreas.filter((area) =>
-        FOCUSED_SUITE_PATHS.generator.includes(area.prefix),
+        generatorPaths.includes(area.prefix),
       );
 
       assertSame(
         JSON.stringify(generatorAreas.map((area) => area.prefix)),
-        JSON.stringify(FOCUSED_SUITE_PATHS.generator),
+        JSON.stringify(generatorPaths),
       );
       assertSame(
         generatorAreas.every(
           (area) =>
             area.prefix.endsWith('.js') &&
+            area.features.includes('generators') &&
             area.features.every((feature) =>
               [
                 'Symbol.toStringTag',
@@ -789,9 +826,23 @@ export default [
       const asyncMetadata = parseTest262Metadata(
         '/*---\ndescription: async\nflags: [async]\n---*/\n',
       );
+      const moduleAsyncMetadata = parseTest262Metadata(
+        '/*---\ndescription: async module\nflags: [module, async]\n---*/\n',
+      );
 
       assertSame(JSON.stringify(moduleMetadata.features), '[]');
       assertSame(JSON.stringify(asyncMetadata.features), '[]');
+      assertSame(
+        JSON.stringify(moduleAsyncMetadata.flags),
+        '["module","async"]',
+      );
+      assertSame(
+        JSON.stringify(decideSkip(moduleAsyncMetadata)),
+        JSON.stringify({
+          reason: 'unsupported-flag-combination',
+          message: 'unsupported flag combination: module and async',
+        }),
+      );
       assertSame(
         JSON.stringify(expandVariants(moduleMetadata)),
         '["non-strict"]',
@@ -819,13 +870,6 @@ export default [
           ),
         ),
         '["non-strict"]',
-      );
-      assertThrows(
-        () =>
-          parseTest262Metadata(
-            '/*---\ndescription: async module\nflags: [module, async]\n---*/\n',
-          ),
-        Error,
       );
       assertThrows(
         () =>

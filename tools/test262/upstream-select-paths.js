@@ -27,15 +27,30 @@ const GENERATOR_EXPANSION_FEATURE = 'generators';
  * @returns {boolean}
  */
 export function parsesUnderEngineGrammar(source, policy) {
+  return inspectEngineGrammar(source, policy).parsesUnderEngineGrammar;
+}
+
+/**
+ * @param {string} source
+ * @param {import('./es5-selection.js').Es5SelectionPolicy} policy
+ * @returns {{ parsesUnderEngineGrammar: boolean, usesGeneratorSyntax: boolean }}
+ */
+function inspectEngineGrammar(source, policy) {
   try {
     const program = parseScript(source);
+    const usesGeneratorSyntax = containsGeneratorSyntax(program);
 
-    return (
-      policy.expansionFeatures.includes(GENERATOR_EXPANSION_FEATURE) ||
-      !containsGeneratorSyntax(program)
-    );
+    return {
+      parsesUnderEngineGrammar:
+        policy.expansionFeatures.includes(GENERATOR_EXPANSION_FEATURE) ||
+        !usesGeneratorSyntax,
+      usesGeneratorSyntax,
+    };
   } catch {
-    return false;
+    return {
+      parsesUnderEngineGrammar: false,
+      usesGeneratorSyntax: false,
+    };
   }
 }
 
@@ -103,11 +118,13 @@ export async function selectPaths(options) {
 
     const source = await readSource(path);
     const frontmatter = scanFrontmatter(source);
+    const grammar = inspectEngineGrammar(source, policy);
     const info = {
       declaresFeatures: frontmatter.hasFeatures,
       features: frontmatter.features,
       isModule: frontmatter.isModule,
-      parsesUnderEngineGrammar: parsesUnderEngineGrammar(source, policy),
+      usesGeneratorSyntax: grammar.usesGeneratorSyntax,
+      parsesUnderEngineGrammar: grammar.parsesUnderEngineGrammar,
       includesParseUnderEngineGrammar: frontmatter.includes.every(
         (name) => harnessParsing.get(name) !== false,
       ),

@@ -23,10 +23,14 @@ const HARNESS_USER_PATH = 'test/built-ins/Array/generator-harness.js';
 const GENERATOR_HARNESS = 'generator.js';
 const FOCUSED_TAGGED_GENERATOR_PATH =
   'test/built-ins/GeneratorPrototype/next/consecutive-yields.js';
-const NEIGHBORING_TAGGED_GENERATOR_PATH =
-  'test/built-ins/GeneratorPrototype/next/neighbor.js';
-const FOCUSED_UNTAGGED_GENERATOR_PATH =
+const FOCUSED_UNTAGGED_CLASS_GENERATOR_PATH =
+  'test/language/computed-property-names/class/method/generator.js';
+const FOCUSED_UNTAGGED_OBJECT_GENERATOR_PATH =
   'test/language/computed-property-names/object/method/generator.js';
+const PINNED_CLASS_GENERATOR_NEIGHBOR =
+  'test/language/expressions/class/cpn-class-expr-computed-property-name-from-generator-function-declaration.js';
+const PINNED_OBJECT_GENERATOR_NEIGHBOR =
+  'test/language/expressions/object/cpn-obj-lit-computed-property-name-from-generator-function-declaration.js';
 const COMPUTED_PROPERTY_FRONTMATTER =
   '/*---\nfeatures: [computed-property-names]\n---*/\n';
 
@@ -173,9 +177,24 @@ export default [
             reason: 'Exact focused tagged generator root.',
           },
           {
-            prefix: FOCUSED_UNTAGGED_GENERATOR_PATH,
-            features: [],
-            reason: 'Exact focused untagged generator root.',
+            prefix: FOCUSED_UNTAGGED_CLASS_GENERATOR_PATH,
+            features: ['generators'],
+            reason: 'Exact focused untagged class generator root.',
+          },
+          {
+            prefix: FOCUSED_UNTAGGED_OBJECT_GENERATOR_PATH,
+            features: ['generators'],
+            reason: 'Exact focused untagged object generator root.',
+          },
+          {
+            prefix: 'test/language/expressions/class',
+            features: ['computed-property-names'],
+            reason: 'Broad computed class coverage.',
+          },
+          {
+            prefix: 'test/language/expressions/object',
+            features: ['computed-property-names'],
+            reason: 'Broad computed object coverage.',
           },
         ],
       );
@@ -185,12 +204,20 @@ export default [
           '/*---\nfeatures: [generators]\n---*/\nfunction* g() { yield 1; }',
         ],
         [
-          NEIGHBORING_TAGGED_GENERATOR_PATH,
-          '/*---\nfeatures: [generators]\n---*/\nfunction* g() { yield 1; }',
+          FOCUSED_UNTAGGED_CLASS_GENERATOR_PATH,
+          '/*---\ndescription: focused class\n---*/\nclass C { *g() { yield 1; } }',
         ],
         [
-          FOCUSED_UNTAGGED_GENERATOR_PATH,
-          '/*---\ndescription: focused\n---*/\nvar o = { *g() { yield 1; } };',
+          FOCUSED_UNTAGGED_OBJECT_GENERATOR_PATH,
+          '/*---\ndescription: focused object\n---*/\nvar o = { *g() { yield 1; } };',
+        ],
+        [
+          PINNED_CLASS_GENERATOR_NEIGHBOR,
+          `${COMPUTED_PROPERTY_FRONTMATTER}class C { [function* () {}] () {} }`,
+        ],
+        [
+          PINNED_OBJECT_GENERATOR_NEIGHBOR,
+          `${COMPUTED_PROPERTY_FRONTMATTER}var o = { [function* () {}] () {} };`,
         ],
       ]);
       const paths = await selectPaths({
@@ -213,7 +240,8 @@ export default [
         JSON.stringify(paths),
         JSON.stringify([
           FOCUSED_TAGGED_GENERATOR_PATH,
-          FOCUSED_UNTAGGED_GENERATOR_PATH,
+          FOCUSED_UNTAGGED_CLASS_GENERATOR_PATH,
+          FOCUSED_UNTAGGED_OBJECT_GENERATOR_PATH,
         ]),
       );
     },
@@ -227,14 +255,11 @@ export default [
     },
   },
   {
-    name: 'upstream selection admits generator syntax with generators expansion',
+    name: 'generator expansion alone does not admit generator syntax without exact areas',
     run: async () => {
       const paths = await selectKnownGood(GENERATOR_SOURCES, GENERATOR_POLICY);
 
-      assertSame(
-        JSON.stringify(paths),
-        JSON.stringify([...GENERATOR_SOURCES.keys()]),
-      );
+      assertSame(JSON.stringify(paths), JSON.stringify([ORDINARY_PATH]));
     },
   },
   {

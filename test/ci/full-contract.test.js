@@ -31,6 +31,7 @@ import {
   matchExclusion,
   parseEs5Selection,
 } from '../../tools/test262/es5-selection.js';
+import { selectPaths } from '../../tools/test262/upstream-select-paths.js';
 import {
   COVERAGE_MARKER_BEGIN,
   COVERAGE_MARKER_END,
@@ -60,6 +61,7 @@ import {
 } from '../../tools/test262/upstream.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
 import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
+import { ASYNC_RUNTIME_RELEASE_MANIFEST } from '../../tools/test262/async-runtime-release-manifest.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT_URL);
@@ -115,105 +117,17 @@ const UNSUPPORTED_NEIGHBOR_FEATURES = Object.freeze([
   'object-spread',
 ]);
 
-/** @type {readonly (readonly [string, readonly string[]])[]} */
-const FOCUSED_GENERATOR_METADATA = Object.freeze([
-  [
-    'test/built-ins/GeneratorFunction/invoked-as-constructor-no-arguments.js',
-    ['generators'],
-  ],
-  [
-    'test/built-ins/GeneratorFunction/invoked-as-function-multiple-arguments.js',
-    ['generators'],
-  ],
-  [
-    'test/built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js',
-    ['generators', 'Symbol.toStringTag'],
-  ],
-  [
-    'test/built-ins/GeneratorPrototype/next/consecutive-yields.js',
-    ['generators'],
-  ],
-  [
-    'test/built-ins/GeneratorPrototype/next/from-state-executing.js',
-    ['generators'],
-  ],
-  [
-    'test/built-ins/GeneratorPrototype/return/from-state-suspended-start.js',
-    ['generators'],
-  ],
-  [
-    'test/built-ins/GeneratorPrototype/return/try-finally-within-try.js',
-    ['generators'],
-  ],
-  [
-    'test/built-ins/GeneratorPrototype/throw/from-state-suspended-start.js',
-    ['generators'],
-  ],
-  [
-    'test/built-ins/GeneratorPrototype/throw/try-catch-within-try.js',
-    ['generators'],
-  ],
-  ['test/language/computed-property-names/class/method/generator.js', []],
-  ['test/language/computed-property-names/object/method/generator.js', []],
-]);
-
-/** @type {readonly (readonly [string, readonly string[], readonly string[]])[]} */
-const FOCUSED_PROMISE_METADATA = Object.freeze([
-  [
-    'test/built-ins/Promise/Symbol.species/prop-desc.js',
-    ['Symbol.species'],
-    [],
-  ],
-  [
-    'test/built-ins/Promise/all/capability-resolve-throws-no-close.js',
-    ['Symbol.iterator'],
-    [],
-  ],
-  [
-    'test/built-ins/Promise/all/capability-resolve-throws-reject.js',
-    [],
-    ['async'],
-  ],
-  ['test/built-ins/Promise/all/resolve-non-thenable.js', [], ['async']],
-  ['test/built-ins/Promise/constructor.js', [], []],
-  [
-    'test/built-ins/Promise/prototype/Symbol.toStringTag.js',
-    ['Symbol.toStringTag'],
-    [],
-  ],
-  [
-    'test/built-ins/Promise/prototype/then/rxn-handler-identity.js',
-    [],
-    ['async'],
-  ],
-  [
-    'test/built-ins/Promise/prototype/then/rxn-handler-thrower.js',
-    [],
-    ['async'],
-  ],
-  ['test/built-ins/Promise/race/resolved-sequence.js', [], ['async']],
-  ['test/built-ins/Promise/resolve-thenable-immed.js', [], ['async']],
-  ['test/built-ins/Promise/resolve/resolve-thenable.js', [], ['async']],
-]);
-
-/** @type {readonly (readonly [string, readonly string[]])[]} */
-const FOCUSED_MODULE_METADATA = Object.freeze([
-  [
-    'test/language/module-code/ambiguous-export-bindings/omitted-from-namespace.js',
-    [],
-  ],
-  ['test/language/module-code/eval-export-dflt-expr-fn-anon.js', []],
-  ['test/language/module-code/eval-gtbndng-indirect-update.js', []],
-  ['test/language/module-code/eval-gtbndng-local-bndng-let.js', []],
-  ['test/language/module-code/eval-this.js', []],
-  ['test/language/module-code/instn-iee-bndng-fun.js', []],
-  ['test/language/module-code/instn-iee-err-dflt-thru-star.js', []],
-  ['test/language/module-code/instn-iee-err-not-found.js', []],
-  ['test/language/module-code/instn-iee-iee-cycle.js', []],
-  [
-    'test/language/module-code/namespace/Symbol.toStringTag.js',
-    ['Symbol.toStringTag'],
-  ],
+const PINNED_GENERATOR_NEIGHBORS = Object.freeze([
+  'test/language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-generator-function-declaration.js',
+  'test/language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-yield-expression.js',
+  'test/language/expressions/class/cpn-class-expr-computed-property-name-from-generator-function-declaration.js',
+  'test/language/expressions/class/cpn-class-expr-computed-property-name-from-yield-expression.js',
+  'test/language/expressions/object/cpn-obj-lit-computed-property-name-from-generator-function-declaration.js',
+  'test/language/expressions/object/cpn-obj-lit-computed-property-name-from-yield-expression.js',
+  'test/language/statements/class/cpn-class-decl-accessors-computed-property-name-from-generator-function-declaration.js',
+  'test/language/statements/class/cpn-class-decl-accessors-computed-property-name-from-yield-expression.js',
+  'test/language/statements/class/cpn-class-decl-computed-property-name-from-generator-function-declaration.js',
+  'test/language/statements/class/cpn-class-decl-computed-property-name-from-yield-expression.js',
 ]);
 
 /**
@@ -594,7 +508,10 @@ export default [
       );
       assertSame(policy.expansionFeatures.includes('generators'), true);
 
-      const generatorPaths = FOCUSED_GENERATOR_METADATA.map(([path]) => path);
+      const generatorRelease = ASYNC_RUNTIME_RELEASE_MANIFEST.generator;
+      const generatorPaths = generatorRelease.records.map(
+        (record) => record.path,
+      );
       const exactGeneratorAreas = policy.featureAreas.filter((area) =>
         generatorPaths.includes(area.prefix),
       );
@@ -605,34 +522,44 @@ export default [
         'generated selection may expand only to the eleven proven generator roots',
       );
 
-      for (const [path, features] of FOCUSED_GENERATOR_METADATA) {
+      const selectedGeneratorPaths = await selectPaths({
+        files: [...generatorPaths, ...PINNED_GENERATOR_NEIGHBORS].sort(),
+        policy,
+        previouslySelected: new Set(),
+        harnessParsing: new Map(),
+        readSource: (path) => host.readTest(path),
+      });
+
+      assertSame(
+        JSON.stringify(selectedGeneratorPaths),
+        JSON.stringify(generatorPaths),
+        'generator syntax must require an exact-file generators claim; broad computed-property areas must not admit pinned class/object neighbors',
+      );
+
+      for (const { path, features, flags } of generatorRelease.records) {
         const metadata = parseTest262Metadata(await host.readTest(path));
         const area = exactGeneratorAreas.find(
           (candidate) => candidate.prefix === path,
         );
+        const expectedAreaFeatures = [
+          ...new Set([...features, 'generators']),
+        ].sort();
 
         assertSame(JSON.stringify(metadata.features), JSON.stringify(features));
+        assertSame(JSON.stringify(metadata.flags), JSON.stringify(flags));
         assertSame(
           JSON.stringify(area?.features),
-          JSON.stringify([...features].sort()),
-          `${path} must claim only its real pinned metadata tags`,
+          JSON.stringify(expectedAreaFeatures),
+          `${path} must claim its pinned metadata and required generator syntax`,
         );
       }
 
-      const promiseSuite = await readRepositoryFile(
-        'test/ci/es2015-promise-test262.test.js',
-      );
-      const promiseFeatures = [
-        'Symbol.iterator',
-        'Symbol.species',
-        'Symbol.toStringTag',
-      ];
+      const promiseRelease = ASYNC_RUNTIME_RELEASE_MANIFEST.promise;
       const promiseEngine = createJsjsTest262Engine();
 
-      for (const [path, features, flags] of FOCUSED_PROMISE_METADATA) {
+      for (const { path, features, flags } of promiseRelease.records) {
         const metadata = parseTest262Metadata(await host.readTest(path));
 
-        assertSame(promiseSuite.includes(`'${path}'`), true);
         assertSame(JSON.stringify(metadata.features), JSON.stringify(features));
         assertSame(JSON.stringify(metadata.flags), JSON.stringify(flags));
         assertSame(metadata.features.includes('Promise'), false);
@@ -641,7 +568,7 @@ export default [
           engine: promiseEngine,
           host,
           file: path,
-          supportedFeatures: promiseFeatures,
+          supportedFeatures: promiseRelease.supportedFeatures,
         });
 
         assertSame(
@@ -651,9 +578,9 @@ export default [
         );
       }
 
-      const asyncPromisePath = FOCUSED_PROMISE_METADATA.find(([, , flags]) =>
-        flags.includes('async'),
-      )?.[0];
+      const asyncPromisePath = promiseRelease.records.find((record) =>
+        record.flags.includes('async'),
+      )?.path;
 
       if (asyncPromisePath === undefined) {
         throw new Error('the focused Promise suite must retain async roots');
@@ -666,7 +593,7 @@ export default [
         },
         host,
         file: asyncPromisePath,
-        supportedFeatures: promiseFeatures,
+        supportedFeatures: promiseRelease.supportedFeatures,
       });
 
       assertSame(
@@ -678,16 +605,13 @@ export default [
         'async Promise roots require guest installDone and deterministic runJobs hooks',
       );
 
-      const moduleSuite = await readRepositoryFile(
-        'test/ci/es2015-module-test262.test.js',
-      );
+      const moduleRelease = ASYNC_RUNTIME_RELEASE_MANIFEST.module;
 
-      for (const [path, features] of FOCUSED_MODULE_METADATA) {
+      for (const { path, features, flags } of moduleRelease.records) {
         const metadata = parseTest262Metadata(await host.readTest(path));
 
-        assertSame(moduleSuite.includes(`'${path}'`), true);
         assertSame(JSON.stringify(metadata.features), JSON.stringify(features));
-        assertSame(JSON.stringify(metadata.flags), JSON.stringify(['module']));
+        assertSame(JSON.stringify(metadata.flags), JSON.stringify(flags));
         assertSame(
           isStructurallyEligiblePath(path, policy),
           false,
@@ -737,13 +661,13 @@ export default [
             .filter(
               (candidate) =>
                 path === candidate.prefix ||
-                path.startsWith(`${candidate.prefix}/`),
+                (!candidate.prefix.endsWith('.js') &&
+                  path.startsWith(`${candidate.prefix}/`)),
             )
             .sort((left, right) => right.prefix.length - left.prefix.length)[0];
 
           if (
-            (metadata.features.length > 0 ||
-              (area.prefix === path && area.features.length === 0)) &&
+            (metadata.features.length > 0 || area.prefix === path) &&
             metadata.features.every((feature) =>
               area.features.includes(feature),
             )

@@ -141,13 +141,13 @@
     },
     {
       "prefix": "test/language/computed-property-names/class/method/generator.js",
-      "features": [],
-      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata."
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata, while the exact-file claim records its required generator syntax."
     },
     {
       "prefix": "test/language/computed-property-names/object/method/generator.js",
-      "features": [],
-      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata."
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata, while the exact-file claim records its required generator syntax."
     },
     {
       "prefix": "test/language/destructuring/binding",

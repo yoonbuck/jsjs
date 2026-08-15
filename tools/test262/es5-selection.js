@@ -106,6 +106,7 @@ const EMPTY_PREVIOUSLY_SELECTED = new Set();
  *   declaresFeatures: boolean,
  *   features: readonly string[],
  *   isModule: boolean,
+ *   usesGeneratorSyntax?: boolean,
  *   parsesUnderEngineGrammar: boolean,
  *   includesParseUnderEngineGrammar: boolean,
  * }} Es5CandidateInfo
@@ -568,6 +569,15 @@ export function isCandidatePath(
     return false;
   }
 
+  if (
+    info.usesGeneratorSyntax === true &&
+    !policy.featureAreas.some(
+      (area) => area.prefix === path && area.features.includes('generators'),
+    )
+  ) {
+    return false;
+  }
+
   if (!previouslySelected.has(path)) {
     const claimedByArea = isClaimedByFeatureArea(path, info, policy);
     const expandsTaggedFeature =
@@ -576,10 +586,7 @@ export function isCandidatePath(
     const isExactUntaggedClaim =
       !info.declaresFeatures &&
       policy.featureAreas.some(
-        (area) =>
-          area.prefix === path &&
-          area.features.length === 0 &&
-          info.features.length === 0,
+        (area) => area.prefix === path && info.features.length === 0,
       );
 
     if (!claimedByArea || (!expandsTaggedFeature && !isExactUntaggedClaim)) {
@@ -603,7 +610,7 @@ export function isCandidatePath(
  */
 function isClaimedByFeatureArea(path, info, policy) {
   for (const area of policy.featureAreas) {
-    if (path !== area.prefix && !path.startsWith(`${area.prefix}/`)) {
+    if (!featureAreaMatchesPath(path, area)) {
       continue;
     }
 
@@ -613,6 +620,21 @@ function isClaimedByFeatureArea(path, info, policy) {
   }
 
   return false;
+}
+
+/**
+ * Exact-file areas end in `.js` and match only equality. Directory areas match
+ * on a segment boundary.
+ *
+ * @param {string} path
+ * @param {Es5FeatureArea} area
+ * @returns {boolean}
+ */
+function featureAreaMatchesPath(path, area) {
+  return (
+    path === area.prefix ||
+    (!area.prefix.endsWith('.js') && path.startsWith(`${area.prefix}/`))
+  );
 }
 
 /**
