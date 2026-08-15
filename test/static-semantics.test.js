@@ -506,6 +506,15 @@ const tests = [
     },
   },
   {
+    name: 'containsYield traverses a generator body statement list',
+    run() {
+      const statements = parseScript('function* g(){ yield 1; }').body[0].body
+        .body;
+
+      assertSame(containsYield(statements), true);
+    },
+  },
+  {
     name: 'containsYield finds yields in every executed expression edge',
     run() {
       /** @param {string} source */

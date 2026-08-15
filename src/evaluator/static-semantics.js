@@ -55,6 +55,13 @@ export function containsYield(node) {
 
     seen.add(current);
 
+    if (Array.isArray(current)) {
+      for (const child of current) {
+        pending.push(child);
+      }
+      continue;
+    }
+
     if (current.type === 'YieldExpression') {
       return true;
     }
