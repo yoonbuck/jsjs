@@ -26,6 +26,13 @@ const PARSER_OPTIONS = Object.freeze({
   ranges: true,
 });
 
+const MODULE_PARSER_OPTIONS = Object.freeze({
+  ecmaVersion: 6,
+  sourceType: 'module',
+  locations: true,
+  ranges: true,
+});
+
 /**
  * Parses with Acorn's base script parser. A named wrapper rather than a
  * detached `Parser.parse` reference because Acorn's static `parse` reads `this`
@@ -282,6 +289,40 @@ export function parseScript(source, options = {}) {
 }
 
 /**
+ * Parses ES2015 module source into an engine-owned, descriptor-safe Program.
+ *
+ * @param {string} source
+ * @param {Record<string, unknown>} [options]
+ * @returns {any}
+ */
+export function parseModule(source, options = {}) {
+  const { parse = parseWithScriptParser, ...parserOptions } = options;
+
+  if (typeof parse !== 'function') {
+    throw new TypeError('Expected options.parse to be a function');
+  }
+
+  let program;
+
+  try {
+    program = parse(source, {
+      ...parserOptions,
+      ...MODULE_PARSER_OPTIONS,
+    });
+  } catch (error) {
+    throw asParseFailure(error, parse === parseWithScriptParser);
+  }
+
+  const customAst = parse !== parseWithScriptParser;
+
+  if (customAst) {
+    program = snapshotProgramGraph(program);
+  }
+
+  return validateModuleProgram(program);
+}
+
+/**
  * Parses dynamic `eval` source as a `Program` (ECMA-262 15.1.2.1 step 2).
  *
  * When `strict` is true the forced-strict parser is used so a strict eval
@@ -377,6 +418,32 @@ function validateScriptProgram(
     rootContext,
   );
   checkProgramDeclarationEarlyErrors(/** @type {any} */ (program).body);
+
+  return /** @type {any} */ (program);
+}
+
+/**
+ * Validates the ES2015 module-only portion of a Program. Module records retain
+ * this owned AST for later linking and evaluation, so module syntax gets its
+ * own capability boundary rather than being admitted through script validation.
+ *
+ * @param {unknown} program
+ * @returns {any}
+ */
+function validateModuleProgram(program) {
+  checkUntrustedAstDescriptors(program);
+
+  if (!isModuleProgram(program)) {
+    throw new TypeError('Expected parser to return a module Program node');
+  }
+
+  const body = /** @type {any[]} */ (
+    ownDataPropertyValue(/** @type {object} */ (program), 'body')
+  );
+
+  for (let index = 0; index < body.length; index += 1) {
+    validateModuleItem(body[index]);
+  }
 
   return /** @type {any} */ (program);
 }
@@ -983,6 +1050,262 @@ function isScriptProgram(program) {
     /** @type {any} */ (program).sourceType === 'script' &&
     Array.isArray(/** @type {any} */ (program).body)
   );
+}
+
+/**
+ * @param {unknown} program
+ * @returns {boolean}
+ */
+function isModuleProgram(program) {
+  return (
+    !!program &&
+    typeof program === 'object' &&
+    ownDataPropertyValue(/** @type {object} */ (program), 'type') ===
+      'Program' &&
+    ownDataPropertyValue(/** @type {object} */ (program), 'sourceType') ===
+      'module' &&
+    Array.isArray(ownDataPropertyValue(/** @type {object} */ (program), 'body'))
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateModuleItem(node) {
+  if (!node || typeof node !== 'object') {
+    throw new UnsupportedNodeError(String(node));
+  }
+
+  switch (moduleField(node, 'type')) {
+    case 'ImportDeclaration':
+      validateImportDeclaration(node);
+      return;
+    case 'ExportNamedDeclaration':
+      validateExportNamedDeclaration(node);
+      return;
+    case 'ExportDefaultDeclaration':
+      validateExportDefaultDeclaration(node);
+      return;
+    case 'ExportAllDeclaration':
+      validateExportAllDeclaration(node);
+      return;
+    default:
+      // Module bodies may contain ordinary statements. Their runtime support is
+      // established by the script parser; module declarations are the new
+      // syntax boundary owned by this entry point.
+      {
+        const type = moduleField(node, 'type');
+
+        if (typeof type !== 'string' || !SUPPORTED_STATEMENT_TYPES.has(type)) {
+          throw new UnsupportedNodeError(String(type));
+        }
+      }
+      return;
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateImportDeclaration(node) {
+  rejectModuleAttributes(node);
+
+  const specifiers = moduleField(node, 'specifiers');
+
+  if (
+    !isModuleStringLiteral(moduleField(node, 'source')) ||
+    !Array.isArray(specifiers)
+  ) {
+    throw new UnsupportedNodeError('ImportDeclaration');
+  }
+
+  for (const specifier of specifiers) {
+    validateImportSpecifier(specifier);
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateImportSpecifier(node) {
+  if (
+    !node ||
+    typeof node !== 'object' ||
+    !isModuleIdentifier(moduleField(node, 'local'))
+  ) {
+    throw new UnsupportedNodeError('ImportSpecifier');
+  }
+
+  switch (moduleField(node, 'type')) {
+    case 'ImportDefaultSpecifier':
+    case 'ImportNamespaceSpecifier':
+      return;
+    case 'ImportSpecifier':
+      if (isModuleIdentifier(moduleField(node, 'imported'))) {
+        return;
+      }
+      break;
+    default:
+      break;
+  }
+
+  throw new UnsupportedNodeError(String(moduleField(node, 'type')));
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateExportNamedDeclaration(node) {
+  rejectModuleAttributes(node);
+  const source = moduleField(node, 'source');
+  const declaration = moduleField(node, 'declaration');
+  const specifiers = moduleField(node, 'specifiers');
+
+  if (
+    (source !== null && !isModuleStringLiteral(source)) ||
+    !Array.isArray(specifiers) ||
+    (declaration !== null && !isModuleDeclaration(declaration)) ||
+    (declaration !== null && specifiers.length !== 0) ||
+    (source !== null && declaration !== null)
+  ) {
+    throw new UnsupportedNodeError('ExportNamedDeclaration');
+  }
+
+  for (const specifier of specifiers) {
+    if (
+      !specifier ||
+      typeof specifier !== 'object' ||
+      moduleField(specifier, 'type') !== 'ExportSpecifier' ||
+      !isModuleIdentifier(moduleField(specifier, 'local')) ||
+      !isModuleIdentifier(moduleField(specifier, 'exported'))
+    ) {
+      throw new UnsupportedNodeError(
+        String(
+          specifier && typeof specifier === 'object'
+            ? moduleField(specifier, 'type')
+            : specifier,
+        ),
+      );
+    }
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateExportDefaultDeclaration(node) {
+  rejectModuleAttributes(node);
+  const declaration = moduleField(node, 'declaration');
+
+  if (
+    !declaration ||
+    typeof declaration !== 'object' ||
+    !isModuleDefaultDeclaration(declaration)
+  ) {
+    throw new UnsupportedNodeError('ExportDefaultDeclaration');
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {void}
+ */
+function validateExportAllDeclaration(node) {
+  rejectModuleAttributes(node);
+
+  if (!isModuleStringLiteral(moduleField(node, 'source'))) {
+    throw new UnsupportedNodeError('ExportAllDeclaration');
+  }
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isModuleDeclaration(node) {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  const type = moduleField(node, 'type');
+
+  return (
+    type === 'VariableDeclaration' ||
+    (type === 'FunctionDeclaration' &&
+      isModuleIdentifier(moduleField(node, 'id'))) ||
+    (type === 'ClassDeclaration' && isModuleIdentifier(moduleField(node, 'id')))
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isModuleDefaultDeclaration(node) {
+  const type = moduleField(node, 'type');
+
+  if (type === 'FunctionDeclaration' || type === 'ClassDeclaration') {
+    const id = moduleField(node, 'id');
+    return (
+      (id === null || isModuleIdentifier(id)) &&
+      moduleField(node, 'generator') !== true &&
+      moduleField(node, 'async') !== true
+    );
+  }
+
+  return typeof type === 'string' && SUPPORTED_EXPRESSION_TYPES.has(type);
+}
+
+/**
+ * @param {unknown} node
+ * @returns {boolean}
+ */
+function isModuleStringLiteral(node) {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    moduleField(node, 'type') === 'Literal' &&
+    typeof moduleField(node, 'value') === 'string'
+  );
+}
+
+/**
+ * @param {unknown} node
+ * @returns {boolean}
+ */
+function isModuleIdentifier(node) {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    moduleField(node, 'type') === 'Identifier' &&
+    typeof moduleField(node, 'name') === 'string'
+  );
+}
+
+/**
+ * @param {object} node
+ * @param {string} field
+ * @returns {unknown}
+ */
+function moduleField(node, field) {
+  return ownDataPropertyValue(node, field);
+}
+
+/**
+ * @param {object} node
+ * @returns {void}
+ */
+function rejectModuleAttributes(node) {
+  for (const field of ['assertions', 'attributes']) {
+    if (Object.getOwnPropertyDescriptor(node, field) !== undefined) {
+      throw new UnsupportedNodeError(field);
+    }
+  }
 }
 
 /**

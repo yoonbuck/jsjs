@@ -16,6 +16,7 @@
 import foundation from './foundation.test.js';
 import staticSemantics from './static-semantics.test.js';
 import parser from './parser.test.js';
+import moduleParser from './module-parser.test.js';
 import runtimeRecords from './runtime-records.test.js';
 import objects from './objects.test.js';
 import objectHotPathIntegration from './object-hot-path-integration.test.js';
@@ -106,6 +107,7 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: staticSemantics,
   }),
   Object.freeze({ file: 'test/parser.test.js', tests: parser }),
+  Object.freeze({ file: 'test/module-parser.test.js', tests: moduleParser }),
   Object.freeze({
     file: 'test/runtime-records.test.js',
     tests: runtimeRecords,
