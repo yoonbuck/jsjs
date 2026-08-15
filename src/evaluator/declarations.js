@@ -23,6 +23,7 @@ import { evaluateClassDefinition } from './classes.js';
 import { evaluateStatementList } from './statements.js';
 import { assignBindingPattern, initializeBindingPattern } from './patterns.js';
 import { hasUseStrictDirective } from './directive.js';
+import { createGeneratorExecution } from './generator-machine.js';
 import {
   annexBBlockFunctionDeclarations,
   boundNames,
@@ -31,7 +32,6 @@ import {
   topLevelLexicallyScopedDeclarations,
   topLevelVarDeclaredNames,
   topLevelVarScopedDeclarations,
-  containsYield,
 } from './static-semantics.js';
 
 /**
@@ -994,50 +994,13 @@ function createGeneratorObject(
     prototype instanceof EngineObject
       ? prototype
       : requiredGeneratorIntrinsic(context.realm, 'generatorPrototype');
-  const continuation = containsYield(bodyStatements)
-    ? new YieldingGeneratorPlaceholder()
-    : new YieldFreeGeneratorContinuation(context, bodyStatements);
+  const continuation = createGeneratorExecution({
+    functionObject,
+    body: bodyStatements,
+    context,
+  });
 
   return new GeneratorObject(context.realm, generatorPrototype, continuation);
-}
-
-class YieldFreeGeneratorContinuation {
-  /**
-   * @param {EvaluationContext} context
-   * @param {any[]} bodyStatements
-   */
-  constructor(context, bodyStatements) {
-    this.context = context;
-    this.bodyStatements = bodyStatements;
-  }
-
-  /**
-   * @param {import('../runtime/generator-object.js').GeneratorResumeCompletion} completion
-   * @returns {import('../runtime/generator-object.js').GeneratorMachineResult}
-   */
-  resume(completion) {
-    if (completion.type !== 'normal') {
-      return { type: 'complete', completion };
-    }
-
-    return {
-      type: 'complete',
-      completion: evaluateStatementList(this.bodyStatements, this.context),
-    };
-  }
-}
-
-class YieldingGeneratorPlaceholder {
-  /**
-   * @param {import('../runtime/generator-object.js').GeneratorResumeCompletion} _completion
-   * @returns {import('../runtime/generator-object.js').GeneratorMachineResult}
-   */
-  resume(_completion) {
-    throw new GuestErrorSignal(
-      'TypeError',
-      'Generator suspension is not implemented',
-    );
-  }
 }
 
 /**
@@ -1081,7 +1044,13 @@ export function evaluateVariableDeclaration(node, context) {
       if (declarator.init) {
         if (declarator.id.type !== 'Identifier') {
           const value = evaluateExpressionValue(declarator.init, context);
-          assignBindingPattern(declarator.id, value, context);
+          applyVariableDeclaratorValue(
+            node.kind,
+            declarator,
+            value,
+            context,
+            null,
+          );
           continue;
         }
 
@@ -1098,7 +1067,13 @@ export function evaluateVariableDeclaration(node, context) {
           context,
           declarator.id.name,
         );
-        putValue(reference, value);
+        applyVariableDeclaratorValue(
+          node.kind,
+          declarator,
+          value,
+          context,
+          reference,
+        );
       }
     }
 
@@ -1110,7 +1085,7 @@ export function evaluateVariableDeclaration(node, context) {
       const value = declarator.init
         ? evaluateExpressionValue(declarator.init, context)
         : undefined;
-      initializeBindingPattern(declarator.id, value, context.env, context);
+      applyVariableDeclaratorValue(node.kind, declarator, value, context, null);
       continue;
     }
 
@@ -1124,28 +1099,62 @@ export function evaluateVariableDeclaration(node, context) {
     const value = declarator.init
       ? evaluateNamedExpression(declarator.init, context, declarator.id.name)
       : undefined;
-
-    // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
-    // way `ResolveBinding` does (through the environment chain) and initialize
-    // the record that holds it, lifting the name out of its TDZ. Every lexical
-    // scope — a script/global top level (§15.1.8), function body (§9.2.12),
-    // block/`switch`/`try` (§13.2.14), and now eval code (§18.2.1.2) — creates
-    // the uninitialized binding before its statements run, so this reference
-    // always resolves to the declarative record that holds it.
-    const reference = getIdentifierReference(
-      context.env,
-      declarator.id.name,
-      context.strict,
-    );
-
-    const environment =
-      /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
-        reference.base
-      );
-    environment.initializeBinding(declarator.id.name, value);
+    applyVariableDeclaratorValue(node.kind, declarator, value, context, null);
   }
 
   return createNormalCompletion(EMPTY);
+}
+
+/**
+ * Applies an already-evaluated initializer with the same binding rules used by
+ * synchronous declarations. A resumable `var` passes the Reference it captured
+ * before evaluating the initializer so suspension cannot change its target.
+ *
+ * @param {string} kind
+ * @param {any} declarator
+ * @param {unknown} value
+ * @param {EvaluationContext} context
+ * @param {import('../runtime/reference.js').Reference | null} reference
+ * @returns {void}
+ */
+export function applyVariableDeclaratorValue(
+  kind,
+  declarator,
+  value,
+  context,
+  reference,
+) {
+  if (kind === 'var') {
+    if (declarator.id.type !== 'Identifier') {
+      assignBindingPattern(declarator.id, value, context);
+      return;
+    }
+
+    putValue(
+      reference ??
+        getIdentifierReference(context.env, declarator.id.name, context.strict),
+      value,
+    );
+    return;
+  }
+
+  if (declarator.id.type !== 'Identifier') {
+    initializeBindingPattern(declarator.id, value, context.env, context);
+    return;
+  }
+
+  // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
+  // way `ResolveBinding` does and initialize the record that holds it.
+  const resolved = getIdentifierReference(
+    context.env,
+    declarator.id.name,
+    context.strict,
+  );
+  const environment =
+    /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
+      resolved.base
+    );
+  environment.initializeBinding(declarator.id.name, value);
 }
 
 /**

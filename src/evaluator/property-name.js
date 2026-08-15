@@ -14,8 +14,25 @@ import { evaluateExpressionValue } from './expressions.js';
  * @returns {string | symbol}
  */
 export function evaluatePropertyName(node, computed, context) {
+  return propertyNameFromValue(
+    node,
+    computed,
+    computed ? evaluateExpressionValue(node, context) : undefined,
+  );
+}
+
+/**
+ * Completes a property-name evaluation after a resumable computed key has
+ * produced its value. Non-computed names ignore `value`.
+ *
+ * @param {any} node
+ * @param {boolean} computed
+ * @param {unknown} value
+ * @returns {string | symbol}
+ */
+export function propertyNameFromValue(node, computed, value) {
   if (computed) {
-    return toPropertyKey(evaluateExpressionValue(node, context));
+    return toPropertyKey(value);
   }
 
   if (node.type === 'Identifier') {

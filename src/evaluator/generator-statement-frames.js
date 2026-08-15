@@ -1,0 +1,472 @@
+import {
+  EMPTY,
+  createNormalCompletion,
+  createReturnCompletion,
+  createThrowCompletion,
+  updateEmpty,
+} from '../runtime/completion.js';
+import { getIdentifierReference } from '../runtime/environment.js';
+import { createUnsupportedNodeError } from '../runtime/errors.js';
+import { containsYield } from './static-semantics.js';
+import { evaluateStatement } from './statements.js';
+import { applyVariableDeclaratorValue } from './declarations.js';
+import { createGeneratorExpressionFrame } from './generator-expression-frames.js';
+import {
+  captureGeneratorOperation,
+  takeGeneratorOutput,
+} from './generator-machine.js';
+
+/**
+ * @typedef {import('./index.js').EvaluationContext} EvaluationContext
+ * @typedef {import('../runtime/reference.js').Reference} Reference
+ * @typedef {import('./generator-machine.js').GeneratorExecution}
+ *   GeneratorExecution
+ * @typedef {import('./generator-machine.js').GeneratorFrameAction}
+ *   GeneratorFrameAction
+ *
+ * @typedef {{
+ *   kind: 'statement-list',
+ *   statements: any[],
+ *   context: EvaluationContext,
+ *   index: number,
+ *   phase: 'next' | 'statement',
+ *   completion: { type: string, value: unknown, target?: string | undefined },
+ * }} StatementListFrame
+ * @typedef {{
+ *   kind: 'sync-statement',
+ *   node: any,
+ *   context: EvaluationContext,
+ * }} SyncStatementFrame
+ * @typedef {{
+ *   kind: 'expression-statement',
+ *   node: any,
+ *   context: EvaluationContext,
+ *   phase: 'start' | 'expression',
+ * }} ExpressionStatementFrame
+ * @typedef {{
+ *   kind: 'variable-declaration',
+ *   node: any,
+ *   context: EvaluationContext,
+ *   index: number,
+ *   phase: 'next' | 'initializer',
+ *   reference: Reference | null,
+ * }} VariableDeclarationFrame
+ * @typedef {{
+ *   kind: 'return-statement',
+ *   node: any,
+ *   context: EvaluationContext,
+ *   phase: 'start' | 'argument',
+ * }} ReturnStatementFrame
+ * @typedef {{
+ *   kind: 'throw-statement',
+ *   node: any,
+ *   context: EvaluationContext,
+ *   phase: 'start' | 'argument',
+ * }} ThrowStatementFrame
+ * @typedef {{
+ *   kind: 'empty-statement',
+ *   node: any,
+ *   context: EvaluationContext,
+ * }} EmptyStatementFrame
+ * @typedef {StatementListFrame | SyncStatementFrame | ExpressionStatementFrame
+ *   | VariableDeclarationFrame | ReturnStatementFrame | ThrowStatementFrame
+ *   | EmptyStatementFrame} GeneratorStatementFrame
+ */
+
+/**
+ * @param {any[]} statements
+ * @param {EvaluationContext} context
+ * @returns {StatementListFrame}
+ */
+export function createStatementListFrame(statements, context) {
+  return {
+    kind: 'statement-list',
+    statements,
+    context,
+    index: 0,
+    phase: 'next',
+    completion: createNormalCompletion(EMPTY),
+  };
+}
+
+/**
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @returns {GeneratorStatementFrame}
+ */
+export function createGeneratorStatementFrame(node, context) {
+  if (node.type === 'EmptyStatement') {
+    return { kind: 'empty-statement', node, context };
+  }
+
+  if (!containsYield(node)) {
+    return { kind: 'sync-statement', node, context };
+  }
+
+  switch (node.type) {
+    case 'ExpressionStatement':
+      return {
+        kind: 'expression-statement',
+        node,
+        context,
+        phase: 'start',
+      };
+    case 'VariableDeclaration':
+      return {
+        kind: 'variable-declaration',
+        node,
+        context,
+        index: 0,
+        phase: 'next',
+        reference: null,
+      };
+    case 'ReturnStatement':
+      return { kind: 'return-statement', node, context, phase: 'start' };
+    case 'ThrowStatement':
+      return { kind: 'throw-statement', node, context, phase: 'start' };
+    default:
+      throw createUnsupportedNodeError(node);
+  }
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {GeneratorStatementFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+export function dispatchGeneratorStatementFrame(execution, frame) {
+  switch (frame.kind) {
+    case 'statement-list':
+      return dispatchStatementList(execution, frame);
+    case 'sync-statement':
+      return dispatchSyncStatement(execution, frame);
+    case 'expression-statement':
+      return dispatchExpressionStatement(execution, frame);
+    case 'variable-declaration':
+      return dispatchVariableDeclaration(execution, frame);
+    case 'return-statement':
+      return dispatchReturnStatement(execution, frame);
+    case 'throw-statement':
+      return dispatchThrowStatement(execution, frame);
+    case 'empty-statement':
+      return {
+        type: 'pop',
+        result: {
+          type: 'completion',
+          completion: createNormalCompletion(EMPTY),
+        },
+      };
+  }
+}
+
+/**
+ * @param {unknown} frame
+ * @returns {frame is GeneratorStatementFrame}
+ */
+export function isGeneratorStatementFrame(frame) {
+  if (!frame || typeof frame !== 'object' || !('kind' in frame)) {
+    return false;
+  }
+
+  switch (/** @type {{ kind: string }} */ (frame).kind) {
+    case 'statement-list':
+    case 'sync-statement':
+    case 'expression-statement':
+    case 'variable-declaration':
+    case 'return-statement':
+    case 'throw-statement':
+    case 'empty-statement':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {StatementListFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchStatementList(execution, frame) {
+  if (frame.phase === 'statement') {
+    const result = takeGeneratorOutput(execution);
+
+    if (result.type !== 'completion') {
+      throw new TypeError('Statement frame returned a non-completion result');
+    }
+
+    frame.completion = updateEmpty(result.completion, frame.completion.value);
+    frame.index += 1;
+    frame.phase = 'next';
+
+    if (frame.completion.type !== 'normal') {
+      return {
+        type: 'pop',
+        result: { ...result, completion: frame.completion },
+      };
+    }
+  }
+
+  if (frame.index >= frame.statements.length) {
+    return {
+      type: 'pop',
+      result: { type: 'completion', completion: frame.completion },
+    };
+  }
+
+  frame.phase = 'statement';
+  return {
+    type: 'push',
+    frame: createGeneratorStatementFrame(
+      frame.statements[frame.index],
+      frame.context,
+    ),
+  };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {SyncStatementFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchSyncStatement(execution, frame) {
+  const result = captureGeneratorOperation(execution.realm, () =>
+    evaluateStatement(frame.node, frame.context),
+  );
+
+  if (result.type === 'completion') {
+    return { type: 'pop', result };
+  }
+
+  if (result.type !== 'value' || !isCompletion(result.value)) {
+    throw new TypeError('Synchronous statement returned an invalid completion');
+  }
+
+  return {
+    type: 'pop',
+    result: { type: 'completion', completion: result.value },
+  };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {ExpressionStatementFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchExpressionStatement(execution, frame) {
+  if (frame.phase === 'start') {
+    frame.phase = 'expression';
+    return {
+      type: 'push',
+      frame: createGeneratorExpressionFrame(
+        frame.node.expression,
+        frame.context,
+        'value',
+      ),
+    };
+  }
+
+  const result = takeGeneratorOutput(execution);
+
+  if (result.type === 'completion') {
+    return { type: 'pop', result };
+  }
+
+  if (result.type !== 'value') {
+    throw new TypeError('Expression statement expected a value');
+  }
+
+  return {
+    type: 'pop',
+    result: {
+      type: 'completion',
+      completion: createNormalCompletion(result.value),
+    },
+  };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {VariableDeclarationFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchVariableDeclaration(execution, frame) {
+  if (frame.phase === 'initializer') {
+    const result = takeGeneratorOutput(execution);
+
+    if (result.type === 'completion') {
+      return { type: 'pop', result };
+    }
+
+    if (result.type !== 'value') {
+      throw new TypeError('Variable initializer expected a value');
+    }
+
+    const declarator = frame.node.declarations[frame.index];
+    const applied = captureGeneratorOperation(execution.realm, () => {
+      applyVariableDeclaratorValue(
+        frame.node.kind,
+        declarator,
+        result.value,
+        frame.context,
+        frame.reference,
+      );
+    });
+
+    if (applied.type === 'completion') {
+      return { type: 'pop', result: applied };
+    }
+
+    frame.index += 1;
+    frame.phase = 'next';
+    frame.reference = null;
+  }
+
+  while (frame.index < frame.node.declarations.length) {
+    const declarator = frame.node.declarations[frame.index];
+
+    if (declarator.id.type !== 'Identifier') {
+      throw createUnsupportedNodeError(declarator.id);
+    }
+
+    if (declarator.init !== null && declarator.init !== undefined) {
+      frame.reference =
+        frame.node.kind === 'var'
+          ? getIdentifierReference(
+              frame.context.env,
+              declarator.id.name,
+              frame.context.strict,
+            )
+          : null;
+      frame.phase = 'initializer';
+      return {
+        type: 'push',
+        frame: createGeneratorExpressionFrame(
+          declarator.init,
+          frame.context,
+          'value',
+        ),
+      };
+    }
+
+    if (frame.node.kind !== 'var') {
+      const applied = captureGeneratorOperation(execution.realm, () => {
+        applyVariableDeclaratorValue(
+          frame.node.kind,
+          declarator,
+          undefined,
+          frame.context,
+          null,
+        );
+      });
+
+      if (applied.type === 'completion') {
+        return { type: 'pop', result: applied };
+      }
+    }
+
+    frame.index += 1;
+  }
+
+  return {
+    type: 'pop',
+    result: {
+      type: 'completion',
+      completion: createNormalCompletion(EMPTY),
+    },
+  };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {ReturnStatementFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchReturnStatement(execution, frame) {
+  if (frame.phase === 'start') {
+    if (frame.node.argument === null || frame.node.argument === undefined) {
+      return completionAction(createReturnCompletion(undefined));
+    }
+
+    frame.phase = 'argument';
+    return {
+      type: 'push',
+      frame: createGeneratorExpressionFrame(
+        frame.node.argument,
+        frame.context,
+        'value',
+      ),
+    };
+  }
+
+  const result = takeGeneratorOutput(execution);
+
+  if (result.type === 'completion') {
+    return { type: 'pop', result };
+  }
+
+  if (result.type !== 'value') {
+    throw new TypeError('Return statement expected a value');
+  }
+
+  return completionAction(createReturnCompletion(result.value));
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {ThrowStatementFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchThrowStatement(execution, frame) {
+  if (frame.phase === 'start') {
+    frame.phase = 'argument';
+    return {
+      type: 'push',
+      frame: createGeneratorExpressionFrame(
+        frame.node.argument,
+        frame.context,
+        'value',
+      ),
+    };
+  }
+
+  const result = takeGeneratorOutput(execution);
+
+  if (result.type === 'completion') {
+    return { type: 'pop', result };
+  }
+
+  if (result.type !== 'value') {
+    throw new TypeError('Throw statement expected a value');
+  }
+
+  return completionAction(createThrowCompletion(result.value));
+}
+
+/**
+ * @param {{ type: string, value: unknown }} completion
+ * @returns {GeneratorFrameAction}
+ */
+function completionAction(completion) {
+  return {
+    type: 'pop',
+    result: { type: 'completion', completion },
+  };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is {
+ *   type: string,
+ *   value: unknown,
+ *   target?: string | undefined,
+ * }}
+ */
+function isCompletion(value) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    'value' in value
+  );
+}
