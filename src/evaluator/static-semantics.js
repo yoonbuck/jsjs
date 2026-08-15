@@ -34,6 +34,219 @@
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 
 /**
+ * Returns whether evaluating `node` executes a yield expression in the current
+ * function. Nested function bodies are intentionally opaque: callers query a
+ * generator's body, not the generator function node itself.
+ *
+ * @param {any} node
+ * @returns {boolean}
+ */
+export function containsYield(node) {
+  /** @type {any[]} */
+  const pending = [node];
+  const seen = new WeakSet();
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+
+    if (!current || typeof current !== 'object' || seen.has(current)) {
+      continue;
+    }
+
+    seen.add(current);
+
+    if (current.type === 'YieldExpression') {
+      return true;
+    }
+
+    if (isNestedFunctionBoundary(current)) {
+      continue;
+    }
+
+    if (current.type === 'MethodDefinition') {
+      if (current.computed) {
+        pending.push(current.key);
+      }
+      continue;
+    }
+
+    pushExecutedChildren(current, pending);
+  }
+
+  return false;
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isNestedFunctionBoundary(node) {
+  return (
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'ArrowFunctionExpression'
+  );
+}
+
+/**
+ * Pushes only ESTree edges that evaluation can execute. This is deliberately
+ * explicit rather than a generic property walk so AST metadata and function
+ * bodies cannot alter the result.
+ *
+ * @param {any} node
+ * @param {any[]} pending
+ * @returns {void}
+ */
+function pushExecutedChildren(node, pending) {
+  /** @param {any} child */
+  const push = (child) => {
+    if (child !== null && child !== undefined) {
+      pending.push(child);
+    }
+  };
+  /** @param {any[] | undefined} children */
+  const pushList = (children) => {
+    if (!Array.isArray(children)) {
+      return;
+    }
+    for (const child of children) {
+      push(child);
+    }
+  };
+
+  switch (node.type) {
+    case 'Program':
+    case 'BlockStatement':
+    case 'ClassBody':
+      pushList(node.body);
+      break;
+    case 'ExpressionStatement':
+      push(node.expression);
+      break;
+    case 'VariableDeclaration':
+      pushList(node.declarations);
+      break;
+    case 'VariableDeclarator':
+      push(node.id);
+      push(node.init);
+      break;
+    case 'ReturnStatement':
+    case 'ThrowStatement':
+      push(node.argument);
+      break;
+    case 'IfStatement':
+      push(node.test);
+      push(node.consequent);
+      push(node.alternate);
+      break;
+    case 'WhileStatement':
+    case 'DoWhileStatement':
+      push(node.test);
+      push(node.body);
+      break;
+    case 'ForStatement':
+      push(node.init);
+      push(node.test);
+      push(node.update);
+      push(node.body);
+      break;
+    case 'ForInStatement':
+    case 'ForOfStatement':
+      push(node.left);
+      push(node.right);
+      push(node.body);
+      break;
+    case 'LabeledStatement':
+    case 'WithStatement':
+      push(node.body);
+      if (node.type === 'WithStatement') {
+        push(node.object);
+      }
+      break;
+    case 'TryStatement':
+      push(node.block);
+      push(node.handler);
+      push(node.finalizer);
+      break;
+    case 'CatchClause':
+      push(node.param);
+      push(node.body);
+      break;
+    case 'SwitchStatement':
+      push(node.discriminant);
+      pushList(node.cases);
+      break;
+    case 'SwitchCase':
+      push(node.test);
+      pushList(node.consequent);
+      break;
+    case 'ClassDeclaration':
+    case 'ClassExpression':
+      push(node.superClass);
+      push(node.body);
+      break;
+    case 'Property':
+      if (node.computed) {
+        push(node.key);
+      }
+      push(node.value);
+      break;
+    case 'ObjectExpression':
+    case 'ObjectPattern':
+      pushList(node.properties);
+      break;
+    case 'ArrayExpression':
+    case 'ArrayPattern':
+      pushList(node.elements);
+      break;
+    case 'AssignmentPattern':
+      push(node.left);
+      push(node.right);
+      break;
+    case 'RestElement':
+    case 'SpreadElement':
+    case 'UnaryExpression':
+    case 'UpdateExpression':
+      push(node.argument);
+      break;
+    case 'BinaryExpression':
+    case 'LogicalExpression':
+    case 'AssignmentExpression':
+      push(node.left);
+      push(node.right);
+      break;
+    case 'ConditionalExpression':
+      push(node.test);
+      push(node.consequent);
+      push(node.alternate);
+      break;
+    case 'CallExpression':
+    case 'NewExpression':
+      push(node.callee);
+      pushList(node.arguments);
+      break;
+    case 'MemberExpression':
+      push(node.object);
+      if (node.computed) {
+        push(node.property);
+      }
+      break;
+    case 'SequenceExpression':
+      pushList(node.expressions);
+      break;
+    case 'TemplateLiteral':
+      pushList(node.expressions);
+      break;
+    case 'TaggedTemplateExpression':
+      push(node.tag);
+      push(node.quasi);
+      break;
+    default:
+      break;
+  }
+}
+
+/**
  * ES2015 §12.1.2 (`BindingIdentifier : Identifier`), §13.3.1.2
  * (`LexicalDeclaration`), §13.3.2.1 (`VariableDeclarationList`), and §14.1.3
  * (`FunctionDeclaration`) — the names `node` binds, in source order.

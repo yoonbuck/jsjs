@@ -2401,11 +2401,226 @@ const tests = [
     },
   },
   {
+    name: 'parser admits ES2015 generator declarations, expressions, and methods',
+    run() {
+      const program = parseScript(`
+        function* declaration(a) { yield a; yield; }
+        var expression = function* named() { yield* []; };
+        var object = { *method() { yield 1; }, *[key()]() { yield 2; } };
+        class C {
+          *method() { yield super.value; }
+          static *[key()]() { yield 3; }
+        }
+      `);
+
+      assertSame(program.body[0].generator, true);
+      assertSame(program.body[1].declarations[0].init.generator, true);
+      assertSame(
+        program.body[2].declarations[0].init.properties[0].value.generator,
+        true,
+      );
+      assertSame(program.body[3].body.body[0].value.generator, true);
+
+      const bareYield = program.body[0].body.body[1].expression;
+      assertSame(bareYield.type, 'YieldExpression');
+      assertSame(bareYield.delegate, false);
+      assertSame(bareYield.argument, null);
+
+      const delegatedYield =
+        program.body[1].declarations[0].init.body.body[0].expression;
+      assertSame(delegatedYield.type, 'YieldExpression');
+      assertSame(delegatedYield.delegate, true);
+      assertSame(delegatedYield.argument.type, 'ArrayExpression');
+    },
+  },
+  {
+    name: 'parser preserves generator early errors and rejects malformed custom yield syntax',
+    run() {
+      const rejected = [
+        'function* g(a = yield 1) {}',
+        'function* g(...yield) {}',
+        '({ get *x() {} })',
+        'class C { *constructor() {} }',
+        'async function* g() {}',
+        'function* g(){ await 1; }',
+      ];
+
+      for (const source of rejected) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+
+      /** @param {any} value */
+      function generatorProgram(value) {
+        return {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              type: 'FunctionDeclaration',
+              id: { type: 'Identifier', name: 'g' },
+              params: [],
+              generator: true,
+              async: false,
+              expression: false,
+              body: {
+                type: 'BlockStatement',
+                body: [
+                  {
+                    type: 'ExpressionStatement',
+                    expression: value,
+                  },
+                ],
+              },
+            },
+          ],
+        };
+      }
+
+      const malformed = [
+        {
+          ...generatorProgram({ type: 'Literal', value: 0 }),
+          body: [
+            {
+              ...generatorProgram({ type: 'Literal', value: 0 }).body[0],
+              generator: 'true',
+            },
+          ],
+        },
+        {
+          ...generatorProgram({ type: 'Literal', value: 0 }),
+          body: [
+            {
+              ...generatorProgram({ type: 'Literal', value: 0 }).body[0],
+              async: true,
+            },
+          ],
+        },
+        generatorProgram({
+          type: 'YieldExpression',
+          delegate: 'false',
+          argument: null,
+        }),
+        generatorProgram({
+          type: 'YieldExpression',
+          delegate: true,
+          argument: null,
+        }),
+      ];
+
+      for (const program of malformed) {
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom parser confines yield to a current generator body',
+    run() {
+      const yieldExpression = {
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      };
+      const ordinaryFunction = {
+        type: 'FunctionDeclaration',
+        id: { type: 'Identifier', name: 'f' },
+        params: [],
+        generator: false,
+        async: false,
+        expression: false,
+        body: {
+          type: 'BlockStatement',
+          body: [{ type: 'ExpressionStatement', expression: yieldExpression }],
+        },
+      };
+      const generator = {
+        ...ordinaryFunction,
+        id: { type: 'Identifier', name: 'g' },
+        generator: true,
+      };
+      const cases = [
+        expressionProgram(yieldExpression),
+        { type: 'Program', sourceType: 'script', body: [ordinaryFunction] },
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              ...generator,
+              params: [yieldExpression],
+              body: { type: 'BlockStatement', body: [] },
+            },
+          ],
+        },
+        {
+          type: 'Program',
+          sourceType: 'script',
+          body: [
+            {
+              ...generator,
+              body: {
+                type: 'BlockStatement',
+                body: [
+                  {
+                    ...ordinaryFunction,
+                    type: 'FunctionDeclaration',
+                    id: { type: 'Identifier', name: 'nested' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        expressionProgram({
+          type: 'ClassExpression',
+          id: null,
+          superClass: null,
+          body: {
+            type: 'ClassBody',
+            body: [
+              {
+                type: 'MethodDefinition',
+                key: { type: 'Identifier', name: 'method' },
+                computed: false,
+                static: false,
+                kind: 'method',
+                value: {
+                  type: 'FunctionExpression',
+                  id: null,
+                  params: [],
+                  generator: false,
+                  async: false,
+                  expression: false,
+                  body: {
+                    type: 'BlockStatement',
+                    body: [
+                      {
+                        type: 'ExpressionStatement',
+                        expression: yieldExpression,
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      ];
+
+      for (const program of cases) {
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
     name: 'each remaining reachable unsupported ES2015 construct is rejected by the pass from parseScript and parseEval',
     run() {
       const rejected = [
-        'function* g() { yield 1; }',
-        'var object = { *method() {} };',
         'var object = { async method() {} };',
         'var object = { ...source };',
         'function withMeta() { return new.target; }',
@@ -2466,7 +2681,6 @@ const tests = [
         'class C { constructor() {} constructor(value) {} }',
         'class C { get constructor() {} }',
         'class C { set constructor(value) {} }',
-        'class C { *method() {} }',
         'class C { static prototype() {} }',
         'class C { constructor() { super(); } }',
         'class C { method() { super(); } }',
@@ -2553,18 +2767,6 @@ const tests = [
           body: {
             type: 'ClassBody',
             body: [{ ...method(), kind: 'field' }],
-          },
-        },
-        {
-          ...valid,
-          body: {
-            type: 'ClassBody',
-            body: [
-              {
-                ...method(),
-                value: { ...functionValue(), generator: true },
-              },
-            ],
           },
         },
       ];
@@ -3441,7 +3643,7 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      for (const body of ['return function* g() {};']) {
+      for (const body of ['return function f() { return new.target; };']) {
         assertSame(
           evaluateScript(
             realm,
@@ -3691,12 +3893,11 @@ const tests = [
     },
   },
   {
-    name: 'generator and async forms remain unsupported around arrow parameters',
+    name: 'generator parameter syntax is accepted while async functions remain unsupported',
     run() {
-      for (const source of [
-        'function* g(a = 1) {}',
-        'async function f(a = 1) {}',
-      ]) {
+      assertSame(parseScript('function* g(a = 1) {}').type, 'Program');
+
+      for (const source of ['async function f(a = 1) {}']) {
         assertThrows(() => parseScript(source), SyntaxError);
       }
 

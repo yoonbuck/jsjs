@@ -13,6 +13,7 @@ import {
   topLevelVarScopedDeclarations,
   topLevelLexicallyDeclaredNames,
   topLevelLexicallyScopedDeclarations,
+  containsYield,
 } from '../src/evaluator/static-semantics.js';
 
 /**
@@ -502,6 +503,96 @@ const tests = [
       const declarations = topLevelVarScopedDeclarations([node]);
       assertSame(declarations.length, 1);
       assertSame(tag(declarations[0]), 'VariableDeclaration(deepest)');
+    },
+  },
+  {
+    name: 'containsYield finds yields in every executed expression edge',
+    run() {
+      /** @param {string} source */
+      const generatorBody = (source) =>
+        parseScript(`function* g(){ ${source} }`).body[0].body;
+      /** @param {string} source */
+      const expression = (source) =>
+        generatorBody(`${source};`).body[0].expression;
+
+      assertSame(containsYield(expression('yield 1')), true);
+      assertSame(containsYield(expression('left + (yield right)')), true);
+      assertSame(containsYield(expression('({ [yield 1]: yield 2 })')), true);
+      assertSame(containsYield(expression('tag`${yield 1}`')), true);
+      assertSame(
+        containsYield(
+          generatorBody('for (var x of yield xs) { yield x; }').body[0],
+        ),
+        true,
+      );
+      assertSame(containsYield(expression('call(...(yield values))')), true);
+      assertSame(containsYield(expression('new C(...(yield values))')), true);
+      assertSame(
+        containsYield(
+          generatorBody('for (yield init; yield test; yield update) {}')
+            .body[0],
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'containsYield excludes nested function and method bodies but scans class setup',
+    run() {
+      /** @param {string} source */
+      const expression = (source) =>
+        parseScript(`function* g(){ ${source}; }`).body[0].body.body[0]
+          .expression;
+
+      assertSame(
+        containsYield(expression('(function* inner(){ yield 1; })')),
+        false,
+      );
+      assertSame(
+        containsYield(expression('(class { *m(){ yield 1; } })')),
+        false,
+      );
+      assertSame(
+        containsYield(expression('(class extends (yield Base) {})')),
+        true,
+      );
+      assertSame(
+        containsYield(expression('(class { [yield key]() {} })')),
+        true,
+      );
+    },
+  },
+  {
+    name: 'containsYield handles patterns and cyclic custom ASTs iteratively',
+    run() {
+      const yieldExpression = {
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      };
+      const pattern = {
+        type: 'VariableDeclaration',
+        declarations: [
+          {
+            type: 'VariableDeclarator',
+            id: {
+              type: 'AssignmentPattern',
+              left: { type: 'Identifier', name: 'value' },
+              right: yieldExpression,
+            },
+            init: null,
+          },
+        ],
+      };
+      assertSame(containsYield(pattern), true);
+
+      const cycle = /** @type {any} */ ({
+        type: 'BinaryExpression',
+        left: { type: 'Identifier', name: 'left' },
+        right: null,
+      });
+      cycle.right = cycle;
+      assertSame(containsYield(cycle), false);
     },
   },
 ];
