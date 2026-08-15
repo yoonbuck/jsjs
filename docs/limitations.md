@@ -463,22 +463,30 @@ then `typeof o[Symbol.hasInstance]` is `"function"` and
 **Backing code:** `src/runtime/symbol.js`, `src/runtime/agent.js`,
 `src/builtins/symbol.js`.
 
-### Guest recursion depth is the engine's, and it is shallow
+### Ordinary synchronous recursion depth is engine-owned and shallow
 
-The engine evaluates guest code by recursing on the host stack, so guest
-recursion is bounded by an engine-owned budget rather than by the host's stack:
-a realm allows 500 engine frames (`DEFAULT_MAX_STACK_DEPTH`), and the frame
-that would exceed that raises a realm-local guest `RangeError` with the message
+The ordinary evaluator processes guest code by recursing on the host stack, so
+that synchronous recursion is bounded by an engine-owned budget rather than by
+the host's stack: a realm allows 500 engine frames
+(`DEFAULT_MAX_STACK_DEPTH`), and the frame that would exceed that raises a
+realm-local guest `RangeError` with the message
 `Maximum call stack size exceeded`, which guest `try`/`catch` sees exactly as a
 real engine's does. Everything that recurses on the host stack enters the
 budget: every activation (guest functions, guest constructors, and built-ins
 alike, so a recursion threaded through `[].map`, a getter, a `valueOf`, or an
-`eval` chain is counted), every expression and statement node the evaluator
-walks into, `JSON.parse`/`JSON.stringify`, and the regular-expression pattern
-parser. The last two matter because their recursion follows the shape of
-runtime _data_ — a parsed JSON document, a pattern string — rather than the
-shape of source, so guest code can drive them arbitrarily deep without a
-single extra call.
+`eval` chain is counted), every expression and statement node the synchronous
+evaluator walks into, `JSON.parse`/`JSON.stringify`, and the regular-expression
+pattern parser. The last two matter because their recursion follows the shape
+of runtime _data_ — a parsed JSON document, a pattern string — rather than the
+shape of source, so guest code can drive them arbitrarily deep without a single
+extra call.
+
+Synchronous generator suspension does not retain that recursion. Its
+expression, pattern, and control-flow continuation frames are typed heap data,
+and every active evaluator/`StackGuard` frame unwinds before a yield returns.
+Resuming a classified yield-free subtree or making a synchronous call still
+bridges to the ordinary evaluator, so generators do not remove this bounded
+active-recursion limitation.
 
 The unit is deliberately an _engine frame_ and not a guest call, because a
 guest call is not a fixed amount of host stack — `f()` nested twenty levels
@@ -594,25 +602,30 @@ labelled-function case remains supported where Annex B.3.2 permits it.
 **Verification:** `evaluateScript(realm, 'if (true) function f() {}')` throws a
 host `SyntaxError`.
 
-### Remaining unsupported syntax is rejected at parse time
+### Remaining unsupported syntax and later APIs
 
 The engine now accepts the issue #25 ES2015 syntax surface: arrows, classes and
 derived construction, computed object/class method names, destructuring,
 default/rest parameters, iterable array/call/construction spread, and template
-literals. The capability gate still rejects exactly these neighboring forms:
+literals. It also accepts synchronous generator declarations, expressions,
+object/class methods, `yield`, and `yield*`. The capability gate still rejects
+these neighboring forms, and the runtime omits the listed later APIs:
 
-- generators and `yield`;
-- async functions and `await`;
+- async functions and `await`, including async generators and async iteration;
 - modules, `import`, `export`, and dynamic `import()`;
 - `new.target`, including inside arrows;
 - object rest and object spread;
 - later class forms: public/private fields, private methods, static blocks, and
   decorators;
-- binary (`0b`) and octal (`0o`) numeric literals; and
-- Unicode code-point escapes (`\u{…}`) in strings and identifiers.
+- binary (`0b`) and octal (`0o`) numeric literals;
+- Unicode code-point escapes (`\u{…}`) in strings and identifiers; and
+- post-ES2015 iterator/generator helpers such as `Iterator.from` and helper
+  methods including `map`, `filter`, and `take`.
 
 `sourceType: 'script'` makes modules fail in Acorn, and `ecmaVersion: 6` rejects
-async forms before the engine's capability pass. The remaining forms are guarded
-by `src/parser.js` shape validation, so the grammar it accepts is the grammar the
-evaluator can execute. A top-level parse failure is a host `SyntaxError`; code
-reached through `eval` or `Function` receives a catchable guest `SyntaxError`.
+async forms before the engine's capability pass. The remaining unsupported
+syntax forms are guarded by `src/parser.js` shape validation, so the grammar it
+accepts is the grammar the evaluator can execute. Iterator/generator helpers
+are a later built-in surface rather than syntax and are simply not installed.
+A top-level parse failure is a host `SyntaxError`; code reached through `eval`,
+`Function`, or `%GeneratorFunction%` receives a catchable guest `SyntaxError`.
