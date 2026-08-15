@@ -46,7 +46,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test:jsc`                      | Every portable suite in the `jsc` shell                                                                                                                                                                                         |
 | `npm run test262:fixtures`              | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                                                                                        |
 | `npm run test262:fixtures:manifest`     | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
-| `TZ=UTC npm run test262:modules`        | Focused pinned static-module Test262 roots; does not rewrite broad reports or selection                                                                                                                                         |
+| `TZ=UTC npm run test262:es2015-release` | Focused pinned Promise+generator+module Test262 release gate; does not rewrite broad reports or selection                                                                                                                       |
 | `TZ=UTC npm run test262:upstream`       | The pinned upstream subset from a real `tc39/test262` checkout; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                         |
 | `TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
 | `TZ=UTC npm run test262:select`         | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
@@ -341,20 +341,20 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 
 Every push and pull request against `main` runs twelve jobs:
 
-| Job                | What it runs                                           | Depends on |
-| ------------------ | ------------------------------------------------------ | ---------- |
-| `ci-drift`         | `npm run ci:check`                                     | —          |
-| `vendor`           | `npm run vendor:check`                                 | —          |
-| `format`           | `npm run format` (Prettier `--check`)                  | —          |
-| `lint`             | `npm run lint` (ESLint only)                           | —          |
-| `typecheck`        | `npm run typecheck` (`tsc` in checkJs mode)            | —          |
-| `test-node`        | `npm run test:node`                                    | `vendor`   |
-| `test-browser`     | `npm run test:browser` (Playwright headless Chromium)  | `vendor`   |
-| `test-jsc`         | `npm run test:jsc` (JavaScriptCoreGTK shell)           | `vendor`   |
-| `test262-fixtures` | `npm run test262:fixtures` (local fixture tree)        | `vendor`   |
-| `test262-modules`  | `npm run test262:modules` (focused pinned module tree) | `vendor`   |
-| `benchmark-smoke`  | `npm run benchmark:smoke` (correctness-only smoke run) | `vendor`   |
-| `test262-upstream` | `npm run test262:upstream` (pinned upstream subset)    | `vendor`   |
+| Job                      | What it runs                                                                    | Depends on |
+| ------------------------ | ------------------------------------------------------------------------------- | ---------- |
+| `ci-drift`               | `npm run ci:check`                                                              | —          |
+| `vendor`                 | `npm run vendor:check`                                                          | —          |
+| `format`                 | `npm run format` (Prettier `--check`)                                           | —          |
+| `lint`                   | `npm run lint` (ESLint only)                                                    | —          |
+| `typecheck`              | `npm run typecheck` (`tsc` in checkJs mode)                                     | —          |
+| `test-node`              | `npm run test:node`                                                             | `vendor`   |
+| `test-browser`           | `npm run test:browser` (Playwright headless Chromium)                           | `vendor`   |
+| `test-jsc`               | `npm run test:jsc` (JavaScriptCoreGTK shell)                                    | `vendor`   |
+| `test262-fixtures`       | `npm run test262:fixtures` (local fixture tree)                                 | `vendor`   |
+| `test262-es2015-release` | `npm run test262:es2015-release` (focused pinned Promise+generator+module gate) | `vendor`   |
+| `benchmark-smoke`        | `npm run benchmark:smoke` (correctness-only smoke run)                          | `vendor`   |
+| `test262-upstream`       | `npm run test262:upstream` (pinned upstream subset)                             | `vendor`   |
 
 Each job runs on `ubuntu-latest` with Node 20 (via `actions/setup-node` with the
 built-in npm cache) and `npm ci`.
