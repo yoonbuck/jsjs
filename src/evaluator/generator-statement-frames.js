@@ -9,7 +9,10 @@ import { getIdentifierReference } from '../runtime/environment.js';
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 import { containsYield } from './static-semantics.js';
 import { evaluateStatement } from './statements.js';
-import { applyVariableDeclaratorValue } from './declarations.js';
+import {
+  applyVariableDeclaratorValue,
+  evaluateNamedExpression,
+} from './declarations.js';
 import { createGeneratorExpressionFrame } from './generator-expression-frames.js';
 import {
   captureGeneratorOperation,
@@ -338,6 +341,43 @@ function dispatchVariableDeclaration(execution, frame) {
               frame.context.strict,
             )
           : null;
+
+      if (!containsYield(declarator.init)) {
+        const evaluated = captureGeneratorOperation(execution.realm, () =>
+          evaluateNamedExpression(
+            declarator.init,
+            frame.context,
+            declarator.id.name,
+          ),
+        );
+
+        if (evaluated.type === 'completion') {
+          return { type: 'pop', result: evaluated };
+        }
+
+        if (evaluated.type !== 'value') {
+          throw new TypeError('Variable initializer expected a value');
+        }
+
+        const applied = captureGeneratorOperation(execution.realm, () => {
+          applyVariableDeclaratorValue(
+            frame.node.kind,
+            declarator,
+            evaluated.value,
+            frame.context,
+            frame.reference,
+          );
+        });
+
+        if (applied.type === 'completion') {
+          return { type: 'pop', result: applied };
+        }
+
+        frame.index += 1;
+        frame.reference = null;
+        continue;
+      }
+
       frame.phase = 'initializer';
       return {
         type: 'push',

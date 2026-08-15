@@ -604,6 +604,48 @@ const tests = [
       assertSame(containsYield(cycle), false);
     },
   },
+  {
+    name: 'containsYield caches nested classifications across repeated queries',
+    run() {
+      const depth = 64;
+      let edgeReads = 0;
+      let expression = /** @type {any} */ ({
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      });
+      /** @type {any[]} */
+      const nested = [];
+
+      for (let index = 0; index < depth; index += 1) {
+        const right = expression;
+        const parent = /** @type {any} */ ({
+          type: 'BinaryExpression',
+          operator: '+',
+          left: { type: 'Literal', value: index },
+        });
+        Object.defineProperty(parent, 'right', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            edgeReads += 1;
+            return right;
+          },
+        });
+        nested.push(parent);
+        expression = parent;
+      }
+
+      for (let repeat = 0; repeat < 8; repeat += 1) {
+        assertSame(containsYield(expression), true);
+      }
+      for (const node of nested) {
+        assertSame(containsYield(node), true);
+      }
+
+      assertSame(edgeReads, depth);
+    },
+  },
 ];
 
 export default tests;

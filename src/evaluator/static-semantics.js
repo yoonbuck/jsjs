@@ -33,6 +33,9 @@
 
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 
+/** @type {WeakMap<object, boolean>} */
+const containsYieldCache = new WeakMap();
+
 /**
  * Returns whether evaluating `node` executes a yield expression in the current
  * function. Nested function bodies are intentionally opaque: callers query a
@@ -42,9 +45,32 @@ import { createUnsupportedNodeError } from '../runtime/errors.js';
  * @returns {boolean}
  */
 export function containsYield(node) {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  if (containsYieldCache.has(node)) {
+    return /** @type {boolean} */ (containsYieldCache.get(node));
+  }
+
   /** @type {any[]} */
   const pending = [node];
   const seen = new WeakSet();
+  /** @type {any[]} */
+  const visited = [];
+  /** @type {Map<object, object[]>} */
+  const reverseParents = new Map();
+  const positive = new WeakSet();
+  /** @type {object[]} */
+  const positiveQueue = [];
+
+  /** @param {object} current */
+  const markPositive = (current) => {
+    if (!positive.has(current)) {
+      positive.add(current);
+      positiveQueue.push(current);
+    }
+  };
 
   while (pending.length > 0) {
     const current = pending.pop();
@@ -54,33 +80,70 @@ export function containsYield(node) {
     }
 
     seen.add(current);
+    visited.push(current);
+
+    /** @type {any[]} */
+    const children = [];
 
     if (Array.isArray(current)) {
       for (const child of current) {
+        children.push(child);
+      }
+    } else if (current.type === 'YieldExpression') {
+      markPositive(current);
+    } else if (isNestedFunctionBoundary(current)) {
+      // Nested functions execute only when called, not while creating them.
+    } else if (current.type === 'MethodDefinition') {
+      if (current.computed) {
+        children.push(current.key);
+      }
+    } else {
+      pushExecutedChildren(current, children);
+    }
+
+    for (const child of children) {
+      if (!child || typeof child !== 'object') {
+        continue;
+      }
+
+      if (containsYieldCache.has(child)) {
+        if (containsYieldCache.get(child)) {
+          markPositive(current);
+        }
+        continue;
+      }
+
+      const parents = reverseParents.get(child);
+      if (parents === undefined) {
+        reverseParents.set(child, [current]);
+      } else {
+        parents.push(current);
+      }
+
+      if (!seen.has(child)) {
         pending.push(child);
       }
-      continue;
     }
-
-    if (current.type === 'YieldExpression') {
-      return true;
-    }
-
-    if (isNestedFunctionBoundary(current)) {
-      continue;
-    }
-
-    if (current.type === 'MethodDefinition') {
-      if (current.computed) {
-        pending.push(current.key);
-      }
-      continue;
-    }
-
-    pushExecutedChildren(current, pending);
   }
 
-  return false;
+  for (let index = 0; index < positiveQueue.length; index += 1) {
+    const current = positiveQueue[index];
+    const parents = reverseParents.get(current);
+
+    if (parents === undefined) {
+      continue;
+    }
+
+    for (const parent of parents) {
+      markPositive(parent);
+    }
+  }
+
+  for (const current of visited) {
+    containsYieldCache.set(current, positive.has(current));
+  }
+
+  return positive.has(node);
 }
 
 /**

@@ -83,6 +83,41 @@ const tests = [
     },
   },
   {
+    name: 'resumable declaration lists apply NamedEvaluation before later yields',
+    run() {
+      assertSame(
+        run(`
+          function* g() {
+            var fn = function () {}, first = yield 'var-ready';
+            let arrow = () => {}, second = yield 'let-ready';
+            const Klass = class {}, third = yield 'const-ready';
+            return [
+              fn.name,
+              arrow.name,
+              Klass.name,
+              first,
+              second,
+              third
+            ].join(':');
+          }
+          var iterator = g();
+          var first = iterator.next();
+          var second = iterator.next(1);
+          var third = iterator.next(2);
+          var result = iterator.next(3);
+          [
+            first.value,
+            second.value,
+            third.value,
+            result.value,
+            result.done
+          ].join('|');
+        `),
+        'var-ready|let-ready|const-ready|fn:arrow:Klass:1:2:3|true',
+      );
+    },
+  },
+  {
     name: 'throw statements and injected throw and return completions leave a suspended yield abruptly',
     run() {
       assertSame(
@@ -377,6 +412,24 @@ const tests = [
     },
   },
   {
+    name: 'call frames append large resumed spread lists without host argument spread',
+    run() {
+      assertSame(
+        run(`
+          var values = new Array(150000);
+          function* g() {
+            return Array(...(yield 'call-ready')).length;
+          }
+          var iterator = g();
+          var first = iterator.next();
+          var result = iterator.next(values);
+          [first.value, result.value, result.done].join(':');
+        `),
+        'call-ready:150000:true',
+      );
+    },
+  },
+  {
     name: 'new frames retain the constructor and expand spread arguments after resume',
     run() {
       assertSame(
@@ -426,6 +479,24 @@ const tests = [
           ].join(':');
         `),
         'spread-ready:false:constructor,first,spread:10:true:constructor,first,spread,fourth,construct',
+      );
+    },
+  },
+  {
+    name: 'new frames append large resumed spread lists without host argument spread',
+    run() {
+      assertSame(
+        run(`
+          var values = new Array(150000);
+          function* g() {
+            return new Array(...(yield 'new-ready')).length;
+          }
+          var iterator = g();
+          var first = iterator.next();
+          var result = iterator.next(values);
+          [first.value, result.value, result.done].join(':');
+        `),
+        'new-ready:150000:true',
       );
     },
   },
@@ -589,6 +660,96 @@ const tests = [
           ].join(':');
         `),
         'key-ready:second-ready:16:true:key,first,second,super-this',
+      );
+    },
+  },
+  {
+    name: 'resumed super reads reject a null super base',
+    run() {
+      assertSame(
+        run(`
+          var object = {
+            __proto__: null,
+            *read() {
+              return super[yield 'read-key-ready'];
+            }
+          };
+          var iterator = object.read();
+          var first = iterator.next();
+          var outcome = 'no-error';
+          try {
+            iterator.next('missing');
+          } catch (error) {
+            outcome = error.name;
+          }
+          [first.value, first.done, outcome].join(':');
+        `),
+        'read-key-ready:false:TypeError',
+      );
+    },
+  },
+  {
+    name: 'resumed super calls reject a null base before arguments',
+    run() {
+      assertSame(
+        run(`
+          var log = [];
+          function argument() {
+            log.push('argument');
+            return 'argument-ready';
+          }
+          var object = {
+            __proto__: null,
+            *call() {
+              return super[yield 'call-key-ready'](yield argument());
+            }
+          };
+          var iterator = object.call();
+          var first = iterator.next();
+          var outcome = 'no-error';
+          try {
+            iterator.next('missing');
+          } catch (error) {
+            outcome = error.name;
+          }
+          [first.value, outcome, log.join(',')].join(':');
+        `),
+        'call-key-ready:TypeError:',
+      );
+    },
+  },
+  {
+    name: 'resumed super assignments reject a null base after the right side',
+    run() {
+      assertSame(
+        run(`
+          var log = [];
+          function rightSide() {
+            log.push('right');
+            return 7;
+          }
+          var object = {
+            __proto__: null,
+            *assign() {
+              super[yield 'assignment-key-ready'] = rightSide();
+            }
+          };
+          var iterator = object.assign();
+          var first = iterator.next();
+          var outcome = 'no-error';
+          try {
+            iterator.next('written');
+          } catch (error) {
+            outcome = error.name;
+          }
+          [
+            first.value,
+            outcome,
+            log.join(','),
+            'written' in object
+          ].join(':');
+        `),
+        'assignment-key-ready:TypeError:right:false',
       );
     },
   },

@@ -987,7 +987,9 @@ function dispatchCall(execution, frame) {
         throw new TypeError('Spread argument did not produce a value list');
       }
 
-      frame.args.push(...spread.value);
+      for (const value of spread.value) {
+        frame.args.push(value);
+      }
     } else {
       frame.args.push(result.value);
     }
@@ -1113,7 +1115,9 @@ function dispatchNew(execution, frame) {
         throw new TypeError('Spread argument did not produce a value list');
       }
 
-      frame.args.push(...spread.value);
+      for (const value of spread.value) {
+        frame.args.push(value);
+      }
     } else {
       frame.args.push(result.value);
     }
