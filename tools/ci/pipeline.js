@@ -91,21 +91,24 @@ export const TEST262_UPSTREAM_ENVIRONMENT = Object.freeze({
 });
 
 /**
- * Adds the broad Test262 environment only for scripts that execute that broad
- * run. Returning the original environment for every other script makes it
- * impossible for the local full-contract helper to leak these settings into
- * unrelated commands.
+ * Preserves the full contract's UTC baseline for every script and adds the
+ * authoritative heap allowance only for scripts that execute the broad run.
  *
  * @param {string} script
  * @param {Readonly<Record<string, string | undefined>>} environment
  * @returns {Readonly<Record<string, string | undefined>>}
  */
 export function environmentForTest262NpmScript(script, environment) {
+  const utcEnvironment = {
+    ...environment,
+    TZ: TEST262_UPSTREAM_ENVIRONMENT.TZ,
+  };
+
   if (script !== 'test262:upstream' && script !== 'test262:upstream:check') {
-    return environment;
+    return utcEnvironment;
   }
 
-  return { ...environment, ...TEST262_UPSTREAM_ENVIRONMENT };
+  return { ...utcEnvironment, ...TEST262_UPSTREAM_ENVIRONMENT };
 }
 
 /**

@@ -76,7 +76,7 @@
 - [ ] Generalize the coverage document update code to target `docs/conformance.md`; retain the detailed JSONL path unchanged.
 - [ ] Write `docs/conformance.md` with supported ES5 surface, selection/exclusion methodology, denominator semantics, generated summary markers, and links to detailed JSONL and policy artifacts.
 - [ ] Remove the old README conformance internals and retain only a short current-status headline linked to the reference.
-- [ ] Regenerate artifacts and run `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`.
+- [ ] Regenerate artifacts and run `npm run test262:upstream:check`.
 - [ ] Commit with `docs: move conformance reporting out of readme`.
 
 ### Task 4: Limitations, deviations, and consistency audit
@@ -118,7 +118,7 @@
 - Produces: final current-reference documentation set.
 
 - [ ] Compare all README commands with `package.json`, all API examples with exports, all supported-family claims with realm installation, and coverage numbers with generated artifacts.
-- [ ] Run `npm run format`, `npm run lint`, `npm run typecheck`, `npm run test:node`, `npm run test:browser`, `npm run test:jsc`, `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`, and `npm run ci:contract`.
+- [ ] Run `npm run format`, `npm run lint`, `npm run typecheck`, `npm run test:node`, `npm run test:browser`, `npm run test:jsc`, `npm run test262:upstream:check`, and `npm run ci:contract`.
 - [ ] Verify README is substantially shorter, contains no generated report block, and every reference link resolves.
 - [ ] Request a whole-branch documentation/code consistency review and fix all Important findings.
 - [ ] Commit with `docs: finalize project documentation`.

@@ -518,11 +518,10 @@ export default [
     },
   },
   {
-    name: 'the broad Test262 environment helper scopes heap and UTC to broad npm scripts',
+    name: 'the full contract environment helper keeps UTC global and scopes heap to broad npm scripts',
     run: () => {
       const base = Object.freeze({
         PATH: '/contract/bin',
-        NODE_OPTIONS: '--trace-warnings',
         TZ: 'America/Los_Angeles',
       });
       const environmentForScript = ciPipeline.environmentForTest262NpmScript;
@@ -541,10 +540,14 @@ export default [
         assertSame(environment.TZ, 'UTC');
       }
 
+      const unrelatedEnvironment = environmentForScript('format', base);
+
+      assertSame(unrelatedEnvironment.PATH, base.PATH);
+      assertSame(unrelatedEnvironment.TZ, 'UTC');
       assertSame(
-        environmentForScript('format', base),
-        base,
-        'unrelated commands must not receive a globally modified environment',
+        unrelatedEnvironment.NODE_OPTIONS,
+        undefined,
+        'unrelated commands must not receive the broad Test262 heap allowance',
       );
     },
   },
