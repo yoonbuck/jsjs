@@ -69,6 +69,7 @@ import {
 import * as ciPipeline from '../../tools/ci/pipeline.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+const NON_UTC_UPSTREAM_DIAGNOSTIC_ENV = Object.freeze({ TZ: 'Etc/GMT+1' });
 
 /**
  * The command each CI job is supposed to run, spelled out here instead of
@@ -207,6 +208,45 @@ function usesSteps(job, action) {
     (/** @type {any} */ step) =>
       typeof step.uses === 'string' && step.uses.startsWith(`${action}@`),
   );
+}
+
+function nodeExecPath() {
+  return /** @type {{ execPath: string }} */ (/** @type {unknown} */ (process))
+    .execPath;
+}
+
+function nonUtcUpstreamDiagnosticInvocation() {
+  return {
+    command: nodeExecPath(),
+    args: ['tools/test262/upstream-run.js'],
+    options: /** @type {{
+      cwd: string,
+      env: typeof NON_UTC_UPSTREAM_DIAGNOSTIC_ENV,
+      encoding: 'utf8',
+      maxBuffer: number,
+    }} */ ({
+      cwd: fileURLToPath(REPOSITORY_ROOT_URL),
+      env: NON_UTC_UPSTREAM_DIAGNOSTIC_ENV,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024,
+    }),
+  };
+}
+
+/**
+ * @param {{ stderr?: unknown }} result
+ * @returns {string}
+ */
+function stderrText(result) {
+  if (typeof result.stderr === 'string') {
+    return result.stderr;
+  }
+
+  if (result.stderr instanceof Uint8Array) {
+    return new globalThis.TextDecoder().decode(result.stderr);
+  }
+
+  return '';
 }
 
 /**
@@ -553,26 +593,40 @@ export default [
     },
   },
   {
-    name: 'upstream checkout diagnostics print the exact heap and UTC remediation command',
+    name: 'non-UTC upstream diagnostic prints the exact heap and UTC remediation command',
     run: async () => {
-      const result = spawnSync(
-        process.argv[0],
-        ['tools/test262/upstream-run.js'],
-        {
-          cwd: fileURLToPath(REPOSITORY_ROOT_URL),
-          env: { ...process.env, TZ: 'Etc/GMT+1' },
-          encoding: 'utf8',
-          maxBuffer: 64 * 1024,
-        },
-      );
+      const { command, args, options } = nonUtcUpstreamDiagnosticInvocation();
+      const result = spawnSync(command, args, options);
 
+      assertSame(result.error, undefined);
       assertSame(result.status, 1);
       assertSame(
-        result.stderr.includes(
+        stderrText(result).includes(
           'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream',
         ),
         true,
-        `non-UTC remediation was:\n${result.stderr}`,
+        `non-UTC remediation was:\n${stderrText(result)}`,
+      );
+    },
+  },
+  {
+    name: 'non-UTC upstream diagnostic uses process.execPath and isolated TZ-only environment',
+    run: () => {
+      const invocation = nonUtcUpstreamDiagnosticInvocation();
+
+      assertSame(invocation.command, nodeExecPath());
+      assertSame(
+        JSON.stringify(invocation.args),
+        JSON.stringify(['tools/test262/upstream-run.js']),
+      );
+      assertSame(
+        JSON.stringify(invocation.options),
+        JSON.stringify({
+          cwd: fileURLToPath(REPOSITORY_ROOT_URL),
+          env: NON_UTC_UPSTREAM_DIAGNOSTIC_ENV,
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024,
+        }),
       );
     },
   },
