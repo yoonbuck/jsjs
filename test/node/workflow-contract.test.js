@@ -23,7 +23,18 @@ import { readFile } from 'node:fs/promises';
 import { load as parseYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
-import { runTest262Suite } from '../../tools/test262/runner.js';
+import {
+  UNSUPPORTED_FLAGS,
+  runTest262Suite,
+} from '../../tools/test262/runner.js';
+import {
+  expandVariants,
+  parseTest262Metadata,
+} from '../../tools/test262/metadata.js';
+import {
+  ES5_SELECTION_FILE,
+  parseEs5Selection,
+} from '../../tools/test262/es5-selection.js';
 import {
   ACTION_PINS,
   TEST262_REPORT_FILE,
@@ -126,12 +137,75 @@ const EXPECTED_DRIFT_COMMAND =
 
 const engine = { createRealm, evaluateScript };
 
+const GENERATOR_PROBE =
+  "function* sequence() {\n  var input = yield 1;\n  return input + 1;\n}\nvar iterator = sequence();\nif (iterator[Symbol.iterator]() !== iterator) {\n  throw new Error('generator is not iterable');\n}\nvar first = iterator.next();\nvar second = iterator.next(2);\nif (first.value !== 1 || first.done || second.value !== 3 || !second.done) {\n  throw new Error('generator resume semantics failed');\n}";
+
+const FOCUSED_SUITE_PATHS = Object.freeze({
+  generator: Object.freeze([
+    'test/built-ins/GeneratorFunction/invoked-as-constructor-no-arguments.js',
+    'test/built-ins/GeneratorFunction/invoked-as-function-multiple-arguments.js',
+    'test/built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js',
+    'test/built-ins/GeneratorPrototype/next/consecutive-yields.js',
+    'test/built-ins/GeneratorPrototype/next/from-state-executing.js',
+    'test/built-ins/GeneratorPrototype/return/from-state-suspended-start.js',
+    'test/built-ins/GeneratorPrototype/return/try-finally-within-try.js',
+    'test/built-ins/GeneratorPrototype/throw/from-state-suspended-start.js',
+    'test/built-ins/GeneratorPrototype/throw/try-catch-within-try.js',
+    'test/language/computed-property-names/class/method/generator.js',
+    'test/language/computed-property-names/object/method/generator.js',
+  ]),
+  module: Object.freeze([
+    'test/language/module-code/ambiguous-export-bindings/omitted-from-namespace.js',
+    'test/language/module-code/eval-export-dflt-expr-fn-anon.js',
+    'test/language/module-code/eval-gtbndng-indirect-update.js',
+    'test/language/module-code/eval-gtbndng-local-bndng-let.js',
+    'test/language/module-code/eval-this.js',
+    'test/language/module-code/instn-iee-bndng-fun.js',
+    'test/language/module-code/instn-iee-err-dflt-thru-star.js',
+    'test/language/module-code/instn-iee-err-not-found.js',
+    'test/language/module-code/instn-iee-iee-cycle.js',
+    'test/language/module-code/namespace/Symbol.toStringTag.js',
+  ]),
+  promise: Object.freeze([
+    'test/built-ins/Promise/Symbol.species/prop-desc.js',
+    'test/built-ins/Promise/all/capability-resolve-throws-no-close.js',
+    'test/built-ins/Promise/all/capability-resolve-throws-reject.js',
+    'test/built-ins/Promise/all/resolve-non-thenable.js',
+    'test/built-ins/Promise/constructor.js',
+    'test/built-ins/Promise/prototype/Symbol.toStringTag.js',
+    'test/built-ins/Promise/prototype/then/rxn-handler-identity.js',
+    'test/built-ins/Promise/prototype/then/rxn-handler-thrower.js',
+    'test/built-ins/Promise/race/resolved-sequence.js',
+    'test/built-ins/Promise/resolve-thenable-immed.js',
+    'test/built-ins/Promise/resolve/resolve-thenable.js',
+  ]),
+});
+
 /**
  * @param {string} path Repository-relative.
  * @returns {Promise<string>}
  */
 function readRepositoryFile(path) {
   return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
+}
+
+/**
+ * @param {'generator' | 'module' | 'promise'} suite
+ * @returns {Promise<string[]>}
+ */
+async function readFocusedPaths(suite) {
+  const source = await readRepositoryFile(
+    `test/ci/es2015-${suite}-test262.test.js`,
+  );
+  const block = /const FOCUSED_PATHS = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(
+    source,
+  )?.[1];
+
+  if (block === undefined) {
+    throw new Error(`focused ${suite} suite must declare FOCUSED_PATHS`);
+  }
+
+  return [...block.matchAll(/'([^']+\.js)'/g)].map((match) => match[1]);
 }
 
 /**
@@ -607,6 +681,166 @@ export default [
         assertSame(unsupported.records[0].status, 'skipped');
         assertSame(unsupported.records[0].reason, 'unsupported-feature');
       }
+    },
+  },
+  {
+    name: 'the focused async runtime release policy is explicit and deterministic',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const policy = parseEs5Selection(
+        await readRepositoryFile(ES5_SELECTION_FILE),
+      );
+      const names = featureNames(manifest);
+      const generator = manifest.features.find(
+        (feature) => feature.name === 'generators',
+      );
+
+      assertSame(JSON.stringify(names), JSON.stringify([...names].sort()));
+      assertSame(new Set(names).size, names.length);
+      assertSame(generator?.probe, GENERATOR_PROBE);
+      assertSame(
+        JSON.stringify(generator?.tests),
+        JSON.stringify(FOCUSED_SUITE_PATHS.generator.slice(0, 9)),
+        'generator probe evidence must be the nine focused roots tagged generators',
+      );
+      if (generator === undefined) {
+        throw new Error('features.json must claim generators');
+      }
+
+      assertSame(
+        runFeatureProbe({ engine, feature: generator }).outcome,
+        'completed',
+      );
+      assertSame(
+        JSON.stringify(
+          names.filter((name) => ['Promise', 'async', 'module'].includes(name)),
+        ),
+        '[]',
+        'Promise is untagged coverage and async/module are Test262 flags',
+      );
+      assertSame(
+        JSON.stringify(UNSUPPORTED_FLAGS),
+        JSON.stringify([
+          'CanBlockIsFalse',
+          'CanBlockIsTrue',
+          'non-deterministic',
+        ]),
+      );
+      assertSame(
+        JSON.stringify(policy.excludedLanguageDirectories),
+        JSON.stringify(['export', 'import', 'module-code']),
+      );
+      assertSame(policy.expansionFeatures.includes('generators'), true);
+
+      for (const suite of /** @type {const} */ ([
+        'generator',
+        'module',
+        'promise',
+      ])) {
+        const paths = await readFocusedPaths(suite);
+        const expected = FOCUSED_SUITE_PATHS[suite];
+
+        assertSame(JSON.stringify(paths), JSON.stringify(expected));
+        assertSame(JSON.stringify(paths), JSON.stringify([...paths].sort()));
+      }
+
+      const allFocusedPaths = Object.values(FOCUSED_SUITE_PATHS).flat();
+
+      assertSame(new Set(allFocusedPaths).size, allFocusedPaths.length);
+
+      const generatorAreas = policy.featureAreas.filter((area) =>
+        FOCUSED_SUITE_PATHS.generator.includes(area.prefix),
+      );
+
+      assertSame(
+        JSON.stringify(generatorAreas.map((area) => area.prefix)),
+        JSON.stringify(FOCUSED_SUITE_PATHS.generator),
+      );
+      assertSame(
+        generatorAreas.every(
+          (area) =>
+            area.prefix.endsWith('.js') &&
+            area.features.every((feature) =>
+              [
+                'Symbol.toStringTag',
+                'computed-property-names',
+                'generators',
+              ].includes(feature),
+            ),
+        ),
+        true,
+      );
+      assertSame(
+        policy.featureAreas.some((area) =>
+          [
+            'test/built-ins/GeneratorFunction',
+            'test/built-ins/GeneratorPrototype',
+          ].includes(area.prefix),
+        ),
+        false,
+        'generator admission must stay in exact-file structured policy',
+      );
+
+      const moduleMetadata = parseTest262Metadata(
+        '/*---\ndescription: module\nflags: [module]\n---*/\n',
+      );
+      const asyncMetadata = parseTest262Metadata(
+        '/*---\ndescription: async\nflags: [async]\n---*/\n',
+      );
+
+      assertSame(JSON.stringify(moduleMetadata.features), '[]');
+      assertSame(JSON.stringify(asyncMetadata.features), '[]');
+      assertSame(
+        JSON.stringify(expandVariants(moduleMetadata)),
+        '["non-strict"]',
+      );
+      assertSame(
+        JSON.stringify(expandVariants(asyncMetadata)),
+        '["non-strict","strict"]',
+      );
+      assertSame(
+        JSON.stringify(
+          expandVariants(
+            parseTest262Metadata(
+              '/*---\ndescription: strict\nflags: [onlyStrict]\n---*/\n',
+            ),
+          ),
+        ),
+        '["strict"]',
+      );
+      assertSame(
+        JSON.stringify(
+          expandVariants(
+            parseTest262Metadata(
+              '/*---\ndescription: sloppy\nflags: [noStrict]\n---*/\n',
+            ),
+          ),
+        ),
+        '["non-strict"]',
+      );
+      assertThrows(
+        () =>
+          parseTest262Metadata(
+            '/*---\ndescription: async module\nflags: [module, async]\n---*/\n',
+          ),
+        Error,
+      );
+      assertThrows(
+        () =>
+          parseTest262Metadata(
+            '/*---\ndescription: raw module\nflags: [raw, module]\n---*/\n',
+          ),
+        Error,
+      );
+      assertThrows(
+        () =>
+          parseTest262Metadata(
+            '/*---\ndescription: raw async\nflags: [raw, async]\n---*/\n',
+          ),
+        Error,
+      );
     },
   },
   {

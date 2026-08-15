@@ -453,6 +453,18 @@ export default [
     },
   },
   {
+    name: 'metadata rejects module plus async without focused pinned evidence',
+    run: () => {
+      assertThrows(
+        () =>
+          parseTest262Metadata(
+            '/*---\ndescription: unsupported async module\nflags: [module, async]\n---*/\n',
+          ),
+        Test262MetadataError,
+      );
+    },
+  },
+  {
     name: 'variant expansion honours the strictness flags',
     run: () => {
       const variantsOf = (/** @type {string} */ flags) =>

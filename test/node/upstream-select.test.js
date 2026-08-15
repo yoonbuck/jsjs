@@ -10,6 +10,7 @@ import {
 
 const EXCLUDED_PATH = 'test/staging/not-read.js';
 const MODULE_PATH = 'test/built-ins/Array/module.js';
+const MODULE_CODE_PATH = 'test/language/module-code/basic.js';
 const ELIGIBLE_PATH = 'test/built-ins/Array/eligible.js';
 const ORDINARY_PATH = 'test/built-ins/Array/ordinary.js';
 const GENERATOR_DECLARATION_PATH =
@@ -20,20 +21,27 @@ const OBJECT_GENERATOR_PATH = 'test/built-ins/Array/object-generator.js';
 const CLASS_GENERATOR_PATH = 'test/built-ins/Array/class-generator.js';
 const HARNESS_USER_PATH = 'test/built-ins/Array/generator-harness.js';
 const GENERATOR_HARNESS = 'generator.js';
+const FOCUSED_TAGGED_GENERATOR_PATH =
+  'test/built-ins/GeneratorPrototype/next/consecutive-yields.js';
+const NEIGHBORING_TAGGED_GENERATOR_PATH =
+  'test/built-ins/GeneratorPrototype/next/neighbor.js';
+const FOCUSED_UNTAGGED_GENERATOR_PATH =
+  'test/language/computed-property-names/object/method/generator.js';
 const COMPUTED_PROPERTY_FRONTMATTER =
   '/*---\nfeatures: [computed-property-names]\n---*/\n';
 
 /**
  * @param {readonly string[]} expansionFeatures
+ * @param {readonly object[]} [featureAreas]
  */
-function createPolicy(expansionFeatures) {
+function createPolicy(expansionFeatures, featureAreas = []) {
   return parseEs5Selection(
     JSON.stringify({
       version: ES5_SELECTION_VERSION,
       excludedDirectories: ['test/staging'],
-      builtins: ['Array'],
-      excludedLanguageDirectories: [],
-      featureAreas: [],
+      builtins: ['Array', 'GeneratorPrototype'],
+      excludedLanguageDirectories: ['module-code'],
+      featureAreas,
       expansionFeatures,
       exclusions: [],
     }),
@@ -131,6 +139,83 @@ export default [
         'structurally excluded paths must not be read while module metadata is read before rejection',
       );
       assertSame(JSON.stringify(paths), JSON.stringify([ELIGIBLE_PATH]));
+    },
+  },
+  {
+    name: 'upstream selection excludes module-code paths before reading source',
+    run: async () => {
+      /** @type {string[]} */
+      const reads = [];
+      const paths = await selectPaths({
+        policy: POLICY,
+        previouslySelected: new Set([MODULE_CODE_PATH, ELIGIBLE_PATH]),
+        files: [MODULE_CODE_PATH, ELIGIBLE_PATH],
+        harnessParsing: new Map(),
+        readSource: (path) => {
+          reads.push(path);
+          return '';
+        },
+      });
+
+      assertSame(JSON.stringify(reads), JSON.stringify([ELIGIBLE_PATH]));
+      assertSame(JSON.stringify(paths), JSON.stringify([ELIGIBLE_PATH]));
+    },
+  },
+  {
+    name: 'upstream selection admits only exact generator feature areas',
+    run: async () => {
+      const policy = createPolicy(
+        ['computed-property-names', 'generators'],
+        [
+          {
+            prefix: FOCUSED_TAGGED_GENERATOR_PATH,
+            features: ['generators'],
+            reason: 'Exact focused tagged generator root.',
+          },
+          {
+            prefix: FOCUSED_UNTAGGED_GENERATOR_PATH,
+            features: [],
+            reason: 'Exact focused untagged generator root.',
+          },
+        ],
+      );
+      const sources = new Map([
+        [
+          FOCUSED_TAGGED_GENERATOR_PATH,
+          '/*---\nfeatures: [generators]\n---*/\nfunction* g() { yield 1; }',
+        ],
+        [
+          NEIGHBORING_TAGGED_GENERATOR_PATH,
+          '/*---\nfeatures: [generators]\n---*/\nfunction* g() { yield 1; }',
+        ],
+        [
+          FOCUSED_UNTAGGED_GENERATOR_PATH,
+          '/*---\ndescription: focused\n---*/\nvar o = { *g() { yield 1; } };',
+        ],
+      ]);
+      const paths = await selectPaths({
+        policy,
+        previouslySelected: new Set(),
+        files: [...sources.keys()],
+        harnessParsing: new Map(),
+        readSource: (path) => {
+          const source = sources.get(path);
+
+          if (source === undefined) {
+            throw new Error(`unexpected source read: ${path}`);
+          }
+
+          return source;
+        },
+      });
+
+      assertSame(
+        JSON.stringify(paths),
+        JSON.stringify([
+          FOCUSED_TAGGED_GENERATOR_PATH,
+          FOCUSED_UNTAGGED_GENERATOR_PATH,
+        ]),
+      );
     },
   },
   {

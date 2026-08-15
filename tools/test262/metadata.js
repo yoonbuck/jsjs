@@ -485,6 +485,12 @@ function validateFlagCombinations(flags, includes) {
     );
   }
 
+  if (flags.includes('module') && flags.includes('async')) {
+    throw new Test262MetadataError(
+      'Unsupported frontmatter flag combination: module and async',
+    );
+  }
+
   if (!flags.includes('raw')) {
     return;
   }

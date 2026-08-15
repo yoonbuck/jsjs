@@ -8,6 +8,8 @@
     "Date",
     "Error",
     "Function",
+    "GeneratorFunction",
+    "GeneratorPrototype",
     "Infinity",
     "JSON",
     "Math",
@@ -55,6 +57,51 @@
       "reason": "ES2015 §22.1.5 `%ArrayIteratorPrototype%` and its `next`/`@@toStringTag` are implemented (issue #47); the engine claims the `Symbol.iterator` and `Symbol.toStringTag` tags in `tools/test262/features.json`. Tests that also need `TypedArray` stay out of scope."
     },
     {
+      "prefix": "test/built-ins/GeneratorFunction/invoked-as-constructor-no-arguments.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorFunction/invoked-as-function-multiple-arguments.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js",
+      "features": ["Symbol.toStringTag", "generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; it claims only its generators and Symbol.toStringTag metadata."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorPrototype/next/consecutive-yields.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorPrototype/next/from-state-executing.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorPrototype/return/from-state-suspended-start.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorPrototype/return/try-finally-within-try.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorPrototype/throw/from-state-suspended-start.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
+      "prefix": "test/built-ins/GeneratorPrototype/throw/try-catch-within-try.js",
+      "features": ["generators"],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; its only metadata feature is generators."
+    },
+    {
       "prefix": "test/built-ins/Object/getOwnPropertySymbols",
       "features": ["Symbol"],
       "reason": "ES2015 §19.1.2.8 `Object.getOwnPropertySymbols` is implemented (issue #43); the engine claims the `Symbol` tag in `tools/test262/features.json`."
@@ -91,6 +138,16 @@
       "prefix": "test/language",
       "features": ["Symbol.iterator", "const", "for-of", "let"],
       "reason": "ES2015 lexical declarations and `for`-`of` are implemented (issues #41 and #47), including iteration through `Symbol.iterator`; the engine claims these exact tags in `tools/test262/features.json`. Tests with any additional tag, modules, or unsupported neighboring syntax stay out of scope."
+    },
+    {
+      "prefix": "test/language/computed-property-names/class/method/generator.js",
+      "features": [],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata."
+    },
+    {
+      "prefix": "test/language/computed-property-names/object/method/generator.js",
+      "features": [],
+      "reason": "Exact pinned focused generator root proven by test/ci/es2015-generator-test262.test.js; the pinned file declares no features metadata."
     },
     {
       "prefix": "test/language/destructuring/binding",
@@ -183,6 +240,7 @@
     "default-parameters",
     "destructuring-assignment",
     "destructuring-binding",
+    "generators",
     "rest-parameters",
     "spread-syntax",
     "template"

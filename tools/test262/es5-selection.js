@@ -15,8 +15,9 @@
  * The policy expresses path-only structural filters as data — excluded
  * top-level directories, the allowed `test/built-ins/<name>` list, the excluded
  * `test/language/<dir>` list, and exact classified exclusions — plus a
- * `featureAreas` list that names, per directory prefix, exactly which Test262
- * `features:` tags the engine is willing to run there. Source-dependent
+ * `featureAreas` list that names, per directory or exact-file prefix, exactly
+ * which Test262 `features:` tags the engine is willing to run there. An exact
+ * file may claim an empty metadata list; directory claims may not. Source-dependent
  * decisions ("source parses under the engine's supported grammar", "frontmatter
  * carries no `module` flag", and claimed feature tags) deliberately remain
  * separate, so a caller can eliminate impossible paths without reading them.
@@ -280,7 +281,7 @@ function parseFeatureArea(entry) {
 
   const features = parseStringList(record.features, `featureAreas ${prefix}`, {
     requireTestPrefix: false,
-    allowEmpty: false,
+    allowEmpty: prefix.endsWith('.js'),
   });
 
   if (typeof record.reason !== 'string' || record.reason.trim() === '') {
@@ -538,7 +539,8 @@ export function isStructurallyEligiblePath(path, policy) {
  * Whether a path and its source-derived information survive the selection
  * policy. Every known-good path is retained after the structural guards below.
  * A path outside that baseline must declare at least one `expansionFeatures`
- * tag and must be fully claimed by a matching **feature area**
+ * tag and must be fully claimed by a matching **feature area**, unless an
+ * exact-file area explicitly claims its empty pinned metadata
  * (`featureAreas` in the policy). Both halves matter. Requiring the expansion
  * tag keeps a grammar widening from dragging in newly parseable untagged tests
  * or unrelated tagged tests such as `Symbol.species`; requiring the prefix and
@@ -567,11 +569,20 @@ export function isCandidatePath(
   }
 
   if (!previouslySelected.has(path)) {
-    if (
-      !info.declaresFeatures ||
-      !info.features.some((name) => policy.expansionFeatures.includes(name)) ||
-      !isClaimedByFeatureArea(path, info, policy)
-    ) {
+    const claimedByArea = isClaimedByFeatureArea(path, info, policy);
+    const expandsTaggedFeature =
+      info.declaresFeatures &&
+      info.features.some((name) => policy.expansionFeatures.includes(name));
+    const isExactUntaggedClaim =
+      !info.declaresFeatures &&
+      policy.featureAreas.some(
+        (area) =>
+          area.prefix === path &&
+          area.features.length === 0 &&
+          info.features.length === 0,
+      );
+
+    if (!claimedByArea || (!expandsTaggedFeature && !isExactUntaggedClaim)) {
       return false;
     }
   }
@@ -591,10 +602,6 @@ export function isCandidatePath(
  * @returns {boolean}
  */
 function isClaimedByFeatureArea(path, info, policy) {
-  if (info.features.length === 0) {
-    return false;
-  }
-
   for (const area of policy.featureAreas) {
     if (path !== area.prefix && !path.startsWith(`${area.prefix}/`)) {
       continue;
