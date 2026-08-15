@@ -155,4 +155,94 @@ export default [
       }
     },
   },
+  {
+    name: 'parseModule rejects unsupported nested custom-parser module nodes',
+    run() {
+      /** @param {any[]} body */
+      const parseModuleAst = (body) =>
+        parseModule('', {
+          parse() {
+            return { type: 'Program', sourceType: 'module', body };
+          },
+        });
+
+      assertThrows(
+        () =>
+          parseModuleAst([
+            {
+              type: 'ExpressionStatement',
+              expression: {
+                type: 'ImportExpression',
+                source: { type: 'Literal', value: 'a' },
+              },
+            },
+          ]),
+        Error,
+      );
+      assertThrows(
+        () =>
+          parseModuleAst([
+            {
+              type: 'ExpressionStatement',
+              expression: {
+                type: 'MetaProperty',
+                meta: { type: 'Identifier', name: 'import' },
+                property: { type: 'Identifier', name: 'meta' },
+              },
+            },
+          ]),
+        Error,
+      );
+      assertThrows(
+        () =>
+          parseModuleAst([
+            {
+              type: 'ExportNamedDeclaration',
+              declaration: { type: 'VariableDeclaration' },
+              specifiers: [],
+              source: null,
+            },
+          ]),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'parseModule rejects exported export-all declarations from custom parsers',
+    run() {
+      assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              return {
+                type: 'Program',
+                sourceType: 'module',
+                body: [
+                  {
+                    type: 'ExportAllDeclaration',
+                    source: { type: 'Literal', value: 'a' },
+                    exported: { type: 'Identifier', name: 'ns' },
+                  },
+                ],
+              };
+            },
+          }),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'SourceTextModuleRecord retains duplicate module requests in source order',
+    run() {
+      const record = new SourceTextModuleRecord({
+        realm: createRealm(),
+        identifier: 'duplicate-requests',
+        ast: parseModule(
+          'import "a"; import "a"; export { x as y } from "a"; export * from "a";',
+        ),
+      });
+
+      assertSame(record.requestedModules.join(','), 'a,a,a,a');
+    },
+  },
 ];

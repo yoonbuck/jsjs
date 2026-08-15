@@ -319,7 +319,7 @@ export function parseModule(source, options = {}) {
     program = snapshotProgramGraph(program);
   }
 
-  return validateModuleProgram(program);
+  return validateModuleProgram(program, customAst);
 }
 
 /**
@@ -428,9 +428,10 @@ function validateScriptProgram(
  * own capability boundary rather than being admitted through script validation.
  *
  * @param {unknown} program
+ * @param {boolean} customAst
  * @returns {any}
  */
-function validateModuleProgram(program) {
+function validateModuleProgram(program, customAst) {
   checkUntrustedAstDescriptors(program);
 
   if (!isModuleProgram(program)) {
@@ -442,7 +443,7 @@ function validateModuleProgram(program) {
   );
 
   for (let index = 0; index < body.length; index += 1) {
-    validateModuleItem(body[index]);
+    validateModuleItem(body[index], customAst);
   }
 
   return /** @type {any} */ (program);
@@ -1070,9 +1071,10 @@ function isModuleProgram(program) {
 
 /**
  * @param {any} node
+ * @param {boolean} customAst
  * @returns {void}
  */
-function validateModuleItem(node) {
+function validateModuleItem(node, customAst) {
   if (!node || typeof node !== 'object') {
     throw new UnsupportedNodeError(String(node));
   }
@@ -1082,10 +1084,10 @@ function validateModuleItem(node) {
       validateImportDeclaration(node);
       return;
     case 'ExportNamedDeclaration':
-      validateExportNamedDeclaration(node);
+      validateExportNamedDeclaration(node, customAst);
       return;
     case 'ExportDefaultDeclaration':
-      validateExportDefaultDeclaration(node);
+      validateExportDefaultDeclaration(node, customAst);
       return;
     case 'ExportAllDeclaration':
       validateExportAllDeclaration(node);
@@ -1099,6 +1101,10 @@ function validateModuleItem(node) {
 
         if (typeof type !== 'string' || !SUPPORTED_STATEMENT_TYPES.has(type)) {
           throw new UnsupportedNodeError(String(type));
+        }
+
+        if (customAst) {
+          validateCustomModuleStatement(node);
         }
       }
       return;
@@ -1157,9 +1163,10 @@ function validateImportSpecifier(node) {
 
 /**
  * @param {any} node
+ * @param {boolean} customAst
  * @returns {void}
  */
-function validateExportNamedDeclaration(node) {
+function validateExportNamedDeclaration(node, customAst) {
   rejectModuleAttributes(node);
   const source = moduleField(node, 'source');
   const declaration = moduleField(node, 'declaration');
@@ -1192,13 +1199,18 @@ function validateExportNamedDeclaration(node) {
       );
     }
   }
+
+  if (customAst && declaration !== null) {
+    validateCustomModuleStatement(declaration);
+  }
 }
 
 /**
  * @param {any} node
+ * @param {boolean} customAst
  * @returns {void}
  */
-function validateExportDefaultDeclaration(node) {
+function validateExportDefaultDeclaration(node, customAst) {
   rejectModuleAttributes(node);
   const declaration = moduleField(node, 'declaration');
 
@@ -1209,6 +1221,10 @@ function validateExportDefaultDeclaration(node) {
   ) {
     throw new UnsupportedNodeError('ExportDefaultDeclaration');
   }
+
+  if (customAst) {
+    validateCustomModuleDefaultDeclaration(declaration);
+  }
 }
 
 /**
@@ -1218,9 +1234,50 @@ function validateExportDefaultDeclaration(node) {
 function validateExportAllDeclaration(node) {
   rejectModuleAttributes(node);
 
-  if (!isModuleStringLiteral(moduleField(node, 'source'))) {
+  if (
+    !isModuleStringLiteral(moduleField(node, 'source')) ||
+    Object.getOwnPropertyDescriptor(node, 'exported') !== undefined
+  ) {
     throw new UnsupportedNodeError('ExportAllDeclaration');
   }
+}
+
+/**
+ * Runs the established custom-AST shape and early-error passes beneath a
+ * module declaration without making module declarations themselves look like
+ * script syntax.
+ *
+ * @param {any} statement
+ * @returns {void}
+ */
+function validateCustomModuleStatement(statement) {
+  const program = { type: 'Program', sourceType: 'script', body: [statement] };
+
+  checkCustomAstDefenses(program);
+  checkStatementPositionFunctionDeclarations(program, '', true, true);
+  checkProgramDeclarationEarlyErrors(program.body);
+}
+
+/**
+ * Validates default-export children at an expression position. Anonymous
+ * default function and class declarations are represented as expressions only
+ * for this validation wrapper; the retained module AST is never changed.
+ *
+ * @param {any} declaration
+ * @returns {void}
+ */
+function validateCustomModuleDefaultDeclaration(declaration) {
+  const expression =
+    declaration.type === 'FunctionDeclaration'
+      ? { ...declaration, type: 'FunctionExpression' }
+      : declaration.type === 'ClassDeclaration'
+        ? { ...declaration, type: 'ClassExpression' }
+        : declaration;
+
+  validateCustomModuleStatement({
+    type: 'ExpressionStatement',
+    expression,
+  });
 }
 
 /**

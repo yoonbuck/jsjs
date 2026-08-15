@@ -16,7 +16,6 @@ export class SourceTextModuleRecord {
 
     /** @type {string[]} */
     const requestedModules = [];
-    const requestedModuleSet = new Set();
     /** @type {any[]} */
     const importEntries = [];
     /** @type {any[]} */
@@ -28,10 +27,7 @@ export class SourceTextModuleRecord {
 
     /** @param {string} moduleRequest */
     const addRequest = (moduleRequest) => {
-      if (!requestedModuleSet.has(moduleRequest)) {
-        requestedModuleSet.add(moduleRequest);
-        requestedModules.push(moduleRequest);
-      }
+      requestedModules.push(moduleRequest);
     };
 
     for (const declaration of ast.body) {
