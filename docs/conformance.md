@@ -25,6 +25,74 @@ ES2015 RegExp flags `u` and `y` are rejected by ES5.1 flag validation. A
 top-level rejection is a host `SyntaxError`; source parsed through `eval` or the
 dynamic `Function` constructor receives a catchable guest `SyntaxError`.
 
+## Layer 1: Agent Jobs, Promises, and async Test262
+
+### Agent Jobs and host scheduling
+
+An Agent owns one FIFO queue shared by its realms. Each Job Record carries its
+owning Realm (or `null`), callback, argument list, and nonempty kind. A queued
+Realm must belong to that Agent. While invoking a non-null Realm's callback, the
+Agent exposes that Realm as the current job Realm, then restores the prior
+context; this keeps cross-Realm Promise work attached to the Realm that owns the
+job rather than to the Realm that happened to initiate a drain.
+
+Without a `jobHost`, `realm.agent.runJobs()` is a deterministic manual
+checkpoint. It drains FIFO work, including work enqueued by jobs already being
+drained, and returns `{ processed, failures }`. A job returning a guest throw
+completion or throwing unexpectedly is recorded as a Job Drain failure; the
+remaining queue still drains. `takeJobFailures()` returns and clears the
+Agent-wide durable failure list.
+
+An automatic embedder supplies `jobHost.scheduleMicrotask(checkpoint)`. The
+first enqueue while idle schedules one checkpoint; work added while scheduled or
+draining does not schedule another. A public `runJobs()` can drain a scheduled
+checkpoint early. The generation token then makes its late host callback stale,
+so it does nothing instead of draining a later checkpoint. If scheduling throws,
+the Agent returns to idle without losing queued work, allowing the embedder to
+repair its scheduler and drain manually. `reportJobError`, when supplied, sees
+each job failure; a throwing host hook is itself recorded as a host-hook failure.
+
+The optional `promiseRejectionTracker(promise, operation)` receives `reject`
+for an unhandled rejection and `handle` once when a later `then` marks it
+handled. Hook failures are recorded rather than changing Promise settlement or
+queue order.
+
+### ES2015 Promise constructor and reactions
+
+Each Realm has its own ES2015 Promise constructor, `Promise.prototype`, and
+Promise objects. The supported surface is the constructor; `then` and `catch`;
+`resolve` and `reject`; and the `all` and `race` combinators. Resolution rejects
+self-resolution, adopts same-engine Promises when appropriate, reads a
+thenable's `then` once for thenable assimilation, and enqueues thenable and
+reaction jobs. It never uses host Promise assimilation.
+
+Promise `Symbol.species` selects the derived Promise constructor for `then`:
+`Promise[Symbol.species]` returns its receiver, missing or null species fall
+back to the Realm's intrinsic Promise constructor, and a non-constructor species
+throws a guest `TypeError`.
+
+Reactions preserve registration order. Guest abrupt completions from handlers
+reject the derived Promise rather than escaping the Agent Job Queue. Promise
+jobs select the handler's function Realm when available, preserving Realm-owned
+intrinsics across an Agent's realms. `Promise.all` and `Promise.race` honor the
+ES2015 iterator-close abrupt-completion precedence.
+
+### async $DONE Test262 execution
+
+The Test262 bridge installs a realm-owned native `$DONE` function for tests with
+the `async` flag. The runner evaluates the test, drains that Realm's Agent
+deterministically, and classifies `$DONE()` or `$DONE(error)` without timers or
+host Promise scheduling. The focused Promise suite is
+`test/ci/es2015-promise-test262.test.js`; it runs against the pinned checkout
+with `TZ=UTC`.
+
+### Layer-1 exclusions
+
+Generators and modules are not implemented. This layer also excludes
+`async`/`await`, async generators and iteration, dynamic import or module
+loading, broad Test262 selection expansion, and regenerated broad Test262
+coverage artifacts.
+
 Fixtures deliberately stay inside what the engine implements today: `var`,
 `let`, `const`, function declarations and expressions, object and array literals
 (including getter/setter syntax), member access and calls, `new`, arithmetic,
@@ -169,12 +237,12 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 652 classified exclusions break down as:
+editions deliberately changed. The 649 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                |
 | -------------------- | ----- | -------------------------------------------------------------------------------------------- |
 | `post-es5-semantics` | 333   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1.              |
-| `post-es5-builtin`   | 259   | A built-in or member ES5.1 does not define.                                                  |
+| `post-es5-builtin`   | 256   | A built-in or member ES5.1 does not define.                                                  |
 | `post-es5-syntax`    | 25    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
 | `host-dependent`     | 33    | The result depends on a host facility or environment.                                        |
 | `engine-deviation`   | 2     | This engine knowingly differs from ES5.1; each entry names a limitation heading.             |

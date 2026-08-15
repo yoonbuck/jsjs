@@ -208,6 +208,22 @@ syntax tags: `arrow-function`, `class`, `computed-property-names`,
 the pinned tree has no standalone spread tag, and its only template-tagged test
 also requires unsupported `new.target`.
 
+### Focused ES2015 Promise Test262 suite
+
+Agent Jobs and Promise work uses a separate small pinned suite. It covers the
+ES2015 Promise constructor, `then` reaction identity and throwing handlers,
+thenable adoption, abrupt final `all` capability resolution, `resolve`, `all`,
+`race`, `Symbol.species`, and `Promise.prototype[Symbol.toStringTag]`:
+
+```sh
+TZ=UTC node test/run-node.js test/ci/es2015-promise-test262.test.js
+```
+
+The focused suite requires the exact upstream revision in `vendor/test262` and
+does not rewrite coverage artifacts. For this Layer-1 focused check, do not run
+the broad upstream Test262 suite locally or regenerate its report; exact-SHA CI
+owns that coverage and its generated artifacts.
+
 ### Fixture vs. upstream suites
 
 The local fixture tree (`test/fixtures/test262`) is run by

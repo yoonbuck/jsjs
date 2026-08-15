@@ -33,8 +33,8 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { createRealm, evaluateScript } from '../../src/index.js';
 import { createNodeTest262Host } from './adapters/node.js';
+import { createJsjsTest262Engine } from './engine.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
 import { TEST262_REPORT_FILE } from '../ci/pipeline.js';
@@ -243,7 +243,7 @@ export async function main(argv = []) {
   const host = createNodeTest262Host({ root: pin.checkoutPath });
   const paths = upstreamSubsetPaths(subset);
   const { records, summary } = await runTest262Suite({
-    engine: { createRealm, evaluateScript },
+    engine: createJsjsTest262Engine(),
     host,
     paths,
     supportedFeatures,

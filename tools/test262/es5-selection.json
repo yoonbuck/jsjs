@@ -2549,24 +2549,9 @@
       "reason": "The selected SpiderMonkey Promise tests require `Promise`, an ES2015 builtin absent from this subset."
     },
     {
-      "path": "test/staging/sm/Promise/bug-1287334.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
-    },
-    {
       "path": "test/staging/sm/Promise/bug-1289040.js",
       "category": "host-dependent",
       "reason": "Depends on `$262`, an test262 host builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Promise/methods-non-enumerable.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
-    },
-    {
-      "path": "test/staging/sm/Promise/promise-species.js",
-      "category": "post-es5-builtin",
-      "reason": "Depends on `Promise`, an ES2015 builtin absent from ES5.1."
     },
     {
       "path": "test/staging/sm/Proxy/define-writable-as-non-writable.js",

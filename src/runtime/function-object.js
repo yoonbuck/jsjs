@@ -226,6 +226,13 @@ export class EngineFunction extends EngineObject {
   }
 
   /**
+   * @returns {import('./function-realm.js').JobCompletion}
+   */
+  getFunctionRealm() {
+    return { type: 'normal', value: this.realm };
+  }
+
+  /**
    * Implements ordinary and class `[[Construct]]`. Ordinary functions allocate
    * through the supplied `newTarget`; class base constructors bind that
    * allocation before their body, while derived constructors defer binding until

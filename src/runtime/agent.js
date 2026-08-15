@@ -1,4 +1,5 @@
 import { WELL_KNOWN_SYMBOL_NAMES, createSymbol, isSymbol } from './symbol.js';
+import { AgentJobQueue } from './jobs.js';
 
 /**
  * @typedef {import('./symbol.js').WellKnownSymbolName} WellKnownSymbolName
@@ -35,7 +36,10 @@ import { WELL_KNOWN_SYMBOL_NAMES, createSymbol, isSymbol } from './symbol.js';
  * its own. See `docs/architecture.md` for the embedding lifecycle.
  */
 export class Agent {
-  constructor() {
+  /**
+   * @param {{ jobHost?: import('./jobs.js').JobHost }} [options]
+   */
+  constructor(options = {}) {
     /**
      * This agent's eleven well-known symbols, keyed by the name each carries
      * on the `Symbol` constructor.
@@ -57,6 +61,10 @@ export class Agent {
 
     /** @type {Map<symbol, string>} */
     this._registryBySymbol = new Map();
+
+    /** @type {WeakSet<object>} */
+    this._realms = new WeakSet();
+    this._jobQueue = new AgentJobQueue(options.jobHost, this);
   }
 
   /**
@@ -108,6 +116,72 @@ export class Agent {
 
     return this._registryBySymbol.get(symbol);
   }
+
+  /**
+   * @param {import('./jobs.js').JobRecord} job
+   */
+  enqueueJob(job) {
+    this._jobQueue.enqueue(job);
+  }
+
+  /**
+   * @returns {import('./jobs.js').JobDrainReport}
+   */
+  runJobs() {
+    return this._jobQueue.run();
+  }
+
+  /**
+   * @returns {readonly import('./jobs.js').JobFailure[]}
+   */
+  takeJobFailures() {
+    return this._jobQueue.takeFailures();
+  }
+
+  /**
+   * @param {unknown} error
+   */
+  recordHostHookFailure(error) {
+    this._jobQueue.recordHostHookFailure(error);
+  }
+
+  /**
+   * @returns {'idle' | 'scheduled' | 'draining'}
+   */
+  get checkpointState() {
+    return this._jobQueue.state;
+  }
+
+  /**
+   * @returns {import('./realm.js').Realm | null}
+   */
+  get currentJobRealm() {
+    return this._jobQueue.currentRealm;
+  }
+
+  /**
+   * @returns {import('./jobs.js').JobHost | null}
+   */
+  get jobHost() {
+    return this._jobQueue.jobHost;
+  }
+
+  /**
+   * @param {object} realm
+   */
+  registerRealm(realm) {
+    this._realms.add(realm);
+  }
+
+  /**
+   * @param {unknown} realm
+   * @returns {boolean}
+   */
+  ownsRealm(realm) {
+    return (
+      typeof realm === 'object' && realm !== null && this._realms.has(realm)
+    );
+  }
 }
 
 /**
@@ -132,8 +206,9 @@ export function createWellKnownSymbols() {
 }
 
 /**
+ * @param {{ jobHost?: import('./jobs.js').JobHost }} [options]
  * @returns {Agent}
  */
-export function createAgent() {
-  return new Agent();
+export function createAgent(options = {}) {
+  return new Agent(options);
 }

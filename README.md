@@ -53,6 +53,39 @@ template literals (including tagged-template caching). See
 [docs/architecture.md](docs/architecture.md) for the grammar boundary and full
 embedding API.
 
+### Agent Jobs and Promises
+
+Promises use an Agent-owned FIFO job queue. With no `jobHost`, a realm uses
+deterministic manual mode: guest Promise work remains queued until its embedder
+creates a checkpoint with `realm.agent.runJobs()`.
+
+```js
+const realm = createRealm();
+evaluateScript(realm, 'Promise.resolve(1).then(function (x) { result = x; })');
+const checkpoint = realm.agent.runJobs();
+```
+
+`checkpoint` reports the number of jobs processed and any recorded job or host
+hook failures. For automatic delivery, provide a `jobHost` when creating the
+realm. The scheduler accepts one checkpoint callback at a time:
+
+```js
+const realm = createRealm({
+  jobHost: {
+    scheduleMicrotask(callback) {
+      queueMicrotask(callback);
+    },
+  },
+});
+```
+
+This example names `queueMicrotask` only as an embedder/host scheduling choice;
+nothing in `src/` probes or calls that host API. `jobHost.scheduleMicrotask` is
+optional at the embedding boundary only in the sense that omitting the whole
+`jobHost` selects manual mode. See
+[docs/conformance.md](docs/conformance.md) for Agent Job, Promise, rejection
+tracker, and async Test262 behavior.
+
 ## Commands
 
 | Command                     | What it does                                                   |

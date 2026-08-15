@@ -61,16 +61,23 @@ import {
   createIteratorIntrinsics,
   installIteratorMethods,
 } from '../builtins/iterator.js';
+import {
+  createPromiseIntrinsics,
+  installPromiseConstructor,
+} from '../builtins/promise.js';
 import { GuestErrorSignal } from './completion.js';
 import { StackGuard } from './stack-guard.js';
 import { createAgent } from './agent.js';
 import { createDateHost } from './date.js';
+
+const REALMS = new WeakSet();
 
 /**
  * @typedef {import('../builtins/fundamental.js').FundamentalIntrinsics} FundamentalIntrinsics
  * @typedef {import('../builtins/errors.js').ErrorIntrinsics} ErrorIntrinsics
  * @typedef {{
  *   agent?: import('./agent.js').Agent,
+ *   jobHost?: import('./jobs.js').JobHost,
  *   maxStackDepth?: number,
  *   dateHost?: Partial<import('./date.js').DateHost>,
  *   now?: () => number,
@@ -95,16 +102,23 @@ export class Realm {
    * @param {RealmOptions} [options]
    */
   constructor(options = {}) {
+    if (options.agent !== undefined && options.jobHost !== undefined) {
+      throw new TypeError('Realm cannot accept both agent and jobHost');
+    }
+
     // The agent owns the symbol state ECMA-262 shares between realms: the
     // well-known symbols and the GlobalSymbolRegistry. Realms passed the same
     // agent interoperate through those; a realm given none gets its own, so
     // nothing a guest interns can outlive the realm that interned it.
     /** @type {import('./agent.js').Agent} */
-    this.agent = options.agent ?? createAgent();
+    this.agent = options.agent ?? createAgent({ jobHost: options.jobHost });
+    REALMS.add(this);
+    this.agent.registerRealm(this);
     /** @type {FundamentalIntrinsics & Partial<ErrorIntrinsics> & Record<string, unknown>} */
     this.intrinsics = /** @type {any} */ (
       createFundamentalIntrinsics(this.agent)
     );
+    this.intrinsics.functionPrototype.setRealm(this);
     this.globalObject = new EngineObject(this.intrinsics.objectPrototype);
     defineGlobalValueProperties(this.globalObject);
     this.globalEnvironment = new GlobalEnvironmentRecord(this.globalObject);
@@ -225,6 +239,10 @@ export class Realm {
     const iteratorIntrinsics = createIteratorIntrinsics(this);
     Object.assign(this.intrinsics, iteratorIntrinsics);
     installIteratorMethods(this, iteratorIntrinsics);
+
+    const promiseIntrinsics = createPromiseIntrinsics(this);
+    Object.assign(this.intrinsics, promiseIntrinsics);
+    installPromiseConstructor(this.globalObject, promiseIntrinsics);
   }
 
   /**
@@ -300,4 +318,12 @@ export class Realm {
  */
 export function createRealm(options = {}) {
   return new Realm(options);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is Realm}
+ */
+export function isRealm(value) {
+  return typeof value === 'object' && value !== null && REALMS.has(value);
 }

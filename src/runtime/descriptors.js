@@ -17,6 +17,7 @@
  *
  * @typedef {{
  *   callFunction: (thisValue: unknown, args: readonly unknown[]) => unknown,
+ *   getFunctionRealm: () => import('./function-realm.js').JobCompletion,
  * }} CallableLike
  */
 

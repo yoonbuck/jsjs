@@ -754,6 +754,44 @@ export default [
     },
   },
   {
+    name: 'every Test262 execution entry point uses the portable engine bridge',
+    run: async () => {
+      const expectedImports = new Map([
+        ['tools/test262/adapters/node.js', '../engine.js'],
+        ['tools/test262/adapters/jsc-run.js', '../engine.js'],
+        ['tools/test262/upstream-run.js', './engine.js'],
+        ['test/test262-async.test.js', '../tools/test262/engine.js'],
+      ]);
+      /** @type {string[]} */
+      const violations = [];
+
+      for (const [file, specifier] of expectedImports) {
+        const source = await readSource(file);
+
+        if (!importSpecifiers(source).includes(specifier)) {
+          violations.push(`${file} does not import ${specifier}`);
+        }
+        if (!source.includes('createJsjsTest262Engine')) {
+          violations.push(`${file} does not use createJsjsTest262Engine`);
+        }
+        if (
+          file !== 'test/test262-async.test.js' &&
+          importSpecifiers(source).some((entry) =>
+            entry.includes('src/index.js'),
+          )
+        ) {
+          violations.push(`${file} still assembles its own engine bridge`);
+        }
+      }
+
+      assertSame(
+        violations.join('\n'),
+        '',
+        'Test262 runners must share the realm-owned async engine bridge',
+      );
+    },
+  },
+  {
     // `parseUpstreamSubset` proves the manifest is well-formed; it has no
     // opinion on which named groups must exist. Without this check, deleting
     // or emptying one of the groups a milestone report names would still pass
@@ -1490,6 +1528,106 @@ export default [
         true,
         'README must contain an embedding example that calls evaluateScript',
       );
+    },
+  },
+  {
+    name: 'layer-1 Agent Jobs and Promise documentation publishes its stable boundary',
+    run: async () => {
+      const readme = await readSource('README.md');
+      const testing = await readSource('docs/testing.md');
+      const conformance = await readSource('docs/conformance.md');
+
+      assertSame(
+        readme.includes('realm.agent.runJobs()'),
+        true,
+        'README must document deterministic manual Agent job draining',
+      );
+      assertSame(
+        readme.includes('jobHost.scheduleMicrotask'),
+        true,
+        'README must document the optional jobHost scheduler interface',
+      );
+      assertSame(
+        /jobHost: \{\s+scheduleMicrotask\(callback\) \{\s+queueMicrotask\(callback\);\s+\},/u.test(
+          readme,
+        ),
+        true,
+        'README must show queueMicrotask only inside the embedder jobHost scheduler example',
+      );
+      const queueMicrotaskMentions = [readme, testing, conformance]
+        .join('\n')
+        .match(/\bqueueMicrotask\b/gu);
+      assertSame(
+        queueMicrotaskMentions?.length,
+        2,
+        'the layer-1 documentation must name queueMicrotask only in the README host example and its host-only claim',
+      );
+      assertSame(
+        readme.includes(
+          'This example names `queueMicrotask` only as an embedder/host scheduling choice;',
+        ),
+        true,
+        'README must describe queueMicrotask as an embedder/host scheduling choice only',
+      );
+      const sourceQueueMicrotaskUsers = [
+        ...(await readJavaScript('src/')).entries(),
+      ]
+        .filter(([, source]) => source.includes('queueMicrotask'))
+        .map(([file]) => file);
+      assertSame(
+        JSON.stringify(sourceQueueMicrotaskUsers),
+        '[]',
+        'src/ must not probe or call the host queueMicrotask API',
+      );
+      assertSame(
+        testing.includes('test/ci/es2015-promise-test262.test.js'),
+        true,
+        'docs/testing.md must name the focused ES2015 Promise Test262 suite',
+      );
+      assertSame(
+        testing.includes('TZ=UTC'),
+        true,
+        'docs/testing.md must document UTC for the focused Promise Test262 suite',
+      );
+      assertSame(
+        /For this Layer-1 focused check, do not run\s+the broad upstream Test262 suite locally or regenerate its report; exact-SHA CI\s+owns that coverage and its generated artifacts\./u.test(
+          testing,
+        ),
+        true,
+        'docs/testing.md must reserve the broad upstream Test262 run and artifact regeneration for CI during the Layer-1 focused check',
+      );
+
+      for (const contract of [
+        'Agent Jobs',
+        'ES2015 Promise constructor',
+        'reactions',
+        'thenable assimilation',
+        'combinators',
+        'Promise `Symbol.species` selects the derived Promise constructor',
+        'promiseRejectionTracker(promise, operation)',
+        'async $DONE',
+        'Generators and modules are not implemented.',
+      ]) {
+        assertSame(
+          conformance.includes(contract),
+          true,
+          `docs/conformance.md must document the layer-1 ${contract} boundary`,
+        );
+      }
+
+      for (const [file, source] of [
+        ['README.md', readme],
+        ['docs/testing.md', testing],
+        ['docs/conformance.md', conformance],
+      ]) {
+        assertSame(
+          /\b(?:implements|supports)\b[^\n]*\b(?:generators?|modules?)\b/iu.test(
+            source,
+          ),
+          false,
+          `${file} must not claim generators or modules are implemented`,
+        );
+      }
     },
   },
   {

@@ -35,6 +35,7 @@ import templateLiterals from './template-literals.test.js';
 import arrowFunctions from './arrow-functions.test.js';
 import classes from './classes.test.js';
 import test262Runner from './test262-runner.test.js';
+import test262Async from './test262-async.test.js';
 import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
@@ -80,6 +81,11 @@ import es2015SyntaxIntegration from './es2015-syntax-integration.test.js';
 import benchmarkCore from './benchmark-core.test.js';
 import profilingCore from './profiling-core.test.js';
 import arrayIndex from './array-index.test.js';
+import jobs from './jobs.test.js';
+import functionRealm from './function-realm.test.js';
+import promiseCore from './promise-core.test.js';
+import promiseReactions from './promise-reactions.test.js';
+import promiseCombinators from './promise-combinators.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -151,6 +157,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,
+  }),
+  Object.freeze({
+    file: 'test/test262-async.test.js',
+    tests: test262Async,
   }),
   Object.freeze({
     file: 'test/es5-selection.test.js',
@@ -328,5 +338,22 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/array-index.test.js',
     tests: arrayIndex,
+  }),
+  Object.freeze({ file: 'test/jobs.test.js', tests: jobs }),
+  Object.freeze({
+    file: 'test/function-realm.test.js',
+    tests: functionRealm,
+  }),
+  Object.freeze({
+    file: 'test/promise-core.test.js',
+    tests: promiseCore,
+  }),
+  Object.freeze({
+    file: 'test/promise-reactions.test.js',
+    tests: promiseReactions,
+  }),
+  Object.freeze({
+    file: 'test/promise-combinators.test.js',
+    tests: promiseCombinators,
   }),
 ]);
