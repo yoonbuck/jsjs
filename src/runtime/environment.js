@@ -225,6 +225,133 @@ export class DeclarativeEnvironmentRecord {
 }
 
 /**
+ * @typedef {{
+ *   kind: 'named',
+ *   targetModule: import('./module-record.js').SourceTextModuleRecord,
+ *   targetName: string,
+ * } | {
+ *   kind: 'namespace',
+ *   targetModule: import('./module-record.js').SourceTextModuleRecord,
+ * }} ModuleImportBinding
+ */
+
+/**
+ * A module environment holds ordinary module-local bindings plus indirect import
+ * bindings. Imports are intentionally kept outside `_bindings`: an import reads
+ * its target environment every time rather than copying a value at link time.
+ */
+export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
+  /**
+   * @param {EnvironmentRecordLike | null} outer
+   */
+  constructor(outer) {
+    super(outer);
+    /** @type {Map<PropertyKey, ModuleImportBinding>} */
+    this._importBindings = new Map();
+  }
+
+  /**
+   * @param {PropertyKey} localName
+   * @param {import('./module-record.js').SourceTextModuleRecord} targetModule
+   * @param {string} targetName
+   * @returns {void}
+   */
+  createImportBinding(localName, targetModule, targetName) {
+    this._rejectExisting(localName);
+    this._importBindings.set(localName, {
+      kind: 'named',
+      targetModule,
+      targetName,
+    });
+  }
+
+  /**
+   * @param {PropertyKey} localName
+   * @param {import('./module-record.js').SourceTextModuleRecord} targetModule
+   * @returns {void}
+   */
+  createNamespaceImportBinding(localName, targetModule) {
+    this._rejectExisting(localName);
+    this._importBindings.set(localName, {
+      kind: 'namespace',
+      targetModule,
+    });
+  }
+
+  /**
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  hasBinding(name) {
+    return this._importBindings.has(name) || super.hasBinding(name);
+  }
+
+  /**
+   * @param {PropertyKey} name
+   * @param {boolean} strict
+   * @returns {unknown}
+   */
+  getBindingValue(name, strict) {
+    const importBinding = this._importBindings.get(name);
+
+    if (importBinding === undefined) {
+      return super.getBindingValue(name, strict);
+    }
+
+    if (importBinding.kind === 'namespace') {
+      return importBinding.targetModule.getNamespace();
+    }
+
+    const targetEnvironment = importBinding.targetModule.environment;
+
+    if (targetEnvironment === null) {
+      throw new TypeError('Imported module environment is not initialized');
+    }
+
+    return targetEnvironment.getBindingValue(importBinding.targetName, true);
+  }
+
+  /**
+   * @param {PropertyKey} name
+   * @param {unknown} value
+   * @param {boolean} strict
+   * @returns {void}
+   */
+  setMutableBinding(name, value, strict) {
+    if (this._importBindings.has(name)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Assignment to constant variable.',
+      );
+    }
+
+    super.setMutableBinding(name, value, strict);
+  }
+
+  /**
+   * @param {PropertyKey} name
+   * @returns {boolean}
+   */
+  deleteBinding(name) {
+    if (this._importBindings.has(name)) {
+      return false;
+    }
+
+    return super.deleteBinding(name);
+  }
+
+  /**
+   * @param {PropertyKey} name
+   * @returns {void}
+   */
+  _rejectExisting(name) {
+    if (this._importBindings.has(name) || this._bindings.has(name)) {
+      throw new TypeError(`Binding ${String(name)} already exists`);
+    }
+  }
+}
+
+/**
  * An object environment record binds each own/inherited property of a guest
  * `EngineObject` as a binding name. It backs `with` statement scoping and the
  * global object's var/function bindings.
@@ -659,7 +786,7 @@ export class GlobalEnvironmentRecord {
 }
 
 /**
- * @typedef {DeclarativeEnvironmentRecord | ObjectEnvironmentRecord | GlobalEnvironmentRecord} EnvironmentRecordLike
+ * @typedef {DeclarativeEnvironmentRecord | ModuleEnvironmentRecord | ObjectEnvironmentRecord | GlobalEnvironmentRecord} EnvironmentRecordLike
  */
 
 /**

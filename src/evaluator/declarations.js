@@ -687,10 +687,11 @@ function ensureEvalVarBinding(variableEnv, name) {
  *
  * @param {any} node
  * @param {EvaluationContext} context
+ * @param {CreateFunctionObjectOptions} [options={}]
  * @returns {EngineFunction}
  */
-export function instantiateFunctionObject(node, context) {
-  return createFunctionObject(node, context.env, context);
+export function instantiateFunctionObject(node, context, options = {}) {
+  return createFunctionObject(node, context.env, context, options);
 }
 
 /**

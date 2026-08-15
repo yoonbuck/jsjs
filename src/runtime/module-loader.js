@@ -1,4 +1,5 @@
 import { parseModule } from '../parser.js';
+import { linkModuleGraph } from './module-linker.js';
 import { ModuleLoaderError, SourceTextModuleRecord } from './module-record.js';
 import { isRealm } from './realm.js';
 
@@ -90,15 +91,16 @@ export class ModuleLoader {
   }
 
   /**
-   * Acquires the source graph. Linking, evaluation, and its namespace result
-   * are added at this one host-facing boundary by later module tasks.
+   * Acquires and links the source graph. Evaluation and its namespace result are
+   * added at this one host-facing boundary by later module tasks.
    *
    * @param {string} specifier
    * @param {string | null} [referrer=null]
    * @returns {Promise<undefined>}
    */
   async loadAndEvaluate(specifier, referrer = null) {
-    await loadModuleGraph(this, specifier, referrer);
+    const record = await loadModuleGraph(this, specifier, referrer);
+    linkModuleGraph(record);
     return undefined;
   }
 }
@@ -202,6 +204,20 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
 
   const cycleOwner = loader.cycleOwners.get(identifier);
   if (cycleOwner !== undefined && cycleOwner !== identifier) {
+    // This request is already inside the owner graph's traversal. Waiting for
+    // the owner here would make a later duplicate request edge await the graph
+    // currently awaiting this acquisition (for example, `import "b"; export *
+    // from "b"` in the owner of an A↔B cycle). The parsed member record is
+    // enough for that internal edge; the owner completes the SCC graph before
+    // an external root is allowed to observe it.
+    if (ancestors.has(cycleOwner)) {
+      const cyclicRecord = loader.records.get(identifier);
+      if (cyclicRecord === undefined) {
+        throw new Error('Expected parsed cyclic module record');
+      }
+      return Promise.resolve(cyclicRecord);
+    }
+
     const ownerGraph = loader.graphInFlight.get(cycleOwner);
     if (ownerGraph !== undefined) {
       return ownerGraph.then(() => {

@@ -77,6 +77,9 @@ export class SourceTextModuleRecord {
     this.status = 'unlinked';
     this.dfsIndex = undefined;
     this.dfsAncestorIndex = undefined;
+    this.dfsOnStack = false;
+    /** @type {ReadonlyArray<ResolvedImportEntry>} */
+    this.resolvedImportEntries = [];
   }
 
   /**
@@ -97,6 +100,22 @@ export class SourceTextModuleRecord {
  *   identifier: string,
  *   module: SourceTextModuleRecord,
  * }} ResolvedModuleRequest
+ */
+
+/**
+ * One import entry resolved during linking. The entry remains the immutable
+ * parse product; this separate link-state record carries its live target.
+ *
+ * @typedef {{
+ *   entry: Readonly<{
+ *     moduleRequest: string,
+ *     importName: string,
+ *     localName: string,
+ *     kind: 'named' | 'namespace',
+ *   }>,
+ *   targetModule: SourceTextModuleRecord,
+ *   targetName?: string,
+ * }} ResolvedImportEntry
  */
 
 /**
