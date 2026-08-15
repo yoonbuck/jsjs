@@ -65,6 +65,10 @@ class BoundFunction extends NativeFunction {
     const targetName =
       target instanceof EngineObject ? target.get('name') : undefined;
     const boundName = `bound ${typeof targetName === 'string' ? targetName : ''}`;
+    const targetPrototype =
+      target instanceof EngineObject
+        ? target.getPrototype()
+        : realm.intrinsics.functionPrototype;
 
     super(realm, {
       name: boundName,
@@ -81,6 +85,10 @@ class BoundFunction extends NativeFunction {
       // an explicit object the target returns.
       retargetConstructionResult: false,
     });
+
+    if (!this.setPrototypeOf(targetPrototype)) {
+      throw new TypeError('Cannot initialize bound function inheritance');
+    }
 
     this.boundTargetFunction = target;
     this.boundThis = boundThis;

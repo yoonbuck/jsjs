@@ -15,15 +15,19 @@ inheritance, `super`, and computed method names; computed object names;
 destructuring declarations, assignments, and parameters; default and rest
 parameters; iterable spread in arrays, calls, and construction; and template
 literals including tagged-template cooked/raw objects and realm-local
-parse-site caching.
+parse-site caching. The Layer-2 surface adds synchronous generator
+declarations, expressions, object/class methods, `yield`/`yield*`, generator
+iteration methods, and the non-global dynamic `%GeneratorFunction%`
+constructor.
 
 The parser's capability gate admits only those forms, so grammar and evaluation
-move together. It still rejects generators/yield, async/await, modules,
+move together. It still rejects async functions/generators and `await`, modules,
 `new.target`, object rest/spread, later class fields/private names/static
 blocks/decorators, binary/octal literals, and `\u{…}` code-point escapes. The
 ES2015 RegExp flags `u` and `y` are rejected by ES5.1 flag validation. A
-top-level rejection is a host `SyntaxError`; source parsed through `eval` or the
-dynamic `Function` constructor receives a catchable guest `SyntaxError`.
+top-level rejection is a host `SyntaxError`; source parsed through `eval`,
+dynamic `Function`, or dynamic `%GeneratorFunction%` receives a catchable guest
+`SyntaxError`.
 
 ## Layer 1: Agent Jobs, Promises, and async Test262
 
@@ -88,10 +92,89 @@ with `TZ=UTC`.
 
 ### Layer-1 exclusions
 
-Generators and modules are not implemented. This layer also excludes
-`async`/`await`, async generators and iteration, dynamic import or module
-loading, broad Test262 selection expansion, and regenerated broad Test262
-coverage artifacts.
+The Layer-1 boundary remains: Generators and modules are not implemented.
+Synchronous generators are the separate Layer-2 contract below. Async functions,
+async generators and iteration, modules and dynamic import, broad Test262
+selection expansion, and regenerated broad Test262 coverage artifacts remain
+outside Layer 1.
+
+## Layer 2: Synchronous generators
+
+### Functions, activation, and exact state
+
+Source generator declarations, expressions, and object/class methods are
+callable, non-constructible functions with Realm-owned generator intrinsic
+lineage. A call performs parameter/default/destructuring/rest setup and
+declaration instantiation immediately, then returns a generator in
+`suspendedStart`; the body does not begin until `next()`.
+
+Every generator uses exactly four states:
+
+1. `suspendedStart` before any body statement has run;
+2. `executing` while one resume is active (a reentrant `next`, `return`, or
+   `throw` raises a guest `TypeError`);
+3. `suspendedYield` after a direct or delegated yield; and
+4. `completed` after normal completion, return, throw, or an unexpected
+   continuation failure, with the continuation released.
+
+The first `next(value)` discards `value`. Later `next`, `throw`, and `return`
+inject normal, throw, and return Completions at the suspension point, allowing
+the retained `try`/`catch`/`finally` and loop regions to handle them normally.
+`return` or `throw` in `suspendedStart` completes without evaluating the body.
+After completion, `next()` returns `{ value: undefined, done: true }`,
+`return(value)` returns `{ value, done: true }`, and `throw(value)` throws the
+value.
+
+### Heap-resident execution and `yield*`
+
+Yield-bearing expressions, patterns, object/class definitions, statements, and
+control flow run through typed heap-resident continuation frames. Frames retain
+only their phase/index, AST and evaluation context, iterator/class/object state,
+and engine values, References, and Completions. They retain no host callback,
+closure continuation, active evaluator call, or `StackGuard` entry. Yield-free
+subtrees are proven by a function-owned static-semantics snapshot before they
+bridge to the ordinary synchronous evaluator; every synchronous frame unwinds
+before suspension.
+
+Delegated yield forwards the iterator protocol rather than approximating it:
+`next` and dynamically resolved `throw`/`return`, missing-method behavior,
+iterator close precedence, result-object validation, and `done`-before-`value`
+ordering are preserved. A `done: false` delegated result is forwarded unchanged,
+including identity, prototype, Agent, and lazy `value`; a `done: true` result
+becomes the value or abrupt Completion of the outer `yield*`.
+
+### Dynamic constructor and Realm/Agent rules
+
+`%GeneratorFunction%` is Realm-owned and intentionally absent from the global
+object; it is reachable through a generator function's inherited `constructor`.
+Call and construction both parse independently guarded parameter/body fragments
+with the guest parser, create a non-constructible generator function closed over
+the invoked constructor's Realm-global environment, and obey the generated
+body's own strictness.
+
+Cross-Realm calls allocate the dynamic function, its prototype, generator
+object, direct/terminal iterator-result objects, and parse errors from the
+constructor's Realm. Well-known protocol keys belong to an Agent: an
+`EngineObject` uses its owning Agent's `@@iterator`, while primitives use the
+executing Realm's Agent when boxed. This permits cross-Agent delegation while
+preserving a foreign `done: false` result unchanged; results created by the
+outer generator remain in its Realm.
+
+### Focused pinned Test262 coverage and exclusions
+
+`test/ci/es2015-generator-test262.test.js` runs 11 pinned files (22
+strict/non-strict records) covering dynamic construction, intrinsic
+`@@toStringTag`, consecutive and reentrant resumes, suspended-start abrupt
+resumes, catch/finally injection, and computed object/class generator methods.
+At revision `b363f29d3c43c626dc852744ad64a0b48a003693`, every record passes with
+zero failures and zero skips under `TZ=UTC`.
+
+This suite passes only `generators`, `Symbol.iterator`, and
+`Symbol.toStringTag` as its local supported-feature set. It does not add
+`generators` to `tools/test262/features.json`, enter the broad selection, or
+regenerate `docs/test262-report.jsonl` or this document's generated coverage
+block. Async functions/generators and iteration, modules/dynamic import, and
+post-ES2015 iterator/generator helper APIs remain unsupported.
 
 Fixtures deliberately stay inside what the engine implements today: `var`,
 `let`, `const`, function declarations and expressions, object and array literals
@@ -237,13 +320,13 @@ so they live in the generated [Coverage](#coverage) block where
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 649 classified exclusions break down as:
+editions deliberately changed. The 643 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                |
 | -------------------- | ----- | -------------------------------------------------------------------------------------------- |
-| `post-es5-semantics` | 333   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1.              |
+| `post-es5-semantics` | 332   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1.              |
 | `post-es5-builtin`   | 256   | A built-in or member ES5.1 does not define.                                                  |
-| `post-es5-syntax`    | 25    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
+| `post-es5-syntax`    | 20    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
 | `host-dependent`     | 33    | The result depends on a host facility or environment.                                        |
 | `engine-deviation`   | 2     | This engine knowingly differs from ES5.1; each entry names a limitation heading.             |
 

@@ -38,7 +38,10 @@ export class SuperReferenceBase {
     const superBase = this.homeObject.getPrototype();
 
     if (superBase === null) {
-      return undefined;
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Cannot read a property through a null super base',
+      );
     }
 
     const descriptor = superBase.getProperty(name);
@@ -63,13 +66,16 @@ export class SuperReferenceBase {
    * @returns {void}
    */
   setReferencedValue(name, value, strict = false) {
-    setPropertyWithReceiver(
-      this.homeObject.getPrototype(),
-      this.receiver,
-      name,
-      value,
-      strict,
-    );
+    const superBase = this.homeObject.getPrototype();
+
+    if (superBase === null) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Cannot set a property through a null super base',
+      );
+    }
+
+    setPropertyWithReceiver(superBase, this.receiver, name, value, strict);
   }
 
   /**

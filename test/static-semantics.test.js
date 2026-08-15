@@ -13,6 +13,8 @@ import {
   topLevelVarScopedDeclarations,
   topLevelLexicallyDeclaredNames,
   topLevelLexicallyScopedDeclarations,
+  annexBBlockFunctionDeclarations,
+  containsYield,
 } from '../src/evaluator/static-semantics.js';
 
 /**
@@ -502,6 +504,191 @@ const tests = [
       const declarations = topLevelVarScopedDeclarations([node]);
       assertSame(declarations.length, 1);
       assertSame(tag(declarations[0]), 'VariableDeclaration(deepest)');
+    },
+  },
+  {
+    name: 'Annex B block-function eligibility excludes generator declarations',
+    run() {
+      const declarations = annexBBlockFunctionDeclarations(
+        body('{ function ordinary() {} function* generator() {} }'),
+        new Set(),
+      );
+
+      assertSame(
+        JSON.stringify(declarations.map((declaration) => declaration.id.name)),
+        '["ordinary"]',
+      );
+    },
+  },
+  {
+    name: 'containsYield traverses a generator body statement list',
+    run() {
+      const statements = parseScript('function* g(){ yield 1; }').body[0].body
+        .body;
+
+      assertSame(containsYield(statements), true);
+    },
+  },
+  {
+    name: 'containsYield finds yields in every executed expression edge',
+    run() {
+      /** @param {string} source */
+      const generatorBody = (source) =>
+        parseScript(`function* g(){ ${source} }`).body[0].body;
+      /** @param {string} source */
+      const expression = (source) =>
+        generatorBody(`${source};`).body[0].expression;
+
+      assertSame(containsYield(expression('yield 1')), true);
+      assertSame(containsYield(expression('left + (yield right)')), true);
+      assertSame(containsYield(expression('({ [yield 1]: yield 2 })')), true);
+      assertSame(containsYield(expression('tag`${yield 1}`')), true);
+      assertSame(
+        containsYield(
+          generatorBody('for (var x of yield xs) { yield x; }').body[0],
+        ),
+        true,
+      );
+      assertSame(containsYield(expression('call(...(yield values))')), true);
+      assertSame(containsYield(expression('new C(...(yield values))')), true);
+      assertSame(
+        containsYield(
+          generatorBody('for (yield init; yield test; yield update) {}')
+            .body[0],
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'containsYield excludes nested function and method bodies but scans class setup',
+    run() {
+      /** @param {string} source */
+      const expression = (source) =>
+        parseScript(`function* g(){ ${source}; }`).body[0].body.body[0]
+          .expression;
+
+      assertSame(
+        containsYield(expression('(function* inner(){ yield 1; })')),
+        false,
+      );
+      assertSame(
+        containsYield(expression('(class { *m(){ yield 1; } })')),
+        false,
+      );
+      assertSame(
+        containsYield(expression('(class extends (yield Base) {})')),
+        true,
+      );
+      assertSame(
+        containsYield(expression('(class { [yield key]() {} })')),
+        true,
+      );
+    },
+  },
+  {
+    name: 'containsYield handles patterns and cyclic custom ASTs iteratively',
+    run() {
+      const yieldExpression = {
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      };
+      const pattern = {
+        type: 'VariableDeclaration',
+        declarations: [
+          {
+            type: 'VariableDeclarator',
+            id: {
+              type: 'AssignmentPattern',
+              left: { type: 'Identifier', name: 'value' },
+              right: yieldExpression,
+            },
+            init: null,
+          },
+        ],
+      };
+      assertSame(containsYield(pattern), true);
+
+      const cycle = /** @type {any} */ ({
+        type: 'BinaryExpression',
+        left: { type: 'Identifier', name: 'left' },
+        right: null,
+      });
+      cycle.right = cycle;
+      assertSame(containsYield(cycle), false);
+    },
+  },
+  {
+    name: 'containsYield observes a yield added after an earlier query',
+    run() {
+      const expression = /** @type {any} */ ({
+        type: 'BinaryExpression',
+        operator: '+',
+        left: { type: 'Literal', value: 1 },
+        right: { type: 'Literal', value: 2 },
+      });
+
+      assertSame(containsYield(expression), false);
+      expression.right = {
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      };
+      assertSame(containsYield(expression), true);
+    },
+  },
+  {
+    name: 'containsYield observes a yield added inside a previously queried cycle',
+    run() {
+      const expression = /** @type {any} */ ({
+        type: 'BinaryExpression',
+        operator: '+',
+        left: { type: 'Literal', value: 1 },
+        right: null,
+      });
+      expression.right = expression;
+
+      assertSame(containsYield(expression), false);
+      expression.left = {
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      };
+      assertSame(containsYield(expression), true);
+    },
+  },
+  {
+    name: 'containsYield classifies a graph in one bounded traversal',
+    run() {
+      const depth = 64;
+      let edgeReads = 0;
+      let expression = /** @type {any} */ ({
+        type: 'YieldExpression',
+        delegate: false,
+        argument: null,
+      });
+
+      for (let index = 0; index < depth; index += 1) {
+        const right = expression;
+        const parent = /** @type {any} */ ({
+          type: 'BinaryExpression',
+          operator: '+',
+          left: { type: 'Literal', value: index },
+        });
+        Object.defineProperty(parent, 'right', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            edgeReads += 1;
+            return right;
+          },
+        });
+        expression = parent;
+      }
+
+      assertSame(containsYield(expression), true);
+      assertSame(edgeReads, depth);
     },
   },
 ];

@@ -103,13 +103,15 @@ async function listTestFiles(checkoutPath) {
 }
 
 /**
- * Reads every harness include and records whether it parses under the engine
- * grammar. A test that pulls in an include the engine rejects cannot run.
+ * Reads every harness include and records whether it parses under the broad
+ * selection grammar. A test that pulls in an include the policy rejects cannot
+ * run.
  *
  * @param {string} checkoutPath
+ * @param {import('./es5-selection.js').Es5SelectionPolicy} policy
  * @returns {Promise<Map<string, boolean>>}
  */
-async function readHarnessParsing(checkoutPath) {
+async function readHarnessParsing(checkoutPath, policy) {
   const entries = await readdir(
     new URL(`${checkoutPath}/${HARNESS_DIRECTORY}`, REPOSITORY_ROOT_URL),
     { withFileTypes: true },
@@ -126,7 +128,7 @@ async function readHarnessParsing(checkoutPath) {
       `${checkoutPath}/${HARNESS_DIRECTORY}/${entry.name}`,
     );
 
-    parsing.set(entry.name, parsesUnderEngineGrammar(source));
+    parsing.set(entry.name, parsesUnderEngineGrammar(source, policy));
   }
 
   return parsing;
@@ -160,7 +162,7 @@ export async function main(argv = []) {
   const previouslySelected = new Set(upstreamSubsetPaths(knownGoodSubset));
   const [files, harnessParsing] = await Promise.all([
     listTestFiles(pin.checkoutPath),
-    readHarnessParsing(pin.checkoutPath),
+    readHarnessParsing(pin.checkoutPath, policy),
   ]);
   const paths = await selectPaths({
     files,

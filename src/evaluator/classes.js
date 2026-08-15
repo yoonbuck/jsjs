@@ -12,6 +12,24 @@ import {
 /**
  * @typedef {import('./index.js').EvaluationContext} EvaluationContext
  * @typedef {import('../runtime/function-object.js').EngineFunction} EngineFunction
+ * @typedef {import('../runtime/environment.js').EnvironmentRecordLike}
+ *   EnvironmentRecordLike
+ * @typedef {{
+ *   node: any,
+ *   context: EvaluationContext,
+ *   classContext: EvaluationContext,
+ *   className: string,
+ *   classEnvironment: EnvironmentRecordLike,
+ *   classNameEnvironment:
+ *     import('../runtime/environment.js').DeclarativeEnvironmentRecord
+ *     | undefined,
+ *   heritageApplied: boolean,
+ *   derived: boolean,
+ *   heritage: unknown,
+ *   constructorDefinition: any | undefined,
+ *   prototype: EngineObject | null,
+ *   constructor: EngineFunction | null,
+ * }} ClassDefinitionState
  */
 
 const DEFAULT_BASE_CONSTRUCTOR = Object.freeze({
@@ -38,6 +56,36 @@ const DEFAULT_BASE_CONSTRUCTOR = Object.freeze({
  * @returns {EngineFunction}
  */
 export function evaluateClassDefinition(node, context, bindingName = '') {
+  const state = createClassDefinitionState(node, context, bindingName);
+  const heritage =
+    node.superClass === null
+      ? undefined
+      : evaluateExpressionValue(node.superClass, state.classContext);
+  applyClassHeritage(state, heritage);
+
+  for (const definition of node.body.body) {
+    if (definition === state.constructorDefinition) {
+      continue;
+    }
+
+    const key = evaluatePropertyName(
+      definition.key,
+      definition.computed,
+      state.classContext,
+    );
+    defineClassElement(state, definition, key);
+  }
+
+  return finishClassDefinition(state);
+}
+
+/**
+ * @param {any} node
+ * @param {EvaluationContext} context
+ * @param {string} [bindingName='']
+ * @returns {ClassDefinitionState}
+ */
+export function createClassDefinitionState(node, context, bindingName = '') {
   const className = node.id ? node.id.name : bindingName;
   let classEnvironment = context.env;
   /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord | undefined} */
@@ -50,10 +98,33 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
   }
   const classContext = { ...context, env: classEnvironment, strict: true };
 
-  const heritage =
-    node.superClass === null
-      ? undefined
-      : evaluateExpressionValue(node.superClass, classContext);
+  return {
+    node,
+    context,
+    classContext,
+    className,
+    classEnvironment,
+    classNameEnvironment,
+    heritageApplied: false,
+    derived: node.superClass !== null,
+    heritage: undefined,
+    constructorDefinition: undefined,
+    prototype: null,
+    constructor: null,
+  };
+}
+
+/**
+ * @param {ClassDefinitionState} state
+ * @param {unknown} heritage
+ * @returns {void}
+ */
+export function applyClassHeritage(state, heritage) {
+  if (state.heritageApplied) {
+    throw new TypeError('Class heritage was already applied');
+  }
+
+  const { context, node, classContext, classEnvironment, className } = state;
   const derived = node.superClass !== null;
   /** @type {EngineObject | null} */
   let instancePrototype = context.realm.intrinsics.objectPrototype;
@@ -89,6 +160,14 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
     constructorDefinition === undefined
       ? DEFAULT_BASE_CONSTRUCTOR
       : constructorDefinition.value;
+
+  if (constructorNode.generator === true) {
+    throw new GuestErrorSignal(
+      'SyntaxError',
+      'Class constructors cannot be generators',
+    );
+  }
+
   const prototype = new EngineObject(
     instancePrototype,
     'Object',
@@ -133,61 +212,92 @@ export function evaluateClassDefinition(node, context, bindingName = '') {
     }
   }
 
-  for (const definition of node.body.body) {
-    if (definition === constructorDefinition) {
-      continue;
-    }
+  state.heritageApplied = true;
+  state.derived = derived;
+  state.heritage = heritage;
+  state.constructorDefinition = constructorDefinition;
+  state.prototype = prototype;
+  state.constructor = constructor;
+}
 
-    const target = definition.static ? constructor : prototype;
-    const key = evaluatePropertyName(
-      definition.key,
-      definition.computed,
-      classContext,
-    );
-    const functionObject = createFunctionObject(
-      definition.value,
-      classEnvironment,
-      classContext,
-      {
-        name: functionNameFromPropertyKey(
-          key,
-          definition.kind === 'get' || definition.kind === 'set'
-            ? definition.kind
-            : '',
-        ),
-        functionKind: 'method',
-        thisMode: 'strict',
-        constructible: false,
-        createPrototype: false,
-        homeObject: target,
-        strict: true,
-      },
-    );
+/**
+ * @param {ClassDefinitionState} state
+ * @param {any} definition
+ * @param {string | symbol} key
+ * @returns {void}
+ */
+export function defineClassElement(state, definition, key) {
+  if (!state.heritageApplied || state.constructor === null) {
+    throw new TypeError('Class heritage must be applied before its elements');
+  }
 
-    if (definition.kind === 'get' || definition.kind === 'set') {
-      defineClassProperty(target, key, {
-        ...(definition.kind === 'get'
-          ? { get: functionObject }
-          : { set: functionObject }),
-        enumerable: false,
-        configurable: true,
-      });
-      continue;
-    }
+  if (definition === state.constructorDefinition) {
+    return;
+  }
 
+  const target = definition.static ? state.constructor : state.prototype;
+
+  if (target === null) {
+    throw new TypeError('Class definition lost its prototype');
+  }
+
+  const functionObject = createFunctionObject(
+    definition.value,
+    state.classEnvironment,
+    state.classContext,
+    {
+      name: functionNameFromPropertyKey(
+        key,
+        definition.kind === 'get' || definition.kind === 'set'
+          ? definition.kind
+          : '',
+      ),
+      functionKind:
+        definition.value.generator === true ? 'generatorMethod' : 'method',
+      thisMode: 'strict',
+      constructible: false,
+      createPrototype: definition.value.generator === true,
+      homeObject: target,
+      strict: true,
+    },
+  );
+
+  if (definition.kind === 'get' || definition.kind === 'set') {
     defineClassProperty(target, key, {
-      value: functionObject,
-      writable: true,
+      ...(definition.kind === 'get'
+        ? { get: functionObject }
+        : { set: functionObject }),
       enumerable: false,
       configurable: true,
     });
+    return;
   }
 
-  if (classNameEnvironment !== undefined) {
-    classNameEnvironment.initializeBinding(className, constructor);
+  defineClassProperty(target, key, {
+    value: functionObject,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+/**
+ * @param {ClassDefinitionState} state
+ * @returns {EngineFunction}
+ */
+export function finishClassDefinition(state) {
+  if (!state.heritageApplied || state.constructor === null) {
+    throw new TypeError('Class definition is incomplete');
   }
 
-  return constructor;
+  if (state.classNameEnvironment !== undefined) {
+    state.classNameEnvironment.initializeBinding(
+      state.className,
+      state.constructor,
+    );
+  }
+
+  return state.constructor;
 }
 
 /**

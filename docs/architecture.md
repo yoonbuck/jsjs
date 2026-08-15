@@ -2,8 +2,8 @@
 
 jsjs is an ES5.1 JavaScript engine — extended with ES2015 lexical declarations,
 iteration, arrows, classes, computed names, destructuring, non-simple
-parameters, iterable spread, and template literals — written in plain ES2020
-JavaScript with JSDoc types. The same source
+parameters, iterable spread, template literals, and synchronous generators —
+written in plain ES2020 JavaScript with JSDoc types. The same source
 runs in Node, in a browser, and in the JavaScriptCore (`jsc`) shell: nothing in
 `src/` imports a host module, and guest behaviour never leans on host `eval`,
 `Function`, or host objects.
@@ -17,13 +17,15 @@ Source enters through `evaluateScript(realm, source)`, which:
    block-level function declarations, `for`-`of`, arrows, class
    declarations/expressions and ES2015 methods,
    computed property names, destructuring, default/rest parameters, array/call/
-   construction spread, and template/tagged-template expressions. Acorn supplies
-   redeclaration early errors; the engine validates each supported AST shape
-   before evaluation. It still rejects generators/yield, async/await, modules,
-   `new.target`, object rest/spread, class fields/private names/static blocks/
-   decorators, binary/octal literals, and `\u{…}` escapes. A top-level rejection
-   is a host `SyntaxError`; `eval` and dynamic `Function` convert it into a
-   catchable guest `SyntaxError`.
+   construction spread, template/tagged-template expressions, synchronous
+   generator declarations/expressions/object/class methods, and `yield`/`yield*`
+   inside their bodies. Acorn supplies redeclaration early errors; the engine
+   validates each supported AST shape before evaluation. It still rejects
+   async functions/generators and `await`, modules, `new.target`, object
+   rest/spread, class fields/private names/static blocks/decorators, binary/octal
+   literals, and `\u{…}` escapes. A top-level rejection is a host `SyntaxError`;
+   `eval`, dynamic `Function`, and dynamic `%GeneratorFunction%` convert it into
+   a catchable guest `SyntaxError`.
 2. **Hoists** via `src/evaluator/declarations.js` —
    `globalDeclarationInstantiation` (ES2015 §15.1.8) walks the AST, using the
    spec's static-semantics name walks in `src/evaluator/static-semantics.js` to
@@ -40,8 +42,11 @@ Expression evaluation dispatches the admitted forms in
 `src/evaluator/expressions.js`. `patterns.js` supplies declaration,
 parameter, and assignment pattern algorithms; `iteration.js` consumes spread
 and array-pattern iterators; `classes.js` owns class definition/construction;
-and `property-name.js` evaluates computed keys once before their definition.
-This keeps the parser's shape gate and the evaluator's semantic paths aligned.
+and `property-name.js` evaluates computed keys once before their definition. A
+yield-bearing generator body instead dispatches typed expression, pattern,
+definition, and control-flow frames through `generator-machine.js`; classified
+yield-free subtrees bridge back to the same synchronous evaluators. This keeps
+the parser's shape gate and the evaluator's semantic paths aligned.
 
 A well-formed script produces either a `'normal'` completion or a `'throw'`
 completion carrying the thrown guest value. Guest throws are values, not host
@@ -113,22 +118,27 @@ Construction order in the `Realm` constructor:
 6. `%ThrowTypeError%` — a frozen per-realm function for strict poison-pill
    accessors
 7. Object constructor and prototype methods
-8. Function constructor (including `bind`, `apply`, `call`)
-9. Array constructor and prototype methods
-10. Primitive wrapper constructors (`Boolean`, `Number`, `String`)
-11. RegExp constructor and prototype methods
-12. `Symbol` constructor, prototype, registry methods, and well-known symbols
-13. `Math` object
-14. Numeric globals (`parseInt`, `parseFloat`, `isNaN`, `isFinite`)
-15. URI globals (`encodeURI`, `encodeURIComponent`, `decodeURI`,
+8. `Reflect` object
+9. Function constructor (including `bind`, `apply`, `call`)
+10. Array constructor and prototype methods
+11. Primitive wrapper constructors (`Boolean`, `Number`, `String`)
+12. RegExp constructor and prototype methods
+13. `Symbol` constructor, prototype, registry methods, and well-known symbols
+14. `Math` object
+15. Numeric globals (`parseInt`, `parseFloat`, `isNaN`, `isFinite`)
+16. URI globals (`encodeURI`, `encodeURIComponent`, `decodeURI`,
     `decodeURIComponent`, `escape`, `unescape`)
-16. `eval` global
-17. `JSON` object (`parse`, `stringify`)
-18. `Date` constructor
+17. `eval` global
+18. `JSON` object (`parse`, `stringify`)
+19. `Date` constructor
+20. Iterator intrinsics and Array/String iterator methods
+21. `%GeneratorFunction%` and `%GeneratorPrototype%` intrinsics (no global
+    `GeneratorFunction` binding)
+22. `Promise` constructor and prototype methods
 
-Each family follows the same pattern: a `create*Intrinsics(realm)` function
-builds the prototype and constructor objects, and an `install*` function
-publishes them on the global object.
+Each family builds its graph through a `create*Intrinsics(realm)` path. Families
+with a global binding publish it through an `install*` path;
+`%GeneratorFunction%` deliberately has no global installer.
 
 ## Values, objects, environments, references, completions
 
@@ -289,13 +299,13 @@ and 11.2.3 method-call `this` binding).
 
 ### Recursion boundary (`src/runtime/stack-guard.js`)
 
-Guest code runs on the host stack, so the engine keeps a budget of its own
-rather than inheriting the host's: `StackGuard` counts the engine frames a
-realm currently has on the stack and raises a `GuestErrorSignal` for a
-`RangeError` (`Maximum call stack size exceeded`) when the next one would
-exceed `DEFAULT_MAX_STACK_DEPTH`, or the `maxStackDepth` a realm was created
-with. The count is per realm because a realm is the engine's unit of isolation
-and there is no cross-realm call path.
+The ordinary synchronous evaluator runs on the host stack, so the engine keeps
+a budget of its own rather than inheriting the host's: `StackGuard` counts the
+engine frames a realm currently has on the stack and raises a
+`GuestErrorSignal` for a `RangeError` (`Maximum call stack size exceeded`) when
+the next one would exceed `DEFAULT_MAX_STACK_DEPTH`, or the `maxStackDepth` a
+realm was created with. The count is per realm; a guest or native function
+always enters its owning realm's guard, including when another realm calls it.
 
 The unit is an engine frame rather than a guest call because a guest call is
 not a fixed amount of host stack: the evaluator walks expressions and
@@ -317,6 +327,13 @@ therefore enter the guard:
   follows the shape of a guest-supplied pattern string. The guard reaches it
   duck-typed, threaded through `compilePattern`, so `regexp-syntax.js` stays a
   pure syntax module with no dependency on the runtime.
+
+Generator suspension does not retain any of those host frames. The generator
+machine stores typed continuation records on the heap and returns only after
+the dispatcher and every active guard entry unwind. A classified yield-free
+subtree or synchronous call still bridges to the ordinary evaluator, so active
+work on either side of a suspension remains subject to this same bounded
+recursion policy.
 
 Every `enter` is paired with an `exit` in a `finally`, so the count is exact
 whether a frame returns or throws and no signal boundary has to repair it.
@@ -392,10 +409,93 @@ Unsupported AST nodes throw an explicit `UnsupportedNodeError`,
 `UnsupportedOperatorError`, or `UnsupportedOperationError` naming what is
 missing rather than silently misbehaving.
 
+## Synchronous generators
+
+### Function activation and intrinsics
+
+`createFunctionObject` gives generator declarations, expressions, and
+object/class methods the `generator` or `generatorMethod` function kind. They
+are callable but not constructible and inherit from their realm's
+`%GeneratorFunction.prototype%`; each function's own `prototype` inherits from
+that realm's `%GeneratorPrototype%`.
+
+Calling one creates its activation and performs parameter/default/
+destructuring/rest setup, `var`/function instantiation, and body lexical
+instantiation immediately. It then returns a `GeneratorObject` in
+`suspendedStart` without evaluating a body statement. The first `next()` starts
+the body in the retained activation, so parameter side effects and errors are
+call-time behavior while body side effects remain resume-time behavior.
+
+Each realm owns `%GeneratorFunction%`, `%GeneratorFunction.prototype%`, and
+`%GeneratorPrototype%`, but installs no global `GeneratorFunction` property.
+Guest code reaches the dynamic constructor through a generator function's
+inherited `constructor`. Calling or constructing it parses independently
+guarded parameter/body fragments with the guest parser and creates a generator
+closed over the invoked constructor's realm-global environment; it never calls
+host `eval`, `Function`, or a host generator.
+
+### `GeneratorObject` state and continuation
+
+`src/runtime/generator-object.js` implements exactly four states:
+
+- `suspendedStart` — the activation exists but no body statement has run.
+  `next(value)` starts with `undefined` (discarding `value`); `return(value)` or
+  `throw(value)` completes without entering the body.
+- `executing` — one resume is active. Reentrant `next`, `return`, or `throw`
+  raises a guest `TypeError`.
+- `suspendedYield` — a direct or delegated yield has returned outward.
+  `next`, `throw`, and `return` inject their normal/throw/return Completion at
+  that exact suspension point, so surrounding `catch` and `finally` regions
+  retain authority.
+- `completed` — the continuation has been released. `next()` returns
+  `{ value: undefined, done: true }`, `return(value)` returns
+  `{ value, done: true }`, and `throw(value)` throws `value`.
+
+A direct yield transitions `executing → suspendedYield`; a normal/return/throw
+terminal Completion transitions `executing → completed`, returning `undefined`,
+returning its value, or propagating its thrown value respectively. Any
+unexpected continuation failure also clears the continuation and completes the
+object.
+
+`GeneratorExecution` (`src/evaluator/generator-machine.js`) stores a typed
+`frames` array plus explicit resume-input and child-output slots. The expression,
+pattern/definition, and statement/control dispatchers retain only
+discriminants, phases/indices, AST nodes, evaluation contexts, iterator records,
+and engine values, References, or Completions. No suspended record retains a
+host callback, closure continuation, evaluator frame, or active `StackGuard`
+entry. Each dispatch step is finite; suspension returns only after the machine
+loop and any synchronous subtree have unwound.
+
+The first activation builds a function-owned, execution-edge-aware yield
+classification. A yield-bearing subtree gets typed frames; a classified
+yield-free subtree uses the existing synchronous expression or statement
+evaluator. That bridge keeps one semantic implementation for ordinary work
+without retaining its host stack across suspension.
+
+### Delegation and Realm/Agent ownership
+
+A `yield*` frame retains one Iterator Record and forwards the native iterator
+protocol: initial and resumed `next`, dynamic `throw` and `return` lookup,
+missing-`throw` close/`TypeError` behavior, missing-`return` propagation,
+iterator-result validation, and `done` before `value`. A delegated `done: false`
+result is returned unchanged — including identity, prototype, owning Agent, and
+a still-unread `value` getter — rather than being reboxed. A `done: true` result
+feeds its value back into the outer expression or Completion.
+
+Generator functions, their default prototypes, `GeneratorObject`s, direct-yield
+iterator results, terminal iterator results, and dynamic-constructor parse
+errors belong to the generator function/constructor realm. Protocol lookup on
+an `EngineObject` uses that object's Agent-owned well-known `@@iterator`; a
+primitive uses the executing realm while it is boxed. Consequently a foreign
+iterator can delegate across Agents, its forwarded `done: false` result remains
+foreign, and results the outer generator itself creates use the outer
+generator's realm.
+
 ## Built-in families (`src/builtins/`)
 
-Each built-in family is a module under `src/builtins/` that exports a
-`create*Intrinsics(realm)` function and an `install*` function:
+Each built-in family is a module under `src/builtins/` with a
+`create*Intrinsics(realm)` path; globally exposed families also provide an
+`install*` path. Generators deliberately have no global installer:
 
 | Module                  | Family / globals                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -408,6 +508,8 @@ Each built-in family is a module under `src/builtins/` that exports a
 | `regexp.js`             | `RegExp` constructor and prototype methods                                                                                                                                                                                                                                                                                                                                                                                      |
 | `symbol.js`             | `Symbol` constructor, prototype, registry, well-known symbols                                                                                                                                                                                                                                                                                                                                                                   |
 | `reflect.js`            | `Reflect.ownKeys` exposing complete string/symbol own-key order                                                                                                                                                                                                                                                                                                                                                                 |
+| `iterator.js`           | `%IteratorPrototype%`, Array/String iterator prototypes and methods, and `@@iterator` installation                                                                                                                                                                                                                                                                                                                              |
+| `generator.js`          | Per-Realm non-global generator intrinsics plus generator `next`, `return`, and `throw` resume methods                                                                                                                                                                                                                                                                                                                           |
 | `math.js`               | `Math` object (constants and functions)                                                                                                                                                                                                                                                                                                                                                                                         |
 | `global-numeric.js`     | `parseInt`, `parseFloat`, `isNaN`, `isFinite`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `global-uri.js`         | URI encoding/decoding, `escape`/`unescape`                                                                                                                                                                                                                                                                                                                                                                                      |

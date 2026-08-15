@@ -1041,6 +1041,22 @@ const tests = [
       );
     },
   },
+  {
+    name: 'direct eval keeps a block generator local without an Annex B alias',
+    run() {
+      assertNormal(
+        run(`
+          eval(
+            "{ function* blockGenerator(){ return 4; } " +
+            "var inside = typeof blockGenerator + ':' + " +
+            "blockGenerator().next().value; } " +
+            "inside + ':' + typeof blockGenerator;"
+          );
+        `),
+        'function:4:undefined',
+      );
+    },
+  },
 ];
 
 export default tests;

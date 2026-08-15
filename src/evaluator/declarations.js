@@ -16,11 +16,14 @@ import {
   createArgumentsObject,
 } from '../runtime/function-object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { EngineObject } from '../runtime/object.js';
+import { GeneratorObject } from '../runtime/generator-object.js';
 import { evaluateExpressionValue } from './expressions.js';
 import { evaluateClassDefinition } from './classes.js';
 import { evaluateStatementList } from './statements.js';
 import { assignBindingPattern, initializeBindingPattern } from './patterns.js';
 import { hasUseStrictDirective } from './directive.js';
+import { createGeneratorExecution } from './generator-machine.js';
 import {
   annexBBlockFunctionDeclarations,
   boundNames,
@@ -695,7 +698,7 @@ export function instantiateFunctionObject(node, context) {
  *   name?: string,
  *   isMethod?: boolean,
  *   createPrototype?: boolean,
- *   functionKind?: 'normal' | 'method' | 'arrow' | 'classConstructor',
+ *   functionKind?: import('../runtime/function-object.js').FunctionKind,
  *   thisMode?: 'global' | 'strict' | 'lexical',
  *   constructible?: boolean,
  *   homeObject?: import('../runtime/object.js').EngineObject,
@@ -779,15 +782,27 @@ export function createFunctionObject(node, scope, context, options = {}) {
     options.functionKind ??
     (node.type === 'ArrowFunctionExpression'
       ? 'arrow'
-      : options.isMethod
-        ? 'method'
-        : 'normal');
+      : node.generator === true
+        ? options.isMethod
+          ? 'generatorMethod'
+          : 'generator'
+        : options.isMethod
+          ? 'method'
+          : 'normal');
   const thisMode =
     options.thisMode ??
     (functionKind === 'arrow' ? 'lexical' : strict ? 'strict' : 'global');
   const constructible =
     options.constructible ??
     (functionKind === 'normal' || functionKind === 'classConstructor');
+  const generator =
+    functionKind === 'generator' || functionKind === 'generatorMethod';
+  const generatorFunctionPrototype = generator
+    ? requiredGeneratorIntrinsic(context.realm, 'generatorFunctionPrototype')
+    : undefined;
+  const generatorPrototype = generator
+    ? requiredGeneratorIntrinsic(context.realm, 'generatorPrototype')
+    : undefined;
 
   const functionObject = new EngineFunction({
     realm: context.realm,
@@ -798,8 +813,8 @@ export function createFunctionObject(node, scope, context, options = {}) {
     scope,
     strict,
     name,
-    isMethod: functionKind === 'method',
-    createPrototype: options.createPrototype ?? constructible,
+    isMethod: functionKind === 'method' || functionKind === 'generatorMethod',
+    createPrototype: options.createPrototype ?? (constructible || generator),
     functionKind,
     thisMode,
     constructible,
@@ -807,6 +822,18 @@ export function createFunctionObject(node, scope, context, options = {}) {
     methodHomeObject: functionKind === 'arrow' ? undefined : options.homeObject,
     constructorKind: options.constructorKind,
     defaultDerivedConstructor: options.defaultDerivedConstructor,
+    functionObjectPrototype: generatorFunctionPrototype,
+    prototypeObjectPrototype: generatorPrototype,
+    generatorFactory: generator
+      ? (functionObject, thisValue, args, functionEnvironment) =>
+          createGeneratorObject(
+            node,
+            functionObject,
+            thisValue,
+            args,
+            functionEnvironment,
+          )
+      : undefined,
     execute: (functionObject, thisValue, args, functionEnvironment) =>
       executeFunctionBody(
         node,
@@ -865,6 +892,40 @@ function executeFunctionBody(
   args,
   functionEnvironment,
 ) {
+  const { context, bodyStatements } = createFunctionBodyContext(
+    node,
+    functionObject,
+    thisValue,
+    args,
+    functionEnvironment,
+  );
+
+  if (node.type === 'ArrowFunctionExpression' && node.expression) {
+    return createReturnCompletion(evaluateExpressionValue(node.body, context));
+  }
+
+  return evaluateStatementList(bodyStatements, context);
+}
+
+/**
+ * Builds a function activation through declaration instantiation without
+ * evaluating a body statement. Generator calls retain the resulting context
+ * until their first resume; ordinary functions evaluate it immediately.
+ *
+ * @param {any} node
+ * @param {EngineFunction} functionObject
+ * @param {unknown} thisValue
+ * @param {readonly unknown[]} args
+ * @param {import('../runtime/environment.js').FunctionExecutionEnvironment} functionEnvironment
+ * @returns {{ context: EvaluationContext, bodyStatements: any[] }}
+ */
+export function createFunctionBodyContext(
+  node,
+  functionObject,
+  thisValue,
+  args,
+  functionEnvironment,
+) {
   const functionEnv = newDeclarativeEnvironment(functionObject.scope);
   const parameterEnv = functionObject.simpleParameterList
     ? functionEnv
@@ -903,11 +964,58 @@ function executeFunctionBody(
     context,
   );
 
-  if (node.type === 'ArrowFunctionExpression' && node.expression) {
-    return createReturnCompletion(evaluateExpressionValue(node.body, context));
+  return { context, bodyStatements };
+}
+
+/**
+ * @param {any} node
+ * @param {EngineFunction} functionObject
+ * @param {unknown} thisValue
+ * @param {readonly unknown[]} args
+ * @param {import('../runtime/environment.js').FunctionExecutionEnvironment} functionEnvironment
+ * @returns {GeneratorObject}
+ */
+function createGeneratorObject(
+  node,
+  functionObject,
+  thisValue,
+  args,
+  functionEnvironment,
+) {
+  const { context, bodyStatements } = createFunctionBodyContext(
+    node,
+    functionObject,
+    thisValue,
+    args,
+    functionEnvironment,
+  );
+  const prototype = functionObject.get('prototype');
+  const generatorPrototype =
+    prototype instanceof EngineObject
+      ? prototype
+      : requiredGeneratorIntrinsic(context.realm, 'generatorPrototype');
+  const continuation = createGeneratorExecution({
+    functionObject,
+    body: bodyStatements,
+    context,
+  });
+
+  return new GeneratorObject(context.realm, generatorPrototype, continuation);
+}
+
+/**
+ * @param {import('../runtime/realm.js').Realm} realm
+ * @param {'generatorFunctionPrototype' | 'generatorPrototype'} name
+ * @returns {EngineObject}
+ */
+function requiredGeneratorIntrinsic(realm, name) {
+  const intrinsic = realm.intrinsics[name];
+
+  if (!(intrinsic instanceof EngineObject)) {
+    throw new TypeError(`Realm is missing required %${name}% intrinsic`);
   }
 
-  return evaluateStatementList(bodyStatements, context);
+  return intrinsic;
 }
 
 /**
@@ -936,7 +1044,13 @@ export function evaluateVariableDeclaration(node, context) {
       if (declarator.init) {
         if (declarator.id.type !== 'Identifier') {
           const value = evaluateExpressionValue(declarator.init, context);
-          assignBindingPattern(declarator.id, value, context);
+          applyVariableDeclaratorValue(
+            node.kind,
+            declarator,
+            value,
+            context,
+            null,
+          );
           continue;
         }
 
@@ -953,7 +1067,13 @@ export function evaluateVariableDeclaration(node, context) {
           context,
           declarator.id.name,
         );
-        putValue(reference, value);
+        applyVariableDeclaratorValue(
+          node.kind,
+          declarator,
+          value,
+          context,
+          reference,
+        );
       }
     }
 
@@ -965,7 +1085,7 @@ export function evaluateVariableDeclaration(node, context) {
       const value = declarator.init
         ? evaluateExpressionValue(declarator.init, context)
         : undefined;
-      initializeBindingPattern(declarator.id, value, context.env, context);
+      applyVariableDeclaratorValue(node.kind, declarator, value, context, null);
       continue;
     }
 
@@ -979,28 +1099,62 @@ export function evaluateVariableDeclaration(node, context) {
     const value = declarator.init
       ? evaluateNamedExpression(declarator.init, context, declarator.id.name)
       : undefined;
-
-    // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
-    // way `ResolveBinding` does (through the environment chain) and initialize
-    // the record that holds it, lifting the name out of its TDZ. Every lexical
-    // scope — a script/global top level (§15.1.8), function body (§9.2.12),
-    // block/`switch`/`try` (§13.2.14), and now eval code (§18.2.1.2) — creates
-    // the uninitialized binding before its statements run, so this reference
-    // always resolves to the declarative record that holds it.
-    const reference = getIdentifierReference(
-      context.env,
-      declarator.id.name,
-      context.strict,
-    );
-
-    const environment =
-      /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
-        reference.base
-      );
-    environment.initializeBinding(declarator.id.name, value);
+    applyVariableDeclaratorValue(node.kind, declarator, value, context, null);
   }
 
   return createNormalCompletion(EMPTY);
+}
+
+/**
+ * Applies an already-evaluated initializer with the same binding rules used by
+ * synchronous declarations. A resumable `var` passes the Reference it captured
+ * before evaluating the initializer so suspension cannot change its target.
+ *
+ * @param {string} kind
+ * @param {any} declarator
+ * @param {unknown} value
+ * @param {EvaluationContext} context
+ * @param {import('../runtime/reference.js').Reference | null} reference
+ * @returns {void}
+ */
+export function applyVariableDeclaratorValue(
+  kind,
+  declarator,
+  value,
+  context,
+  reference,
+) {
+  if (kind === 'var') {
+    if (declarator.id.type !== 'Identifier') {
+      assignBindingPattern(declarator.id, value, context);
+      return;
+    }
+
+    putValue(
+      reference ??
+        getIdentifierReference(context.env, declarator.id.name, context.strict),
+      value,
+    );
+    return;
+  }
+
+  if (declarator.id.type !== 'Identifier') {
+    initializeBindingPattern(declarator.id, value, context.env, context);
+    return;
+  }
+
+  // ES2015 §13.3.1.4 `InitializeReferencedBinding`: resolve the binding the
+  // way `ResolveBinding` does and initialize the record that holds it.
+  const resolved = getIdentifierReference(
+    context.env,
+    declarator.id.name,
+    context.strict,
+  );
+  const environment =
+    /** @type {import('../runtime/environment.js').DeclarativeEnvironmentRecord} */ (
+      resolved.base
+    );
+  environment.initializeBinding(declarator.id.name, value);
 }
 
 /**

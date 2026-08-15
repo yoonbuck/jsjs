@@ -1521,6 +1521,7 @@ function basicValidationContextKey(nestedArray, patternContext) {
  *
  * @param {boolean} nestedArray
  * @param {boolean} strict
+ * @param {boolean} yieldAllowed
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
  * @param {boolean | undefined} classDerived
@@ -1530,6 +1531,7 @@ function basicValidationContextKey(nestedArray, patternContext) {
 function syntaxValidationContextKey(
   nestedArray,
   strict,
+  yieldAllowed,
   superAllowed,
   superCallAllowed,
   classDerived,
@@ -1539,6 +1541,7 @@ function syntaxValidationContextKey(
     classDerived === undefined ? 0 : classDerived === false ? 1 : 2;
   let key = basicValidationContextKey(nestedArray, patternContext);
   key = key * 2 + (strict ? 1 : 0);
+  key = key * 2 + (yieldAllowed ? 1 : 0);
   key = key * 2 + (superAllowed ? 1 : 0);
   key = key * 2 + (superCallAllowed ? 1 : 0);
   return key * 3 + classKey;
@@ -1672,10 +1675,6 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * walk always rejects an ancestor first, so this entry never fires on its own.
  * These are defence-in-depth: were the walk order or a parent's flag ever to
  * change, the node would still be refused rather than silently evaluated.
- * - `YieldExpression` occurs only inside a generator, whose enclosing
- *   `Function` is rejected first by the `generator: true` flag check in
- *   `checkUnsupportedEs2015Node`.
- *
  * Template literals, elements, and tagged-template expressions are supported,
  * but their dedicated validators still require the exact ESTree parent,
  * quasi/expression count, raw/cooked value, and tail shapes before evaluator
@@ -1704,7 +1703,6 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * @type {ReadonlyMap<string, string>}
  */
 const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
-  ['YieldExpression', 'generators and `yield` are not supported'],
   ['AwaitExpression', '`await` expressions are not supported'],
   ['ObjectPattern', 'destructuring patterns are not supported'],
   ['ArrayPattern', 'destructuring patterns are not supported'],
@@ -1746,6 +1744,7 @@ const SUPPORTED_EXPRESSION_TYPES = new Set([
   'SequenceExpression',
   'TemplateLiteral',
   'TaggedTemplateExpression',
+  'YieldExpression',
 ]);
 
 /**
@@ -1879,6 +1878,7 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
   'TemplateLiteral',
   'TemplateElement',
   'TaggedTemplateExpression',
+  'YieldExpression',
   ...UNSUPPORTED_ES2015_NODE_MESSAGES.keys(),
 ]);
 
@@ -1952,6 +1952,7 @@ const UNTRUSTED_AST_SYNTAX_FIELD_NAMES = new Set([
   'shorthand',
   'static',
   'await',
+  'delegate',
   'raw',
   'regex',
   'tail',
@@ -2081,7 +2082,7 @@ const UNTRUSTED_AST_SCALAR_VALIDATORS = new Map([
   ['TemplateLiteral', validateNoScalarSyntax],
   ['TemplateElement', validateTemplateElementScalarSyntax],
   ['TaggedTemplateExpression', validateNoScalarSyntax],
-  ['YieldExpression', validateNoScalarSyntax],
+  ['YieldExpression', validateYieldScalarSyntax],
   ['AwaitExpression', validateNoScalarSyntax],
   ['ObjectPattern', validateNoScalarSyntax],
   ['ArrayPattern', validateNoScalarSyntax],
@@ -2162,11 +2163,12 @@ function checkStatementPositionFunctionDeclarations(
   sourceIndependentNodes,
   rootContext = { superAllowed: false, superCallAllowed: false },
 ) {
-  /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
+  /** @type {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
   const pending = [
     {
       node: root,
       strict: rootStrict,
+      yieldAllowed: false,
       superAllowed: rootContext.superAllowed,
       superCallAllowed: rootContext.superCallAllowed,
       classDerived: undefined,
@@ -2182,7 +2184,7 @@ function checkStatementPositionFunctionDeclarations(
 
   while (pending.length > 0) {
     const item =
-      /** @type {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
+      /** @type {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
         pending.pop()
       );
     const node = item.node;
@@ -2202,6 +2204,7 @@ function checkStatementPositionFunctionDeclarations(
         syntaxValidationContextKey(
           item.nestedArray,
           strict,
+          item.yieldAllowed,
           item.superAllowed,
           item.superCallAllowed,
           item.classDerived,
@@ -2246,6 +2249,7 @@ function checkStatementPositionFunctionDeclarations(
           pending,
           element,
           strict,
+          item.yieldAllowed,
           item.superAllowed,
           item.superCallAllowed,
           item.classDerived,
@@ -2280,6 +2284,7 @@ function checkStatementPositionFunctionDeclarations(
       item.parentKey,
       item.patternContext,
       item.parentIndex,
+      item.yieldAllowed,
       item.superAllowed,
       item.superCallAllowed,
       sourceIndependentNodes === undefined || !sourceIndependentNodes.has(node),
@@ -2320,6 +2325,7 @@ function checkStatementPositionFunctionDeclarations(
           pending,
           node[key],
           childStrict,
+          yieldAllowedForChild(node, parentKey, item.yieldAllowed),
           childSuperAllowed,
           childSuperCallAllowed,
           parentKey === undefined
@@ -2632,10 +2638,10 @@ function checkFunctionDeclarationPosition(node, strict) {
     return;
   }
 
-  if (node.type === 'LabeledStatement' && strict) {
+  if (node.type === 'LabeledStatement') {
     const offending = resolveBodyFunctionDeclaration(node);
 
-    if (offending) {
+    if (offending && (strict || offending.fn.generator === true)) {
       throw statementPositionFunctionError(
         'the body of a labelled statement',
         offending.fn,
@@ -2649,9 +2655,10 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} pending
+ * @param {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} pending
  * @param {unknown} value
  * @param {boolean} strict
+ * @param {boolean} yieldAllowed
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
  * @param {boolean | undefined} classDerived
@@ -2666,6 +2673,7 @@ function pushChild(
   pending,
   value,
   strict,
+  yieldAllowed,
   superAllowed,
   superCallAllowed,
   classDerived,
@@ -2679,6 +2687,7 @@ function pushChild(
     pending.push({
       node: value,
       strict,
+      yieldAllowed,
       superAllowed,
       superCallAllowed,
       classDerived,
@@ -2689,6 +2698,24 @@ function pushChild(
       patternContext,
     });
   }
+}
+
+/**
+ * Yield is scoped to the currently entered synchronous generator body. A
+ * nested function-like node replaces rather than inherits that context, while
+ * computed class and object names remain part of their enclosing execution.
+ *
+ * @param {any} parent
+ * @param {string | undefined} key
+ * @param {boolean} inherited
+ * @returns {boolean}
+ */
+function yieldAllowedForChild(parent, key, inherited) {
+  if (!isFunctionNode(parent)) {
+    return inherited;
+  }
+
+  return key === 'body' && parent.generator === true && parent.async !== true;
 }
 
 /**
@@ -2937,10 +2964,8 @@ function unsupportedEs2015Message(
     }
   }
 
-  if (isFunctionNode(node) && (node.generator || node.async)) {
-    return node.async
-      ? 'async functions are not supported'
-      : 'generators and `yield` are not supported';
+  if (isFunctionNode(node) && node.async) {
+    return 'async functions are not supported';
   }
 
   if (
@@ -3251,6 +3276,10 @@ function validateClassMethodDefinition(node, parent, parentKey, parentIndex) {
     return 'class constructors cannot be generators';
   }
 
+  if ((node.kind === 'get' || node.kind === 'set') && node.value.generator) {
+    return 'class accessors cannot be generators';
+  }
+
   if (node.static && !node.computed && keyName === 'prototype') {
     return 'classes may not have a static property named prototype';
   }
@@ -3350,7 +3379,7 @@ function isClassMethodFunction(definition, value) {
     value.type === 'FunctionExpression' &&
     value.id === null &&
     Array.isArray(value.params) &&
-    value.generator === false &&
+    typeof value.generator === 'boolean' &&
     (value.async === undefined || value.async === false) &&
     value.expression === false &&
     value.body &&
@@ -3495,6 +3524,8 @@ function isSupportedExpressionPosition(
     case 'ArrayExpression':
       return member('elements');
     case 'SpreadElement':
+      return direct('argument');
+    case 'YieldExpression':
       return direct('argument');
     case 'TemplateLiteral':
       return member('expressions');
@@ -4196,6 +4227,10 @@ function validateObjectExpressionProperty(
     return 'unsupported object accessor';
   }
 
+  if (node.value.generator) {
+    return 'object accessors cannot be generators';
+  }
+
   const parameterMessage = validateFunctionParameterList(node.value);
 
   if (parameterMessage !== undefined) {
@@ -4314,9 +4349,25 @@ function validateVariableDeclarationScalarSyntax(node) {
  */
 function validateFunctionScalarSyntax(node) {
   return (
-    validateRequiredScalar(node, 'generator', (value) => value === false) ??
+    validateRequiredScalar(
+      node,
+      'generator',
+      (value) => typeof value === 'boolean',
+    ) ??
     validateOptionalScalar(node, 'async', (value) => value === false) ??
     validateRequiredScalar(node, 'expression', (value) => value === false)
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateYieldScalarSyntax(node) {
+  return validateRequiredScalar(
+    node,
+    'delegate',
+    (value) => typeof value === 'boolean',
   );
 }
 
@@ -4827,6 +4878,10 @@ function validateEvaluatorChildEdges(node) {
       );
     case 'SpreadElement':
       return validateRequiredChild(node, 'argument', isExpressionNodeOrUnknown);
+    case 'YieldExpression':
+      return node.delegate === true
+        ? validateRequiredChild(node, 'argument', isExpressionNodeOrUnknown)
+        : validateNullableChild(node, 'argument', isExpressionNodeOrUnknown);
     case 'ObjectPattern':
       return validateObjectPatternProperties(node);
     case 'ArrayPattern':
@@ -5377,7 +5432,7 @@ function isObjectLiteralFunction(node) {
     node.type === 'FunctionExpression' &&
     node.id === null &&
     Array.isArray(node.params) &&
-    node.generator === false &&
+    typeof node.generator === 'boolean' &&
     (node.async === undefined || node.async === false) &&
     node.expression === false &&
     node.body &&
@@ -5393,6 +5448,7 @@ function isObjectLiteralFunction(node) {
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
  * @param {number | undefined} parentIndex
+ * @param {boolean} yieldAllowed
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
  * @param {boolean} identifierSourceMatches
@@ -5405,10 +5461,18 @@ function checkUnsupportedEs2015Node(
   parentKey,
   patternContext,
   parentIndex,
+  yieldAllowed,
   superAllowed,
   superCallAllowed,
   identifierSourceMatches,
 ) {
+  if (node.type === 'YieldExpression' && !yieldAllowed) {
+    throw unsupportedEs2015Error(
+      '`yield` expressions are only valid inside generator bodies',
+      node,
+    );
+  }
+
   if (node.type === 'Super') {
     const directMember = isDirectSuperMemberObject(node, parent, parentKey);
     const directCall = isDirectSuperCallCallee(node, parent, parentKey);

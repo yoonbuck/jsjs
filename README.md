@@ -41,15 +41,19 @@ const result = evaluateScript(realm, '1 + 2');
 console.log(result); // { type: 'normal', value: 3 }
 ```
 
-`createRealm()` returns an initialized realm with all built-in objects: the
-full ES5.1 standard library plus ES2015 `Symbol`. Each realm gets its own
-agent — the owner of the well-known symbols and the global symbol registry —
-unless `createRealm({ agent })` opts several realms into sharing one.
+`createRealm()` returns an initialized realm with the full ES5.1 standard
+library plus ES2015 `Symbol`, iterator, Promise, and non-global generator
+intrinsics. Each realm gets its own agent — the owner of the well-known symbols
+and the global symbol registry — unless `createRealm({ agent })` opts several
+realms into sharing one.
 `evaluateScript(realm, source)` parses and evaluates a script, returning
 `{ type: 'normal' | 'throw', value }`. The engine implements ES5.1 plus ES2015
 lexical declarations, `for`-`of`, arrows, classes, computed object and class
 method names, destructuring, default/rest parameters, iterable spread, and
-template literals (including tagged-template caching). See
+template literals (including tagged-template caching). It also implements
+synchronous generator declarations, expressions, object/class methods,
+`yield`/`yield*`, and the non-global dynamic `%GeneratorFunction%` constructor.
+See
 [docs/architecture.md](docs/architecture.md) for the grammar boundary and full
 embedding API.
 
@@ -120,8 +124,12 @@ The Test262 feature manifest has executable probes for the supported ES2015
 syntax tags: arrows, classes, computed names, defaults, destructuring,
 rest parameters, spread, and templates. A small pinned suite in
 `test/ci/es2015-syntax-test262.test.js` covers their positive, negative, and
-classified-neighbor cases. Conformance methodology, live coverage, and the
-detailed report are in [docs/conformance.md](docs/conformance.md).
+classified-neighbor cases. The checkout-dependent
+`test/ci/es2015-generator-test262.test.js` separately runs focused generator
+coverage with an explicit feature allowlist, without broadening the global
+feature manifest or regenerated coverage artifacts. Conformance methodology,
+live coverage, and the detailed report are in
+[docs/conformance.md](docs/conformance.md).
 
 ## Architecture
 
@@ -134,10 +142,12 @@ the embedding API are documented in [docs/architecture.md](docs/architecture.md)
 The engine has a small number of intentional deviations from the ES5.1 text
 (mostly following ES2015+ errata every engine ships, plus the ES2015 grammar's
 removal of the strict duplicate-property early error) and known limitations —
-guest recursion depth is bounded by an engine-owned budget of 500 engine frames,
-raising a catchable guest `RangeError` rather than by the host's stack. It still
-rejects generators/yield, async/await, modules, `new.target`, object
-rest/spread, later class forms, binary/octal literals, and Unicode code-point
-escapes. The full
+ordinary synchronous evaluation is bounded by an engine-owned budget of 500
+engine frames, raising a catchable guest `RangeError` before the host stack
+fails. Generator suspension itself retains only heap-resident frames. The
+engine still rejects async functions/generators and `await`, modules,
+`new.target`, object rest/spread, later class forms, binary/octal literals, and
+Unicode code-point escapes, and it omits later iterator/generator helpers. The
+full
 tables, spec citations, observable examples, and backing code references are in
 [docs/limitations.md](docs/limitations.md).

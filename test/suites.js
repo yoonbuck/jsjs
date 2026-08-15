@@ -86,6 +86,12 @@ import functionRealm from './function-realm.test.js';
 import promiseCore from './promise-core.test.js';
 import promiseReactions from './promise-reactions.test.js';
 import promiseCombinators from './promise-combinators.test.js';
+import generatorFunction from './generator-function.test.js';
+import generatorRuntime from './generator-runtime.test.js';
+import generatorYield from './generator-yield.test.js';
+import generatorStack from './generator-stack.test.js';
+import generatorControlFlow from './generator-control-flow.test.js';
+import generatorDelegation from './generator-delegation.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -355,5 +361,29 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/promise-combinators.test.js',
     tests: promiseCombinators,
+  }),
+  Object.freeze({
+    file: 'test/generator-function.test.js',
+    tests: generatorFunction,
+  }),
+  Object.freeze({
+    file: 'test/generator-runtime.test.js',
+    tests: generatorRuntime,
+  }),
+  Object.freeze({
+    file: 'test/generator-yield.test.js',
+    tests: generatorYield,
+  }),
+  Object.freeze({
+    file: 'test/generator-stack.test.js',
+    tests: generatorStack,
+  }),
+  Object.freeze({
+    file: 'test/generator-control-flow.test.js',
+    tests: generatorControlFlow,
+  }),
+  Object.freeze({
+    file: 'test/generator-delegation.test.js',
+    tests: generatorDelegation,
   }),
 ]);

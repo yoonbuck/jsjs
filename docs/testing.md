@@ -84,17 +84,11 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 default work from it. `test/node/repository-invariants.test.js` fails if a suite
 file exists that no runner registers.
 
-The registry currently lists 49 portable suites covering: foundation, static
-semantics, parser, runtime records, objects, abstract operations, environments,
-realms, evaluator expressions and statements, `with` statements, functions,
-object/array literals, Test262 runner, ES5 selection, errors, try statements,
-switch/labels, lexical declarations, stack overflow, update/assignment,
-`in`/`instanceof`, strict mode, `eval`, dynamic `Function`, `delete`, date
-arithmetic, date built-ins, native built-ins, object built-ins, function
-built-ins, array built-ins, primitive wrappers, boolean/number/string built-ins,
-number formatting, string built-ins, string search/case/pattern, regexp
-syntax/built-ins/exec, string-regexp, math built-ins, numeric globals, URI
-globals, JSON parse, and JSON stringify.
+The registry currently lists 79 portable suites covering the parser, static
+semantics, runtime records, objects, environments, evaluator, ES5 built-ins,
+ES2015 syntax/runtime integration, Symbols and iteration, Agent Jobs and
+Promises, benchmark/profile core, and synchronous generator function, runtime,
+yield, control-flow, delegation, and stack behavior.
 
 ### Node-only suites (`test/node/`)
 
@@ -142,6 +136,12 @@ and covers positive/negative arrows, classes, computed names, parameters,
 destructuring, spread, and templates. Its explicitly classified class-field and
 Unicode/legacy-escape neighbors prove that those missing dependencies are not
 silently feature claims.
+
+`test/ci/es2015-generator-test262.test.js` is the checkout-dependent Layer-2
+generator suite. It runs its fixed pinned paths through the same engine bridge,
+Node host, and Test262 runner with an explicit generator/Symbol feature set. It
+is registered only with `test/run-ci-contract.js`, never the portable or Node
+registries.
 
 Nothing in the full contract is conditional. A missing browser or a missing
 upstream checkout fails with the exact command needed to fix it, because a skip
@@ -223,6 +223,27 @@ The focused suite requires the exact upstream revision in `vendor/test262` and
 does not rewrite coverage artifacts. For this Layer-1 focused check, do not run
 the broad upstream Test262 suite locally or regenerate its report; exact-SHA CI
 owns that coverage and its generated artifacts.
+
+### Focused ES2015 generator Test262 suite
+
+The synchronous generator layer has its own fixed-path checkout-dependent
+suite:
+
+```sh
+TZ=UTC node test/run-node.js test/ci/es2015-generator-test262.test.js
+```
+
+It covers `%GeneratorFunction%` call/construction, generator intrinsic
+descriptors, the exact resume states, `next`/`return`/`throw` through
+catch/finally, consecutive yields, and computed object/class generator methods.
+It requires the pinned checkout and passes only the local feature set
+`generators`, `Symbol.iterator`, and `Symbol.toStringTag`, requiring zero failed
+and zero skipped records.
+
+This Layer-2 command does not add `generators` to
+`tools/test262/features.json`, regenerate the broad selection/report/conformance
+block, or make a broad conformance claim. Run it directly as shown; broad
+artifact regeneration remains release work owned by exact-SHA CI.
 
 ### Fixture vs. upstream suites
 
