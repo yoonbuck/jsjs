@@ -381,7 +381,7 @@ function markdownLinkTargets(source, sourceFile) {
  */
 function extractNpmRunCommands(source) {
   const normalized = source.replace(/\s+/g, ' ');
-  const COMMAND_PATTERN = /\bnpm run ([\w:]+)/g;
+  const COMMAND_PATTERN = /\bnpm run ([\w:-]+)/g;
   const seen = new Set(
     [...normalized.matchAll(COMMAND_PATTERN)].map((m) => m[1]),
   );
@@ -1268,6 +1268,12 @@ export default [
     // project.
     name: 'every npm run command in current documentation refers to an existing script',
     run: async () => {
+      assertSame(
+        JSON.stringify(extractNpmRunCommands('npm run test262:es2015-release')),
+        JSON.stringify(['test262:es2015-release']),
+        'npm run extraction preserves hyphenated script names',
+      );
+
       const manifest = JSON.parse(await readSource('package.json'));
       const scripts = new Set(Object.keys(manifest.scripts ?? {}));
       const docFiles = await currentDocumentationFiles();

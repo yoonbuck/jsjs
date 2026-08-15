@@ -3,13 +3,13 @@
  * checked-in Test262 manifests.
  *
  * This suite runs inside `npm run test:node`, so it must stay deterministic
- * and machine-independent: it never spawns a subprocess, never touches the
- * network, and never runs the CI pipeline it describes. Everything here is
- * either structured data parsed from a real file (the workflow YAML through a
- * real YAML parser, `package.json`, the two manifests) or a real execution of
- * the engine against manifest-declared source. The commands themselves are
- * executed by `npm run ci:contract` (`test/ci/full-contract.test.js`), which is
- * deliberately *not* registered with the Node runner.
+ * and machine-independent: it never touches the network or runs the CI pipeline
+ * it describes. Everything here is either structured data parsed from a real
+ * file (the workflow YAML through a real YAML parser, `package.json`, the two
+ * manifests), a bounded subprocess for the UTC diagnostic guard, or a real
+ * execution of the engine against manifest-declared source. The commands
+ * themselves are executed by `npm run ci:contract` (`test/ci/full-contract.test.js`),
+ * which is deliberately *not* registered with the Node runner.
  *
  * The workflow is a generated artifact of `tools/ci/pipeline.js`, but a
  * byte comparison against its own generator proves only that nobody hand-edited
@@ -19,7 +19,9 @@
  * expectation table written out here rather than imported from the generator.
  */
 
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { load as parseYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
@@ -64,7 +66,6 @@ import {
   ASYNC_RUNTIME_RELEASE_MANIFEST,
   ASYNC_RUNTIME_RELEASE_MANIFEST_FILE,
 } from '../../tools/test262/async-runtime-release-manifest.js';
-import { assertPinnedCheckout } from '../../tools/test262/upstream-run.js';
 import * as ciPipeline from '../../tools/ci/pipeline.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
@@ -554,29 +555,24 @@ export default [
   {
     name: 'upstream checkout diagnostics print the exact heap and UTC remediation command',
     run: async () => {
-      /** @type {unknown} */
-      let error;
+      const result = spawnSync(
+        process.argv[0],
+        ['tools/test262/upstream-run.js'],
+        {
+          cwd: fileURLToPath(REPOSITORY_ROOT_URL),
+          env: { ...process.env, TZ: 'Etc/GMT+1' },
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024,
+        },
+      );
 
-      try {
-        await assertPinnedCheckout({
-          repository: 'https://github.com/tc39/test262.git',
-          revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
-          checkoutPath: 'vendor/missing-test262-contract-checkout',
-        });
-      } catch (caught) {
-        error = caught;
-      }
-
-      assertSame(error instanceof Error, true);
+      assertSame(result.status, 1);
       assertSame(
-        error instanceof Error &&
-          error.message.includes(
-            'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream',
-          ),
+        result.stderr.includes(
+          'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream',
+        ),
         true,
-        `missing-checkout remediation was:\n${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `non-UTC remediation was:\n${result.stderr}`,
       );
     },
   },
