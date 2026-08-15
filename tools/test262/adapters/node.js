@@ -2,7 +2,7 @@
  * Node adapter for the portable Test262 runner.
  *
  * The adapter is deliberately thin: it turns a directory of test files into the
- * `Test262Host` protocol (`readTest`, `readInclude`, `readManifest`,
+ * `Test262Host` protocol (`readTest`, `readModule`, `readInclude`, `readManifest`,
  * `listTests`), parses a CLI, and writes the shared report. Which tests run and
  * what a record looks like are decided by `tools/test262/selection.js` and
  * `tools/test262/runner.js`, which never import this file.
@@ -30,6 +30,7 @@ import {
   EMPTY_FEATURES_MANIFEST,
   resolveSupportedFeatures,
 } from '../features.js';
+import { NON_TEST_SUFFIX } from '../coverage.js';
 
 /**
  * @typedef {import('../runner.js').Test262Host} Test262Host
@@ -49,6 +50,9 @@ export function createNodeTest262Host(options) {
 
   return {
     readTest(file) {
+      return readFile(new URL(file, root), 'utf8');
+    },
+    readModule(file) {
       return readFile(new URL(file, root), 'utf8');
     },
     readInclude(name) {
@@ -194,7 +198,10 @@ async function listJavaScriptFiles(root, prefix, harnessDirectory) {
           harnessDirectory,
         )),
       );
-    } else if (entry.name.endsWith('.js')) {
+    } else if (
+      entry.name.endsWith('.js') &&
+      !entry.name.endsWith(NON_TEST_SUFFIX)
+    ) {
       files.push(`${prefix}${entry.name}`);
     }
   }

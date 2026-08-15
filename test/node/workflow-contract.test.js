@@ -1097,5 +1097,8 @@ function probeHost(source) {
     readInclude(name) {
       throw new Error(`a raw probe must not load ${name}`);
     },
+    readModule(file) {
+      throw new Error(`a raw probe must not load module ${file}`);
+    },
   };
 }

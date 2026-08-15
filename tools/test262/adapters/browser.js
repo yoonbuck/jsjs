@@ -56,6 +56,9 @@ export function createBrowserTest262Host(options) {
     readTest(file) {
       return readText(file);
     },
+    readModule(file) {
+      return readText(file);
+    },
     readInclude(name) {
       return readText(`${harnessDirectory}/${name}`);
     },

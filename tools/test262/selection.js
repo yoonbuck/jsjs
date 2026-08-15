@@ -19,6 +19,9 @@ export const TEST262_MANIFEST_FILE = 'manifest.json';
 /** The harness subdirectory of a Test262 tree, unless a host overrides it. */
 export const DEFAULT_HARNESS_DIRECTORY = 'harness';
 
+/** Test262 dependency sources that are never independently executed. */
+export const TEST262_FIXTURE_SUFFIX = '_FIXTURE.js';
+
 const MANIFEST_KEYS = Object.freeze(['tests', 'malformed']);
 
 /**
@@ -73,6 +76,14 @@ export function sortStrings(values) {
   return [...values].sort((left, right) =>
     left < right ? -1 : left > right ? 1 : 0,
   );
+}
+
+/**
+ * @param {string} path
+ * @returns {boolean}
+ */
+export function isTest262FixtureDependencyPath(path) {
+  return path.endsWith(TEST262_FIXTURE_SUFFIX);
 }
 
 /**
@@ -168,21 +179,31 @@ export function selectTest262Paths(options) {
   const { paths, manifest, listing, includeMalformed = false } = options;
 
   if (paths !== undefined && paths.length > 0) {
-    return sortTestPaths(paths);
+    return sortRootTestPaths(paths);
   }
 
   if (manifest !== undefined && manifest !== null) {
-    return sortTestPaths([
+    return sortRootTestPaths([
       ...manifest.tests,
       ...(includeMalformed ? manifest.malformed : []),
     ]);
   }
 
   if (listing !== undefined && listing !== null) {
-    return sortTestPaths(listing);
+    return sortRootTestPaths(listing);
   }
 
   return [];
+}
+
+/**
+ * @param {readonly string[]} paths
+ * @returns {string[]}
+ */
+function sortRootTestPaths(paths) {
+  return sortTestPaths(
+    paths.filter((path) => !isTest262FixtureDependencyPath(path)),
+  );
 }
 
 /**
