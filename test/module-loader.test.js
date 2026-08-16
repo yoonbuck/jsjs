@@ -6,7 +6,9 @@ import {
   ModuleLoaderError,
   Realm,
 } from '../src/index.js';
-import { loadModuleGraph } from '../src/runtime/module-loader.js';
+import * as moduleLoaderInternals from '../src/runtime/module-loader.js';
+
+const { loadModuleGraph } = moduleLoaderInternals;
 
 /**
  * @param {Promise<unknown>} promise
@@ -691,6 +693,157 @@ export default [
           retryAfterFailure ? 'p,x,b,delayed-y,x' : 'p,x,b,delayed-y',
         );
         assertSame(xLoads, retryAfterFailure ? 2 : 1);
+      }
+    },
+  },
+  {
+    name: 'loader reclaims settled failure waves without changing active roots',
+    async run() {
+      const failureCauses = Array.from(
+        { length: 3 },
+        (_, index) => new Error(`x failure ${index}`),
+      );
+      const olderAttempts = Array.from({ length: 3 }, () => ({
+        started: deferred(),
+        release: deferred(),
+      }));
+      const xAttempts = [
+        ...failureCauses.map((cause) => ({
+          started: deferred(),
+          release: deferred(),
+          cause,
+        })),
+        { started: deferred(), release: deferred(), cause: undefined },
+      ];
+      /** @type {Map<string, number>} */
+      const cycleLoads = new Map();
+      let xLoads = 0;
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'p') {
+            return 'import "x"; export const value = "p";';
+          }
+          if (identifier.startsWith('older-')) {
+            const index = Number(identifier.slice('older-'.length));
+            const attempt = olderAttempts[index];
+            attempt.started.resolve();
+            return attempt.release.promise.then(
+              () => `import "p"; export const value = ${index};`,
+            );
+          }
+          if (identifier === 'x') {
+            const attempt = xAttempts[xLoads];
+            xLoads += 1;
+            attempt.started.resolve();
+            return attempt.release.promise.then(() => {
+              if (attempt.cause !== undefined) {
+                throw attempt.cause;
+              }
+              return 'export const value = "x";';
+            });
+          }
+          if (identifier.startsWith('cycle-x-')) {
+            const loads = (cycleLoads.get(identifier) ?? 0) + 1;
+            cycleLoads.set(identifier, loads);
+            if (loads === 1) {
+              throw new Error(`${identifier} failed`);
+            }
+            return 'export const value = 1;';
+          }
+          if (identifier.startsWith('cycle-')) {
+            return `import "${identifier.replace('cycle-', 'cycle-x-')}"; export const value = 1;`;
+          }
+          throw new Error(`Unexpected module ${identifier}`);
+        },
+      });
+
+      /** @type {Promise<any>[]} */
+      const olderRoots = [];
+      /** @type {any[]} */
+      const waveErrors = [];
+      for (let wave = 0; wave < failureCauses.length; wave += 1) {
+        const failedWave = loader.loadAndEvaluate('p');
+        await xAttempts[wave].started.promise;
+        olderRoots.push(loader.loadAndEvaluate(`older-${wave}`));
+        await olderAttempts[wave].started.promise;
+        xAttempts[wave].release.resolve();
+        const waveError = await rejected(failedWave);
+        waveErrors.push(waveError);
+        assertSame(waveError.cause, failureCauses[wave]);
+        const coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(
+          coordination.activeGraphSequences.join(','),
+          Array.from({ length: wave + 1 }, (_, index) => 2 + index * 2).join(
+            ',',
+          ),
+        );
+        assertSame(coordination.requestFailures.length, 1);
+        assertSame(coordination.requestFailures[0].identifier, 'p');
+        assertSame(coordination.requestFailures[0].outcomeCount, wave + 1);
+        assertSame(coordination.requestFailureOutcomeCount, wave + 1);
+        assertSame(coordination.requestFailureStorageSize, wave + 1);
+      }
+
+      const successfulRetry = loader.loadAndEvaluate('p');
+      const successfulAttempt = xAttempts[failureCauses.length];
+      await successfulAttempt.started.promise;
+      successfulAttempt.release.resolve();
+      const namespace = await successfulRetry;
+      assertSame(namespace.get('value'), 'p');
+      let coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.join(','), '2,4,6');
+      assertSame(coordination.requestFailures[0].outcomeCount, 3);
+
+      for (let wave = 0; wave < olderRoots.length; wave += 1) {
+        olderAttempts[wave].release.resolve();
+        assertSame(await rejected(olderRoots[wave]), waveErrors[wave]);
+        coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(
+          coordination.activeGraphSequences.join(','),
+          Array.from(
+            { length: olderRoots.length - wave - 1 },
+            (_, index) => 4 + (wave + index) * 2,
+          ).join(','),
+        );
+        if (wave + 1 === olderRoots.length) {
+          assertSame(coordination.requestFailures.length, 0);
+          assertSame(coordination.requestFailureOutcomeCount, 0);
+          assertSame(coordination.requestFailureStorageSize, 0);
+        } else {
+          assertSame(
+            coordination.requestFailures[0].outcomeCount,
+            olderRoots.length - wave - 1,
+          );
+          assertSame(
+            coordination.requestFailureOutcomeCount,
+            olderRoots.length - wave - 1,
+          );
+        }
+      }
+
+      for (let cycle = 0; cycle < 4; cycle += 1) {
+        const identifier = `cycle-${cycle}`;
+        await rejected(loader.loadAndEvaluate(identifier));
+        coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(coordination.activeGraphSequences.length, 0);
+        assertSame(coordination.requestFailures.length, 0);
+        assertSame(coordination.requestFailureOutcomeCount, 0);
+        assertSame(coordination.requestFailureStorageSize, 0);
+        const retried = await loader.loadAndEvaluate(identifier);
+        assertSame(retried.get('value'), 1);
+        coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(coordination.activeGraphSequences.length, 0);
+        assertSame(coordination.requestFailures.length, 0);
+        assertSame(coordination.requestFailureOutcomeCount, 0);
+        assertSame(coordination.requestFailureStorageSize, 0);
       }
     },
   },

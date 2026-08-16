@@ -46,19 +46,44 @@ import { isRealm } from './realm.js';
 
 /**
  * @typedef {{
+ *   sequence: number,
+ *   previous: ActiveGraphSequence | null,
+ *   next: ActiveGraphSequence | null,
+ * }} ActiveGraphSequence
+ */
+
+/**
+ * @typedef {{
+ *   identifier: string,
+ *   error: unknown,
+ *   throughSequence: number,
+ * }} ModuleRequestFailure
+ */
+
+/**
+ * @typedef {{
+ *   outcomes: Array<ModuleRequestFailure | undefined>,
+ *   first: number,
+ * }} ModuleRequestFailureQueue
+ */
+
+/**
+ * @typedef {{
  *   bindings: ModuleLoaderBindings,
  *   records: Map<string, SourceTextModuleRecord>,
  *   resolveInFlight: Map<string, Map<string | null, Promise<string>>>,
  *   loadInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   graphInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   requestInFlight: Map<string, Promise<SourceTextModuleRecord>>,
- *   requestFailures: Map<string, Array<{
- *     error: unknown,
- *     throughSequence: number,
- *   }>>,
+ *   requestFailures: Map<string, ModuleRequestFailureQueue>,
+ *   requestFailureOutcomes: Array<ModuleRequestFailure | undefined>,
+ *   firstRequestFailureOutcome: number,
  *   loadedRequests: Set<string>,
  *   completedGraphs: Set<string>,
  *   nextGraphSequence: number,
+ *   activeGraphSequences: Map<number, ActiveGraphSequence>,
+ *   firstActiveGraphSequence: ActiveGraphSequence | null,
+ *   lastActiveGraphSequence: ActiveGraphSequence | null,
  *   activeLoadIdentifiers: Set<string>,
  *   evaluationInFlight: WeakMap<SourceTextModuleRecord, Promise<any>>,
  *   evaluationErrors: WeakMap<SourceTextModuleRecord, ModuleLoaderError>,
@@ -99,9 +124,14 @@ export class ModuleLoader {
       graphInFlight: new Map(),
       requestInFlight: new Map(),
       requestFailures: new Map(),
+      requestFailureOutcomes: [],
+      firstRequestFailureOutcome: 0,
       loadedRequests: new Set(),
       completedGraphs: new Set(),
       nextGraphSequence: 0,
+      activeGraphSequences: new Map(),
+      firstActiveGraphSequence: null,
+      lastActiveGraphSequence: null,
       activeLoadIdentifiers: new Set(),
       evaluationInFlight: new WeakMap(),
       evaluationErrors: new WeakMap(),
@@ -211,6 +241,39 @@ export async function loadModuleGraph(loader, specifier, referrer = null) {
 }
 
 /**
+ * Returns the failure-wave coordination state used by focused loader tests.
+ * This is intentionally absent from the package's public entry point.
+ *
+ * @param {ModuleLoader} loader
+ * @returns {{
+ *   activeGraphSequences: readonly number[],
+ *   requestFailures: readonly Readonly<{
+ *     identifier: string,
+ *     outcomeCount: number,
+ *   }>[],
+ *   requestFailureOutcomeCount: number,
+ *   requestFailureStorageSize: number,
+ * }}
+ */
+export function getModuleLoaderCoordinationState(loader) {
+  const state = moduleLoaderState(loader);
+  return Object.freeze({
+    activeGraphSequences: Object.freeze([...state.activeGraphSequences.keys()]),
+    requestFailures: Object.freeze(
+      [...state.requestFailures].map(([identifier, queue]) =>
+        Object.freeze({
+          identifier,
+          outcomeCount: queue.outcomes.length - queue.first,
+        }),
+      ),
+    ),
+    requestFailureOutcomeCount:
+      state.requestFailureOutcomes.length - state.firstRequestFailureOutcome,
+    requestFailureStorageSize: state.requestFailureOutcomes.length,
+  });
+}
+
+/**
  * @param {ModuleLoader} loader
  * @param {string} specifier
  * @param {string | null} referrer
@@ -273,6 +336,7 @@ function acquireModuleGraph(loader, identifier) {
 
   const sequence = ++state.nextGraphSequence;
   const discovered = new Set();
+  registerGraphSequence(state, sequence);
   const graph = discoverModuleGraph(loader, identifier, discovered, sequence)
     .then((record) => {
       for (const discoveredIdentifier of discovered) {
@@ -284,6 +348,7 @@ function acquireModuleGraph(loader, identifier) {
       if (state.graphInFlight.get(identifier) === graph) {
         state.graphInFlight.delete(identifier);
       }
+      unregisterGraphSequence(state, sequence);
     });
 
   state.graphInFlight.set(identifier, graph);
@@ -326,9 +391,10 @@ async function discoverModuleGraph(loader, identifier, discovered, sequence) {
  */
 function acquireModuleRequests(loader, identifier, sequence) {
   const state = moduleLoaderState(loader);
-  const failure = state.requestFailures
-    .get(identifier)
-    ?.find((outcome) => sequence <= outcome.throughSequence);
+  const failure = findRequestFailure(
+    state.requestFailures.get(identifier),
+    sequence,
+  );
   if (failure !== undefined) {
     return Promise.reject(failure.error);
   }
@@ -369,15 +435,18 @@ function acquireModuleRequests(loader, identifier, sequence) {
       return record;
     })
     .catch((error) => {
-      let failures = state.requestFailures.get(identifier);
-      if (failures === undefined) {
-        failures = [];
-        state.requestFailures.set(identifier, failures);
+      let queue = state.requestFailures.get(identifier);
+      if (queue === undefined) {
+        queue = { outcomes: [], first: 0 };
+        state.requestFailures.set(identifier, queue);
       }
-      failures.push({
+      const outcome = {
+        identifier,
         error,
         throughSequence: state.nextGraphSequence,
-      });
+      };
+      queue.outcomes.push(outcome);
+      state.requestFailureOutcomes.push(outcome);
       throw error;
     })
     .finally(() => {
@@ -388,6 +457,148 @@ function acquireModuleRequests(loader, identifier, sequence) {
 
   state.requestInFlight.set(identifier, requests);
   return requests;
+}
+
+/**
+ * @param {ModuleRequestFailureQueue | undefined} queue
+ * @param {number} sequence
+ * @returns {ModuleRequestFailure | undefined}
+ */
+function findRequestFailure(queue, sequence) {
+  if (queue === undefined) {
+    return undefined;
+  }
+
+  let low = queue.first;
+  let high = queue.outcomes.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    const outcome = queue.outcomes[middle];
+    if (outcome === undefined || outcome.throughSequence < sequence) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return queue.outcomes[low];
+}
+
+/**
+ * @param {ModuleLoaderState} state
+ * @param {number} sequence
+ * @returns {void}
+ */
+function registerGraphSequence(state, sequence) {
+  const entry = {
+    sequence,
+    previous: state.lastActiveGraphSequence,
+    next: null,
+  };
+  if (state.lastActiveGraphSequence === null) {
+    state.firstActiveGraphSequence = entry;
+  } else {
+    state.lastActiveGraphSequence.next = entry;
+  }
+  state.lastActiveGraphSequence = entry;
+  state.activeGraphSequences.set(sequence, entry);
+}
+
+/**
+ * @param {ModuleLoaderState} state
+ * @param {number} sequence
+ * @returns {void}
+ */
+function unregisterGraphSequence(state, sequence) {
+  const entry = state.activeGraphSequences.get(sequence);
+  if (entry === undefined) {
+    return;
+  }
+
+  const wasOldest = entry.previous === null;
+  if (entry.previous === null) {
+    state.firstActiveGraphSequence = entry.next;
+  } else {
+    entry.previous.next = entry.next;
+  }
+  if (entry.next === null) {
+    state.lastActiveGraphSequence = entry.previous;
+  } else {
+    entry.next.previous = entry.previous;
+  }
+  state.activeGraphSequences.delete(sequence);
+  if (wasOldest) {
+    pruneRequestFailures(state);
+  }
+}
+
+/**
+ * Removes every outcome older than the earliest traversal that could still
+ * observe it. The global sequence queue makes reclamation proportional to the
+ * number of discarded outcomes rather than rescanning every identifier.
+ *
+ * @param {ModuleLoaderState} state
+ * @returns {void}
+ */
+function pruneRequestFailures(state) {
+  const oldest = state.firstActiveGraphSequence?.sequence;
+  const throughSequence = oldest ?? Number.POSITIVE_INFINITY;
+
+  while (
+    state.firstRequestFailureOutcome < state.requestFailureOutcomes.length
+  ) {
+    const outcome =
+      state.requestFailureOutcomes[state.firstRequestFailureOutcome];
+    if (outcome !== undefined && outcome.throughSequence >= throughSequence) {
+      break;
+    }
+
+    state.requestFailureOutcomes[state.firstRequestFailureOutcome] = undefined;
+    state.firstRequestFailureOutcome += 1;
+    if (outcome === undefined) {
+      continue;
+    }
+
+    const queue = state.requestFailures.get(outcome.identifier);
+    if (queue === undefined) {
+      continue;
+    }
+    queue.outcomes[queue.first] = undefined;
+    queue.first += 1;
+    if (queue.first === queue.outcomes.length) {
+      state.requestFailures.delete(outcome.identifier);
+    } else if (queue.first >= 32 && queue.first * 2 >= queue.outcomes.length) {
+      queue.outcomes = compactFailureOutcomes(queue.outcomes, queue.first);
+      queue.first = 0;
+    }
+  }
+
+  if (state.activeGraphSequences.size === 0) {
+    state.requestFailureOutcomes = [];
+    state.firstRequestFailureOutcome = 0;
+  } else if (
+    state.firstRequestFailureOutcome >= 32 &&
+    state.firstRequestFailureOutcome * 2 >= state.requestFailureOutcomes.length
+  ) {
+    state.requestFailureOutcomes = compactFailureOutcomes(
+      state.requestFailureOutcomes,
+      state.firstRequestFailureOutcome,
+    );
+    state.firstRequestFailureOutcome = 0;
+  }
+}
+
+/**
+ * @param {Array<ModuleRequestFailure | undefined>} outcomes
+ * @param {number} first
+ * @returns {Array<ModuleRequestFailure | undefined>}
+ */
+function compactFailureOutcomes(outcomes, first) {
+  /** @type {Array<ModuleRequestFailure | undefined>} */
+  const compacted = [];
+  for (let index = first; index < outcomes.length; index += 1) {
+    compacted.push(outcomes[index]);
+  }
+  return compacted;
 }
 
 /**
