@@ -5478,6 +5478,11 @@ function validateEvaluatorChildEdges(
         validateFunctionBlockBody(node)
       );
     }
+    case 'ClassDeclaration':
+      return validationContext.module &&
+        isModuleDefaultDeclarationPosition(node, parent, parentKey)
+        ? validateOptionalChild(node, 'id', isIdentifierNodeOrUnknown)
+        : validateRequiredChild(node, 'id', isIdentifierNodeOrUnknown);
     case 'FunctionExpression':
       return (
         validateOptionalChild(node, 'id', isIdentifierNodeOrUnknown) ??

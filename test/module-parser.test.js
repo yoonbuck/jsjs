@@ -395,4 +395,22 @@ export default [
       assertThrows(() => parseModule('', { parse: () => regexp }), SyntaxError);
     },
   },
+  {
+    name: 'parseModule normalizes an anonymous top-level custom-AST ClassDeclaration to SyntaxError',
+    run() {
+      const anonymousClass = parseModule('class Named {}');
+      anonymousClass.body[0].id = null;
+      assertThrows(
+        () => parseModule('', { parse: () => anonymousClass }),
+        SyntaxError,
+      );
+
+      // Adjacent valid control: an anonymous class remains admitted when it is
+      // the declaration of a module default export, including when replayed
+      // through the custom-parser snapshot path exercised above.
+      const anonymousDefaultClass = parseModule('export default class {}');
+      const parsed = parseModule('', { parse: () => anonymousDefaultClass });
+      assertSame(parsed.body[0].declaration.id, null);
+    },
+  },
 ];
