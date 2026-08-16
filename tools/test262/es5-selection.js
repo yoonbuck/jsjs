@@ -181,7 +181,7 @@ export function parseEs5Selection(text) {
   const expansionFeatures = parseStringList(
     record.expansionFeatures,
     'expansionFeatures',
-    { requireTestPrefix: false, allowEmpty: true },
+    { requireTestPrefix: false, allowEmpty: false },
   );
   const exclusions = parseExclusions(record.exclusions);
 

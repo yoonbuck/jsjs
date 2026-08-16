@@ -454,6 +454,15 @@ export default [
     },
   },
   {
+    name: 'es5-selection rejects an empty expansionFeatures list',
+    run: () => {
+      assertThrows(
+        () => parseEs5Selection(policyText({ expansionFeatures: [] })),
+        Es5SelectionError,
+      );
+    },
+  },
+  {
     name: 'es5-selection rejects an exclusion with neither path nor prefix',
     run: () => {
       assertThrows(

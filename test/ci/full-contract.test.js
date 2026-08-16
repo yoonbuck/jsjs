@@ -394,13 +394,11 @@ function findCoverageNumberOffenders(outside, live) {
   const offenders = [];
 
   for (const line of outside.split('\n')) {
-    if (/^\s*#{1,6}(?:\s|$)/u.test(line)) {
-      continue;
-    }
+    const scanLine = line.replace(/^(\s*#{1,6}\s+Layer\s+)\d+\b/u, '$1');
 
     for (const value of live) {
       for (const rendering of numberRenderings(value)) {
-        if (wholeNumberPattern(rendering).test(line)) {
+        if (wholeNumberPattern(rendering).test(scanLine)) {
           offenders.push(`${rendering} -> ${line.trim()}`);
         }
       }
@@ -1186,7 +1184,9 @@ export default [
   {
     name: 'coverage drift helper ignores live counts in Markdown headings',
     run: () => {
-      const syntheticReport = [{ type: 'inventory', malformed: 3 }];
+      const syntheticReport = [
+        { type: 'inventory', malformed: 3, selectedFiles: 14107 },
+      ];
       const live = new Set(
         syntheticReport.flatMap((record) =>
           Object.values(record).filter((value) => typeof value === 'number'),
@@ -1201,10 +1201,17 @@ export default [
       );
       assertSame(
         findCoverageNumberOffenders(
-          '## Layer 3: Static modules\nThe malformed count is 3 items.',
+          '## Coverage: 14,107 selected files',
           live,
         ).join('\n'),
-        '3 -> The malformed count is 3 items.',
+        '14,107 -> ## Coverage: 14,107 selected files',
+      );
+      assertSame(
+        findCoverageNumberOffenders(
+          '## Layer 3: 14,107 selected files',
+          live,
+        ).join('\n'),
+        '14,107 -> ## Layer 3: 14,107 selected files',
       );
     },
   },

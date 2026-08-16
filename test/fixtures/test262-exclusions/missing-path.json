@@ -4,7 +4,7 @@
   "builtins": ["Array"],
   "excludedLanguageDirectories": [],
   "featureAreas": [],
-  "expansionFeatures": [],
+  "expansionFeatures": ["generators"],
   "exclusions": [
     {
       "path": "test/built-ins/Array/missing-exclusion-fixture.js",
