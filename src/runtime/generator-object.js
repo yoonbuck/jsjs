@@ -51,15 +51,16 @@ export class GeneratorObject extends EngineObject {
 
   /**
    * @param {GeneratorResumeCompletion} completion
+   * @param {Realm} [resultRealm=this.realm]
    * @returns {EngineObject}
    */
-  resume(completion) {
+  resume(completion, resultRealm = this.realm) {
     if (this.state === 'executing') {
       throw new GuestErrorSignal('TypeError', 'Generator is already running');
     }
 
     if (this.state === 'completed') {
-      return this.resumeCompleted(completion);
+      return this.resumeCompleted(completion, resultRealm);
     }
 
     if (this.state === 'suspendedStart' && completion.type !== 'normal') {
@@ -69,7 +70,7 @@ export class GeneratorObject extends EngineObject {
         throw new ThrowSignal(completion.value);
       }
 
-      return createIterResultObject(this.realm, completion.value, true);
+      return createIterResultObject(resultRealm, completion.value, true);
     }
 
     const continuation = this.continuation;
@@ -113,10 +114,10 @@ export class GeneratorObject extends EngineObject {
 
       switch (result.completion.type) {
         case 'normal':
-          return createIterResultObject(this.realm, undefined, true);
+          return createIterResultObject(resultRealm, undefined, true);
         case 'return':
           return createIterResultObject(
-            this.realm,
+            resultRealm,
             result.completion.value,
             true,
           );
@@ -135,15 +136,16 @@ export class GeneratorObject extends EngineObject {
 
   /**
    * @param {GeneratorResumeCompletion} completion
+   * @param {Realm} resultRealm
    * @returns {EngineObject}
    */
-  resumeCompleted(completion) {
+  resumeCompleted(completion, resultRealm) {
     if (completion.type === 'throw') {
       throw new ThrowSignal(completion.value);
     }
 
     return createIterResultObject(
-      this.realm,
+      resultRealm,
       completion.type === 'return' ? completion.value : undefined,
       true,
     );

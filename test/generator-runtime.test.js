@@ -10,6 +10,8 @@ import {
 } from '../src/runtime/completion.js';
 import { GeneratorObject } from '../src/runtime/generator-object.js';
 
+/** @typedef {import('../src/runtime/object.js').EngineObject} EngineObject */
+
 /**
  * @param {import('../src/runtime/realm.js').Realm} realm
  * @param {string} source
@@ -351,6 +353,79 @@ const tests = [
         ),
         '4:true:true:0',
       );
+    },
+  },
+  {
+    name: 'borrowed generator methods allocate terminal results in the method Realm',
+    run() {
+      const generatorRealm = createRealm();
+      const methodRealm = createRealm();
+      evalValue(
+        generatorRealm,
+        `
+          function* values() { yield 1; return 2; }
+          function* catches() {
+            try { yield 3; } catch (error) { return error; }
+          }
+          var valuesIterator = values();
+          var returnIterator = values();
+          var throwIterator = catches();
+        `,
+      );
+      const methodPrototype =
+        /** @type {import('../src/runtime/object.js').EngineObject} */ (
+          methodRealm.intrinsics.generatorPrototype
+        );
+      const next =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          methodPrototype.get('next')
+        );
+      const returnMethod =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          methodPrototype.get('return')
+        );
+      const throwMethod =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          methodPrototype.get('throw')
+        );
+      const valuesIterator = generatorRealm.globalObject.get('valuesIterator');
+      const returnIterator = generatorRealm.globalObject.get('returnIterator');
+      const throwIterator = generatorRealm.globalObject.get('throwIterator');
+
+      const yielded = /** @type {EngineObject} */ (
+        next.callFunction(valuesIterator, [])
+      );
+      const completed = /** @type {EngineObject} */ (
+        next.callFunction(valuesIterator, [])
+      );
+      const alreadyCompleted = /** @type {EngineObject} */ (
+        next.callFunction(valuesIterator, [])
+      );
+      const returned = /** @type {EngineObject} */ (
+        returnMethod.callFunction(returnIterator, [4])
+      );
+      const throwYield = /** @type {EngineObject} */ (
+        next.callFunction(throwIterator, [])
+      );
+      const thrown = /** @type {EngineObject} */ (
+        throwMethod.callFunction(throwIterator, [5])
+      );
+
+      assertSame(
+        yielded.getPrototype(),
+        generatorRealm.intrinsics.objectPrototype,
+      );
+      assertSame(
+        throwYield.getPrototype(),
+        generatorRealm.intrinsics.objectPrototype,
+      );
+      for (const result of [completed, alreadyCompleted, returned, thrown]) {
+        assertSame(result.get('done'), true);
+        assertSame(
+          result.getPrototype(),
+          methodRealm.intrinsics.objectPrototype,
+        );
+      }
     },
   },
   {

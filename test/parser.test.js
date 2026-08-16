@@ -2567,6 +2567,29 @@ const tests = [
           SyntaxError,
         );
       }
+
+      const validGenerator = parseScript(
+        'function* valid(value) { yield value; }',
+      );
+      assertSame(
+        parseScript('', { parse: () => validGenerator }).type,
+        'Program',
+      );
+
+      const yieldParameter = parseScript('function* g(value) {}');
+      yieldParameter.body[0].params[0].name = 'yield';
+      assertThrows(
+        () => parseScript('', { parse: () => yieldParameter }),
+        SyntaxError,
+      );
+
+      const duplicateMethod = parseScript('({ *m(a, b) {} });');
+      duplicateMethod.body[0].expression.properties[0].value.params[1].name =
+        'a';
+      assertThrows(
+        () => parseScript('', { parse: () => duplicateMethod }),
+        SyntaxError,
+      );
     },
   },
   {

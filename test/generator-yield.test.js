@@ -689,6 +689,38 @@ const tests = [
     },
   },
   {
+    name: 'generator super reads capture their base before key coercion',
+    run() {
+      assertSame(
+        run(`
+          var first = { selected: 'first' };
+          var second = { selected: 'second' };
+          var key = {
+            toString: function () {
+              Object.setPrototypeOf(object, second);
+              return 'selected';
+            }
+          };
+          var object = {
+            __proto__: first,
+            *read() {
+              return super[yield 'key-ready'];
+            }
+          };
+          var iterator = object.read();
+          var firstStep = iterator.next();
+          var result = iterator.next(key);
+          [
+            firstStep.value,
+            result.value,
+            Object.getPrototypeOf(object) === second
+          ].join(':');
+        `),
+        'key-ready:first:true',
+      );
+    },
+  },
+  {
     name: 'resumed super reads reject a null super base',
     run() {
       assertSame(

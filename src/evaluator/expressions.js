@@ -80,7 +80,7 @@ import {
  *   | { kind: 'member', baseValue: unknown, propertyValue: unknown }
  *   | {
  *       kind: 'superMember',
- *       homeObject: EngineObject,
+ *       superBase: EngineObject | null,
  *       thisValue: unknown,
  *       propertyValue: unknown,
  *     }
@@ -284,11 +284,16 @@ export function prepareAssignmentTarget(target, context) {
   }
 
   if (target.object.type === 'Super') {
+    const superBase = getSuperHomeObject(
+      context.functionEnvironment,
+    ).getPrototype();
+    const thisValue = getContextThisBinding(context);
+    const propertyValue = evaluateMemberPropertyValue(target, context);
     return {
       kind: 'superMember',
-      homeObject: getSuperHomeObject(context.functionEnvironment),
-      thisValue: getContextThisBinding(context),
-      propertyValue: evaluateMemberPropertyValue(target, context),
+      superBase,
+      thisValue,
+      propertyValue,
     };
   }
 
@@ -326,7 +331,7 @@ export function applyPreparedAssignmentTarget(prepared, value, context) {
     case 'superMember':
       putValue(
         createSuperMemberReference(
-          prepared.homeObject,
+          prepared.superBase,
           prepared.thisValue,
           prepared.propertyValue,
           context,
@@ -1050,12 +1055,14 @@ function evaluateMemberExpression(node, context) {
  * @returns {Reference}
  */
 function evaluateSuperMemberExpression(node, context) {
-  const homeObject = getSuperHomeObject(context.functionEnvironment);
+  const superBase = getSuperHomeObject(
+    context.functionEnvironment,
+  ).getPrototype();
   const thisValue = getContextThisBinding(context);
   const propertyValue = evaluateMemberPropertyValue(node, context);
 
   return createSuperMemberReference(
-    homeObject,
+    superBase,
     thisValue,
     propertyValue,
     context,
@@ -1091,20 +1098,20 @@ function createOrdinaryMemberReference(baseValue, propertyValue, context) {
 }
 
 /**
- * @param {EngineObject} homeObject
+ * @param {EngineObject | null} superBase
  * @param {unknown} thisValue
  * @param {unknown} propertyValue
  * @param {EvaluationContext} context
  * @returns {Reference}
  */
 function createSuperMemberReference(
-  homeObject,
+  superBase,
   thisValue,
   propertyValue,
   context,
 ) {
   return new Reference(
-    new SuperReferenceBase(homeObject, thisValue),
+    new SuperReferenceBase(superBase, thisValue),
     toPropertyKey(propertyValue),
     context.strict,
     thisValue,

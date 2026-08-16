@@ -179,7 +179,7 @@ import {
  *   phase: 'start' | 'object' | 'property',
  *   base: unknown,
  *   property: unknown,
- *   homeObject: EngineObject | null,
+ *   superBase: EngineObject | null,
  *   thisValue: unknown,
  * }} MemberFrame
  * @typedef {{
@@ -358,7 +358,7 @@ import {
  *   phase: 'start' | 'identifier' | 'object' | 'property',
  *   base: unknown,
  *   property: unknown,
- *   homeObject: EngineObject | null,
+ *   superBase: EngineObject | null,
  *   thisValue: unknown,
  * }} PatternTargetFrame
  * @typedef {PatternLeafFrame | PatternDefaultFrame | PatternRestFrame
@@ -470,7 +470,7 @@ export function createGeneratorExpressionFrame(
         phase: 'start',
         base: undefined,
         property: undefined,
-        homeObject: null,
+        superBase: null,
         thisValue: undefined,
       };
     case 'AssignmentExpression':
@@ -717,7 +717,7 @@ function createPatternTargetFrame(target, context, targetMode) {
     phase: 'start',
     base: undefined,
     property: undefined,
-    homeObject: null,
+    superBase: null,
     thisValue: undefined,
   };
 }
@@ -1284,7 +1284,9 @@ function dispatchMember(execution, frame) {
   if (frame.phase === 'start') {
     if (frame.node.object.type === 'Super') {
       const state = captureGeneratorOperation(execution.realm, () => ({
-        homeObject: getSuperHomeObject(frame.context.functionEnvironment),
+        superBase: getSuperHomeObject(
+          frame.context.functionEnvironment,
+        ).getPrototype(),
         thisValue: getContextThisBinding(frame.context),
       }));
 
@@ -1297,10 +1299,10 @@ function dispatchMember(execution, frame) {
       }
 
       const saved =
-        /** @type {{ homeObject: EngineObject, thisValue: unknown }} */ (
+        /** @type {{ superBase: EngineObject | null, thisValue: unknown }} */ (
           state.value
         );
-      frame.homeObject = saved.homeObject;
+      frame.superBase = saved.superBase;
       frame.thisValue = saved.thisValue;
 
       if (!frame.node.computed) {
@@ -1350,12 +1352,8 @@ function dispatchMember(execution, frame) {
 function finishMemberReference(execution, frame) {
   const result = captureGeneratorOperation(execution.realm, () => {
     if (frame.node.object.type === 'Super') {
-      if (frame.homeObject === null) {
-        throw new TypeError('Super member is missing its home object');
-      }
-
       return new Reference(
-        new SuperReferenceBase(frame.homeObject, frame.thisValue),
+        new SuperReferenceBase(frame.superBase, frame.thisValue),
         propertyNameFromValue(
           frame.node.property,
           frame.node.computed,
@@ -2207,7 +2205,9 @@ function dispatchPatternTarget(execution, frame) {
 
     if (frame.node.object.type === 'Super') {
       const state = captureGeneratorOperation(execution.realm, () => ({
-        homeObject: getSuperHomeObject(frame.context.functionEnvironment),
+        superBase: getSuperHomeObject(
+          frame.context.functionEnvironment,
+        ).getPrototype(),
         thisValue: getContextThisBinding(frame.context),
       }));
 
@@ -2220,10 +2220,10 @@ function dispatchPatternTarget(execution, frame) {
       }
 
       const saved =
-        /** @type {{ homeObject: EngineObject, thisValue: unknown }} */ (
+        /** @type {{ superBase: EngineObject | null, thisValue: unknown }} */ (
           state.value
         );
-      frame.homeObject = saved.homeObject;
+      frame.superBase = saved.superBase;
       frame.thisValue = saved.thisValue;
       return nextPatternTargetProperty(frame);
     }
@@ -2279,13 +2279,9 @@ function nextPatternTargetProperty(frame) {
  */
 function finishPatternTarget(frame) {
   if (frame.node.object.type === 'Super') {
-    if (frame.homeObject === null) {
-      throw new TypeError('Super pattern target lost its home object');
-    }
-
     return finishValue({
       kind: 'superMember',
-      homeObject: frame.homeObject,
+      superBase: frame.superBase,
       thisValue: frame.thisValue,
       propertyValue: frame.property,
     });

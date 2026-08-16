@@ -2835,7 +2835,12 @@ function checkStatementPositionFunctionDeclarations(
       item.patternContext,
       strict,
     );
-    checkFunctionParameterEarlyErrors(node, strict);
+    checkFunctionParameterEarlyErrors(
+      node,
+      strict,
+      item.parent,
+      item.parentKey,
+    );
 
     const childStrict = childScopeStrictness(node, strict);
     const childSuperAllowed = superAllowedForChildren(
@@ -2886,9 +2891,11 @@ function checkStatementPositionFunctionDeclarations(
  *
  * @param {any} node
  * @param {boolean} strict
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
  * @returns {void}
  */
-function checkFunctionParameterEarlyErrors(node, strict) {
+function checkFunctionParameterEarlyErrors(node, strict, parent, parentKey) {
   if (!isFunctionNode(node)) {
     return;
   }
@@ -2901,8 +2908,18 @@ function checkFunctionParameterEarlyErrors(node, strict) {
     Array.isArray(node.body.body) &&
     hasUseStrictDirective(node.body.body);
   const effectiveStrict = strict || ownStrict;
+  const generatorMethod =
+    node.generator === true &&
+    parentKey === 'value' &&
+    ((parent?.type === 'Property' && parent.method === true) ||
+      parent?.type === 'MethodDefinition');
+  const allowsDuplicates =
+    simple &&
+    !effectiveStrict &&
+    node.type !== 'ArrowFunctionExpression' &&
+    !generatorMethod;
 
-  if (simple && !effectiveStrict && node.type !== 'ArrowFunctionExpression') {
+  if (allowsDuplicates && node.generator !== true) {
     return;
   }
 
@@ -2927,7 +2944,14 @@ function checkFunctionParameterEarlyErrors(node, strict) {
     throw error;
   }
 
-  if (summary.duplicate) {
+  if (node.generator === true && summary.names.has('yield')) {
+    throw unsupportedEs2015Error(
+      "Generator parameters may not bind 'yield'",
+      node,
+    );
+  }
+
+  if (summary.duplicate && !allowsDuplicates) {
     throw unsupportedEs2015Error(
       'Duplicate parameter name not allowed in this context',
       node,

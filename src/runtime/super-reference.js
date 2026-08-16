@@ -20,12 +20,12 @@ import { GuestErrorSignal } from './completion.js';
  */
 export class SuperReferenceBase {
   /**
-   * @param {EngineObject} homeObject
+   * @param {EngineObject | null} superBase
    * @param {unknown} receiver
    */
-  constructor(homeObject, receiver) {
-    /** @type {EngineObject} */
-    this.homeObject = homeObject;
+  constructor(superBase, receiver) {
+    /** @type {EngineObject | null} */
+    this.superBase = superBase;
     /** @type {unknown} */
     this.receiver = receiver;
   }
@@ -35,7 +35,7 @@ export class SuperReferenceBase {
    * @returns {unknown}
    */
   getReferencedValue(name) {
-    const superBase = this.homeObject.getPrototype();
+    const superBase = this.superBase;
 
     if (superBase === null) {
       throw new GuestErrorSignal(
@@ -66,7 +66,7 @@ export class SuperReferenceBase {
    * @returns {void}
    */
   setReferencedValue(name, value, strict = false) {
-    const superBase = this.homeObject.getPrototype();
+    const superBase = this.superBase;
 
     if (superBase === null) {
       throw new GuestErrorSignal(
