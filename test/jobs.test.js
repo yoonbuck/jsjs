@@ -193,6 +193,45 @@ export default [
     },
   },
   {
+    name: 'Agent queue releases consumed records and compacts during a checkpoint',
+    run: () => {
+      const realm = createRealm();
+      const queue = realm.agent._jobQueue;
+      let storage = queue.jobs;
+      let compactions = 0;
+      let retainedConsumedRecord = false;
+      /** @type {number[]} */
+      const order = [];
+
+      for (let index = 0; index < 2048; index += 1) {
+        const kind = `retention-${index}`;
+        realm.agent.enqueueJob(
+          createJob(realm, kind, () => {
+            order.push(index);
+            if (queue.jobs.some((candidate) => candidate?.kind === kind)) {
+              retainedConsumedRecord = true;
+            }
+            if (queue.jobs !== storage) {
+              compactions += 1;
+              storage = queue.jobs;
+            }
+            return createNormalCompletion(undefined);
+          }),
+        );
+      }
+
+      const report = realm.agent.runJobs();
+      assertSame(report.failures.length, 0);
+      assertSame(retainedConsumedRecord, false);
+      assertSame(compactions > 0, true);
+      assertSame(order.length, 2048);
+      assertSame(order[0], 0);
+      assertSame(order[2047], 2047);
+      assertSame(queue.jobs.length, 0);
+      assertSame(queue.jobHead, 0);
+    },
+  },
+  {
     name: 'invalid Job Record fields leave the queue and checkpoint unchanged',
     run: () => {
       const realm = createRealm();

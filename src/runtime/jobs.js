@@ -32,6 +32,7 @@ const EMPTY_JOB_DRAIN_REPORT = Object.freeze({
   processed: 0,
   failures: Object.freeze([]),
 });
+const JOB_QUEUE_COMPACTION_THRESHOLD = 1024;
 
 export class AgentJobQueue {
   /**
@@ -41,7 +42,7 @@ export class AgentJobQueue {
   constructor(jobHost, agent) {
     this.jobHost = validateJobHost(jobHost);
     this.agent = agent;
-    /** @type {JobRecord[]} */
+    /** @type {(JobRecord | undefined)[]} */
     this.jobs = [];
     this.jobHead = 0;
     /** @type {JobFailure[]} */
@@ -84,7 +85,9 @@ export class AgentJobQueue {
     try {
       while (this.jobHead < this.jobs.length) {
         const job = /** @type {JobRecord} */ (this.jobs[this.jobHead]);
+        this.jobs[this.jobHead] = undefined;
         this.jobHead += 1;
+        this.compactConsumedJobs();
         processed += 1;
         const previousRealm = this.jobRealm;
         let failed = false;
@@ -157,6 +160,18 @@ export class AgentJobQueue {
    */
   get currentRealm() {
     return this.jobRealm;
+  }
+
+  compactConsumedJobs() {
+    if (
+      this.jobHead < JOB_QUEUE_COMPACTION_THRESHOLD ||
+      this.jobHead * 2 < this.jobs.length
+    ) {
+      return;
+    }
+
+    this.jobs = this.jobs.slice(this.jobHead);
+    this.jobHead = 0;
   }
 
   scheduleCheckpoint() {
