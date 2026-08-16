@@ -799,31 +799,27 @@ export default [
       assertSame(coordination.activeGraphSequences.join(','), '2,4,6');
       assertSame(coordination.requestFailures[0].outcomeCount, 3);
 
-      for (let wave = 0; wave < olderRoots.length; wave += 1) {
+      const releaseOrder = [1, 2, 0];
+      const remainingActiveSequences = ['2,6', '2', ''];
+      for (let release = 0; release < releaseOrder.length; release += 1) {
+        const wave = releaseOrder[release];
         olderAttempts[wave].release.resolve();
         assertSame(await rejected(olderRoots[wave]), waveErrors[wave]);
         coordination =
           moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
         assertSame(
           coordination.activeGraphSequences.join(','),
-          Array.from(
-            { length: olderRoots.length - wave - 1 },
-            (_, index) => 4 + (wave + index) * 2,
-          ).join(','),
+          remainingActiveSequences[release],
         );
-        if (wave + 1 === olderRoots.length) {
+        const remaining = releaseOrder.length - release - 1;
+        if (remaining === 0) {
           assertSame(coordination.requestFailures.length, 0);
           assertSame(coordination.requestFailureOutcomeCount, 0);
           assertSame(coordination.requestFailureStorageSize, 0);
         } else {
-          assertSame(
-            coordination.requestFailures[0].outcomeCount,
-            olderRoots.length - wave - 1,
-          );
-          assertSame(
-            coordination.requestFailureOutcomeCount,
-            olderRoots.length - wave - 1,
-          );
+          assertSame(coordination.requestFailures[0].outcomeCount, remaining);
+          assertSame(coordination.requestFailureOutcomeCount, remaining);
+          assertSame(coordination.requestFailureStorageSize, remaining);
         }
       }
 
@@ -845,6 +841,101 @@ export default [
         assertSame(coordination.requestFailureOutcomeCount, 0);
         assertSame(coordination.requestFailureStorageSize, 0);
       }
+    },
+  },
+  {
+    name: 'loader retains only failure intervals observable by an active root',
+    async run() {
+      const waveCount = 64;
+      const oldestStarted = deferred();
+      const oldestSource = deferred();
+      const failureCauses = Array.from(
+        { length: waveCount },
+        (_, index) => new Error(`failure wave ${index}`),
+      );
+      const xAttempts = Array.from({ length: waveCount + 1 }, (_, index) => ({
+        started: deferred(),
+        release: deferred(),
+        cause: failureCauses[index],
+      }));
+      let xLoads = 0;
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'oldest') {
+            oldestStarted.resolve();
+            return oldestSource.promise.then(
+              () => 'import "p"; export const value = "oldest";',
+            );
+          }
+          if (identifier === 'p') {
+            return 'import "x"; export const value = "p";';
+          }
+          if (identifier === 'x') {
+            const attempt = xAttempts[xLoads];
+            xLoads += 1;
+            attempt.started.resolve();
+            return attempt.release.promise.then(() => {
+              if (attempt.cause !== undefined) {
+                throw attempt.cause;
+              }
+              return 'export const value = "x";';
+            });
+          }
+          throw new Error(`Unexpected module ${identifier}`);
+        },
+      });
+
+      const oldestRoot = loader.loadAndEvaluate('oldest');
+      await oldestStarted.promise;
+      /** @type {any} */
+      let firstWaveError;
+      for (let wave = 0; wave < waveCount; wave += 1) {
+        const failedWave = loader.loadAndEvaluate('p');
+        const attempt = xAttempts[wave];
+        await attempt.started.promise;
+        attempt.release.resolve();
+        const waveError = await rejected(failedWave);
+        assertSame(waveError.cause, failureCauses[wave]);
+        if (wave === 0) {
+          firstWaveError = waveError;
+        }
+
+        const coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(coordination.activeGraphSequences.join(','), '1');
+        assertSame(coordination.requestFailures.length, 1);
+        assertSame(coordination.requestFailures[0].identifier, 'p');
+        assertSame(coordination.requestFailures[0].outcomeCount, 1);
+        assertSame(coordination.requestFailureOutcomeCount, 1);
+        assertSame(coordination.requestFailureStorageSize, 1);
+      }
+
+      const successfulRetry = loader.loadAndEvaluate('p');
+      const successfulAttempt = xAttempts[waveCount];
+      await successfulAttempt.started.promise;
+      successfulAttempt.release.resolve();
+      const namespace = await successfulRetry;
+      assertSame(namespace.get('value'), 'p');
+      let coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.join(','), '1');
+      assertSame(coordination.requestFailures.length, 1);
+      assertSame(coordination.requestFailures[0].outcomeCount, 1);
+      assertSame(coordination.requestFailureOutcomeCount, 1);
+      assertSame(coordination.requestFailureStorageSize, 1);
+
+      oldestSource.resolve();
+      assertSame(await rejected(oldestRoot), firstWaveError);
+      coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.length, 0);
+      assertSame(coordination.requestFailures.length, 0);
+      assertSame(coordination.requestFailureOutcomeCount, 0);
+      assertSame(coordination.requestFailureStorageSize, 0);
+      assertSame(xLoads, waveCount + 1);
     },
   },
   {

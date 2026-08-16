@@ -56,14 +56,15 @@ import { isRealm } from './realm.js';
  * @typedef {{
  *   identifier: string,
  *   error: unknown,
+ *   previousThroughSequence: number,
  *   throughSequence: number,
  * }} ModuleRequestFailure
  */
 
 /**
  * @typedef {{
- *   outcomes: Array<ModuleRequestFailure | undefined>,
- *   first: number,
+ *   outcomes: ModuleRequestFailure[],
+ *   throughSequence: number,
  * }} ModuleRequestFailureQueue
  */
 
@@ -76,8 +77,7 @@ import { isRealm } from './realm.js';
  *   graphInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   requestInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   requestFailures: Map<string, ModuleRequestFailureQueue>,
- *   requestFailureOutcomes: Array<ModuleRequestFailure | undefined>,
- *   firstRequestFailureOutcome: number,
+ *   requestFailureOutcomes: ModuleRequestFailure[],
  *   loadedRequests: Set<string>,
  *   completedGraphs: Set<string>,
  *   nextGraphSequence: number,
@@ -125,7 +125,6 @@ export class ModuleLoader {
       requestInFlight: new Map(),
       requestFailures: new Map(),
       requestFailureOutcomes: [],
-      firstRequestFailureOutcome: 0,
       loadedRequests: new Set(),
       completedGraphs: new Set(),
       nextGraphSequence: 0,
@@ -257,18 +256,22 @@ export async function loadModuleGraph(loader, specifier, referrer = null) {
  */
 export function getModuleLoaderCoordinationState(loader) {
   const state = moduleLoaderState(loader);
+  const requestFailures = [];
+  for (const [identifier, queue] of state.requestFailures) {
+    if (queue.outcomes.length === 0) {
+      continue;
+    }
+    requestFailures.push(
+      Object.freeze({
+        identifier,
+        outcomeCount: queue.outcomes.length,
+      }),
+    );
+  }
   return Object.freeze({
     activeGraphSequences: Object.freeze([...state.activeGraphSequences.keys()]),
-    requestFailures: Object.freeze(
-      [...state.requestFailures].map(([identifier, queue]) =>
-        Object.freeze({
-          identifier,
-          outcomeCount: queue.outcomes.length - queue.first,
-        }),
-      ),
-    ),
-    requestFailureOutcomeCount:
-      state.requestFailureOutcomes.length - state.firstRequestFailureOutcome,
+    requestFailures: Object.freeze(requestFailures),
+    requestFailureOutcomeCount: state.requestFailureOutcomes.length,
     requestFailureStorageSize: state.requestFailureOutcomes.length,
   });
 }
@@ -437,14 +440,16 @@ function acquireModuleRequests(loader, identifier, sequence) {
     .catch((error) => {
       let queue = state.requestFailures.get(identifier);
       if (queue === undefined) {
-        queue = { outcomes: [], first: 0 };
+        queue = { outcomes: [], throughSequence: 0 };
         state.requestFailures.set(identifier, queue);
       }
       const outcome = {
         identifier,
         error,
+        previousThroughSequence: queue.throughSequence,
         throughSequence: state.nextGraphSequence,
       };
+      queue.throughSequence = outcome.throughSequence;
       queue.outcomes.push(outcome);
       state.requestFailureOutcomes.push(outcome);
       throw error;
@@ -469,18 +474,21 @@ function findRequestFailure(queue, sequence) {
     return undefined;
   }
 
-  let low = queue.first;
+  let low = 0;
   let high = queue.outcomes.length;
   while (low < high) {
     const middle = low + Math.floor((high - low) / 2);
     const outcome = queue.outcomes[middle];
-    if (outcome === undefined || outcome.throughSequence < sequence) {
+    if (outcome.throughSequence < sequence) {
       low = middle + 1;
     } else {
       high = middle;
     }
   }
-  return queue.outcomes[low];
+  const outcome = queue.outcomes[low];
+  return outcome !== undefined && sequence > outcome.previousThroughSequence
+    ? outcome
+    : undefined;
 }
 
 /**
@@ -514,7 +522,6 @@ function unregisterGraphSequence(state, sequence) {
     return;
   }
 
-  const wasOldest = entry.previous === null;
   if (entry.previous === null) {
     state.firstActiveGraphSequence = entry.next;
   } else {
@@ -526,79 +533,52 @@ function unregisterGraphSequence(state, sequence) {
     entry.next.previous = entry.previous;
   }
   state.activeGraphSequences.delete(sequence);
-  if (wasOldest) {
-    pruneRequestFailures(state);
-  }
+  pruneRequestFailures(state);
 }
 
 /**
- * Removes every outcome older than the earliest traversal that could still
- * observe it. The global sequence queue makes reclamation proportional to the
- * number of discarded outcomes rather than rescanning every identifier.
+ * Retains an outcome only while an active traversal lies in its exact
+ * `(previousThroughSequence, throughSequence]` interval.
  *
  * @param {ModuleLoaderState} state
  * @returns {void}
  */
 function pruneRequestFailures(state) {
-  const oldest = state.firstActiveGraphSequence?.sequence;
-  const throughSequence = oldest ?? Number.POSITIVE_INFINITY;
-
-  while (
-    state.firstRequestFailureOutcome < state.requestFailureOutcomes.length
-  ) {
-    const outcome =
-      state.requestFailureOutcomes[state.firstRequestFailureOutcome];
-    if (outcome !== undefined && outcome.throughSequence >= throughSequence) {
-      break;
-    }
-
-    state.requestFailureOutcomes[state.firstRequestFailureOutcome] = undefined;
-    state.firstRequestFailureOutcome += 1;
-    if (outcome === undefined) {
-      continue;
-    }
-
-    const queue = state.requestFailures.get(outcome.identifier);
-    if (queue === undefined) {
-      continue;
-    }
-    queue.outcomes[queue.first] = undefined;
-    queue.first += 1;
-    if (queue.first === queue.outcomes.length) {
-      state.requestFailures.delete(outcome.identifier);
-    } else if (queue.first >= 32 && queue.first * 2 >= queue.outcomes.length) {
-      queue.outcomes = compactFailureOutcomes(queue.outcomes, queue.first);
-      queue.first = 0;
-    }
-  }
-
   if (state.activeGraphSequences.size === 0) {
+    state.requestFailures.clear();
     state.requestFailureOutcomes = [];
-    state.firstRequestFailureOutcome = 0;
-  } else if (
-    state.firstRequestFailureOutcome >= 32 &&
-    state.firstRequestFailureOutcome * 2 >= state.requestFailureOutcomes.length
-  ) {
-    state.requestFailureOutcomes = compactFailureOutcomes(
-      state.requestFailureOutcomes,
-      state.firstRequestFailureOutcome,
-    );
-    state.firstRequestFailureOutcome = 0;
+    return;
   }
-}
 
-/**
- * @param {Array<ModuleRequestFailure | undefined>} outcomes
- * @param {number} first
- * @returns {Array<ModuleRequestFailure | undefined>}
- */
-function compactFailureOutcomes(outcomes, first) {
-  /** @type {Array<ModuleRequestFailure | undefined>} */
-  const compacted = [];
-  for (let index = first; index < outcomes.length; index += 1) {
-    compacted.push(outcomes[index]);
+  /** @type {Set<ModuleRequestFailure>} */
+  const retained = new Set();
+  for (const queue of state.requestFailures.values()) {
+    /** @type {ModuleRequestFailure[]} */
+    const outcomes = [];
+    let active = state.firstActiveGraphSequence;
+    for (const outcome of queue.outcomes) {
+      while (
+        active !== null &&
+        active.sequence <= outcome.previousThroughSequence
+      ) {
+        active = active.next;
+      }
+      if (active !== null && active.sequence <= outcome.throughSequence) {
+        outcomes.push(outcome);
+        retained.add(outcome);
+      }
+    }
+    queue.outcomes = outcomes;
   }
-  return compacted;
+
+  /** @type {ModuleRequestFailure[]} */
+  const outcomes = [];
+  for (const outcome of state.requestFailureOutcomes) {
+    if (retained.has(outcome)) {
+      outcomes.push(outcome);
+    }
+  }
+  state.requestFailureOutcomes = outcomes;
 }
 
 /**
