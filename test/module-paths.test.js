@@ -101,4 +101,18 @@ export default [
       assertSame(encodedReferrer.message.includes('encoded'), true);
     },
   },
+  {
+    name: 'portable module paths reject literal backslashes before normalization',
+    run: () => {
+      for (const [specifier, referrer] of [
+        ['./nested\\child.js', 'test/language/module-code/root.js'],
+        ['./child.js', 'test\\language/module-code/root.js'],
+      ]) {
+        const error = captureError(() =>
+          resolveTest262ModulePath(specifier, referrer),
+        );
+        assertSame(error.message.includes('literal backslashes'), true);
+      }
+    },
+  },
 ];

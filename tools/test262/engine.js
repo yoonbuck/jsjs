@@ -39,6 +39,16 @@ export function createJsjsTest262Engine() {
         }
 
         if (error.phase === 'parse') {
+          if (error.identifier !== identifier) {
+            const message =
+              error.cause instanceof Error
+                ? error.cause.message
+                : 'Module dependency parse failed';
+            return {
+              phase: 'resolution',
+              value: realm.createGuestError('SyntaxError', message),
+            };
+          }
           return {
             phase: 'parse',
             error: /** @type {Error} */ (error.cause),

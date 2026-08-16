@@ -119,6 +119,11 @@ export const ASYNC_RUNTIME_RELEASE_MANIFEST = Object.freeze({
         ['module'],
       ),
       metadataRecord(
+        'test/language/module-code/instn-resolve-err-syntax-1.js',
+        [],
+        ['module'],
+      ),
+      metadataRecord(
         'test/language/module-code/namespace/Symbol.toStringTag.js',
         ['Symbol.toStringTag'],
         ['module'],

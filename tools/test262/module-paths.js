@@ -18,6 +18,11 @@ export function resolveTest262ModulePath(specifier, referrer) {
   if (typeof referrer !== 'string' || referrer === '') {
     throw new TypeError('Test262 module referrer must be a non-empty string');
   }
+  if (specifier.includes('\\') || referrer.includes('\\')) {
+    throw new RangeError(
+      'Test262 module request cannot contain literal backslashes',
+    );
+  }
   rejectEncodedStructuralPath(specifier);
   rejectEncodedStructuralPath(referrer);
   if (!isRelativeSpecifier(specifier)) {
