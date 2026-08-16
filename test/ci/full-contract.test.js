@@ -383,7 +383,7 @@ function numberRenderings(value) {
   return [...new Set([String(value), formatCount(value)])];
 }
 
-const STRUCTURAL_LAYER_LABEL_PATTERN = /\bLayer(?:\s+|-)\d+\b/gu;
+const STRUCTURAL_LAYER_LABEL_PATTERN = /\bLayer(?: |-)[1-4]\b/gu;
 
 /**
  * Removes structural Layer labels from prose without touching other numbers.
@@ -1196,41 +1196,51 @@ export default [
   {
     name: 'coverage drift helper ignores live counts in Layer labels and Markdown headings',
     run: () => {
-      const syntheticReport = [
-        { type: 'inventory', malformed: 3, selectedFiles: 14107 },
-      ];
-      const live = new Set(
-        syntheticReport.flatMap((record) =>
-          Object.values(record).filter((value) => typeof value === 'number'),
-        ),
-      );
+      for (const layer of [1, 2, 3, 4]) {
+        assertSame(
+          findCoverageNumberOffenders(
+            `## Layer ${layer}: Static modules`,
+            new Set([layer]),
+          ).join('\n'),
+          '',
+        );
+
+        assertSame(
+          findCoverageNumberOffenders(
+            `## Layer-${layer}: Static modules with 14,107 selected files`,
+            new Set([layer, 14107]),
+          ).join('\n'),
+          `14,107 -> ## Layer-${layer}: Static modules with 14,107 selected files`,
+        );
+      }
 
       assertSame(
         findCoverageNumberOffenders(
-          'The exotics are the Layer-3 contract.',
-          live,
+          'The exotics are the Layered-3 contract.',
+          new Set([3]),
         ).join('\n'),
-        '',
-      );
-      assertSame(
-        findCoverageNumberOffenders('## Layer 3: Static modules', live).join(
-          '\n',
-        ),
-        '',
+        '3 -> The exotics are the Layered-3 contract.',
       );
       assertSame(
         findCoverageNumberOffenders(
           '## Coverage: 14,107 selected files',
-          live,
+          new Set([14107]),
         ).join('\n'),
         '14,107 -> ## Coverage: 14,107 selected files',
       );
       assertSame(
         findCoverageNumberOffenders(
-          'The Layer-3 contract covers 14,107 selected files.',
-          live,
+          'The Layer 14107 contract.',
+          new Set([14107]),
         ).join('\n'),
-        '14,107 -> The Layer-3 contract covers 14,107 selected files.',
+        '14107 -> The Layer 14107 contract.',
+      );
+      assertSame(
+        findCoverageNumberOffenders(
+          'The Layer 14,107 contract.',
+          new Set([14107]),
+        ).join('\n'),
+        '14,107 -> The Layer 14,107 contract.',
       );
     },
   },
