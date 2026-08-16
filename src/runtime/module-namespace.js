@@ -113,20 +113,27 @@ export class ModuleNamespaceObject extends EngineObject {
   }
 
   /**
-   * @param {PropertyKey} key
-   * @param {unknown} value
+   * A module namespace object never accepts an assignment, regardless of
+   * `key`, `value`, or `receiver`: every export is a live, non-writable-from
+   * this-side binding, and any other key is an own property this exotic
+   * object refuses to create (its `[[Extensible]]` is `false` and it has no
+   * writable data properties). Overriding the polymorphic `set` (rather than
+   * only `put`) is what makes this rejection reach `super.prop = value`
+   * assignments too: `SuperReferenceBase#setReferencedValue` and ordinary
+   * `EngineObject#set`'s prototype walk both dispatch to whichever object's
+   * `set` governs the lookup, receiver and all.
+   *
+   * @param {PropertyKey} _key
+   * @param {unknown} _value
+   * @param {unknown} _receiver
    * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  put(key, value, throwOnError = false) {
-    if (this._resolvedExports.has(/** @type {string} */ (key))) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot assign to a module namespace export',
-      );
-    }
-
-    return super.put(key, value, throwOnError);
+  set(_key, _value, _receiver, throwOnError = false) {
+    return rejectOperation(
+      throwOnError,
+      'Cannot assign to a module namespace object',
+    );
   }
 
   /**

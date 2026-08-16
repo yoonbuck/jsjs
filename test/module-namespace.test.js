@@ -22,6 +22,20 @@ function loaderFor(sources, realm = createRealm()) {
   });
 }
 
+/**
+ * @param {Promise<unknown>} promise
+ * @returns {Promise<any>}
+ */
+async function rejected(promise) {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+
+  throw new Error('Expected promise to reject');
+}
+
 export default [
   {
     name: 'loader returns one cached namespace with sorted exports',
@@ -186,6 +200,71 @@ export default [
       assertSame(keys, 'leftOnly,rightOnly');
       assertSame(namespace.getOwnProperty('shared'), undefined);
       assertSame(namespace.get('shared'), undefined);
+    },
+  },
+  {
+    name: 'namespace set rejects direct and receiver-aware assignment for exports and new keys',
+    async run() {
+      const loader = loaderFor({ root: 'export let value = 1;' });
+      const namespace = await loader.loadAndEvaluate('root');
+      const child = new EngineObject(namespace);
+
+      assertSame(namespace.set('value', 2, namespace), false);
+      assertSame(namespace.set('value', 2, child), false);
+      assertSame(namespace.set('extra', 2, namespace), false);
+      assertSame(namespace.set('extra', 2, child), false);
+      assertThrows(
+        () => namespace.set('value', 2, namespace, true),
+        GuestErrorSignal,
+      );
+      assertThrows(
+        () => namespace.set('value', 2, child, true),
+        GuestErrorSignal,
+      );
+      assertThrows(
+        () => namespace.set('extra', 2, namespace, true),
+        GuestErrorSignal,
+      );
+      assertThrows(
+        () => namespace.set('extra', 2, child, true),
+        GuestErrorSignal,
+      );
+
+      assertSame(namespace.get('value'), 1);
+      assertSame(namespace.getOwnProperty('extra'), undefined);
+      assertSame(child.getOwnProperty('value'), undefined);
+      assertSame(child.getOwnProperty('extra'), undefined);
+    },
+  },
+  {
+    name: 'assigning a property through an EngineObject whose prototype is a namespace produces a Realm-correct guest TypeError and creates no own property',
+    async run() {
+      const realm = createRealm();
+      const namespaceLoader = loaderFor(
+        { root: 'export const value = 1;' },
+        realm,
+      );
+      const namespace = await namespaceLoader.loadAndEvaluate('root');
+      const child = new EngineObject(namespace);
+
+      realm.globalObject.defineOwnProperty('child', {
+        value: child,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const assignmentLoader = loaderFor({ assign: 'child.extra = 2;' }, realm);
+      const error = await rejected(assignmentLoader.loadAndEvaluate('assign'));
+
+      assertSame(error.phase, 'evaluate');
+      assertSame(
+        error.value.getPrototype(),
+        realm.intrinsics.typeErrorPrototype,
+      );
+      assertSame(error.value.get('name'), 'TypeError');
+      assertSame(child.getOwnProperty('extra'), undefined);
+      assertSame(namespace.getOwnProperty('extra'), undefined);
     },
   },
 ];

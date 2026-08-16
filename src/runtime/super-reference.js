@@ -1,9 +1,10 @@
-import { EngineObject, callAccessor } from './object.js';
-import { isAccessorDescriptor, isDataDescriptor } from './descriptors.js';
+import { callAccessor } from './object.js';
+import { isDataDescriptor } from './descriptors.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
+ * @typedef {import('./object.js').EngineObject} EngineObject
  */
 
 /**
@@ -75,7 +76,7 @@ export class SuperReferenceBase {
       );
     }
 
-    setPropertyWithReceiver(superBase, this.receiver, name, value, strict);
+    superBase.set(name, value, this.receiver, strict);
   }
 
   /**
@@ -88,143 +89,4 @@ export class SuperReferenceBase {
       'Unsupported reference to a super property',
     );
   }
-}
-
-/**
- * Implements ECMA-262 9.1.9 `OrdinarySet` with an explicit `Receiver`,
- * distinct from the object the lookup started at. Ordinary (non-`super`)
- * property assignment never needs this — `EngineObject#put` always uses the
- * same object as both the lookup start and the receiver — so this is kept
- * as its own free function rather than folded into `EngineObject#put`,
- * used only by `SuperReferenceBase#setReferencedValue`.
- *
- * @param {EngineObject | null} startObject
- * @param {unknown} receiver
- * @param {PropertyKey} name
- * @param {unknown} value
- * @param {boolean} throwOnError
- * @returns {boolean}
- */
-export function setPropertyWithReceiver(
-  startObject,
-  receiver,
-  name,
-  value,
-  throwOnError,
-) {
-  const ownDescriptor =
-    startObject === null ? undefined : startObject.getOwnProperty(name);
-
-  if (ownDescriptor === undefined) {
-    const parent = startObject === null ? null : startObject.getPrototype();
-
-    if (parent !== null) {
-      return setPropertyWithReceiver(
-        parent,
-        receiver,
-        name,
-        value,
-        throwOnError,
-      );
-    }
-
-    return createDataPropertyOnReceiver(
-      receiver,
-      name,
-      value,
-      throwOnError,
-      true,
-    );
-  }
-
-  if (isDataDescriptor(ownDescriptor)) {
-    if (!ownDescriptor.writable) {
-      return reject(
-        throwOnError,
-        'Cannot assign to a read-only property inherited through super',
-      );
-    }
-
-    return createDataPropertyOnReceiver(
-      receiver,
-      name,
-      value,
-      throwOnError,
-      true,
-    );
-  }
-
-  if (!isAccessorDescriptor(ownDescriptor) || ownDescriptor.set === undefined) {
-    return reject(
-      throwOnError,
-      'Cannot assign to a property with no setter inherited through super',
-    );
-  }
-
-  callAccessor(ownDescriptor.set, receiver, [value]);
-  return true;
-}
-
-/**
- * @param {unknown} receiver
- * @param {PropertyKey} name
- * @param {unknown} value
- * @param {boolean} throwOnError
- * @param {boolean} checkExistingOwnProperty
- * @returns {boolean}
- */
-function createDataPropertyOnReceiver(
-  receiver,
-  name,
-  value,
-  throwOnError,
-  checkExistingOwnProperty,
-) {
-  if (!(receiver instanceof EngineObject)) {
-    return reject(
-      throwOnError,
-      'Cannot create a property on a non-object super receiver',
-    );
-  }
-
-  if (checkExistingOwnProperty) {
-    const existing = receiver.getOwnProperty(name);
-
-    if (existing !== undefined) {
-      if (isAccessorDescriptor(existing)) {
-        return reject(
-          throwOnError,
-          'Cannot assign a data value over an inherited accessor through super',
-        );
-      }
-
-      if (existing.writable === false) {
-        return reject(
-          throwOnError,
-          'Cannot assign to a read-only own property through super',
-        );
-      }
-
-      return receiver.defineOwnProperty(name, { value }, throwOnError);
-    }
-  }
-
-  return receiver.defineOwnProperty(
-    name,
-    { value, writable: true, enumerable: true, configurable: true },
-    throwOnError,
-  );
-}
-
-/**
- * @param {boolean} throwOnError
- * @param {string} message
- * @returns {false}
- */
-function reject(throwOnError, message) {
-  if (throwOnError) {
-    throw new GuestErrorSignal('TypeError', message);
-  }
-
-  return false;
 }

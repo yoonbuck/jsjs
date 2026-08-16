@@ -271,9 +271,9 @@ export class EngineObject {
    * host frame per link would let a long enough chain exhaust the host stack
    * on a plain assignment. Recursion is reserved for the boundary where an
    * object's own `set` is not this ordinary implementation — an exotic
-   * object (for example a future namespace object) governs its own lookup,
-   * and there can only be as many of those in a chain as guest code
-   * deliberately constructs, unlike chain length itself.
+   * object (for example `ModuleNamespaceObject`) governs its own lookup, and
+   * there can only be as many of those in a chain as guest code deliberately
+   * constructs, unlike chain length itself.
    *
    * @param {PropertyKey} name
    * @param {unknown} value
@@ -314,9 +314,9 @@ export class EngineObject {
       }
 
       if (proto.set !== EngineObject.prototype.set) {
-        // `proto` overrides `set` with exotic semantics (not yet the case
-        // for any built-in, but reserved for future exotic objects): defer
-        // to it rather than assuming its own-property lookup is ordinary.
+        // `proto` overrides `set` with exotic semantics (for example
+        // `ModuleNamespaceObject`): defer to it rather than assuming its
+        // own-property lookup is ordinary.
         return proto.set(name, value, receiver, throwOnError);
       }
 
