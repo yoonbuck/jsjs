@@ -129,12 +129,7 @@ export function performPromiseAll(
     try {
       next = iteratorStep(iteratorRecord);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     if (next === false) {
@@ -150,12 +145,7 @@ export function performPromiseAll(
     try {
       nextValue = iteratorValue(next);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     values.defineOwnProperty(String(index), {
@@ -216,12 +206,7 @@ export function performPromiseRace(
     try {
       next = iteratorStep(iteratorRecord);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     if (next === false) {
@@ -233,12 +218,7 @@ export function performPromiseRace(
     try {
       nextValue = iteratorValue(next);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     try {
@@ -506,7 +486,7 @@ function createPromiseAllResolveElementFunction(
       remainingElementsCount.value -= 1;
 
       if (remainingElementsCount.value === 0) {
-        resolvePromiseAllCapability(resultCapability, values, currentRealm);
+        resultCapability.resolve.callFunction(undefined, [values]);
       }
 
       return undefined;
@@ -589,6 +569,16 @@ function rejectAfterIteratorClose(
   error,
 ) {
   iteratorClose(currentRealm, iteratorRecord, true);
+  return rejectPromiseCapability(currentRealm, resultCapability, error);
+}
+
+/**
+ * @param {Realm} currentRealm
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {unknown} error
+ * @returns {EngineObject}
+ */
+function rejectPromiseCapability(currentRealm, resultCapability, error) {
   resultCapability.reject.callFunction(undefined, [
     abruptValue(currentRealm, error),
   ]);

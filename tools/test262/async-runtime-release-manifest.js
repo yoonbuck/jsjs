@@ -144,6 +144,16 @@ export const ASYNC_RUNTIME_RELEASE_MANIFEST = Object.freeze({
         ['async'],
       ),
       metadataRecord(
+        'test/built-ins/Promise/all/iter-next-val-err-no-close.js',
+        ['Symbol.iterator'],
+        [],
+      ),
+      metadataRecord(
+        'test/built-ins/Promise/all/iter-step-err-no-close.js',
+        ['Symbol.iterator'],
+        [],
+      ),
+      metadataRecord(
         'test/built-ins/Promise/all/resolve-non-thenable.js',
         [],
         ['async'],
@@ -163,6 +173,16 @@ export const ASYNC_RUNTIME_RELEASE_MANIFEST = Object.freeze({
         'test/built-ins/Promise/prototype/then/rxn-handler-thrower.js',
         [],
         ['async'],
+      ),
+      metadataRecord(
+        'test/built-ins/Promise/race/iter-next-val-err-no-close.js',
+        ['Symbol.iterator'],
+        [],
+      ),
+      metadataRecord(
+        'test/built-ins/Promise/race/iter-step-err-no-close.js',
+        ['Symbol.iterator'],
+        [],
       ),
       metadataRecord(
         'test/built-ins/Promise/race/resolved-sequence.js',
