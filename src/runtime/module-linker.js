@@ -2,7 +2,7 @@ import { moduleDeclarationInstantiation } from '../evaluator/modules.js';
 import { GuestErrorSignal } from './completion.js';
 import { ModuleEnvironmentRecord } from './environment.js';
 import {
-  importedReExportImportEntry,
+  moduleRequestIndexForEntry,
   ModuleLoaderError,
   SourceTextModuleRecord,
 } from './module-record.js';
@@ -104,7 +104,7 @@ export function resolveExport(module, exportName, resolveSet) {
 
   if (indirectEntry !== undefined) {
     return resolveExport(
-      requestedModuleForEntry(module, indirectEntry, 'indirect'),
+      requestedModuleForEntry(module, indirectEntry),
       indirectEntry.importName,
       nextResolveSet,
     );
@@ -119,7 +119,7 @@ export function resolveExport(module, exportName, resolveSet) {
 
   for (const starEntry of module.starExportEntries) {
     const resolution = resolveExport(
-      requestedModuleForEntry(module, starEntry, 'star'),
+      requestedModuleForEntry(module, starEntry),
       exportName,
       nextResolveSet,
     );
@@ -236,7 +236,7 @@ function resolveImportEntries(record) {
   const resolutions = [];
 
   for (const entry of record.importEntries) {
-    const requestedModule = requestedModuleForEntry(record, entry, 'import');
+    const requestedModule = requestedModuleForEntry(record, entry);
 
     if (entry.kind === 'namespace') {
       resolutions.push(
@@ -312,7 +312,7 @@ function validateLocalExportBindings(record) {
  */
 function validateIndirectExportEntries(record) {
   for (const entry of record.indirectExportEntries) {
-    const requestedModule = requestedModuleForEntry(record, entry, 'indirect');
+    const requestedModule = requestedModuleForEntry(record, entry);
     const resolution = resolveExport(
       requestedModule,
       entry.importName,
@@ -342,77 +342,14 @@ function validateIndirectExportEntries(record) {
  *
  * @param {SourceTextModuleRecord} record
  * @param {object} targetEntry
- * @param {'import' | 'indirect' | 'star'} entryKind
  * @returns {SourceTextModuleRecord}
  */
-function requestedModuleForEntry(record, targetEntry, entryKind) {
-  if (entryKind === 'indirect') {
-    const importEntry = importedReExportImportEntry(targetEntry);
-    if (importEntry !== undefined) {
-      return requestedModuleForEntry(record, importEntry, 'import');
-    }
+function requestedModuleForEntry(record, targetEntry) {
+  const requestIndex = moduleRequestIndexForEntry(targetEntry);
+  if (requestIndex === undefined) {
+    throw new TypeError('Module entry has no resolved request');
   }
-
-  let requestIndex = 0;
-  let importIndex = 0;
-  let indirectIndex = 0;
-  let starIndex = 0;
-
-  for (const declaration of record.ast.body) {
-    if (declaration.type === 'ImportDeclaration') {
-      const request = requiredResolvedRequest(record, requestIndex);
-      requestIndex += 1;
-
-      for (
-        let specifierIndex = 0;
-        specifierIndex < declaration.specifiers.length;
-        specifierIndex += 1
-      ) {
-        const entry = record.importEntries[importIndex];
-        importIndex += 1;
-
-        if (entryKind === 'import' && entry === targetEntry) {
-          return request.module;
-        }
-      }
-      continue;
-    }
-
-    if (
-      declaration.type === 'ExportNamedDeclaration' &&
-      declaration.source !== null
-    ) {
-      const request = requiredResolvedRequest(record, requestIndex);
-      requestIndex += 1;
-
-      for (
-        let specifierIndex = 0;
-        specifierIndex < declaration.specifiers.length;
-        specifierIndex += 1
-      ) {
-        const entry = record.indirectExportEntries[indirectIndex];
-        indirectIndex += 1;
-
-        if (entryKind === 'indirect' && entry === targetEntry) {
-          return request.module;
-        }
-      }
-      continue;
-    }
-
-    if (declaration.type === 'ExportAllDeclaration') {
-      const request = requiredResolvedRequest(record, requestIndex);
-      requestIndex += 1;
-      const entry = record.starExportEntries[starIndex];
-      starIndex += 1;
-
-      if (entryKind === 'star' && entry === targetEntry) {
-        return request.module;
-      }
-    }
-  }
-
-  throw new TypeError('Module entry has no resolved request');
+  return requiredResolvedRequest(record, requestIndex).module;
 }
 
 /**

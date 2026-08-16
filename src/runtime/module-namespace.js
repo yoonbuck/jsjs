@@ -4,7 +4,10 @@ import {
   validatePropertyDescriptor,
 } from './descriptors.js';
 import { resolveExport } from './module-linker.js';
-import { SourceTextModuleRecord } from './module-record.js';
+import {
+  moduleRequestIndexForEntry,
+  SourceTextModuleRecord,
+} from './module-record.js';
 import { EngineObject } from './object.js';
 
 /**
@@ -229,42 +232,15 @@ function exportedNames(record, exportStarSet) {
  * @returns {SourceTextModuleRecord}
  */
 function requestedModuleForStarEntry(record, targetEntry) {
-  let requestIndex = 0;
-  let starIndex = 0;
-
-  for (const declaration of record.ast.body) {
-    if (declaration.type === 'ImportDeclaration') {
-      requestIndex += 1;
-      continue;
-    }
-
-    if (
-      declaration.type === 'ExportNamedDeclaration' &&
-      declaration.source !== null
-    ) {
-      requestIndex += 1;
-      continue;
-    }
-
-    if (declaration.type !== 'ExportAllDeclaration') {
-      continue;
-    }
-
-    const entry = record.starExportEntries[starIndex];
-    const request = record.resolvedRequestedModules[requestIndex];
-    starIndex += 1;
-    requestIndex += 1;
-
-    if (entry === targetEntry) {
-      if (request === undefined) {
-        throw new TypeError('Module graph is incomplete');
-      }
-
-      return request.module;
-    }
+  const requestIndex = moduleRequestIndexForEntry(targetEntry);
+  if (requestIndex === undefined) {
+    throw new TypeError('Star export entry has no resolved request');
   }
-
-  throw new TypeError('Star export entry has no resolved request');
+  const request = record.resolvedRequestedModules[requestIndex];
+  if (request === undefined) {
+    throw new TypeError('Module graph is incomplete');
+  }
+  return request.module;
 }
 
 /**

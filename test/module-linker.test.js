@@ -235,6 +235,47 @@ export default [
     },
   },
   {
+    name: 'mixed imported and direct re-exports keep their exact request entries',
+    async run() {
+      const loader = loaderFor({
+        root: 'import { x } from "a"; export { x }; export { y } from "b";',
+        a: 'export const x = 1;',
+        b: 'export const y = 2;',
+      });
+
+      const namespace = await loader.loadAndEvaluate('root');
+
+      assertSame(namespace.get('x'), 1);
+      assertSame(namespace.get('y'), 2);
+    },
+  },
+  {
+    name: 'mixed re-exports preserve duplicate specifier request ordering',
+    async run() {
+      let dependencyResolutions = 0;
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          if (specifier === 'root') {
+            return 'root';
+          }
+          dependencyResolutions += 1;
+          return `dep-${dependencyResolutions}`;
+        },
+        load(identifier) {
+          if (identifier === 'root') {
+            return 'import { value as x } from "dep"; export { x }; export { value as y } from "dep";';
+          }
+          return `export const value = "${identifier}";`;
+        },
+      });
+
+      const namespace = await loader.loadAndEvaluate('root');
+
+      assertSame(namespace.get('x'), 'dep-1');
+      assertSame(namespace.get('y'), 'dep-2');
+    },
+  },
+  {
     name: 'linking creates live cycle imports and pair-identity export resolution terminates',
     async run() {
       const loader = loaderFor({

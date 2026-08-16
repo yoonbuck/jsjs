@@ -3,6 +3,8 @@ import { ModuleNamespaceObject } from './module-namespace.js';
 
 /** @type {WeakMap<object, object>} */
 const IMPORTED_REEXPORT_IMPORT_ENTRIES = new WeakMap();
+/** @type {WeakMap<object, number>} */
+const MODULE_REQUEST_INDICES = new WeakMap();
 
 /**
  * The static products of parsing an ES2015 source-text module. Linking and
@@ -28,23 +30,43 @@ export class SourceTextModuleRecord {
     const indirectExportEntries = [];
     /** @type {any[]} */
     const starExportEntries = [];
+    /** @type {Map<any, any[]>} */
+    const importEntriesByDeclaration = new Map();
 
-    /** @param {string} moduleRequest */
+    /**
+     * @param {string} moduleRequest
+     * @returns {number}
+     */
     const addRequest = (moduleRequest) => {
+      const requestIndex = requestedModules.length;
       requestedModules.push(moduleRequest);
+      return requestIndex;
     };
 
     for (const declaration of ast.body) {
       if (declaration.type === 'ImportDeclaration') {
+        const firstEntry = importEntries.length;
         extractImportEntries(declaration, importEntries);
+        importEntriesByDeclaration.set(
+          declaration,
+          importEntries.slice(firstEntry),
+        );
       }
     }
 
     for (const declaration of ast.body) {
       switch (declaration.type) {
-        case 'ImportDeclaration':
-          addRequest(declaration.source.value);
+        case 'ImportDeclaration': {
+          const requestIndex = addRequest(declaration.source.value);
+          const declarationEntries = importEntriesByDeclaration.get(declaration);
+          if (declarationEntries === undefined) {
+            throw new TypeError('Import declaration entries are missing');
+          }
+          for (const entry of declarationEntries) {
+            MODULE_REQUEST_INDICES.set(entry, requestIndex);
+          }
           break;
+        }
         case 'ExportNamedDeclaration':
           extractNamedExportEntries(
             declaration,
@@ -62,15 +84,30 @@ export class SourceTextModuleRecord {
             }),
           );
           break;
-        case 'ExportAllDeclaration':
-          addRequest(declaration.source.value);
-          starExportEntries.push(
-            freezeEntry({ moduleRequest: declaration.source.value }),
-          );
+        case 'ExportAllDeclaration': {
+          const requestIndex = addRequest(declaration.source.value);
+          const entry = freezeEntry({
+            moduleRequest: declaration.source.value,
+          });
+          MODULE_REQUEST_INDICES.set(entry, requestIndex);
+          starExportEntries.push(entry);
           break;
+        }
         default:
           break;
       }
+    }
+
+    for (const entry of indirectExportEntries) {
+      const imported = IMPORTED_REEXPORT_IMPORT_ENTRIES.get(entry);
+      if (imported === undefined) {
+        continue;
+      }
+      const requestIndex = MODULE_REQUEST_INDICES.get(imported);
+      if (requestIndex === undefined) {
+        throw new TypeError('Imported re-export request is missing');
+      }
+      MODULE_REQUEST_INDICES.set(entry, requestIndex);
     }
 
     this.requestedModules = Object.freeze(requestedModules);
@@ -212,7 +249,7 @@ function extractImportEntries(declaration, entries) {
 
 /**
  * @param {any} declaration
- * @param {(moduleRequest: string) => void} addRequest
+ * @param {(moduleRequest: string) => number} addRequest
  * @param {any[]} importEntries
  * @param {any[]} localEntries
  * @param {any[]} indirectEntries
@@ -260,15 +297,15 @@ function extractNamedExportEntries(
   }
 
   const moduleRequest = declaration.source.value;
-  addRequest(moduleRequest);
+  const requestIndex = addRequest(moduleRequest);
   for (const specifier of declaration.specifiers) {
-    indirectEntries.push(
-      freezeEntry({
-        moduleRequest,
-        importName: specifier.local.name,
-        exportName: specifier.exported.name,
-      }),
-    );
+    const entry = freezeEntry({
+      moduleRequest,
+      importName: specifier.local.name,
+      exportName: specifier.exported.name,
+    });
+    MODULE_REQUEST_INDICES.set(entry, requestIndex);
+    indirectEntries.push(entry);
   }
 }
 
@@ -278,6 +315,14 @@ function extractNamedExportEntries(
  */
 export function importedReExportImportEntry(entry) {
   return IMPORTED_REEXPORT_IMPORT_ENTRIES.get(entry);
+}
+
+/**
+ * @param {object} entry
+ * @returns {number | undefined}
+ */
+export function moduleRequestIndexForEntry(entry) {
+  return MODULE_REQUEST_INDICES.get(entry);
 }
 
 /**
