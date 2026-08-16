@@ -1,6 +1,9 @@
 import { boundNames } from '../evaluator/static-semantics.js';
 import { ModuleNamespaceObject } from './module-namespace.js';
 
+/** @type {WeakMap<object, object>} */
+const IMPORTED_REEXPORT_IMPORT_ENTRIES = new WeakMap();
+
 /**
  * The static products of parsing an ES2015 source-text module. Linking and
  * evaluation populate the mutable record state; the AST and entry lists stay
@@ -32,15 +35,21 @@ export class SourceTextModuleRecord {
     };
 
     for (const declaration of ast.body) {
+      if (declaration.type === 'ImportDeclaration') {
+        extractImportEntries(declaration, importEntries);
+      }
+    }
+
+    for (const declaration of ast.body) {
       switch (declaration.type) {
         case 'ImportDeclaration':
           addRequest(declaration.source.value);
-          extractImportEntries(declaration, importEntries);
           break;
         case 'ExportNamedDeclaration':
           extractNamedExportEntries(
             declaration,
             addRequest,
+            importEntries,
             localExportEntries,
             indirectExportEntries,
           );
@@ -204,6 +213,7 @@ function extractImportEntries(declaration, entries) {
 /**
  * @param {any} declaration
  * @param {(moduleRequest: string) => void} addRequest
+ * @param {any[]} importEntries
  * @param {any[]} localEntries
  * @param {any[]} indirectEntries
  * @returns {void}
@@ -211,6 +221,7 @@ function extractImportEntries(declaration, entries) {
 function extractNamedExportEntries(
   declaration,
   addRequest,
+  importEntries,
   localEntries,
   indirectEntries,
 ) {
@@ -223,12 +234,27 @@ function extractNamedExportEntries(
 
   if (declaration.source === null) {
     for (const specifier of declaration.specifiers) {
-      localEntries.push(
-        freezeEntry({
-          exportName: specifier.exported.name,
-          localName: specifier.local.name,
-        }),
+      const imported = importEntries.find(
+        (entry) =>
+          entry.kind === 'named' && entry.localName === specifier.local.name,
       );
+      if (imported === undefined) {
+        localEntries.push(
+          freezeEntry({
+            exportName: specifier.exported.name,
+            localName: specifier.local.name,
+          }),
+        );
+        continue;
+      }
+
+      const entry = freezeEntry({
+        moduleRequest: imported.moduleRequest,
+        importName: imported.importName,
+        exportName: specifier.exported.name,
+      });
+      IMPORTED_REEXPORT_IMPORT_ENTRIES.set(entry, imported);
+      indirectEntries.push(entry);
     }
     return;
   }
@@ -244,6 +270,14 @@ function extractNamedExportEntries(
       }),
     );
   }
+}
+
+/**
+ * @param {object} entry
+ * @returns {object | undefined}
+ */
+export function importedReExportImportEntry(entry) {
+  return IMPORTED_REEXPORT_IMPORT_ENTRIES.get(entry);
 }
 
 /**

@@ -33,6 +33,41 @@ function deferred() {
   return { promise, resolve };
 }
 
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @returns {Promise<T>}
+ */
+async function resolvesPromptly(promise) {
+  let settled = false;
+  /** @type {T | undefined} */
+  let value;
+  /** @type {unknown} */
+  let failure;
+  promise.then(
+    (result) => {
+      settled = true;
+      value = result;
+    },
+    (error) => {
+      settled = true;
+      failure = error;
+    },
+  );
+
+  for (let turn = 0; turn < 100 && !settled; turn += 1) {
+    await Promise.resolve();
+  }
+
+  if (!settled) {
+    throw new Error('Expected concurrent cyclic module roots to settle');
+  }
+  if (failure !== undefined) {
+    throw failure;
+  }
+  return /** @type {T} */ (value);
+}
+
 export default [
   {
     name: 'loader uses canonical identity, serial source order, and one source load',
@@ -509,6 +544,38 @@ export default [
       ]);
       assertSame(a.resolvedRequestedModules[0].module, b);
       assertSame(b.resolvedRequestedModules[0].module, a);
+    },
+  },
+  {
+    name: 'loader settles concurrent roots across an overlapping source cycle',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'a') {
+            return 'import "b"; import "c"; export const a = 1;';
+          }
+          if (identifier === 'b') {
+            return 'import "a"; export const b = 1;';
+          }
+          return 'import "b"; export const c = 1;';
+        },
+      });
+
+      const [a, b, c] = await resolvesPromptly(
+        Promise.all([
+          loadModuleGraph(loader, 'a'),
+          loadModuleGraph(loader, 'b'),
+          loadModuleGraph(loader, 'c'),
+        ]),
+      );
+
+      assertSame(a.resolvedRequestedModules[0].module, b);
+      assertSame(a.resolvedRequestedModules[1].module, c);
+      assertSame(b.resolvedRequestedModules[0].module, a);
+      assertSame(c.resolvedRequestedModules[0].module, b);
     },
   },
   {

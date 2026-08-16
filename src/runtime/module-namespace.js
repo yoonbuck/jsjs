@@ -73,6 +73,17 @@ export class ModuleNamespaceObject extends EngineObject {
   }
 
   /**
+   * @param {PropertyKey} key
+   * @returns {boolean}
+   */
+  hasProperty(key) {
+    if (typeof key === 'string' && this._resolvedExports.has(key)) {
+      return true;
+    }
+    return super.hasProperty(key);
+  }
+
+  /**
    * @param {EngineObject | null} prototype
    * @returns {boolean}
    */

@@ -19,7 +19,9 @@ export default [
       assertSame(record.requestedModules.join(','), 'a,b');
       assertSame(record.importEntries[0].importName, 'default');
       assertSame(record.importEntries[1].localName, 'y');
-      assertSame(record.localExportEntries[0].exportName, 'z');
+      assertSame(record.indirectExportEntries[0].exportName, 'z');
+      assertSame(record.indirectExportEntries[0].moduleRequest, 'a');
+      assertSame(record.indirectExportEntries[0].importName, 'x');
       assertSame(record.starExportEntries[0].moduleRequest, 'b');
       assertSame(Object.isFrozen(record.requestedModules), true);
       assertSame(Object.isFrozen(record.importEntries[0]), true);
@@ -207,9 +209,12 @@ export default [
       assertSame(record.localExportEntries[1].localName, 'second');
       assertSame(record.localExportEntries[2].localName, '*default*');
       assertSame(record.localExportEntries[2].exportName, 'default');
-      assertSame(record.localExportEntries[3].exportName, 'renamed');
-      assertSame(record.indirectExportEntries[0].moduleRequest, 'indirect');
-      assertSame(record.indirectExportEntries[0].importName, 'sourceName');
+      assertSame(record.localExportEntries.length, 3);
+      assertSame(record.indirectExportEntries[0].exportName, 'renamed');
+      assertSame(record.indirectExportEntries[0].moduleRequest, 'named');
+      assertSame(record.indirectExportEntries[0].importName, 'original');
+      assertSame(record.indirectExportEntries[1].moduleRequest, 'indirect');
+      assertSame(record.indirectExportEntries[1].importName, 'sourceName');
       assertSame(Object.isFrozen(record.importEntries), true);
       assertSame(Object.isFrozen(record.localExportEntries), true);
       assertSame(Object.isFrozen(record.indirectExportEntries[0]), true);

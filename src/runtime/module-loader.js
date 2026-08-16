@@ -334,9 +334,10 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
 
       record.resolvedRequestedModules = Object.freeze(resolvedRequests);
       const cycleOwner = state.cycleOwners.get(identifier);
-      if (cycleOwner === undefined || cycleOwner === identifier) {
-        completeCycle(loader, identifier);
+      if (cycleOwner === undefined) {
         state.completedGraphs.add(identifier);
+      } else if (cycleOwner === identifier) {
+        completeCycle(loader, identifier);
       }
       return record;
     })
@@ -346,7 +347,9 @@ function acquireModuleGraph(loader, identifier, ancestors, parentIdentifier) {
     })
     .finally(() => {
       state.graphInFlight.delete(identifier);
-      state.graphDependencies.delete(identifier);
+      if (!state.cycleOwners.has(identifier)) {
+        state.graphDependencies.delete(identifier);
+      }
     });
 
   state.graphInFlight.set(identifier, graph);
@@ -619,6 +622,7 @@ function completeCycle(loader, identifier) {
     if (owner === identifier) {
       state.completedGraphs.add(member);
       state.cycleOwners.delete(member);
+      state.graphDependencies.delete(member);
     }
   }
 }
@@ -640,6 +644,7 @@ function resetFailedCycle(loader, identifier) {
 
   for (const member of members) {
     state.completedGraphs.delete(member);
+    state.graphDependencies.delete(member);
     const record = state.records.get(member);
     if (record !== undefined) {
       record.resolvedRequestedModules = [];

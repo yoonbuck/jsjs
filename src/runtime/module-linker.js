@@ -1,7 +1,11 @@
 import { moduleDeclarationInstantiation } from '../evaluator/modules.js';
 import { GuestErrorSignal } from './completion.js';
 import { ModuleEnvironmentRecord } from './environment.js';
-import { ModuleLoaderError, SourceTextModuleRecord } from './module-record.js';
+import {
+  importedReExportImportEntry,
+  ModuleLoaderError,
+  SourceTextModuleRecord,
+} from './module-record.js';
 
 /** @type {WeakMap<SourceTextModuleRecord, Map<string, object>>} */
 const RESOLVE_EXPORT_PAIR_KEYS = new WeakMap();
@@ -342,6 +346,13 @@ function validateIndirectExportEntries(record) {
  * @returns {SourceTextModuleRecord}
  */
 function requestedModuleForEntry(record, targetEntry, entryKind) {
+  if (entryKind === 'indirect') {
+    const importEntry = importedReExportImportEntry(targetEntry);
+    if (importEntry !== undefined) {
+      return requestedModuleForEntry(record, importEntry, 'import');
+    }
+  }
+
   let requestIndex = 0;
   let importIndex = 0;
   let indirectIndex = 0;

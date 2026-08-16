@@ -73,6 +73,11 @@ export const ASYNC_RUNTIME_RELEASE_MANIFEST = Object.freeze({
     ['Symbol.toStringTag'],
     [
       metadataRecord(
+        'test/language/module-code/ambiguous-export-bindings/import-and-export-propagates-binding.js',
+        [],
+        ['module'],
+      ),
+      metadataRecord(
         'test/language/module-code/ambiguous-export-bindings/omitted-from-namespace.js',
         [],
         ['module'],
