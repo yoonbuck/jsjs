@@ -721,6 +721,130 @@ const tests = [
     },
   },
   {
+    name: 'generator super reads capture their base after a computed-key suspension',
+    run() {
+      assertSame(
+        run(`
+          var first = { selected: 'first' };
+          var second = { selected: 'second' };
+          var third = { selected: 'third' };
+          var key = {
+            toString: function () {
+              Object.setPrototypeOf(object, third);
+              return 'selected';
+            }
+          };
+          var object = {
+            __proto__: first,
+            *read() {
+              return super[yield 'key-ready'];
+            }
+          };
+          var iterator = object.read();
+          var firstStep = iterator.next();
+          Object.setPrototypeOf(object, second);
+          var result = iterator.next(key);
+          [
+            firstStep.value,
+            result.value,
+            Object.getPrototypeOf(object) === third
+          ].join(':');
+        `),
+        'key-ready:second:true',
+      );
+    },
+  },
+  {
+    name: 'generator super assignments capture their base after a computed-key suspension',
+    run() {
+      assertSame(
+        run(`
+          var writes = [];
+          var first = {};
+          var second = {};
+          var third = {};
+          Object.defineProperty(first, 'selected', {
+            set: function (value) { writes.push('first:' + value); }
+          });
+          Object.defineProperty(second, 'selected', {
+            set: function (value) { writes.push('second:' + value); }
+          });
+          Object.defineProperty(third, 'selected', {
+            set: function (value) { writes.push('third:' + value); }
+          });
+          var key = {
+            toString: function () {
+              Object.setPrototypeOf(object, third);
+              return 'selected';
+            }
+          };
+          var object = {
+            __proto__: first,
+            *assign() {
+              super[yield 'assignment-key-ready'] = 7;
+            }
+          };
+          var iterator = object.assign();
+          var firstStep = iterator.next();
+          Object.setPrototypeOf(object, second);
+          var result = iterator.next(key);
+          [
+            firstStep.value,
+            writes.join(','),
+            result.done,
+            Object.getPrototypeOf(object) === third
+          ].join(':');
+        `),
+        'assignment-key-ready:second:7:true:true',
+      );
+    },
+  },
+  {
+    name: 'generator destructuring super targets capture their base after a computed-key suspension',
+    run() {
+      assertSame(
+        run(`
+          var writes = [];
+          var first = {};
+          var second = {};
+          var third = {};
+          Object.defineProperty(first, 'selected', {
+            set: function (value) { writes.push('first:' + value); }
+          });
+          Object.defineProperty(second, 'selected', {
+            set: function (value) { writes.push('second:' + value); }
+          });
+          Object.defineProperty(third, 'selected', {
+            set: function (value) { writes.push('third:' + value); }
+          });
+          var key = {
+            toString: function () {
+              Object.setPrototypeOf(object, third);
+              return 'selected';
+            }
+          };
+          var object = {
+            __proto__: first,
+            *assign() {
+              [super[yield 'destructuring-key-ready']] = [9];
+            }
+          };
+          var iterator = object.assign();
+          var firstStep = iterator.next();
+          Object.setPrototypeOf(object, second);
+          var result = iterator.next(key);
+          [
+            firstStep.value,
+            writes.join(','),
+            result.done,
+            Object.getPrototypeOf(object) === third
+          ].join(':');
+        `),
+        'destructuring-key-ready:second:9:true:true',
+      );
+    },
+  },
+  {
     name: 'resumed super reads reject a null super base',
     run() {
       assertSame(

@@ -885,16 +885,16 @@ export function bindThisValue(functionEnvironment, value) {
 }
 
 /**
- * Arrows reuse their enclosing function execution record, so a method
- * HomeObject must be present on the supplied record itself. An ordinary
- * function creates its own record and therefore stops lexical `super` lookup.
+ * Implements GetSuperBase at the point a super reference is created. Arrows
+ * reuse their enclosing function execution record; an ordinary function creates
+ * its own record and therefore stops lexical `super` lookup.
  *
  * @param {FunctionExecutionEnvironment | undefined} functionEnvironment
- * @returns {EngineObject}
+ * @returns {EngineObject | null}
  */
-export function getSuperHomeObject(functionEnvironment) {
+export function getSuperBase(functionEnvironment) {
   if (functionEnvironment?.homeObject instanceof EngineObject) {
-    return functionEnvironment.homeObject;
+    return functionEnvironment.homeObject.getPrototype();
   }
 
   throw new GuestErrorSignal(

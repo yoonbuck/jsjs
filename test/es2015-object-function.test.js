@@ -196,6 +196,77 @@ const tests = [
     },
   },
   {
+    name: 'computed super reads capture their base after the property expression but before key coercion',
+    run() {
+      assertSame(
+        run(`
+          var first = { selected: 'first' };
+          var second = { selected: 'second' };
+          var third = { selected: 'third' };
+          var key = {
+            toString: function () {
+              Object.setPrototypeOf(object, third);
+              return 'selected';
+            }
+          };
+          function property() {
+            Object.setPrototypeOf(object, second);
+            return key;
+          }
+          var object = {
+            __proto__: first,
+            read() {
+              return super[property()];
+            }
+          };
+          [object.read(), Object.getPrototypeOf(object) === third].join(':');
+        `),
+        'second:true',
+      );
+    },
+  },
+  {
+    name: 'computed super assignments capture their base after the property expression but before key coercion',
+    run() {
+      assertSame(
+        run(`
+          var writes = [];
+          var first = {};
+          var second = {};
+          var third = {};
+          Object.defineProperty(first, 'selected', {
+            set: function (value) { writes.push('first:' + value); }
+          });
+          Object.defineProperty(second, 'selected', {
+            set: function (value) { writes.push('second:' + value); }
+          });
+          Object.defineProperty(third, 'selected', {
+            set: function (value) { writes.push('third:' + value); }
+          });
+          var key = {
+            toString: function () {
+              Object.setPrototypeOf(object, third);
+              return 'selected';
+            }
+          };
+          function property() {
+            Object.setPrototypeOf(object, second);
+            return key;
+          }
+          var object = {
+            __proto__: first,
+            write(value) {
+              super[property()] = value;
+            }
+          };
+          object.write(7);
+          [writes.join(','), Object.getPrototypeOf(object) === third].join(':');
+        `),
+        'second:7:true',
+      );
+    },
+  },
+  {
     name: "super.prop on an accessor whose home object's prototype lacks the key reads undefined",
     run() {
       assertSame(

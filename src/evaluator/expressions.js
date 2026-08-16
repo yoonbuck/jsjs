@@ -7,8 +7,8 @@ import {
 import {
   getIdentifierBindingValue,
   getIdentifierReference,
+  getSuperBase,
   getThisBinding,
-  getSuperHomeObject,
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
@@ -284,11 +284,9 @@ export function prepareAssignmentTarget(target, context) {
   }
 
   if (target.object.type === 'Super') {
-    const superBase = getSuperHomeObject(
-      context.functionEnvironment,
-    ).getPrototype();
     const thisValue = getContextThisBinding(context);
     const propertyValue = evaluateMemberPropertyValue(target, context);
+    const superBase = getSuperBase(context.functionEnvironment);
     return {
       kind: 'superMember',
       superBase,
@@ -1055,11 +1053,9 @@ function evaluateMemberExpression(node, context) {
  * @returns {Reference}
  */
 function evaluateSuperMemberExpression(node, context) {
-  const superBase = getSuperHomeObject(
-    context.functionEnvironment,
-  ).getPrototype();
   const thisValue = getContextThisBinding(context);
   const propertyValue = evaluateMemberPropertyValue(node, context);
+  const superBase = getSuperBase(context.functionEnvironment);
 
   return createSuperMemberReference(
     superBase,

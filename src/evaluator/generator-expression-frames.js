@@ -6,7 +6,7 @@ import {
 } from '../runtime/reference.js';
 import {
   getIdentifierReference,
-  getSuperHomeObject,
+  getSuperBase,
   getThisBinding,
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
@@ -179,7 +179,6 @@ import {
  *   phase: 'start' | 'object' | 'property',
  *   base: unknown,
  *   property: unknown,
- *   superBase: EngineObject | null,
  *   thisValue: unknown,
  * }} MemberFrame
  * @typedef {{
@@ -470,7 +469,6 @@ export function createGeneratorExpressionFrame(
         phase: 'start',
         base: undefined,
         property: undefined,
-        superBase: null,
         thisValue: undefined,
       };
     case 'AssignmentExpression':
@@ -1283,12 +1281,9 @@ function dispatchSequence(execution, frame) {
 function dispatchMember(execution, frame) {
   if (frame.phase === 'start') {
     if (frame.node.object.type === 'Super') {
-      const state = captureGeneratorOperation(execution.realm, () => ({
-        superBase: getSuperHomeObject(
-          frame.context.functionEnvironment,
-        ).getPrototype(),
-        thisValue: getContextThisBinding(frame.context),
-      }));
+      const state = captureGeneratorOperation(execution.realm, () =>
+        getContextThisBinding(frame.context),
+      );
 
       if (state.type === 'completion') {
         return { type: 'pop', result: state };
@@ -1298,12 +1293,7 @@ function dispatchMember(execution, frame) {
         throw new TypeError('Super member state expected a value');
       }
 
-      const saved =
-        /** @type {{ superBase: EngineObject | null, thisValue: unknown }} */ (
-          state.value
-        );
-      frame.superBase = saved.superBase;
-      frame.thisValue = saved.thisValue;
+      frame.thisValue = state.value;
 
       if (!frame.node.computed) {
         frame.property = frame.node.property.name;
@@ -1352,8 +1342,9 @@ function dispatchMember(execution, frame) {
 function finishMemberReference(execution, frame) {
   const result = captureGeneratorOperation(execution.realm, () => {
     if (frame.node.object.type === 'Super') {
+      const superBase = getSuperBase(frame.context.functionEnvironment);
       return new Reference(
-        new SuperReferenceBase(frame.superBase, frame.thisValue),
+        new SuperReferenceBase(superBase, frame.thisValue),
         propertyNameFromValue(
           frame.node.property,
           frame.node.computed,
@@ -2204,12 +2195,9 @@ function dispatchPatternTarget(execution, frame) {
     }
 
     if (frame.node.object.type === 'Super') {
-      const state = captureGeneratorOperation(execution.realm, () => ({
-        superBase: getSuperHomeObject(
-          frame.context.functionEnvironment,
-        ).getPrototype(),
-        thisValue: getContextThisBinding(frame.context),
-      }));
+      const state = captureGeneratorOperation(execution.realm, () =>
+        getContextThisBinding(frame.context),
+      );
 
       if (state.type === 'completion') {
         return { type: 'pop', result: state };
@@ -2219,13 +2207,8 @@ function dispatchPatternTarget(execution, frame) {
         throw new TypeError('Super pattern target expected state');
       }
 
-      const saved =
-        /** @type {{ superBase: EngineObject | null, thisValue: unknown }} */ (
-          state.value
-        );
-      frame.superBase = saved.superBase;
-      frame.thisValue = saved.thisValue;
-      return nextPatternTargetProperty(frame);
+      frame.thisValue = state.value;
+      return nextPatternTargetProperty(execution, frame);
     }
 
     frame.phase = 'object';
@@ -2252,33 +2235,45 @@ function dispatchPatternTarget(execution, frame) {
 
   if (frame.phase === 'object') {
     frame.base = result.value;
-    return nextPatternTargetProperty(frame);
+    return nextPatternTargetProperty(execution, frame);
   }
 
   frame.property = result.value;
-  return finishPatternTarget(frame);
+  return finishPatternTarget(execution, frame);
 }
 
 /**
+ * @param {GeneratorExecution} execution
  * @param {PatternTargetFrame} frame
  * @returns {GeneratorFrameAction}
  */
-function nextPatternTargetProperty(frame) {
+function nextPatternTargetProperty(execution, frame) {
   if (frame.node.computed) {
     frame.phase = 'property';
     return pushExpression(frame.node.property, frame.context, 'value');
   }
 
   frame.property = frame.node.property.name;
-  return finishPatternTarget(frame);
+  return finishPatternTarget(execution, frame);
 }
 
 /**
+ * @param {GeneratorExecution} execution
  * @param {PatternTargetFrame} frame
  * @returns {GeneratorFrameAction}
  */
-function finishPatternTarget(frame) {
+function finishPatternTarget(execution, frame) {
   if (frame.node.object.type === 'Super') {
+    const capturedBase = captureGeneratorOperation(execution.realm, () =>
+      getSuperBase(frame.context.functionEnvironment),
+    );
+    if (capturedBase.type === 'completion') {
+      return { type: 'pop', result: capturedBase };
+    }
+    if (capturedBase.type !== 'value') {
+      throw new TypeError('Super pattern target expected a base value');
+    }
+    frame.superBase = /** @type {EngineObject | null} */ (capturedBase.value);
     return finishValue({
       kind: 'superMember',
       superBase: frame.superBase,
