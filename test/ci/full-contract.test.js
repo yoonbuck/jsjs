@@ -383,6 +383,18 @@ function numberRenderings(value) {
   return [...new Set([String(value), formatCount(value)])];
 }
 
+const STRUCTURAL_LAYER_LABEL_PATTERN = /\bLayer(?:\s+|-)\d+\b/gu;
+
+/**
+ * Removes structural Layer labels from prose without touching other numbers.
+ *
+ * @param {string} line
+ * @returns {string}
+ */
+function stripStructuralLayerLabel(line) {
+  return line.replace(STRUCTURAL_LAYER_LABEL_PATTERN, 'Layer');
+}
+
 /**
  * Finds live coverage counts in non-generated Markdown lines.
  *
@@ -394,7 +406,7 @@ function findCoverageNumberOffenders(outside, live) {
   const offenders = [];
 
   for (const line of outside.split('\n')) {
-    const scanLine = line.replace(/^(\s*#{1,6}\s+Layer\s+)\d+\b/u, '$1');
+    const scanLine = stripStructuralLayerLabel(line);
 
     for (const value of live) {
       for (const rendering of numberRenderings(value)) {
@@ -1182,7 +1194,7 @@ export default [
     },
   },
   {
-    name: 'coverage drift helper ignores live counts in Markdown headings',
+    name: 'coverage drift helper ignores live counts in Layer labels and Markdown headings',
     run: () => {
       const syntheticReport = [
         { type: 'inventory', malformed: 3, selectedFiles: 14107 },
@@ -1193,6 +1205,13 @@ export default [
         ),
       );
 
+      assertSame(
+        findCoverageNumberOffenders(
+          'The exotics are the Layer-3 contract.',
+          live,
+        ).join('\n'),
+        '',
+      );
       assertSame(
         findCoverageNumberOffenders('## Layer 3: Static modules', live).join(
           '\n',
@@ -1208,10 +1227,10 @@ export default [
       );
       assertSame(
         findCoverageNumberOffenders(
-          '## Layer 3: 14,107 selected files',
+          'The Layer-3 contract covers 14,107 selected files.',
           live,
         ).join('\n'),
-        '14,107 -> ## Layer 3: 14,107 selected files',
+        '14,107 -> The Layer-3 contract covers 14,107 selected files.',
       );
     },
   },
