@@ -331,6 +331,16 @@ export default [
         'only the two approved generator roots may lack an expansion metadata feature',
       );
       assertSame(
+        GENERATOR_ROOTS.length,
+        11,
+        'the layer-4 contract must retain exactly eleven generator roots',
+      );
+      assertSame(
+        APPROVED_UNTAGGED_GENERATOR_ROOTS.length,
+        2,
+        'the layer-4 contract must retain exactly two approved untagged generator roots',
+      );
+      assertSame(
         GENERATOR_ROOTS.every((path) => currentPaths.has(path)),
         true,
         'generated selection must retain all eleven layer-4 generator roots',
