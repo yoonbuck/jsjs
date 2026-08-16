@@ -547,6 +547,82 @@ export default [
     },
   },
   {
+    name: 'public loader waits for a complete overlapping graph before linking concurrent roots',
+    async run() {
+      const realm = createRealm();
+      realm.globalObject.defineOwnProperty('aRuns', {
+        value: 0,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      realm.globalObject.defineOwnProperty('bRuns', {
+        value: 0,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const loader = createModuleLoader(realm, {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          return identifier === 'a'
+            ? 'import "a"; import "b"; aRuns += 1; export const value = aRuns;'
+            : 'import "a"; import "b"; bRuns += 1; export const value = bRuns;';
+        },
+      });
+
+      const [a, b] = await resolvesPromptly(
+        Promise.all([
+          loader.loadAndEvaluate('a'),
+          loader.loadAndEvaluate('b'),
+        ]),
+      );
+
+      assertSame(a.get('value'), 1);
+      assertSame(b.get('value'), 1);
+      assertSame(realm.globalObject.get('aRuns'), 1);
+      assertSame(realm.globalObject.get('bRuns'), 1);
+      assertSame(await loader.loadAndEvaluate('a'), a);
+      assertSame(await loader.loadAndEvaluate('b'), b);
+    },
+  },
+  {
+    name: 'public loader does not await its owner across a same-SCC dependency edge',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'a') {
+            return 'import "b"; export const value = "a";';
+          }
+          if (identifier === 'b') {
+            return 'import "c"; export const value = "b";';
+          }
+          return 'import "a"; import "b"; export const value = "c";';
+        },
+      });
+
+      const [a, b, c] = await resolvesPromptly(
+        Promise.all([
+          loader.loadAndEvaluate('a'),
+          loader.loadAndEvaluate('b'),
+          loader.loadAndEvaluate('c'),
+        ]),
+      );
+
+      assertSame(a.get('value'), 'a');
+      assertSame(b.get('value'), 'b');
+      assertSame(c.get('value'), 'c');
+      assertSame(await loader.loadAndEvaluate('a'), a);
+      assertSame(await loader.loadAndEvaluate('b'), b);
+      assertSame(await loader.loadAndEvaluate('c'), c);
+    },
+  },
+  {
     name: 'loader settles concurrent roots across an overlapping source cycle',
     async run() {
       const loader = createModuleLoader(createRealm(), {
