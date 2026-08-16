@@ -3,6 +3,7 @@ import {
   createNormalCompletion,
   createThrowCompletion,
 } from '../src/runtime/completion.js';
+import { AgentJobQueue } from '../src/runtime/jobs.js';
 import { assertSame, assertThrows } from './harness/assert.js';
 
 /**
@@ -193,40 +194,38 @@ export default [
     },
   },
   {
-    name: 'Agent queue releases consumed records and compacts during a checkpoint',
+    name: 'JobQueue releases consumed records and bounds storage during a checkpoint',
     run: () => {
-      const realm = createRealm();
-      const queue = realm.agent._jobQueue;
-      let storage = queue.jobs;
-      let compactions = 0;
+      const queue = new AgentJobQueue(undefined);
+      const jobCount = 2048;
+      let boundedStorageObserved = false;
       let retainedConsumedRecord = false;
       /** @type {number[]} */
       const order = [];
 
-      for (let index = 0; index < 2048; index += 1) {
+      for (let index = 0; index < jobCount; index += 1) {
         const kind = `retention-${index}`;
-        realm.agent.enqueueJob(
-          createJob(realm, kind, () => {
+        queue.enqueue(
+          createJob(null, kind, () => {
             order.push(index);
             if (queue.jobs.some((candidate) => candidate?.kind === kind)) {
               retainedConsumedRecord = true;
             }
-            if (queue.jobs !== storage) {
-              compactions += 1;
-              storage = queue.jobs;
+            if (index < jobCount - 1 && queue.jobs.length <= jobCount / 2) {
+              boundedStorageObserved = true;
             }
             return createNormalCompletion(undefined);
           }),
         );
       }
 
-      const report = realm.agent.runJobs();
+      const report = queue.run();
       assertSame(report.failures.length, 0);
       assertSame(retainedConsumedRecord, false);
-      assertSame(compactions > 0, true);
-      assertSame(order.length, 2048);
+      assertSame(boundedStorageObserved, true);
+      assertSame(order.length, jobCount);
       assertSame(order[0], 0);
-      assertSame(order[2047], 2047);
+      assertSame(order[jobCount - 1], jobCount - 1);
       assertSame(queue.jobs.length, 0);
       assertSame(queue.jobHead, 0);
     },
