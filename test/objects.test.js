@@ -530,6 +530,25 @@ const tests = [
     },
   },
   {
+    name: 'set rejects a non-object receiver for a writable data descriptor: sloppy false, strict throws',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(prototype.set('value', 'updated', 'not-an-object'), false);
+      assertSame(prototype.get('value'), 1);
+      assertThrows(
+        () => prototype.set('value', 'updated', 'not-an-object', true),
+        GuestErrorSignal,
+      );
+      assertSame(prototype.get('value'), 1);
+    },
+  },
+  {
     name: 'put delegates to set with itself as the receiver',
     run() {
       let setterValue = 'unset';

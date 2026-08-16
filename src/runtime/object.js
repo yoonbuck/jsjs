@@ -289,15 +289,24 @@ export class EngineObject {
       const own = current._peekOwnDescriptor(name);
 
       if (own !== undefined) {
-        return setWithOwnDescriptor(name, own, value, receiver, throwOnError);
+        return setWithOwnDescriptor(
+          name,
+          own,
+          current === receiver,
+          value,
+          receiver,
+          throwOnError,
+        );
       }
 
+      /** @type {EngineObject | null} */
       const proto = current._prototype;
 
       if (proto === null) {
         return setWithOwnDescriptor(
           name,
           IMPLICIT_DATA_DESCRIPTOR,
+          false,
           value,
           receiver,
           throwOnError,
@@ -772,12 +781,28 @@ const IMPLICIT_DATA_DESCRIPTOR = {
  *
  * @param {PropertyKey} name
  * @param {CompletePropertyDescriptor} ownDesc
+ * @param {boolean} ownerIsReceiver Whether `ownDesc` was read directly off
+ *   `receiver` itself (i.e. the `set` walk's `current === receiver` on the
+ *   step that found it), as opposed to off some other object in the
+ *   prototype chain or the implicit end-of-chain descriptor. When true, a
+ *   fresh `receiver.getOwnProperty(name)` lookup would only reconfirm facts
+ *   already known from `ownDesc` (present, data, writable) at the cost of an
+ *   extra virtual dispatch and descriptor copy — this is the hot path for a
+ *   plain `obj.prop = value` assignment to an existing writable own data
+ *   property, so it is worth skipping.
  * @param {unknown} value
  * @param {unknown} receiver
  * @param {boolean} throwOnError
  * @returns {boolean}
  */
-function setWithOwnDescriptor(name, ownDesc, value, receiver, throwOnError) {
+function setWithOwnDescriptor(
+  name,
+  ownDesc,
+  ownerIsReceiver,
+  value,
+  receiver,
+  throwOnError,
+) {
   if (isDataDescriptor(ownDesc)) {
     if (!ownDesc.writable) {
       return rejectOperation(
@@ -787,7 +812,14 @@ function setWithOwnDescriptor(name, ownDesc, value, receiver, throwOnError) {
     }
 
     if (!(receiver instanceof EngineObject)) {
-      return false;
+      return rejectOperation(
+        throwOnError,
+        'Cannot create property on non-object receiver',
+      );
+    }
+
+    if (ownerIsReceiver) {
+      return receiver.defineOwnProperty(name, { value }, throwOnError);
     }
 
     const existing = receiver.getOwnProperty(name);
