@@ -384,6 +384,33 @@ function numberRenderings(value) {
 }
 
 /**
+ * Finds live coverage counts in non-generated Markdown lines.
+ *
+ * @param {string} outside
+ * @param {Set<number>} live
+ * @returns {string[]}
+ */
+function findCoverageNumberOffenders(outside, live) {
+  const offenders = [];
+
+  for (const line of outside.split('\n')) {
+    if (/^\s*#{1,6}(?:\s|$)/u.test(line)) {
+      continue;
+    }
+
+    for (const value of live) {
+      for (const rendering of numberRenderings(value)) {
+        if (wholeNumberPattern(rendering).test(line)) {
+          offenders.push(`${rendering} -> ${line.trim()}`);
+        }
+      }
+    }
+  }
+
+  return offenders;
+}
+
+/**
  * Runs an npm script that is *expected* to fail and returns its output, so a
  * contract can assert on the failure itself instead of only on the happy path.
  * `stderr` is returned separately as well as combined: a command that prints a
@@ -1157,6 +1184,31 @@ export default [
     },
   },
   {
+    name: 'coverage drift helper ignores live counts in Markdown headings',
+    run: () => {
+      const syntheticReport = [{ type: 'inventory', malformed: 3 }];
+      const live = new Set(
+        syntheticReport.flatMap((record) =>
+          Object.values(record).filter((value) => typeof value === 'number'),
+        ),
+      );
+
+      assertSame(
+        findCoverageNumberOffenders('## Layer 3: Static modules', live).join(
+          '\n',
+        ),
+        '',
+      );
+      assertSame(
+        findCoverageNumberOffenders(
+          '## Layer 3: Static modules\nThe malformed count is 3 items.',
+          live,
+        ).join('\n'),
+        '3 -> The malformed count is 3 items.',
+      );
+    },
+  },
+  {
     name: 'every live coverage number in docs/conformance.md is inside the generated block, where the drift check can reach it',
     run: async () => {
       const { coverageDoc, report } = await readUpstreamRun();
@@ -1185,23 +1237,7 @@ export default [
         'the report must publish the numbers this check is about',
       );
 
-      const lines = outside.split('\n');
-      /** @type {string[]} */
-      const offenders = [];
-
-      for (const value of live) {
-        for (const rendering of numberRenderings(value)) {
-          const match = wholeNumberPattern(rendering).exec(outside);
-
-          if (match === null) {
-            continue;
-          }
-
-          const line = outside.slice(0, match.index).split('\n').length;
-
-          offenders.push(`${rendering} -> ${lines[line - 1].trim()}`);
-        }
-      }
+      const offenders = findCoverageNumberOffenders(outside, live);
 
       assertSame(
         offenders.join('\n'),
