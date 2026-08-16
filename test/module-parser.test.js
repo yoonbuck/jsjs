@@ -295,7 +295,7 @@ export default [
               source: null,
             },
           ]),
-        Error,
+        SyntaxError,
       );
     },
   },
@@ -335,6 +335,64 @@ export default [
       });
 
       assertSame(record.requestedModules.join(','), 'a,a,a,a');
+    },
+  },
+  {
+    name: 'ordinary modules enforce the supported capability and strict early-error boundary',
+    run() {
+      for (const source of [
+        'new.target;',
+        'var pattern = /./u;',
+        'function duplicate(a, a) {}',
+        'var invalid = /]/;',
+      ]) {
+        assertThrows(() => parseModule(source), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'ordinary module validation keeps adjacent implemented forms',
+    run() {
+      for (const source of [
+        'import value from "dep"; export { value };',
+        'function distinct(a, b) { return /a/gim.test(a + b); }',
+        'export default function* values() { yield 1; }',
+      ]) {
+        assertSame(parseModule(source).sourceType, 'module');
+      }
+    },
+  },
+  {
+    name: 'custom modules enforce capability and strict binding early errors',
+    run() {
+      const meta = parseModule('function kept() { return 1; }');
+      meta.body[0].body.body[0].argument = {
+        type: 'MetaProperty',
+        meta: { type: 'Identifier', name: 'new' },
+        property: { type: 'Identifier', name: 'target' },
+      };
+      assertThrows(() => parseModule('', { parse: () => meta }), SyntaxError);
+
+      const duplicate = parseModule('function kept(a, b) {}');
+      duplicate.body[0].params[1].name = 'a';
+      assertThrows(
+        () => parseModule('', { parse: () => duplicate }),
+        SyntaxError,
+      );
+
+      const imported = parseModule('import { value as local } from "dep";');
+      imported.body[0].specifiers[0].local.name = 'eval';
+      assertThrows(
+        () => parseModule('', { parse: () => imported }),
+        SyntaxError,
+      );
+
+      const regexp = parseModule('var pattern = /a/;');
+      const literal = regexp.body[0].declarations[0].init;
+      literal.regex.pattern = ']';
+      literal.raw = '/]/';
+      literal.value = undefined;
+      assertThrows(() => parseModule('', { parse: () => regexp }), SyntaxError);
     },
   },
 ];
