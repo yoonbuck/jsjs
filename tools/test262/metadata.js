@@ -489,7 +489,7 @@ function validateFlagCombinations(flags, includes) {
     return;
   }
 
-  for (const flag of ['onlyStrict', 'noStrict', 'module', 'async']) {
+  for (const flag of ['onlyStrict', 'noStrict', 'async']) {
     if (flags.includes(flag)) {
       throw new Test262MetadataError(
         `Conflicting frontmatter flags: raw and ${flag}`,

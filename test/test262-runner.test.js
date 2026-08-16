@@ -56,6 +56,7 @@ const FIXTURE_TESTS = [
   'test/feature-skip.js',
   'test/includes.js',
   'test/language/module-code/basic.js',
+  'test/language/module-code/raw.js',
   'test/no-strict.js',
   'test/only-strict.js',
   'test/parse-negative.js',
@@ -179,6 +180,7 @@ const FIXTURE_TEST_LINES = [
   '{"type":"test","file":"test/includes.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/includes.js","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/language/module-code/basic.js","variant":"non-strict","status":"passed"}',
+  '{"type":"test","file":"test/language/module-code/raw.js","variant":"raw","status":"passed"}',
   '{"type":"test","file":"test/no-strict.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/only-strict.js","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/parse-negative.js","variant":"non-strict","status":"passed"}',
@@ -200,7 +202,7 @@ const FIXTURE_MALFORMED_LINES = [
 /** The default selection: exactly what `npm run test262:fixtures` writes. */
 const FIXTURE_REPORT = [
   ...FIXTURE_TEST_LINES,
-  '{"type":"summary","total":17,"passed":16,"failed":0,"skipped":1}',
+  '{"type":"summary","total":18,"passed":17,"failed":0,"skipped":1}',
   '',
 ].join('\n');
 
@@ -208,7 +210,7 @@ const FIXTURE_REPORT = [
 const FIXTURE_MALFORMED_REPORT = [
   ...FIXTURE_MALFORMED_LINES,
   ...FIXTURE_TEST_LINES,
-  '{"type":"summary","total":19,"passed":16,"failed":2,"skipped":1}',
+  '{"type":"summary","total":20,"passed":17,"failed":2,"skipped":1}',
   '',
 ].join('\n');
 
@@ -538,6 +540,7 @@ export default [
       assertSame(variantsOf('flags: [onlyStrict]\n'), '["strict"]');
       assertSame(variantsOf('flags: [noStrict]\n'), '["non-strict"]');
       assertSame(variantsOf('flags: [raw]\n'), '["raw"]');
+      assertSame(variantsOf('flags: [module, raw]\n'), '["raw"]');
     },
   },
   {
@@ -1371,11 +1374,11 @@ export default [
       });
 
       assertSame(inventory.files.join(','), FIXTURE_INVENTORY_PATHS.join(','));
-      assertSame(inventory.totals.files, 13);
+      assertSame(inventory.totals.files, 14);
       assertSame(
         inventory.totals.records,
-        18,
-        'eleven fixture tests expand into eighteen (file, variant) records',
+        19,
+        'twelve fixture tests expand into nineteen (file, variant) records',
       );
       assertSame(inventory.totals.malformed, 2);
       assertSame(inventory.malformed.join(','), FIXTURE_MALFORMED.join(','));
@@ -1383,6 +1386,7 @@ export default [
       assertSame(inventory.variants.get('test/only-strict.js'), 1);
       assertSame(inventory.variants.get('test/no-strict.js'), 1);
       assertSame(inventory.variants.get('test/raw.js'), 1);
+      assertSame(inventory.variants.get('test/language/module-code/raw.js'), 1);
       assertSame(
         inventory.variants.get('test/feature-skip.js'),
         2,
@@ -1406,15 +1410,26 @@ export default [
             'var value = 1;',
             'flags: [raw]\n',
           ),
+          'test/module-raw.js': fixture(
+            'One raw module variant',
+            'export const value = 1;',
+            'flags: [module, raw]\n',
+          ),
           'test/broken.js': 'var withoutFrontmatter = 1;\n',
         }),
-        paths: ['test/plain.js', 'test/raw.js', 'test/broken.js'],
+        paths: [
+          'test/plain.js',
+          'test/raw.js',
+          'test/module-raw.js',
+          'test/broken.js',
+        ],
       });
 
-      assertSame(inventory.totals.files, 3);
-      assertSame(inventory.totals.records, 3);
+      assertSame(inventory.totals.files, 4);
+      assertSame(inventory.totals.records, 4);
       assertSame(inventory.totals.malformed, 1);
       assertSame(inventory.malformed.join(','), 'test/broken.js');
+      assertSame(inventory.variants.get('test/module-raw.js'), 1);
     },
   },
   {
@@ -1496,19 +1511,19 @@ export default [
         ).records,
       });
 
-      assertSame(coverage.files.total, 13);
-      assertSame(coverage.files.selected, 11);
+      assertSame(coverage.files.total, 14);
+      assertSame(coverage.files.selected, 12);
       assertSame(
         coverage.files.attempted,
-        10,
+        11,
         'the feature-skipped file is selected but never attempted',
       );
-      assertSame(coverage.files.passed, 10);
+      assertSame(coverage.files.passed, 11);
       assertSame(coverage.files.malformed, 2);
-      assertSame(coverage.records.total, 18);
-      assertSame(coverage.records.selected, 18);
-      assertSame(coverage.records.attempted, 16);
-      assertSame(coverage.records.passed, 16);
+      assertSame(coverage.records.total, 19);
+      assertSame(coverage.records.selected, 19);
+      assertSame(coverage.records.attempted, 17);
+      assertSame(coverage.records.passed, 17);
     },
   },
   {
@@ -1531,12 +1546,12 @@ export default [
         ).records,
       });
 
-      assertSame(coverage.files.selectedPercent, 84.615);
-      assertSame(coverage.files.attemptedPercent, 76.923);
-      assertSame(coverage.files.passedPercent, 76.923);
+      assertSame(coverage.files.selectedPercent, 85.714);
+      assertSame(coverage.files.attemptedPercent, 78.571);
+      assertSame(coverage.files.passedPercent, 78.571);
       assertSame(coverage.records.selectedPercent, 100);
-      assertSame(coverage.records.attemptedPercent, 88.889);
-      assertSame(coverage.records.passedPercent, 88.889);
+      assertSame(coverage.records.attemptedPercent, 89.474);
+      assertSame(coverage.records.passedPercent, 89.474);
 
       const empty = summarizeTest262Coverage({
         inventory: await collectTest262Inventory({
@@ -1574,9 +1589,9 @@ export default [
       assertSame(
         formatCoverageLines(coverage).join('\n'),
         [
-          '{"type":"inventory","files":13,"records":18,"malformed":2}',
-          '{"type":"coverage","scope":"files","total":13,"selected":11,"attempted":10,"passed":10,"selectedPercent":84.615,"attemptedPercent":76.923,"passedPercent":76.923}',
-          '{"type":"coverage","scope":"records","total":18,"selected":18,"attempted":16,"passed":16,"selectedPercent":100,"attemptedPercent":88.889,"passedPercent":88.889}',
+          '{"type":"inventory","files":14,"records":19,"malformed":2}',
+          '{"type":"coverage","scope":"files","total":14,"selected":12,"attempted":11,"passed":11,"selectedPercent":85.714,"attemptedPercent":78.571,"passedPercent":78.571}',
+          '{"type":"coverage","scope":"records","total":19,"selected":19,"attempted":17,"passed":17,"selectedPercent":100,"attemptedPercent":89.474,"passedPercent":89.474}',
         ].join('\n'),
       );
     },
@@ -1610,10 +1625,10 @@ export default [
         [
           '| Denominator     | Whole suite | Selected | Attempted | Passed | Passing |',
           '| --------------- | ----------- | -------- | --------- | ------ | ------- |',
-          '| Files           | 13          | 11       | 10        | 10     | 76.923% |',
-          '| (file, variant) | 18          | 18       | 16        | 16     | 88.889% |',
+          '| Files           | 14          | 12       | 11        | 11     | 78.571% |',
+          '| (file, variant) | 19          | 19       | 17        | 17     | 89.474% |',
           '',
-          '2 of the 13 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.',
+          '2 of the 14 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.',
           'Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).',
         ].join('\n'),
       );

@@ -9,7 +9,12 @@
 import { assertSame } from '../harness/assert.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
 import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
-import { runTest262 } from '../../tools/test262/runner.js';
+import {
+  expandVariants,
+  parseTest262Metadata,
+  resolveIncludes,
+} from '../../tools/test262/metadata.js';
+import { decideSkip, runTest262 } from '../../tools/test262/runner.js';
 import { ASYNC_RUNTIME_RELEASE_MANIFEST } from '../../tools/test262/async-runtime-release-manifest.js';
 import {
   assertPinnedCheckout,
@@ -51,6 +56,31 @@ export default [
       assertSame(summary.passed, FOCUSED_PATHS.length);
       assertSame(summary.failed, 0);
       assertSame(summary.skipped, 0);
+    },
+  },
+  {
+    name: 'pinned module raw metadata expands once without harness rewriting',
+    run: async () => {
+      const pin = await readTest262Pin();
+      await assertPinnedCheckout(pin);
+      const host = createNodeTest262Host({ root: pin.checkoutPath });
+
+      for (const path of [
+        'test/language/comments/hashbang/module.js',
+        'test/language/module-code/import-attributes/allow-nlt-before-with.js',
+      ]) {
+        const metadata = parseTest262Metadata(await host.readTest(path));
+
+        assertSame(JSON.stringify(metadata.flags), '["module","raw"]');
+        assertSame(JSON.stringify(expandVariants(metadata)), '["raw"]');
+        assertSame(JSON.stringify(resolveIncludes(metadata)), '[]');
+        assertSame(
+          decideSkip(metadata, {
+            supportedFeatures: RELEASE.supportedFeatures,
+          })?.reason,
+          'unsupported-feature',
+        );
+      }
     },
   },
 ];

@@ -62,6 +62,7 @@ import {
   formatUpstreamSummaryLines,
   parseUpstreamSubset,
   summarizeUpstreamRun,
+  upstreamRunResultPasses,
   upstreamSubsetPaths,
 } from './upstream.js';
 
@@ -186,17 +187,14 @@ export async function assertPinnedCheckout(pin) {
  * than by engine behaviour. Generating under `TZ=UTC` (the environment CI uses)
  * makes the two artifacts a pure function of the engine and the pinned tree.
  *
- * The probe uses both a January and a July instant so a zone that merely happens
- * to sit at `+00:00` for one season (for example Europe/London in winter) is
- * still rejected; only a zone that is `+00:00` year round passes.
+ * The environment must name canonical `UTC` exactly. Offset probes cannot
+ * distinguish UTC from zones such as Africa/Monrovia whose historical offset is
+ * nonzero but whose modern January and July offsets are both zero.
  *
  * @returns {void}
  */
 export function assertUtcTimeZone() {
-  const januaryOffset = new Date(Date.UTC(2020, 0, 1)).getTimezoneOffset();
-  const julyOffset = new Date(Date.UTC(2020, 6, 1)).getTimezoneOffset();
-
-  if (januaryOffset === 0 && julyOffset === 0) {
+  if (process.env.TZ === 'UTC') {
     return;
   }
 
@@ -287,7 +285,7 @@ export async function main(argv = []) {
     return 1;
   }
 
-  return summary.failed > 0 ? 1 : 0;
+  return upstreamRunResultPasses({ summary, coverage }) ? 0 : 1;
 }
 
 /**

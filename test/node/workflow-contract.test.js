@@ -33,6 +33,7 @@ import {
 import {
   expandVariants,
   parseTest262Metadata,
+  resolveIncludes,
 } from '../../tools/test262/metadata.js';
 import {
   ES5_SELECTION_FILE,
@@ -62,6 +63,7 @@ import {
   summarizeUpstreamRun,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
+import * as upstreamOperations from '../../tools/test262/upstream.js';
 import {
   ASYNC_RUNTIME_RELEASE_MANIFEST,
   ASYNC_RUNTIME_RELEASE_MANIFEST_FILE,
@@ -70,6 +72,10 @@ import * as ciPipeline from '../../tools/ci/pipeline.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const NON_UTC_UPSTREAM_DIAGNOSTIC_ENV = Object.freeze({ TZ: 'Etc/GMT+1' });
+const UTC_GUARD_MODULE_URL = new URL(
+  '../../tools/test262/upstream-run.js',
+  import.meta.url,
+).href;
 
 /**
  * The command each CI job is supposed to run, spelled out here instead of
@@ -227,6 +233,36 @@ function nonUtcUpstreamDiagnosticInvocation() {
       encoding: 'utf8',
       maxBuffer: 64 * 1024,
     }),
+  };
+}
+
+/**
+ * @param {string} zone
+ */
+function utcGuardInvocation(zone) {
+  return {
+    command: /** @type {{ execPath: string }} */ (
+      /** @type {unknown} */ (process)
+    ).execPath,
+    args: [
+      '--input-type=module',
+      '--eval',
+      [
+        `import { assertUtcTimeZone } from ${JSON.stringify(UTC_GUARD_MODULE_URL)};`,
+        'try {',
+        '  assertUtcTimeZone();',
+        '} catch (error) {',
+        '  process.exitCode = 1;',
+        '  process.stderr.write(`${error.message}\\n`);',
+        '}',
+      ].join('\n'),
+    ],
+    options: {
+      cwd: fileURLToPath(REPOSITORY_ROOT_URL),
+      env: { TZ: zone },
+      encoding: /** @type {const} */ ('utf8'),
+      maxBuffer: 64 * 1024,
+    },
   };
 }
 
@@ -607,6 +643,40 @@ export default [
     },
   },
   {
+    name: 'UTC guard requires the canonical TZ value rather than historical offsets',
+    run: () => {
+      const historicalInvocation = utcGuardInvocation('Africa/Monrovia');
+      const utcInvocation = utcGuardInvocation('UTC');
+      const historical = spawnSync(
+        historicalInvocation.command,
+        historicalInvocation.args,
+        historicalInvocation.options,
+      );
+      const utc = spawnSync(
+        utcInvocation.command,
+        utcInvocation.args,
+        utcInvocation.options,
+      );
+      const diagnostic = stderrText(historical);
+
+      assertSame(historical.error, undefined);
+      assertSame(historical.status, 1);
+      assertSame(
+        diagnostic.includes('this process is running in Africa/Monrovia.'),
+        true,
+      );
+      assertSame(
+        diagnostic.includes(
+          'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream',
+        ),
+        true,
+      );
+      assertSame(utc.error, undefined);
+      assertSame(utc.status, 0);
+      assertSame(stderrText(utc), '');
+    },
+  },
+  {
     name: 'non-UTC upstream diagnostic uses process.execPath and isolated TZ-only environment',
     run: () => {
       const invocation = nonUtcUpstreamDiagnosticInvocation();
@@ -811,8 +881,8 @@ export default [
       const suites = /** @type {const} */ (['generator', 'module', 'promise']);
       const expectedCounts = Object.freeze({
         generator: 11,
-        module: 10,
-        promise: 11,
+        module: 12,
+        promise: 15,
       });
       const expectedSupportedFeatures = Object.freeze({
         generator: ['Symbol.iterator', 'Symbol.toStringTag', 'generators'],
@@ -1006,6 +1076,9 @@ export default [
       const moduleAsyncMetadata = parseTest262Metadata(
         '/*---\ndescription: async module\nflags: [module, async]\n---*/\n',
       );
+      const moduleRawMetadata = parseTest262Metadata(
+        '/*---\ndescription: raw module\nflags: [module, raw]\n---*/\n',
+      );
 
       assertSame(JSON.stringify(moduleMetadata.features), '[]');
       assertSame(JSON.stringify(asyncMetadata.features), '[]');
@@ -1028,6 +1101,8 @@ export default [
         JSON.stringify(expandVariants(asyncMetadata)),
         '["non-strict","strict"]',
       );
+      assertSame(JSON.stringify(expandVariants(moduleRawMetadata)), '["raw"]');
+      assertSame(JSON.stringify(resolveIncludes(moduleRawMetadata)), '[]');
       assertSame(
         JSON.stringify(
           expandVariants(
@@ -1047,13 +1122,6 @@ export default [
           ),
         ),
         '["non-strict"]',
-      );
-      assertThrows(
-        () =>
-          parseTest262Metadata(
-            '/*---\ndescription: raw module\nflags: [raw, module]\n---*/\n',
-          ),
-        Error,
       );
       assertThrows(
         () =>
@@ -1520,6 +1588,44 @@ export default [
         summary.groups.reduce((total, group) => total + group.skipped, 0),
         1,
       );
+    },
+  },
+  {
+    name: 'broad Test262 result policy rejects skips and incomplete coverage',
+    run: () => {
+      const resultPasses = /** @type {any} */ (upstreamOperations)
+        .upstreamRunResultPasses;
+      assertSame(typeof resultPasses, 'function');
+
+      const summary = { total: 2, passed: 2, failed: 0, skipped: 0 };
+      const coverage = {
+        files: { selected: 1, attempted: 1, passed: 1 },
+        records: { selected: 2, attempted: 2, passed: 2 },
+      };
+      assertSame(resultPasses({ summary, coverage }), true);
+
+      for (const incomplete of [
+        {
+          summary: { ...summary, passed: 1, skipped: 1 },
+          coverage,
+        },
+        {
+          summary,
+          coverage: {
+            ...coverage,
+            files: { selected: 1, attempted: 0, passed: 0 },
+          },
+        },
+        {
+          summary,
+          coverage: {
+            ...coverage,
+            records: { selected: 2, attempted: 2, passed: 1 },
+          },
+        },
+      ]) {
+        assertSame(resultPasses(incomplete), false);
+      }
     },
   },
   {

@@ -4,6 +4,7 @@
     "test/feature-skip.js",
     "test/includes.js",
     "test/language/module-code/basic.js",
+    "test/language/module-code/raw.js",
     "test/no-strict.js",
     "test/only-strict.js",
     "test/parse-negative.js",
