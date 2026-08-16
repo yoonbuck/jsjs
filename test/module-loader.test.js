@@ -574,10 +574,7 @@ export default [
       });
 
       const [a, b] = await resolvesPromptly(
-        Promise.all([
-          loader.loadAndEvaluate('a'),
-          loader.loadAndEvaluate('b'),
-        ]),
+        Promise.all([loader.loadAndEvaluate('a'), loader.loadAndEvaluate('b')]),
       );
 
       assertSame(a.get('value'), 1);

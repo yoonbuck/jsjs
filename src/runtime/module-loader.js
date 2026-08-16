@@ -311,12 +311,7 @@ async function discoverModuleGraph(loader, identifier, discovered, sequence) {
   discovered.add(identifier);
   const record = await acquireModuleRequests(loader, identifier, sequence);
   for (const request of record.resolvedRequestedModules) {
-    await discoverModuleGraph(
-      loader,
-      request.identifier,
-      discovered,
-      sequence,
-    );
+    await discoverModuleGraph(loader, request.identifier, discovered, sequence);
   }
   return record;
 }

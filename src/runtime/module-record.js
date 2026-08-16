@@ -59,7 +59,8 @@ export class SourceTextModuleRecord {
       switch (declaration.type) {
         case 'ImportDeclaration': {
           const requestIndex = addRequest(declaration.source.value);
-          const declarationEntries = importEntriesByDeclaration.get(declaration);
+          const declarationEntries =
+            importEntriesByDeclaration.get(declaration);
           if (declarationEntries === undefined) {
             throw new TypeError('Import declaration entries are missing');
           }
