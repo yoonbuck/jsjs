@@ -882,8 +882,18 @@ Update #28 and #24 with the same exact-head evidence while leaving them open unt
 Immediately recheck PR head and checks, then run:
 
 ```bash
-gh pr merge "$PR_NUMBER" --repo yoonbuck/jsjs --squash --delete-branch
+SQUASH_SUBJECT='release: integrate async runtime and modules'
+SQUASH_BODY=$'Release the reviewed async runtime and modules milestone.\n\nCo-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>'
+printf '%s\n' "$SQUASH_BODY" | grep -Fqx 'Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>' || {
+  echo 'squash body is missing the required Copilot App trailer' >&2
+  exit 1
+}
+gh pr merge "$PR_NUMBER" --repo yoonbuck/jsjs --squash --delete-branch --subject "$SQUASH_SUBJECT" --body "$SQUASH_BODY"
 ```
+
+Before merging, verify that the exact trailer
+`Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>` is
+present in the squash body passed to `gh pr merge`.
 
 Resolve and save the exact merge SHA from:
 
