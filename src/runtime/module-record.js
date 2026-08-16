@@ -5,6 +5,7 @@ import { ModuleNamespaceObject } from './module-namespace.js';
 const IMPORTED_REEXPORT_IMPORT_ENTRIES = new WeakMap();
 /** @type {WeakMap<object, number>} */
 const MODULE_REQUEST_INDICES = new WeakMap();
+export const MODULE_NAMESPACE_BINDING = Symbol('Module namespace binding');
 
 /**
  * The static products of parsing an ES2015 source-text module. Linking and
@@ -174,7 +175,7 @@ export class SourceTextModuleRecord {
  *     kind: 'named' | 'namespace',
  *   }>,
  *   targetModule: SourceTextModuleRecord,
- *   targetName?: string,
+ *   targetName?: string | typeof MODULE_NAMESPACE_BINDING,
  * }} ResolvedImportEntry
  */
 
@@ -272,8 +273,7 @@ function extractNamedExportEntries(
   if (declaration.source === null) {
     for (const specifier of declaration.specifiers) {
       const imported = importEntries.find(
-        (entry) =>
-          entry.kind === 'named' && entry.localName === specifier.local.name,
+        (entry) => entry.localName === specifier.local.name,
       );
       if (imported === undefined) {
         localEntries.push(

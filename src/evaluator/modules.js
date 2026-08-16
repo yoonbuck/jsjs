@@ -13,7 +13,10 @@ import {
   instantiateFunctionObject,
 } from './declarations.js';
 import { evaluateStatement } from './statements.js';
-import { SourceTextModuleRecord } from '../runtime/module-record.js';
+import {
+  MODULE_NAMESPACE_BINDING,
+  SourceTextModuleRecord,
+} from '../runtime/module-record.js';
 import {
   boundNames,
   isConstantDeclaration,
@@ -44,7 +47,10 @@ export function moduleDeclarationInstantiation(record) {
   const context = moduleContext(record, environment);
 
   for (const resolvedImport of record.resolvedImportEntries) {
-    if (resolvedImport.entry.kind === 'namespace') {
+    if (
+      resolvedImport.entry.kind === 'namespace' ||
+      resolvedImport.targetName === MODULE_NAMESPACE_BINDING
+    ) {
       environment.createNamespaceImportBinding(
         resolvedImport.entry.localName,
         resolvedImport.targetModule,

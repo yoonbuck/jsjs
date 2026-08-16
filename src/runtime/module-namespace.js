@@ -6,6 +6,7 @@ import {
 import { resolveExport } from './module-linker.js';
 import {
   moduleRequestIndexForEntry,
+  MODULE_NAMESPACE_BINDING,
   SourceTextModuleRecord,
 } from './module-record.js';
 import { EngineObject } from './object.js';
@@ -17,7 +18,7 @@ import { EngineObject } from './object.js';
  *
  * @typedef {{
  *   module: SourceTextModuleRecord,
- *   bindingName: string,
+ *   bindingName: string | typeof MODULE_NAMESPACE_BINDING,
  * }} ResolvedExport
  */
 
@@ -248,6 +249,15 @@ function requestedModuleForStarEntry(record, targetEntry) {
  * @returns {CompletePropertyDescriptor}
  */
 function exportDescriptor(resolved) {
+  if (resolved.bindingName === MODULE_NAMESPACE_BINDING) {
+    return {
+      value: resolved.module.getNamespace(),
+      writable: true,
+      enumerable: true,
+      configurable: false,
+    };
+  }
+
   const environment = resolved.module.environment;
 
   if (environment === null) {

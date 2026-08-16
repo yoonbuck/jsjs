@@ -78,6 +78,11 @@ export const ASYNC_RUNTIME_RELEASE_MANIFEST = Object.freeze({
         ['module'],
       ),
       metadataRecord(
+        'test/language/module-code/ambiguous-export-bindings/namespace-unambiguous-if-import-star-as-and-export.js',
+        [],
+        ['module'],
+      ),
+      metadataRecord(
         'test/language/module-code/ambiguous-export-bindings/omitted-from-namespace.js',
         [],
         ['module'],

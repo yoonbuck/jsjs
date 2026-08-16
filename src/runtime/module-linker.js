@@ -3,6 +3,7 @@ import { GuestErrorSignal } from './completion.js';
 import { ModuleEnvironmentRecord } from './environment.js';
 import {
   moduleRequestIndexForEntry,
+  MODULE_NAMESPACE_BINDING,
   ModuleLoaderError,
   SourceTextModuleRecord,
 } from './module-record.js';
@@ -103,8 +104,16 @@ export function resolveExport(module, exportName, resolveSet) {
   );
 
   if (indirectEntry !== undefined) {
+    const requestedModule = requestedModuleForEntry(module, indirectEntry);
+    if (indirectEntry.importName === '*') {
+      return {
+        type: 'resolved',
+        module: requestedModule,
+        bindingName: MODULE_NAMESPACE_BINDING,
+      };
+    }
     return resolveExport(
-      requestedModuleForEntry(module, indirectEntry),
+      requestedModule,
       indirectEntry.importName,
       nextResolveSet,
     );
@@ -312,6 +321,9 @@ function validateLocalExportBindings(record) {
  */
 function validateIndirectExportEntries(record) {
   for (const entry of record.indirectExportEntries) {
+    if (entry.importName === '*') {
+      continue;
+    }
     const requestedModule = requestedModuleForEntry(record, entry);
     const resolution = resolveExport(
       requestedModule,
@@ -489,7 +501,7 @@ class LinkTransaction {
   }
 }
 
-/** @typedef {{ type: 'not-found' } | { type: 'ambiguous' } | { type: 'resolved', module: SourceTextModuleRecord, bindingName: string }} ExportResolution */
+/** @typedef {{ type: 'not-found' } | { type: 'ambiguous' } | { type: 'resolved', module: SourceTextModuleRecord, bindingName: string | typeof MODULE_NAMESPACE_BINDING }} ExportResolution */
 
 /** @type {Extract<ExportResolution, { type: 'not-found' }>} */
 const NOT_FOUND = Object.freeze({ type: 'not-found' });

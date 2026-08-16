@@ -171,6 +171,23 @@ export default [
     },
   },
   {
+    name: 'equivalent namespace-import re-exports remain unambiguous',
+    async run() {
+      const loader = loaderFor({
+        root: 'export * from "left"; export * from "right";',
+        left: 'import * as foo from "dep"; export { foo };',
+        right: 'import * as foo from "dep"; export { foo };',
+        dep: 'export const value = 1;',
+      });
+
+      const root = await loader.loadAndEvaluate('root');
+      const dependency = await loader.loadAndEvaluate('dep');
+
+      assertSame(root.get('foo'), dependency);
+      assertSame(root.hasProperty('foo'), true);
+    },
+  },
+  {
     name: 'namespace omits ambiguous star exports',
     async run() {
       const loader = loaderFor({
