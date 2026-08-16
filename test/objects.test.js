@@ -392,6 +392,162 @@ const tests = [
       assertThrows(() => object.put('getterOnly', 2, true), GuestErrorSignal);
     },
   },
+  // ── Behavioral: receiver-aware ordinary Set (ES2015 [[Set]] boundary) ─────
+  {
+    name: 'set on an inherited writable data property creates an own receiver property without mutating the prototype',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const receiver = new EngineObject(prototype);
+      assertSame(prototype.set('value', 2, receiver), true);
+      assertSame(prototype.get('value'), 1);
+      assertSame(receiver.get('value'), 2);
+      const own = receiver.getOwnProperty('value');
+      if (own === undefined) {
+        throw new Error('Expected receiver to gain an own property');
+      }
+      assertSame(own.value, 2);
+      assertSame(own.writable, true);
+    },
+  },
+  {
+    name: 'set on an inherited non-writable data property rejects in sloppy and strict modes',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('locked', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      });
+      const receiver = new EngineObject(prototype);
+      assertSame(prototype.set('locked', 2, receiver), false);
+      assertSame(receiver.getOwnProperty('locked'), undefined);
+      assertThrows(
+        () => prototype.set('locked', 2, receiver, true),
+        GuestErrorSignal,
+      );
+      assertSame(receiver.getOwnProperty('locked'), undefined);
+    },
+  },
+  {
+    name: 'set on an inherited setter invokes it with the original receiver',
+    run() {
+      let observedReceiver = null;
+      let observedValue = 'unset';
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('sink', {
+        set(value) {
+          observedReceiver = this;
+          observedValue = String(value);
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      const receiver = new EngineObject(prototype);
+      assertSame(prototype.set('sink', 5, receiver, true), true);
+      assertSame(observedReceiver, receiver);
+      assertSame(observedValue, '5');
+      assertSame(receiver.getOwnProperty('sink'), undefined);
+    },
+  },
+  {
+    name: 'set respects a receiver own writable data property distinct from the found prototype descriptor',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const receiver = new EngineObject();
+      receiver.defineOwnProperty('value', {
+        value: 'receiver-original',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(prototype.set('value', 'updated', receiver), true);
+      assertSame(receiver.get('value'), 'updated');
+      assertSame(prototype.get('value'), 1);
+    },
+  },
+  {
+    name: 'set rejects when the receiver own data property is non-writable',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const receiver = new EngineObject();
+      receiver.defineOwnProperty('value', {
+        value: 'frozen',
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(prototype.set('value', 'updated', receiver), false);
+      assertSame(receiver.get('value'), 'frozen');
+      assertThrows(
+        () => prototype.set('value', 'updated', receiver, true),
+        GuestErrorSignal,
+      );
+      assertSame(receiver.get('value'), 'frozen');
+    },
+  },
+  {
+    name: 'set rejects when the receiver has its own accessor property for a name found as a prototype data property',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      let getterCalls = 0;
+      const receiver = new EngineObject();
+      receiver.defineOwnProperty('value', {
+        get() {
+          getterCalls += 1;
+          return 'receiver-accessor';
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(prototype.set('value', 'updated', receiver), false);
+      assertSame(receiver.get('value'), 'receiver-accessor');
+      assertSame(getterCalls, 1);
+    },
+  },
+  {
+    name: 'put delegates to set with itself as the receiver',
+    run() {
+      let setterValue = 'unset';
+      let observedReceiver = null;
+      const object = new EngineObject();
+      object.defineOwnProperty('sink', {
+        set(value) {
+          observedReceiver = this;
+          setterValue = String(value);
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(object.put('sink', 3, true), true);
+      assertSame(setterValue, '3');
+      assertSame(observedReceiver, object);
+    },
+  },
 ];
 
 export default tests;

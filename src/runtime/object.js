@@ -256,58 +256,77 @@ export class EngineObject {
   }
 
   /**
+   * Implements ECMA-262 `OrdinarySet`/`OrdinarySetWithOwnDescriptor`: assigns
+   * `value` for `name` as seen from `this` object, but creates or updates the
+   * property on `receiver` rather than on whichever object in the prototype
+   * chain actually owns the descriptor that governs the assignment. This is
+   * what makes an inherited writable data property "shadow" onto the
+   * original receiver (`o.inherited = 1` adds an own property to `o` even
+   * though `inherited` lives on `o`'s prototype) while an inherited setter
+   * still runs against that original receiver instead of the object partway
+   * up the chain where the setter happens to be defined.
+   *
+   * The prototype walk is iterative for the same reason `getProperty` is:
+   * guest code can lengthen an ordinary prototype chain at runtime, and a
+   * host frame per link would let a long enough chain exhaust the host stack
+   * on a plain assignment. Recursion is reserved for the boundary where an
+   * object's own `set` is not this ordinary implementation — an exotic
+   * object (for example a future namespace object) governs its own lookup,
+   * and there can only be as many of those in a chain as guest code
+   * deliberately constructs, unlike chain length itself.
+   *
+   * @param {PropertyKey} name
+   * @param {unknown} value
+   * @param {unknown} receiver
+   * @param {boolean} [throwOnError=false]
+   * @returns {boolean}
+   */
+  set(name, value, receiver, throwOnError = false) {
+    /** @type {EngineObject | null} */
+    let current = this;
+
+    while (current !== null) {
+      const own = current._peekOwnDescriptor(name);
+
+      if (own !== undefined) {
+        return setWithOwnDescriptor(name, own, value, receiver, throwOnError);
+      }
+
+      const proto = current._prototype;
+
+      if (proto === null) {
+        return setWithOwnDescriptor(
+          name,
+          IMPLICIT_DATA_DESCRIPTOR,
+          value,
+          receiver,
+          throwOnError,
+        );
+      }
+
+      if (proto.set !== EngineObject.prototype.set) {
+        // `proto` overrides `set` with exotic semantics (not yet the case
+        // for any built-in, but reserved for future exotic objects): defer
+        // to it rather than assuming its own-property lookup is ordinary.
+        return proto.set(name, value, receiver, throwOnError);
+      }
+
+      current = proto;
+    }
+
+    // Unreachable: the loop above always returns before `current` becomes
+    // null without first taking the `proto === null` branch.
+    return false;
+  }
+
+  /**
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
   put(name, value, throwOnError = false) {
-    if (!this.canPut(name)) {
-      return rejectOperation(throwOnError, 'Cannot assign to property');
-    }
-
-    const own = this._peekOwnDescriptor(name);
-    if (own !== undefined && isDataDescriptor(own)) {
-      return this.defineOwnProperty(name, { value }, throwOnError);
-    }
-
-    if (own !== undefined && isAccessorDescriptor(own)) {
-      if (own.set === undefined) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot assign to accessor property',
-        );
-      }
-
-      callAccessor(own.set, this, [value]);
-      return true;
-    }
-
-    const inherited =
-      this._prototype === null ? undefined : this._prototype.getProperty(name);
-
-    if (inherited !== undefined && isAccessorDescriptor(inherited)) {
-      if (inherited.set === undefined) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot assign to accessor property',
-        );
-      }
-
-      callAccessor(inherited.set, this, [value]);
-      return true;
-    }
-
-    return this.defineOwnProperty(
-      name,
-      {
-        value,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      },
-      throwOnError,
-    );
+    return this.set(name, value, this, throwOnError);
   }
 
   /**
@@ -721,6 +740,85 @@ function rejectOperation(throwOnError, message) {
   }
 
   return false;
+}
+
+/**
+ * The descriptor `OrdinarySetWithOwnDescriptor` (ECMA-262 10.1.9.2) invents
+ * when a `set` walk reaches the end of the prototype chain (`ownDesc` is
+ * undefined and the final prototype is `null`): an implicit, writable,
+ * enumerable, configurable data property whose value is `undefined`. Passing
+ * it through the same data-descriptor branch as a real found descriptor is
+ * what makes an ordinary assignment to a wholly new property name behave
+ * like `CreateDataProperty` on the receiver.
+ *
+ * @type {CompletePropertyDescriptor}
+ */
+const IMPLICIT_DATA_DESCRIPTOR = {
+  value: undefined,
+  writable: true,
+  enumerable: true,
+  configurable: true,
+};
+
+/**
+ * Applies `OrdinarySetWithOwnDescriptor` (ECMA-262 10.1.9.2) once the
+ * governing descriptor `ownDesc` — found on `this` or one of its ordinary
+ * prototypes — is known. `receiver` is the object the assignment is
+ * ultimately observed on: a data descriptor is realized as an own property
+ * of `receiver` (never of the object that owned `ownDesc`, unless they are
+ * the same object), while an accessor's setter is invoked with `receiver` as
+ * `this`, exactly like an inherited ES setter runs against the original
+ * assignment target rather than the object it is defined on.
+ *
+ * @param {PropertyKey} name
+ * @param {CompletePropertyDescriptor} ownDesc
+ * @param {unknown} value
+ * @param {unknown} receiver
+ * @param {boolean} throwOnError
+ * @returns {boolean}
+ */
+function setWithOwnDescriptor(name, ownDesc, value, receiver, throwOnError) {
+  if (isDataDescriptor(ownDesc)) {
+    if (!ownDesc.writable) {
+      return rejectOperation(
+        throwOnError,
+        'Cannot assign to read only property',
+      );
+    }
+
+    if (!(receiver instanceof EngineObject)) {
+      return false;
+    }
+
+    const existing = receiver.getOwnProperty(name);
+
+    if (existing !== undefined) {
+      if (isAccessorDescriptor(existing) || !existing.writable) {
+        return rejectOperation(
+          throwOnError,
+          'Cannot assign to read only property',
+        );
+      }
+
+      return receiver.defineOwnProperty(name, { value }, throwOnError);
+    }
+
+    return receiver.defineOwnProperty(
+      name,
+      { value, writable: true, enumerable: true, configurable: true },
+      throwOnError,
+    );
+  }
+
+  // ownDesc is an accessor descriptor (OrdinarySetWithOwnDescriptor asserts
+  // IsAccessorDescriptor here, since ownDesc is always either a data or an
+  // accessor descriptor by construction).
+  if (ownDesc.set === undefined) {
+    return rejectOperation(throwOnError, 'Cannot assign to accessor property');
+  }
+
+  callAccessor(ownDesc.set, receiver, [value]);
+  return true;
 }
 
 /**
