@@ -707,6 +707,10 @@ export default [
         started: deferred(),
         release: deferred(),
       }));
+      const keeperAttempt = {
+        started: deferred(),
+        release: deferred(),
+      };
       const xAttempts = [
         ...failureCauses.map((cause) => ({
           started: deferred(),
@@ -744,6 +748,12 @@ export default [
               }
               return 'export const value = "x";';
             });
+          }
+          if (identifier === 'keeper') {
+            keeperAttempt.started.resolve();
+            return keeperAttempt.release.promise.then(
+              () => 'export const value = "keeper";',
+            );
           }
           if (identifier.startsWith('cycle-x-')) {
             const loads = (cycleLoads.get(identifier) ?? 0) + 1;
@@ -799,8 +809,10 @@ export default [
       assertSame(coordination.activeGraphSequences.join(','), '2,4,6');
       assertSame(coordination.requestFailures[0].outcomeCount, 3);
 
+      const keeperRoot = loader.loadAndEvaluate('keeper');
+      await keeperAttempt.started.promise;
       const releaseOrder = [1, 2, 0];
-      const remainingActiveSequences = ['2,6', '2', ''];
+      const remainingActiveSequences = ['2,6,8', '2,8', '8'];
       for (let release = 0; release < releaseOrder.length; release += 1) {
         const wave = releaseOrder[release];
         olderAttempts[wave].release.resolve();
@@ -816,12 +828,20 @@ export default [
           assertSame(coordination.requestFailures.length, 0);
           assertSame(coordination.requestFailureOutcomeCount, 0);
           assertSame(coordination.requestFailureStorageSize, 0);
+          assertSame(coordination.requestFailureQueueCount, 0);
         } else {
           assertSame(coordination.requestFailures[0].outcomeCount, remaining);
           assertSame(coordination.requestFailureOutcomeCount, remaining);
           assertSame(coordination.requestFailureStorageSize, remaining);
         }
       }
+
+      keeperAttempt.release.resolve();
+      assertSame((await keeperRoot).get('value'), 'keeper');
+      coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.length, 0);
+      assertSame(coordination.requestFailureQueueCount, 0);
 
       for (let cycle = 0; cycle < 4; cycle += 1) {
         const identifier = `cycle-${cycle}`;
@@ -907,6 +927,7 @@ export default [
           moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
         assertSame(coordination.activeGraphSequences.join(','), '1');
         assertSame(coordination.requestFailures.length, 1);
+        assertSame(coordination.requestFailureQueueCount, 1);
         assertSame(coordination.requestFailures[0].identifier, 'p');
         assertSame(coordination.requestFailures[0].outcomeCount, 1);
         assertSame(coordination.requestFailureOutcomeCount, 1);
@@ -923,6 +944,7 @@ export default [
         moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
       assertSame(coordination.activeGraphSequences.join(','), '1');
       assertSame(coordination.requestFailures.length, 1);
+      assertSame(coordination.requestFailureQueueCount, 1);
       assertSame(coordination.requestFailures[0].outcomeCount, 1);
       assertSame(coordination.requestFailureOutcomeCount, 1);
       assertSame(coordination.requestFailureStorageSize, 1);
@@ -933,6 +955,7 @@ export default [
         moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
       assertSame(coordination.activeGraphSequences.length, 0);
       assertSame(coordination.requestFailures.length, 0);
+      assertSame(coordination.requestFailureQueueCount, 0);
       assertSame(coordination.requestFailureOutcomeCount, 0);
       assertSame(coordination.requestFailureStorageSize, 0);
       assertSame(xLoads, waveCount + 1);

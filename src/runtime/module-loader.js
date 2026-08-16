@@ -258,6 +258,7 @@ export async function loadModuleGraph(loader, specifier, referrer = null) {
  *     identifier: string,
  *     outcomeCount: number,
  *   }>[],
+ *   requestFailureQueueCount: number,
  *   requestFailureOutcomeCount: number,
  *   requestFailureStorageSize: number,
  * }}
@@ -279,6 +280,7 @@ export function getModuleLoaderCoordinationState(loader) {
   return Object.freeze({
     activeGraphSequences: Object.freeze([...state.activeGraphSequences.keys()]),
     requestFailures: Object.freeze(requestFailures),
+    requestFailureQueueCount: state.requestFailures.size,
     requestFailureOutcomeCount: state.requestFailureOutcomes.size,
     requestFailureStorageSize: state.requestFailureStorageSize,
   });
@@ -604,6 +606,7 @@ function releaseRequestFailureOutcome(state, outcome) {
     state.requestFailureStorageSize -= queue.outcomes.length;
     queue.outcomes = [];
     queue.staleOutcomeCount = 0;
+    state.requestFailures.delete(outcome.identifier);
     return;
   }
 
