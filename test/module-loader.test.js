@@ -63,7 +63,7 @@ export default [
     },
   },
   {
-    name: 'loader reports unsupported module capability as a parse-phase failure',
+    name: 'loader wraps grammar-level module parse rejection for unsupported capability fixture',
     async run() {
       const loader = createModuleLoader(createRealm(), {
         resolve(specifier) {
@@ -75,7 +75,8 @@ export default [
             : 'new.target;';
         },
       });
-      const error = await rejected(loadModuleGraph(loader, 'root'));
+      // Acorn rejects this fixture before the capability walk; this guards loader parse-error wrapping.
+      const error = await rejected(loadModuleGraph(loader, 'root', null));
       assertSame(error instanceof ModuleLoaderError, true);
       assertSame(error.phase, 'parse');
       assertSame(error.identifier, 'invalid');
@@ -83,7 +84,7 @@ export default [
     },
   },
   {
-    name: 'loader reports nested unsupported module capability as a parse-phase failure',
+    name: 'loader rejects nested unsupported capability as the starting-SHA regression guard',
     async run() {
       const loader = createModuleLoader(createRealm(), {
         resolve(specifier) {
@@ -95,7 +96,8 @@ export default [
             : 'function unsupported() { return new.target; }';
         },
       });
-      const error = await rejected(loadModuleGraph(loader, 'root'));
+      // Unlike the grammar-level fixture above, this parsed at the exact starting SHA.
+      const error = await rejected(loadModuleGraph(loader, 'root', null));
       assertSame(error instanceof ModuleLoaderError, true);
       assertSame(error.phase, 'parse');
       assertSame(error.identifier, 'invalid');
