@@ -49,6 +49,7 @@ import { isRealm } from './realm.js';
  *   sequence: number,
  *   previous: ActiveGraphSequence | null,
  *   next: ActiveGraphSequence | null,
+ *   requestFailures: Set<ModuleRequestFailure>,
  * }} ActiveGraphSequence
  */
 
@@ -58,6 +59,8 @@ import { isRealm } from './realm.js';
  *   error: unknown,
  *   previousThroughSequence: number,
  *   throughSequence: number,
+ *   activeSequenceCount: number,
+ *   retained: boolean,
  * }} ModuleRequestFailure
  */
 
@@ -65,6 +68,8 @@ import { isRealm } from './realm.js';
  * @typedef {{
  *   outcomes: ModuleRequestFailure[],
  *   throughSequence: number,
+ *   retainedOutcomeCount: number,
+ *   staleOutcomeCount: number,
  * }} ModuleRequestFailureQueue
  */
 
@@ -77,7 +82,8 @@ import { isRealm } from './realm.js';
  *   graphInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   requestInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   requestFailures: Map<string, ModuleRequestFailureQueue>,
- *   requestFailureOutcomes: ModuleRequestFailure[],
+ *   requestFailureOutcomes: Set<ModuleRequestFailure>,
+ *   requestFailureStorageSize: number,
  *   loadedRequests: Set<string>,
  *   completedGraphs: Set<string>,
  *   nextGraphSequence: number,
@@ -92,6 +98,7 @@ import { isRealm } from './realm.js';
 
 /** @type {WeakMap<ModuleLoader, ModuleLoaderState>} */
 const MODULE_LOADER_STATE = new WeakMap();
+const REQUEST_FAILURE_COMPACTION_THRESHOLD = 32;
 
 /**
  * Constructs a module loader bound to one Realm.
@@ -124,7 +131,8 @@ export class ModuleLoader {
       graphInFlight: new Map(),
       requestInFlight: new Map(),
       requestFailures: new Map(),
-      requestFailureOutcomes: [],
+      requestFailureOutcomes: new Set(),
+      requestFailureStorageSize: 0,
       loadedRequests: new Set(),
       completedGraphs: new Set(),
       nextGraphSequence: 0,
@@ -258,21 +266,21 @@ export function getModuleLoaderCoordinationState(loader) {
   const state = moduleLoaderState(loader);
   const requestFailures = [];
   for (const [identifier, queue] of state.requestFailures) {
-    if (queue.outcomes.length === 0) {
+    if (queue.retainedOutcomeCount === 0) {
       continue;
     }
     requestFailures.push(
       Object.freeze({
         identifier,
-        outcomeCount: queue.outcomes.length,
+        outcomeCount: queue.retainedOutcomeCount,
       }),
     );
   }
   return Object.freeze({
     activeGraphSequences: Object.freeze([...state.activeGraphSequences.keys()]),
     requestFailures: Object.freeze(requestFailures),
-    requestFailureOutcomeCount: state.requestFailureOutcomes.length,
-    requestFailureStorageSize: state.requestFailureOutcomes.length,
+    requestFailureOutcomeCount: state.requestFailureOutcomes.size,
+    requestFailureStorageSize: state.requestFailureStorageSize,
   });
 }
 
@@ -440,18 +448,40 @@ function acquireModuleRequests(loader, identifier, sequence) {
     .catch((error) => {
       let queue = state.requestFailures.get(identifier);
       if (queue === undefined) {
-        queue = { outcomes: [], throughSequence: 0 };
+        queue = {
+          outcomes: [],
+          throughSequence: 0,
+          retainedOutcomeCount: 0,
+          staleOutcomeCount: 0,
+        };
         state.requestFailures.set(identifier, queue);
       }
+      /** @type {ModuleRequestFailure} */
       const outcome = {
         identifier,
         error,
         previousThroughSequence: queue.throughSequence,
         throughSequence: state.nextGraphSequence,
+        activeSequenceCount: 0,
+        retained: true,
       };
       queue.throughSequence = outcome.throughSequence;
       queue.outcomes.push(outcome);
-      state.requestFailureOutcomes.push(outcome);
+      queue.retainedOutcomeCount += 1;
+      state.requestFailureOutcomes.add(outcome);
+      state.requestFailureStorageSize += 1;
+      let active = state.firstActiveGraphSequence;
+      while (
+        active !== null &&
+        active.sequence <= outcome.previousThroughSequence
+      ) {
+        active = active.next;
+      }
+      while (active !== null && active.sequence <= outcome.throughSequence) {
+        active.requestFailures.add(outcome);
+        outcome.activeSequenceCount += 1;
+        active = active.next;
+      }
       throw error;
     })
     .finally(() => {
@@ -486,7 +516,9 @@ function findRequestFailure(queue, sequence) {
     }
   }
   const outcome = queue.outcomes[low];
-  return outcome !== undefined && sequence > outcome.previousThroughSequence
+  return outcome !== undefined &&
+    outcome.retained &&
+    sequence > outcome.previousThroughSequence
     ? outcome
     : undefined;
 }
@@ -501,6 +533,7 @@ function registerGraphSequence(state, sequence) {
     sequence,
     previous: state.lastActiveGraphSequence,
     next: null,
+    requestFailures: new Set(),
   };
   if (state.lastActiveGraphSequence === null) {
     state.firstActiveGraphSequence = entry;
@@ -533,52 +566,85 @@ function unregisterGraphSequence(state, sequence) {
     entry.next.previous = entry.previous;
   }
   state.activeGraphSequences.delete(sequence);
-  pruneRequestFailures(state);
-}
-
-/**
- * Retains an outcome only while an active traversal lies in its exact
- * `(previousThroughSequence, throughSequence]` interval.
- *
- * @param {ModuleLoaderState} state
- * @returns {void}
- */
-function pruneRequestFailures(state) {
   if (state.activeGraphSequences.size === 0) {
+    entry.requestFailures.clear();
     state.requestFailures.clear();
-    state.requestFailureOutcomes = [];
+    state.requestFailureOutcomes.clear();
+    state.requestFailureStorageSize = 0;
     return;
   }
 
-  /** @type {Set<ModuleRequestFailure>} */
-  const retained = new Set();
-  for (const queue of state.requestFailures.values()) {
-    /** @type {ModuleRequestFailure[]} */
-    const outcomes = [];
-    let active = state.firstActiveGraphSequence;
-    for (const outcome of queue.outcomes) {
-      while (
-        active !== null &&
-        active.sequence <= outcome.previousThroughSequence
-      ) {
-        active = active.next;
-      }
-      if (active !== null && active.sequence <= outcome.throughSequence) {
-        outcomes.push(outcome);
-        retained.add(outcome);
-      }
+  for (const outcome of entry.requestFailures) {
+    outcome.activeSequenceCount -= 1;
+    if (outcome.activeSequenceCount === 0) {
+      releaseRequestFailureOutcome(state, outcome);
     }
-    queue.outcomes = outcomes;
+  }
+  entry.requestFailures.clear();
+}
+
+/**
+ * @param {ModuleLoaderState} state
+ * @param {ModuleRequestFailure} outcome
+ * @returns {void}
+ */
+function releaseRequestFailureOutcome(state, outcome) {
+  outcome.retained = false;
+  outcome.error = undefined;
+  state.requestFailureOutcomes.delete(outcome);
+
+  const queue = state.requestFailures.get(outcome.identifier);
+  if (queue === undefined) {
+    return;
+  }
+  queue.retainedOutcomeCount -= 1;
+  queue.staleOutcomeCount += 1;
+
+  if (queue.retainedOutcomeCount === 0) {
+    state.requestFailureStorageSize -= queue.outcomes.length;
+    queue.outcomes = [];
+    queue.staleOutcomeCount = 0;
+    return;
   }
 
+  while (
+    queue.outcomes.length > 0 &&
+    queue.outcomes[queue.outcomes.length - 1].retained === false
+  ) {
+    queue.outcomes.length -= 1;
+    queue.staleOutcomeCount -= 1;
+    state.requestFailureStorageSize -= 1;
+  }
+
+  if (
+    queue.staleOutcomeCount > 0 &&
+    (queue.outcomes.length < REQUEST_FAILURE_COMPACTION_THRESHOLD ||
+      (queue.staleOutcomeCount >= REQUEST_FAILURE_COMPACTION_THRESHOLD &&
+        queue.staleOutcomeCount * 2 >= queue.outcomes.length))
+  ) {
+    compactRequestFailureQueue(state, queue);
+  }
+}
+
+/**
+ * Compacts only a queue whose dead interval metadata has reached a bounded
+ * threshold; error references are cleared as soon as their interval dies.
+ *
+ * @param {ModuleLoaderState} state
+ * @param {ModuleRequestFailureQueue} queue
+ * @returns {void}
+ */
+function compactRequestFailureQueue(state, queue) {
   /** @type {ModuleRequestFailure[]} */
   const outcomes = [];
-  for (const outcome of state.requestFailureOutcomes) {
-    if (retained.has(outcome)) {
+  for (const outcome of queue.outcomes) {
+    if (outcome.retained) {
       outcomes.push(outcome);
     }
   }
-  state.requestFailureOutcomes = outcomes;
+  state.requestFailureStorageSize -= queue.staleOutcomeCount;
+  queue.outcomes = outcomes;
+  queue.staleOutcomeCount = 0;
 }
 
 /**
