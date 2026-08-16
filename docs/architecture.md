@@ -151,6 +151,17 @@ Every guest object is an `EngineObject`. It implements the ES5 internal methods
 tracks `[[Prototype]]`, `[[Class]]`, `[[Extensible]]`, and own properties as a
 `Map` of property descriptors keyed by a String **or** a Symbol.
 
+Its receiver-aware `[[Set]]` seam is `set(name, value, receiver, throwOnError =
+false)`: ordinary prototype chains are walked iteratively, the original
+receiver is preserved for inherited data properties and accessors, and exotic
+prototypes can override `set` to supply their own semantics. `put(name, value,
+throwOnError = false)` remains the direct-assignment compatibility wrapper and
+calls `set(name, value, this, throwOnError)`. The existing `throwOnError` flag
+still controls sloppy-vs-strict rejection: `false` returns `false`, while `true`
+routes the failure through the existing guest `TypeError`/`GuestErrorSignal`
+boundary. This is the engine's internal `[[Set]]` boundary, not a Proxy or other
+future meta-object layer.
+
 ### Symbols (`src/runtime/symbol.js`)
 
 Symbol values, their descriptions, `SymbolDescriptiveString`, and the global
@@ -199,6 +210,11 @@ Two rules come with that:
    path deliberately reads `_properties` directly rather than through
    `_peekOwnDescriptor`: it is about to _write_ the stored descriptor, so it
    needs the real one and must not see a subclass's synthesised stand-in.
+
+`ModuleNamespaceObject` (`src/runtime/module-namespace.js`) overrides `set(...)`
+to reject every write. That closes the namespace-as-prototype bypass too: both
+direct assignment and `super` assignment dispatch through the same polymorphic
+boundary, so an inherited namespace still cannot absorb or forward a write.
 
 ### Own-property-key order (`src/runtime/object.js`)
 
