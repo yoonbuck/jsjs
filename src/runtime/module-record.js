@@ -48,10 +48,11 @@ export class SourceTextModuleRecord {
       if (declaration.type === 'ImportDeclaration') {
         const firstEntry = importEntries.length;
         extractImportEntries(declaration, importEntries);
-        importEntriesByDeclaration.set(
-          declaration,
-          importEntries.slice(firstEntry),
-        );
+        const declarationEntries = [];
+        for (let index = firstEntry; index < importEntries.length; index += 1) {
+          declarationEntries.push(importEntries[index]);
+        }
+        importEntriesByDeclaration.set(declaration, declarationEntries);
       }
     }
 

@@ -170,7 +170,12 @@ export class AgentJobQueue {
       return;
     }
 
-    this.jobs = this.jobs.slice(this.jobHead);
+    /** @type {(JobRecord | undefined)[]} */
+    const remainingJobs = [];
+    for (let index = this.jobHead; index < this.jobs.length; index += 1) {
+      remainingJobs.push(this.jobs[index]);
+    }
+    this.jobs = remainingJobs;
     this.jobHead = 0;
   }
 
