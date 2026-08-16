@@ -210,14 +210,11 @@ function usesSteps(job, action) {
   );
 }
 
-function nodeExecPath() {
-  return /** @type {{ execPath: string }} */ (/** @type {unknown} */ (process))
-    .execPath;
-}
-
 function nonUtcUpstreamDiagnosticInvocation() {
   return {
-    command: nodeExecPath(),
+    command: /** @type {{ execPath: string }} */ (
+      /** @type {unknown} */ (process)
+    ).execPath,
     args: ['tools/test262/upstream-run.js'],
     options: /** @type {{
       cwd: string,
@@ -614,7 +611,11 @@ export default [
     run: () => {
       const invocation = nonUtcUpstreamDiagnosticInvocation();
 
-      assertSame(invocation.command, nodeExecPath());
+      assertSame(
+        invocation.command,
+        /** @type {{ execPath: string }} */ (/** @type {unknown} */ (process))
+          .execPath,
+      );
       assertSame(
         JSON.stringify(invocation.args),
         JSON.stringify(['tools/test262/upstream-run.js']),
