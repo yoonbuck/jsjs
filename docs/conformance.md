@@ -182,7 +182,10 @@ Static ES2015 modules are parsed by `parseModule` and loaded only through
 module namespace. Canonical identifier identity, source-order serial hooks,
 immutable parsed records, graph-before-link transactionality, strict synchronous
 evaluation, exact cached guest failures, and constrained live module namespace
-exotics are the Layer-3 contract. Static modules remain loader-only and do not add dynamic import.
+exotics are the Layer-3 contract. `parseModule` applies the same supported
+language capability and early-error checks as `parseScript`, with module-root
+strictness and static `import`/`export` declarations admitted. Static modules
+remain loader-only and do not add dynamic import.
 
 The loader rejects synchronous same-identifier reentry only in
 `load(identifier)`'s dynamic extent. After a host hook returns a PromiseLike,

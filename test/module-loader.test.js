@@ -63,6 +63,46 @@ export default [
     },
   },
   {
+    name: 'loader reports unsupported module capability as a parse-phase failure',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          return identifier === 'root'
+            ? 'import "invalid"; export const ok = 1;'
+            : 'new.target;';
+        },
+      });
+      const error = await rejected(loadModuleGraph(loader, 'root'));
+      assertSame(error instanceof ModuleLoaderError, true);
+      assertSame(error.phase, 'parse');
+      assertSame(error.identifier, 'invalid');
+      assertSame(error.cause instanceof SyntaxError, true);
+    },
+  },
+  {
+    name: 'loader reports nested unsupported module capability as a parse-phase failure',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          return identifier === 'root'
+            ? 'import "invalid"; export const ok = 1;'
+            : 'function unsupported() { return new.target; }';
+        },
+      });
+      const error = await rejected(loadModuleGraph(loader, 'root'));
+      assertSame(error instanceof ModuleLoaderError, true);
+      assertSame(error.phase, 'parse');
+      assertSame(error.identifier, 'invalid');
+      assertSame(error.cause instanceof SyntaxError, true);
+    },
+  },
+  {
     name: 'loader rejects malformed source records and permits retry after parse failure',
     async run() {
       let loads = 0;
