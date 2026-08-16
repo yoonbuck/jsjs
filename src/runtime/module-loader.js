@@ -52,7 +52,10 @@ import { isRealm } from './realm.js';
  *   loadInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   graphInFlight: Map<string, Promise<SourceTextModuleRecord>>,
  *   requestInFlight: Map<string, Promise<SourceTextModuleRecord>>,
- *   requestFailures: Map<string, { error: unknown, throughSequence: number }>,
+ *   requestFailures: Map<string, Array<{
+ *     error: unknown,
+ *     throughSequence: number,
+ *   }>>,
  *   loadedRequests: Set<string>,
  *   completedGraphs: Set<string>,
  *   nextGraphSequence: number,
@@ -290,7 +293,8 @@ function acquireModuleGraph(loader, identifier) {
 /**
  * Traverses only loader-owned request records. A traversal never awaits another
  * root's graph Promise, so overlapping roots cannot form a Promise dependency
- * cycle; per-record request acquisition remains shared and source ordered.
+ * cycle. It still walks cached dependency edges so its sequence observes the
+ * request outcome wave that existed when the root started.
  *
  * @param {ModuleLoader} loader
  * @param {string} identifier
@@ -299,11 +303,6 @@ function acquireModuleGraph(loader, identifier) {
  * @returns {Promise<SourceTextModuleRecord>}
  */
 async function discoverModuleGraph(loader, identifier, discovered, sequence) {
-  const state = moduleLoaderState(loader);
-  const cached = state.records.get(identifier);
-  if (state.completedGraphs.has(identifier) && cached !== undefined) {
-    return cached;
-  }
   if (discovered.has(identifier)) {
     return acquireSourceRecord(loader, identifier);
   }
@@ -327,17 +326,16 @@ async function discoverModuleGraph(loader, identifier, discovered, sequence) {
  */
 function acquireModuleRequests(loader, identifier, sequence) {
   const state = moduleLoaderState(loader);
+  const failure = state.requestFailures
+    .get(identifier)
+    ?.find((outcome) => sequence <= outcome.throughSequence);
+  if (failure !== undefined) {
+    return Promise.reject(failure.error);
+  }
+
   const cached = state.records.get(identifier);
   if (state.loadedRequests.has(identifier) && cached !== undefined) {
     return Promise.resolve(cached);
-  }
-
-  const failure = state.requestFailures.get(identifier);
-  if (failure !== undefined) {
-    if (sequence <= failure.throughSequence) {
-      return Promise.reject(failure.error);
-    }
-    state.requestFailures.delete(identifier);
   }
 
   const pending = state.requestInFlight.get(identifier);
@@ -367,12 +365,16 @@ function acquireModuleRequests(loader, identifier, sequence) {
       }
 
       record.resolvedRequestedModules = Object.freeze(resolvedRequests);
-      state.requestFailures.delete(identifier);
       state.loadedRequests.add(identifier);
       return record;
     })
     .catch((error) => {
-      state.requestFailures.set(identifier, {
+      let failures = state.requestFailures.get(identifier);
+      if (failures === undefined) {
+        failures = [];
+        state.requestFailures.set(identifier, failures);
+      }
+      failures.push({
         error,
         throughSequence: state.nextGraphSequence,
       });

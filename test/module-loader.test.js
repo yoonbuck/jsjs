@@ -620,6 +620,81 @@ export default [
     },
   },
   {
+    name: 'public loader preserves an older failure wave across a later retry',
+    async run() {
+      for (const retryAfterFailure of [false, true]) {
+        const firstXLoadStarted = deferred();
+        const firstXFailure = deferred();
+        const delayedYLoadStarted = deferred();
+        const delayedYSource = deferred();
+        const retryXLoadStarted = deferred();
+        const retryXSource = deferred();
+        const failureCause = new Error('x failed');
+        /** @type {string[]} */
+        const loads = [];
+        let xLoads = 0;
+        const loader = createModuleLoader(createRealm(), {
+          resolve(specifier) {
+            return specifier;
+          },
+          load(identifier) {
+            loads.push(identifier);
+            if (identifier === 'p') {
+              return 'import "x"; export const value = "p";';
+            }
+            if (identifier === 'b') {
+              return 'import "delayed-y"; export const value = "b";';
+            }
+            if (identifier === 'delayed-y') {
+              delayedYLoadStarted.resolve();
+              return delayedYSource.promise.then(
+                () => 'import "p"; export const value = "delayed-y";',
+              );
+            }
+
+            xLoads += 1;
+            if (xLoads === 1) {
+              firstXLoadStarted.resolve();
+              return firstXFailure.promise.then(() => {
+                throw failureCause;
+              });
+            }
+            retryXLoadStarted.resolve();
+            return retryXSource.promise.then(() => 'export const value = "x";');
+          },
+        });
+
+        const failedP = loader.loadAndEvaluate('p');
+        await firstXLoadStarted.promise;
+        const olderB = loader.loadAndEvaluate('b');
+        await delayedYLoadStarted.promise;
+        firstXFailure.resolve();
+        const pError = await rejected(failedP);
+        assertSame(pError instanceof ModuleLoaderError, true);
+        assertSame(pError.phase, 'load');
+        assertSame(pError.identifier, 'x');
+        assertSame(pError.cause, failureCause);
+
+        if (retryAfterFailure) {
+          const retriedP = loader.loadAndEvaluate('p');
+          await retryXLoadStarted.promise;
+          retryXSource.resolve();
+          const namespace = await retriedP;
+          assertSame(namespace.get('value'), 'p');
+        }
+
+        delayedYSource.resolve();
+        const bError = await rejected(olderB);
+        assertSame(bError, pError);
+        assertSame(
+          loads.join(','),
+          retryAfterFailure ? 'p,x,b,delayed-y,x' : 'p,x,b,delayed-y',
+        );
+        assertSame(xLoads, retryAfterFailure ? 2 : 1);
+      }
+    },
+  },
+  {
     name: 'loader settles concurrent roots across an overlapping source cycle',
     async run() {
       const loader = createModuleLoader(createRealm(), {
