@@ -3849,6 +3849,7 @@ const tests = [
   {
     name: 'custom object and class methods reject duplicate simple parameters independently of generator state',
     run() {
+      /** @type {{ source: string, functionNode: (program: any) => any }[]} */
       const cases = [
         {
           source: '({ *m(a, b) {} });',
@@ -3891,6 +3892,7 @@ const tests = [
   {
     name: 'custom accessors keep their arity rules while sloppy declarations and expressions retain duplicate simple parameters',
     run() {
+      /** @type {{ source: string, functionNode: (program: any) => any, params: any[] }[]} */
       const accessorCases = [
         {
           source: '({ get value() {} });',
@@ -3931,6 +3933,7 @@ const tests = [
         );
       }
 
+      /** @type {{ source: string, functionNode: (program: any) => any }[]} */
       const sloppyCases = [
         {
           source: 'function f(a, b) {}',
