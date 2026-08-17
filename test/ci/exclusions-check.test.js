@@ -202,6 +202,50 @@ export default [
     },
   },
   {
+    name: 'checkExclusions retains every mixed failure diagnostic when infrastructure is unverifiable',
+    run: async () => {
+      const pin = await readTest262Pin();
+      const selectionText = await readRepositoryFile(
+        'test/fixtures/test262-exclusions/module-pass.json',
+      );
+      const results = await checkExclusions({
+        pin,
+        selectionText,
+        supportedFeatures: [],
+        runFile: async () => [
+          {
+            type: 'test',
+            file: 'test/staging/sm/module/await-restricted-nested.js',
+            variant: 'non-strict',
+            status: 'failed',
+            reason: 'engine-error',
+            message: 'engine bridge unavailable',
+          },
+          {
+            type: 'test',
+            file: 'test/staging/sm/module/await-restricted-nested.js',
+            variant: 'strict',
+            status: 'failed',
+            reason: 'wrong-error-type',
+            message: 'expected SyntaxError, got TypeError',
+          },
+          {
+            type: 'test',
+            file: 'test/staging/sm/module/await-restricted-nested.js',
+            variant: 'raw',
+            status: 'passed',
+          },
+        ],
+      });
+
+      assertSame(results[0].verdict, 'unverifiable');
+      assertSame(
+        results[0].message,
+        'non-strict: engine-error: engine bridge unavailable; strict: wrong-error-type: expected SyntaxError, got TypeError',
+      );
+    },
+  },
+  {
     name: 'checkExclusions reports no stale exclusions in the committed policy',
     run: async () => {
       const pin = await readTest262Pin();

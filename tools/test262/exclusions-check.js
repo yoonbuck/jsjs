@@ -141,6 +141,9 @@ export async function checkExclusions(options) {
         record.reason !== undefined &&
         UNVERIFIABLE_FAILURE_REASONS.has(record.reason),
     );
+    const nonPassingRecords = records.filter(
+      (record) => record.status !== 'passed',
+    );
     const allPassed = records.every((r) => r.status === 'passed');
     const allSkipped = records.every((r) => r.status === 'skipped');
 
@@ -149,7 +152,7 @@ export async function checkExclusions(options) {
         path: exclusion.path,
         category: exclusion.category,
         verdict: 'unverifiable',
-        message: infrastructureFailures.map(recordDiagnostic).join('; '),
+        message: nonPassingRecords.map(recordDiagnostic).join('; '),
       });
     } else if (records.length === 0) {
       results.push({
@@ -176,10 +179,7 @@ export async function checkExclusions(options) {
         path: exclusion.path,
         category: exclusion.category,
         verdict: 'failed',
-        message: records
-          .filter((record) => record.status !== 'passed')
-          .map(recordDiagnostic)
-          .join('; '),
+        message: nonPassingRecords.map(recordDiagnostic).join('; '),
       });
     }
   }
