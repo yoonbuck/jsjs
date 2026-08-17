@@ -303,12 +303,21 @@ export class AgentJobQueue {
 
     if (this.failureOverflowCount === 0) {
       this.failureOverflowCount = 1;
-      this.failures = [
-        ...this.failures.slice(0, DURABLE_JOB_FAILURE_EDGE_SIZE),
-        createJobFailureOverflow(this.failureOverflowCount),
-        ...this.failures.slice(DURABLE_JOB_FAILURE_EDGE_SIZE + 1),
-        failure,
-      ];
+      /** @type {DurableJobFailure[]} */
+      const retained = [];
+      for (let index = 0; index < DURABLE_JOB_FAILURE_EDGE_SIZE; index += 1) {
+        retained.push(this.failures[index]);
+      }
+      retained.push(createJobFailureOverflow(this.failureOverflowCount));
+      for (
+        let index = DURABLE_JOB_FAILURE_EDGE_SIZE + 1;
+        index < this.failures.length;
+        index += 1
+      ) {
+        retained.push(this.failures[index]);
+      }
+      retained.push(failure);
+      this.failures = retained;
       return;
     }
 
