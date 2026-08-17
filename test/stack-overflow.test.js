@@ -500,7 +500,8 @@ const tests = [
       assertSame(
         run(
           'var o = {}; for (var i = 0; i < 50000; i++) { o = Object.create(o); }' +
-            ' o.missing === undefined && ("missing" in o) === false',
+            ' o.missing === undefined && ("missing" in o) === false && ' +
+            '(o.created = 1) === 1 && o.created === 1',
         ),
         true,
       );

@@ -1,6 +1,6 @@
 import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
-import { evaluateScript } from '../src/api.js';
+import { createModuleLoader, evaluateScript } from '../src/api.js';
 
 /**
  * @param {string} source
@@ -612,6 +612,55 @@ const tests = [
         `),
         '5:true:true:child:child:9:11:true:true',
       );
+    },
+  },
+  {
+    name: 'super assignment through a module namespace home-object prototype rejects strictly and creates no receiver property',
+    async run() {
+      const realm = createRealm();
+      const loader = createModuleLoader(realm, {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(_identifier) {
+          return 'export const value = 1;';
+        },
+      });
+      const namespace = await loader.loadAndEvaluate('dep');
+
+      realm.globalObject.defineOwnProperty('ns', {
+        value: namespace,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const completion = evaluateScript(
+        realm,
+        `
+          class Base {
+            write() {
+              super.extra = 2;
+            }
+          }
+          Object.setPrototypeOf(Base.prototype, ns);
+          var instance = new Base();
+          var name;
+          try {
+            instance.write();
+            name = 'no-throw';
+          } catch (error) {
+            name = error.name;
+          }
+          [name, Object.getOwnPropertyNames(instance).join(','), 'extra' in ns].join(':');
+        `,
+      );
+
+      if (completion.type !== 'normal') {
+        throw new Error(`Expected a normal completion, got ${completion.type}`);
+      }
+
+      assertSame(completion.value, 'TypeError::false');
     },
   },
   {
