@@ -2980,16 +2980,18 @@ function checkFunctionParameterEarlyErrors(node, strict, parent, parentKey) {
     Array.isArray(node.body.body) &&
     hasUseStrictDirective(node.body.body);
   const effectiveStrict = strict || ownStrict;
-  const generatorMethod =
-    node.generator === true &&
+  const method =
     parentKey === 'value' &&
-    ((parent?.type === 'Property' && parent.method === true) ||
+    ((parent?.type === 'Property' &&
+      (parent.method === true ||
+        parent.kind === 'get' ||
+        parent.kind === 'set')) ||
       parent?.type === 'MethodDefinition');
   const allowsDuplicates =
     simple &&
     !effectiveStrict &&
     node.type !== 'ArrowFunctionExpression' &&
-    !generatorMethod;
+    !method;
 
   if (allowsDuplicates && node.generator !== true) {
     return;

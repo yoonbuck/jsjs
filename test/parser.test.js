@@ -3847,6 +3847,123 @@ const tests = [
     },
   },
   {
+    name: 'custom object and class methods reject duplicate simple parameters independently of generator state',
+    run() {
+      const cases = [
+        {
+          source: '({ *m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+        },
+        {
+          source: '(class { m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+        },
+        {
+          source: '(class { *m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+        },
+        {
+          source: '({ m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+        },
+      ];
+
+      for (const methodCase of cases) {
+        const program = parseScript(methodCase.source);
+        const functionNode = methodCase.functionNode(program);
+        functionNode.params[1].name = functionNode.params[0].name;
+
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom accessors keep their arity rules while sloppy declarations and expressions retain duplicate simple parameters',
+    run() {
+      const accessorCases = [
+        {
+          source: '({ get value() {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+          params: [{ type: 'Identifier', name: 'value' }],
+        },
+        {
+          source: '({ set value(next) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+          params: [],
+        },
+        {
+          source: '(class { get value() {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+          params: [{ type: 'Identifier', name: 'value' }],
+        },
+        {
+          source: '(class { set value(next) {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+          params: [],
+        },
+      ];
+
+      for (const accessorCase of accessorCases) {
+        const program = parseScript(accessorCase.source);
+        accessorCase.functionNode(program).params = accessorCase.params;
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+
+      const sloppyCases = [
+        {
+          source: 'function f(a, b) {}',
+          functionNode(program) {
+            return program.body[0];
+          },
+        },
+        {
+          source: '(function (a, b) {});',
+          functionNode(program) {
+            return program.body[0].expression;
+          },
+        },
+        {
+          source: '({ value: function (a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+        },
+      ];
+
+      for (const sloppyCase of sloppyCases) {
+        const program = parseScript(sloppyCase.source);
+        const functionNode = sloppyCase.functionNode(program);
+        functionNode.params[1].name = functionNode.params[0].name;
+        assertSame(
+          parseScript('', { parse: () => program }).sourceType,
+          'script',
+        );
+      }
+    },
+  },
+  {
     name: 'own strict directives reject duplicate simple parameters from source and custom ASTs',
     run() {
       assertThrows(
