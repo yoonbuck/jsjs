@@ -405,7 +405,7 @@ by machine. Only the `engine-deviation` category is machine-checked:
 `tools/test262/features.json` is the checked-in supported-feature manifest, and
 each entry is a record rather than a bare name:
 
-```json
+```json test262-coverage-synthetic-example
 {
   "version": 1,
   "features": [
@@ -460,7 +460,7 @@ and prints the compact coverage summary instead. Test records come first, sorted
 by file path then variant, followed by the per-group baseline, the feature line,
 the coverage records, and one summary record:
 
-```json
+```json test262-coverage-synthetic-example
 {"type":"test","file":"test/positive.js","variant":"non-strict","status":"passed"}
 {"type":"test","file":"test/feature-skip.js","variant":null,"status":"skipped","reason":"unsupported-feature","message":"unsupported features: Proxy, Reflect","features":["Proxy","Reflect"]}
 {"type":"summary","total":14,"passed":13,"failed":0,"skipped":1}

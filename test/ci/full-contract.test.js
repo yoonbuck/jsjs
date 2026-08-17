@@ -384,6 +384,8 @@ function numberRenderings(value) {
 }
 
 const STRUCTURAL_LAYER_LABEL_PATTERN = /\bLayer(?: |-)[1-4]\b/gu;
+const SYNTHETIC_COVERAGE_EXAMPLE_MARKER =
+  'test262-coverage-synthetic-example';
 
 /**
  * Removes structural Layer labels from prose without touching other numbers.
@@ -396,6 +398,44 @@ function stripStructuralLayerLabel(line) {
 }
 
 /**
+ * @param {string} line
+ * @returns {{ character: string, length: number } | undefined}
+ */
+function markedSyntheticCoverageFence(line) {
+  const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line);
+
+  if (
+    opening === null ||
+    !opening[2]
+      .trim()
+      .split(/\s+/u)
+      .includes(SYNTHETIC_COVERAGE_EXAMPLE_MARKER)
+  ) {
+    return undefined;
+  }
+
+  return {
+    character: opening[1][0],
+    length: opening[1].length,
+  };
+}
+
+/**
+ * @param {string} line
+ * @param {{ character: string, length: number }} opening
+ * @returns {boolean}
+ */
+function closesSyntheticCoverageFence(line, opening) {
+  const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/u.exec(line);
+
+  return (
+    closing !== null &&
+    closing[1][0] === opening.character &&
+    closing[1].length >= opening.length
+  );
+}
+
+/**
  * Finds live coverage counts in non-generated Markdown lines.
  *
  * @param {string} outside
@@ -404,8 +444,24 @@ function stripStructuralLayerLabel(line) {
  */
 function findCoverageNumberOffenders(outside, live) {
   const offenders = [];
+  /** @type {{ character: string, length: number } | undefined} */
+  let syntheticFence;
 
   for (const line of outside.split('\n')) {
+    if (syntheticFence !== undefined) {
+      if (closesSyntheticCoverageFence(line, syntheticFence)) {
+        syntheticFence = undefined;
+      }
+
+      continue;
+    }
+
+    syntheticFence = markedSyntheticCoverageFence(line);
+
+    if (syntheticFence !== undefined) {
+      continue;
+    }
+
     const scanLine = stripStructuralLayerLabel(line);
 
     for (const value of live) {
@@ -1253,6 +1309,56 @@ export default [
           new Set([14107]),
         ).join('\n'),
         '14,107 -> The Layer 14,107 contract.',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json test262-coverage-synthetic-example',
+            '{"version": 1}',
+            '```',
+            'An ordinary prose claim still says 1 file.',
+            '```json',
+            '{"malformed": 1}',
+            '```',
+          ].join('\n'),
+          new Set([1]),
+        ).join('\n'),
+        [
+          '1 -> An ordinary prose claim still says 1 file.',
+          '1 -> {"malformed": 1}',
+        ].join('\n'),
+      );
+    },
+  },
+  {
+    name: 'marked synthetic coverage schemas do not collide with the current final report',
+    run: async () => {
+      const coverageDoc = await readRepositoryFile(COVERAGE_DOCUMENT_FILE);
+      const report = await readRepositoryFile(TEST262_REPORT_FILE);
+      const begin = coverageDoc.indexOf(COVERAGE_MARKER_BEGIN);
+      const end =
+        coverageDoc.indexOf(COVERAGE_MARKER_END) + COVERAGE_MARKER_END.length;
+      const outside = `${coverageDoc.slice(0, begin)}${coverageDoc.slice(end)}`;
+      /** @type {Set<number>} */
+      const live = new Set();
+
+      for (const record of parseJsonLines(report)) {
+        if (record.type !== 'inventory' && record.type !== 'coverage') {
+          continue;
+        }
+
+        for (const value of Object.values(record)) {
+          if (typeof value === 'number') {
+            live.add(value);
+          }
+        }
+      }
+
+      assertSame(
+        findCoverageNumberOffenders(outside, live).join('\n'),
+        '',
+        'only explicitly marked synthetic schema fences may repeat live coverage counts outside the generated block',
       );
     },
   },
