@@ -3143,11 +3143,6 @@
       "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."
     },
     {
-      "path": "test/staging/sm/module/await-restricted-nested.js",
-      "category": "post-es5-syntax",
-      "reason": "Uses `import`/`export` module syntax (flagged `module` in the test's frontmatter); ES6 modules do not exist in ES5.1, and this file cannot be parsed as a `Program` (only as a `Module`), so it is unrunnable as an ES5.1 script."
-    },
-    {
       "path": "test/staging/sm/object/15.2.3.14-01.js",
       "category": "post-es5-builtin",
       "reason": "Asserts a `groups` property on `RegExp.prototype.exec`'s result array, added by ES2018 named capture groups (`(?<name>...)`); ES5.1 §15.10.6.2 defines no such property."

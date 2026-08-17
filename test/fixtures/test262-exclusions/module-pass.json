@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "excludedDirectories": [],
+  "builtins": ["Array"],
+  "excludedLanguageDirectories": [],
+  "featureAreas": [],
+  "expansionFeatures": ["generators"],
+  "exclusions": [
+    {
+      "path": "test/staging/sm/module/await-restricted-nested.js",
+      "category": "post-es5-syntax",
+      "reason": "Fixture for an ES2015 module early error the complete engine supports"
+    }
+  ]
+}

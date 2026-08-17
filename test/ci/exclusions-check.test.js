@@ -12,6 +12,9 @@
 import { readFile } from 'node:fs/promises';
 import { assertSame } from '../harness/assert.js';
 import { checkExclusions } from '../../tools/test262/exclusions-check.js';
+import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
+import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
+import { runTest262File } from '../../tools/test262/runner.js';
 import { readTest262Pin } from '../../tools/test262/upstream-run.js';
 import {
   FEATURES_MANIFEST_FILE,
@@ -105,6 +108,96 @@ export default [
       assertSame(
         error.message.includes('Update tools/test262/es5-selection.json'),
         true,
+      );
+    },
+  },
+  {
+    name: 'checkExclusions executes module exclusions with the complete engine bridge',
+    run: async () => {
+      const pin = await readTest262Pin();
+      const supportedFeatures = featureNames(
+        parseFeatureManifest(await readRepositoryFile(FEATURES_MANIFEST_FILE)),
+      );
+      const selectionText = await readRepositoryFile(
+        'test/fixtures/test262-exclusions/module-pass.json',
+      );
+      const file = 'test/staging/sm/module/await-restricted-nested.js';
+      const directRecords = await runTest262File({
+        engine: createJsjsTest262Engine(),
+        host: createNodeTest262Host({ root: pin.checkoutPath }),
+        file,
+        supportedFeatures,
+      });
+
+      assertSame(directRecords.length, 1);
+      assertSame(directRecords[0].status, 'passed');
+
+      const results = await checkExclusions({
+        pin,
+        selectionText,
+        supportedFeatures,
+      });
+
+      assertSame(results.length, 1);
+      assertSame(results[0].path, file);
+      assertSame(results[0].verdict, 'passed');
+    },
+  },
+  {
+    name: 'checkExclusions treats infrastructure failures as unverifiable, not exclusion evidence',
+    run: async () => {
+      const pin = await readTest262Pin();
+      const selectionText = await readRepositoryFile(
+        'test/fixtures/test262-exclusions/module-pass.json',
+      );
+
+      for (const reason of [
+        'engine-error',
+        'load-error',
+        'metadata-error',
+        'harness-error',
+      ]) {
+        const results = await checkExclusions({
+          pin,
+          selectionText,
+          supportedFeatures: [],
+          runFile: async () => [
+            {
+              type: 'test',
+              file: 'test/staging/sm/module/await-restricted-nested.js',
+              variant: 'non-strict',
+              status: 'failed',
+              reason,
+              message: `${reason} detail`,
+            },
+          ],
+        });
+
+        assertSame(results[0].verdict, 'unverifiable');
+        assertSame(results[0].message?.includes(reason), true);
+        assertSame(results[0].message?.includes(`${reason} detail`), true);
+      }
+
+      const semanticFailure = await checkExclusions({
+        pin,
+        selectionText,
+        supportedFeatures: [],
+        runFile: async () => [
+          {
+            type: 'test',
+            file: 'test/staging/sm/module/await-restricted-nested.js',
+            variant: 'non-strict',
+            status: 'failed',
+            reason: 'wrong-error-type',
+            message: 'expected SyntaxError, got TypeError',
+          },
+        ],
+      });
+
+      assertSame(semanticFailure[0].verdict, 'failed');
+      assertSame(
+        semanticFailure[0].message,
+        'non-strict: wrong-error-type: expected SyntaxError, got TypeError',
       );
     },
   },

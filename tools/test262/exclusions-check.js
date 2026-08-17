@@ -21,8 +21,8 @@
 
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { createRealm, evaluateScript } from '../../src/index.js';
 import { createNodeTest262Host } from './adapters/node.js';
+import { createJsjsTest262Engine } from './engine.js';
 import { parseEs5Selection, ES5_SELECTION_FILE } from './es5-selection.js';
 import { parseTest262Metadata } from './metadata.js';
 import { runTest262File, UNSUPPORTED_FLAGS } from './runner.js';
@@ -34,6 +34,12 @@ import {
 } from './features.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+const UNVERIFIABLE_FAILURE_REASONS = new Set([
+  'engine-error',
+  'load-error',
+  'metadata-error',
+  'harness-error',
+]);
 
 /**
  * @param {string} path Repository-relative.
@@ -59,11 +65,13 @@ function readRepositoryFile(path) {
  *   pin: { repository: string, revision: string, checkoutPath: string },
  *   selectionText?: string,
  *   supportedFeatures: readonly string[],
+ *   runFile?: typeof runTest262File,
  * }} options
  * @returns {Promise<ExclusionCheckResult[]>}
  */
 export async function checkExclusions(options) {
   const { pin, supportedFeatures } = options;
+  const runFile = options.runFile ?? runTest262File;
 
   await assertPinnedCheckout(pin);
 
@@ -71,7 +79,7 @@ export async function checkExclusions(options) {
     options.selectionText ?? (await readRepositoryFile(ES5_SELECTION_FILE)),
   );
   const host = createNodeTest262Host({ root: pin.checkoutPath });
-  const engine = { createRealm, evaluateScript };
+  const engine = createJsjsTest262Engine();
 
   /** @type {ExclusionCheckResult[]} */
   const results = [];
@@ -95,12 +103,13 @@ export async function checkExclusions(options) {
     let metadata;
     try {
       metadata = parseTest262Metadata(source);
-    } catch {
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
       results.push({
         path: exclusion.path,
         category: exclusion.category,
         verdict: 'unverifiable',
-        message: 'cannot parse metadata',
+        message: `metadata-error: ${detail}`,
       });
       continue;
     }
@@ -119,17 +128,36 @@ export async function checkExclusions(options) {
     }
 
     // Run the test
-    const records = await runTest262File({
+    const records = await runFile({
       engine,
       host,
       file: exclusion.path,
       supportedFeatures,
     });
 
+    const infrastructureFailures = records.filter(
+      (record) =>
+        record.reason !== undefined &&
+        UNVERIFIABLE_FAILURE_REASONS.has(record.reason),
+    );
     const allPassed = records.every((r) => r.status === 'passed');
     const allSkipped = records.every((r) => r.status === 'skipped');
 
-    if (allSkipped) {
+    if (infrastructureFailures.length > 0) {
+      results.push({
+        path: exclusion.path,
+        category: exclusion.category,
+        verdict: 'unverifiable',
+        message: infrastructureFailures.map(recordDiagnostic).join('; '),
+      });
+    } else if (records.length === 0) {
+      results.push({
+        path: exclusion.path,
+        category: exclusion.category,
+        verdict: 'unverifiable',
+        message: 'runner produced no test records',
+      });
+    } else if (allSkipped) {
       results.push({
         path: exclusion.path,
         category: exclusion.category,
@@ -147,11 +175,27 @@ export async function checkExclusions(options) {
         path: exclusion.path,
         category: exclusion.category,
         verdict: 'failed',
+        message: records
+          .filter((record) => record.status !== 'passed')
+          .map(recordDiagnostic)
+          .join('; '),
       });
     }
   }
 
   return results;
+}
+
+/**
+ * @param {import('./report.js').Test262TestRecord} record
+ * @returns {string}
+ */
+function recordDiagnostic(record) {
+  const variant = record.variant ?? 'unflagged';
+  const reason = record.reason ?? record.status;
+  return record.message === undefined
+    ? `${variant}: ${reason}`
+    : `${variant}: ${reason}: ${record.message}`;
 }
 
 /**
