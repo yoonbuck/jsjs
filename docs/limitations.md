@@ -626,9 +626,11 @@ these neighboring forms, and the runtime omits the listed later APIs:
 `parseScript` uses `sourceType: 'script'`, while `parseModule` is the dedicated
 static-module parser. Neither accepts dynamic import or the remaining module
 forms above, and `ecmaVersion: 6` rejects async forms before the engine's
-capability pass. The remaining unsupported syntax forms are guarded by
-`src/parser.js` shape validation, so the grammar it accepts is the grammar the
-evaluator can execute. Iterator/generator helpers are a later built-in surface
-rather than syntax and are simply not installed. A top-level parse failure is a
-host `SyntaxError`; code reached through `eval`, `Function`, or
-`%GeneratorFunction%` receives a catchable guest `SyntaxError`.
+capability pass. Both ordinary and custom module ASTs reject unsupported syntax,
+RegExp flags, ES5-invalid RegExp patterns, and strict binding/parameter errors
+during parsing, before loader linking or evaluation. The remaining unsupported
+syntax forms are guarded by `src/parser.js` shape validation, so the grammar it
+accepts is the grammar the evaluator can execute. Iterator/generator helpers are
+a later built-in surface rather than syntax and are simply not installed. A
+top-level parse failure is a host `SyntaxError`; code reached through `eval`,
+`Function`, or `%GeneratorFunction%` receives a catchable guest `SyntaxError`.

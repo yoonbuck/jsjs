@@ -35,6 +35,11 @@ const MODULE_PARSER_OPTIONS = Object.freeze({
   ranges: true,
 });
 
+const SCRIPT_VALIDATION_CONTEXT = Object.freeze({
+  module: false,
+  allOwnKeys: false,
+});
+
 /**
  * Parses with Acorn's base script parser. A named wrapper rather than a
  * detached `Parser.parse` reference because Acorn's static `parse` reads `this`
@@ -316,12 +321,20 @@ export function parseModule(source, options = {}) {
   }
 
   const customAst = parse !== parseWithScriptParser;
+  /** @type {WeakSet<object> | undefined} */
+  let customAstSnapshotValues;
 
   if (customAst) {
-    program = snapshotProgramGraph(program);
+    customAstSnapshotValues = new WeakSet();
+    program = snapshotProgramGraph(program, customAstSnapshotValues);
   }
 
-  return validateModuleProgram(program, customAst);
+  return validateModuleProgram(
+    program,
+    source,
+    customAst,
+    customAstSnapshotValues,
+  );
 }
 
 /**
@@ -411,11 +424,15 @@ function validateScriptProgram(
     checkCustomAstDefenses(/** @type {any} */ (program));
   }
 
+  const validationContext = customAst
+    ? { ...SCRIPT_VALIDATION_CONTEXT, allOwnKeys: true }
+    : SCRIPT_VALIDATION_CONTEXT;
+
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
     source,
     strict,
-    customAst,
+    validationContext,
     sourceIndependentNodes,
     rootContext,
   );
@@ -430,10 +447,17 @@ function validateScriptProgram(
  * own capability boundary rather than being admitted through script validation.
  *
  * @param {unknown} program
+ * @param {string} source
  * @param {boolean} customAst
+ * @param {WeakSet<object>} [sourceIndependentNodes]
  * @returns {any}
  */
-function validateModuleProgram(program, customAst) {
+function validateModuleProgram(
+  program,
+  source,
+  customAst,
+  sourceIndependentNodes,
+) {
   checkUntrustedAstDescriptors(program);
 
   if (!isModuleProgram(program)) {
@@ -445,9 +469,30 @@ function validateModuleProgram(program, customAst) {
   );
 
   for (let index = 0; index < body.length; index += 1) {
-    validateModuleItem(body[index], customAst);
+    validateModuleItem(body[index]);
   }
+
+  const moduleValidationContext = {
+    module: true,
+    allOwnKeys: customAst,
+  };
+
+  if (customAst) {
+    checkCustomAstDefenses(
+      /** @type {any} */ (program),
+      moduleValidationContext,
+    );
+  }
+
   checkModuleDeclarationEarlyErrors(body);
+
+  checkStatementPositionFunctionDeclarations(
+    /** @type {any} */ (program),
+    source,
+    true,
+    moduleValidationContext,
+    sourceIndependentNodes,
+  );
 
   return /** @type {any} */ (program);
 }
@@ -1221,10 +1266,9 @@ function isModuleProgram(program) {
 
 /**
  * @param {any} node
- * @param {boolean} customAst
  * @returns {void}
  */
-function validateModuleItem(node, customAst) {
+function validateModuleItem(node) {
   if (!node || typeof node !== 'object') {
     throw new UnsupportedNodeError(String(node));
   }
@@ -1234,10 +1278,10 @@ function validateModuleItem(node, customAst) {
       validateImportDeclaration(node);
       return;
     case 'ExportNamedDeclaration':
-      validateExportNamedDeclaration(node, customAst);
+      validateExportNamedDeclaration(node);
       return;
     case 'ExportDefaultDeclaration':
-      validateExportDefaultDeclaration(node, customAst);
+      validateExportDefaultDeclaration(node);
       return;
     case 'ExportAllDeclaration':
       validateExportAllDeclaration(node);
@@ -1251,10 +1295,6 @@ function validateModuleItem(node, customAst) {
 
         if (typeof type !== 'string' || !SUPPORTED_STATEMENT_TYPES.has(type)) {
           throw new UnsupportedNodeError(String(type));
-        }
-
-        if (customAst) {
-          validateCustomModuleStatement(node);
         }
       }
       return;
@@ -1313,10 +1353,9 @@ function validateImportSpecifier(node) {
 
 /**
  * @param {any} node
- * @param {boolean} customAst
  * @returns {void}
  */
-function validateExportNamedDeclaration(node, customAst) {
+function validateExportNamedDeclaration(node) {
   rejectModuleAttributes(node);
   const source = moduleField(node, 'source');
   const declaration = moduleField(node, 'declaration');
@@ -1349,18 +1388,13 @@ function validateExportNamedDeclaration(node, customAst) {
       );
     }
   }
-
-  if (customAst && declaration !== null) {
-    validateCustomModuleStatement(declaration);
-  }
 }
 
 /**
  * @param {any} node
- * @param {boolean} customAst
  * @returns {void}
  */
-function validateExportDefaultDeclaration(node, customAst) {
+function validateExportDefaultDeclaration(node) {
   rejectModuleAttributes(node);
   const declaration = moduleField(node, 'declaration');
 
@@ -1370,10 +1404,6 @@ function validateExportDefaultDeclaration(node, customAst) {
     !isModuleDefaultDeclaration(declaration)
   ) {
     throw new UnsupportedNodeError('ExportDefaultDeclaration');
-  }
-
-  if (customAst) {
-    validateCustomModuleDefaultDeclaration(declaration);
   }
 }
 
@@ -1390,44 +1420,6 @@ function validateExportAllDeclaration(node) {
   ) {
     throw new UnsupportedNodeError('ExportAllDeclaration');
   }
-}
-
-/**
- * Runs the established custom-AST shape and early-error passes beneath a
- * module declaration without making module declarations themselves look like
- * script syntax.
- *
- * @param {any} statement
- * @returns {void}
- */
-function validateCustomModuleStatement(statement) {
-  const program = { type: 'Program', sourceType: 'script', body: [statement] };
-
-  checkCustomAstDefenses(program);
-  checkStatementPositionFunctionDeclarations(program, '', true, true);
-  checkProgramDeclarationEarlyErrors(program.body);
-}
-
-/**
- * Validates default-export children at an expression position. Anonymous
- * default function and class declarations are represented as expressions only
- * for this validation wrapper; the retained module AST is never changed.
- *
- * @param {any} declaration
- * @returns {void}
- */
-function validateCustomModuleDefaultDeclaration(declaration) {
-  const expression =
-    declaration.type === 'FunctionDeclaration'
-      ? { ...declaration, type: 'FunctionExpression' }
-      : declaration.type === 'ClassDeclaration'
-        ? { ...declaration, type: 'ClassExpression' }
-        : declaration;
-
-  validateCustomModuleStatement({
-    type: 'ExpressionStatement',
-    expression,
-  });
 }
 
 /**
@@ -1770,9 +1762,13 @@ function checkStructuralAstTree(root) {
  * tree while the main syntax and capability gate remains in place below.
  *
  * @param {any} root
+ * @param {{ module: boolean, allOwnKeys: boolean }} [validationContext]
  * @returns {void}
  */
-function checkCustomAstDefenses(root) {
+function checkCustomAstDefenses(
+  root,
+  validationContext = SCRIPT_VALIDATION_CONTEXT,
+) {
   checkStructuralAstTree(root);
 
   /** @type {{ value: unknown, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
@@ -1871,13 +1867,21 @@ function checkCustomAstDefenses(root) {
         );
       }
 
-      const scalarMessage = validateEvaluatorScalarSyntax(value);
+      const scalarMessage = validateEvaluatorScalarSyntax(
+        value,
+        validationContext,
+      );
 
       if (scalarMessage !== undefined) {
         throw unsupportedEs2015Error(scalarMessage, value);
       }
 
-      const childMessage = validateEvaluatorChildEdges(value);
+      const childMessage = validateEvaluatorChildEdges(
+        value,
+        validationContext,
+        item.parent,
+        item.parentKey,
+      );
 
       if (childMessage !== undefined) {
         throw unsupportedEs2015Error(childMessage, value);
@@ -1889,6 +1893,7 @@ function checkCustomAstDefenses(root) {
         item.parentKey,
         item.parentIndex,
         item.patternContext,
+        validationContext,
       );
 
       if (placementMessage !== undefined) {
@@ -2416,6 +2421,10 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
   'TemplateElement',
   'TaggedTemplateExpression',
   'YieldExpression',
+  'ImportDefaultSpecifier',
+  'ImportNamespaceSpecifier',
+  'ImportSpecifier',
+  'ExportSpecifier',
   ...UNSUPPORTED_ES2015_NODE_MESSAGES.keys(),
 ]);
 
@@ -2439,16 +2448,20 @@ const AST_CHILD_PROPERTY_KEYS = new Set([
   'consequent',
   'declarations',
   'discriminant',
+  'declaration',
   'elements',
   'expression',
   'expressions',
+  'exported',
   'finalizer',
   'handler',
   'id',
   'init',
+  'imported',
   'key',
   'label',
   'left',
+  'local',
   'object',
   'param',
   'params',
@@ -2457,6 +2470,7 @@ const AST_CHILD_PROPERTY_KEYS = new Set([
   'quasi',
   'quasis',
   'right',
+  'specifiers',
   'superClass',
   'tag',
   'test',
@@ -2565,7 +2579,7 @@ const SUPPORTED_VARIABLE_DECLARATION_KINDS = new Set(['var', 'let', 'const']);
  * evaluator switches. Every evaluator-recognized node has an explicit entry;
  * entries with no scalar state use the shared no-op validator.
  *
- * @type {ReadonlyMap<string, (node: any) => string | undefined>}
+ * @type {ReadonlyMap<string, (node: any, validationContext: { module: boolean, allOwnKeys: boolean }) => string | undefined>}
  */
 const UNTRUSTED_AST_SCALAR_VALIDATORS = new Map([
   ['Program', validateProgramScalarSyntax],
@@ -2631,6 +2645,10 @@ const UNTRUSTED_AST_SCALAR_VALIDATORS = new Map([
   ['ExportNamedDeclaration', validateNoScalarSyntax],
   ['ExportDefaultDeclaration', validateNoScalarSyntax],
   ['ExportAllDeclaration', validateNoScalarSyntax],
+  ['ImportDefaultSpecifier', validateNoScalarSyntax],
+  ['ImportNamespaceSpecifier', validateNoScalarSyntax],
+  ['ImportSpecifier', validateNoScalarSyntax],
+  ['ExportSpecifier', validateNoScalarSyntax],
 ]);
 
 /**
@@ -2688,6 +2706,7 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * @param {any} root
  * @param {string} source The exact text parsed, for the code-point-escape check.
  * @param {boolean} rootStrict
+ * @param {{ module: boolean, allOwnKeys: boolean }} [validationContext]
  * @param {WeakSet<object>} [sourceIndependentNodes]
  * @param {{ superAllowed: boolean, superCallAllowed: boolean }} [rootContext]
  * @returns {void}
@@ -2696,7 +2715,7 @@ function checkStatementPositionFunctionDeclarations(
   root,
   source,
   rootStrict,
-  allOwnKeys = false,
+  validationContext = SCRIPT_VALIDATION_CONTEXT,
   sourceIndependentNodes,
   rootContext = { superAllowed: false, superCallAllowed: false },
 ) {
@@ -2824,6 +2843,7 @@ function checkStatementPositionFunctionDeclarations(
       item.yieldAllowed,
       item.superAllowed,
       item.superCallAllowed,
+      validationContext,
       sourceIndependentNodes === undefined || !sourceIndependentNodes.has(node),
     );
     checkUnsupportedForOfAwait(node);
@@ -2851,7 +2871,9 @@ function checkStatementPositionFunctionDeclarations(
       item.superCallAllowed,
       item.classDerived,
     );
-    const keys = allOwnKeys ? Reflect.ownKeys(node) : Object.keys(node);
+    const keys = validationContext.allOwnKeys
+      ? Reflect.ownKeys(node)
+      : Object.keys(node);
 
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       const key = keys[index];
@@ -3271,6 +3293,15 @@ function patternContextForChild(parent, key, inherited) {
   }
 
   if (
+    (parent.type === 'ImportDefaultSpecifier' ||
+      parent.type === 'ImportNamespaceSpecifier' ||
+      parent.type === 'ImportSpecifier') &&
+    key === 'local'
+  ) {
+    return 'binding';
+  }
+
+  if (
     parent.type === 'AssignmentExpression' &&
     parent.operator === '=' &&
     key === 'left'
@@ -3388,6 +3419,7 @@ function statementPositionFunctionError(context, node) {
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
  * @param {number | undefined} parentIndex
+ * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
  * @returns {string | undefined}
  */
 function unsupportedEs2015Message(
@@ -3396,13 +3428,19 @@ function unsupportedEs2015Message(
   parentKey,
   patternContext,
   parentIndex,
+  validationContext,
 ) {
   if (!RECOGNIZED_AST_NODE_TYPES.has(node.type)) {
     return `unsupported AST node type ${node.type}`;
   }
 
+  const supportedModulePosition =
+    validationContext.module &&
+    isSupportedModulePosition(node, parent, parentKey, parentIndex);
+
   if (
     isSupportedExpressionNode(node) &&
+    !supportedModulePosition &&
     !isSupportedExpressionPosition(
       node,
       parent,
@@ -3415,7 +3453,13 @@ function unsupportedEs2015Message(
   }
 
   if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
-    return validateClassDefinition(node, parent, parentKey, parentIndex);
+    return validateClassDefinition(
+      node,
+      parent,
+      parentKey,
+      parentIndex,
+      validationContext,
+    );
   }
 
   if (node.type === 'ClassBody') {
@@ -3571,6 +3615,10 @@ function unsupportedEs2015Message(
       : 'spread elements are not supported in this context';
   }
 
+  if (supportedModulePosition && isModuleSyntaxNode(node)) {
+    return undefined;
+  }
+
   return UNSUPPORTED_ES2015_NODE_MESSAGES.get(node.type);
 }
 
@@ -3583,6 +3631,7 @@ function unsupportedEs2015Message(
  * @param {string | number | undefined} parentKey
  * @param {number | undefined} parentIndex
  * @param {'binding' | 'assignment' | undefined} patternContext
+ * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
  * @returns {string | undefined}
  */
 function validateCustomAstNodePlacement(
@@ -3591,9 +3640,17 @@ function validateCustomAstNodePlacement(
   parentKey,
   parentIndex,
   patternContext,
+  validationContext,
 ) {
   if (!RECOGNIZED_AST_NODE_TYPES.has(node.type)) {
     return `unsupported AST node type ${node.type}`;
+  }
+
+  if (
+    validationContext.module &&
+    isSupportedModulePosition(node, parent, parentKey, parentIndex)
+  ) {
+    return undefined;
   }
 
   if (isSupportedExpressionNode(node)) {
@@ -3623,6 +3680,108 @@ function validateCustomAstNodePlacement(
  * @param {any} node
  * @returns {boolean}
  */
+function isModuleSyntaxNode(node) {
+  return (
+    node.type === 'ImportDeclaration' ||
+    node.type === 'ExportNamedDeclaration' ||
+    node.type === 'ExportDefaultDeclaration' ||
+    node.type === 'ExportAllDeclaration' ||
+    node.type === 'ImportDefaultSpecifier' ||
+    node.type === 'ImportNamespaceSpecifier' ||
+    node.type === 'ImportSpecifier' ||
+    node.type === 'ExportSpecifier'
+  );
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {number | undefined} parentIndex
+ * @returns {boolean}
+ */
+function isSupportedModulePosition(node, parent, parentKey, parentIndex) {
+  if (!parent || typeof parentKey !== 'string') {
+    return false;
+  }
+
+  /** @param {string} key @returns {boolean} */
+  const direct = (key) => parentKey === key && parent[key] === node;
+  /** @param {string} key @returns {boolean} */
+  const member = (key) =>
+    parentKey === key &&
+    Array.isArray(parent[key]) &&
+    typeof parentIndex === 'number' &&
+    Number.isInteger(parentIndex) &&
+    parentIndex >= 0 &&
+    parentIndex < parent[key].length &&
+    parent[key][parentIndex] === node;
+
+  switch (node.type) {
+    case 'ImportDeclaration':
+    case 'ExportNamedDeclaration':
+    case 'ExportDefaultDeclaration':
+    case 'ExportAllDeclaration':
+      return parent.type === 'Program' && member('body');
+    case 'ImportDefaultSpecifier':
+    case 'ImportNamespaceSpecifier':
+    case 'ImportSpecifier':
+      return parent.type === 'ImportDeclaration' && member('specifiers');
+    case 'ExportSpecifier':
+      return parent.type === 'ExportNamedDeclaration' && member('specifiers');
+    case 'Literal':
+      return (
+        ((parent.type === 'ImportDeclaration' ||
+          parent.type === 'ExportNamedDeclaration' ||
+          parent.type === 'ExportAllDeclaration') &&
+          direct('source')) ||
+        (parent.type === 'ExportDefaultDeclaration' && direct('declaration'))
+      );
+    case 'Identifier':
+      return (
+        ((parent.type === 'ImportDefaultSpecifier' ||
+          parent.type === 'ImportNamespaceSpecifier' ||
+          parent.type === 'ImportSpecifier') &&
+          direct('local')) ||
+        (parent.type === 'ImportSpecifier' && direct('imported')) ||
+        (parent.type === 'ExportSpecifier' &&
+          (direct('local') || direct('exported')))
+      );
+    case 'VariableDeclaration':
+      return parent.type === 'ExportNamedDeclaration' && direct('declaration');
+    case 'FunctionDeclaration':
+    case 'ClassDeclaration':
+      return (
+        (parent.type === 'ExportNamedDeclaration' && direct('declaration')) ||
+        (parent.type === 'ExportDefaultDeclaration' && direct('declaration'))
+      );
+    default:
+      return (
+        isSupportedExpressionNode(node) &&
+        parent.type === 'ExportDefaultDeclaration' &&
+        direct('declaration')
+      );
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {boolean}
+ */
+function isModuleDefaultDeclarationPosition(node, parent, parentKey) {
+  return (
+    parent?.type === 'ExportDefaultDeclaration' &&
+    parentKey === 'declaration' &&
+    parent.declaration === node
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
 function isFunctionNode(node) {
   return (
     node.type === 'FunctionDeclaration' ||
@@ -3641,19 +3800,35 @@ function isFunctionNode(node) {
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {number | undefined} parentIndex
+ * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
  * @returns {string | undefined}
  */
-function validateClassDefinition(node, parent, parentKey, parentIndex) {
+function validateClassDefinition(
+  node,
+  parent,
+  parentKey,
+  parentIndex,
+  validationContext,
+) {
   if (
     node.type === 'ClassDeclaration' &&
-    !isClassDeclarationPosition(parent, parentKey, parentIndex)
+    !isClassDeclarationPosition(parent, parentKey, parentIndex) &&
+    !(
+      validationContext.module &&
+      isSupportedModulePosition(node, parent, parentKey, parentIndex)
+    )
   ) {
     return 'class declarations are not supported in this AST position';
   }
 
   if (
     node.type === 'ClassDeclaration' &&
-    (!isIdentifierNode(node.id) || typeof node.id.name !== 'string')
+    (!isIdentifierNode(node.id) || typeof node.id.name !== 'string') &&
+    !(
+      validationContext.module &&
+      node.id === null &&
+      isModuleDefaultDeclarationPosition(node, parent, parentKey)
+    )
   ) {
     return 'class declarations require an identifier name';
   }
@@ -4821,12 +4996,15 @@ function isSupportedExpressionNode(node) {
 
 /**
  * @param {any} node
+ * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
  * @returns {string | undefined}
  */
-function validateEvaluatorScalarSyntax(node) {
+function validateEvaluatorScalarSyntax(node, validationContext) {
   const validator = UNTRUSTED_AST_SCALAR_VALIDATORS.get(node.type);
 
-  return validator === undefined ? undefined : validator(node);
+  return validator === undefined
+    ? undefined
+    : validator(node, validationContext);
 }
 
 /**
@@ -4848,13 +5026,14 @@ function isAllowedScalarString(value, allowed) {
 
 /**
  * @param {any} node
+ * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
  * @returns {string | undefined}
  */
-function validateProgramScalarSyntax(node) {
+function validateProgramScalarSyntax(node, validationContext) {
   return validateRequiredScalar(
     node,
     'sourceType',
-    (value) => value === 'script',
+    (value) => value === (validationContext.module ? 'module' : 'script'),
   );
 }
 
@@ -5247,11 +5426,26 @@ function invalidEvaluatorScalar(node, field) {
  * generic walker so its ordinary unsupported-node diagnostic is preserved.
  *
  * @param {any} node
+ * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
  * @returns {string | undefined}
  */
-function validateEvaluatorChildEdges(node) {
+function validateEvaluatorChildEdges(
+  node,
+  validationContext,
+  parent,
+  parentKey,
+) {
   switch (node.type) {
     case 'Program':
+      return validateChildList(
+        node,
+        'body',
+        validationContext.module
+          ? isModuleItemNodeOrUnknown
+          : isStatementNodeOrUnknown,
+      );
     case 'BlockStatement':
       return validateChildList(node, 'body', isStatementNodeOrUnknown);
     case 'ExpressionStatement':
@@ -5271,12 +5465,24 @@ function validateEvaluatorChildEdges(node) {
         validateRequiredChild(node, 'id', isBindingPatternNodeOrUnknown) ??
         validateOptionalChild(node, 'init', isExpressionNodeOrUnknown)
       );
-    case 'FunctionDeclaration':
+    case 'FunctionDeclaration': {
+      const idMessage =
+        validationContext.module &&
+        isModuleDefaultDeclarationPosition(node, parent, parentKey)
+          ? validateOptionalChild(node, 'id', isIdentifierNodeOrUnknown)
+          : validateRequiredChild(node, 'id', isIdentifierNodeOrUnknown);
+
       return (
-        validateRequiredChild(node, 'id', isIdentifierNodeOrUnknown) ??
+        idMessage ??
         validateChildList(node, 'params', isBindingPatternNodeOrUnknown) ??
         validateFunctionBlockBody(node)
       );
+    }
+    case 'ClassDeclaration':
+      return validationContext.module &&
+        isModuleDefaultDeclarationPosition(node, parent, parentKey)
+        ? validateOptionalChild(node, 'id', isIdentifierNodeOrUnknown)
+        : validateRequiredChild(node, 'id', isIdentifierNodeOrUnknown);
     case 'FunctionExpression':
       return (
         validateOptionalChild(node, 'id', isIdentifierNodeOrUnknown) ??
@@ -5430,6 +5636,54 @@ function validateEvaluatorChildEdges(node) {
       );
     case 'RestElement':
       return validateRequiredChild(node, 'argument', isPatternNodeOrUnknown);
+    case 'ImportDeclaration':
+      return (
+        validateChildList(node, 'specifiers', isImportSpecifierNodeOrUnknown) ??
+        validateRequiredChild(
+          node,
+          'source',
+          isModuleStringLiteralNodeOrUnknown,
+        )
+      );
+    case 'ImportDefaultSpecifier':
+    case 'ImportNamespaceSpecifier':
+      return validateRequiredChild(node, 'local', isIdentifierNodeOrUnknown);
+    case 'ImportSpecifier':
+      return (
+        validateRequiredChild(node, 'local', isIdentifierNodeOrUnknown) ??
+        validateRequiredChild(node, 'imported', isIdentifierNodeOrUnknown)
+      );
+    case 'ExportNamedDeclaration':
+      return (
+        validateNullableChild(
+          node,
+          'declaration',
+          isModuleDeclarationNodeOrUnknown,
+        ) ??
+        validateChildList(node, 'specifiers', isExportSpecifierNodeOrUnknown) ??
+        validateNullableChild(
+          node,
+          'source',
+          isModuleStringLiteralNodeOrUnknown,
+        )
+      );
+    case 'ExportDefaultDeclaration':
+      return validateRequiredChild(
+        node,
+        'declaration',
+        isModuleDefaultDeclarationNodeOrUnknown,
+      );
+    case 'ExportAllDeclaration':
+      return validateRequiredChild(
+        node,
+        'source',
+        isModuleStringLiteralNodeOrUnknown,
+      );
+    case 'ExportSpecifier':
+      return (
+        validateRequiredChild(node, 'local', isIdentifierNodeOrUnknown) ??
+        validateRequiredChild(node, 'exported', isIdentifierNodeOrUnknown)
+      );
     default:
       return undefined;
   }
@@ -5777,6 +6031,20 @@ function isStatementNodeOrUnknown(value) {
  * @param {unknown} value
  * @returns {boolean}
  */
+function isModuleItemNodeOrUnknown(value) {
+  return (
+    isStatementNodeOrUnknown(value) ||
+    isNodeTypeOrUnknown(value, 'ImportDeclaration') ||
+    isNodeTypeOrUnknown(value, 'ExportNamedDeclaration') ||
+    isNodeTypeOrUnknown(value, 'ExportDefaultDeclaration') ||
+    isNodeTypeOrUnknown(value, 'ExportAllDeclaration')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
 function isIdentifierNodeOrUnknown(value) {
   return isUnknownAstNode(value) || isIdentifierNode(value);
 }
@@ -5827,6 +6095,58 @@ function isTemplateElementNodeOrUnknown(value) {
  */
 function isTemplateLiteralNodeOrUnknown(value) {
   return isNodeTypeOrUnknown(value, 'TemplateLiteral');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isModuleStringLiteralNodeOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'Literal');
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isModuleDeclarationNodeOrUnknown(value) {
+  return (
+    isNodeTypeOrUnknown(value, 'VariableDeclaration') ||
+    isNodeTypeOrUnknown(value, 'FunctionDeclaration') ||
+    isNodeTypeOrUnknown(value, 'ClassDeclaration')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isModuleDefaultDeclarationNodeOrUnknown(value) {
+  return (
+    isExpressionNodeOrUnknown(value) ||
+    isNodeTypeOrUnknown(value, 'FunctionDeclaration') ||
+    isNodeTypeOrUnknown(value, 'ClassDeclaration')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isImportSpecifierNodeOrUnknown(value) {
+  return (
+    isNodeTypeOrUnknown(value, 'ImportDefaultSpecifier') ||
+    isNodeTypeOrUnknown(value, 'ImportNamespaceSpecifier') ||
+    isNodeTypeOrUnknown(value, 'ImportSpecifier')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isExportSpecifierNodeOrUnknown(value) {
+  return isNodeTypeOrUnknown(value, 'ExportSpecifier');
 }
 
 /**
@@ -5988,6 +6308,7 @@ function isObjectLiteralFunction(node) {
  * @param {boolean} yieldAllowed
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
+ * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
  * @param {boolean} identifierSourceMatches
  * @returns {void}
  */
@@ -6001,6 +6322,7 @@ function checkUnsupportedEs2015Node(
   yieldAllowed,
   superAllowed,
   superCallAllowed,
+  validationContext,
   identifierSourceMatches,
 ) {
   if (node.type === 'YieldExpression' && !yieldAllowed) {
@@ -6039,6 +6361,7 @@ function checkUnsupportedEs2015Node(
     parentKey,
     patternContext,
     parentIndex,
+    validationContext,
   );
 
   if (typeMessage !== undefined) {

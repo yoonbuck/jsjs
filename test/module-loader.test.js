@@ -63,6 +63,48 @@ export default [
     },
   },
   {
+    name: 'loader wraps grammar-level module parse rejection for unsupported capability fixture',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          return identifier === 'root'
+            ? 'import "invalid"; export const ok = 1;'
+            : 'new.target;';
+        },
+      });
+      // Acorn rejects this fixture before the capability walk; this guards loader parse-error wrapping.
+      const error = await rejected(loadModuleGraph(loader, 'root', null));
+      assertSame(error instanceof ModuleLoaderError, true);
+      assertSame(error.phase, 'parse');
+      assertSame(error.identifier, 'invalid');
+      assertSame(error.cause instanceof SyntaxError, true);
+    },
+  },
+  {
+    name: 'loader rejects nested unsupported capability as the starting-SHA regression guard',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          return identifier === 'root'
+            ? 'import "invalid"; export const ok = 1;'
+            : 'function unsupported() { return new.target; }';
+        },
+      });
+      // Unlike the grammar-level fixture above, this parsed at the exact starting SHA.
+      const error = await rejected(loadModuleGraph(loader, 'root', null));
+      assertSame(error instanceof ModuleLoaderError, true);
+      assertSame(error.phase, 'parse');
+      assertSame(error.identifier, 'invalid');
+      assertSame(error.cause instanceof SyntaxError, true);
+    },
+  },
+  {
     name: 'loader rejects malformed source records and permits retry after parse failure',
     async run() {
       let loads = 0;
