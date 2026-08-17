@@ -110,6 +110,55 @@ export default [
     },
   },
   {
+    name: 'parseModule appends to an owned snapshot of a caller-supplied module Program',
+    run() {
+      const program = parseModule('export const existing = 1;');
+      const result = parseModule('export const appended = 2;', { program });
+
+      assertSame(result === program, false);
+      assertSame(result.body === program.body, false);
+      assertSame(program.body.length, 1);
+      assertSame(result.body.length, 2);
+
+      program.body[0].declaration.declarations[0].id.name = 'mutated';
+
+      assertSame(
+        result.body[0].declaration.declarations[0].id.name,
+        'existing',
+      );
+    },
+  },
+  {
+    name: 'caller-supplied module Programs receive custom AST validation',
+    run() {
+      const missingExport = parseModule(
+        'const present = 1; export { present };',
+      );
+      missingExport.body[1].specifiers[0].local.name = 'missing';
+      assertThrows(
+        () => parseModule('', { program: missingExport }),
+        SyntaxError,
+      );
+
+      const structurallyInvalid = parseModule(
+        'export default function kept(value) {}',
+      );
+      structurallyInvalid.body[0].declaration.id =
+        structurallyInvalid.body[0].declaration.params[0];
+      assertThrows(
+        () => parseModule('', { program: structurallyInvalid }),
+        SyntaxError,
+      );
+
+      const outsideCapability = parseModule('export default 1 + 2;');
+      outsideCapability.body[0].declaration.operator = '**';
+      assertThrows(
+        () => parseModule('', { program: outsideCapability }),
+        SyntaxError,
+      );
+    },
+  },
+  {
     name: 'parseModule rejects duplicate exported names from custom ASTs',
     run() {
       const ast = parseModule(

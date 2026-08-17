@@ -304,9 +304,32 @@ export function parseScript(source, options = {}) {
  */
 export function parseModule(source, options = {}) {
   const { parse = parseWithScriptParser, ...parserOptions } = options;
+  const hasCustomParse = parse !== parseWithScriptParser;
+  const hasCustomProgram = Object.prototype.propertyIsEnumerable.call(
+    parserOptions,
+    'program',
+  );
+  const hasReusableProgram =
+    !hasCustomParse && hasCustomProgram && Boolean(parserOptions.program);
+  const reusableProgram = hasReusableProgram
+    ? parserOptions.program
+    : undefined;
+  let reusableProgramSnapshot;
+  /** @type {WeakSet<object> | undefined} */
+  let sourceIndependentNodes;
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
+  }
+
+  if (hasReusableProgram) {
+    sourceIndependentNodes = new WeakSet();
+    reusableProgramSnapshot = snapshotProgramGraph(
+      reusableProgram,
+      sourceIndependentNodes,
+    );
+    validateReusableProgram(reusableProgramSnapshot, true);
+    delete parserOptions.program;
   }
 
   let program;
@@ -320,20 +343,20 @@ export function parseModule(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
-  const customAst = parse !== parseWithScriptParser;
-  /** @type {WeakSet<object> | undefined} */
-  let customAstSnapshotValues;
+  if (hasCustomParse) {
+    sourceIndependentNodes = new WeakSet();
+    program = snapshotProgramGraph(program, sourceIndependentNodes);
+  }
 
-  if (customAst) {
-    customAstSnapshotValues = new WeakSet();
-    program = snapshotProgramGraph(program, customAstSnapshotValues);
+  if (hasReusableProgram) {
+    program = mergeReusableProgram(reusableProgramSnapshot, program);
   }
 
   return validateModuleProgram(
     program,
     source,
-    customAst,
-    customAstSnapshotValues,
+    hasCustomParse || hasCustomProgram,
+    sourceIndependentNodes,
   );
 }
 
@@ -953,20 +976,23 @@ function checkOmittedArrayMetadata(roots) {
 }
 
 /**
- * Validates a Program supplied for Acorn-style statement appending. parseScript
+ * Validates a Program supplied for Acorn-style statement appending. The parser
  * never gives the caller-owned graph to Acorn: it validates and uses only the
  * engine-owned snapshot while callbacks can mutate the ignored original.
  * Requiring Acorn's location shape also turns malformed reuse targets into a
  * parser-boundary TypeError without partially writing to them.
  *
  * @param {unknown} program
+ * @param {boolean} [module=false]
  * @returns {void}
  */
-function validateReusableProgram(program) {
+function validateReusableProgram(program, module = false) {
   checkUntrustedAstDescriptors(program);
 
-  if (!isScriptProgram(program)) {
-    throw new TypeError('Expected parser to return a script Program node');
+  if (module ? !isModuleProgram(program) : !isScriptProgram(program)) {
+    throw new TypeError(
+      `Expected parser to return a ${module ? 'module' : 'script'} Program node`,
+    );
   }
 
   if (!hasReusableProgramPositionShape(/** @type {any} */ (program))) {
@@ -975,7 +1001,10 @@ function validateReusableProgram(program) {
     );
   }
 
-  checkCustomAstDefenses(/** @type {any} */ (program));
+  checkCustomAstDefenses(
+    /** @type {any} */ (program),
+    module ? { module: true, allOwnKeys: true } : SCRIPT_VALIDATION_CONTEXT,
+  );
 }
 
 /**
