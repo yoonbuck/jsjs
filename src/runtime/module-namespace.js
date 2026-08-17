@@ -184,7 +184,7 @@ function resolveNamespaceExports(record) {
   const resolvedExports = new Map();
 
   for (const exportName of exportedNames(record, new Set())) {
-    const resolution = resolveExport(record, exportName, new Set());
+    const resolution = resolveExport(record, exportName, new Set(), new Set());
 
     if (resolution.type === 'resolved') {
       resolvedExports.set(exportName, {

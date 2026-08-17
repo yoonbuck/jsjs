@@ -60,15 +60,16 @@ export function linkModuleGraph(rootRecord) {
 
 /**
  * Resolves one exported name using the module-record pair identity required by
- * ResolveExport. Recursive branches share the same resolve set so a pair reached
- * through one star path is pruned when another path reaches it again.
+ * ResolveExport. Recursive branches share the same pair set and module-only star
+ * set, while each top-level resolution supplies fresh sets.
  *
  * @param {SourceTextModuleRecord} module
  * @param {string} exportName
  * @param {Set<object>} resolveSet
+ * @param {Set<SourceTextModuleRecord>} exportStarSet
  * @returns {ExportResolution}
  */
-export function resolveExport(module, exportName, resolveSet) {
+export function resolveExport(module, exportName, resolveSet, exportStarSet) {
   if (!(module instanceof SourceTextModuleRecord)) {
     throw new TypeError('Expected a SourceTextModuleRecord');
   }
@@ -77,6 +78,9 @@ export function resolveExport(module, exportName, resolveSet) {
   }
   if (!(resolveSet instanceof Set)) {
     throw new TypeError('Expected ResolveExport pair set');
+  }
+  if (!(exportStarSet instanceof Set)) {
+    throw new TypeError('Expected ResolveExport star set');
   }
 
   const pair = resolveExportPairKey(module, exportName);
@@ -111,13 +115,23 @@ export function resolveExport(module, exportName, resolveSet) {
         bindingName: MODULE_NAMESPACE_BINDING,
       };
     }
-    return resolveExport(requestedModule, indirectEntry.importName, resolveSet);
+    return resolveExport(
+      requestedModule,
+      indirectEntry.importName,
+      resolveSet,
+      exportStarSet,
+    );
   }
 
   if (exportName === 'default') {
     return NOT_FOUND;
   }
 
+  if (exportStarSet.has(module)) {
+    return NOT_FOUND;
+  }
+
+  exportStarSet.add(module);
   /** @type {ExportResolution} */
   let starResolution = NOT_FOUND;
 
@@ -126,6 +140,7 @@ export function resolveExport(module, exportName, resolveSet) {
       requestedModuleForEntry(module, starEntry),
       exportName,
       resolveSet,
+      exportStarSet,
     );
 
     if (resolution.type === 'ambiguous') {
@@ -256,6 +271,7 @@ function resolveImportEntries(record) {
       requestedModule,
       entry.importName,
       new Set(),
+      new Set(),
     );
 
     if (resolution.type === 'not-found') {
@@ -323,6 +339,7 @@ function validateIndirectExportEntries(record) {
     const resolution = resolveExport(
       requestedModule,
       entry.importName,
+      new Set(),
       new Set(),
     );
 

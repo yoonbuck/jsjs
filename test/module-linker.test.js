@@ -125,8 +125,8 @@ export default [
       const root = await loadModuleGraph(loader, 'root', null);
       linkModuleGraph(root);
 
-      const x = resolveExport(root, 'x', new Set());
-      const y = resolveExport(root, 'y', new Set());
+      const x = resolveExport(root, 'x', new Set(), new Set());
+      const y = resolveExport(root, 'y', new Set(), new Set());
       assertSame(x.type, 'resolved');
       if (x.type !== 'resolved') {
         throw new Error('Expected x to resolve');
@@ -138,7 +138,10 @@ export default [
         throw new Error('Expected y to resolve');
       }
       assertSame(y.bindingName, 'y');
-      assertSame(resolveExport(root, 'default', new Set()).type, 'not-found');
+      assertSame(
+        resolveExport(root, 'default', new Set(), new Set()).type,
+        'not-found',
+      );
     },
   },
   {
@@ -298,7 +301,10 @@ export default [
       );
       b.environment.setMutableBinding('b', 'updated', true);
       assertSame(a.environment.getBindingValue('b', true), 'updated');
-      assertSame(resolveExport(a, 'missing', new Set()).type, 'not-found');
+      assertSame(
+        resolveExport(a, 'missing', new Set(), new Set()).type,
+        'not-found',
+      );
     },
   },
   {
@@ -335,7 +341,7 @@ export default [
         }),
       ]);
 
-      const resolution = resolveExport(first, 'value', new Set());
+      const resolution = resolveExport(first, 'value', new Set(), new Set());
       assertSame(resolution.type, 'resolved');
       if (resolution.type !== 'resolved') {
         throw new Error(
@@ -344,6 +350,26 @@ export default [
       }
       assertSame(resolution.module, third);
       assertSame(resolution.bindingName, 'value');
+    },
+  },
+  {
+    name: 'ResolveExport returns not-found for a renamed star cycle',
+    async run() {
+      const root = await loadModuleGraph(
+        loaderFor({
+          root: 'export * from "A";',
+          A: 'export * from "D";',
+          D: 'export { y as x } from "A"; export const y = 1;',
+        }),
+        'root',
+      );
+      const resolution = resolveExport(root, 'x', new Set(), new Set());
+
+      assertSame(
+        resolution.type,
+        'not-found',
+        'a renamed star cycle must not expose D.y as root.x',
+      );
     },
   },
   {
@@ -403,7 +429,7 @@ export default [
 
       const resolveSet = new Set();
       const started = Date.now();
-      const resolution = resolveExport(root, 'shared', resolveSet);
+      const resolution = resolveExport(root, 'shared', resolveSet, new Set());
       const elapsed = Date.now() - started;
 
       assertSame(resolution.type, 'resolved');
@@ -421,7 +447,7 @@ export default [
       assertSame(elapsed < 10000, true, 'resolution should finish promptly');
 
       resolutionVisits = 0;
-      const repeated = resolveExport(root, 'shared', new Set());
+      const repeated = resolveExport(root, 'shared', new Set(), new Set());
       assertSame(repeated.type, 'resolved');
       assertSame(
         resolutionVisits,
@@ -443,7 +469,10 @@ export default [
       );
       linkModuleGraph(root);
 
-      assertSame(resolveExport(root, 'shared', new Set()).type, 'ambiguous');
+      assertSame(
+        resolveExport(root, 'shared', new Set(), new Set()).type,
+        'ambiguous',
+      );
     },
   },
   {
