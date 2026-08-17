@@ -2,6 +2,64 @@ import { EngineObject } from './object.js';
 import { createPrimitiveWrapper } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
+import { codeUnitsBetween } from './code-units.js';
+
+/**
+ * @param {string} unit
+ * @returns {boolean}
+ */
+function isStringNumericWhitespace(unit) {
+  switch (unit) {
+    case '\u0009':
+    case '\u000a':
+    case '\u000b':
+    case '\u000c':
+    case '\u000d':
+    case '\u0020':
+    case '\u00a0':
+    case '\u1680':
+    case '\u2000':
+    case '\u2001':
+    case '\u2002':
+    case '\u2003':
+    case '\u2004':
+    case '\u2005':
+    case '\u2006':
+    case '\u2007':
+    case '\u2008':
+    case '\u2009':
+    case '\u200a':
+    case '\u2028':
+    case '\u2029':
+    case '\u202f':
+    case '\u205f':
+    case '\u3000':
+    case '\ufeff':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function trimStringNumericWhitespace(value) {
+  let start = 0;
+
+  while (start < value.length && isStringNumericWhitespace(value[start])) {
+    start += 1;
+  }
+
+  let end = value.length;
+
+  while (end > start && isStringNumericWhitespace(value[end - 1])) {
+    end -= 1;
+  }
+
+  return codeUnitsBetween(value, start, end);
+}
 
 /**
  * @param {unknown} value
@@ -169,10 +227,7 @@ export function toNumber(value) {
    * @returns {number}
    */
   function stringToNumber(value) {
-    const source = value.replace(
-      /^[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/g,
-      '',
-    );
+    const source = trimStringNumericWhitespace(value);
 
     if (source === '') {
       return 0;
@@ -183,7 +238,7 @@ export function toNumber(value) {
     }
 
     if (/^0[xX][0-9a-fA-F]+$/.test(source)) {
-      return Number.parseInt(source.slice(2), 16);
+      return Number.parseInt(codeUnitsBetween(source, 2, source.length), 16);
     }
 
     if (

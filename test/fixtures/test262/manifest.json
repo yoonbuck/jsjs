@@ -7,7 +7,7 @@
     "test/language/module-code/raw.js",
     "test/no-strict.js",
     "test/only-strict.js",
-    "test/parse-negative.js",
+    "test/parse-negative.js.txt",
     "test/positive.js",
     "test/raw.js",
     "test/runtime-negative.js",
@@ -15,6 +15,6 @@
   ],
   "malformed": [
     "malformed/missing-frontmatter.js",
-    "malformed/negative-without-type.js"
+    "malformed/negative-without-type.js.txt"
   ]
 }

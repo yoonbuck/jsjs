@@ -231,8 +231,6 @@ async function readIgnoreFile() {
 const HOST_STRING_INVARIANT_EXEMPTIONS = Object.freeze({
   'src/builtins/number-format.js':
     'Number formatting builds and slices its own host digit strings, which are engine-internal scratch, never guest String semantics',
-  'src/runtime/conversion.js':
-    'ToNumber pre-dates this invariant and still trims/slices guest strings with host methods; tightening it is its own change',
 });
 
 /**

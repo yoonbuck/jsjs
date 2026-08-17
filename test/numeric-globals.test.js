@@ -404,6 +404,47 @@ const tests = [
     },
   },
   {
+    name: 'Number trims every ES5 boundary whitespace member around valid and invalid forms',
+    run() {
+      for (const unit of WHITESPACE) {
+        const escaped = escapeUnit(unit);
+
+        for (const [value, expected] of [
+          ['123.5', 123.5],
+          ['0x2a', 42],
+          ['-Infinity', -Infinity],
+          ['12x', NaN],
+          ['1e', NaN],
+        ]) {
+          assertSame(
+            run(`Number("${escaped}${value}${escaped}");`),
+            expected,
+            `${escaped}${value}${escaped}`,
+          );
+        }
+      }
+
+      const longWhitespace = WHITESPACE.join('').repeat(256);
+      const longWhitespaceSource = [...longWhitespace].map(escapeUnit).join('');
+
+      for (const [value, expected] of [
+        ['123.5', 123.5],
+        ['0x2a', 42],
+        ['-Infinity', -Infinity],
+        ['12x', NaN],
+        ['1e', NaN],
+      ]) {
+        assertSame(
+          run(
+            `Number("${longWhitespaceSource}${value}${longWhitespaceSource}");`,
+          ),
+          expected,
+          `long whitespace around ${value}`,
+        );
+      }
+    },
+  },
+  {
     name: 'the numeric globals are realm-local functions',
     run() {
       const first = createRealm();

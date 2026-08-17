@@ -59,7 +59,7 @@ const FIXTURE_TESTS = [
   'test/language/module-code/raw.js',
   'test/no-strict.js',
   'test/only-strict.js',
-  'test/parse-negative.js',
+  'test/parse-negative.js.txt',
   'test/positive.js',
   'test/raw.js',
   'test/runtime-negative.js',
@@ -68,7 +68,7 @@ const FIXTURE_TESTS = [
 
 const FIXTURE_MALFORMED = [
   'malformed/missing-frontmatter.js',
-  'malformed/negative-without-type.js',
+  'malformed/negative-without-type.js.txt',
 ];
 
 /** Every fixture file, in the code-unit order the inventory reports them in. */
@@ -183,8 +183,8 @@ const FIXTURE_TEST_LINES = [
   '{"type":"test","file":"test/language/module-code/raw.js","variant":"raw","status":"passed"}',
   '{"type":"test","file":"test/no-strict.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/only-strict.js","variant":"strict","status":"passed"}',
-  '{"type":"test","file":"test/parse-negative.js","variant":"non-strict","status":"passed"}',
-  '{"type":"test","file":"test/parse-negative.js","variant":"strict","status":"passed"}',
+  '{"type":"test","file":"test/parse-negative.js.txt","variant":"non-strict","status":"passed"}',
+  '{"type":"test","file":"test/parse-negative.js.txt","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/positive.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/positive.js","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/raw.js","variant":"raw","status":"passed"}',
@@ -196,7 +196,7 @@ const FIXTURE_TEST_LINES = [
 
 const FIXTURE_MALFORMED_LINES = [
   '{"type":"test","file":"malformed/missing-frontmatter.js","variant":null,"status":"failed","reason":"metadata-error","message":"Missing Test262 frontmatter block"}',
-  '{"type":"test","file":"malformed/negative-without-type.js","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
+  '{"type":"test","file":"malformed/negative-without-type.js.txt","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
 ];
 
 /** The default selection: exactly what `npm run test262:fixtures` writes. */
@@ -1345,7 +1345,51 @@ export default [
     },
   },
   {
-    name: 'the fixture manifest matches the fixture directory listing',
+    name: 'invalid disk fixtures stay out of extraction while remaining runnable',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      if (typeof host.listTests !== 'function') {
+        throw new Error('fixture host must list disk tests');
+      }
+
+      const listed = await host.listTests();
+      const invalidPaths = [
+        'test/parse-negative.js.txt',
+        'malformed/negative-without-type.js.txt',
+      ];
+
+      for (const file of invalidPaths) {
+        assertSame(file.endsWith('.js'), false, file);
+        assertSame(listed.includes(file), false, file);
+      }
+
+      assertSame(
+        (await host.readTest('test/parse-negative.js.txt')).includes('var = ;'),
+        true,
+      );
+
+      const parseNegative = await runTest262({
+        engine,
+        host,
+        paths: ['test/parse-negative.js.txt'],
+      });
+      assertSame(parseNegative.failed, 0);
+      assertSame(parseNegative.summary.passed, 2);
+
+      const malformedMetadata = await runTest262({
+        engine,
+        host,
+        paths: ['malformed/negative-without-type.js.txt'],
+      });
+      assertSame(malformedMetadata.failed, 1);
+      assertSame(
+        malformedMetadata.lines[0],
+        '{"type":"test","file":"malformed/negative-without-type.js.txt","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
+      );
+    },
+  },
+  {
+    name: 'extractable fixture files match the fixture directory listing',
     run: async () => {
       const host = await createFixtureTest262Host();
 
@@ -1358,9 +1402,10 @@ export default [
         includeMalformed: true,
       });
 
+      const extractable = declared.filter((file) => file.endsWith('.js'));
       assertSame(
         sortTestPaths(await host.listTests()).join(','),
-        sortTestPaths(declared).join(','),
+        sortTestPaths(extractable).join(','),
       );
     },
   },
