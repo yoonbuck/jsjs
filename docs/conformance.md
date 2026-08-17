@@ -45,7 +45,14 @@ checkpoint. It drains FIFO work, including work enqueued by jobs already being
 drained, and returns `{ processed, failures }`. A job returning a guest throw
 completion or throwing unexpectedly is recorded as a Job Drain failure; the
 remaining queue still drains. `takeJobFailures()` returns and clears the
-Agent-wide durable failure list.
+Agent-wide durable failure list. That list retains at most 256 detailed records:
+the first 128 and most recent 128. If failures occurred between those windows,
+the returned array contains a frozen
+`{ job: null, category: "overflow", error: undefined, dropped }` marker between
+them, where `dropped` is the exact number of omitted detail records. This bounds
+the callbacks, Realms, and guest errors the Agent can retain without silently
+losing the fact or extent of an overflow. Taking the list clears both its
+details and overflow count.
 
 An automatic embedder supplies `jobHost.scheduleMicrotask(checkpoint)`. The
 first enqueue while idle schedules one checkpoint; work added while scheduled or
@@ -54,7 +61,9 @@ checkpoint early. The generation token then makes its late host callback stale,
 so it does nothing instead of draining a later checkpoint. If scheduling throws,
 the Agent returns to idle without losing queued work, allowing the embedder to
 repair its scheduler and drain manually. `reportJobError`, when supplied, sees
-each job failure; a throwing host hook is itself recorded as a host-hook failure.
+each job failure even when durable retention has overflowed; a throwing host hook
+is itself recorded as a host-hook failure. Per-checkpoint `runJobs().failures`
+reports remain complete and do not contain durable-overflow markers.
 
 The optional `promiseRejectionTracker(promise, operation)` receives `reject`
 for an unhandled rejection and `handle` once when a later `then` marks it

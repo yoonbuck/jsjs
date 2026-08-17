@@ -132,7 +132,7 @@ export class Agent {
   }
 
   /**
-   * @returns {readonly import('./jobs.js').JobFailure[]}
+   * @returns {readonly import('./jobs.js').DurableJobFailure[]}
    */
   takeJobFailures() {
     return this._jobQueue.takeFailures();
