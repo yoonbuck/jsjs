@@ -448,7 +448,7 @@ function findCoverageNumberOffenders(outside, live) {
   /** @type {{ character: string, length: number, synthetic: boolean } | undefined} */
   let markdownFence;
 
-  for (const line of outside.split('\n')) {
+  for (const line of outside.split(/\r?\n/)) {
     if (markdownFence !== undefined) {
       const synthetic = markdownFence.synthetic;
 
@@ -1359,6 +1359,35 @@ export default [
           new Set([1]),
         ).join('\n'),
         '1 -> An invalid fence must not hide 1 live count.',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json test262-coverage-synthetic-example',
+            '{"version": 1}',
+            '```',
+            'An ordinary prose claim still says 1 file.',
+          ].join('\r\n'),
+          new Set([1]),
+        ).join('\n'),
+        '1 -> An ordinary prose claim still says 1 file.',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json',
+            '{"malformed": 1}',
+            '```',
+            'A CRLF fence still leaves 1 visible count behind it.',
+          ].join('\r\n'),
+          new Set([1]),
+        ).join('\n'),
+        [
+          '1 -> {"malformed": 1}',
+          '1 -> A CRLF fence still leaves 1 visible count behind it.',
+        ].join('\n'),
       );
     },
   },
