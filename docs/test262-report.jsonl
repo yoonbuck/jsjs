@@ -26915,7 +26915,7 @@
 {"type":"baseline","group":"language/white-space","files":60,"records":120,"passed":120,"failed":0,"skipped":0}
 {"type":"baseline","group":"staging/sm","files":361,"records":640,"passed":640,"failed":0,"skipped":0}
 {"type":"features","supported":["Symbol","Symbol.hasInstance","Symbol.isConcatSpreadable","Symbol.iterator","Symbol.match","Symbol.replace","Symbol.search","Symbol.species","Symbol.split","Symbol.toPrimitive","Symbol.toStringTag","Symbol.unscopables","arrow-function","class","computed-property-names","const","default-parameters","destructuring-assignment","destructuring-binding","for-of","generators","let","rest-parameters","spread-syntax","template"],"tagged":["Symbol","Symbol.hasInstance","Symbol.isConcatSpreadable","Symbol.iterator","Symbol.match","Symbol.replace","Symbol.search","Symbol.species","Symbol.split","Symbol.toPrimitive","Symbol.toStringTag","Symbol.unscopables","arrow-function","class","computed-property-names","const","default-parameters","destructuring-assignment","destructuring-binding","for-of","generators","let"],"untagged":23359}
-{"type":"inventory","files":53575,"records":102908,"malformed":3}
+{"type":"inventory","files":53575,"records":102910,"malformed":1}
 {"type":"coverage","scope":"files","total":53575,"selected":14107,"attempted":14107,"passed":14107,"selectedPercent":26.331,"attemptedPercent":26.331,"passedPercent":26.331}
-{"type":"coverage","scope":"records","total":102908,"selected":26858,"attempted":26858,"passed":26858,"selectedPercent":26.099,"attemptedPercent":26.099,"passedPercent":26.099}
+{"type":"coverage","scope":"records","total":102910,"selected":26858,"attempted":26858,"passed":26858,"selectedPercent":26.099,"attemptedPercent":26.099,"passedPercent":26.099}
 {"type":"summary","total":26858,"passed":26858,"failed":0,"skipped":0}
