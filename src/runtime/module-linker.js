@@ -111,11 +111,7 @@ export function resolveExport(module, exportName, resolveSet) {
         bindingName: MODULE_NAMESPACE_BINDING,
       };
     }
-    return resolveExport(
-      requestedModule,
-      indirectEntry.importName,
-      resolveSet,
-    );
+    return resolveExport(requestedModule, indirectEntry.importName, resolveSet);
   }
 
   if (exportName === 'default') {

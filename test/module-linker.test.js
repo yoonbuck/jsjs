@@ -418,7 +418,7 @@ export default [
         'each module/export pair should be visited once',
       );
       assertSame(resolveSet.size, records.length);
-      assertSame(elapsed < 10_000, true, 'resolution should finish promptly');
+      assertSame(elapsed < 10000, true, 'resolution should finish promptly');
 
       resolutionVisits = 0;
       const repeated = resolveExport(root, 'shared', new Set());
