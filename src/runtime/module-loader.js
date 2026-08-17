@@ -175,14 +175,11 @@ export class ModuleLoader {
         }
 
         if (error instanceof GuestErrorSignal) {
-          throw new ModuleLoaderError({
-            phase: 'evaluate',
-            identifier: record.identifier,
-            value: record.realm.createGuestError(
-              error.typeName,
-              error.guestMessage,
-            ),
-          });
+          throw cacheEvaluationError(
+            this,
+            record,
+            record.realm.createGuestError(error.typeName, error.guestMessage),
+          );
         }
 
         throw asModuleLoaderError('evaluate', record.identifier, error);
@@ -218,10 +215,27 @@ function cachedEvaluationError(loader, record) {
     throw new TypeError('Evaluation failure is missing an abrupt completion');
   }
 
+  return cacheEvaluationError(loader, record, completion.value);
+}
+
+/**
+ * @param {ModuleLoader} loader
+ * @param {SourceTextModuleRecord} record
+ * @param {unknown} value
+ * @returns {ModuleLoaderError}
+ */
+function cacheEvaluationError(loader, record, value) {
+  const errors = moduleLoaderState(loader).evaluationErrors;
+  const cached = errors.get(record);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const error = new ModuleLoaderError({
     phase: 'evaluate',
     identifier: record.identifier,
-    value: completion.value,
+    value,
   });
   errors.set(record, error);
   return error;

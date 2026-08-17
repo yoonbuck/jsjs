@@ -240,8 +240,12 @@ export default [
         A: 'export * from "D";',
         D: 'export { y as x } from "A"; export const y = 1;',
       };
+      const cycleLoader = loaderFor(cycle, realm);
       const namespaceError = await rejected(
-        loaderFor(cycle, realm).loadAndEvaluate('root'),
+        cycleLoader.loadAndEvaluate('root'),
+      );
+      const repeatedNamespaceError = await rejected(
+        cycleLoader.loadAndEvaluate('root'),
       );
 
       assertSame(namespaceError instanceof ModuleLoaderError, true);
@@ -253,6 +257,8 @@ export default [
         realm.intrinsics.syntaxErrorPrototype,
       );
       assertSame(namespaceError.value.get('name'), 'SyntaxError');
+      assertSame(repeatedNamespaceError, namespaceError);
+      assertSame(repeatedNamespaceError.value, namespaceError.value);
 
       const importError = await rejected(
         loaderFor(
