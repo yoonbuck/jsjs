@@ -88,6 +88,11 @@ export const ASYNC_RUNTIME_RELEASE_MANIFEST = Object.freeze({
         ['module'],
       ),
       metadataRecord(
+        'test/language/module-code/eval-export-dflt-expr-err-get-value.js',
+        [],
+        ['module'],
+      ),
+      metadataRecord(
         'test/language/module-code/eval-export-dflt-expr-fn-anon.js',
         [],
         ['module'],

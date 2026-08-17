@@ -3769,7 +3769,8 @@ function isSupportedModulePosition(node, parent, parentKey, parentIndex) {
           direct('local')) ||
         (parent.type === 'ImportSpecifier' && direct('imported')) ||
         (parent.type === 'ExportSpecifier' &&
-          (direct('local') || direct('exported')))
+          (direct('local') || direct('exported'))) ||
+        (parent.type === 'ExportDefaultDeclaration' && direct('declaration'))
       );
     case 'VariableDeclaration':
       return parent.type === 'ExportNamedDeclaration' && direct('declaration');

@@ -180,6 +180,29 @@ export default [
     },
   },
   {
+    name: 'parseModule accepts an identifier as a default-export expression',
+    run() {
+      const ast = parseModule('const value = 7; export default value;');
+
+      assertSame(ast.body[1].declaration.type, 'Identifier');
+      assertSame(ast.body[1].declaration.name, 'value');
+    },
+  },
+  {
+    name: 'custom module AST validation accepts a default-export identifier',
+    run() {
+      const ast = parseModule(
+        'const value = 7; export default (value, value);',
+      );
+      ast.body[1].declaration = ast.body[1].declaration.expressions[0];
+
+      const parsed = parseModule('', { parse: () => ast });
+
+      assertSame(parsed.body[1].declaration.type, 'Identifier');
+      assertSame(parsed.body[1].declaration.name, 'value');
+    },
+  },
+  {
     name: 'SourceTextModuleRecord classifies ES2015 static entry forms',
     run() {
       const record = new SourceTextModuleRecord({

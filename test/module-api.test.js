@@ -26,4 +26,21 @@ export default [
       assertSame(typeof ModuleLoaderError, 'function');
     },
   },
+  {
+    name: 'public ModuleLoader evaluates an identifier default export',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load() {
+          return 'const value = 7; export default value;';
+        },
+      });
+
+      const namespace = await loader.loadAndEvaluate('identifier-default');
+
+      assertSame(namespace.get('default'), 7);
+    },
+  },
 ];
