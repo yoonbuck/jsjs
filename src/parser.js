@@ -481,7 +481,9 @@ function validateModuleProgram(
   customAst,
   sourceIndependentNodes,
 ) {
-  checkUntrustedAstDescriptors(program);
+  if (customAst) {
+    checkUntrustedAstDescriptors(program);
+  }
 
   if (!isModuleProgram(program)) {
     throw new TypeError('Expected parser to return a module Program node');

@@ -73,6 +73,53 @@ export default [
     },
   },
   {
+    name: 'ordinary module parsing skips the untrusted descriptor graph scan while custom AST entry points reject accessors',
+    run() {
+      for (const customEntry of ['parse', 'program']) {
+        const ast = parseModule('');
+        let getterCalls = 0;
+
+        Object.defineProperty(ast, 'body', {
+          get() {
+            getterCalls += 1;
+            throw new Error('custom Program.body getter must not execute');
+          },
+          enumerable: true,
+          configurable: true,
+        });
+
+        assertThrows(
+          () =>
+            customEntry === 'parse'
+              ? parseModule('', { parse: () => ast })
+              : parseModule('', { program: ast }),
+          SyntaxError,
+        );
+        assertSame(getterCalls, 0, `${customEntry} AST getter stayed inert`);
+      }
+
+      const ownKeys = Reflect.ownKeys;
+      let descriptorGraphScans = 0;
+
+      Reflect.ownKeys = function countedOwnKeys(value) {
+        descriptorGraphScans += 1;
+        return ownKeys(value);
+      };
+
+      try {
+        assertSame(parseModule('export const value = 1;').sourceType, 'module');
+      } finally {
+        Reflect.ownKeys = ownKeys;
+      }
+
+      assertSame(
+        descriptorGraphScans,
+        0,
+        'trusted Acorn output must not enter the untrusted descriptor walk',
+      );
+    },
+  },
+  {
     name: 'parseModule snapshots custom AST graphs before validation',
     run() {
       const ast = parseScript('const preserved = 1;');
