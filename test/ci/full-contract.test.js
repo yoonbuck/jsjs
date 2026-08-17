@@ -384,8 +384,7 @@ function numberRenderings(value) {
 }
 
 const STRUCTURAL_LAYER_LABEL_PATTERN = /\bLayer(?: |-)[1-4]\b/gu;
-const SYNTHETIC_COVERAGE_EXAMPLE_MARKER =
-  'test262-coverage-synthetic-example';
+const SYNTHETIC_COVERAGE_EXAMPLE_MARKER = 'test262-coverage-synthetic-example';
 
 /**
  * Removes structural Layer labels from prose without touching other numbers.
@@ -406,10 +405,7 @@ function markedSyntheticCoverageFence(line) {
 
   if (
     opening === null ||
-    !opening[2]
-      .trim()
-      .split(/\s+/u)
-      .includes(SYNTHETIC_COVERAGE_EXAMPLE_MARKER)
+    !opening[2].trim().split(/\s+/u).includes(SYNTHETIC_COVERAGE_EXAMPLE_MARKER)
   ) {
     return undefined;
   }
