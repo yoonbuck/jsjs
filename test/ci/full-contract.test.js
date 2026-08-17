@@ -407,6 +407,10 @@ function markdownFenceOpening(line) {
     return undefined;
   }
 
+  if (opening[1][0] === '`' && opening[2].includes('`')) {
+    return undefined;
+  }
+
   return {
     character: opening[1][0],
     length: opening[1].length,
@@ -1343,6 +1347,18 @@ export default [
           new Set([1]),
         ).join('\n'),
         '1 -> {"malformed": 1}',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json` test262-coverage-synthetic-example',
+            'An invalid fence must not hide 1 live count.',
+            '```',
+          ].join('\n'),
+          new Set([1]),
+        ).join('\n'),
+        '1 -> An invalid fence must not hide 1 live count.',
       );
     },
   },
