@@ -398,21 +398,22 @@ function stripStructuralLayerLabel(line) {
 
 /**
  * @param {string} line
- * @returns {{ character: string, length: number } | undefined}
+ * @returns {{ character: string, length: number, synthetic: boolean } | undefined}
  */
-function markedSyntheticCoverageFence(line) {
+function markdownFenceOpening(line) {
   const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line);
 
-  if (
-    opening === null ||
-    !opening[2].trim().split(/\s+/u).includes(SYNTHETIC_COVERAGE_EXAMPLE_MARKER)
-  ) {
+  if (opening === null) {
     return undefined;
   }
 
   return {
     character: opening[1][0],
     length: opening[1].length,
+    synthetic: opening[2]
+      .trim()
+      .split(/\s+/u)
+      .includes(SYNTHETIC_COVERAGE_EXAMPLE_MARKER),
   };
 }
 
@@ -421,7 +422,7 @@ function markedSyntheticCoverageFence(line) {
  * @param {{ character: string, length: number }} opening
  * @returns {boolean}
  */
-function closesSyntheticCoverageFence(line, opening) {
+function closesMarkdownFence(line, opening) {
   const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/u.exec(line);
 
   return (
@@ -440,22 +441,26 @@ function closesSyntheticCoverageFence(line, opening) {
  */
 function findCoverageNumberOffenders(outside, live) {
   const offenders = [];
-  /** @type {{ character: string, length: number } | undefined} */
-  let syntheticFence;
+  /** @type {{ character: string, length: number, synthetic: boolean } | undefined} */
+  let markdownFence;
 
   for (const line of outside.split('\n')) {
-    if (syntheticFence !== undefined) {
-      if (closesSyntheticCoverageFence(line, syntheticFence)) {
-        syntheticFence = undefined;
+    if (markdownFence !== undefined) {
+      const synthetic = markdownFence.synthetic;
+
+      if (closesMarkdownFence(line, markdownFence)) {
+        markdownFence = undefined;
       }
 
-      continue;
-    }
+      if (synthetic) {
+        continue;
+      }
+    } else {
+      markdownFence = markdownFenceOpening(line);
 
-    syntheticFence = markedSyntheticCoverageFence(line);
-
-    if (syntheticFence !== undefined) {
-      continue;
+      if (markdownFence?.synthetic === true) {
+        continue;
+      }
     }
 
     const scanLine = stripStructuralLayerLabel(line);
@@ -1324,6 +1329,20 @@ export default [
           '1 -> An ordinary prose claim still says 1 file.',
           '1 -> {"malformed": 1}',
         ].join('\n'),
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '````markdown',
+            '```json test262-coverage-synthetic-example',
+            '{"malformed": 1}',
+            '```',
+            '````',
+          ].join('\n'),
+          new Set([1]),
+        ).join('\n'),
+        '1 -> {"malformed": 1}',
       );
     },
   },
