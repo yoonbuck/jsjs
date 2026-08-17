@@ -185,20 +185,26 @@ export default [
     },
   },
   {
-    name: 'equivalent namespace-import re-exports remain unambiguous',
+    name: 'namespace omits namespace-import local exports that are ambiguous across intermediaries',
     async run() {
       const loader = loaderFor({
         root: 'export * from "left"; export * from "right";',
-        left: 'import * as foo from "dep"; export { foo };',
-        right: 'import * as foo from "dep"; export { foo };',
+        left: 'import * as ns from "dep"; export { ns };',
+        right: 'import * as ns from "dep"; export { ns };',
         dep: 'export const value = 1;',
       });
 
       const root = await loader.loadAndEvaluate('root');
+      const left = await loader.loadAndEvaluate('left');
+      const right = await loader.loadAndEvaluate('right');
       const dependency = await loader.loadAndEvaluate('dep');
 
-      assertSame(root.get('foo'), dependency);
-      assertSame(root.hasProperty('foo'), true);
+      assertSame(root.hasProperty('ns'), false);
+      assertSame(root.getOwnProperty('ns'), undefined);
+      assertSame(root.get('ns'), undefined);
+      assertSame(left.get('ns'), dependency);
+      assertSame(right.get('ns'), dependency);
+      assertSame(dependency, await loader.loadAndEvaluate('dep'));
     },
   },
   {

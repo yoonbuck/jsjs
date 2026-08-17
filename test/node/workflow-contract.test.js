@@ -881,7 +881,7 @@ export default [
       const suites = /** @type {const} */ (['generator', 'module', 'promise']);
       const expectedCounts = Object.freeze({
         generator: 11,
-        module: 14,
+        module: 13,
         promise: 15,
       });
       const expectedSupportedFeatures = Object.freeze({

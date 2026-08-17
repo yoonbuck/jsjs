@@ -28,6 +28,28 @@ export default [
     },
   },
   {
+    name: 'SourceTextModuleRecord keeps namespace-import exports local while named-import exports are indirect',
+    run() {
+      const record = new SourceTextModuleRecord({
+        realm: createRealm(),
+        identifier: 'root',
+        ast: parseModule(`
+          import * as namespaceName from "dep";
+          import { value as namedName } from "dep";
+          export { namespaceName as namespaceExport, namedName as namedExport };
+        `),
+      });
+
+      assertSame(record.localExportEntries.length, 1);
+      assertSame(record.localExportEntries[0].exportName, 'namespaceExport');
+      assertSame(record.localExportEntries[0].localName, 'namespaceName');
+      assertSame(record.indirectExportEntries.length, 1);
+      assertSame(record.indirectExportEntries[0].exportName, 'namedExport');
+      assertSame(record.indirectExportEntries[0].moduleRequest, 'dep');
+      assertSame(record.indirectExportEntries[0].importName, 'value');
+    },
+  },
+  {
     name: 'parseModule rejects foreign accessors and later module syntax',
     run() {
       assertThrows(

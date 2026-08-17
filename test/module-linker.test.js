@@ -389,6 +389,33 @@ export default [
     },
   },
   {
+    name: 'namespace-import local exports from separate intermediaries make a named import ambiguous',
+    async run() {
+      const root = await loadModuleGraph(
+        loaderFor({
+          root: 'import { ns } from "barrel";',
+          barrel: 'export * from "left"; export * from "right";',
+          left: 'import * as ns from "dep"; export { ns };',
+          right: 'import * as ns from "dep"; export { ns };',
+          dep: 'export const value = 1;',
+        }),
+        'root',
+      );
+      const error = /** @type {ModuleLoaderError} */ (
+        assertThrows(() => linkModuleGraph(root), ModuleLoaderError)
+      );
+
+      assertSame(error.phase, 'link');
+      assertSame(
+        /** @type {{ get: (name: string) => unknown }} */ (error.cause).get(
+          'name',
+        ),
+        'SyntaxError',
+      );
+      assertUnlinked(root);
+    },
+  },
+  {
     name: 'failed link rolls back every graph record without reloading parsed source',
     async run() {
       let loads = 0;

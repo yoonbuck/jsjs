@@ -275,7 +275,8 @@ function extractNamedExportEntries(
   if (declaration.source === null) {
     for (const specifier of declaration.specifiers) {
       const imported = importEntries.find(
-        (entry) => entry.localName === specifier.local.name,
+        (entry) =>
+          entry.kind === 'named' && entry.localName === specifier.local.name,
       );
       if (imported === undefined) {
         localEntries.push(
