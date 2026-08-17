@@ -422,6 +422,8 @@ const tests = [
             `${escaped}${value}${escaped}`,
           );
         }
+
+        assertSame(run(`Number("1${escaped}1");`), NaN, `${escaped} interior`);
       }
 
       const longWhitespace = WHITESPACE.join('').repeat(256);
@@ -442,6 +444,12 @@ const tests = [
           `long whitespace around ${value}`,
         );
       }
+
+      assertSame(
+        run(`Number("1${longWhitespaceSource}1");`),
+        NaN,
+        'long whitespace interior',
+      );
     },
   },
   {
