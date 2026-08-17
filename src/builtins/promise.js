@@ -149,7 +149,7 @@ export function createPromiseIntrinsics(realm) {
       name: 'resolve',
       length: 1,
       call(thisValue, args) {
-        if (!isConstructor(thisValue)) {
+        if (!(thisValue instanceof EngineObject)) {
           throw new GuestErrorSignal(
             'TypeError',
             'Promise.resolve called on a non-constructor',

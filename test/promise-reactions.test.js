@@ -285,6 +285,39 @@ export default [
     },
   },
   {
+    name: 'Promise.resolve checks constructibility only when allocation is needed',
+    run: () => {
+      const realm = createRealm();
+
+      assertNormalValue(
+        evaluateScript(
+          realm,
+          [
+            'var promise = Promise.resolve("same");',
+            'var marker = {};',
+            'promise.constructor = marker;',
+            'var same = Promise.resolve.call(marker, promise);',
+            'var allocationError;',
+            'try {',
+            '  Promise.resolve.call(marker, 1);',
+            '} catch (error) {',
+            '  allocationError = error.name;',
+            '}',
+            'var primitiveError;',
+            'promise.constructor = 1;',
+            'try {',
+            '  Promise.resolve.call(1, promise);',
+            '} catch (error) {',
+            '  primitiveError = error.name;',
+            '}',
+            '(same === promise) + ":" + allocationError + ":" + primitiveError;',
+          ].join('\n'),
+        ),
+        'true:TypeError:TypeError',
+      );
+    },
+  },
+  {
     name: 'then uses the species constructor and validates invalid species values',
     run: () => {
       const realm = createRealm();
