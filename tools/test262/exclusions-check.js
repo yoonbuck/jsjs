@@ -11,8 +11,9 @@
  * legitimately covers files that do not exist yet, and directory exclusions are
  * structural policy, not per-file verdicts.
  *
- * **Unverifiable tests:** if a test cannot be run (e.g. it carries the `module`
- * flag), it is reported as unverifiable rather than silently skipped.
+ * **Unverifiable tests:** if a test cannot be run because of unsupported flags
+ * or runner infrastructure, it is reported as unverifiable rather than counted
+ * as evidence that the exclusion is still needed.
  *
  * Exit code: non-zero when any stale exclusion is found.
  *

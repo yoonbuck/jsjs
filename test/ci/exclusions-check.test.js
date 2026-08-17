@@ -245,7 +245,7 @@ export default [
         'should have failed (correctly excluded) entries',
       );
 
-      // Some tests may be unverifiable (module flag, etc.)
+      // Unsupported flags and infrastructure failures remain unverifiable.
       assertSame(
         results.every(
           (r) =>
