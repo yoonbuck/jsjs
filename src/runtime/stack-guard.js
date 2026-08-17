@@ -56,6 +56,9 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
  *   an `eval` chain is counted in the same units as a direct call;
  * - every expression and statement the evaluator walks into, so a call buried
  *   in a deeply nested expression costs what it really costs;
+ * - every active generator resumption, because synchronous `yield*` and
+ *   generator-backed iteration can resume another generator before the current
+ *   continuation unwinds;
  * - `JSON.parse` and `JSON.stringify`, whose recursion follows the shape of
  *   runtime *data* rather than of source, and the regular-expression pattern
  *   parser, whose recursion follows the shape of a guest-supplied pattern

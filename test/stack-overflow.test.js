@@ -365,6 +365,54 @@ const tests = [
     },
   },
   {
+    name: 'the default limit makes recursive yield delegation guest-catchable',
+    run() {
+      assertSame(
+        run(`
+          function* recursive() {
+            yield* recursive();
+          }
+          try {
+            recursive().next();
+            "not thrown";
+          } catch (error) {
+            [
+              error.name,
+              error instanceof RangeError,
+              error.message
+            ].join("|");
+          }
+        `),
+        'RangeError|true|Maximum call stack size exceeded',
+      );
+    },
+  },
+  {
+    name: 'the default limit contains generator-backed for-of recursion',
+    run() {
+      assertSame(
+        run(`
+          function* recursive() {
+            for (var value of recursive()) {
+              yield value;
+            }
+          }
+          try {
+            recursive().next();
+            "not thrown";
+          } catch (error) {
+            [
+              error.name,
+              error instanceof RangeError,
+              error.message
+            ].join("|");
+          }
+        `),
+        'RangeError|true|Maximum call stack size exceeded',
+      );
+    },
+  },
+  {
     name: 'recursion through nested data is contained, not left to the host stack',
     run() {
       // `String(a)` on a self-nesting array recurses through

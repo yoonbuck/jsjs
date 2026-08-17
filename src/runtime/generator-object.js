@@ -81,6 +81,9 @@ export class GeneratorObject extends EngineObject {
     }
 
     const starting = this.state === 'suspendedStart';
+    const guard = this.realm.stackGuard;
+
+    guard.enter();
     this.state = 'executing';
 
     try {
@@ -127,6 +130,8 @@ export class GeneratorObject extends EngineObject {
     } catch (error) {
       this.complete();
       throw error;
+    } finally {
+      guard.exit();
     }
 
     throw new TypeError(
