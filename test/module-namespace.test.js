@@ -1,5 +1,9 @@
 import { assertSame, assertThrows } from './harness/assert.js';
-import { createModuleLoader, createRealm } from '../src/index.js';
+import {
+  createModuleLoader,
+  createRealm,
+  ModuleLoaderError,
+} from '../src/index.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import { linkModuleGraph } from '../src/runtime/module-linker.js';
@@ -225,6 +229,50 @@ export default [
       assertSame(keys, 'leftOnly,rightOnly');
       assertSame(namespace.getOwnProperty('shared'), undefined);
       assertSame(namespace.get('shared'), undefined);
+    },
+  },
+  {
+    name: 'namespace creation rejects a not-found exported name with a Realm-owned SyntaxError while named imports still fail during linking',
+    async run() {
+      const realm = createRealm();
+      const cycle = {
+        root: 'export * from "A";',
+        A: 'export * from "D";',
+        D: 'export { y as x } from "A"; export const y = 1;',
+      };
+      const namespaceError = await rejected(
+        loaderFor(cycle, realm).loadAndEvaluate('root'),
+      );
+
+      assertSame(namespaceError instanceof ModuleLoaderError, true);
+      assertSame(namespaceError.phase, 'evaluate');
+      assertSame(namespaceError.identifier, 'root');
+      assertSame(namespaceError.cause, undefined);
+      assertSame(
+        namespaceError.value.getPrototype(),
+        realm.intrinsics.syntaxErrorPrototype,
+      );
+      assertSame(namespaceError.value.get('name'), 'SyntaxError');
+
+      const importError = await rejected(
+        loaderFor(
+          {
+            entry: 'import { x } from "root";',
+            ...cycle,
+          },
+          realm,
+        ).loadAndEvaluate('entry'),
+      );
+
+      assertSame(importError instanceof ModuleLoaderError, true);
+      assertSame(importError.phase, 'link');
+      assertSame(importError.identifier, 'entry');
+      assertSame(importError.value, undefined);
+      assertSame(
+        importError.cause.getPrototype(),
+        realm.intrinsics.syntaxErrorPrototype,
+      );
+      assertSame(importError.cause.get('name'), 'SyntaxError');
     },
   },
   {

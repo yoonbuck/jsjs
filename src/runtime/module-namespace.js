@@ -186,12 +186,20 @@ function resolveNamespaceExports(record) {
   for (const exportName of exportedNames(record, new Set())) {
     const resolution = resolveExport(record, exportName, new Set(), new Set());
 
-    if (resolution.type === 'resolved') {
-      resolvedExports.set(exportName, {
-        module: resolution.module,
-        bindingName: resolution.bindingName,
-      });
+    if (resolution.type === 'ambiguous') {
+      continue;
     }
+    if (resolution.type === 'not-found') {
+      throw new GuestErrorSignal(
+        'SyntaxError',
+        `Module namespace export '${exportName}' cannot be resolved`,
+      );
+    }
+
+    resolvedExports.set(exportName, {
+      module: resolution.module,
+      bindingName: resolution.bindingName,
+    });
   }
 
   return resolvedExports;

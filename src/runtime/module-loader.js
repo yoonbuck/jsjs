@@ -1,6 +1,6 @@
 import { parseModule } from '../parser.js';
 import { evaluateModuleGraph } from '../evaluator/modules.js';
-import { ThrowSignal } from './completion.js';
+import { GuestErrorSignal, ThrowSignal } from './completion.js';
 import { linkModuleGraph } from './module-linker.js';
 import { ModuleLoaderError, SourceTextModuleRecord } from './module-record.js';
 import { isRealm } from './realm.js';
@@ -165,17 +165,28 @@ export class ModuleLoader {
       linkModuleGraph(record);
       try {
         evaluateModuleGraph(record);
+        return record.getNamespace();
       } catch (error) {
         if (
-          error instanceof ThrowSignal &&
+          (error instanceof ThrowSignal || error instanceof GuestErrorSignal) &&
           record.evaluationCompletion?.type === 'throw'
         ) {
           throw cachedEvaluationError(this, record);
         }
 
+        if (error instanceof GuestErrorSignal) {
+          throw new ModuleLoaderError({
+            phase: 'evaluate',
+            identifier: record.identifier,
+            value: record.realm.createGuestError(
+              error.typeName,
+              error.guestMessage,
+            ),
+          });
+        }
+
         throw asModuleLoaderError('evaluate', record.identifier, error);
       }
-      return record.getNamespace();
     });
     state.evaluationInFlight.set(record, evaluation);
 
