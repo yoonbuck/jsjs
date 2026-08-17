@@ -347,6 +347,90 @@ export default [
     },
   },
   {
+    name: 'ResolveExport shares visited pairs across a star-export diamond',
+    async run() {
+      const depth = 12;
+      /** @type {Record<string, string>} */
+      const sources = {
+        root: 'export * from "left-0"; export * from "right-0";',
+        leaf: 'export const shared = 1;',
+      };
+
+      for (let level = 0; level < depth; level += 1) {
+        const source =
+          level === depth - 1
+            ? 'export * from "leaf";'
+            : `export * from "left-${level + 1}"; export * from "right-${level + 1}";`;
+        sources[`left-${level}`] = source;
+        sources[`right-${level}`] = source;
+      }
+
+      const root = await loadModuleGraph(loaderFor(sources), 'root');
+      /** @type {SourceTextModuleRecord[]} */
+      const records = [];
+      const pending = [root];
+      const seen = new Set();
+
+      while (pending.length > 0) {
+        const record = pending.pop();
+        if (record === undefined || seen.has(record)) {
+          continue;
+        }
+
+        seen.add(record);
+        records.push(record);
+        for (const request of record.resolvedRequestedModules) {
+          pending.push(request.module);
+        }
+      }
+
+      const leaf = records.find((record) => record.identifier === 'leaf');
+      if (leaf === undefined) {
+        throw new Error('Expected the shared leaf module');
+      }
+
+      let resolutionVisits = 0;
+      for (const record of records) {
+        const localExportEntries = record.localExportEntries;
+        Object.defineProperty(record, 'localExportEntries', {
+          configurable: true,
+          get() {
+            resolutionVisits += 1;
+            return localExportEntries;
+          },
+        });
+      }
+
+      const resolveSet = new Set();
+      const started = Date.now();
+      const resolution = resolveExport(root, 'shared', resolveSet);
+      const elapsed = Date.now() - started;
+
+      assertSame(resolution.type, 'resolved');
+      if (resolution.type !== 'resolved') {
+        throw new Error('Expected the shared export to resolve');
+      }
+      assertSame(resolution.module, leaf);
+      assertSame(resolution.bindingName, 'shared');
+      assertSame(
+        resolutionVisits,
+        records.length,
+        'each module/export pair should be visited once',
+      );
+      assertSame(resolveSet.size, records.length);
+      assertSame(elapsed < 10_000, true, 'resolution should finish promptly');
+
+      resolutionVisits = 0;
+      const repeated = resolveExport(root, 'shared', new Set());
+      assertSame(repeated.type, 'resolved');
+      assertSame(
+        resolutionVisits,
+        records.length,
+        'a fresh top-level resolution must use a fresh visited set',
+      );
+    },
+  },
+  {
     name: 'ambiguous star exports stay absent until a named import requests them',
     async run() {
       const root = await loadModuleGraph(

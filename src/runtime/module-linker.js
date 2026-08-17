@@ -60,8 +60,8 @@ export function linkModuleGraph(rootRecord) {
 
 /**
  * Resolves one exported name using the module-record pair identity required by
- * ResolveExport. Each recursive branch receives its own extended resolve set,
- * so one star branch cannot suppress work in another.
+ * ResolveExport. Recursive branches share the same resolve set so a pair reached
+ * through one star path is pruned when another path reaches it again.
  *
  * @param {SourceTextModuleRecord} module
  * @param {string} exportName
@@ -85,8 +85,7 @@ export function resolveExport(module, exportName, resolveSet) {
     return NOT_FOUND;
   }
 
-  const nextResolveSet = new Set(resolveSet);
-  nextResolveSet.add(pair);
+  resolveSet.add(pair);
   const localEntry = module.localExportEntries.find(
     (entry) => entry.exportName === exportName,
   );
@@ -115,7 +114,7 @@ export function resolveExport(module, exportName, resolveSet) {
     return resolveExport(
       requestedModule,
       indirectEntry.importName,
-      nextResolveSet,
+      resolveSet,
     );
   }
 
@@ -130,7 +129,7 @@ export function resolveExport(module, exportName, resolveSet) {
     const resolution = resolveExport(
       requestedModuleForEntry(module, starEntry),
       exportName,
-      nextResolveSet,
+      resolveSet,
     );
 
     if (resolution.type === 'ambiguous') {
