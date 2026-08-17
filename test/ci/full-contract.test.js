@@ -932,14 +932,26 @@ export default [
     run: () => {
       const results = parseJsonLines(npmRun('test262:es2015-release'));
 
-      assertSame(results.length, 3);
       assertSame(
-        results.map((result) => result.status).join(','),
-        'passed,passed,passed',
-      );
-      assertSame(
-        results.map((result) => result.name).join(' | '),
-        'focused ES2015 Promise upstream Test262 files all pass | focused ES2015 generator upstream Test262 files all pass | focused ES2015 static-module Test262 roots all pass at the pinned revision',
+        JSON.stringify(results),
+        JSON.stringify([
+          {
+            name: 'focused ES2015 Promise upstream Test262 files all pass',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 generator upstream Test262 files all pass',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 static-module Test262 roots all pass at the pinned revision',
+            status: 'passed',
+          },
+          {
+            name: 'pinned module raw metadata expands once without harness rewriting',
+            status: 'passed',
+          },
+        ]),
       );
     },
   },
