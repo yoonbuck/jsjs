@@ -129,6 +129,58 @@ export default [
     },
   },
   {
+    name: 'parseModule rejects an unbound source-less export from a custom AST',
+    run() {
+      const ast = parseModule(
+        'const present = 1; export { present as alias };',
+      );
+      ast.body[1].specifiers[0].local.name = 'missing';
+
+      assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              return ast;
+            },
+          }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom module local exports accept every declared and imported binding form',
+    run() {
+      const ast = parseModule(`
+        var variableName;
+        let lexicalName;
+        function functionName() {}
+        class ClassName {}
+        import defaultName, { imported as importedName } from "dep";
+        import * as namespaceName from "namespace";
+        export {
+          variableName as variableAlias,
+          variableName as secondVariableAlias,
+          lexicalName as lexicalAlias,
+          functionName as functionAlias,
+          ClassName as classAlias,
+          defaultName as defaultAlias,
+          importedName as importedAlias,
+          namespaceName as namespaceAlias,
+          laterName as laterAlias
+        };
+        const laterName = 1;
+        export var exportedVariable;
+        export { exportedVariable as exportedVariableAlias };
+        export { remoteName as remoteAlias } from "remote";
+        export * from "star";
+      `);
+
+      const parsed = parseModule('', { parse: () => ast });
+
+      assertSame(parsed.body.length, 12);
+    },
+  },
+  {
     name: 'parseModule rejects duplicate import and top-level bindings from custom ASTs',
     run() {
       const importCollision = parseModule(

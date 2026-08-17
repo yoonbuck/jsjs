@@ -484,7 +484,7 @@ function validateModuleProgram(
     );
   }
 
-  checkModuleDeclarationEarlyErrors(body);
+  checkModuleDeclarationEarlyErrors(body, customAst);
 
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
@@ -503,12 +503,14 @@ function validateModuleProgram(
  * declarations are lexical in a module, unlike their script top-level role.
  *
  * @param {readonly any[]} body
+ * @param {boolean} checkLocalExportBindings
  * @returns {void}
  */
-function checkModuleDeclarationEarlyErrors(body) {
+function checkModuleDeclarationEarlyErrors(body, checkLocalExportBindings) {
   const exportedNames = new Set();
   const lexicalNames = new Set();
   const varNames = new Set();
+  const localExportNames = [];
 
   /** @param {string} name */
   const addExportName = (name) => {
@@ -594,6 +596,7 @@ function checkModuleDeclarationEarlyErrors(body) {
         break;
       case 'ExportNamedDeclaration': {
         const declaration = moduleField(item, 'declaration');
+        const source = moduleField(item, 'source');
 
         if (declaration !== null) {
           addDeclarationBindings(declaration);
@@ -611,6 +614,16 @@ function checkModuleDeclarationEarlyErrors(body) {
               )
             ),
           );
+          if (checkLocalExportBindings && source === null) {
+            localExportNames.push(
+              /** @type {string} */ (
+                moduleField(
+                  /** @type {object} */ (moduleField(specifier, 'local')),
+                  'name',
+                )
+              ),
+            );
+          }
         }
         break;
       }
@@ -640,6 +653,12 @@ function checkModuleDeclarationEarlyErrors(body) {
           addDeclarationBindings(item);
         }
         break;
+    }
+  }
+
+  for (const name of localExportNames) {
+    if (!lexicalNames.has(name) && !varNames.has(name)) {
+      throw new SyntaxError(`Export '${name}' is not defined`);
     }
   }
 }
