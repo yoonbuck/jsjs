@@ -229,16 +229,14 @@ export class DeclarativeEnvironmentRecord {
  *   kind: 'named',
  *   targetModule: import('./module-record.js').SourceTextModuleRecord,
  *   targetName: string,
- * } | {
- *   kind: 'namespace',
- *   targetModule: import('./module-record.js').SourceTextModuleRecord,
  * }} ModuleImportBinding
  */
 
 /**
- * A module environment holds ordinary module-local bindings plus indirect import
- * bindings. Imports are intentionally kept outside `_bindings`: an import reads
- * its target environment every time rather than copying a value at link time.
+ * A module environment holds ordinary module-local bindings plus indirect named
+ * imports. Named imports stay outside `_bindings` so every read reaches the
+ * target environment; namespace imports are immutable local bindings initialized
+ * by the linker with the target's cached namespace object.
  */
 export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
   /**
@@ -266,19 +264,6 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
   }
 
   /**
-   * @param {PropertyKey} localName
-   * @param {import('./module-record.js').SourceTextModuleRecord} targetModule
-   * @returns {void}
-   */
-  createNamespaceImportBinding(localName, targetModule) {
-    this._rejectExisting(localName);
-    this._importBindings.set(localName, {
-      kind: 'namespace',
-      targetModule,
-    });
-  }
-
-  /**
    * @param {PropertyKey} name
    * @returns {boolean}
    */
@@ -296,10 +281,6 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
 
     if (importBinding === undefined) {
       return super.getBindingValue(name, strict);
-    }
-
-    if (importBinding.kind === 'namespace') {
-      return importBinding.targetModule.getNamespace();
     }
 
     const targetEnvironment = importBinding.targetModule.environment;

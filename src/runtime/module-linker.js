@@ -31,6 +31,7 @@ export function linkModuleGraph(rootRecord) {
 
   try {
     linkRecord(rootRecord, transaction);
+    initializeNamespaceImportBindings(transaction.records);
     return rootRecord;
   } catch (error) {
     transaction.rollback();
@@ -55,6 +56,38 @@ export function linkModuleGraph(rootRecord) {
       identifier: rootRecord.identifier,
       cause: error,
     });
+  }
+}
+
+/**
+ * Materializes namespace imports only after every SCC reached `linked`. ES2015
+ * module instantiation stores the resulting namespace in the immutable local
+ * binding, so later evaluation reads cannot trigger namespace construction.
+ *
+ * @param {Iterable<SourceTextModuleRecord>} records
+ * @returns {void}
+ */
+function initializeNamespaceImportBindings(records) {
+  for (const record of records) {
+    const environment = record.environment;
+
+    if (!(environment instanceof ModuleEnvironmentRecord)) {
+      throw new TypeError('Module environment is not initialized');
+    }
+
+    for (const resolvedImport of record.resolvedImportEntries) {
+      if (
+        resolvedImport.entry.kind !== 'namespace' &&
+        resolvedImport.targetName !== MODULE_NAMESPACE_BINDING
+      ) {
+        continue;
+      }
+
+      environment.initializeBinding(
+        resolvedImport.entry.localName,
+        resolvedImport.targetModule.getNamespace(),
+      );
+    }
   }
 }
 
@@ -499,6 +532,7 @@ class LinkTransaction {
   rollback() {
     for (const record of this.records) {
       record.environment = null;
+      record.namespace = null;
       record.status = 'unlinked';
       record.dfsIndex = undefined;
       record.dfsAncestorIndex = undefined;

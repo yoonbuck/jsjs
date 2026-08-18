@@ -51,10 +51,7 @@ export function moduleDeclarationInstantiation(record) {
       resolvedImport.entry.kind === 'namespace' ||
       resolvedImport.targetName === MODULE_NAMESPACE_BINDING
     ) {
-      environment.createNamespaceImportBinding(
-        resolvedImport.entry.localName,
-        resolvedImport.targetModule,
-      );
+      environment.createImmutableBinding(resolvedImport.entry.localName, true);
       continue;
     }
 

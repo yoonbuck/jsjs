@@ -92,6 +92,7 @@ import { isRealm } from './realm.js';
  *   lastActiveGraphSequence: ActiveGraphSequence | null,
  *   activeLoadIdentifiers: Set<string>,
  *   evaluationInFlight: WeakMap<SourceTextModuleRecord, Promise<any>>,
+ *   linkErrors: WeakMap<SourceTextModuleRecord, ModuleLoaderError>,
  *   evaluationErrors: WeakMap<SourceTextModuleRecord, ModuleLoaderError>,
  * }} ModuleLoaderState
  */
@@ -141,6 +142,7 @@ export class ModuleLoader {
       lastActiveGraphSequence: null,
       activeLoadIdentifiers: new Set(),
       evaluationInFlight: new WeakMap(),
+      linkErrors: new WeakMap(),
       evaluationErrors: new WeakMap(),
     });
   }
@@ -162,7 +164,19 @@ export class ModuleLoader {
     }
 
     const evaluation = Promise.resolve().then(() => {
-      linkModuleGraph(record);
+      const cachedLinkError = state.linkErrors.get(record);
+      if (cachedLinkError !== undefined) {
+        throw cachedLinkError;
+      }
+      try {
+        linkModuleGraph(record);
+      } catch (error) {
+        if (error instanceof ModuleLoaderError) {
+          state.linkErrors.set(record, error);
+        }
+        throw error;
+      }
+
       try {
         evaluateModuleGraph(record);
         return record.getNamespace();
