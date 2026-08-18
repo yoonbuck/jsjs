@@ -1,8 +1,11 @@
 # Core ECMAScript 2015 Conformance Roadmap Design
 
-**Date:** 2026-08-18  
-**Parent:** [#70 Complete ES2015 conformance](https://github.com/yoonbuck/jsjs/issues/70)  
-**Audit:** [#71 Audit remaining ES2015 conformance gaps](https://github.com/yoonbuck/jsjs/issues/71)  
+**Date:** 2026-08-18
+
+**Parent:** [#70 Complete ES2015 conformance](https://github.com/yoonbuck/jsjs/issues/70)
+
+**Audit:** [#71 Audit remaining ES2015 conformance gaps](https://github.com/yoonbuck/jsjs/issues/71)
+
 **Release dependency:** [#61 Integrate and release async runtime and modules](https://github.com/yoonbuck/jsjs/issues/61)
 
 ## Status
