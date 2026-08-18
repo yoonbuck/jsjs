@@ -1,4 +1,4 @@
-import { EngineObject } from './object.js';
+import { EngineObject, callAccessor } from './object.js';
 import { createPrimitiveWrapper } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
@@ -134,7 +134,7 @@ export function toPrimitive(value, preferredType = 'default') {
       );
     }
 
-    const result = exoticToPrimitive.callFunction(value, [preferredType]);
+    const result = callAccessor(exoticToPrimitive, value, [preferredType]);
 
     if (!isPrimitive(result)) {
       throw new GuestErrorSignal(

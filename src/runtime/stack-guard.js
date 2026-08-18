@@ -50,8 +50,9 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
  * During a synchronous generator resume, the first Agent also owns a temporary
  * complete host-chain count: every guarded frame entered until the outermost
  * resume unwinds charges that count, including frames in another Realm or Agent.
- * The entering Realm's `maxDepth` remains the limit at each edge, so its ordinary
- * evaluator semantics and independently configured budget are unchanged.
+ * A merged chain retains the smallest `maxDepth` observed from its participating
+ * Realms, so adding a Realm can only tighten the complete host-chain budget;
+ * each Realm's ordinary evaluator count and configured limit remain unchanged.
  *
  * Three kinds of work enter the guard, because all three recurse on the host
  * stack proportionally to something guest source controls:
@@ -105,6 +106,8 @@ export class StackGuard {
     this.depth = 0;
     this.agent = agent;
     this.generatorHostChainDepth = 0;
+    /** @type {import('./agent.js').GeneratorHostChain[]} */
+    this._generatorHostChainFrames = [];
   }
 
   /**
@@ -125,11 +128,12 @@ export class StackGuard {
     }
 
     const chargedGeneratorHostChain =
-      this.agent?.enterGeneratorHostFrame(this.maxDepth) === true;
+      this.agent?.enterGeneratorHostFrame(this.maxDepth) ?? null;
 
     this.depth += 1;
 
-    if (chargedGeneratorHostChain) {
+    if (chargedGeneratorHostChain !== null) {
+      this._generatorHostChainFrames.push(chargedGeneratorHostChain);
       this.generatorHostChainDepth += 1;
     }
   }
@@ -141,8 +145,14 @@ export class StackGuard {
     this.depth -= 1;
 
     if (this.generatorHostChainDepth > 0) {
+      const chargedGeneratorHostChain = this._generatorHostChainFrames.pop();
+
+      if (chargedGeneratorHostChain === undefined) {
+        throw new TypeError('Generator host-chain frame stack is empty');
+      }
+
       this.generatorHostChainDepth -= 1;
-      this.agent?.exitGeneratorHostFrame();
+      this.agent?.exitGeneratorHostFrame(chargedGeneratorHostChain);
     }
   }
 }

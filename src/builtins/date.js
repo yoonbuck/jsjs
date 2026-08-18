@@ -193,7 +193,7 @@ function installDatePrototypeMethods(realm, datePrototype) {
       throw new GuestErrorSignal('TypeError', 'toISOString is not callable');
     }
 
-    return toISOString.callFunction(object, []);
+    return toISOString.callFunction(object, [], realm);
   });
   defineMethod(
     realm,

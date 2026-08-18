@@ -125,7 +125,7 @@ export function createObjectIntrinsics(realm) {
           object.get('toString'),
           'toString is not callable',
         );
-        return method.callFunction(object, []);
+        return method.callFunction(object, [], realm);
       },
     }),
   );

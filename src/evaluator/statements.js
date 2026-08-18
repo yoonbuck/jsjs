@@ -246,7 +246,10 @@ function evaluateFunctionDeclaration(node, context) {
     aliasDeclarations.has(node)
   ) {
     const name = node.id.name;
-    const value = getValue(getIdentifierReference(context.env, name, false));
+    const value = getValue(
+      getIdentifierReference(context.env, name, false),
+      context.realm,
+    );
     context.variableEnv.setMutableBinding(name, value, false);
   }
 
@@ -725,7 +728,7 @@ function assignForInTarget(left, key, context) {
         pattern.name,
         context.strict,
       );
-      putValue(reference, key);
+      putValue(reference, key, context.realm);
     } else {
       assignBindingPattern(pattern, key, context);
     }
@@ -744,7 +747,7 @@ function assignForInTarget(left, key, context) {
   const reference = /** @type {import('../runtime/reference.js').Reference} */ (
     evaluateExpression(left, context)
   );
-  putValue(reference, key);
+  putValue(reference, key, context.realm);
 }
 
 /**
@@ -806,7 +809,7 @@ function evaluateForOfStatement(node, context, labelSet) {
     if (step === false) {
       return createNormalCompletion(value);
     }
-    const nextValue = iteratorValue(step);
+    const nextValue = iteratorValue(step, context.realm);
 
     /** @type {Completion} */
     let bodyResult;

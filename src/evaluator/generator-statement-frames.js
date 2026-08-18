@@ -1341,6 +1341,7 @@ function startForOfIteration(execution, frame) {
       /** @type {import('../runtime/object.js').EngineObject} */ (
         stepResult.value
       ),
+      execution.realm,
     ),
   );
 

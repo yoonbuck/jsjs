@@ -91,11 +91,12 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'next',
       length: 1,
+      generatorResume: true,
       call(thisValue, args) {
-        return requireGenerator(thisValue, 'next').resume(
-          createNormalCompletion(args[0]),
-          realm,
-        );
+        const generator = requireGenerator(thisValue, 'next');
+
+        realm.agent.linkGeneratorHostChain(generator.realm.agent);
+        return generator.resume(createNormalCompletion(args[0]), realm);
       },
     }),
   );
@@ -105,11 +106,12 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'return',
       length: 1,
+      generatorResume: true,
       call(thisValue, args) {
-        return requireGenerator(thisValue, 'return').resume(
-          createReturnCompletion(args[0]),
-          realm,
-        );
+        const generator = requireGenerator(thisValue, 'return');
+
+        realm.agent.linkGeneratorHostChain(generator.realm.agent);
+        return generator.resume(createReturnCompletion(args[0]), realm);
       },
     }),
   );
@@ -119,11 +121,12 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'throw',
       length: 1,
+      generatorResume: true,
       call(thisValue, args) {
-        return requireGenerator(thisValue, 'throw').resume(
-          createThrowCompletion(args[0]),
-          realm,
-        );
+        const generator = requireGenerator(thisValue, 'throw');
+
+        realm.agent.linkGeneratorHostChain(generator.realm.agent);
+        return generator.resume(createThrowCompletion(args[0]), realm);
       },
     }),
   );

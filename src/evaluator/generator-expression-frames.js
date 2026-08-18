@@ -2,6 +2,7 @@ import {
   Reference,
   getValue,
   isEnvironmentRecord,
+  linkValueToGeneratorHostChain,
   putValue,
 } from '../runtime/reference.js';
 import {
@@ -1026,7 +1027,12 @@ function callDelegatedIteratorMethod(
   const methodResult = captureGeneratorOperation(execution.realm, () =>
     resumeKind === 'normal'
       ? iteratorNext(iteratorRecord, sent)
-      : iteratorNextWithMethod(iteratorRecord.iterator, method, sent),
+      : iteratorNextWithMethod(
+          iteratorRecord.iterator,
+          method,
+          sent,
+          execution.realm,
+        ),
   );
 
   if (methodResult.type === 'completion') {
@@ -1054,7 +1060,7 @@ function callDelegatedIteratorMethod(
 function inspectDelegatedResult(execution, frame) {
   const result = requireDelegatedResult(frame);
   const doneResult = captureGeneratorOperation(execution.realm, () =>
-    iteratorComplete(result),
+    iteratorComplete(result, execution.realm),
   );
 
   if (doneResult.type === 'completion') {
@@ -1082,7 +1088,7 @@ function inspectDelegatedResult(execution, frame) {
   }
 
   const valueResult = captureGeneratorOperation(execution.realm, () =>
-    iteratorValue(result),
+    iteratorValue(result, execution.realm),
   );
 
   if (valueResult.type === 'completion') {
@@ -1161,7 +1167,12 @@ function dispatchBinary(execution, frame) {
   }
 
   return popOperation(execution, () =>
-    applyBinaryOperator(frame.node.operator, frame.left, result.value),
+    applyBinaryOperator(
+      frame.node.operator,
+      frame.left,
+      result.value,
+      execution.realm,
+    ),
   );
 }
 
@@ -1380,7 +1391,9 @@ function finishMemberReference(execution, frame) {
     return { type: 'pop', result };
   }
 
-  return popOperation(execution, () => getValue(result.reference));
+  return popOperation(execution, () =>
+    getValue(result.reference, execution.realm),
+  );
 }
 
 /**
@@ -1460,7 +1473,7 @@ function dispatchAssignment(execution, frame) {
       }
 
       const oldValue = captureGeneratorOperation(execution.realm, () =>
-        getValue(result.reference),
+        getValue(result.reference, execution.realm),
       );
 
       if (oldValue.type === 'completion') {
@@ -1510,8 +1523,9 @@ function dispatchAssignment(execution, frame) {
             frame.node.operator.slice(0, -1),
             frame.leftValue,
             result.value,
+            execution.realm,
           );
-    putValue(reference, value);
+    putValue(reference, value, execution.realm);
     return value;
   });
 }
@@ -1869,6 +1883,7 @@ function readPatternPropertyValue(frame) {
       frame.context.strict,
       frame.receiver,
     ),
+    frame.context.realm,
   );
 }
 
@@ -1994,6 +2009,7 @@ function dispatchArrayPattern(execution, frame) {
             /** @type {import('../runtime/object.js').EngineObject} */ (
               stepped.value
             ),
+            execution.realm,
           ),
         );
 
@@ -2041,7 +2057,7 @@ function collectArrayPatternRest(execution, frame, element) {
         break;
       }
 
-      defineArrayElement(rest, index, iteratorValue(step));
+      defineArrayElement(rest, index, iteratorValue(step, execution.realm));
       index += 1;
     }
 
@@ -2311,6 +2327,7 @@ function applyPatternPreparedTarget(prepared, value, context) {
     putValue(
       getIdentifierReference(context.env, target.name, context.strict),
       value,
+      context.realm,
     );
     return;
   }
@@ -2389,7 +2406,7 @@ function dispatchUnary(execution, frame) {
   }
 
   return popOperation(execution, () =>
-    applyUnaryOperator(frame.node.operator, result),
+    applyUnaryOperator(frame.node.operator, result, execution.realm),
   );
 }
 
@@ -2422,9 +2439,9 @@ function dispatchUpdate(execution, frame) {
   }
 
   return popOperation(execution, () => {
-    const oldValue = toNumber(getValue(result.reference));
+    const oldValue = toNumber(getValue(result.reference, execution.realm));
     const newValue = frame.node.operator === '++' ? oldValue + 1 : oldValue - 1;
-    putValue(result.reference, newValue);
+    putValue(result.reference, newValue, execution.realm);
     return frame.node.prefix ? newValue : oldValue;
   });
 }
@@ -2475,7 +2492,7 @@ function dispatchCall(execution, frame) {
     if (result.type === 'reference') {
       frame.calleeReference = result.reference;
       const calleeState = captureGeneratorOperation(execution.realm, () => ({
-        callee: getValue(result.reference),
+        callee: getValue(result.reference, execution.realm),
         thisValue: referenceThisValue(result.reference),
       }));
 
@@ -2598,7 +2615,7 @@ function invokeCall(execution, frame) {
 
     return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
       frame.callee
-    ).callFunction(frame.thisValue, frame.args);
+    ).callFunction(frame.thisValue, frame.args, frame.context.realm);
   });
 }
 
@@ -2707,8 +2724,16 @@ function constructNew(execution, frame) {
 
     const constructed =
       /** @type {{
-       *   constructFunction(args?: readonly unknown[]): unknown,
-       * }} */ (frame.callee).constructFunction(frame.args);
+       *   constructFunction(
+       *     args?: readonly unknown[],
+       *     newTarget?: unknown,
+       *     callerRealm?: import('../runtime/realm.js').Realm,
+       *   ): unknown,
+       * }} */ (frame.callee).constructFunction(
+        frame.args,
+        frame.callee,
+        frame.context.realm,
+      );
     return constructed;
   });
 }
@@ -3211,7 +3236,7 @@ function dispatchTaggedTemplate(execution, frame) {
     if (result.type === 'reference') {
       frame.tagReference = result.reference;
       const tagState = captureGeneratorOperation(execution.realm, () => ({
-        tag: getValue(result.reference),
+        tag: getValue(result.reference, execution.realm),
         thisValue: referenceThisValue(result.reference),
       }));
 
@@ -3304,7 +3329,7 @@ function invokeTag(execution, frame) {
 
     return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
       frame.tag
-    ).callFunction(frame.thisValue, frame.args);
+    ).callFunction(frame.thisValue, frame.args, frame.context.realm);
   });
 }
 
@@ -3345,9 +3370,13 @@ function popOperation(execution, operation) {
  * @param {string} operator
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('../runtime/realm.js').Realm} realm
  * @returns {unknown}
  */
-function applyBinaryOperator(operator, left, right) {
+function applyBinaryOperator(operator, left, right, realm) {
+  linkValueToGeneratorHostChain(realm, left);
+  linkValueToGeneratorHostChain(realm, right);
+
   switch (operator) {
     case '+':
       return add(left, right);
@@ -3418,9 +3447,10 @@ function applyBinaryOperator(operator, left, right) {
 /**
  * @param {string} operator
  * @param {import('./generator-machine.js').FrameResult} result
+ * @param {import('../runtime/realm.js').Realm} realm
  * @returns {unknown}
  */
-function applyUnaryOperator(operator, result) {
+function applyUnaryOperator(operator, result, realm) {
   if (result.type === 'completion') {
     throw new TypeError('Unary operator received an abrupt completion');
   }
@@ -3452,7 +3482,9 @@ function applyUnaryOperator(operator, result) {
     }
 
     return typeOf(
-      result.type === 'reference' ? getValue(result.reference) : result.value,
+      result.type === 'reference'
+        ? getValue(result.reference, realm)
+        : result.value,
     );
   }
 

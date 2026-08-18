@@ -207,9 +207,10 @@ export class EngineObject {
 
   /**
    * @param {PropertyKey} name
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  get(name) {
+  get(name, callerRealm) {
     const descriptor = this.getProperty(name);
 
     if (descriptor === undefined) {
@@ -217,12 +218,15 @@ export class EngineObject {
     }
 
     if (isDataDescriptor(descriptor)) {
-      return descriptor.value;
+      return linkObjectValueAgent(this.agent, descriptor.value);
     }
 
-    return descriptor.get === undefined
-      ? undefined
-      : callAccessor(descriptor.get, this, []);
+    const value =
+      descriptor.get === undefined
+        ? undefined
+        : callAccessor(descriptor.get, this, [], callerRealm);
+
+    return linkObjectValueAgent(this.agent, value);
   }
 
   /**
@@ -279,9 +283,10 @@ export class EngineObject {
    * @param {unknown} value
    * @param {unknown} receiver
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  set(name, value, receiver, throwOnError = false) {
+  set(name, value, receiver, throwOnError = false, callerRealm) {
     /** @type {EngineObject | null} */
     let current = this;
 
@@ -296,6 +301,7 @@ export class EngineObject {
           value,
           receiver,
           throwOnError,
+          callerRealm,
         );
       }
 
@@ -310,6 +316,7 @@ export class EngineObject {
           value,
           receiver,
           throwOnError,
+          callerRealm,
         );
       }
 
@@ -317,7 +324,7 @@ export class EngineObject {
         // `proto` overrides `set` with exotic semantics (for example
         // `ModuleNamespaceObject`): defer to it rather than assuming its
         // own-property lookup is ordinary.
-        return proto.set(name, value, receiver, throwOnError);
+        return proto.set(name, value, receiver, throwOnError, callerRealm);
       }
 
       current = proto;
@@ -332,10 +339,11 @@ export class EngineObject {
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  put(name, value, throwOnError = false) {
-    return this.set(name, value, this, throwOnError);
+  put(name, value, throwOnError = false, callerRealm) {
+    return this.set(name, value, this, throwOnError, callerRealm);
   }
 
   /**
@@ -564,20 +572,22 @@ export class EngineObject {
 
   /**
    * @param {PropertyKey} name
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  getReferencedValue(name) {
-    return this.get(name);
+  getReferencedValue(name, callerRealm) {
+    return this.get(name, callerRealm);
   }
 
   /**
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} [strict=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {void}
    */
-  setReferencedValue(name, value, strict = false) {
-    this.put(name, value, strict);
+  setReferencedValue(name, value, strict = false, callerRealm) {
+    this.put(name, value, strict, callerRealm);
   }
 }
 
@@ -716,15 +726,28 @@ export function isEnumerableForIn(object, key) {
  * @param {((...args: any[]) => unknown) | import('./descriptors.js').CallableLike} accessor
  * @param {unknown} thisValue
  * @param {unknown[]} args
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {unknown}
  */
-export function callAccessor(accessor, thisValue, args) {
+export function callAccessor(accessor, thisValue, args, callerRealm) {
   if (typeof accessor === 'function') {
     return accessor.call(thisValue, ...args);
   }
 
   if (isCallable(accessor)) {
-    return accessor.callFunction(thisValue, args);
+    const sourceAgent =
+      callerRealm?.agent ??
+      (thisValue instanceof EngineObject ? thisValue.agent : null);
+
+    if (
+      sourceAgent !== null &&
+      accessor instanceof EngineObject &&
+      accessor.agent !== null
+    ) {
+      sourceAgent.linkGeneratorHostChain(accessor.agent);
+    }
+
+    return accessor.callFunction(thisValue, args, callerRealm);
   }
 
   throw new TypeError('Accessor is not callable');
@@ -749,6 +772,23 @@ function rejectOperation(throwOnError, message) {
   }
 
   return false;
+}
+
+/**
+ * @param {import('./agent.js').Agent | null} sourceAgent
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function linkObjectValueAgent(sourceAgent, value) {
+  if (
+    sourceAgent !== null &&
+    value instanceof EngineObject &&
+    value.agent !== null
+  ) {
+    sourceAgent.linkGeneratorHostChain(value.agent);
+  }
+
+  return value;
 }
 
 /**
@@ -793,6 +833,7 @@ const IMPLICIT_DATA_DESCRIPTOR = {
  * @param {unknown} value
  * @param {unknown} receiver
  * @param {boolean} throwOnError
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {boolean}
  */
 function setWithOwnDescriptor(
@@ -802,6 +843,7 @@ function setWithOwnDescriptor(
   value,
   receiver,
   throwOnError,
+  callerRealm,
 ) {
   if (isDataDescriptor(ownDesc)) {
     if (!ownDesc.writable) {
@@ -849,7 +891,7 @@ function setWithOwnDescriptor(
     return rejectOperation(throwOnError, 'Cannot assign to accessor property');
   }
 
-  callAccessor(ownDesc.set, receiver, [value]);
+  callAccessor(ownDesc.set, receiver, [value], callerRealm);
   return true;
 }
 

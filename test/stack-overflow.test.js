@@ -22,6 +22,7 @@
 import { assertSame, assertThrows } from './harness/assert.js';
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 /**
  * @param {string} source
@@ -46,6 +47,320 @@ function defineGlobal(realm, name, value) {
     enumerable: true,
     configurable: true,
   });
+}
+
+/**
+ * @param {import('../src/runtime/agent.js').Agent} agent
+ * @returns {any}
+ */
+function generatorHostChainRoot(agent) {
+  let chain = agent._generatorHostChain;
+
+  while (
+    chain !== null &&
+    chain.parent !== undefined &&
+    chain.parent !== null
+  ) {
+    chain = chain.parent;
+  }
+
+  return chain;
+}
+
+/**
+ * @param {readonly import('../src/runtime/realm.js').Realm[]} realms
+ * @returns {void}
+ */
+function assertGeneratorAccountingCleared(realms) {
+  for (const realm of realms) {
+    assertSame(realm.stackGuard.depth, 0);
+    assertSame(realm.stackGuard.generatorHostChainDepth, 0);
+    assertSame(realm.agent._generatorHostChain, null);
+  }
+}
+
+/**
+ * @param {import('../src/runtime/realm.js').Realm} realm
+ * @param {string} label
+ * @returns {void}
+ */
+function assertFiniteGeneratorResume(realm, label) {
+  const completion = evaluateScript(
+    realm,
+    `
+      var finite = (function* () {
+        yield "${label}";
+        return "${label}-done";
+      }());
+      var finiteFirst = finite.next();
+      var finiteLast = finite.next();
+      [
+        finiteFirst.value,
+        finiteFirst.done,
+        finiteLast.value,
+        finiteLast.done
+      ].join("|");
+    `,
+  );
+
+  assertSame(completion.type, 'normal');
+  assertSame(completion.value, `${label}|false|${label}-done|true`);
+}
+
+/**
+ * @param {{ type: string, value: unknown }} completion
+ * @param {readonly import('../src/runtime/realm.js').Realm[]} realms
+ * @returns {void}
+ */
+function assertRealmRangeError(completion, realms) {
+  const error = /** @type {EngineObject} */ (completion.value);
+
+  assertSame(completion.type, 'normal');
+  assertSame(error instanceof EngineObject, true);
+  assertSame(error.get('name'), 'RangeError');
+  assertSame(error.get('message'), 'Maximum call stack size exceeded');
+  assertSame(
+    realms.some(
+      (realm) => error.getPrototype() === realm.intrinsics.rangeErrorPrototype,
+    ),
+    true,
+  );
+}
+
+/**
+ * @param {boolean} borrowed
+ * @returns {void}
+ */
+function assertForeignGeneratorRecursionContained(borrowed) {
+  const realms = [];
+  const methodRealm = createRealm();
+  const borrowedNext = evaluateScript(
+    methodRealm,
+    '(function* () {})().next',
+  ).value;
+
+  for (let index = 0; index < 8; index += 1) {
+    const realm = createRealm();
+    const recurse = borrowed
+      ? 'var iterator = foreign(); iterator.next = borrowedNext; iterator.next();'
+      : 'foreign().next();';
+
+    evaluateScript(realm, `function* recurse() { ${recurse} }`);
+
+    if (borrowed) {
+      defineGlobal(realm, 'borrowedNext', borrowedNext);
+    }
+
+    realms.push(realm);
+  }
+
+  for (let index = 0; index < realms.length; index += 1) {
+    defineGlobal(
+      realms[index],
+      'foreign',
+      realms[(index + 1) % realms.length].globalObject.get('recurse'),
+    );
+  }
+
+  const completion = evaluateScript(
+    realms[0],
+    'try { recurse().next(); "not thrown"; } catch (error) { error; }',
+  );
+  const allRealms = [...realms, methodRealm];
+
+  assertRealmRangeError(completion, allRealms);
+  assertGeneratorAccountingCleared(allRealms);
+
+  for (let index = 0; index < allRealms.length; index += 1) {
+    assertFiniteGeneratorResume(
+      allRealms[index],
+      `${borrowed ? 'borrowed' : 'foreign'}-${String(index)}`,
+    );
+  }
+
+  assertGeneratorAccountingCleared(allRealms);
+}
+
+/**
+ * @param {boolean} borrowed
+ * @param {boolean} [throughCall=false]
+ * @returns {void}
+ */
+function assertGeneratorMethodParticipantsLinked(
+  borrowed,
+  throughCall = false,
+) {
+  const callerRealm = createRealm({ maxStackDepth: 90 });
+  const ownerRealm = createRealm({ maxStackDepth: 200 });
+  const methodRealm = borrowed
+    ? createRealm({ maxStackDepth: 120 })
+    : ownerRealm;
+  const realms = [...new Set([callerRealm, ownerRealm, methodRealm])];
+  const inspectChain = ownerRealm.createNativeFunction({
+    name: 'inspectChain',
+    length: 0,
+    call() {
+      const roots = realms.map((realm) => generatorHostChainRoot(realm.agent));
+
+      if (
+        roots[0] === null ||
+        roots.some((root) => root !== roots[0]) ||
+        roots[0].maxDepth !== 90
+      ) {
+        throw new Error('generator method participants were not linked');
+      }
+    },
+  });
+
+  defineGlobal(ownerRealm, 'inspectChain', inspectChain);
+  evaluateScript(
+    ownerRealm,
+    `
+      var linkedGenerator = (function* () {
+        inspectChain();
+        yield "first";
+        inspectChain();
+        return "done";
+      }());
+    `,
+  );
+  const generator = /** @type {EngineObject} */ (
+    ownerRealm.globalObject.get('linkedGenerator')
+  );
+
+  if (borrowed) {
+    const borrowedNext = evaluateScript(
+      methodRealm,
+      '(function* () {})().next',
+    ).value;
+
+    if (throughCall) {
+      defineGlobal(callerRealm, 'borrowedNext', borrowedNext);
+    } else {
+      generator.put('next', borrowedNext, true);
+    }
+  }
+
+  defineGlobal(callerRealm, 'linkedGenerator', generator);
+  const resumeExpression = throughCall
+    ? 'borrowedNext.call(linkedGenerator)'
+    : 'linkedGenerator.next()';
+  const first = evaluateScript(
+    callerRealm,
+    `var linkedFirst = ${resumeExpression}; linkedFirst.value;`,
+  );
+
+  assertSame(first.type, 'normal');
+  assertSame(first.value, 'first');
+  assertGeneratorAccountingCleared(realms);
+
+  const last = evaluateScript(
+    callerRealm,
+    `var linkedLast = ${resumeExpression}; linkedLast.value;`,
+  );
+
+  assertSame(last.type, 'normal');
+  assertSame(last.value, 'done');
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
+ * @param {'iterator' | 'next' | 'done' | 'value'} property
+ * @returns {void}
+ */
+function assertIteratorProtocolGetterLinked(property) {
+  const realmA = createRealm();
+  const realmB = createRealm();
+  const realmC = createRealm();
+  const inspectChain = realmC.createNativeFunction({
+    name: 'inspectChain',
+    length: 0,
+    call() {
+      const rootA = generatorHostChainRoot(realmA.agent);
+      const rootC = generatorHostChainRoot(realmC.agent);
+
+      if (rootA === null || rootA !== rootC) {
+        throw new Error(`${property} getter entered a distinct host chain`);
+      }
+    },
+  });
+  const result = new EngineObject(realmB.intrinsics.objectPrototype);
+  const iterator = new EngineObject(realmB.intrinsics.objectPrototype);
+  const iterable = new EngineObject(realmB.intrinsics.objectPrototype);
+  const next = realmB.createNativeFunction({
+    name: 'next',
+    length: 0,
+    call() {
+      return result;
+    },
+  });
+  const iteratorMethod = realmB.createNativeFunction({
+    name: '[Symbol.iterator]',
+    length: 0,
+    call() {
+      return iterator;
+    },
+  });
+  const methodGetter = realmC.createNativeFunction({
+    name: `get ${property}`,
+    length: 0,
+    call() {
+      inspectChain.callFunction(undefined, [], realmC);
+      return property === 'iterator' ? iteratorMethod : next;
+    },
+  });
+  const resultGetter = realmC.createNativeFunction({
+    name: `get ${property}`,
+    length: 0,
+    call() {
+      inspectChain.callFunction(undefined, [], realmC);
+      return property === 'done' ? true : 'getter-value';
+    },
+  });
+
+  iterable.defineOwnProperty(realmB.agent.wellKnownSymbols.iterator, {
+    ...(property === 'iterator'
+      ? { get: methodGetter }
+      : { value: iteratorMethod, writable: true }),
+    enumerable: false,
+    configurable: true,
+  });
+  iterator.defineOwnProperty('next', {
+    ...(property === 'next'
+      ? { get: methodGetter }
+      : { value: next, writable: true }),
+    enumerable: false,
+    configurable: true,
+  });
+  result.defineOwnProperty('done', {
+    ...(property === 'done'
+      ? { get: resultGetter }
+      : { value: true, writable: true }),
+    enumerable: true,
+    configurable: true,
+  });
+  result.defineOwnProperty('value', {
+    ...(property === 'value'
+      ? { get: resultGetter }
+      : { value: 'value', writable: true }),
+    enumerable: true,
+    configurable: true,
+  });
+  defineGlobal(realmA, 'foreignIterable', iterable);
+
+  const completion = evaluateScript(
+    realmA,
+    `
+      function* delegateGetter() {
+        return yield* foreignIterable;
+      }
+      delegateGetter().next().value;
+    `,
+  );
+
+  assertSame(completion.type, 'normal');
+  assertSame(completion.value, property === 'value' ? 'getter-value' : 'value');
+  assertGeneratorAccountingCleared([realmA, realmB, realmC]);
 }
 
 /**
@@ -546,6 +861,1364 @@ const tests = [
         assertSame(realmA.stackGuard.depth, 0);
         assertSame(realmB.stackGuard.depth, 0);
       }
+    },
+  },
+  {
+    name: 'initial and resumed foreign generator methods link the caller Realm',
+    run() {
+      assertGeneratorMethodParticipantsLinked(false);
+    },
+  },
+  {
+    name: 'initial and resumed borrowed generator methods link every Realm',
+    run() {
+      assertGeneratorMethodParticipantsLinked(true);
+    },
+  },
+  {
+    name: 'borrowed generator methods called through call retain the original Realm',
+    run() {
+      assertGeneratorMethodParticipantsLinked(true, true);
+    },
+  },
+  {
+    name: 'direct foreign generator next recursion shares one host chain',
+    run() {
+      assertForeignGeneratorRecursionContained(false);
+    },
+  },
+  {
+    name: 'borrowed cross-Agent generator next recursion shares one host chain',
+    run() {
+      assertForeignGeneratorRecursionContained(true);
+    },
+  },
+  {
+    name: 'a custom iterable links the third-Agent generator it returns',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('third-Agent iterator was not linked');
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      evaluateScript(realmA, 'function* fromA() { yield* foreignIterable; }');
+      defineGlobal(realmC, 'fromA', realmA.globalObject.get('fromA'));
+      evaluateScript(
+        realmC,
+        `
+          function* fromC() {
+            inspectChain();
+            fromA().next();
+          }
+          var iteratorPool = [];
+          for (var index = 0; index < 2000; index = index + 1) {
+            iteratorPool[index] = fromC();
+          }
+        `,
+      );
+      defineGlobal(
+        realmB,
+        'iteratorPool',
+        realmC.globalObject.get('iteratorPool'),
+      );
+      evaluateScript(
+        realmB,
+        `
+          var iteratorIndex = 0;
+          var foreignIterable = {};
+          foreignIterable[Symbol.iterator] = function () {
+            var iterator = iteratorPool[iteratorIndex];
+            iteratorIndex = iteratorIndex + 1;
+            return iterator;
+          };
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'foreignIterable',
+        realmB.globalObject.get('foreignIterable'),
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        'try { fromA().next(); "not thrown"; } catch (error) { error; }',
+      );
+
+      assertRealmRangeError(completion, [realmA, realmB, realmC]);
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+      assertFiniteGeneratorResume(realmA, 'third-A');
+      assertFiniteGeneratorResume(realmB, 'third-B');
+      assertFiniteGeneratorResume(realmC, 'third-C');
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'delegated return and throw relink a suspended third-Agent iterator',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('suspended third-Agent iterator was not relinked');
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmC,
+        `
+          var returnIterator = (function* () {
+            try {
+              yield "return-start";
+            } finally {
+              inspectChain();
+            }
+          }());
+          var throwIterator = (function* () {
+            try {
+              yield "throw-start";
+            } catch (error) {
+              inspectChain();
+              return "caught-" + error;
+            }
+          }());
+          var generatorReturn = returnIterator.return;
+          var generatorThrow = throwIterator.throw;
+          Object.defineProperty(returnIterator, "return", {
+            get: function () {
+              inspectChain();
+              return generatorReturn;
+            }
+          });
+          Object.defineProperty(throwIterator, "throw", {
+            get: function () {
+              inspectChain();
+              return generatorThrow;
+            }
+          });
+        `,
+      );
+      defineGlobal(
+        realmB,
+        'returnIterator',
+        realmC.globalObject.get('returnIterator'),
+      );
+      defineGlobal(
+        realmB,
+        'throwIterator',
+        realmC.globalObject.get('throwIterator'),
+      );
+      evaluateScript(
+        realmB,
+        `
+          var returnIterable = {};
+          returnIterable[Symbol.iterator] = function () {
+            return returnIterator;
+          };
+          var throwIterable = {};
+          throwIterable[Symbol.iterator] = function () {
+            return throwIterator;
+          };
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'returnIterable',
+        realmB.globalObject.get('returnIterable'),
+      );
+      defineGlobal(
+        realmA,
+        'throwIterable',
+        realmB.globalObject.get('throwIterable'),
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          function* delegate(iterable) {
+            return yield* iterable;
+          }
+          var returned = delegate(returnIterable);
+          var returnStart = returned.next();
+          var returnLast = returned.return("stop");
+          var thrown = delegate(throwIterable);
+          var throwStart = thrown.next();
+          var throwLast = thrown.throw("boom");
+          [
+            returnStart.value,
+            returnStart.done,
+            returnLast.value,
+            returnLast.done,
+            throwStart.value,
+            throwStart.done,
+            throwLast.value,
+            throwLast.done
+          ].join("|");
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(
+        completion.value,
+        'return-start|false|stop|true|throw-start|false|caught-boom|true',
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+      assertFiniteGeneratorResume(realmA, 'methods-A');
+      assertFiniteGeneratorResume(realmB, 'methods-B');
+      assertFiniteGeneratorResume(realmC, 'methods-C');
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'iterator result getters run on the complete cross-Agent host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const realmD = createRealm();
+      const inspectChain = realmD.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootD = generatorHostChainRoot(realmD.agent);
+
+          if (rootA === null || rootA !== rootD) {
+            throw new Error('foreign iterator result was not linked');
+          }
+        },
+      });
+
+      defineGlobal(realmD, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmD,
+        `
+          var foreignResult = { value: "foreign-result" };
+          Object.defineProperty(foreignResult, "done", {
+            get: function () {
+              inspectChain();
+              return false;
+            }
+          });
+        `,
+      );
+      defineGlobal(
+        realmC,
+        'foreignResult',
+        realmD.globalObject.get('foreignResult'),
+      );
+      evaluateScript(
+        realmC,
+        `
+          var called = false;
+          var foreignIterator = {
+            next: function () {
+              if (!called) {
+                called = true;
+                return foreignResult;
+              }
+              return { value: undefined, done: true };
+            }
+          };
+        `,
+      );
+      defineGlobal(
+        realmB,
+        'foreignIterator',
+        realmC.globalObject.get('foreignIterator'),
+      );
+      evaluateScript(
+        realmB,
+        `
+          var foreignIterable = {};
+          foreignIterable[Symbol.iterator] = function () {
+            return foreignIterator;
+          };
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'foreignIterable',
+        realmB.globalObject.get('foreignIterable'),
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          function* delegate() {
+            yield* foreignIterable;
+          }
+          delegate().next().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'foreign-result');
+      assertGeneratorAccountingCleared([realmA, realmB, realmC, realmD]);
+    },
+  },
+  {
+    name: 'the iterator method getter joins the active generator host chain',
+    run() {
+      assertIteratorProtocolGetterLinked('iterator');
+    },
+  },
+  {
+    name: 'the iterator next getter joins the active generator host chain',
+    run() {
+      assertIteratorProtocolGetterLinked('next');
+    },
+  },
+  {
+    name: 'the iterator done getter joins the active generator host chain',
+    run() {
+      assertIteratorProtocolGetterLinked('done');
+    },
+  },
+  {
+    name: 'the iterator value getter joins the active generator host chain',
+    run() {
+      assertIteratorProtocolGetterLinked('value');
+    },
+  },
+  {
+    name: 'foreign accessors inherit the executing generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const inspectChain = realmB.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootB = generatorHostChainRoot(realmB.agent);
+
+          if (rootA === null || rootA !== rootB) {
+            throw new Error('foreign accessor entered a distinct host chain');
+          }
+        },
+      });
+
+      defineGlobal(realmB, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmB,
+        `
+          var foreignObject = {};
+          Object.defineProperty(foreignObject, "value", {
+            get: function () {
+              inspectChain();
+              return 42;
+            }
+          });
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'foreignObject',
+        realmB.globalObject.get('foreignObject'),
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          function* readForeignAccessor() {
+            return foreignObject.value;
+          }
+          readForeignAccessor().next().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 42);
+      assertGeneratorAccountingCleared([realmA, realmB]);
+    },
+  },
+  {
+    name: 'foreign coercions inherit the executing generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('foreign coercion entered a distinct host chain');
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmC,
+        `
+          function foreignCoercion() {
+            inspectChain();
+            return 41;
+          }
+        `,
+      );
+      defineGlobal(
+        realmB,
+        'foreignCoercion',
+        realmC.globalObject.get('foreignCoercion'),
+      );
+      evaluateScript(
+        realmB,
+        `
+          var foreignObject = {};
+          foreignObject[Symbol.toPrimitive] = foreignCoercion;
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'foreignObject',
+        realmB.globalObject.get('foreignObject'),
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          function* coerceForeignObject() {
+            return foreignObject + 1;
+          }
+          coerceForeignObject().next().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 42);
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'foreign call results inherit the executing generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error(
+              'foreign call result entered a distinct host chain',
+            );
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmC,
+        `
+          var foreignObject = {};
+          foreignObject[Symbol.toPrimitive] = function () {
+            inspectChain();
+            return 41;
+          };
+        `,
+      );
+      defineGlobal(
+        realmB,
+        'foreignObject',
+        realmC.globalObject.get('foreignObject'),
+      );
+      evaluateScript(
+        realmB,
+        'function foreignFactory() { return foreignObject; }',
+      );
+      defineGlobal(
+        realmA,
+        'foreignFactory',
+        realmB.globalObject.get('foreignFactory'),
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          function* coerceForeignCallResult() {
+            return foreignFactory() + 1;
+          }
+          coerceForeignCallResult().next().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 42);
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'native foreign call results inherit the generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('native result entered a distinct host chain');
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      const foreignObject = /** @type {EngineObject} */ (
+        evaluateScript(
+          realmC,
+          `
+            var object = {};
+            object[Symbol.toPrimitive] = function () {
+              inspectChain();
+              return 41;
+            };
+            object;
+          `,
+        ).value
+      );
+      const nativeFactory = realmB.createNativeFunction({
+        name: 'nativeFactory',
+        length: 0,
+        call() {
+          return foreignObject;
+        },
+      });
+
+      defineGlobal(realmA, 'nativeFactory', nativeFactory);
+      const completion = evaluateScript(
+        realmA,
+        `
+          function* coerceNativeCallResult() {
+            return nativeFactory() + 1;
+          }
+          coerceNativeCallResult().next().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 42);
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'apply array-like getters inherit the generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const lengthGetter = realmC.createNativeFunction({
+        name: 'get length',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('apply getter entered a distinct host chain');
+          }
+          return 0;
+        },
+      });
+      const argumentArray = new EngineObject(realmB.intrinsics.objectPrototype);
+
+      argumentArray.defineOwnProperty('length', {
+        get: lengthGetter,
+        enumerable: false,
+        configurable: true,
+      });
+      defineGlobal(realmA, 'foreignArguments', argumentArray);
+      const completion = evaluateScript(
+        realmA,
+        `
+          function target() { return 7; }
+          function* applyForeignArguments() {
+            return target.apply(null, foreignArguments);
+          }
+          applyForeignArguments().next().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 7);
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'bind metadata getters inherit the generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const target = /** @type {EngineObject} */ (
+        evaluateScript(realmB, '(function target() { return 7; })').value
+      );
+
+      for (const [name, value] of [
+        ['length', 0],
+        ['name', 'target'],
+      ]) {
+        target.defineOwnProperty(String(name), {
+          get: realmC.createNativeFunction({
+            name: `get ${String(name)}`,
+            length: 0,
+            call() {
+              const rootA = generatorHostChainRoot(realmA.agent);
+              const rootC = generatorHostChainRoot(realmC.agent);
+
+              if (rootA === null || rootA !== rootC) {
+                throw new Error('bind getter entered a distinct host chain');
+              }
+              return value;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        });
+      }
+
+      defineGlobal(realmA, 'foreignTarget', target);
+      const completion = evaluateScript(
+        realmA,
+        `
+          function* bindForeignTarget() {
+            return foreignTarget.bind(null)();
+          }
+          bindForeignTarget().next().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 7);
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'object resume values join a resumed generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('resume value entered a distinct host chain');
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmC,
+        `
+          var resumeValue = {};
+          resumeValue[Symbol.toPrimitive] = function () {
+            inspectChain();
+            return 41;
+          };
+        `,
+      );
+      evaluateScript(
+        realmB,
+        `
+          var resumedGenerator = (function* () {
+            return (yield "pause") + 1;
+          }());
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'resumedGenerator',
+        realmB.globalObject.get('resumedGenerator'),
+      );
+      defineGlobal(
+        realmA,
+        'resumeValue',
+        realmC.globalObject.get('resumeValue'),
+      );
+
+      assertSame(
+        evaluateScript(realmA, 'resumedGenerator.next().value;').value,
+        'pause',
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+      assertSame(
+        evaluateScript(realmA, 'resumedGenerator.next(resumeValue).value;')
+          .value,
+        42,
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'cached foreign operands rejoin after generator suspension',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('cached operand entered a distinct host chain');
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmC,
+        `
+          var cachedOperand = {};
+          cachedOperand[Symbol.toPrimitive] = function () {
+            inspectChain();
+            return 41;
+          };
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'cachedOperand',
+        realmC.globalObject.get('cachedOperand'),
+      );
+      evaluateScript(
+        realmA,
+        `
+          function* cachedOperandGenerator() {
+            return cachedOperand + (yield "pause");
+          }
+          var suspendedOperand = cachedOperandGenerator();
+        `,
+      );
+
+      assertSame(
+        evaluateScript(realmA, 'suspendedOperand.next().value;').value,
+        'pause',
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+      assertSame(
+        evaluateScript(realmA, 'suspendedOperand.next(1).value;').value,
+        42,
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'primitive property values rejoin after generator suspension',
+    run() {
+      const realmA = createRealm();
+      const realmC = createRealm();
+      const inspectChain = realmC.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error(
+              'primitive property value entered a distinct host chain',
+            );
+          }
+        },
+      });
+
+      defineGlobal(realmC, 'inspectChain', inspectChain);
+      const foreignValue = /** @type {EngineObject} */ (
+        evaluateScript(
+          realmC,
+          `
+            var object = {
+              valueOf: function () {
+                inspectChain();
+                return 41;
+              }
+            };
+            object;
+          `,
+        ).value
+      );
+
+      realmA.intrinsics.stringPrototype.defineOwnProperty('foreign', {
+        value: foreignValue,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      evaluateScript(
+        realmA,
+        `
+          function* primitivePropertyGenerator() {
+            return +("x"[yield "pause"]);
+          }
+          var suspendedPrimitiveProperty = primitivePropertyGenerator();
+        `,
+      );
+
+      assertSame(
+        evaluateScript(realmA, 'suspendedPrimitiveProperty.next().value;')
+          .value,
+        'pause',
+      );
+      assertGeneratorAccountingCleared([realmA, realmC]);
+      assertSame(
+        evaluateScript(
+          realmA,
+          'suspendedPrimitiveProperty.next("foreign").value;',
+        ).value,
+        41,
+      );
+      assertGeneratorAccountingCleared([realmA, realmC]);
+    },
+  },
+  {
+    name: 'suspended with getters rejoin the generator host chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const getter = realmC.createNativeFunction({
+        name: 'get value',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('with getter entered a distinct host chain');
+          }
+          return 9;
+        },
+      });
+      const scope = new EngineObject(realmB.intrinsics.objectPrototype);
+
+      scope.defineOwnProperty('value', {
+        get: getter,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(realmA, 'foreignScope', scope);
+      evaluateScript(
+        realmA,
+        `
+          function* withGenerator() {
+            with (foreignScope) {
+              yield "pause";
+              return value;
+            }
+          }
+          var suspendedWith = withGenerator();
+        `,
+      );
+
+      assertSame(
+        evaluateScript(realmA, 'suspendedWith.next().value;').value,
+        'pause',
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+      assertSame(
+        evaluateScript(realmA, 'suspendedWith.next().value;').value,
+        9,
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'generator super getters inherit the executing Realm chain',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const realmC = createRealm();
+      const getter = realmC.createNativeFunction({
+        name: 'get value',
+        length: 0,
+        call() {
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootC = generatorHostChainRoot(realmC.agent);
+
+          if (rootA === null || rootA !== rootC) {
+            throw new Error('super getter entered a distinct host chain');
+          }
+          return 7;
+        },
+      });
+      const superPrototype = new EngineObject(
+        realmB.intrinsics.objectPrototype,
+      );
+
+      superPrototype.defineOwnProperty('value', {
+        get: getter,
+        enumerable: true,
+        configurable: true,
+      });
+      evaluateScript(
+        realmA,
+        'var generatorHolder = { *method() { return super.value; } };',
+      );
+      const holder = /** @type {EngineObject} */ (
+        realmA.globalObject.get('generatorHolder')
+      );
+
+      assertSame(holder.setPrototypeOf(superPrototype), true);
+      assertSame(
+        evaluateScript(realmA, 'generatorHolder.method().next().value;').value,
+        7,
+      );
+      assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'bound generator method wrappers join the initial host chain',
+    run() {
+      const realmA = createRealm({ maxStackDepth: 90 });
+      const realmB = createRealm({ maxStackDepth: 200 });
+      const realmC = createRealm({ maxStackDepth: 120 });
+      const realmD = createRealm({ maxStackDepth: 70 });
+      const realms = [realmA, realmB, realmC, realmD];
+      const inspectChain = realmB.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const roots = realms.map((realm) =>
+            generatorHostChainRoot(realm.agent),
+          );
+
+          if (
+            roots[0] === null ||
+            roots.some((root) => root !== roots[0]) ||
+            roots[0].maxDepth !== 70
+          ) {
+            throw new Error('bound generator wrapper was not linked');
+          }
+        },
+      });
+
+      defineGlobal(realmB, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmB,
+        `
+          var boundTarget = (function* () {
+            inspectChain();
+            return "done";
+          }());
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'foreignGenerator',
+        realmB.globalObject.get('boundTarget'),
+      );
+      defineGlobal(
+        realmA,
+        'foreignNext',
+        evaluateScript(realmC, '(function* () {})().next').value,
+      );
+      defineGlobal(
+        realmA,
+        'foreignBind',
+        evaluateScript(realmD, '(function () {}).bind').value,
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          var boundNext = foreignBind.call(foreignNext, foreignGenerator);
+          boundNext().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'done');
+      assertGeneratorAccountingCleared(realms);
+    },
+  },
+  {
+    name: 'bound call wrappers join the initial generator host chain',
+    run() {
+      const realmA = createRealm({ maxStackDepth: 90 });
+      const realmB = createRealm({ maxStackDepth: 200 });
+      const realmC = createRealm({ maxStackDepth: 120 });
+      const realmD = createRealm({ maxStackDepth: 70 });
+      const realms = [realmA, realmB, realmC, realmD];
+      const inspectChain = realmB.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const roots = realms.map((realm) =>
+            generatorHostChainRoot(realm.agent),
+          );
+
+          if (
+            roots[0] === null ||
+            roots.some((root) => root !== roots[0]) ||
+            roots[0].maxDepth !== 70
+          ) {
+            throw new Error('bound call wrapper was not linked');
+          }
+        },
+      });
+
+      defineGlobal(realmB, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmB,
+        `
+          var callBoundTarget = (function* () {
+            inspectChain();
+            return "done";
+          }());
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'foreignGenerator',
+        realmB.globalObject.get('callBoundTarget'),
+      );
+      defineGlobal(
+        realmA,
+        'foreignNext',
+        evaluateScript(realmB, '(function* () {})().next').value,
+      );
+      defineGlobal(
+        realmA,
+        'foreignCall',
+        evaluateScript(realmC, '(function () {}).call').value,
+      );
+      defineGlobal(
+        realmA,
+        'foreignBind',
+        evaluateScript(realmD, '(function () {}).bind').value,
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          var boundCall = foreignBind.call(
+            foreignCall,
+            foreignNext,
+            foreignGenerator
+          );
+          boundCall().value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'done');
+      assertGeneratorAccountingCleared(realms);
+    },
+  },
+  {
+    name: 'nested call and apply wrappers join the initial generator chain',
+    run() {
+      const realmA = createRealm({ maxStackDepth: 90 });
+      const realmB = createRealm({ maxStackDepth: 200 });
+      const realmC = createRealm({ maxStackDepth: 120 });
+      const realmD = createRealm({ maxStackDepth: 70 });
+      const realms = [realmA, realmB, realmC, realmD];
+      const inspectChain = realmB.createNativeFunction({
+        name: 'inspectChain',
+        length: 0,
+        call() {
+          const roots = realms.map((realm) =>
+            generatorHostChainRoot(realm.agent),
+          );
+
+          if (
+            roots[0] === null ||
+            roots.some((root) => root !== roots[0]) ||
+            roots[0].maxDepth !== 70
+          ) {
+            throw new Error('nested call/apply wrappers were not linked');
+          }
+        },
+      });
+
+      defineGlobal(realmB, 'inspectChain', inspectChain);
+      evaluateScript(
+        realmB,
+        `
+          var nestedWrapperTarget = (function* () {
+            inspectChain();
+            return "done";
+          }());
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'foreignGenerator',
+        realmB.globalObject.get('nestedWrapperTarget'),
+      );
+      defineGlobal(
+        realmA,
+        'foreignNext',
+        evaluateScript(realmB, '(function* () {})().next').value,
+      );
+      defineGlobal(
+        realmA,
+        'foreignCall',
+        evaluateScript(realmC, '(function () {}).call').value,
+      );
+      defineGlobal(
+        realmA,
+        'foreignApply',
+        evaluateScript(realmD, '(function () {}).apply').value,
+      );
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          foreignApply.call(
+            foreignCall,
+            foreignNext,
+            [foreignGenerator]
+          ).value;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'done');
+      assertGeneratorAccountingCleared(realms);
+    },
+  },
+  {
+    name: 'independently active Agent chains merge before mutual delegation',
+    run() {
+      for (const [maxDepthA, maxDepthB] of [
+        [80, 240],
+        [240, 80],
+      ]) {
+        const { realmA, realmB } = createMutuallyDelegatingRealms(
+          /** @type {number} */ (maxDepthA),
+          /** @type {number} */ (maxDepthB),
+          false,
+        );
+
+        realmA.agent.enterGeneratorHostChain(maxDepthA);
+        realmB.agent.enterGeneratorHostChain(maxDepthB);
+
+        try {
+          const completion = evaluateScript(
+            realmA,
+            'try { fromA().next(); "not thrown"; } catch (error) { error; }',
+          );
+          const rootA = generatorHostChainRoot(realmA.agent);
+          const rootB = generatorHostChainRoot(realmB.agent);
+
+          assertRealmRangeError(completion, [realmA, realmB]);
+          assertSame(rootA !== null, true);
+          assertSame(rootA, rootB);
+          assertSame(rootA.resumes, 2);
+          assertSame(rootA.references, 0);
+          assertSame(rootA.depth, 0);
+          assertSame(rootA.maxDepth, Math.min(maxDepthA, maxDepthB));
+        } finally {
+          realmB.agent.exitGeneratorHostChain();
+          realmA.agent.exitGeneratorHostChain();
+        }
+
+        assertGeneratorAccountingCleared([realmA, realmB]);
+        assertFiniteGeneratorResume(realmA, `collision-A-${maxDepthA}`);
+        assertFiniteGeneratorResume(realmB, `collision-B-${maxDepthB}`);
+        assertGeneratorAccountingCleared([realmA, realmB]);
+      }
+    },
+  },
+  {
+    name: 'an over-budget chain merge remains unwindable after link throws',
+    run() {
+      const agentA = createAgent();
+      const agentB = createAgent();
+      const resumeA = agentA.enterGeneratorHostChain(5);
+      const resumeB = agentB.enterGeneratorHostChain(5);
+      const framesA = [];
+      const framesB = [];
+
+      for (let index = 0; index < 3; index += 1) {
+        framesA.push(agentA.enterGeneratorHostFrame(5));
+        framesB.push(agentB.enterGeneratorHostFrame(5));
+      }
+
+      try {
+        const error = /** @type {GuestErrorSignal} */ (
+          assertThrows(
+            () => agentA.linkGeneratorHostChain(agentB),
+            GuestErrorSignal,
+          )
+        );
+        const root = generatorHostChainRoot(agentA);
+
+        assertSame(error.typeName, 'RangeError');
+        assertSame(root, generatorHostChainRoot(agentB));
+        assertSame(root.resumes, 2);
+        assertSame(root.references, 0);
+        assertSame(root.depth, 6);
+        assertSame(root.maxDepth, 5);
+      } finally {
+        while (framesB.length > 0) {
+          agentB.exitGeneratorHostFrame(
+            /** @type {import('../src/runtime/agent.js').GeneratorHostChain} */ (
+              framesB.pop()
+            ),
+          );
+        }
+        while (framesA.length > 0) {
+          agentA.exitGeneratorHostFrame(
+            /** @type {import('../src/runtime/agent.js').GeneratorHostChain} */ (
+              framesA.pop()
+            ),
+          );
+        }
+        agentB.exitGeneratorHostChain(resumeB);
+        agentA.exitGeneratorHostChain(resumeA);
+      }
+
+      assertSame(agentA._generatorHostChain, null);
+      assertSame(agentB._generatorHostChain, null);
+    },
+  },
+  {
+    name: 'merged Agent chains unwind on yield completion and abrupt delegation',
+    run() {
+      const realmA = createRealm({ maxStackDepth: 100 });
+      const realmB = createRealm({ maxStackDepth: 160 });
+
+      evaluateScript(
+        realmA,
+        `
+          function* yieldingOuter() {
+            yield* yieldingInner();
+            return "complete";
+          }
+          function* throwingOuter() {
+            yield* throwingInner();
+          }
+        `,
+      );
+      evaluateScript(
+        realmB,
+        `
+          function* yieldingInner() { yield "yielded"; }
+          function* throwingInner() { throw new Error("abrupt"); }
+        `,
+      );
+      defineGlobal(
+        realmA,
+        'yieldingInner',
+        realmB.globalObject.get('yieldingInner'),
+      );
+      defineGlobal(
+        realmA,
+        'throwingInner',
+        realmB.globalObject.get('throwingInner'),
+      );
+
+      realmA.agent.enterGeneratorHostChain(100);
+      realmB.agent.enterGeneratorHostChain(160);
+
+      try {
+        const yielded = evaluateScript(
+          realmA,
+          `
+            var linkedIterator = yieldingOuter();
+            var linkedYield = linkedIterator.next();
+            [linkedYield.value, linkedYield.done].join("|");
+          `,
+        );
+        const root = generatorHostChainRoot(realmA.agent);
+
+        assertSame(yielded.type, 'normal');
+        assertSame(yielded.value, 'yielded|false');
+        assertSame(root, generatorHostChainRoot(realmB.agent));
+        assertSame(root.resumes, 2);
+        assertSame(root.references, 0);
+        assertSame(root.depth, 0);
+      } finally {
+        realmB.agent.exitGeneratorHostChain();
+        realmA.agent.exitGeneratorHostChain();
+      }
+
+      assertGeneratorAccountingCleared([realmA, realmB]);
+      const completed = evaluateScript(
+        realmA,
+        `
+          var linkedComplete = linkedIterator.next();
+          [linkedComplete.value, linkedComplete.done].join("|");
+        `,
+      );
+      assertSame(completed.type, 'normal');
+      assertSame(completed.value, 'complete|true');
+      assertGeneratorAccountingCleared([realmA, realmB]);
+
+      realmA.agent.enterGeneratorHostChain(100);
+      realmB.agent.enterGeneratorHostChain(160);
+
+      try {
+        const abrupt = evaluateScript(
+          realmA,
+          `
+            try {
+              throwingOuter().next();
+              "not thrown";
+            } catch (error) {
+              error.message;
+            }
+          `,
+        );
+        const root = generatorHostChainRoot(realmA.agent);
+
+        assertSame(abrupt.type, 'normal');
+        assertSame(abrupt.value, 'abrupt');
+        assertSame(root, generatorHostChainRoot(realmB.agent));
+        assertSame(root.resumes, 2);
+        assertSame(root.references, 0);
+        assertSame(root.depth, 0);
+      } finally {
+        realmB.agent.exitGeneratorHostChain();
+        realmA.agent.exitGeneratorHostChain();
+      }
+
+      assertGeneratorAccountingCleared([realmA, realmB]);
     },
   },
   {

@@ -48,10 +48,11 @@ class BoundFunction extends NativeFunction {
     let boundFunction;
 
     if (isConstructor(target)) {
-      construct = (args, _functionObject, newTarget) => {
+      construct = (args, _functionObject, newTarget, callerRealm) => {
         const result = target.constructFunction(
           combineArguments(boundArgs, args),
           newTarget === boundFunction ? target : newTarget,
+          callerRealm ?? realm,
         );
 
         if (!(result instanceof EngineObject)) {
@@ -73,10 +74,11 @@ class BoundFunction extends NativeFunction {
     super(realm, {
       name: boundName,
       length,
-      call(_thisValue, args) {
+      call(_thisValue, args, _functionObject, callerRealm) {
         return target.callFunction(
           boundThis,
           combineArguments(boundArgs, args),
+          callerRealm ?? realm,
         );
       },
       construct,
@@ -84,6 +86,7 @@ class BoundFunction extends NativeFunction {
       // so NativeFunction's ordinary allocation retargeting must not rewrite
       // an explicit object the target returns.
       retargetConstructionResult: false,
+      generatorResume: boundTargetResumesGenerator(target),
     });
 
     if (!this.setPrototypeOf(targetPrototype)) {
@@ -215,7 +218,7 @@ export function createFunctionIntrinsics(realm) {
     functionPrototype,
     'apply',
     2,
-    (thisValue, args) => {
+    (thisValue, args, _functionObject, callerRealm) => {
       const target = requireCallable(
         thisValue,
         'Function.prototype.apply receiver is not callable',
@@ -231,22 +234,34 @@ export function createFunctionIntrinsics(realm) {
                 'Function.prototype.apply arguments must be an object',
               ),
             );
-      return target.callFunction(thisArgument, callArguments);
+      return target.callFunction(
+        thisArgument,
+        callArguments,
+        callerRealm ?? realm,
+      );
     },
+    { generatorResumeTargetFromThis: true },
   );
-  defineNativeMethod(realm, functionPrototype, 'call', 1, (thisValue, args) => {
-    const target = requireCallable(
-      thisValue,
-      'Function.prototype.call receiver is not callable',
-    );
-    const callArguments = [];
+  defineNativeMethod(
+    realm,
+    functionPrototype,
+    'call',
+    1,
+    (thisValue, args, _functionObject, callerRealm) => {
+      const target = requireCallable(
+        thisValue,
+        'Function.prototype.call receiver is not callable',
+      );
+      const callArguments = [];
 
-    for (let index = 1; index < args.length; index += 1) {
-      callArguments.push(args[index]);
-    }
+      for (let index = 1; index < args.length; index += 1) {
+        callArguments.push(args[index]);
+      }
 
-    return target.callFunction(args[0], callArguments);
-  });
+      return target.callFunction(args[0], callArguments, callerRealm ?? realm);
+    },
+    { generatorResumeTargetFromThis: true },
+  );
   defineNativeMethod(realm, functionPrototype, 'bind', 1, (thisValue, args) => {
     const target = requireCallable(
       thisValue,
@@ -279,6 +294,23 @@ export function installFunctionConstructor(globalObject, intrinsics) {
 }
 
 /**
+ * @param {CallableLike} target
+ * @returns {boolean}
+ */
+function boundTargetResumesGenerator(target) {
+  if (!(target instanceof EngineObject)) {
+    return false;
+  }
+
+  const nativeTarget = /** @type {any} */ (target);
+
+  return (
+    nativeTarget._generatorResume === true ||
+    nativeTarget._generatorResumeTargetFromThis === true
+  );
+}
+
+/**
  * @param {readonly unknown[]} prefix
  * @param {readonly unknown[]} suffix
  * @returns {unknown[]}
@@ -303,11 +335,12 @@ function combineArguments(prefix, suffix) {
  * @param {string} name
  * @param {number} length
  * @param {import('./shared.js').NativeFunctionOptions['call']} call
+ * @param {{ generatorResumeTargetFromThis?: boolean }} [options]
  * @returns {void}
  */
-function defineNativeMethod(realm, target, name, length, call) {
+function defineNativeMethod(realm, target, name, length, call, options = {}) {
   target.defineOwnProperty(name, {
-    value: realm.createNativeFunction({ name, length, call }),
+    value: realm.createNativeFunction({ name, length, call, ...options }),
     writable: true,
     enumerable: false,
     configurable: true,

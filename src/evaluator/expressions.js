@@ -1,6 +1,7 @@
 import {
   Reference,
   getValue,
+  linkValueToGeneratorHostChain,
   putValue,
   isEnvironmentRecord,
 } from '../runtime/reference.js';
@@ -252,11 +253,22 @@ export function evaluateExpressionValue(node, context) {
     guard.enter();
     guard.exit();
 
-    return getIdentifierBindingValue(context.env, node.name, context.strict);
+    return linkValueToGeneratorHostChain(
+      context.realm,
+      getIdentifierBindingValue(
+        context.env,
+        node.name,
+        context.strict,
+        context.realm,
+      ),
+    );
   }
 
   const result = evaluateExpression(node, context);
-  return result instanceof Reference ? getValue(result) : result;
+  return linkValueToGeneratorHostChain(
+    context.realm,
+    result instanceof Reference ? getValue(result, context.realm) : result,
+  );
 }
 
 /**
@@ -314,7 +326,7 @@ export function prepareAssignmentTarget(target, context) {
 export function applyPreparedAssignmentTarget(prepared, value, context) {
   switch (prepared.kind) {
     case 'reference':
-      putValue(prepared.reference, value);
+      putValue(prepared.reference, value, context.realm);
       return;
     case 'member':
       putValue(
@@ -324,6 +336,7 @@ export function applyPreparedAssignmentTarget(prepared, value, context) {
           context,
         ),
         value,
+        context.realm,
       );
       return;
     case 'superMember':
@@ -335,6 +348,7 @@ export function applyPreparedAssignmentTarget(prepared, value, context) {
           context,
         ),
         value,
+        context.realm,
       );
       return;
   }
@@ -467,7 +481,7 @@ function evaluateTypeofExpression(argument, context) {
       return 'undefined';
     }
 
-    return typeOf(getValue(reference));
+    return typeOf(getValue(reference, context.realm));
   }
 
   return typeOf(evaluateExpressionValue(argument, context));
@@ -651,7 +665,7 @@ function evaluateAssignmentExpression(node, context) {
       node.left.type === 'Identifier'
         ? evaluateNamedExpression(node.right, context, node.left.name)
         : evaluateExpressionValue(node.right, context);
-    putValue(reference, value);
+    putValue(reference, value, context.realm);
     return value;
   }
 
@@ -662,10 +676,10 @@ function evaluateAssignmentExpression(node, context) {
     throw createUnsupportedOperatorError('assignment', node.operator);
   }
 
-  const leftValue = getValue(reference);
+  const leftValue = getValue(reference, context.realm);
   const rightValue = evaluateExpressionValue(node.right, context);
   const result = applyBinaryOperator(binaryOperator, leftValue, rightValue);
-  putValue(reference, result);
+  putValue(reference, result, context.realm);
   return result;
 }
 
@@ -690,9 +704,9 @@ function evaluateUpdateExpression(node, context) {
   const reference = /** @type {Reference} */ (
     evaluateExpression(node.argument, context)
   );
-  const oldValue = toNumber(getValue(reference));
+  const oldValue = toNumber(getValue(reference, context.realm));
   const newValue = node.operator === '++' ? oldValue + 1 : oldValue - 1;
-  putValue(reference, newValue);
+  putValue(reference, newValue, context.realm);
   return node.prefix ? newValue : oldValue;
 }
 
@@ -723,7 +737,7 @@ function evaluateCallExpression(node, context) {
   const calleeReference = evaluateExpression(node.callee, context);
   const callee =
     calleeReference instanceof Reference
-      ? getValue(calleeReference)
+      ? getValue(calleeReference, context.realm)
       : calleeReference;
   const thisValue = referenceThisValue(calleeReference);
   const args = evaluateArguments(node.arguments, context);
@@ -741,7 +755,7 @@ function evaluateCallExpression(node, context) {
 
   return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
     callee
-  ).callFunction(thisValue, args);
+  ).callFunction(thisValue, args, context.realm);
 }
 
 /**
@@ -855,7 +869,9 @@ function evaluateTemplateLiteral(node, context) {
 function evaluateTaggedTemplateExpression(node, context) {
   const tagReference = evaluateExpression(node.tag, context);
   const tag =
-    tagReference instanceof Reference ? getValue(tagReference) : tagReference;
+    tagReference instanceof Reference
+      ? getValue(tagReference, context.realm)
+      : tagReference;
   const thisValue = referenceThisValue(tagReference);
   /** @type {unknown[]} */
   const args = [context.realm.getTemplateObject(node.quasi)];
@@ -873,7 +889,7 @@ function evaluateTaggedTemplateExpression(node, context) {
 
   return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
     tag
-  ).callFunction(thisValue, args);
+  ).callFunction(thisValue, args, context.realm);
 }
 
 /**
@@ -913,7 +929,11 @@ function evaluateNewExpression(node, context) {
     );
   }
 
-  return /** @type {any} */ (callee).constructFunction(args);
+  return /** @type {any} */ (callee).constructFunction(
+    args,
+    callee,
+    context.realm,
+  );
 }
 
 /**

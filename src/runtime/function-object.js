@@ -6,6 +6,7 @@ import {
   bindThisValue,
   createFunctionExecutionEnvironment,
 } from './environment.js';
+import { linkValueToGeneratorHostChain } from './reference.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -216,9 +217,10 @@ export class EngineFunction extends EngineObject {
   /**
    * @param {unknown} thisValue
    * @param {readonly unknown[]} [args=[]]
+   * @param {Realm} [callerRealm]
    * @returns {unknown}
    */
-  callFunction(thisValue, args = []) {
+  callFunction(thisValue, args = [], callerRealm) {
     if (this.functionKind === 'classConstructor') {
       throw new ThrowSignal(
         this.realm.createGuestError(
@@ -226,6 +228,14 @@ export class EngineFunction extends EngineObject {
           "Class constructor cannot be invoked without 'new'",
         ),
       );
+    }
+
+    callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+    const activeRealm = callerRealm ?? this.realm;
+
+    linkValueToGeneratorHostChain(activeRealm, thisValue);
+    for (const argument of args) {
+      linkValueToGeneratorHostChain(activeRealm, argument);
     }
 
     const functionEnvironment = this.functionExecutionEnvironment(thisValue);
@@ -258,7 +268,7 @@ export class EngineFunction extends EngineObject {
       );
 
       if (completion.type === 'return') {
-        return completion.value;
+        return linkValueToGeneratorHostChain(activeRealm, completion.value);
       }
 
       throw new TypeError(
@@ -273,7 +283,7 @@ export class EngineFunction extends EngineObject {
     );
 
     if (completion.type === 'return') {
-      return completion.value;
+      return linkValueToGeneratorHostChain(activeRealm, completion.value);
     }
 
     if (completion.type === 'normal') {
@@ -307,15 +317,29 @@ export class EngineFunction extends EngineObject {
    *
    * @param {readonly unknown[]} [args=[]]
    * @param {unknown} [newTarget=this]
+   * @param {Realm} [callerRealm]
    * @returns {EngineObject}
    */
-  constructFunction(args = [], newTarget = this) {
+  constructFunction(args = [], newTarget = this, callerRealm) {
     if (!this._isConstructor) {
       throw new GuestErrorSignal('TypeError', 'Function is not a constructor');
     }
 
+    callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+    const activeRealm = callerRealm ?? this.realm;
+
+    for (const argument of args) {
+      linkValueToGeneratorHostChain(activeRealm, argument);
+    }
+    linkValueToGeneratorHostChain(activeRealm, newTarget);
+
     if (this.functionKind === 'classConstructor') {
-      return this.constructClass(args, newTarget);
+      return /** @type {EngineObject} */ (
+        linkValueToGeneratorHostChain(
+          activeRealm,
+          this.constructClass(args, newTarget),
+        )
+      );
     }
 
     const instance = ordinaryCreateFromConstructor(
@@ -325,7 +349,12 @@ export class EngineFunction extends EngineObject {
     );
     const result = this.callFunction(instance, args);
 
-    return result instanceof EngineObject ? result : instance;
+    return /** @type {EngineObject} */ (
+      linkValueToGeneratorHostChain(
+        activeRealm,
+        result instanceof EngineObject ? result : instance,
+      )
+    );
   }
 
   /**
@@ -574,6 +603,7 @@ export function constructSuper(args, functionEnvironment) {
   const value = superConstructor.constructFunction(
     args,
     functionEnvironment.newTarget,
+    functionEnvironment.activeConstructor?.realm,
   );
   return bindThisValue(functionEnvironment, value);
 }

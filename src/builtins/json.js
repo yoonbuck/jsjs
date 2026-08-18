@@ -597,7 +597,7 @@ function walkBody(realm, holder, name, reviver) {
     }
   }
 
-  return reviver.callFunction(holder, [name, value]);
+  return reviver.callFunction(holder, [name, value], realm);
 }
 
 /**
@@ -767,12 +767,12 @@ function serializePropertyBody(realm, state, key, holder) {
     const toJSON = value.get('toJSON');
 
     if (isCallable(toJSON)) {
-      value = toJSON.callFunction(value, [key]);
+      value = toJSON.callFunction(value, [key], realm);
     }
   }
 
   if (state.replacerFunction !== undefined) {
-    value = state.replacerFunction.callFunction(holder, [key, value]);
+    value = state.replacerFunction.callFunction(holder, [key, value], realm);
   }
 
   if (value instanceof EngineObject) {

@@ -85,7 +85,11 @@ export function newPromiseCapability(constructor, currentRealm) {
       return undefined;
     },
   });
-  const promise = constructor.constructFunction([executor]);
+  const promise = constructor.constructFunction(
+    [executor],
+    constructor,
+    currentRealm,
+  );
 
   if (!(promise instanceof EngineObject)) {
     throw new GuestErrorSignal(
@@ -143,7 +147,7 @@ export function performPromiseAll(
     /** @type {unknown} */
     let nextValue;
     try {
-      nextValue = iteratorValue(next);
+      nextValue = iteratorValue(next, currentRealm);
     } catch (error) {
       return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
@@ -164,7 +168,7 @@ export function performPromiseAll(
     remainingElementsCount.value += 1;
 
     try {
-      const nextPromise = promiseResolve(constructor, nextValue);
+      const nextPromise = promiseResolve(constructor, nextValue, currentRealm);
       invokeThen(
         currentRealm,
         nextPromise,
@@ -216,13 +220,13 @@ export function performPromiseRace(
     /** @type {unknown} */
     let nextValue;
     try {
-      nextValue = iteratorValue(next);
+      nextValue = iteratorValue(next, currentRealm);
     } catch (error) {
       return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     try {
-      const nextPromise = promiseResolve(constructor, nextValue);
+      const nextPromise = promiseResolve(constructor, nextValue, currentRealm);
       invokeThen(
         currentRealm,
         nextPromise,
@@ -327,7 +331,11 @@ export function newPromiseReactionJob(reaction, argument, currentRealm) {
       }
 
       try {
-        handlerResult = reaction.handler.callFunction(undefined, [argument]);
+        handlerResult = reaction.handler.callFunction(
+          undefined,
+          [argument],
+          /** @type {Realm} */ (jobRealm ?? currentRealm),
+        );
       } catch (error) {
         return callPromiseCapability(
           reaction.capability,
@@ -486,7 +494,11 @@ function createPromiseAllResolveElementFunction(
       remainingElementsCount.value -= 1;
 
       if (remainingElementsCount.value === 0) {
-        resultCapability.resolve.callFunction(undefined, [values]);
+        resultCapability.resolve.callFunction(
+          undefined,
+          [values],
+          currentRealm,
+        );
       }
 
       return undefined;
@@ -506,11 +518,13 @@ function createPromiseAllResolveElementFunction(
  */
 function resolvePromiseAllCapability(resultCapability, values, currentRealm) {
   try {
-    resultCapability.resolve.callFunction(undefined, [values]);
+    resultCapability.resolve.callFunction(undefined, [values], currentRealm);
   } catch (error) {
-    resultCapability.reject.callFunction(undefined, [
-      abruptValue(currentRealm, error),
-    ]);
+    resultCapability.reject.callFunction(
+      undefined,
+      [abruptValue(currentRealm, error)],
+      currentRealm,
+    );
   }
 }
 
@@ -520,9 +534,10 @@ function resolvePromiseAllCapability(resultCapability, values, currentRealm) {
  *
  * @param {EngineObject} constructor
  * @param {unknown} value
+ * @param {Realm} currentRealm
  * @returns {unknown}
  */
-function promiseResolve(constructor, value) {
+function promiseResolve(constructor, value, currentRealm) {
   const resolve = constructor.get('resolve');
 
   if (!isCallable(resolve)) {
@@ -532,7 +547,7 @@ function promiseResolve(constructor, value) {
     );
   }
 
-  return resolve.callFunction(constructor, [value]);
+  return resolve.callFunction(constructor, [value], currentRealm);
 }
 
 /**
@@ -552,7 +567,7 @@ function invokeThen(currentRealm, promise, onFulfilled, onRejected) {
     );
   }
 
-  return then.callFunction(promise, [onFulfilled, onRejected]);
+  return then.callFunction(promise, [onFulfilled, onRejected], currentRealm);
 }
 
 /**
@@ -579,9 +594,11 @@ function rejectAfterIteratorClose(
  * @returns {EngineObject}
  */
 function rejectPromiseCapability(currentRealm, resultCapability, error) {
-  resultCapability.reject.callFunction(undefined, [
-    abruptValue(currentRealm, error),
-  ]);
+  resultCapability.reject.callFunction(
+    undefined,
+    [abruptValue(currentRealm, error)],
+    currentRealm,
+  );
   return resultCapability.promise;
 }
 
@@ -631,14 +648,17 @@ export function newPromiseResolveThenableJob(
       );
 
       try {
-        then.callFunction(thenable, [
-          resolvingFunctions.resolve,
-          resolvingFunctions.reject,
-        ]);
+        then.callFunction(
+          thenable,
+          [resolvingFunctions.resolve, resolvingFunctions.reject],
+          /** @type {Realm} */ (jobRealm),
+        );
       } catch (error) {
-        resolvingFunctions.reject.callFunction(undefined, [
-          abruptValue(/** @type {Realm} */ (jobRealm), error),
-        ]);
+        resolvingFunctions.reject.callFunction(
+          undefined,
+          [abruptValue(/** @type {Realm} */ (jobRealm), error)],
+          /** @type {Realm} */ (jobRealm),
+        );
       }
 
       return createNormalCompletion(undefined);
@@ -752,7 +772,7 @@ function callPromiseCapability(capability, operation, value, realm) {
   }
 
   try {
-    capability[operation].callFunction(undefined, [value]);
+    capability[operation].callFunction(undefined, [value], realm);
     return createNormalCompletion(undefined);
   } catch (error) {
     return { type: 'throw', value: abruptValue(realm, error) };

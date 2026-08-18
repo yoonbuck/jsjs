@@ -5,9 +5,12 @@ import { GuestErrorSignal } from './completion.js';
 /**
  * @typedef {import('./symbol.js').WellKnownSymbolName} WellKnownSymbolName
  * @typedef {{
+ *   parent: GeneratorHostChain | null,
  *   agents: Set<Agent>,
  *   resumes: number,
+ *   references: number,
  *   depth: number,
+ *   maxDepth: number,
  * }} GeneratorHostChain
  */
 
@@ -42,9 +45,10 @@ import { GuestErrorSignal } from './completion.js';
  * its own. See `docs/architecture.md` for the embedding lifecycle.
  *
  * The Agent also owns transient generator host-chain accounting. Shared-Agent
- * Realms naturally charge one chain; cross-Agent iterator delegation links the
- * participating Agents only until the outermost synchronous resume unwinds.
- * The chain retains no guest value and is cleared in `finally`.
+ * Realms naturally charge one chain; cross-Agent calls, iterator operations,
+ * and generator resumes union every participating Agent's active record. The
+ * union retains no guest value and is cleared once all synchronous resumes and
+ * guarded frames unwind.
  */
 export class Agent {
   /**
@@ -201,81 +205,146 @@ export class Agent {
    * resume owns the chain; nested cross-Agent resumes keep charging that owner
    * because they consume the same host stack.
    *
-   * @returns {void}
+   * @param {number} [maxDepth=Number.POSITIVE_INFINITY]
+   * @returns {GeneratorHostChain}
    */
-  enterGeneratorHostChain() {
-    if (this._generatorHostChain === null) {
-      this._generatorHostChain = {
-        agents: new Set([this]),
-        resumes: 0,
-        depth: 0,
-      };
-    }
+  enterGeneratorHostChain(maxDepth = Number.POSITIVE_INFINITY) {
+    const chain = this.ensureGeneratorHostChain(maxDepth);
 
-    this._generatorHostChain.resumes += 1;
+    chain.resumes += 1;
+    return chain;
   }
 
   /**
+   * @param {GeneratorHostChain | null} [enteredChain=this._generatorHostChain]
    * @returns {void}
    */
-  exitGeneratorHostChain() {
-    const chain = this._generatorHostChain;
+  exitGeneratorHostChain(enteredChain = this._generatorHostChain) {
+    if (enteredChain === null) {
+      return;
+    }
 
-    if (chain === null) {
+    const chain = findGeneratorHostChainRoot(enteredChain);
+
+    if (chain.resumes <= 0) {
       return;
     }
 
     chain.resumes -= 1;
-
-    if (chain.resumes === 0) {
-      chain.depth = 0;
-
-      for (const agent of chain.agents) {
-        if (agent._generatorHostChain === chain) {
-          agent._generatorHostChain = null;
-        }
-      }
-
-      chain.agents.clear();
-    }
+    releaseGeneratorHostChain(chain);
   }
 
   /**
-   * Makes a foreign iterator Agent participate in the currently active chain.
-   * The link exists only until the outermost resume unwinds.
+   * Keeps a chain alive around a generator method invocation, including the
+   * method's own guarded frame before the receiver begins its resume.
+   *
+   * @param {number} [maxDepth=Number.POSITIVE_INFINITY]
+   * @returns {GeneratorHostChain}
+   */
+  enterGeneratorHostChainReference(maxDepth = Number.POSITIVE_INFINITY) {
+    const chain = this.ensureGeneratorHostChain(maxDepth);
+
+    chain.references += 1;
+    return chain;
+  }
+
+  /**
+   * @param {GeneratorHostChain} enteredChain
+   * @returns {void}
+   */
+  exitGeneratorHostChainReference(enteredChain) {
+    const chain = findGeneratorHostChainRoot(enteredChain);
+
+    if (chain.references > 0) {
+      chain.references -= 1;
+    }
+
+    releaseGeneratorHostChain(chain);
+  }
+
+  /**
+   * Makes two Agents participate in one currently active chain. An idle Agent
+   * joins the other Agent's chain, while two distinct active chains are merged
+   * rather than silently left to account for the same host stack separately.
+   * The link exists only until every merged resume and frame unwinds.
    *
    * @param {Agent} agent
    * @returns {void}
    */
   linkGeneratorHostChain(agent) {
-    const chain = this._generatorHostChain;
-
-    if (
-      chain === null ||
-      agent._generatorHostChain !== null ||
-      chain.agents.has(agent)
-    ) {
+    if (agent === this) {
       return;
     }
 
-    agent._generatorHostChain = chain;
-    chain.agents.add(agent);
+    const thisChain = this.generatorHostChainRoot();
+    const otherChain = agent.generatorHostChainRoot();
+
+    if (thisChain === null && otherChain === null) {
+      return;
+    }
+
+    if (thisChain === null) {
+      attachAgentToGeneratorHostChain(
+        this,
+        /** @type {GeneratorHostChain} */ (otherChain),
+      );
+      return;
+    }
+
+    if (otherChain === null) {
+      attachAgentToGeneratorHostChain(agent, thisChain);
+      return;
+    }
+
+    if (thisChain === otherChain) {
+      return;
+    }
+
+    const [root, child] =
+      thisChain.agents.size >= otherChain.agents.size
+        ? [thisChain, otherChain]
+        : [otherChain, thisChain];
+
+    child.parent = root;
+    root.resumes += child.resumes;
+    root.references += child.references;
+    root.depth += child.depth;
+    root.maxDepth = Math.min(root.maxDepth, child.maxDepth);
+    child.resumes = 0;
+    child.references = 0;
+    child.depth = 0;
+
+    for (const member of child.agents) {
+      member._generatorHostChain = root;
+      root.agents.add(member);
+    }
+
+    child.agents.clear();
+
+    if (root.depth > root.maxDepth) {
+      throw new GuestErrorSignal(
+        'RangeError',
+        'Maximum call stack size exceeded',
+      );
+    }
   }
 
   /**
    * Charges one guarded engine frame to the complete active generator chain.
    *
    * @param {number} maxDepth
-   * @returns {boolean} Whether an active generator chain was charged.
+   * @returns {GeneratorHostChain | null} The chain charged by this frame.
    */
   enterGeneratorHostFrame(maxDepth) {
-    const chain = this._generatorHostChain;
+    const chain = this.generatorHostChainRoot();
 
     if (chain === null) {
-      return false;
+      return null;
     }
 
-    if (chain.depth >= maxDepth) {
+    chain.maxDepth = Math.min(chain.maxDepth, maxDepth);
+
+    if (chain.depth >= chain.maxDepth) {
       throw new GuestErrorSignal(
         'RangeError',
         'Maximum call stack size exceeded',
@@ -283,17 +352,116 @@ export class Agent {
     }
 
     chain.depth += 1;
-    return true;
+    return chain;
   }
 
   /**
+   * @param {GeneratorHostChain} enteredChain
    * @returns {void}
    */
-  exitGeneratorHostFrame() {
-    if (this._generatorHostChain !== null) {
-      this._generatorHostChain.depth -= 1;
+  exitGeneratorHostFrame(enteredChain) {
+    const chain = findGeneratorHostChainRoot(enteredChain);
+
+    if (chain.depth > 0) {
+      chain.depth -= 1;
+    }
+
+    releaseGeneratorHostChain(chain);
+  }
+
+  /**
+   * @returns {GeneratorHostChain | null}
+   */
+  generatorHostChainRoot() {
+    const chain = this._generatorHostChain;
+
+    if (chain === null) {
+      return null;
+    }
+
+    const root = findGeneratorHostChainRoot(chain);
+    this._generatorHostChain = root;
+    return root;
+  }
+
+  /**
+   * @param {number} maxDepth
+   * @returns {GeneratorHostChain}
+   */
+  ensureGeneratorHostChain(maxDepth) {
+    let chain = this.generatorHostChainRoot();
+
+    if (chain === null) {
+      chain = {
+        parent: null,
+        agents: new Set([this]),
+        resumes: 0,
+        references: 0,
+        depth: 0,
+        maxDepth,
+      };
+      this._generatorHostChain = chain;
+    } else {
+      chain.maxDepth = Math.min(chain.maxDepth, maxDepth);
+    }
+
+    return chain;
+  }
+}
+
+/**
+ * @param {GeneratorHostChain} chain
+ * @returns {GeneratorHostChain}
+ */
+function findGeneratorHostChainRoot(chain) {
+  let root = chain;
+
+  while (root.parent !== null) {
+    root = root.parent;
+  }
+
+  let current = chain;
+
+  while (current.parent !== null && current.parent !== root) {
+    const parent = current.parent;
+    current.parent = root;
+    current = parent;
+  }
+
+  return root;
+}
+
+/**
+ * @param {Agent} agent
+ * @param {GeneratorHostChain} chain
+ * @returns {void}
+ */
+function attachAgentToGeneratorHostChain(agent, chain) {
+  agent._generatorHostChain = chain;
+  chain.agents.add(agent);
+}
+
+/**
+ * @param {GeneratorHostChain} chain
+ * @returns {void}
+ */
+function releaseGeneratorHostChain(chain) {
+  if (chain.resumes !== 0 || chain.references !== 0 || chain.depth !== 0) {
+    return;
+  }
+
+  for (const agent of chain.agents) {
+    const memberChain = agent._generatorHostChain;
+
+    if (
+      memberChain !== null &&
+      findGeneratorHostChainRoot(memberChain) === chain
+    ) {
+      agent._generatorHostChain = null;
     }
   }
+
+  chain.agents.clear();
 }
 
 /**

@@ -16,7 +16,11 @@
  * }} CompletePropertyDescriptor
  *
  * @typedef {{
- *   callFunction: (thisValue: unknown, args: readonly unknown[]) => unknown,
+ *   callFunction: (
+ *     thisValue: unknown,
+ *     args: readonly unknown[],
+ *     callerRealm?: import('./realm.js').Realm,
+ *   ) => unknown,
  *   getFunctionRealm: () => import('./function-realm.js').JobCompletion,
  * }} CallableLike
  */
@@ -45,7 +49,11 @@ export function isCallable(value) {
 /**
  * @param {unknown} value
  * @returns {value is CallableLike & {
- *   constructFunction: (args?: readonly unknown[], newTarget?: unknown) => unknown,
+ *   constructFunction: (
+ *     args?: readonly unknown[],
+ *     newTarget?: unknown,
+ *     callerRealm?: import('./realm.js').Realm,
+ *   ) => unknown,
  * }}
  */
 export function isConstructor(value) {

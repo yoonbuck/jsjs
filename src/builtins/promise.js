@@ -56,14 +56,17 @@ export function createPromiseIntrinsics(realm) {
       const resolvingFunctions = createResolvingFunctions(promise, realm);
 
       try {
-        executor.callFunction(undefined, [
-          resolvingFunctions.resolve,
-          resolvingFunctions.reject,
-        ]);
+        executor.callFunction(
+          undefined,
+          [resolvingFunctions.resolve, resolvingFunctions.reject],
+          realm,
+        );
       } catch (error) {
-        resolvingFunctions.reject.callFunction(undefined, [
-          abruptValue(realm, error),
-        ]);
+        resolvingFunctions.reject.callFunction(
+          undefined,
+          [abruptValue(realm, error)],
+          realm,
+        );
       }
 
       return promise;
@@ -127,7 +130,7 @@ export function createPromiseIntrinsics(realm) {
           );
         }
 
-        return then.callFunction(thisValue, [undefined, args[0]]);
+        return then.callFunction(thisValue, [undefined, args[0]], realm);
       },
     }),
   );
@@ -165,7 +168,7 @@ export function createPromiseIntrinsics(realm) {
         }
 
         const capability = newPromiseCapability(thisValue, realm);
-        capability.resolve.callFunction(undefined, [resolution]);
+        capability.resolve.callFunction(undefined, [resolution], realm);
         return capability.promise;
       },
     }),
@@ -185,7 +188,7 @@ export function createPromiseIntrinsics(realm) {
         }
 
         const capability = newPromiseCapability(thisValue, realm);
-        capability.reject.callFunction(undefined, [args[0]]);
+        capability.reject.callFunction(undefined, [args[0]], realm);
         return capability.promise;
       },
     }),
@@ -205,9 +208,11 @@ export function createPromiseIntrinsics(realm) {
         try {
           iteratorRecord = getIterator(realm, args[0]);
         } catch (error) {
-          resultCapability.reject.callFunction(undefined, [
-            abruptValue(realm, error),
-          ]);
+          resultCapability.reject.callFunction(
+            undefined,
+            [abruptValue(realm, error)],
+            realm,
+          );
           return resultCapability.promise;
         }
 
@@ -235,9 +240,11 @@ export function createPromiseIntrinsics(realm) {
         try {
           iteratorRecord = getIterator(realm, args[0]);
         } catch (error) {
-          resultCapability.reject.callFunction(undefined, [
-            abruptValue(realm, error),
-          ]);
+          resultCapability.reject.callFunction(
+            undefined,
+            [abruptValue(realm, error)],
+            realm,
+          );
           return resultCapability.promise;
         }
 

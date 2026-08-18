@@ -247,7 +247,7 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
       if (value === undefined) {
         undefinedCount += 1;
       } else {
-        insertSorted(sorted, value, compare);
+        insertSorted(sorted, value, compare, realm);
       }
     }
 
@@ -361,10 +361,10 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
     const join = object.get('join');
 
     if (isCallable(join)) {
-      return join.callFunction(object, []);
+      return join.callFunction(object, [], realm);
     }
 
-    return objectToString.callFunction(object, []);
+    return objectToString.callFunction(object, [], realm);
   });
   defineNativeMethod(
     realm,
@@ -400,7 +400,9 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
           'Array element toLocaleString property is not callable',
         );
 
-        result += toString(toLocaleString.callFunction(elementObject, []));
+        result += toString(
+          toLocaleString.callFunction(elementObject, [], realm),
+        );
       }
 
       return result;
@@ -618,7 +620,11 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
       createDataProperty(
         result,
         name,
-        callback.callFunction(args[1], [object.get(name), index, object]),
+        callback.callFunction(
+          args[1],
+          [object.get(name), index, object],
+          realm,
+        ),
       );
     }
 
@@ -643,7 +649,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
 
       const value = object.get(name);
 
-      if (callback.callFunction(args[1], [value, index, object])) {
+      if (callback.callFunction(args[1], [value, index, object], realm)) {
         createDataProperty(result, String(nextIndex), value);
         nextIndex += 1;
       }
@@ -686,7 +692,11 @@ function defineIterationMethod(
       }
 
       const completion = visit(
-        callback.callFunction(args[1], [object.get(property), index, object]),
+        callback.callFunction(
+          args[1],
+          [object.get(property), index, object],
+          realm,
+        ),
       );
 
       if (completion !== undefined) {
@@ -748,12 +758,11 @@ function defineReduceMethod(realm, arrayPrototype, name, rightToLeft) {
       const property = String(index);
 
       if (object.hasProperty(property)) {
-        accumulator = callback.callFunction(undefined, [
-          accumulator,
-          object.get(property),
-          index,
-          object,
-        ]);
+        accumulator = callback.callFunction(
+          undefined,
+          [accumulator, object.get(property), index, object],
+          realm,
+        );
       }
 
       index += step;
@@ -805,14 +814,15 @@ function arrayLikeLength(object) {
  * @param {unknown[]} sorted
  * @param {unknown} value
  * @param {import('../runtime/descriptors.js').CallableLike | undefined} compare
+ * @param {Realm} callerRealm
  * @returns {void}
  */
-function insertSorted(sorted, value, compare) {
+function insertSorted(sorted, value, compare, callerRealm) {
   let index = sorted.length;
 
   while (
     index > 0 &&
-    compareArrayValues(sorted[index - 1], value, compare) > 0
+    compareArrayValues(sorted[index - 1], value, compare, callerRealm) > 0
   ) {
     sorted[index] = sorted[index - 1];
     index -= 1;
@@ -825,11 +835,14 @@ function insertSorted(sorted, value, compare) {
  * @param {unknown} left
  * @param {unknown} right
  * @param {import('../runtime/descriptors.js').CallableLike | undefined} compare
+ * @param {Realm} callerRealm
  * @returns {number}
  */
-function compareArrayValues(left, right, compare) {
+function compareArrayValues(left, right, compare, callerRealm) {
   if (compare !== undefined) {
-    const result = toNumber(compare.callFunction(undefined, [left, right]));
+    const result = toNumber(
+      compare.callFunction(undefined, [left, right], callerRealm),
+    );
     return Number.isNaN(result) ? 0 : result;
   }
 

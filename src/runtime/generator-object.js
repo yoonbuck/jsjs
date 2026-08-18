@@ -1,6 +1,7 @@
 import { EngineObject } from './object.js';
 import { createIterResultObject } from './iterator.js';
 import { GuestErrorSignal, ThrowSignal } from './completion.js';
+import { linkValueToGeneratorHostChain } from './reference.js';
 
 /**
  * @typedef {import('./realm.js').Realm} Realm
@@ -84,9 +85,10 @@ export class GeneratorObject extends EngineObject {
     const guard = this.realm.stackGuard;
     const agent = this.realm.agent;
 
-    agent.enterGeneratorHostChain();
+    const hostChain = agent.enterGeneratorHostChain(guard.maxDepth);
 
     try {
+      linkValueToGeneratorHostChain(this.realm, completion.value);
       guard.enter();
       this.state = 'executing';
 
@@ -138,7 +140,7 @@ export class GeneratorObject extends EngineObject {
         guard.exit();
       }
     } finally {
-      agent.exitGeneratorHostChain();
+      agent.exitGeneratorHostChain(hostChain);
     }
 
     throw new TypeError(

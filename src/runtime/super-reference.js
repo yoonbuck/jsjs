@@ -33,9 +33,10 @@ export class SuperReferenceBase {
 
   /**
    * @param {PropertyKey} name
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  getReferencedValue(name) {
+  getReferencedValue(name, callerRealm) {
     const superBase = this.superBase;
 
     if (superBase === null) {
@@ -57,16 +58,17 @@ export class SuperReferenceBase {
 
     return descriptor.get === undefined
       ? undefined
-      : callAccessor(descriptor.get, this.receiver, []);
+      : callAccessor(descriptor.get, this.receiver, [], callerRealm);
   }
 
   /**
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} [strict=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {void}
    */
-  setReferencedValue(name, value, strict = false) {
+  setReferencedValue(name, value, strict = false, callerRealm) {
     const superBase = this.superBase;
 
     if (superBase === null) {
@@ -76,7 +78,7 @@ export class SuperReferenceBase {
       );
     }
 
-    superBase.set(name, value, this.receiver, strict);
+    superBase.set(name, value, this.receiver, strict, callerRealm);
   }
 
   /**

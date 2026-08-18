@@ -118,9 +118,10 @@ export class DeclarativeEnvironmentRecord {
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} strict
+   * @param {import('./realm.js').Realm} [_callerRealm]
    * @returns {void}
    */
-  setMutableBinding(name, value, strict) {
+  setMutableBinding(name, value, strict, _callerRealm) {
     const binding = this._bindings.get(name);
 
     if (binding === undefined) {
@@ -158,9 +159,10 @@ export class DeclarativeEnvironmentRecord {
    *
    * @param {PropertyKey} name
    * @param {boolean} _strict
+   * @param {import('./realm.js').Realm} [_callerRealm]
    * @returns {unknown}
    */
-  getBindingValue(name, _strict) {
+  getBindingValue(name, _strict, _callerRealm) {
     const binding = this._bindings.get(name);
 
     if (binding === undefined) {
@@ -274,13 +276,14 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
   /**
    * @param {PropertyKey} name
    * @param {boolean} strict
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  getBindingValue(name, strict) {
+  getBindingValue(name, strict, callerRealm) {
     const importBinding = this._importBindings.get(name);
 
     if (importBinding === undefined) {
-      return super.getBindingValue(name, strict);
+      return super.getBindingValue(name, strict, callerRealm);
     }
 
     const targetEnvironment = importBinding.targetModule.environment;
@@ -289,16 +292,21 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
       throw new TypeError('Imported module environment is not initialized');
     }
 
-    return targetEnvironment.getBindingValue(importBinding.targetName, true);
+    return targetEnvironment.getBindingValue(
+      importBinding.targetName,
+      true,
+      callerRealm,
+    );
   }
 
   /**
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} strict
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {void}
    */
-  setMutableBinding(name, value, strict) {
+  setMutableBinding(name, value, strict, callerRealm) {
     if (this._importBindings.has(name)) {
       throw new GuestErrorSignal(
         'TypeError',
@@ -306,7 +314,7 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
       );
     }
 
-    super.setMutableBinding(name, value, strict);
+    super.setMutableBinding(name, value, strict, callerRealm);
   }
 
   /**
@@ -418,18 +426,24 @@ export class ObjectEnvironmentRecord {
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} strict
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {void}
    */
-  setMutableBinding(name, value, strict) {
-    this.bindingObject.put(name, value, strict);
+  setMutableBinding(name, value, strict, callerRealm) {
+    this.bindingObject.put(name, value, strict, callerRealm);
   }
 
   /**
    * @param {PropertyKey} name
    * @param {boolean} strict
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  getBindingValue(name, strict) {
+  getBindingValue(name, strict, callerRealm) {
+    if (callerRealm !== undefined && this.bindingObject.agent !== null) {
+      callerRealm.agent.linkGeneratorHostChain(this.bindingObject.agent);
+    }
+
     if (!this.bindingObject.hasProperty(name)) {
       if (strict) {
         throw new GuestErrorSignal(
@@ -441,7 +455,7 @@ export class ObjectEnvironmentRecord {
       return undefined;
     }
 
-    return this.bindingObject.get(name);
+    return this.bindingObject.get(name, callerRealm);
   }
 
   /**
@@ -702,28 +716,35 @@ export class GlobalEnvironmentRecord {
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} strict
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {void}
    */
-  setMutableBinding(name, value, strict) {
+  setMutableBinding(name, value, strict, callerRealm) {
     if (this.declarativeRecord.hasBinding(name)) {
-      this.declarativeRecord.setMutableBinding(name, value, strict);
+      this.declarativeRecord.setMutableBinding(
+        name,
+        value,
+        strict,
+        callerRealm,
+      );
       return;
     }
 
-    this.objectRecord.setMutableBinding(name, value, strict);
+    this.objectRecord.setMutableBinding(name, value, strict, callerRealm);
   }
 
   /**
    * @param {PropertyKey} name
    * @param {boolean} strict
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  getBindingValue(name, strict) {
+  getBindingValue(name, strict, callerRealm) {
     if (this.declarativeRecord.hasBinding(name)) {
-      return this.declarativeRecord.getBindingValue(name, strict);
+      return this.declarativeRecord.getBindingValue(name, strict, callerRealm);
     }
 
-    return this.objectRecord.getBindingValue(name, strict);
+    return this.objectRecord.getBindingValue(name, strict, callerRealm);
   }
 
   /**
@@ -969,15 +990,16 @@ function globalObjectOf(env) {
  * @param {EnvironmentRecordLike | null} env
  * @param {string | symbol} name
  * @param {boolean} strict
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {unknown}
  */
-export function getIdentifierBindingValue(env, name, strict) {
+export function getIdentifierBindingValue(env, name, strict, callerRealm) {
   /** @type {EnvironmentRecordLike | null} */
   let record = env;
 
   while (record !== null) {
     if (record.hasBinding(name)) {
-      return record.getBindingValue(name, strict);
+      return record.getBindingValue(name, strict, callerRealm);
     }
 
     record = record.outer;

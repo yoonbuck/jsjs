@@ -480,12 +480,11 @@ export function createPrimitiveWrapperIntrinsics(realm) {
               value,
               (matched, position, captures, whole) =>
                 toString(
-                  replaceValue.callFunction(undefined, [
-                    matched,
-                    ...captures,
-                    position,
-                    whole,
-                  ]),
+                  replaceValue.callFunction(
+                    undefined,
+                    [matched, ...captures, position, whole],
+                    realm,
+                  ),
                 ),
             );
           }
@@ -518,7 +517,11 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         if (isCallable(replaceValue)) {
           return replaceFirst(value, search, (matched, position, whole) =>
             toString(
-              replaceValue.callFunction(undefined, [matched, position, whole]),
+              replaceValue.callFunction(
+                undefined,
+                [matched, position, whole],
+                realm,
+              ),
             ),
           );
         }
