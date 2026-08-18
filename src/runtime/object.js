@@ -350,10 +350,10 @@ export class EngineObject {
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
+   * @param {import('./realm.js').Realm} [_callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
+  defineOwnProperty(name, descriptor, throwOnError = false, _callerRealm) {
     // Fast path: a {value}-only update on an existing writable data descriptor
     // avoids validatePropertyDescriptor, completePropertyDescriptor, and the
     // full branching logic below. This is the hottest path from `put`.
