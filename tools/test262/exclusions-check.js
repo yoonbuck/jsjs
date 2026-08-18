@@ -15,7 +15,8 @@
  * or runner infrastructure, it is reported as unverifiable rather than counted
  * as evidence that the exclusion is still needed.
  *
- * Exit code: non-zero when any stale exclusion is found.
+ * Exit code: non-zero when any stale exclusion, unapproved unverifiable
+ * result, or stale unverifiable approval is found.
  *
  * Usage: `node tools/test262/exclusions-check.js`
  */
@@ -35,12 +36,22 @@ import {
 } from './features.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+export const EXCLUSIONS_UNVERIFIABLE_FILE =
+  'tools/test262/exclusions-unverifiable.json';
 const UNVERIFIABLE_FAILURE_REASONS = new Set([
   'engine-error',
   'load-error',
   'metadata-error',
   'harness-error',
 ]);
+
+/**
+ * @typedef {{
+ *   path: string,
+ *   diagnosticIncludes: string,
+ *   reason: string,
+ * }} UnverifiableApproval
+ */
 
 /**
  * @param {string} path Repository-relative.
@@ -188,6 +199,141 @@ export async function checkExclusions(options) {
 }
 
 /**
+ * @param {string} text
+ * @returns {readonly Readonly<UnverifiableApproval>[]}
+ */
+export function parseUnverifiableAllowlist(text) {
+  /** @type {unknown} */
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${EXCLUSIONS_UNVERIFIABLE_FILE} is invalid JSON: ${detail}`,
+    );
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error(`${EXCLUSIONS_UNVERIFIABLE_FILE} must contain an object`);
+  }
+  assertExactKeys(
+    parsed,
+    ['entries', 'schemaVersion'],
+    EXCLUSIONS_UNVERIFIABLE_FILE,
+  );
+  if (parsed.schemaVersion !== 1) {
+    throw new Error(`${EXCLUSIONS_UNVERIFIABLE_FILE} schemaVersion must be 1`);
+  }
+  if (!Array.isArray(parsed.entries)) {
+    throw new Error(`${EXCLUSIONS_UNVERIFIABLE_FILE} entries must be an array`);
+  }
+
+  const paths = new Set();
+  const entries = parsed.entries.map((value, index) => {
+    const location = `${EXCLUSIONS_UNVERIFIABLE_FILE} entries[${index}]`;
+    if (!isRecord(value)) {
+      throw new Error(`${location} must be an object`);
+    }
+    assertExactKeys(value, ['diagnosticIncludes', 'path', 'reason'], location);
+    const path = requireNonEmptyString(value.path, `${location}.path`);
+    const diagnosticIncludes = requireNonEmptyString(
+      value.diagnosticIncludes,
+      `${location}.diagnosticIncludes`,
+    );
+    const reason = requireNonEmptyString(value.reason, `${location}.reason`);
+
+    if (paths.has(path)) {
+      throw new Error(
+        `${EXCLUSIONS_UNVERIFIABLE_FILE} has duplicate path: ${path}`,
+      );
+    }
+    paths.add(path);
+    return Object.freeze({ path, diagnosticIncludes, reason });
+  });
+
+  return Object.freeze(entries);
+}
+
+/**
+ * Applies the reviewed unverifiable policy without changing raw execution
+ * verdicts. An approval matches only one exact path and one diagnostic
+ * fragment; diagnostic drift therefore reopens the result for review. An
+ * approval not consumed by a current unverifiable result is stale.
+ *
+ * @param {readonly ExclusionCheckResult[]} results
+ * @param {readonly UnverifiableApproval[]} approvals
+ * @returns {{
+ *   correctlyExcluded: ExclusionCheckResult[],
+ *   staleExclusions: ExclusionCheckResult[],
+ *   approvedUnverifiable: (ExclusionCheckResult & { reviewReason: string })[],
+ *   unapprovedUnverifiable: ExclusionCheckResult[],
+ *   staleApprovals: UnverifiableApproval[],
+ *   exitCode: 0 | 1,
+ * }}
+ */
+export function evaluateExclusionGate(results, approvals) {
+  const approvalsByPath = new Map();
+  for (const approval of approvals) {
+    if (approvalsByPath.has(approval.path)) {
+      throw new Error(
+        `Unverifiable approvals duplicate path: ${approval.path}`,
+      );
+    }
+    approvalsByPath.set(approval.path, approval);
+  }
+
+  const matchedApprovalPaths = new Set();
+  const approvedUnverifiable = [];
+  const unapprovedUnverifiable = [];
+
+  for (const result of results) {
+    if (result.verdict !== 'unverifiable') {
+      continue;
+    }
+
+    const approval = approvalsByPath.get(result.path);
+    if (
+      approval !== undefined &&
+      result.message?.includes(approval.diagnosticIncludes) === true
+    ) {
+      matchedApprovalPaths.add(approval.path);
+      approvedUnverifiable.push({
+        ...result,
+        reviewReason: approval.reason,
+      });
+    } else {
+      unapprovedUnverifiable.push(result);
+    }
+  }
+
+  const correctlyExcluded = results.filter(
+    (result) => result.verdict === 'failed',
+  );
+  const staleExclusions = results.filter(
+    (result) => result.verdict === 'passed',
+  );
+  const staleApprovals = approvals.filter(
+    (approval) => !matchedApprovalPaths.has(approval.path),
+  );
+  const exitCode =
+    staleExclusions.length > 0 ||
+    unapprovedUnverifiable.length > 0 ||
+    staleApprovals.length > 0
+      ? 1
+      : 0;
+
+  return {
+    correctlyExcluded,
+    staleExclusions,
+    approvedUnverifiable,
+    unapprovedUnverifiable,
+    staleApprovals,
+    exitCode,
+  };
+}
+
+/**
  * @param {import('./report.js').Test262TestRecord} record
  * @returns {string}
  */
@@ -214,26 +360,78 @@ export async function main(_argv = []) {
     pin,
     supportedFeatures,
   });
-
-  const passed = results.filter((r) => r.verdict === 'passed');
-  const failed = results.filter((r) => r.verdict === 'failed');
-  const unverifiable = results.filter((r) => r.verdict === 'unverifiable');
+  const approvals = parseUnverifiableAllowlist(
+    await readRepositoryFile(EXCLUSIONS_UNVERIFIABLE_FILE),
+  );
+  const gate = evaluateExclusionGate(results, approvals);
 
   process.stdout.write(
-    `Exclusion check: ${failed.length} correctly excluded, ${unverifiable.length} unverifiable, ${passed.length} stale\n`,
+    `Exclusion check: ${gate.correctlyExcluded.length} correctly excluded, ${gate.approvedUnverifiable.length} approved unverifiable, ${gate.unapprovedUnverifiable.length} unverifiable, ${gate.staleExclusions.length} stale\n`,
   );
 
-  if (passed.length > 0) {
+  if (gate.unapprovedUnverifiable.length > 0) {
+    process.stderr.write('\nUnapproved unverifiable exclusions:\n');
+    for (const result of gate.unapprovedUnverifiable) {
+      process.stderr.write(
+        `  ${result.path} [${result.category}]: ${result.message ?? 'no diagnostic'}\n`,
+      );
+    }
+  }
+
+  if (gate.staleApprovals.length > 0) {
+    process.stderr.write('\nStale unverifiable approvals:\n');
+    for (const approval of gate.staleApprovals) {
+      process.stderr.write(`  ${approval.path}: ${approval.reason}\n`);
+    }
+  }
+
+  if (gate.staleExclusions.length > 0) {
     process.stderr.write('\nStale exclusions (tests now pass):\n');
-    for (const r of passed) {
+    for (const r of gate.staleExclusions) {
       process.stderr.write(`  ${r.path} [${r.category}]\n`);
     }
     process.stderr.write(
-      `\n${passed.length} stale exclusion(s) found. Remove them from ${ES5_SELECTION_FILE}.\n`,
+      `\n${gate.staleExclusions.length} stale exclusion(s) found. Remove them from ${ES5_SELECTION_FILE}.\n`,
     );
   }
 
-  return passed.length > 0 ? 1 : 0;
+  return gate.exitCode;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * @param {Record<string, unknown>} value
+ * @param {readonly string[]} expected
+ * @param {string} location
+ * @returns {void}
+ */
+function assertExactKeys(value, expected, location) {
+  const keys = Object.keys(value).sort();
+  if (
+    keys.length !== expected.length ||
+    keys.some((key, index) => key !== expected[index])
+  ) {
+    throw new Error(`${location} must contain exactly: ${expected.join(', ')}`);
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} location
+ * @returns {string}
+ */
+function requireNonEmptyString(value, location) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${location} must be a non-empty string`);
+  }
+  return value;
 }
 
 // Entry point when run directly

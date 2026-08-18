@@ -118,6 +118,36 @@ export const UNSUPPORTED_FLAGS = Object.freeze([
 ]);
 
 const STRICT_DIRECTIVE = '"use strict";\n';
+const STRICT_SHELL_INCLUDE = 'sm/non262-strict-shell.js';
+const STRICT_SHELL_GLOBAL_REFERENCES = Object.freeze([
+  ['globalThis.completesNormally', 'global.completesNormally'],
+  ['globalThis.raisesException', 'global.raisesException'],
+]);
+
+/**
+ * The pinned SpiderMonkey strict harness is an IIFE with an existing `global`
+ * parameter, but two initializers use the later `globalThis` spelling. Rewrite
+ * only those harness-owned references. The test source is never transformed
+ * and no `globalThis` binding is installed in its Realm.
+ *
+ * @param {string} name
+ * @param {string} source
+ * @returns {string}
+ */
+function prepareHarnessSource(name, source) {
+  if (name !== STRICT_SHELL_INCLUDE) {
+    return source;
+  }
+
+  let prepared = source;
+  for (const [
+    reference,
+    compatibleReference,
+  ] of STRICT_SHELL_GLOBAL_REFERENCES) {
+    prepared = prepared.replace(reference, compatibleReference);
+  }
+  return prepared;
+}
 
 /**
  * Decides whether a test runs at all. Explicit exclusions win over the
@@ -389,7 +419,10 @@ async function runVariant({
     let includeResult;
 
     try {
-      includeResult = engine.evaluateScript(realm, includeSource);
+      includeResult = engine.evaluateScript(
+        realm,
+        prepareHarnessSource(name, includeSource),
+      );
     } catch (error) {
       return failed(
         'harness-error',
@@ -500,7 +533,10 @@ async function runModuleVariant({
     let includeResult;
 
     try {
-      includeResult = engine.evaluateScript(realm, includeSource);
+      includeResult = engine.evaluateScript(
+        realm,
+        prepareHarnessSource(name, includeSource),
+      );
     } catch (error) {
       return failed(
         'harness-error',
@@ -729,7 +765,10 @@ async function runAsyncVariant({
     let includeResult;
 
     try {
-      includeResult = engine.evaluateScript(realm, includeSource);
+      includeResult = engine.evaluateScript(
+        realm,
+        prepareHarnessSource(name, includeSource),
+      );
     } catch (error) {
       return failed(
         'harness-error',

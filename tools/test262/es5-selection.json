@@ -3288,169 +3288,9 @@
       "reason": "Depends on the legacy `RegExp.lastMatch`/`RegExp.$1`-`$9` static properties; these were never part of ES5.1 (only much later semi-standardized as \"Legacy RegExp features\" well after ES5.1), so this engine correctly leaves them `undefined`."
     },
     {
-      "path": "test/staging/sm/strict/10.4.2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/10.6.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.1.5.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.13.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.13.2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.3.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.3.2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.4.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.4.4.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/11.4.5.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/12.10.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
       "path": "test/staging/sm/strict/12.14.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/12.2.1-01.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/12.2.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/13.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.10.7.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.3.5.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.3.5.2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.4.4.11.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.4.4.12.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.4.4.13.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.4.4.6.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.4.4.8.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.4.4.9.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.5.5.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/15.5.5.2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/8.12.5.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/8.12.7-2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/8.12.7.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/8.7.2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/B.1.1.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/B.1.2.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
-      "path": "test/staging/sm/strict/eval-variable-environment.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+      "category": "post-es5-syntax",
+      "reason": "Exercises destructuring catch parameters (`catch ([eval])` and `catch ({x: eval})`), which are ES2015 syntax outside the ES5.1 selection; the shared test cannot be split into ES5-only cases."
     },
     {
       "path": "test/staging/sm/strict/primitive-assignment.js",
@@ -3458,14 +3298,9 @@
       "reason": "Depends on `Reflect.set`, an ES2015 builtin absent from ES5.1."
     },
     {
-      "path": "test/staging/sm/strict/regress-532254.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
-    },
-    {
       "path": "test/staging/sm/strict/strict-function-statements.js",
-      "category": "post-es5-builtin",
-      "reason": "The shared sm harness file `sm/non262-strict-shell.js` this test includes references `globalThis`, an ES2020 builtin absent from ES5.1, so every test that includes it throws before its own assertions run."
+      "category": "post-es5-syntax",
+      "reason": "Depends on SpiderMonkey's legacy FunctionStatement grammar for unbraced and labelled statements; those extensions are outside ES5.1's normative FunctionDeclaration grammar and this engine intentionally accepts a different legacy subset."
     }
   ]
 }

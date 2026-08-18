@@ -51,7 +51,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
 | `TZ=UTC npm run test262:select`                                                | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
 | `TZ=UTC npm run test262:select:check`                                          | The same derivation, writing nothing: fails if the committed subset is stale                                                                                                                                                    |
-| `npm run test262:exclusions:check`                                             | Runs every per-file exclusion; fails on stale exclusions, missing policy paths, or a missing/wrong pinned checkout                                                                                                              |
+| `npm run test262:exclusions:check`                                             | Runs every per-file exclusion; fails on stale exclusions, unapproved unverifiable results, stale approvals, missing policy paths, or a missing/wrong pinned checkout                                                            |
 | `npm run test262:jsc`                                                          | The fixture suite under the `jsc` shell                                                                                                                                                                                         |
 | `npm run benchmark`                                                            | Run Node, Chromium, and `jsc` with shared run metadata, atomically promoting the validated report set to `.benchmark-results/`                                                                                                  |
 | `npm run benchmark:node`                                                       | Run only the Node host benchmark and write `node.json` under the default ignored benchmark output directory                                                                                                                     |
@@ -128,8 +128,11 @@ would depend on a browser install and an upstream checkout.
 
 `test/ci/exclusions-check.test.js` verifies the stale-exclusion checker against
 a real upstream Test262 checkout, including its hard failures for a missing
-checkout or a per-file policy path absent from that checkout. It does not invoke
-CI commands, but it lives here because it cannot pass without `vendor/test262`.
+checkout or a per-file policy path absent from that checkout. It also pins the
+scoped legacy strict-harness bridge and the exact reviewed unverifiable records
+in `tools/test262/exclusions-unverifiable.json`; diagnostic drift or an unused
+approval fails the gate. It does not invoke CI commands, but it lives here
+because it cannot pass without `vendor/test262`.
 
 `test/ci/es2015-syntax-test262.test.js` is a reviewable pinned syntax smoke
 suite. It runs through the shared Node adapter and runner, not a shell per test,
