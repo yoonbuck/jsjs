@@ -17,6 +17,9 @@
 - Keep Test262 pinned to the repository/revision in `package.json`; a pin move is out of scope and must stop execution.
 - Never globally enable a Test262 feature tag to inflate coverage. Refresh execution names exact paths and proves only their audited dependency closure.
 - Keep the whole-tree partition mutually exclusive and exactly balanced in roots and executable variants.
+- Require exact PR-head CodeQL only where the repository supplies it. Under the
+  current default setup, authoritative CodeQL is post-merge and tied to the
+  exact `main` squash SHA; all #70/child/#71 mutation waits for that gate.
 - Preserve separate core, Annex B, later, unknown, harness, and malformed classes.
 - Use only refreshed post-#61 path identities and counts in #70 and new issue bodies.
 - Use app-native `create_issue` for issue creation. Use GitHub REST only for milestone updates, native sub-issue links, native blocked-by links, body updates, comments, and state verification.
@@ -83,6 +86,18 @@ Create during execution:
 - `$ARTIFACTS/issue-70-after.json`: post-update parent snapshot.
 - `$ARTIFACTS/es2015-existing-issues.json`: duplicate/resume discovery input.
 - `$ARTIFACTS/live-sub-issues.json`: final native child snapshot.
+- `$ARTIFACTS/roadmap-reviewed-artifacts.sha256`: exact reviewed refresh hashes
+  rechecked before GitHub mutation.
+- `$ARTIFACTS/roadmap-reviewed-docs.sha256`: reviewed design/plan byte hashes
+  compared after squash merge.
+- `$ARTIFACTS/roadmap-final-doc-paths.txt`: reviewed documentation-only PR path
+  set.
+- `$ARTIFACTS/roadmap-merge-paths.txt`: squash-merge path set compared with the
+  reviewed PR.
+- `$ARTIFACTS/roadmap-lifecycle.json`: release PR/head/merge and roadmap source
+  head/squash identities, never conflated.
+- `$ARTIFACTS/roadmap-codeql-evidence.sha256`: post-merge exact-main-SHA CodeQL
+  analysis, SARIF, and log hashes.
 
 ### Operational interfaces
 
@@ -100,7 +115,7 @@ Create during execution:
 
 ---
 
-### Task 1: Publish and Review the Approved Design Without Production Changes
+### Task 1: Commit and Review the Approved Design Without Publishing
 
 **Files:**
 
@@ -114,8 +129,8 @@ Create during execution:
 
 - Consumes: approved design commit
   `e30277059957ca09267255847c7868e23ed0ed43`.
-- Produces: a design-only pull request with exact reviewed head and clean CI;
-  no implementation hierarchy.
+- Produces: locally committed and reviewed design/plan source commits; no pull
+  request, `main` mutation, or implementation hierarchy before #61.
 
 - [ ] **Step 1: Verify the branch contains documentation only**
 
@@ -183,67 +198,40 @@ Fix every Important or higher finding. For count or dependency findings, add or
 update an executable Node invariant before changing prose. Repeat both reviews
 until clean.
 
-- [ ] **Step 4: Create the design-only pull request**
+- [ ] **Step 4: Record source commit identities and keep them local**
 
-Use the app-native pull-request tool:
-
-```text
-title: Design the core ECMAScript 2015 conformance roadmap
-draft: false
-body:
-  - Links #71 and parent #70.
-  - States analysis/design only and no guest behavior changes.
-  - Names design and execution-plan paths.
-  - States all implementation issue creation waits for #61 and refreshed UTC
-    evidence.
-  - Summarizes the balanced baseline without presenting it as release evidence.
-```
-
-Expected: a PR targeting `main` from the current roadmap branch.
-
-- [ ] **Step 5: Verify the exact reviewed PR head and CI**
-
-Resolve the PR number and reviewed head:
+Run:
 
 ```bash
-PR=$(gh pr list --repo yoonbuck/jsjs \
+DESIGN_SOURCE_COMMIT=$(git log -1 --format=%H -- \
+  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md)
+PLAN_SOURCE_COMMIT=$(git log -1 --format=%H -- \
+  docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md)
+git cat-file -e "$DESIGN_SOURCE_COMMIT^{commit}"
+git cat-file -e "$PLAN_SOURCE_COMMIT^{commit}"
+gh pr list --repo yoonbuck/jsjs \
   --head yoonbuck-es2015-completion-roadmap \
-  --state open --json number --jq '.[0].number')
-REVIEWED_HEAD=$(gh pr view "$PR" --repo yoonbuck/jsjs --json headRefOid --jq .headRefOid)
-gh run list --repo yoonbuck/jsjs --commit "$REVIEWED_HEAD" --json databaseId,headSha,status,conclusion,name
+  --state open --json number,title,headRefOid,baseRefName,url
 ```
 
-Continue useful local review before waiting. Then synchronously watch the exact
-run. If it continues beyond the initial wait, use 600-second reads on the same
-shell session:
+Expected: source commits exist and at most one held roadmap PR exists. Do not
+push, open, or merge a roadmap PR before #61. If an earlier execution already
+opened one, leave it unmerged and record its number for Task 4's stale-head
+recovery; do not let it run as the definitive review.
 
-```bash
-RUN_ID=$(gh run list --repo yoonbuck/jsjs --commit "$REVIEWED_HEAD" \
-  --json databaseId,headSha --jq \
-  'map(select(.headSha == "'"$REVIEWED_HEAD"'")) | .[0].databaseId')
-gh run watch "$RUN_ID" --repo yoonbuck/jsjs --exit-status
-```
+- [ ] **Step 5: Optionally publish pre-release status to #71**
 
-After completion:
+If the coordinator needs a durable status marker, post a #71 comment containing
+the design/plan source commits, balanced design-baseline hash, and explicit
+statements that:
 
-```bash
-test "$(gh pr view "$PR" --repo yoonbuck/jsjs --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
-gh pr checks "$PR" --repo yoonbuck/jsjs
-```
+- #61 is still active;
+- no roadmap PR has merged;
+- no `main`, #70, or child issue mutation occurred; and
+- definitive evidence and the only roadmap PR wait for #61.
 
-Expected: the head is unchanged and every expected check has a successful
-terminal state. For any CodeQL job, inspect SARIF/log output rather than relying
-only on the green job label.
-
-- [ ] **Step 6: Merge the design PR and record its exact merge SHA**
-
-Merge only after clean reviews and exact-head CI. Record:
-
-```bash
-gh pr view "$PR" --repo yoonbuck/jsjs --json state,mergedAt,mergeCommit,url
-```
-
-Expected: merged state and a non-null merge commit. Do not close #71 yet.
+Re-read the comment after posting. This comment is status evidence only and is
+not the post-release taxonomy evidence used by issue bodies.
 
 ---
 
@@ -277,52 +265,209 @@ Expected before release: #61 may remain open. If open, stop this task and wait
 for a coordinator notification. Do not create children, update #70, or infer a
 release SHA from an unmerged PR head.
 
-- [ ] **Step 2: Resolve the exact release merge SHA after closure**
+- [ ] **Step 2: Resolve the merged release PR, reviewed head, and merge SHA**
 
 After #61 closes:
 
 ```bash
 git fetch origin main --quiet
 ORIGIN_MAIN=$(git rev-parse origin/main)
-gh issue view 61 --repo yoonbuck/jsjs --comments
+gh issue view 61 --repo yoonbuck/jsjs --comments \
+  > "$ARTIFACTS/issue-61-final-evidence.txt"
+gh pr list --repo yoonbuck/jsjs --state merged \
+  --search '"Integrate and release async runtime and modules" in:title' \
+  --json number,title,headRefOid,mergeCommit,mergedAt,url \
+  > "$ARTIFACTS/issue-61-release-pr-candidates.json"
 ```
 
-Extract `RELEASE_SHA` only from the final #61 merge evidence or the merged
-release PR's `mergeCommit.oid`. Then verify:
+Require exactly one candidate whose PR URL and merge SHA appear in #61's final
+evidence. Set:
 
 ```bash
+test "$(jq length "$ARTIFACTS/issue-61-release-pr-candidates.json")" = "1"
+RELEASE_PR=$(node -p \
+  "require('$ARTIFACTS/issue-61-release-pr-candidates.json')[0].number")
+RELEASE_PR_JSON=$(gh pr view "$RELEASE_PR" --repo yoonbuck/jsjs \
+  --json state,mergedAt,mergeCommit,headRefOid,statusCheckRollup,url)
+RELEASE_SHA=$(printf '%s' "$RELEASE_PR_JSON" | jq -r .mergeCommit.oid)
+REVIEWED_RELEASE_HEAD=$(printf '%s' "$RELEASE_PR_JSON" | jq -r .headRefOid)
+test "$(printf '%s' "$RELEASE_PR_JSON" | jq -r .state)" = "MERGED"
+test -n "$RELEASE_SHA"
+test -n "$REVIEWED_RELEASE_HEAD"
+test "$RELEASE_SHA" != "$REVIEWED_RELEASE_HEAD"
+rg -F "$(printf '%s' "$RELEASE_PR_JSON" | jq -r .url)" \
+  "$ARTIFACTS/issue-61-final-evidence.txt"
+rg -F "$RELEASE_SHA" "$ARTIFACTS/issue-61-final-evidence.txt"
 git cat-file -e "$RELEASE_SHA^{commit}"
 git merge-base --is-ancestor "$RELEASE_SHA" origin/main
 test "$(git merge-base "$RELEASE_SHA" origin/main)" = "$RELEASE_SHA"
 ```
 
 Expected: every command exits 0. Stop if #61 is closed without an exact merge
-SHA, the SHA is not on `origin/main`, or a release PR is still unmerged.
+SHA, the candidate set is not exactly one, the PR head differs from the reviewed
+head recorded by #61, the PR merge commit differs from `RELEASE_SHA`, the SHA is
+not on `origin/main`, or the release PR is unmerged.
 
 - [ ] **Step 3: Verify #61's exact-head release evidence**
 
-Read the release PR and workflow run named by #61:
+CI ran against `REVIEWED_RELEASE_HEAD`, not the squash `RELEASE_SHA`. Resolve
+standard CI by reviewed head, workflow identity, and pull-request event with a
+bounded five-minute startup wait:
 
 ```bash
-RELEASE_PR=$(gh pr list --repo yoonbuck/jsjs --state merged \
-  --search '"Integrate and release async runtime and modules" in:title' \
-  --json number,mergeCommit --jq \
-  'map(select(.mergeCommit.oid == "'"$RELEASE_SHA"'")) | .[0].number')
-RELEASE_RUN=$(gh run list --repo yoonbuck/jsjs --commit "$RELEASE_SHA" \
-  --json databaseId,headSha --jq \
-  'map(select(.headSha == "'"$RELEASE_SHA"'")) | .[0].databaseId')
+for ATTEMPT in $(seq 1 30); do
+  gh run list --repo yoonbuck/jsjs \
+    --commit "$REVIEWED_RELEASE_HEAD" \
+    --event pull_request \
+    --workflow ci.yml \
+    --limit 100 \
+    --json databaseId,headSha,event,name,status,conclusion,url \
+    > "$ARTIFACTS/issue-61-reviewed-head-ci-runs.json"
+  RELEASE_CI_RUN=$(jq -r \
+    '[.[] | select(.headSha == "'"$REVIEWED_RELEASE_HEAD"'" and .event == "pull_request" and .name == "CI")][0].databaseId // empty' \
+    "$ARTIFACTS/issue-61-reviewed-head-ci-runs.json")
+  if test -n "$RELEASE_CI_RUN"; then break; fi
+  sleep 10
+done
+test -n "$RELEASE_CI_RUN"
+
 gh pr view "$RELEASE_PR" --repo yoonbuck/jsjs \
   --json state,mergedAt,mergeCommit,headRefOid,statusCheckRollup,url
-gh run view "$RELEASE_RUN" --repo yoonbuck/jsjs --json headSha,status,conclusion,jobs
+gh run view "$RELEASE_CI_RUN" --repo yoonbuck/jsjs \
+  --json headSha,event,name,status,conclusion,jobs
 ```
+
+Synchronously watch the non-terminal CI run. If it continues past its initial
+wait, use 600-second reads on that watcher's same shell session:
+
+```bash
+gh run watch "$RELEASE_CI_RUN" --repo yoonbuck/jsjs --exit-status
+```
+
+After CI finishes:
+
+```bash
+test "$(gh pr view "$RELEASE_PR" --repo yoonbuck/jsjs \
+  --json headRefOid --jq .headRefOid)" = "$REVIEWED_RELEASE_HEAD"
+test "$(gh pr view "$RELEASE_PR" --repo yoonbuck/jsjs \
+  --json mergeCommit --jq .mergeCommit.oid)" = "$RELEASE_SHA"
+test "$(gh run view "$RELEASE_CI_RUN" --repo yoonbuck/jsjs \
+  --json headSha --jq .headSha)" = "$REVIEWED_RELEASE_HEAD"
+gh pr checks "$RELEASE_PR" --repo yoonbuck/jsjs
+```
+
+This repository uses CodeQL default setup, which analyzes `main` through
+`event: dynamic` and does not create PR-head runs. After the squash merge, wait
+up to ten minutes for both default-setup categories at `RELEASE_SHA`:
+
+```bash
+for ATTEMPT in $(seq 1 60); do
+  gh api --paginate repos/yoonbuck/jsjs/code-scanning/analyses \
+    > "$ARTIFACTS/issue-61-codeql-analyses.json"
+  RELEASE_CODEQL_JS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$RELEASE_SHA"'" and .ref == "refs/heads/main" and .tool.name == "CodeQL" and .category == "/language:javascript-typescript")][0].id // empty' \
+    "$ARTIFACTS/issue-61-codeql-analyses.json")
+  RELEASE_CODEQL_ACTIONS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$RELEASE_SHA"'" and .ref == "refs/heads/main" and .tool.name == "CodeQL" and .category == "/language:actions")][0].id // empty' \
+    "$ARTIFACTS/issue-61-codeql-analyses.json")
+  if test -n "$RELEASE_CODEQL_JS" && test -n "$RELEASE_CODEQL_ACTIONS"; then
+    break
+  fi
+  sleep 10
+done
+test -n "$RELEASE_CODEQL_JS"
+test -n "$RELEASE_CODEQL_ACTIONS"
+for ANALYSIS_ID in "$RELEASE_CODEQL_JS" "$RELEASE_CODEQL_ACTIONS"; do
+  gh api "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/issue-61-codeql-$ANALYSIS_ID.json"
+  test "$(jq -r .commit_sha \
+    "$ARTIFACTS/issue-61-codeql-$ANALYSIS_ID.json")" = "$RELEASE_SHA"
+  test "$(jq -r .tool.name \
+    "$ARTIFACTS/issue-61-codeql-$ANALYSIS_ID.json")" = "CodeQL"
+  test -z "$(jq -r '.error // empty' \
+    "$ARTIFACTS/issue-61-codeql-$ANALYSIS_ID.json")"
+  test -z "$(jq -r '.warning // empty' \
+    "$ARTIFACTS/issue-61-codeql-$ANALYSIS_ID.json")"
+  test "$(jq -r .results_count \
+    "$ARTIFACTS/issue-61-codeql-$ANALYSIS_ID.json")" = "0"
+  gh api -H 'Accept: application/sarif+json' \
+    "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/issue-61-codeql-$ANALYSIS_ID.sarif"
+done
+RELEASE_CODEQL_RUN=$(gh run list --repo yoonbuck/jsjs \
+  --commit "$RELEASE_SHA" --event dynamic --limit 100 \
+  --json databaseId,headSha,event,name,status,conclusion \
+  --jq '[.[] | select(.headSha == "'"$RELEASE_SHA"'" and .event == "dynamic" and (.name | test("CodeQL"; "i")))][0].databaseId // empty')
+test -n "$RELEASE_CODEQL_RUN"
+gh run view "$RELEASE_CODEQL_RUN" --repo yoonbuck/jsjs --log \
+  > "$ARTIFACTS/issue-61-codeql-run.log"
+if gh api --paginate \
+  'repos/yoonbuck/jsjs/code-scanning/alerts?ref=refs/heads/main&state=open' \
+  > "$ARTIFACTS/issue-61-codeql-open-alerts.json"
+then
+  test "$(jq \
+    '[.[] | select(.most_recent_instance.commit_sha == "'"$RELEASE_SHA"'")] | length' \
+    "$ARTIFACTS/issue-61-codeql-open-alerts.json")" = "0"
+else
+  printf '%s\n' \
+    'Alert API unavailable; relying on zero-result analyses plus inspected SARIF/logs.' \
+    > "$ARTIFACTS/issue-61-codeql-alert-api-unavailable.txt"
+fi
+```
+
+Inspect the analysis JSON and downloadable SARIF/log evidence for both IDs.
+Require zero actionable JavaScript alerts and zero extraction/parse diagnostics
+in repository source. Default-setup CodeQL evidence is tied to the actual
+`RELEASE_SHA` on `main`; it must not be mislabeled as PR-head CI.
 
 Expected:
 
 - PR merged;
-- recorded reviewed head equals the workflow `headSha`;
+- PR `mergeCommit.oid` equals `RELEASE_SHA`;
+- PR `headRefOid` equals the recorded reviewed head;
+- CI `headSha` equals `REVIEWED_RELEASE_HEAD`;
+- both CodeQL default-setup analyses have `commit_sha === RELEASE_SHA`;
 - every expected check is successful;
 - final whole-milestone review is clean; and
 - no unresolved security or CodeQL finding remains.
+
+Persist the verified identities:
+
+```bash
+RELEASE_PR="$RELEASE_PR" \
+RELEASE_SHA="$RELEASE_SHA" \
+REVIEWED_RELEASE_HEAD="$REVIEWED_RELEASE_HEAD" \
+ORIGIN_MAIN="$ORIGIN_MAIN" \
+RELEASE_CI_RUN="$RELEASE_CI_RUN" \
+RELEASE_CODEQL_RUN="$RELEASE_CODEQL_RUN" \
+RELEASE_CODEQL_JS="$RELEASE_CODEQL_JS" \
+RELEASE_CODEQL_ACTIONS="$RELEASE_CODEQL_ACTIONS" \
+node - <<'NODE'
+const fs = require('fs');
+const path =
+  '/Users/jordan/.copilot/session-state/345a35c4-93fb-4884-962a-f18f57dbf052/files/roadmap-lifecycle.json';
+fs.writeFileSync(
+  path,
+  `${JSON.stringify(
+    {
+      version: 1,
+      releasePr: Number(process.env.RELEASE_PR),
+      releaseSha: process.env.RELEASE_SHA,
+      reviewedReleaseHead: process.env.REVIEWED_RELEASE_HEAD,
+      auditedMainBeforeRefresh: process.env.ORIGIN_MAIN,
+      releaseCiRun: Number(process.env.RELEASE_CI_RUN),
+      releaseCodeqlRun: Number(process.env.RELEASE_CODEQL_RUN),
+      releaseCodeqlAnalyses: {
+        javascriptTypescript: Number(process.env.RELEASE_CODEQL_JS),
+        actions: Number(process.env.RELEASE_CODEQL_ACTIONS),
+      },
+    },
+    null,
+    2,
+  )}\n`,
+);
+NODE
+```
 
 - [ ] **Step 4: Rebase the documentation branch onto released main**
 
@@ -584,6 +729,8 @@ nondeterministic messages change any file.
 
 - Modify:
   `docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md`
+- Verify:
+  `docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md`
 - Read:
   `$ARTIFACTS/es2015-refresh-manifest.json`
 - Create:
@@ -592,8 +739,9 @@ nondeterministic messages change any file.
 **Interfaces:**
 
 - Consumes: the deterministic refresh manifest.
-- Produces: committed refreshed design evidence and a matching #71 evidence
-  comment.
+- Produces: one definitive post-#61 roadmap PR containing design, plan, and
+  refreshed evidence; its squash merge on `origin/main`; and matching #71
+  evidence.
 
 - [ ] **Step 1: Add an explicit post-#61 evidence section**
 
@@ -668,14 +816,17 @@ Self-review:
 - A0 remains non-blocking and non-milestoned; and
 - no implementation requirement was weakened by count movement.
 
-- [ ] **Step 4: Obtain fresh spec and quality review**
+- [ ] **Step 4: Obtain fresh final-range spec, plan, and quality reviews**
 
 Request:
 
 1. a specification review comparing the refreshed document with the approved
    design and refresh manifest; and
-2. a quality review focused on arithmetic, provenance, stale baseline leakage,
-   path-delta explanations, and dependency consistency.
+2. a plan review over the final design+plan range, checking the post-#61
+   lifecycle, one-PR rule, reviewed-head CI resolution, and issue graph; and
+3. a quality review focused on arithmetic, provenance, stale baseline leakage,
+   path-delta explanations, dependency consistency, and documentation-only
+   scope.
 
 Fix every Important or higher finding and repeat until clean.
 
@@ -693,7 +844,320 @@ git --no-pager show --check --oneline HEAD
 
 Expected: one documentation commit and no whitespace errors.
 
-- [ ] **Step 6: Publish matching evidence on #71**
+- [ ] **Step 6: Create or recover the single definitive roadmap PR**
+
+Set:
+
+```bash
+DESIGN_SOURCE_COMMIT=$(git log -1 --format=%H -- \
+  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md)
+PLAN_SOURCE_COMMIT=$(git log -1 --format=%H -- \
+  docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md)
+ROADMAP_REVIEWED_HEAD=$(git rev-parse HEAD)
+test -z "$(git status --porcelain)"
+shasum -a 256 \
+  "$ARTIFACTS/es2015-inventory.raw.json" \
+  "$ARTIFACTS/es2015-audit-results.json" \
+  "$ARTIFACTS/es2015-classification.json" \
+  "$ARTIFACTS/es2015-path-delta.json" \
+  "$ARTIFACTS/es2015-refresh-manifest.json" \
+  > "$ARTIFACTS/roadmap-reviewed-artifacts.sha256"
+shasum -a 256 \
+  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md \
+  docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md \
+  > "$ARTIFACTS/roadmap-reviewed-docs.sha256"
+git --no-pager diff --name-only origin/main...HEAD \
+  > "$ARTIFACTS/roadmap-final-doc-paths.txt"
+test "$(wc -l < "$ARTIFACTS/roadmap-final-doc-paths.txt" | tr -d ' ')" = "2"
+rg -x \
+  'docs/superpowers/(specs/2026-08-18-core-es2015-conformance-roadmap-design|plans/2026-08-18-core-es2015-conformance-roadmap)\.md' \
+  "$ARTIFACTS/roadmap-final-doc-paths.txt"
+```
+
+The PR title is exactly:
+
+```text
+Design the core ECMAScript 2015 conformance roadmap
+```
+
+Its body begins with:
+
+```markdown
+<!-- core-es2015-roadmap-pr -->
+
+Closes #71 after the post-#61 taxonomy and native hierarchy are published.
+Parent: #70
+Release baseline: `${refresh.releaseSha}`
+```
+
+It states that the diff is documentation-only, names the design and plan paths,
+summarizes refreshed balanced evidence, and says #70/child mutation occurs only
+after this PR merges.
+
+Query open PRs for the exact head branch:
+
+```bash
+gh pr list --repo yoonbuck/jsjs \
+  --head yoonbuck-es2015-completion-roadmap \
+  --state open \
+  --json number,title,body,baseRefName,headRefName,headRefOid,url \
+  > "$ARTIFACTS/roadmap-open-prs.json"
+```
+
+Recovery rules:
+
+- More than one open PR for the head branch is an error.
+- If none exists, use the app-native pull-request tool once with the exact
+  title/body, base `main`, and `draft: false`.
+- If one exists, require the marker, exact title, base `main`, and expected head
+  branch. After confirming it is this session's roadmap branch, push the
+  refreshed local head with
+  `git push --force-with-lease origin HEAD:yoonbuck-es2015-completion-roadmap`,
+  update the existing PR body/title with the app-native PR update tool, and
+  re-read it.
+- Never create a second PR for a stale existing one.
+- Never merge until `headRefOid === ROADMAP_REVIEWED_HEAD`.
+
+- [ ] **Step 7: Resolve and verify roadmap CI by reviewed head**
+
+Resolve `ROADMAP_PR` from the exact marker/head. Wait up to five minutes for the
+standard `CI` pull-request workflow:
+
+```bash
+for ATTEMPT in $(seq 1 30); do
+  gh run list --repo yoonbuck/jsjs \
+    --commit "$ROADMAP_REVIEWED_HEAD" \
+    --event pull_request \
+    --workflow ci.yml \
+    --limit 100 \
+    --json databaseId,headSha,event,name,status,conclusion,url \
+    > "$ARTIFACTS/roadmap-reviewed-head-ci-runs.json"
+  ROADMAP_CI_RUN=$(jq -r \
+    '[.[] | select(.headSha == "'"$ROADMAP_REVIEWED_HEAD"'" and .event == "pull_request" and .name == "CI")][0].databaseId // empty' \
+    "$ARTIFACTS/roadmap-reviewed-head-ci-runs.json")
+  if test -n "$ROADMAP_CI_RUN"; then break; fi
+  sleep 10
+done
+test -n "$ROADMAP_CI_RUN"
+```
+
+Continue useful local audit/review work before waiting. Synchronously watch the
+run; if still active, use 600-second reads on that watcher's same shell session:
+
+```bash
+gh run watch "$ROADMAP_CI_RUN" --repo yoonbuck/jsjs --exit-status
+```
+
+Then verify:
+
+```bash
+test "$(gh pr view "$ROADMAP_PR" --repo yoonbuck/jsjs \
+  --json headRefOid --jq .headRefOid)" = "$ROADMAP_REVIEWED_HEAD"
+test "$(gh run view "$ROADMAP_CI_RUN" --repo yoonbuck/jsjs \
+  --json headSha --jq .headSha)" = "$ROADMAP_REVIEWED_HEAD"
+gh pr checks "$ROADMAP_PR" --repo yoonbuck/jsjs
+```
+
+Record `ROADMAP_CI_RUN`, its exact reviewed `headSha`, conclusion, and log hash
+in `roadmap-lifecycle.json`. This repository's CodeQL default setup does not
+create PR-head runs; authoritative CodeQL evidence is the post-merge exact
+`main` SHA in Step 10.
+
+- [ ] **Step 8: Squash-merge the one definitive roadmap PR**
+
+Require the unchanged reviewed head, then:
+
+```bash
+gh pr merge "$ROADMAP_PR" --repo yoonbuck/jsjs --squash
+ROADMAP_PR_JSON=$(gh pr view "$ROADMAP_PR" --repo yoonbuck/jsjs \
+  --json state,mergedAt,mergeCommit,headRefOid,url)
+test "$(printf '%s' "$ROADMAP_PR_JSON" | jq -r .state)" = "MERGED"
+test "$(printf '%s' "$ROADMAP_PR_JSON" | jq -r .headRefOid)" = \
+  "$ROADMAP_REVIEWED_HEAD"
+ROADMAP_MERGE=$(printf '%s' "$ROADMAP_PR_JSON" | jq -r .mergeCommit.oid)
+test -n "$ROADMAP_MERGE"
+test "$ROADMAP_MERGE" != "$ROADMAP_REVIEWED_HEAD"
+git fetch origin main --quiet
+git merge-base --is-ancestor "$ROADMAP_MERGE" origin/main
+```
+
+`DESIGN_SOURCE_COMMIT`, `PLAN_SOURCE_COMMIT`, and
+`ROADMAP_REVIEWED_HEAD` identify reviewed source history.
+`ROADMAP_MERGE` identifies the squash commit on main. Never claim the source
+commits are direct ancestors of `main` after squash.
+
+Update `$ARTIFACTS/roadmap-lifecycle.json` with
+`designSourceCommit`, `planSourceCommit`, `roadmapReviewedHead`,
+`roadmapPr`, and `roadmapMerge` before proceeding.
+
+```bash
+DESIGN_SOURCE_COMMIT="$DESIGN_SOURCE_COMMIT" \
+PLAN_SOURCE_COMMIT="$PLAN_SOURCE_COMMIT" \
+ROADMAP_REVIEWED_HEAD="$ROADMAP_REVIEWED_HEAD" \
+ROADMAP_PR="$ROADMAP_PR" \
+ROADMAP_MERGE="$ROADMAP_MERGE" \
+ROADMAP_CI_RUN="$ROADMAP_CI_RUN" \
+node - <<'NODE'
+const fs = require('fs');
+const path =
+  '/Users/jordan/.copilot/session-state/345a35c4-93fb-4884-962a-f18f57dbf052/files/roadmap-lifecycle.json';
+const lifecycle = JSON.parse(fs.readFileSync(path, 'utf8'));
+Object.assign(lifecycle, {
+  designSourceCommit: process.env.DESIGN_SOURCE_COMMIT,
+  planSourceCommit: process.env.PLAN_SOURCE_COMMIT,
+  roadmapReviewedHead: process.env.ROADMAP_REVIEWED_HEAD,
+  roadmapPr: Number(process.env.ROADMAP_PR),
+  roadmapMerge: process.env.ROADMAP_MERGE,
+  roadmapCiRun: Number(process.env.ROADMAP_CI_RUN),
+});
+fs.writeFileSync(path, `${JSON.stringify(lifecycle, null, 2)}\n`);
+NODE
+```
+
+- [ ] **Step 9: Verify merged files and refresh evidence on `origin/main`**
+
+Run:
+
+```bash
+git --no-pager diff --name-only "$ROADMAP_MERGE^" "$ROADMAP_MERGE" \
+  > "$ARTIFACTS/roadmap-merge-paths.txt"
+cmp "$ARTIFACTS/roadmap-final-doc-paths.txt" \
+  "$ARTIFACTS/roadmap-merge-paths.txt"
+for PATH_IN_REPO in \
+  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md \
+  docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md
+do
+  git show "origin/main:$PATH_IN_REPO" \
+    > "$ARTIFACTS/merged-$(basename "$PATH_IN_REPO")"
+  cmp "$PATH_IN_REPO" "$ARTIFACTS/merged-$(basename "$PATH_IN_REPO")"
+done
+test "$(gh issue view 61 --repo yoonbuck/jsjs --json state --jq .state)" = \
+  "CLOSED"
+```
+
+Re-hash the inventory, audit, classification, path delta, and refresh manifest.
+Require exact equality with the hashes reviewed in Steps 3-7. Stop if main file
+contents or refreshed evidence drift.
+
+- [ ] **Step 10: Require exact-main-SHA CodeQL before roadmap mutation**
+
+CodeQL default setup analyzes `refs/heads/main` with `event: dynamic`. Wait up to
+ten minutes for both configured categories whose analysis `commit_sha` is
+exactly `ROADMAP_MERGE` and whose tool is CodeQL:
+
+```bash
+for ATTEMPT in $(seq 1 60); do
+  gh api --paginate repos/yoonbuck/jsjs/code-scanning/analyses \
+    > "$ARTIFACTS/roadmap-codeql-analyses.json"
+  ROADMAP_CODEQL_JS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$ROADMAP_MERGE"'" and .ref == "refs/heads/main" and .tool.name == "CodeQL" and .category == "/language:javascript-typescript")][0].id // empty' \
+    "$ARTIFACTS/roadmap-codeql-analyses.json")
+  ROADMAP_CODEQL_ACTIONS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$ROADMAP_MERGE"'" and .ref == "refs/heads/main" and .tool.name == "CodeQL" and .category == "/language:actions")][0].id // empty' \
+    "$ARTIFACTS/roadmap-codeql-analyses.json")
+  if test -n "$ROADMAP_CODEQL_JS" && test -n "$ROADMAP_CODEQL_ACTIONS"; then
+    break
+  fi
+  sleep 10
+done
+test -n "$ROADMAP_CODEQL_JS"
+test -n "$ROADMAP_CODEQL_ACTIONS"
+```
+
+Inspect both analyses:
+
+```bash
+for ANALYSIS_ID in "$ROADMAP_CODEQL_JS" "$ROADMAP_CODEQL_ACTIONS"; do
+  gh api "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/roadmap-codeql-$ANALYSIS_ID.json"
+  test "$(jq -r .commit_sha \
+    "$ARTIFACTS/roadmap-codeql-$ANALYSIS_ID.json")" = "$ROADMAP_MERGE"
+  test "$(jq -r .tool.name \
+    "$ARTIFACTS/roadmap-codeql-$ANALYSIS_ID.json")" = "CodeQL"
+  test -z "$(jq -r '.error // empty' \
+    "$ARTIFACTS/roadmap-codeql-$ANALYSIS_ID.json")"
+  test -z "$(jq -r '.warning // empty' \
+    "$ARTIFACTS/roadmap-codeql-$ANALYSIS_ID.json")"
+  test "$(jq -r .results_count \
+    "$ARTIFACTS/roadmap-codeql-$ANALYSIS_ID.json")" = "0"
+  gh api -H 'Accept: application/sarif+json' \
+    "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/roadmap-codeql-$ANALYSIS_ID.sarif"
+done
+```
+
+Resolve the dynamic CodeQL run on the same merge and inspect its log:
+
+```bash
+ROADMAP_CODEQL_RUN=$(gh run list --repo yoonbuck/jsjs \
+  --commit "$ROADMAP_MERGE" --event dynamic --limit 100 \
+  --json databaseId,headSha,event,name,status,conclusion \
+  --jq '[.[] | select(.headSha == "'"$ROADMAP_MERGE"'" and .event == "dynamic" and (.name | test("CodeQL"; "i")))][0].databaseId // empty')
+test -n "$ROADMAP_CODEQL_RUN"
+gh run view "$ROADMAP_CODEQL_RUN" --repo yoonbuck/jsjs --log \
+  > "$ARTIFACTS/roadmap-codeql-run.log"
+```
+
+Inspect SARIF, analysis errors/warnings, and run logs for zero extraction/parse
+diagnostics in analyzed repository source. Query open alerts attributable to
+the merge when the token permits:
+
+```bash
+if gh api --paginate \
+  'repos/yoonbuck/jsjs/code-scanning/alerts?ref=refs/heads/main&state=open' \
+  > "$ARTIFACTS/roadmap-codeql-open-alerts.json"
+then
+  test "$(jq \
+    '[.[] | select(.most_recent_instance.commit_sha == "'"$ROADMAP_MERGE"'")] | length' \
+    "$ARTIFACTS/roadmap-codeql-open-alerts.json")" = "0"
+else
+  printf '%s\n' \
+    'Alert API unavailable; relying on zero-result analyses plus inspected SARIF/logs.' \
+    > "$ARTIFACTS/roadmap-codeql-alert-api-unavailable.txt"
+fi
+```
+
+Persist analysis IDs, categories, `results_count`, `ROADMAP_CODEQL_RUN`,
+`ROADMAP_MERGE`, and SHA-256 hashes of analysis JSON, SARIF, and logs in
+`roadmap-lifecycle.json`.
+
+```bash
+shasum -a 256 \
+  "$ARTIFACTS/roadmap-codeql-$ROADMAP_CODEQL_JS.json" \
+  "$ARTIFACTS/roadmap-codeql-$ROADMAP_CODEQL_JS.sarif" \
+  "$ARTIFACTS/roadmap-codeql-$ROADMAP_CODEQL_ACTIONS.json" \
+  "$ARTIFACTS/roadmap-codeql-$ROADMAP_CODEQL_ACTIONS.sarif" \
+  "$ARTIFACTS/roadmap-codeql-run.log" \
+  > "$ARTIFACTS/roadmap-codeql-evidence.sha256"
+ROADMAP_CODEQL_JS="$ROADMAP_CODEQL_JS" \
+ROADMAP_CODEQL_ACTIONS="$ROADMAP_CODEQL_ACTIONS" \
+ROADMAP_CODEQL_RUN="$ROADMAP_CODEQL_RUN" \
+node - <<'NODE'
+const fs = require('fs');
+const artifacts =
+  '/Users/jordan/.copilot/session-state/345a35c4-93fb-4884-962a-f18f57dbf052/files';
+const path = `${artifacts}/roadmap-lifecycle.json`;
+const lifecycle = JSON.parse(fs.readFileSync(path, 'utf8'));
+Object.assign(lifecycle, {
+  roadmapCodeqlRun: Number(process.env.ROADMAP_CODEQL_RUN),
+  roadmapCodeqlAnalyses: {
+    javascriptTypescript: Number(process.env.ROADMAP_CODEQL_JS),
+    actions: Number(process.env.ROADMAP_CODEQL_ACTIONS),
+  },
+  roadmapCodeqlEvidenceSha256: fs
+    .readFileSync(`${artifacts}/roadmap-codeql-evidence.sha256`, 'utf8')
+    .trim()
+    .split('\n'),
+});
+fs.writeFileSync(path, `${JSON.stringify(lifecycle, null, 2)}\n`);
+NODE
+```
+
+No #70 update, child creation, milestone mutation, native relationship, or #71
+closure may occur until this gate passes. If it fails, correct documentation in
+a new reviewed PR and repeat the gate on that new main SHA.
+
+- [ ] **Step 11: Publish matching merged evidence on #71**
 
 Create `$ARTIFACTS/issue-71-refresh-comment.md` from the manifest with:
 
@@ -703,7 +1167,8 @@ Create `$ARTIFACTS/issue-71-refresh-comment.md` from the manifest with:
 - core and Annex status;
 - blocker ledger;
 - path delta summary with artifact location;
-- refreshed spec commit; and
+- reviewed design/plan source commits, `ROADMAP_REVIEWED_HEAD`, and
+  `ROADMAP_MERGE`, clearly distinguished;
 - statement that no production behavior changed.
 
 Post:
@@ -714,7 +1179,8 @@ gh issue comment 71 --repo yoonbuck/jsjs \
 ```
 
 Re-read the comment from the issue timeline and compare every number to the
-manifest. Do not close #71.
+manifest. Verify the referenced spec and plan are readable from `origin/main`.
+Do not close #71.
 
 ---
 
@@ -733,7 +1199,48 @@ manifest. Do not close #71.
 - Produces: #70 titled `Complete core ECMAScript 2015 conformance` with balanced
   evidence and qualified acceptance.
 
-- [ ] **Step 1: Snapshot live #70 and reject concurrent drift**
+- [ ] **Step 1: Require the definitive roadmap squash merge on main**
+
+Resolve the merged PR by the exact marker/head branch and run:
+
+```bash
+gh pr list --repo yoonbuck/jsjs \
+  --head yoonbuck-es2015-completion-roadmap \
+  --state merged --json number,title,body,mergeCommit \
+  > "$ARTIFACTS/roadmap-merged-prs.json"
+test "$(jq '[.[] | select(.body | contains("core-es2015-roadmap-pr"))] | length' \
+  "$ARTIFACTS/roadmap-merged-prs.json")" = "1"
+ROADMAP_PR=$(jq -r \
+  '[.[] | select(.body | contains("core-es2015-roadmap-pr"))][0].number' \
+  "$ARTIFACTS/roadmap-merged-prs.json")
+ROADMAP_MERGE=$(gh pr view "$ROADMAP_PR" --repo yoonbuck/jsjs \
+  --json mergeCommit --jq .mergeCommit.oid)
+git fetch origin main --quiet
+git merge-base --is-ancestor "$ROADMAP_MERGE" origin/main
+test "$(gh issue view 61 --repo yoonbuck/jsjs \
+  --json state --jq .state)" = "CLOSED"
+for PATH_IN_REPO in \
+  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md \
+  docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md
+do
+  git show "origin/main:$PATH_IN_REPO" \
+    > "$ARTIFACTS/main-$(basename "$PATH_IN_REPO")"
+  cmp "$PATH_IN_REPO" "$ARTIFACTS/main-$(basename "$PATH_IN_REPO")"
+done
+shasum -a 256 -c "$ARTIFACTS/roadmap-reviewed-artifacts.sha256"
+shasum -a 256 -c "$ARTIFACTS/roadmap-reviewed-docs.sha256"
+shasum -a 256 -c "$ARTIFACTS/roadmap-codeql-evidence.sha256"
+test "$(node -p \
+  "require('$ARTIFACTS/roadmap-lifecycle.json').roadmapMerge")" = \
+  "$ROADMAP_MERGE"
+```
+
+Expected: the roadmap squash commit is on current `origin/main`, both merged
+files exactly equal their reviewed final contents, #61 remains closed, and every
+refreshed artifact hash still matches. No #70 or child mutation may occur before
+this gate passes.
+
+- [ ] **Step 2: Snapshot live #70 and reject concurrent drift**
 
 Run:
 
@@ -759,7 +1266,7 @@ If the title is already qualified, compare its live body to the approved design
 and generated update before patching. Reject unrelated concurrent content
 instead of assuming a re-run or overwriting it.
 
-- [ ] **Step 2: Render the exact qualified parent body**
+- [ ] **Step 3: Render the exact qualified parent body**
 
 Create `$ARTIFACTS/issue-70-body.md` with these sections and refreshed values:
 
@@ -806,7 +1313,7 @@ block core closure. Existing supported Annex B behavior cannot regress.
 
 Do not list child issue numbers until Task 6 creates them.
 
-- [ ] **Step 3: Prepare and apply a single REST update**
+- [ ] **Step 4: Prepare and apply a single REST update**
 
 Create `$ARTIFACTS/issue-70-update.json`:
 
@@ -831,7 +1338,7 @@ gh api --method PATCH repos/yoonbuck/jsjs/issues/70 \
 
 Expected: title, body, and milestone update in one response.
 
-- [ ] **Step 4: Re-read and verify #70**
+- [ ] **Step 5: Re-read and verify #70**
 
 Run:
 
@@ -1435,9 +1942,22 @@ hand.
 Run:
 
 ```bash
-git status --short --branch
-git --no-pager diff --name-only origin/main...HEAD
-git --no-pager log --oneline --decorate -8
+test -z "$(git status --porcelain)"
+git fetch origin main --quiet
+ROADMAP_PR=$(node -p \
+  "require('$ARTIFACTS/roadmap-lifecycle.json').roadmapPr")
+ROADMAP_MERGE=$(gh pr view "$ROADMAP_PR" --repo yoonbuck/jsjs \
+  --json mergeCommit --jq .mergeCommit.oid)
+git merge-base --is-ancestor "$ROADMAP_MERGE" origin/main
+git --no-pager diff --name-only "$ROADMAP_MERGE^" "$ROADMAP_MERGE"
+for PATH_IN_REPO in \
+  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md \
+  docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md
+do
+  git show "origin/main:$PATH_IN_REPO" \
+    > "$ARTIFACTS/final-main-$(basename "$PATH_IN_REPO")"
+  cmp "$PATH_IN_REPO" "$ARTIFACTS/final-main-$(basename "$PATH_IN_REPO")"
+done
 gh issue view 61 --repo yoonbuck/jsjs --json state,closedAt
 gh issue view 70 --repo yoonbuck/jsjs --json state,title,milestone,url
 gh issue view 71 --repo yoonbuck/jsjs --json state,title,milestone,url
@@ -1445,7 +1965,9 @@ gh issue view 71 --repo yoonbuck/jsjs --json state,title,milestone,url
 
 Expected:
 
-- repository changes remain documentation-only;
+- the audit worktree is clean even though its source commits were squash-merged;
+- the `ROADMAP_MERGE` tree delta contains only the design and plan paths;
+- both `origin/main` files exactly match the reviewed final contents;
 - #61 is closed;
 - #70 is open, qualified, and in ES2015;
 - #71 is still open immediately before final comment; and
@@ -1481,7 +2003,9 @@ complete live verification.
 
 Create `issue-71-final-comment.md` with:
 
-- design and refreshed-spec commit SHAs;
+- `DESIGN_SOURCE_COMMIT`, `PLAN_SOURCE_COMMIT`,
+  `ROADMAP_REVIEWED_HEAD`, and `ROADMAP_MERGE`, labeled respectively as source
+  review identities and the squash commit actually present on `main`;
 - #61 release SHA;
 - audited main and Test262 SHA;
 - refreshed artifact hashes and balanced tables;
@@ -1534,7 +2058,8 @@ Expected:
 
 Send:
 
-- final spec/plan commit SHAs;
+- final source-review design/plan SHAs and the distinct roadmap squash merge
+  SHA on `main`;
 - #61 release SHA;
 - refreshed partition and blocker summary;
 - #70 and #71 URLs/states;
