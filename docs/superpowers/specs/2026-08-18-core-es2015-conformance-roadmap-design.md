@@ -659,7 +659,9 @@ reviewed skeleton PR, but matrix updates land with each owning semantic PR.
 - Attach every proposed issue as a native sub-issue of #70.
 - Use actual native `blocked by` relationships, not body text alone.
 - Distinguish semantic blockers from sequencing notes in every body.
-- Add #61 as a native blocker to production children created before it merges.
+- Do not create production children while #61 is open; the approved design and
+  plan stay committed and reviewed locally until the post-#61 refresh is
+  complete.
 - No implementation session starts from the pre-#61 baseline.
 - Normal merge resolution clears #61; do not erase history by silently editing
   the body.
@@ -827,8 +829,10 @@ Test262 taxonomy alone cannot establish standard compliance.
 
 ## Post-#61 refresh and issue creation
 
-The design may merge before #61. Implementation hierarchy creation waits for
-#61:
+Before #61, keep the approved design and plan committed and reviewed locally on
+the isolated roadmap branch. The single definitive roadmap PR, its merge to
+`main`, and all #70/child mutation wait for verified #61 plus the refreshed
+evidence below:
 
 1. record the exact #61 merge SHA;
 2. update the audit branch from current main without production changes;

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Publish the approved issue #71 design, refresh its Test262 taxonomy from the definitive #61 merge, create and verify the approved native GitHub roadmap under #70, and close #71 without changing guest production behavior.
+**Goal:** Keep the approved issue #71 design and plan committed and reviewed locally until the definitive #61 merge, then refresh the Test262 taxonomy, publish one definitive roadmap PR, create and verify the approved native GitHub roadmap under #70, and close #71 without changing guest production behavior.
 
 **Architecture:** Treat the approved design as the immutable architecture source and a session-state manifest as the operational source for refreshed counts, issue bodies, and dependency edges. Wait for #61 before deriving final evidence or creating implementation children, generate all GitHub bodies and relationships from one code-keyed graph, and verify live GitHub state against that graph before closing #71.
 
@@ -24,7 +24,7 @@
 - Use only refreshed post-#61 path identities and counts in #70 and new issue bodies.
 - Use app-native `create_issue` for issue creation. Use GitHub REST only for milestone updates, native sub-issue links, native blocked-by links, body updates, comments, and state verification.
 - Mandatory children receive milestone number `1` (`ES2015`). Optional Annex B child `A0` receives no milestone.
-- Every implementation issue created while #61 is open must be natively blocked by #61. The intended execution creates no implementation issue until #61 is merged.
+- Do not create implementation issues while #61 is open. The intended execution keeps the approved design and plan committed and reviewed locally on the roadmap branch until #61 is merged, its exact merge SHA is verified on `origin/main`, and the refreshed taxonomy is complete.
 - Grouping issues own no production PR. Atomic issues state a one-PR boundary. Tracking issue V0 accumulates proof through owning semantic PRs.
 - Do not create nested production children for grouping issues during issue #71 execution; their later blocker audits and plans own that work.
 - All commits include `Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>`.
@@ -129,8 +129,9 @@ Create during execution:
 
 - Consumes: approved design commit
   `e30277059957ca09267255847c7868e23ed0ed43`.
-- Produces: locally committed and reviewed design/plan source commits; no pull
-  request, `main` mutation, or implementation hierarchy before #61.
+- Produces: locally committed and reviewed design/plan source commits on the
+  isolated roadmap branch; the single definitive roadmap PR, `main` mutation,
+  and implementation hierarchy wait for verified #61 plus refreshed evidence.
 
 - [ ] **Step 1: Verify the branch contains documentation only**
 
@@ -215,9 +216,10 @@ gh pr list --repo yoonbuck/jsjs \
 ```
 
 Expected: source commits exist and at most one held roadmap PR exists. Do not
-push, open, or merge a roadmap PR before #61. If an earlier execution already
-opened one, leave it unmerged and record its number for Task 4's stale-head
-recovery; do not let it run as the definitive review.
+push, open, or merge the definitive roadmap PR before verified #61 plus
+refreshed evidence. If an earlier execution already opened one, leave it
+unmerged and record its number for Task 4's stale-head recovery; do not let it
+run as the definitive review.
 
 - [ ] **Step 5: Optionally publish pre-release status to #71**
 
@@ -228,7 +230,8 @@ statements that:
 - #61 is still active;
 - no roadmap PR has merged;
 - no `main`, #70, or child issue mutation occurred; and
-- definitive evidence and the only roadmap PR wait for #61.
+- definitive evidence and the only roadmap PR still wait for verified #61 plus
+  refreshed evidence.
 
 Re-read the comment after posting. This comment is status evidence only and is
 not the post-release taxonomy evidence used by issue bodies.
