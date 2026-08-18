@@ -430,6 +430,10 @@ export class ObjectEnvironmentRecord {
    * @returns {void}
    */
   setMutableBinding(name, value, strict, callerRealm) {
+    if (callerRealm !== undefined && this.bindingObject.agent !== null) {
+      callerRealm.agent.linkGeneratorHostChain(this.bindingObject.agent);
+    }
+
     this.bindingObject.put(name, value, strict, callerRealm);
   }
 

@@ -26,7 +26,6 @@ import { toBoolean, toUint32 } from '../runtime/conversion.js';
  *   prototype?: EngineObject | undefined,
  *   retargetConstructionResult?: boolean,
  *   generatorResume?: boolean,
- *   generatorResumeTargetFromThis?: boolean,
  * }} NativeFunctionOptions
  */
 
@@ -50,7 +49,6 @@ export class NativeFunction extends EngineObject {
       prototype,
       retargetConstructionResult = true,
       generatorResume = false,
-      generatorResumeTargetFromThis = false,
     },
   ) {
     super(realm.intrinsics.functionPrototype, 'Function');
@@ -69,8 +67,6 @@ export class NativeFunction extends EngineObject {
     this._retargetConstructionResult = retargetConstructionResult;
     /** @type {boolean} */
     this._generatorResume = generatorResume;
-    /** @type {boolean} */
-    this._generatorResumeTargetFromThis = generatorResumeTargetFromThis;
 
     this.defineOwnProperty('length', {
       value: length,
@@ -104,12 +100,10 @@ export class NativeFunction extends EngineObject {
   callFunction(thisValue, args = [], callerRealm) {
     const guard = this.realm.stackGuard;
     const methodAgent = this.realm.agent;
-    const generatorResume =
-      this._generatorResume || this._generatorResumeTargetFromThis;
     const callChain = methodAgent.enterSynchronousCallChain(callerRealm?.agent);
 
     try {
-      const hostChainReference = generatorResume
+      const hostChainReference = this._generatorResume
         ? methodAgent.enterGeneratorHostChainReference(
             Math.min(
               guard.maxDepth,
@@ -122,7 +116,7 @@ export class NativeFunction extends EngineObject {
         callerRealm?.agent.linkGeneratorHostChain(methodAgent);
 
         if (
-          generatorResume &&
+          this._generatorResume &&
           thisValue instanceof EngineObject &&
           thisValue.agent !== null
         ) {

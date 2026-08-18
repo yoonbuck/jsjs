@@ -86,7 +86,6 @@ class BoundFunction extends NativeFunction {
       // so NativeFunction's ordinary allocation retargeting must not rewrite
       // an explicit object the target returns.
       retargetConstructionResult: false,
-      generatorResume: boundTargetResumesGenerator(target),
     });
 
     if (!this.setPrototypeOf(targetPrototype)) {
@@ -240,7 +239,6 @@ export function createFunctionIntrinsics(realm) {
         callerRealm ?? realm,
       );
     },
-    { generatorResumeTargetFromThis: true },
   );
   defineNativeMethod(
     realm,
@@ -260,7 +258,6 @@ export function createFunctionIntrinsics(realm) {
 
       return target.callFunction(args[0], callArguments, callerRealm ?? realm);
     },
-    { generatorResumeTargetFromThis: true },
   );
   defineNativeMethod(realm, functionPrototype, 'bind', 1, (thisValue, args) => {
     const target = requireCallable(
@@ -294,23 +291,6 @@ export function installFunctionConstructor(globalObject, intrinsics) {
 }
 
 /**
- * @param {CallableLike} target
- * @returns {boolean}
- */
-function boundTargetResumesGenerator(target) {
-  if (!(target instanceof EngineObject)) {
-    return false;
-  }
-
-  const nativeTarget = /** @type {any} */ (target);
-
-  return (
-    nativeTarget._generatorResume === true ||
-    nativeTarget._generatorResumeTargetFromThis === true
-  );
-}
-
-/**
  * @param {readonly unknown[]} prefix
  * @param {readonly unknown[]} suffix
  * @returns {unknown[]}
@@ -335,12 +315,11 @@ function combineArguments(prefix, suffix) {
  * @param {string} name
  * @param {number} length
  * @param {import('./shared.js').NativeFunctionOptions['call']} call
- * @param {{ generatorResumeTargetFromThis?: boolean }} [options]
  * @returns {void}
  */
-function defineNativeMethod(realm, target, name, length, call, options = {}) {
+function defineNativeMethod(realm, target, name, length, call) {
   target.defineOwnProperty(name, {
-    value: realm.createNativeFunction({ name, length, call, ...options }),
+    value: realm.createNativeFunction({ name, length, call }),
     writable: true,
     enumerable: false,
     configurable: true,

@@ -45,6 +45,8 @@ export class SuperReferenceBase {
       );
     }
 
+    linkSuperTargetToGeneratorHostChain(callerRealm, superBase);
+    linkSuperTargetToGeneratorHostChain(callerRealm, this.receiver);
     const descriptor = superBase.getProperty(name);
 
     if (descriptor === undefined) {

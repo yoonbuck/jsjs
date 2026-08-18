@@ -23,6 +23,8 @@ import { assertSame, assertThrows } from './harness/assert.js';
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
+import { Reference, getValue } from '../src/runtime/reference.js';
+import { SuperReferenceBase } from '../src/runtime/super-reference.js';
 
 /**
  * @param {string} source
@@ -181,6 +183,104 @@ function assertForeignGeneratorRecursionContained(borrowed) {
   }
 
   assertGeneratorAccountingCleared(allRealms);
+}
+
+/**
+ * @param {'direct' | 'call' | 'apply' | 'bind'} invocation
+ * @returns {void}
+ */
+function assertOrdinaryForeignRecursionRemainsUnbudgeted(invocation) {
+  const callerRealm = createRealm({ maxStackDepth: 40 });
+  const functionRealm = createRealm({ maxStackDepth: 300 });
+  const realms = [callerRealm, functionRealm];
+
+  evaluateScript(
+    functionRealm,
+    `
+      function foreignRecursive(depth) {
+        return depth > 0 ? foreignRecursive(depth - 1) : "done";
+      }
+    `,
+  );
+  defineGlobal(
+    callerRealm,
+    'foreignRecursive',
+    functionRealm.globalObject.get('foreignRecursive'),
+  );
+
+  const expression = {
+    direct: 'foreignRecursive(10)',
+    call: 'foreignRecursive.call(null, 10)',
+    apply: 'foreignRecursive.apply(null, [10])',
+    bind: 'foreignRecursive.bind(null)(10)',
+  }[invocation];
+  const completion = evaluateScript(
+    callerRealm,
+    `try { ${expression}; } catch (error) { error.name; }`,
+  );
+
+  assertSame(
+    completion.value,
+    'done',
+    `${invocation} ordinary recursion must not start a generator budget`,
+  );
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
+ * @param {'call' | 'apply'} wrapper
+ * @returns {void}
+ */
+function assertGeneratorWrapperRecursionContained(wrapper) {
+  const realms = [90, 200, 120, 70].map((maxStackDepth) =>
+    createRealm({ maxStackDepth }),
+  );
+  const invocation =
+    wrapper === 'call'
+      ? 'iterator.next.call(iterator);'
+      : 'iterator.next.apply(iterator, []);';
+
+  for (const realm of realms) {
+    evaluateScript(
+      realm,
+      `
+        function* wrappedRecursiveGenerator() {
+          var iterator = foreignWrappedRecursiveGenerator();
+          ${invocation}
+        }
+      `,
+    );
+  }
+
+  for (let index = 0; index < realms.length; index += 1) {
+    defineGlobal(
+      realms[index],
+      'foreignWrappedRecursiveGenerator',
+      realms[(index + 1) % realms.length].globalObject.get(
+        'wrappedRecursiveGenerator',
+      ),
+    );
+  }
+
+  const completion = evaluateScript(
+    realms[0],
+    `
+      try {
+        wrappedRecursiveGenerator().next();
+        "not thrown";
+      } catch (error) {
+        error;
+      }
+    `,
+  );
+
+  assertRealmRangeError(completion, realms);
+  assertGeneratorAccountingCleared(realms);
+
+  for (let index = 0; index < realms.length; index += 1) {
+    assertFiniteGeneratorResume(realms[index], `${wrapper}-wrapper-${index}`);
+  }
+  assertGeneratorAccountingCleared(realms);
 }
 
 /**
@@ -1079,6 +1179,30 @@ const tests = [
     },
   },
   {
+    name: 'direct ordinary cross-Agent recursion stays outside generator budgets',
+    run() {
+      assertOrdinaryForeignRecursionRemainsUnbudgeted('direct');
+    },
+  },
+  {
+    name: 'call-wrapped ordinary cross-Agent recursion stays outside generator budgets',
+    run() {
+      assertOrdinaryForeignRecursionRemainsUnbudgeted('call');
+    },
+  },
+  {
+    name: 'apply-wrapped ordinary cross-Agent recursion stays outside generator budgets',
+    run() {
+      assertOrdinaryForeignRecursionRemainsUnbudgeted('apply');
+    },
+  },
+  {
+    name: 'bound ordinary cross-Agent recursion stays outside generator budgets',
+    run() {
+      assertOrdinaryForeignRecursionRemainsUnbudgeted('bind');
+    },
+  },
+  {
     name: 'cross-Realm generator recursion preserves each Realm stack budget',
     run() {
       for (const [maxDepthA, maxDepthB] of [
@@ -1136,6 +1260,18 @@ const tests = [
     name: 'borrowed cross-Agent generator next recursion shares one host chain',
     run() {
       assertForeignGeneratorRecursionContained(true);
+    },
+  },
+  {
+    name: 'generator recursion through call shares one cross-Agent host chain',
+    run() {
+      assertGeneratorWrapperRecursionContained('call');
+    },
+  },
+  {
+    name: 'generator recursion through apply shares one cross-Agent host chain',
+    run() {
+      assertGeneratorWrapperRecursionContained('apply');
     },
   },
   {
@@ -2029,6 +2165,179 @@ const tests = [
         9,
       );
       assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'suspended with identifier writes rejoin the foreign setter chain',
+    run() {
+      const realmA = createRealm({ maxStackDepth: 120 });
+      const realmB = createRealm({ maxStackDepth: 70 });
+      const realmC = createRealm({ maxStackDepth: 90 });
+      const realms = [realmA, realmB, realmC];
+      let setterCalls = 0;
+      let setterLinked = false;
+      const setter = realmC.createNativeFunction({
+        name: 'set value',
+        length: 1,
+        call() {
+          setterCalls += 1;
+          const roots = realms.map((realm) =>
+            generatorHostChainRoot(realm.agent),
+          );
+
+          setterLinked =
+            roots[0] !== null &&
+            roots.every((root) => root === roots[0]) &&
+            roots[0].maxDepth === 90;
+        },
+      });
+      const scope = new EngineObject(realmB.intrinsics.objectPrototype);
+
+      scope.defineOwnProperty('value', {
+        set: setter,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(realmA, 'foreignScope', scope);
+      evaluateScript(
+        realmA,
+        `
+          function* withSetterGenerator() {
+            with (foreignScope) {
+              yield "pause";
+              value = 9;
+            }
+            return "done";
+          }
+          var suspendedWithSetter = withSetterGenerator();
+        `,
+      );
+
+      assertSame(
+        evaluateScript(realmA, 'suspendedWithSetter.next().value;').value,
+        'pause',
+      );
+      assertGeneratorAccountingCleared(realms);
+      assertSame(
+        evaluateScript(realmA, 'suspendedWithSetter.next().value;').value,
+        'done',
+      );
+      assertGeneratorAccountingCleared(realms);
+      assertSame(setterCalls, 1);
+      assertSame(
+        setterLinked,
+        true,
+        'with setter must share the resumed generator chain',
+      );
+    },
+  },
+  {
+    name: 'cached runtime super reads relink targets after generator suspension',
+    run() {
+      const realmA = createRealm({ maxStackDepth: 120 });
+      const realmB = createRealm({ maxStackDepth: 80 });
+      const realmC = createRealm({ maxStackDepth: 100 });
+      const realmD = createRealm({ maxStackDepth: 70 });
+      const realms = [realmA, realmB, realmC, realmD];
+      let lookupCalls = 0;
+      let lookupLinked = false;
+      let getterCalls = 0;
+      let getterLinked = false;
+
+      class InspectingSuperBase extends EngineObject {
+        /**
+         * @param {string | symbol} name
+         * @returns {import('../src/runtime/descriptors.js').PropertyDescriptorRecord | undefined}
+         */
+        getProperty(name) {
+          lookupCalls += 1;
+          const roots = [realmA, realmB, realmD].map((realm) =>
+            generatorHostChainRoot(realm.agent),
+          );
+
+          lookupLinked =
+            roots[0] !== null &&
+            roots.every((root) => root === roots[0]) &&
+            roots[0].maxDepth === 120;
+          return super.getProperty(name);
+        }
+      }
+
+      const getter = realmC.createNativeFunction({
+        name: 'get value',
+        length: 0,
+        call() {
+          getterCalls += 1;
+          const roots = realms.map((realm) =>
+            generatorHostChainRoot(realm.agent),
+          );
+
+          getterLinked =
+            roots[0] !== null &&
+            roots.every((root) => root === roots[0]) &&
+            roots[0].maxDepth === 100;
+          return 7;
+        },
+      });
+      const superBase = new InspectingSuperBase(
+        realmB.intrinsics.objectPrototype,
+      );
+      const receiver = new EngineObject(realmD.intrinsics.objectPrototype);
+
+      superBase.defineOwnProperty('value', {
+        get: getter,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const cachedReference = new Reference(
+        new SuperReferenceBase(superBase, receiver),
+        'value',
+        false,
+        receiver,
+      );
+      const readCachedSuper = realmA.createNativeFunction({
+        name: 'readCachedSuper',
+        length: 0,
+        call(_thisValue, _args, _functionObject, callerRealm) {
+          return getValue(cachedReference, callerRealm ?? realmA);
+        },
+      });
+
+      defineGlobal(realmA, 'readCachedSuper', readCachedSuper);
+      evaluateScript(
+        realmA,
+        `
+          function* cachedSuperReadGenerator() {
+            yield "pause";
+            return readCachedSuper();
+          }
+          var suspendedSuperRead = cachedSuperReadGenerator();
+        `,
+      );
+
+      assertSame(
+        evaluateScript(realmA, 'suspendedSuperRead.next().value;').value,
+        'pause',
+      );
+      assertGeneratorAccountingCleared(realms);
+      assertSame(
+        evaluateScript(realmA, 'suspendedSuperRead.next().value;').value,
+        7,
+      );
+      assertGeneratorAccountingCleared(realms);
+      assertSame(lookupCalls, 1);
+      assertSame(getterCalls, 1);
+      assertSame(
+        lookupLinked,
+        true,
+        'super base and receiver must link before descriptor lookup',
+      );
+      assertSame(
+        getterLinked,
+        true,
+        'super getter must share the cached reference chain',
+      );
     },
   },
   {
