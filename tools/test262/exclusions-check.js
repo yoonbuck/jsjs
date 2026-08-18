@@ -48,7 +48,7 @@ const UNVERIFIABLE_FAILURE_REASONS = new Set([
 /**
  * @typedef {{
  *   path: string,
- *   diagnosticIncludes: string,
+ *   diagnostics: readonly string[],
  *   reason: string,
  * }} UnverifiableApproval
  */
@@ -225,8 +225,8 @@ export function parseUnverifiableAllowlist(text) {
     ['entries', 'schemaVersion'],
     EXCLUSIONS_UNVERIFIABLE_FILE,
   );
-  if (parsed.schemaVersion !== 1) {
-    throw new Error(`${EXCLUSIONS_UNVERIFIABLE_FILE} schemaVersion must be 1`);
+  if (parsed.schemaVersion !== 2) {
+    throw new Error(`${EXCLUSIONS_UNVERIFIABLE_FILE} schemaVersion must be 2`);
   }
   if (!Array.isArray(parsed.entries)) {
     throw new Error(`${EXCLUSIONS_UNVERIFIABLE_FILE} entries must be an array`);
@@ -238,11 +238,11 @@ export function parseUnverifiableAllowlist(text) {
     if (!isRecord(value)) {
       throw new Error(`${location} must be an object`);
     }
-    assertExactKeys(value, ['diagnosticIncludes', 'path', 'reason'], location);
+    assertExactKeys(value, ['diagnostics', 'path', 'reason'], location);
     const path = requireNonEmptyString(value.path, `${location}.path`);
-    const diagnosticIncludes = requireNonEmptyString(
-      value.diagnosticIncludes,
-      `${location}.diagnosticIncludes`,
+    const diagnostics = requireNonEmptyStringArray(
+      value.diagnostics,
+      `${location}.diagnostics`,
     );
     const reason = requireNonEmptyString(value.reason, `${location}.reason`);
 
@@ -252,7 +252,7 @@ export function parseUnverifiableAllowlist(text) {
       );
     }
     paths.add(path);
-    return Object.freeze({ path, diagnosticIncludes, reason });
+    return Object.freeze({ path, diagnostics, reason });
   });
 
   return Object.freeze(entries);
@@ -260,10 +260,10 @@ export function parseUnverifiableAllowlist(text) {
 
 /**
  * Applies the reviewed unverifiable policy without changing raw execution
- * verdicts. An approval matches only one exact path and only when every variant
- * diagnostic contains its reviewed fragment; an additional or changed failure
- * therefore reopens the whole result for review. An approval not consumed by a
- * current unverifiable result is stale.
+ * verdicts. An approval matches only one exact path and one exact, ordered
+ * diagnostic list. Any variant, reason, message, order, or count drift reopens
+ * the whole result for review. An approval not consumed by a current
+ * unverifiable result is stale.
  *
  * @param {readonly ExclusionCheckResult[]} results
  * @param {readonly UnverifiableApproval[]} approvals
@@ -299,12 +299,13 @@ export function evaluateExclusionGate(results, approvals) {
     const approval = approvalsByPath.get(result.path);
     const diagnostics =
       result.diagnostics ??
-      (result.message === undefined ? [] : result.message.split('; '));
+      (result.message === undefined ? [] : [result.message]);
     if (
       approval !== undefined &&
       diagnostics.length > 0 &&
-      diagnostics.every((diagnostic) =>
-        diagnostic.includes(approval.diagnosticIncludes),
+      diagnostics.length === approval.diagnostics.length &&
+      diagnostics.every(
+        (diagnostic, index) => diagnostic === approval.diagnostics[index],
       )
     ) {
       matchedApprovalPaths.add(approval.path);
@@ -442,6 +443,25 @@ function requireNonEmptyString(value, location) {
     throw new Error(`${location} must be a non-empty string`);
   }
   return value;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} location
+ * @returns {readonly string[]}
+ */
+function requireNonEmptyStringArray(value, location) {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((entry) => typeof entry !== 'string' || entry.trim() === '')
+  ) {
+    throw new Error(
+      `${location} must be a non-empty array of non-empty strings`,
+    );
+  }
+
+  return Object.freeze([...value]);
 }
 
 // Entry point when run directly

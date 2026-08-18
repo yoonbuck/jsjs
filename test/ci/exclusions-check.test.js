@@ -248,15 +248,19 @@ export default [
     run: () => {
       assertSame(typeof evaluateExclusionGate, 'function');
 
+      const approvedDiagnostics = [
+        'non-strict: harness-error: known harness dependency',
+        'strict: harness-error: known harness dependency',
+      ];
       const approvals = [
         {
           path: 'test/approved.js',
-          diagnosticIncludes: 'known harness dependency',
+          diagnostics: approvedDiagnostics,
           reason: 'Requires an unsupported harness dependency.',
         },
         {
           path: 'test/unused.js',
-          diagnosticIncludes: 'unused diagnostic',
+          diagnostics: ['unflagged: harness-error: unused diagnostic'],
           reason: 'This approval should become stale.',
         },
       ];
@@ -276,7 +280,8 @@ export default [
             path: 'test/approved.js',
             category: 'runtime',
             verdict: 'unverifiable',
-            message: 'harness-error: known harness dependency',
+            message: approvedDiagnostics.join('; '),
+            diagnostics: approvedDiagnostics,
           },
           {
             path: 'test/unapproved.js',
@@ -306,7 +311,8 @@ export default [
             path: 'test/approved.js',
             category: 'runtime',
             verdict: 'unverifiable',
-            message: 'harness-error: known harness dependency',
+            message: approvedDiagnostics.join('; '),
+            diagnostics: approvedDiagnostics,
           },
         ],
         approvals.slice(0, 1),
@@ -317,41 +323,70 @@ export default [
       assertSame(clean.unapprovedUnverifiable.length, 0);
       assertSame(clean.staleExclusions.length, 0);
       assertSame(clean.staleApprovals.length, 0);
-
-      const mixedDiagnostic = evaluateExclusionGate(
-        [
-          {
-            path: 'test/approved.js',
-            category: 'runtime',
-            verdict: 'unverifiable',
-            message:
-              'non-strict: harness-error: known harness dependency; strict: engine-error: new infrastructure failure',
-          },
+    },
+  },
+  {
+    name: 'approvals reject diagnostic prefix, suffix, reason, variant, message, order, and count drift',
+    run: () => {
+      const approval = {
+        path: 'test/approved.js',
+        diagnostics: [
+          'non-strict: harness-error: known harness dependency',
+          'strict: harness-error: known harness dependency',
         ],
-        approvals.slice(0, 1),
-      );
-
-      assertSame(mixedDiagnostic.exitCode, 1);
-      assertSame(mixedDiagnostic.approvedUnverifiable.length, 0);
-      assertSame(mixedDiagnostic.unapprovedUnverifiable.length, 1);
-      assertSame(mixedDiagnostic.staleApprovals.length, 1);
-
-      const changedDiagnostic = evaluateExclusionGate(
+        reason: 'Requires an unsupported harness dependency.',
+      };
+      const driftedDiagnostics = [
         [
-          {
-            path: 'test/approved.js',
-            category: 'runtime',
-            verdict: 'unverifiable',
-            message: 'harness-error: unrelated new failure',
-          },
+          'prefix: non-strict: harness-error: known harness dependency',
+          'strict: harness-error: known harness dependency',
         ],
-        approvals.slice(0, 1),
-      );
+        [
+          'non-strict: harness-error: known harness dependency: suffix',
+          'strict: harness-error: known harness dependency',
+        ],
+        [
+          'non-strict: engine-error: known harness dependency',
+          'strict: harness-error: known harness dependency',
+        ],
+        [
+          'raw: harness-error: known harness dependency',
+          'strict: harness-error: known harness dependency',
+        ],
+        [
+          'non-strict: harness-error: changed harness dependency',
+          'strict: harness-error: known harness dependency',
+        ],
+        [
+          'strict: harness-error: known harness dependency',
+          'non-strict: harness-error: known harness dependency',
+        ],
+        [
+          'non-strict: harness-error: known harness dependency',
+          'strict: harness-error: known harness dependency',
+          'raw: harness-error: known harness dependency',
+        ],
+      ];
 
-      assertSame(changedDiagnostic.exitCode, 1);
-      assertSame(changedDiagnostic.approvedUnverifiable.length, 0);
-      assertSame(changedDiagnostic.unapprovedUnverifiable.length, 1);
-      assertSame(changedDiagnostic.staleApprovals.length, 1);
+      for (const diagnostics of driftedDiagnostics) {
+        const gate = evaluateExclusionGate(
+          [
+            {
+              path: 'test/approved.js',
+              category: 'runtime',
+              verdict: 'unverifiable',
+              message: diagnostics.join('; '),
+              diagnostics,
+            },
+          ],
+          [approval],
+        );
+
+        assertSame(gate.exitCode, 1);
+        assertSame(gate.approvedUnverifiable.length, 0);
+        assertSame(gate.unapprovedUnverifiable.length, 1);
+        assertSame(gate.staleApprovals.length, 1);
+      }
     },
   },
   {
@@ -361,11 +396,14 @@ export default [
 
       const parsed = parseUnverifiableAllowlist(
         JSON.stringify({
-          schemaVersion: 1,
+          schemaVersion: 2,
           entries: [
             {
               path: 'test/approved.js',
-              diagnosticIncludes: 'known diagnostic',
+              diagnostics: [
+                'non-strict: harness-error: known diagnostic',
+                'strict: harness-error: known diagnostic',
+              ],
               reason: 'Reviewed dependency is unavailable.',
             },
           ],
@@ -376,21 +414,23 @@ export default [
       assertSame(parsed[0].path, 'test/approved.js');
       assertSame(Object.isFrozen(parsed), true);
       assertSame(Object.isFrozen(parsed[0]), true);
+      assertSame(Object.isFrozen(parsed[0].diagnostics), true);
+      assertSame(parsed[0].diagnostics.length, 2);
 
       const duplicate = assertThrows(
         () =>
           parseUnverifiableAllowlist(
             JSON.stringify({
-              schemaVersion: 1,
+              schemaVersion: 2,
               entries: [
                 {
                   path: 'test/approved.js',
-                  diagnosticIncludes: 'known diagnostic',
+                  diagnostics: ['non-strict: harness-error: known diagnostic'],
                   reason: 'First review.',
                 },
                 {
                   path: 'test/approved.js',
-                  diagnosticIncludes: 'known diagnostic',
+                  diagnostics: ['non-strict: harness-error: known diagnostic'],
                   reason: 'Duplicate review.',
                 },
               ],
@@ -401,6 +441,56 @@ export default [
 
       assertSame(
         duplicate.message.includes('duplicate path: test/approved.js'),
+        true,
+      );
+
+      for (const diagnostics of [[], [''], 'known diagnostic']) {
+        const invalidDiagnostics = assertThrows(
+          () =>
+            parseUnverifiableAllowlist(
+              JSON.stringify({
+                schemaVersion: 2,
+                entries: [
+                  {
+                    path: 'test/approved.js',
+                    diagnostics,
+                    reason: 'Reviewed dependency is unavailable.',
+                  },
+                ],
+              }),
+            ),
+          Error,
+        );
+
+        assertSame(
+          invalidDiagnostics.message.includes(
+            'entries[0].diagnostics must be a non-empty array of non-empty strings',
+          ),
+          true,
+        );
+      }
+
+      const legacyFragment = assertThrows(
+        () =>
+          parseUnverifiableAllowlist(
+            JSON.stringify({
+              schemaVersion: 2,
+              entries: [
+                {
+                  path: 'test/approved.js',
+                  diagnosticIncludes: 'known diagnostic',
+                  reason: 'Reviewed dependency is unavailable.',
+                },
+              ],
+            }),
+          ),
+        Error,
+      );
+
+      assertSame(
+        legacyFragment.message.includes(
+          'must contain exactly: diagnostics, path, reason',
+        ),
         true,
       );
     },

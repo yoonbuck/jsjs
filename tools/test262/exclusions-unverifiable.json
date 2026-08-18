@@ -1,74 +1,116 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "entries": [
     {
       "path": "test/staging/sm/Math/acosh-exact.js",
-      "diagnosticIncludes": "include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+        "strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined"
+      ],
       "reason": "The pinned SpiderMonkey Math harness requires Float64Array and Uint32Array before reaching the Math assertion; typed-array intrinsics are outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/Math/atanh-exact.js",
-      "diagnosticIncludes": "include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+        "strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined"
+      ],
       "reason": "The pinned SpiderMonkey Math harness requires Float64Array and Uint32Array before reaching the Math assertion; typed-array intrinsics are outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/Math/log10-approx.js",
-      "diagnosticIncludes": "include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+        "strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined"
+      ],
       "reason": "The pinned SpiderMonkey Math harness requires Float64Array and Uint32Array before reaching the Math assertion; typed-array intrinsics are outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/Math/log1p-exact.js",
-      "diagnosticIncludes": "include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+        "strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined"
+      ],
       "reason": "The pinned SpiderMonkey Math harness requires Float64Array and Uint32Array before reaching the Math assertion; typed-array intrinsics are outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/Math/log2-approx.js",
-      "diagnosticIncludes": "include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+        "strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined"
+      ],
       "reason": "The pinned SpiderMonkey Math harness requires Float64Array and Uint32Array before reaching the Math assertion; typed-array intrinsics are outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/Math/trunc.js",
-      "diagnosticIncludes": "include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined",
+        "strict: harness-error: include sm/non262-Math-shell.js threw: guest object with message: Float64Array is not defined"
+      ],
       "reason": "The pinned SpiderMonkey Math harness requires Float64Array and Uint32Array before reaching the Math assertion; typed-array intrinsics are outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/String/replace-math.js",
-      "diagnosticIncludes": "engine-error: RangeError: Invalid string length",
+      "diagnostics": [
+        "non-strict: engine-error: RangeError: Invalid string length",
+        "strict: engine-error: RangeError: Invalid string length"
+      ],
       "reason": "The test deliberately requests a 2^36-code-unit replacement string; the host rejects that unrepresentable allocation with RangeError before a guest completion can be observed."
     },
     {
       "path": "test/staging/sm/TypedArray/element-setting-converts-using-ToNumber.js",
-      "diagnosticIncludes": "include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+        "strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)"
+      ],
       "reason": "The pinned SpiderMonkey TypedArray harness uses unsupported nullish-coalescing syntax at line 74 and depends on TypedArray intrinsics outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/TypedArray/from_realms.js",
-      "diagnosticIncludes": "include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+        "strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)"
+      ],
       "reason": "The pinned SpiderMonkey TypedArray harness uses unsupported nullish-coalescing syntax at line 74 and depends on TypedArray intrinsics outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/TypedArray/has-property-op.js",
-      "diagnosticIncludes": "include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+        "strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)"
+      ],
       "reason": "The pinned SpiderMonkey TypedArray harness uses unsupported nullish-coalescing syntax at line 74 and depends on TypedArray intrinsics outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/TypedArray/prototype-constructor-identity.js",
-      "diagnosticIncludes": "include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+        "strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)"
+      ],
       "reason": "The pinned SpiderMonkey TypedArray harness uses unsupported nullish-coalescing syntax at line 74 and depends on TypedArray intrinsics outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/TypedArray/set-with-receiver.js",
-      "diagnosticIncludes": "include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+        "strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)"
+      ],
       "reason": "The pinned SpiderMonkey TypedArray harness uses unsupported nullish-coalescing syntax at line 74 and depends on TypedArray intrinsics outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/TypedArray/sort_byteoffset.js",
-      "diagnosticIncludes": "include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+        "strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)"
+      ],
       "reason": "The pinned SpiderMonkey TypedArray harness uses unsupported nullish-coalescing syntax at line 74 and depends on TypedArray intrinsics outside this ES5 runtime."
     },
     {
       "path": "test/staging/sm/TypedArray/toLocaleString-nointl.js",
-      "diagnosticIncludes": "include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+      "diagnostics": [
+        "non-strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)",
+        "strict: harness-error: include sm/non262-TypedArray-shell.js failed: SyntaxError: Unexpected token (74:27)"
+      ],
       "reason": "The pinned SpiderMonkey TypedArray harness uses unsupported nullish-coalescing syntax at line 74 and depends on TypedArray intrinsics outside this ES5 runtime."
     }
   ]
