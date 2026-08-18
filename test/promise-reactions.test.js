@@ -318,6 +318,161 @@ export default [
     },
   },
   {
+    name: 'Promise.resolve reads a Promise constructor once before early return or allocation',
+    run: () => {
+      const sourceRealm = createRealm();
+      const methodRealm = createRealm();
+      const getterRealm = createRealm();
+      const constructorRealm = createRealm();
+      const outerRealm = createRealm();
+      const source = promiseObject(
+        evaluateScript(sourceRealm, 'Promise.resolve("source")').value,
+      );
+      const resolveMethod =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            methodRealm.globalObject.get('Promise')
+          ).get('resolve')
+        );
+      const earlyConstructor = new EngineObject(
+        constructorRealm.intrinsics.objectPrototype,
+      );
+      const allocated = new EngineObject(
+        constructorRealm.intrinsics.objectPrototype,
+      );
+      /** @type {string[]} */
+      let order = [];
+      let getterReads = 0;
+      let phase = 'early';
+      /** @type {unknown} */
+      let constructorResult = earlyConstructor;
+      /** @type {unknown} */
+      let getterError;
+      /** @type {unknown} */
+      let observedReceiver;
+      /** @type {import('../src/runtime/realm.js').Realm | undefined} */
+      let observedGetterRealm;
+      /** @type {import('../src/runtime/realm.js').Realm | undefined} */
+      let observedAllocationRealm;
+      let allocationCalls = 0;
+      const capabilityResolve = constructorRealm.createNativeFunction({
+        name: 'resolve',
+        length: 1,
+        call() {
+          order.push('resolve');
+          return undefined;
+        },
+      });
+      const capabilityReject = constructorRealm.createNativeFunction({
+        name: 'reject',
+        length: 1,
+        call() {
+          order.push('reject');
+          return undefined;
+        },
+      });
+      const allocationConstructor = constructorRealm.createNativeFunction({
+        name: 'AllocationConstructor',
+        length: 1,
+        call() {
+          return undefined;
+        },
+        construct(args, _functionObject, _newTarget, callerRealmArgument) {
+          allocationCalls += 1;
+          observedAllocationRealm = callerRealmArgument;
+          order.push('allocate');
+          /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+            args[0]
+          ).callFunction(
+            undefined,
+            [capabilityResolve, capabilityReject],
+            constructorRealm,
+          );
+          return allocated;
+        },
+        retargetConstructionResult: false,
+      });
+      source.defineOwnProperty('constructor', {
+        get: getterRealm.createNativeFunction({
+          name: 'get constructor',
+          length: 0,
+          call(thisValue, _args, _functionObject, callerRealmArgument) {
+            getterReads += 1;
+            observedReceiver = thisValue;
+            observedGetterRealm = callerRealmArgument;
+            order.push(`${phase}:get`);
+            if (getterError !== undefined) {
+              throw new ThrowSignal(getterError);
+            }
+            return constructorResult;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+
+      const earlyResult = resolveMethod.callFunction(
+        earlyConstructor,
+        [source],
+        outerRealm,
+      );
+
+      assertSame(earlyResult, source);
+      assertSame(getterReads, 1);
+      assertSame(JSON.stringify(order), '["early:get"]');
+      assertSame(observedReceiver, source);
+      assertSame(observedGetterRealm, methodRealm);
+      assertSame(allocationCalls, 0);
+
+      order = [];
+      getterReads = 0;
+      phase = 'allocation';
+      constructorResult = earlyConstructor;
+      const allocationResult = resolveMethod.callFunction(
+        allocationConstructor,
+        [source],
+        outerRealm,
+      );
+
+      assertSame(allocationResult, allocated);
+      assertSame(getterReads, 1);
+      assertSame(
+        JSON.stringify(order),
+        '["allocation:get","allocate","resolve"]',
+      );
+      assertSame(observedReceiver, source);
+      assertSame(observedGetterRealm, methodRealm);
+      assertSame(observedAllocationRealm, methodRealm);
+      assertSame(allocationCalls, 1);
+
+      order = [];
+      getterReads = 0;
+      phase = 'throw';
+      getterError = getterRealm.createGuestError(
+        'TypeError',
+        'Promise.resolve constructor getter failure',
+      );
+      const abrupt = /** @type {ThrowSignal} */ (
+        assertThrows(
+          () =>
+            resolveMethod.callFunction(
+              allocationConstructor,
+              [source],
+              outerRealm,
+            ),
+          ThrowSignal,
+        )
+      );
+
+      assertSame(abrupt.value, getterError);
+      assertSame(getterReads, 1);
+      assertSame(JSON.stringify(order), '["throw:get"]');
+      assertSame(observedReceiver, source);
+      assertSame(observedGetterRealm, methodRealm);
+      assertSame(allocationCalls, 1);
+    },
+  },
+  {
     name: 'then uses the species constructor and validates invalid species values',
     run: () => {
       const realm = createRealm();
@@ -497,6 +652,481 @@ export default [
 
       assertSame(abruptGetterCalls, 1);
       assertSame(abrupt.value, accessorError);
+    },
+  },
+  {
+    name: 'then inherits foreign Promise species and allocates the local subclass',
+    run: () => {
+      const subclassRealm = createRealm();
+      const baseRealm = createRealm();
+      const methodRealm = createRealm();
+      const foreignPromise = /** @type {EngineObject} */ (
+        baseRealm.globalObject.get('Promise')
+      );
+      subclassRealm.globalObject.defineOwnProperty('ForeignPromise', {
+        value: foreignPromise,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const subclass =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(
+            subclassRealm,
+            [
+              'class Sub extends ForeignPromise {}',
+              'var source = new Sub(function (resolve) { resolve("source"); });',
+              'Sub;',
+            ].join('\n'),
+          ).value
+        );
+      const subclassPrototype = /** @type {EngineObject} */ (
+        subclass.get('prototype')
+      );
+      const source = promiseObject(subclassRealm.globalObject.get('source'));
+      const then =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            methodRealm.intrinsics.promisePrototype
+          ).get('then')
+        );
+
+      assertSame(subclass.agent, subclassRealm.agent);
+      assertSame(subclass.agent === baseRealm.agent, false);
+      assertSame(
+        subclass.getOwnProperty(subclassRealm.agent.wellKnownSymbols.species),
+        undefined,
+      );
+
+      const child = promiseObject(
+        then.callFunction(source, [undefined, undefined], methodRealm),
+      );
+      subclassRealm.globalObject.defineOwnProperty('speciesChild', {
+        value: child,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertNormalValue(
+        evaluateScript(subclassRealm, 'speciesChild instanceof Sub'),
+        true,
+      );
+      assertSame(child.realm, subclassRealm);
+      assertSame(child.agent, subclassRealm.agent);
+      assertSame(child.getPrototype(), subclassPrototype);
+    },
+  },
+  {
+    name: 'cross-Agent species lookup honors own and intermediate Agent shadowing',
+    run: () => {
+      const baseRealm = createRealm();
+      const intermediateRealm = createRealm();
+      const subclassRealm = createRealm();
+      const methodRealm = createRealm();
+      const accessorRealm = createRealm();
+      const foreignPromise = /** @type {EngineObject} */ (
+        baseRealm.globalObject.get('Promise')
+      );
+      intermediateRealm.globalObject.defineOwnProperty('ForeignPromise', {
+        value: foreignPromise,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const intermediate =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(
+            intermediateRealm,
+            'class Intermediate extends ForeignPromise {} Intermediate;',
+          ).value
+        );
+      subclassRealm.globalObject.defineOwnProperty('Intermediate', {
+        value: intermediate,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const subclass =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(
+            subclassRealm,
+            [
+              'class Sub extends Intermediate {}',
+              'class OwnSpecies extends Intermediate {}',
+              'var source = new Sub(function (resolve) { resolve("source"); });',
+              'Sub;',
+            ].join('\n'),
+          ).value
+        );
+      const ownSpecies =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(subclassRealm, 'OwnSpecies').value
+        );
+      const source = promiseObject(subclassRealm.globalObject.get('source'));
+      const then =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            methodRealm.intrinsics.promisePrototype
+          ).get('then')
+        );
+      let baseGetterCalls = 0;
+      let intermediateGetterCalls = 0;
+      let ownGetterCalls = 0;
+      /** @type {unknown} */
+      let intermediateReceiver;
+      /** @type {unknown} */
+      let ownReceiver;
+      /** @type {import('../src/runtime/realm.js').Realm | undefined} */
+      let intermediateCallerRealm;
+      /** @type {import('../src/runtime/realm.js').Realm | undefined} */
+      let ownCallerRealm;
+
+      foreignPromise.defineOwnProperty(
+        baseRealm.agent.wellKnownSymbols.species,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call() {
+              baseGetterCalls += 1;
+              return foreignPromise;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      intermediate.defineOwnProperty(
+        intermediateRealm.agent.wellKnownSymbols.species,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call(thisValue, _args, _functionObject, callerRealmArgument) {
+              intermediateGetterCalls += 1;
+              intermediateReceiver = thisValue;
+              intermediateCallerRealm = callerRealmArgument;
+              return thisValue;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+
+      const intermediateChild = promiseObject(
+        then.callFunction(source, [], methodRealm),
+      );
+
+      assertSame(intermediateGetterCalls, 1);
+      assertSame(baseGetterCalls, 0);
+      assertSame(intermediateReceiver, subclass);
+      assertSame(intermediateCallerRealm, methodRealm);
+      assertSame(intermediateChild.getPrototype(), subclass.get('prototype'));
+
+      subclass.defineOwnProperty(
+        subclassRealm.agent.wellKnownSymbols.species,
+        {
+          value: ownSpecies,
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const ownDataChild = promiseObject(
+        then.callFunction(source, [], methodRealm),
+      );
+
+      assertSame(ownDataChild.getPrototype(), ownSpecies.get('prototype'));
+      assertSame(intermediateGetterCalls, 1);
+      assertSame(baseGetterCalls, 0);
+
+      subclass.defineOwnProperty(
+        subclassRealm.agent.wellKnownSymbols.species,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call(thisValue, _args, _functionObject, callerRealmArgument) {
+              ownGetterCalls += 1;
+              ownReceiver = thisValue;
+              ownCallerRealm = callerRealmArgument;
+              return thisValue;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const ownAccessorChild = promiseObject(
+        then.callFunction(source, [], methodRealm),
+      );
+
+      assertSame(ownGetterCalls, 1);
+      assertSame(ownReceiver, subclass);
+      assertSame(ownCallerRealm, methodRealm);
+      assertSame(ownAccessorChild.getPrototype(), subclass.get('prototype'));
+      assertSame(intermediateGetterCalls, 1);
+      assertSame(baseGetterCalls, 0);
+    },
+  },
+  {
+    name: 'inherited foreign species preserves null, invalid, and abrupt outcomes',
+    run: () => {
+      const subclassRealm = createRealm();
+      const baseRealm = createRealm();
+      const methodRealm = createRealm();
+      const accessorRealm = createRealm();
+      const foreignPromise = /** @type {EngineObject} */ (
+        baseRealm.globalObject.get('Promise')
+      );
+      subclassRealm.globalObject.defineOwnProperty('ForeignPromise', {
+        value: foreignPromise,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const subclass =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(
+            subclassRealm,
+            [
+              'class Sub extends ForeignPromise {}',
+              'var source = new Sub(function (resolve) { resolve("source"); });',
+              'Sub;',
+            ].join('\n'),
+          ).value
+        );
+      const source = promiseObject(subclassRealm.globalObject.get('source'));
+      const then =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            methodRealm.intrinsics.promisePrototype
+          ).get('then')
+        );
+      const foreignSpecies = baseRealm.agent.wellKnownSymbols.species;
+      let nullGetterCalls = 0;
+
+      foreignPromise.defineOwnProperty(
+        foreignSpecies,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call() {
+              nullGetterCalls += 1;
+              return null;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const fallbackChild = promiseObject(
+        then.callFunction(source, [], methodRealm),
+      );
+
+      assertSame(nullGetterCalls, 1);
+      assertSame(fallbackChild.realm, methodRealm);
+      assertSame(fallbackChild.agent, methodRealm.agent);
+      assertSame(
+        fallbackChild.getPrototype(),
+        methodRealm.intrinsics.promisePrototype,
+      );
+      assertSame(
+        fallbackChild.getPrototype() === subclass.get('prototype'),
+        false,
+      );
+
+      let invalidGetterCalls = 0;
+      foreignPromise.defineOwnProperty(
+        foreignSpecies,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call() {
+              invalidGetterCalls += 1;
+              return 1;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const invalid = /** @type {ThrowSignal} */ (
+        assertThrows(
+          () => then.callFunction(source, [], methodRealm),
+          ThrowSignal,
+        )
+      ).value;
+
+      assertSame(invalidGetterCalls, 1);
+      assertSame(
+        /** @type {EngineObject} */ (invalid).getPrototype(),
+        methodRealm.intrinsics.typeErrorPrototype,
+      );
+
+      let abruptGetterCalls = 0;
+      const accessorError = accessorRealm.createGuestError(
+        'TypeError',
+        'inherited foreign species getter failure',
+      );
+      foreignPromise.defineOwnProperty(
+        foreignSpecies,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call() {
+              abruptGetterCalls += 1;
+              throw new ThrowSignal(accessorError);
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const abrupt = /** @type {ThrowSignal} */ (
+        assertThrows(
+          () => then.callFunction(source, [], methodRealm),
+          ThrowSignal,
+        )
+      );
+
+      assertSame(abruptGetterCalls, 1);
+      assertSame(abrupt.value, accessorError);
+    },
+  },
+  {
+    name: 'then reads constructor and species accessors once in execution order',
+    run: () => {
+      const sourceRealm = createRealm();
+      const methodRealm = createRealm();
+      const constructorRealm = createRealm();
+      const accessorRealm = createRealm();
+      const outerRealm = createRealm();
+      const source = promiseObject(
+        evaluateScript(sourceRealm, 'Promise.resolve("source")').value,
+      );
+      const then =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            methodRealm.intrinsics.promisePrototype
+          ).get('then')
+        );
+      const speciesHolder = new EngineObject(
+        constructorRealm.intrinsics.objectPrototype,
+      );
+      const methodPromise = /** @type {EngineObject} */ (
+        methodRealm.globalObject.get('Promise')
+      );
+      /** @type {string[]} */
+      const order = [];
+      let constructorGetterCalls = 0;
+      let speciesGetterCalls = 0;
+      /** @type {unknown} */
+      let constructorReceiver;
+      /** @type {unknown} */
+      let speciesReceiver;
+      /** @type {import('../src/runtime/realm.js').Realm | undefined} */
+      let constructorCallerRealm;
+      /** @type {import('../src/runtime/realm.js').Realm | undefined} */
+      let speciesCallerRealm;
+
+      source.defineOwnProperty('constructor', {
+        get: accessorRealm.createNativeFunction({
+          name: 'get constructor',
+          length: 0,
+          call(thisValue, _args, _functionObject, callerRealmArgument) {
+            constructorGetterCalls += 1;
+            constructorReceiver = thisValue;
+            constructorCallerRealm = callerRealmArgument;
+            order.push('constructor');
+            return speciesHolder;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+      speciesHolder.defineOwnProperty(
+        constructorRealm.agent.wellKnownSymbols.species,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call(thisValue, _args, _functionObject, callerRealmArgument) {
+              speciesGetterCalls += 1;
+              speciesReceiver = thisValue;
+              speciesCallerRealm = callerRealmArgument;
+              order.push('species');
+              return methodPromise;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+      );
+
+      const child = promiseObject(then.callFunction(source, [], outerRealm));
+
+      assertSame(JSON.stringify(order), '["constructor","species"]');
+      assertSame(constructorGetterCalls, 1);
+      assertSame(speciesGetterCalls, 1);
+      assertSame(constructorReceiver, source);
+      assertSame(speciesReceiver, speciesHolder);
+      assertSame(constructorCallerRealm, methodRealm);
+      assertSame(speciesCallerRealm, methodRealm);
+      assertSame(child.realm, methodRealm);
+      assertSame(child.agent, methodRealm.agent);
+
+      const constructorError = accessorRealm.createGuestError(
+        'TypeError',
+        'then constructor getter failure',
+      );
+      source.defineOwnProperty(
+        'constructor',
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get constructor',
+            length: 0,
+            call(thisValue, _args, _functionObject, callerRealmArgument) {
+              constructorGetterCalls += 1;
+              constructorReceiver = thisValue;
+              constructorCallerRealm = callerRealmArgument;
+              order.push('constructor-error');
+              throw new ThrowSignal(constructorError);
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const abrupt = /** @type {ThrowSignal} */ (
+        assertThrows(
+          () => then.callFunction(source, [], outerRealm),
+          ThrowSignal,
+        )
+      );
+
+      assertSame(abrupt.value, constructorError);
+      assertSame(constructorGetterCalls, 2);
+      assertSame(speciesGetterCalls, 1);
+      assertSame(
+        JSON.stringify(order),
+        '["constructor","species","constructor-error"]',
+      );
+      assertSame(constructorReceiver, source);
+      assertSame(constructorCallerRealm, methodRealm);
     },
   },
   {

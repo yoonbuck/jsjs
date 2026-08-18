@@ -230,6 +230,43 @@ export class EngineObject {
   }
 
   /**
+   * Looks up one semantic well-known-symbol property across Agent boundaries.
+   * Each object in the prototype chain owns a distinct physical symbol key, so
+   * the walk derives that object's key before checking only its own descriptor.
+   *
+   * @param {import('./symbol.js').WellKnownSymbolName} name
+   * @param {import('./realm.js').Realm} [callerRealm]
+   * @returns {unknown}
+   */
+  getWellKnownSymbol(name, callerRealm) {
+    /** @type {EngineObject | null} */
+    let current = this;
+
+    while (current !== null) {
+      const key = current.agent?.wellKnownSymbols[name];
+      const descriptor =
+        key === undefined ? undefined : current._peekOwnDescriptor(key);
+
+      if (descriptor !== undefined) {
+        if (isDataDescriptor(descriptor)) {
+          return linkObjectValueAgent(this.agent, descriptor.value);
+        }
+
+        const value =
+          descriptor.get === undefined
+            ? undefined
+            : callAccessor(descriptor.get, this, [], callerRealm);
+
+        return linkObjectValueAgent(this.agent, value);
+      }
+
+      current = current._prototype;
+    }
+
+    return undefined;
+  }
+
+  /**
    * @param {PropertyKey} name
    * @returns {boolean}
    */

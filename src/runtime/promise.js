@@ -383,10 +383,7 @@ export function speciesConstructor(object, defaultConstructor, currentRealm) {
     );
   }
 
-  const species = constructor.get(
-    constructorAgent.wellKnownSymbols.species,
-    currentRealm,
-  );
+  const species = constructor.getWellKnownSymbol('species', currentRealm);
 
   if (species === undefined || species === null) {
     return defaultConstructor;
