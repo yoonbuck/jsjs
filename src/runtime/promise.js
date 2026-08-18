@@ -363,7 +363,7 @@ export function newPromiseReactionJob(reaction, argument, currentRealm) {
  * @returns {unknown}
  */
 export function speciesConstructor(object, defaultConstructor, currentRealm) {
-  const constructor = object.get('constructor');
+  const constructor = object.get('constructor', currentRealm);
 
   if (constructor === undefined) {
     return defaultConstructor;
@@ -375,7 +375,18 @@ export function speciesConstructor(object, defaultConstructor, currentRealm) {
     );
   }
 
-  const species = constructor.get(currentRealm.agent.wellKnownSymbols.species);
+  const constructorAgent = constructor.agent;
+  if (constructorAgent === null) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Promise constructor object has no owning Agent',
+    );
+  }
+
+  const species = constructor.get(
+    constructorAgent.wellKnownSymbols.species,
+    currentRealm,
+  );
 
   if (species === undefined || species === null) {
     return defaultConstructor;

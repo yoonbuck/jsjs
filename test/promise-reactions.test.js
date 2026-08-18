@@ -1,5 +1,5 @@
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
-import { GuestErrorSignal } from '../src/runtime/completion.js';
+import { GuestErrorSignal, ThrowSignal } from '../src/runtime/completion.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { createAbruptRealmCallable } from '../src/runtime/function-realm.js';
 import { PromiseObject } from '../src/runtime/promise.js';
@@ -373,6 +373,130 @@ export default [
           ].join('\n'),
         ),
       );
+    },
+  },
+  {
+    name: 'cross-Agent species lookup uses the constructor Agent symbol and executing Realm',
+    run: () => {
+      const callerRealm = createRealm();
+      const constructorRealm = createRealm();
+      const accessorRealm = createRealm();
+      const source = promiseObject(
+        evaluateScript(constructorRealm, 'Promise.resolve("source")').value,
+      );
+      const constructor =
+        /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
+          constructorRealm.globalObject.get('Promise')
+        );
+      const species =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(
+            constructorRealm,
+            'class ForeignSpecies extends Promise {} ForeignSpecies;',
+          ).value
+        );
+      const speciesPrototype = /** @type {EngineObject} */ (
+        species.get('prototype')
+      );
+      const then =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            callerRealm.intrinsics.promisePrototype
+          ).get('then')
+        );
+      const speciesSymbol = constructorRealm.agent.wellKnownSymbols.species;
+      let getterCalls = 0;
+      let observedCallerRealm;
+      const getter = accessorRealm.createNativeFunction({
+        name: 'get [Symbol.species]',
+        length: 0,
+        call(_thisValue, _args, _functionObject, callerRealmArgument) {
+          getterCalls += 1;
+          observedCallerRealm = callerRealmArgument;
+          return species;
+        },
+      });
+
+      constructor.defineOwnProperty(
+        speciesSymbol,
+        {
+          get: getter,
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+
+      const child = promiseObject(
+        then.callFunction(source, [undefined, undefined], callerRealm),
+      );
+
+      assertSame(getterCalls, 1);
+      assertSame(observedCallerRealm, callerRealm);
+      assertSame(child.realm, constructorRealm);
+      assertSame(child.agent, constructorRealm.agent);
+      assertSame(child.getPrototype(), speciesPrototype);
+
+      let invalidGetterCalls = 0;
+      constructor.defineOwnProperty(
+        speciesSymbol,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call() {
+              invalidGetterCalls += 1;
+              return 1;
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const invalid = /** @type {ThrowSignal} */ (
+        assertThrows(
+          () => then.callFunction(source, [], callerRealm),
+          ThrowSignal,
+        )
+      ).value;
+
+      assertSame(invalidGetterCalls, 1);
+      assertSame(
+        /** @type {EngineObject} */ (invalid).getPrototype(),
+        callerRealm.intrinsics.typeErrorPrototype,
+      );
+
+      let abruptGetterCalls = 0;
+      const accessorError = accessorRealm.createGuestError(
+        'TypeError',
+        'foreign species getter failure',
+      );
+      constructor.defineOwnProperty(
+        speciesSymbol,
+        {
+          get: accessorRealm.createNativeFunction({
+            name: 'get [Symbol.species]',
+            length: 0,
+            call() {
+              abruptGetterCalls += 1;
+              throw new ThrowSignal(accessorError);
+            },
+          }),
+          enumerable: false,
+          configurable: true,
+        },
+        true,
+      );
+      const abrupt = /** @type {ThrowSignal} */ (
+        assertThrows(
+          () => then.callFunction(source, [], callerRealm),
+          ThrowSignal,
+        )
+      );
+
+      assertSame(abruptGetterCalls, 1);
+      assertSame(abrupt.value, accessorError);
     },
   },
   {
