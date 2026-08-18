@@ -125,7 +125,7 @@ export function createPromiseIntrinsics(realm) {
       name: 'catch',
       length: 1,
       call(thisValue, args) {
-        const then = toObject(realm, thisValue).get('then');
+        const then = toObject(realm, thisValue).get('then', realm);
         if (!isCallable(then)) {
           throw new GuestErrorSignal(
             'TypeError',
@@ -165,7 +165,7 @@ export function createPromiseIntrinsics(realm) {
         const resolution = args[0];
         if (
           resolution instanceof PromiseObject &&
-          resolution.get('constructor') === thisValue
+          resolution.get('constructor', realm) === thisValue
         ) {
           return resolution;
         }

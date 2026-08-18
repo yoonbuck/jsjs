@@ -2367,6 +2367,46 @@ const tests = [
     },
   },
   {
+    name: 'cross-Agent Promise resolution then getters charge the executing Realm before starting a generator',
+    run() {
+      const callerRealm = createRealm({ maxStackDepth: 80 });
+      const objectRealm = createRealm({ maxStackDepth: 5000 });
+      const accessorRealm = createRealm({ maxStackDepth: 5000 });
+      const realms = [callerRealm, objectRealm, accessorRealm];
+      const getter = createDeepGeneratorStarter(accessorRealm, 'thenGet');
+      const thenable = new EngineObject(objectRealm.intrinsics.objectPrototype);
+
+      thenable.defineOwnProperty('then', {
+        get: getter,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(callerRealm, 'foreignThenable', thenable);
+
+      assertSame(
+        evaluateScript(
+          callerRealm,
+          'try { foreignThenable.then; "not thrown"; } catch (error) { error.name; }',
+        ).value,
+        'RangeError',
+        'direct-read control',
+      );
+      assertGeneratorAccountingCleared(realms);
+
+      const promise =
+        /** @type {import('../src/runtime/promise.js').PromiseObject} */ (
+          evaluateScript(callerRealm, 'Promise.resolve(foreignThenable)').value
+        );
+
+      assertSame(promise.promiseState, 'rejected');
+      assertSame(
+        /** @type {EngineObject} */ (promise.promiseResult).get('name'),
+        'RangeError',
+      );
+      assertGeneratorAccountingCleared(realms);
+    },
+  },
+  {
     name: 'foreign call results inherit the executing generator host chain',
     run() {
       const realmA = createRealm();
