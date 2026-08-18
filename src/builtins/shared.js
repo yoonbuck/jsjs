@@ -1,6 +1,7 @@
 import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
 import { EngineObject } from '../runtime/object.js';
+import { GeneratorObject } from '../runtime/generator-object.js';
 import { toBoolean, toUint32 } from '../runtime/conversion.js';
 
 /**
@@ -25,6 +26,7 @@ import { toBoolean, toUint32 } from '../runtime/conversion.js';
  *   ) => EngineObject) | undefined,
  *   prototype?: EngineObject | undefined,
  *   retargetConstructionResult?: boolean,
+ *   callPreflight?: 'generatorReceiver',
  * }} NativeFunctionOptions
  */
 
@@ -47,6 +49,7 @@ export class NativeFunction extends EngineObject {
       construct,
       prototype,
       retargetConstructionResult = true,
+      callPreflight,
     },
   ) {
     super(realm.intrinsics.functionPrototype, 'Function');
@@ -63,6 +66,8 @@ export class NativeFunction extends EngineObject {
     this._isConstructor = construct !== undefined;
     /** @type {boolean} */
     this._retargetConstructionResult = retargetConstructionResult;
+    /** @type {NativeFunctionOptions['callPreflight']} */
+    this._callPreflight = callPreflight;
     this.defineOwnProperty('length', {
       value: length,
       writable: false,
@@ -93,6 +98,13 @@ export class NativeFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = [], callerRealm) {
+    runNativeCallPreflight(
+      this.realm,
+      this._callPreflight,
+      thisValue,
+      this._nativeName,
+    );
+
     const guard = this.realm.stackGuard;
     const methodAgent = this.realm.agent;
     const callChain = methodAgent.enterSynchronousCallChain(callerRealm?.agent);
@@ -223,6 +235,32 @@ export class NativeFunction extends EngineObject {
 
     return false;
   }
+}
+
+/**
+ * Performs side-effect-free receiver checks that must win over caller linking
+ * and stack accounting. The closed discriminator keeps this boundary limited
+ * to engine-owned validation rather than admitting arbitrary callbacks.
+ *
+ * @param {Realm} realm
+ * @param {NativeFunctionOptions['callPreflight']} preflight
+ * @param {unknown} thisValue
+ * @param {string} name
+ * @returns {void}
+ */
+function runNativeCallPreflight(realm, preflight, thisValue, name) {
+  if (preflight !== 'generatorReceiver') {
+    return;
+  }
+
+  runNativeBody(realm, () => {
+    if (!(thisValue instanceof GeneratorObject)) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        `Generator.prototype.${name} called on incompatible receiver`,
+      );
+    }
+  });
 }
 
 /**

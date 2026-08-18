@@ -285,9 +285,138 @@ function assertGeneratorWrapperRecursionContained(wrapper) {
 
 /**
  * @param {boolean} shareAgent
+ * @param {'next' | 'return' | 'throw'} method
+ * @param {'object' | 'primitive'} receiverKind
  * @returns {void}
  */
-function assertInvalidForeignGeneratorReceiversDoNotActivate(shareAgent) {
+function assertInvalidForeignGeneratorReceiverPreflights(
+  shareAgent,
+  method,
+  receiverKind,
+) {
+  const sharedAgent = shareAgent ? createAgent() : undefined;
+  const callerRealm = createRealm({
+    ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+    maxStackDepth: 300,
+  });
+  const methodRealm = createRealm({
+    ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+    maxStackDepth: 1,
+  });
+  const realms = [callerRealm, methodRealm];
+  const agents = [...new Set(realms.map((realm) => realm.agent))];
+  let references = 0;
+  let resumes = 0;
+  let methodGuardEntries = 0;
+  let baseline = { references: 0, resumes: 0, methodGuardEntries: 0 };
+  let baselineRecorded = false;
+
+  for (const agent of agents) {
+    const enterReference = agent.enterGeneratorHostChainReference;
+    agent.enterGeneratorHostChainReference = (maxDepth) => {
+      references += 1;
+      return enterReference.call(agent, maxDepth);
+    };
+    const enterResume = agent.enterGeneratorHostChain;
+    agent.enterGeneratorHostChain = (maxDepth) => {
+      resumes += 1;
+      return enterResume.call(agent, maxDepth);
+    };
+  }
+
+  const enterMethodGuard = methodRealm.stackGuard.enter;
+  methodRealm.stackGuard.enter = () => {
+    methodGuardEntries += 1;
+    return enterMethodGuard.call(methodRealm.stackGuard);
+  };
+  const markInvalidCall = callerRealm.createNativeFunction({
+    name: 'markInvalidCall',
+    length: 0,
+    call() {
+      baseline = { references, resumes, methodGuardEntries };
+      baselineRecorded = true;
+    },
+  });
+
+  defineGlobal(
+    callerRealm,
+    'localCall',
+    callerRealm.intrinsics.functionPrototype.get('call'),
+  );
+  defineGlobal(
+    callerRealm,
+    'foreignGeneratorMethod',
+    /** @type {EngineObject} */ (methodRealm.intrinsics.generatorPrototype).get(
+      method,
+    ),
+  );
+  defineGlobal(callerRealm, 'markInvalidCall', markInvalidCall);
+  defineGlobal(
+    callerRealm,
+    'invalidReceiver',
+    receiverKind === 'object' ? evaluateScript(callerRealm, '({})').value : 1,
+  );
+  evaluateScript(
+    callerRealm,
+    `
+      function* callInvalidGeneratorMethod() {
+        markInvalidCall();
+        try {
+          localCall.call(foreignGeneratorMethod, invalidReceiver);
+          return "not thrown";
+        } catch (error) {
+          return error;
+        }
+      }
+    `,
+  );
+  const completion = evaluateScript(
+    callerRealm,
+    'callInvalidGeneratorMethod().next().value',
+  );
+  const error = /** @type {EngineObject} */ (completion.value);
+
+  assertSame(
+    completion.type,
+    'normal',
+    `${method} on an invalid ${receiverKind} receiver must reach the guest catch`,
+  );
+  assertSame(error instanceof EngineObject, true);
+  assertSame(error.get('name'), 'TypeError');
+  assertSame(
+    error.get('message'),
+    `Generator.prototype.${method} called on incompatible receiver`,
+  );
+  assertSame(
+    error.getPrototype(),
+    methodRealm.intrinsics.typeErrorPrototype,
+    `${method} must materialize its receiver error in the method Realm`,
+  );
+  assertSame(baselineRecorded, true);
+  assertSame(
+    references - baseline.references,
+    0,
+    `${method} on an invalid receiver must not create a generator-chain reference`,
+  );
+  assertSame(
+    resumes - baseline.resumes,
+    0,
+    `${method} on an invalid receiver must not begin a generator resume`,
+  );
+  assertSame(
+    methodGuardEntries - baseline.methodGuardEntries,
+    0,
+    `${method} must validate before entering the method Realm guard`,
+  );
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
+ * @param {boolean} shareAgent
+ * @param {'next' | 'return' | 'throw'} method
+ * @returns {void}
+ */
+function assertValidForeignGeneratorReceiverStillActivates(shareAgent, method) {
   const sharedAgent = shareAgent ? createAgent() : undefined;
   const callerRealm = createRealm({
     ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
@@ -299,60 +428,102 @@ function assertInvalidForeignGeneratorReceiversDoNotActivate(shareAgent) {
   });
   const realms = [callerRealm, methodRealm];
   const agents = [...new Set(realms.map((realm) => realm.agent))];
-  let activations = 0;
+  let references = 0;
+  let resumes = 0;
+  let methodGuardEntries = 0;
+  let baseline = { references: 0, resumes: 0, methodGuardEntries: 0 };
+  let baselineRecorded = false;
 
   for (const agent of agents) {
     const enterReference = agent.enterGeneratorHostChainReference;
     agent.enterGeneratorHostChainReference = (maxDepth) => {
-      activations += 1;
+      references += 1;
       return enterReference.call(agent, maxDepth);
+    };
+    const enterResume = agent.enterGeneratorHostChain;
+    agent.enterGeneratorHostChain = (maxDepth) => {
+      resumes += 1;
+      return enterResume.call(agent, maxDepth);
     };
   }
 
-  evaluateScript(
+  const enterMethodGuard = methodRealm.stackGuard.enter;
+  methodRealm.stackGuard.enter = () => {
+    methodGuardEntries += 1;
+    return enterMethodGuard.call(methodRealm.stackGuard);
+  };
+  const markValidCall = callerRealm.createNativeFunction({
+    name: 'markValidCall',
+    length: 0,
+    call() {
+      baseline = { references, resumes, methodGuardEntries };
+      baselineRecorded = true;
+    },
+  });
+
+  defineGlobal(
+    callerRealm,
+    'localCall',
+    callerRealm.intrinsics.functionPrototype.get('call'),
+  );
+  defineGlobal(
+    callerRealm,
+    'foreignGeneratorMethod',
+    /** @type {EngineObject} */ (methodRealm.intrinsics.generatorPrototype).get(
+      method,
+    ),
+  );
+  defineGlobal(callerRealm, 'markValidCall', markValidCall);
+
+  const completion = evaluateScript(
     callerRealm,
     `
-      function callInvalidGeneratorMethod(depth) {
-        if (depth > 0) {
-          return callInvalidGeneratorMethod(depth - 1);
-        }
+      var validReceiver = (function* () {
         try {
-          foreignGeneratorMethod.call({});
-          return "not thrown";
+          yield "ready";
+          return "next-complete";
         } catch (error) {
-          return error;
+          return "caught:" + error;
         }
+      }());
+      ${method === 'next' ? '' : 'validReceiver.next();'}
+      function* callValidGeneratorMethod() {
+        markValidCall();
+        var result = localCall.call(
+          foreignGeneratorMethod,
+          validReceiver,
+          "sent"
+        );
+        return result.value + "|" + result.done;
       }
+      callValidGeneratorMethod().next().value;
     `,
   );
+  const expected = {
+    next: 'ready|false',
+    return: 'sent|true',
+    throw: 'caught:sent|true',
+  }[method];
 
-  for (const method of ['next', 'return', 'throw']) {
-    defineGlobal(
-      callerRealm,
-      'foreignGeneratorMethod',
-      evaluateScript(methodRealm, `(function* () {})().${method}`).value,
-    );
-    const completion = evaluateScript(
-      callerRealm,
-      'callInvalidGeneratorMethod(10)',
-    );
-    const error = /** @type {EngineObject} */ (completion.value);
-
-    assertSame(completion.type, 'normal');
-    assertSame(error instanceof EngineObject, true);
-    assertSame(error.get('name'), 'TypeError');
-    assertSame(
-      error.getPrototype(),
-      methodRealm.intrinsics.typeErrorPrototype,
-      `${method} must validate its receiver before activating a generator chain`,
-    );
-    assertSame(
-      activations,
-      0,
-      `${method} on an invalid receiver must not create a generator-chain reference`,
-    );
-    assertGeneratorAccountingCleared(realms);
-  }
+  assertSame(completion.type, 'normal');
+  assertSame(completion.value, expected);
+  assertSame(baselineRecorded, true);
+  assertSame(
+    references - baseline.references,
+    1,
+    `${method} on a valid receiver must create one generator-chain reference`,
+  );
+  assertSame(
+    resumes - baseline.resumes,
+    1,
+    `${method} on a valid receiver must begin one generator resume`,
+  );
+  assertSame(
+    methodGuardEntries - baseline.methodGuardEntries,
+    1,
+    `${method} on a valid receiver must enter the method Realm guard`,
+  );
+  assertGeneratorAccountingCleared(realms);
 }
 
 /**
@@ -1443,18 +1614,31 @@ const tests = [
       assertOrdinaryForeignRecursionRemainsUnbudgeted('bind');
     },
   },
-  {
-    name: 'deep cross-Realm invalid generator receivers validate before chain activation',
-    run() {
-      assertInvalidForeignGeneratorReceiversDoNotActivate(true);
-    },
-  },
-  {
-    name: 'deep cross-Agent invalid generator receivers validate before chain activation',
-    run() {
-      assertInvalidForeignGeneratorReceiversDoNotActivate(false);
-    },
-  },
+  ...[true, false].flatMap((shareAgent) =>
+    ['next', 'return', 'throw'].flatMap((method) =>
+      ['object', 'primitive'].map((receiverKind) => ({
+        name: `${shareAgent ? 'shared-Agent' : 'cross-Agent'} active generator ${method} preflights an invalid ${receiverKind} receiver`,
+        run() {
+          assertInvalidForeignGeneratorReceiverPreflights(
+            shareAgent,
+            /** @type {'next' | 'return' | 'throw'} */ (method),
+            /** @type {'object' | 'primitive'} */ (receiverKind),
+          );
+        },
+      })),
+    ),
+  ),
+  ...[true, false].flatMap((shareAgent) =>
+    ['next', 'return', 'throw'].map((method) => ({
+      name: `${shareAgent ? 'shared-Agent' : 'cross-Agent'} active generator ${method} retains valid receiver accounting`,
+      run() {
+        assertValidForeignGeneratorReceiverStillActivates(
+          shareAgent,
+          /** @type {'next' | 'return' | 'throw'} */ (method),
+        );
+      },
+    })),
+  ),
   {
     name: 'generator chains detach and re-adopt inside one outer caller',
     run() {

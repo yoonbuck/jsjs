@@ -91,6 +91,7 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'next',
       length: 1,
+      callPreflight: 'generatorReceiver',
       call(thisValue, args, _functionObject, callerRealm) {
         const generator = requireGenerator(thisValue, 'next');
 
@@ -109,6 +110,7 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'return',
       length: 1,
+      callPreflight: 'generatorReceiver',
       call(thisValue, args, _functionObject, callerRealm) {
         const generator = requireGenerator(thisValue, 'return');
 
@@ -127,6 +129,7 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'throw',
       length: 1,
+      callPreflight: 'generatorReceiver',
       call(thisValue, args, _functionObject, callerRealm) {
         const generator = requireGenerator(thisValue, 'throw');
 
