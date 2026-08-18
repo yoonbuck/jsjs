@@ -76,6 +76,8 @@ function assertGeneratorAccountingCleared(realms) {
     assertSame(realm.stackGuard.depth, 0);
     assertSame(realm.stackGuard.generatorHostChainDepth, 0);
     assertSame(realm.agent._generatorHostChain, null);
+    assertSame(realm.agent._synchronousCallChain, null);
+    assertSame(realm.agent._activeStackGuards.size, 0);
   }
 }
 
@@ -261,6 +263,171 @@ function assertGeneratorMethodParticipantsLinked(
 
   assertSame(last.type, 'normal');
   assertSame(last.value, 'done');
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
+ * @param {'assignment' | 'computed-key' | 'destructuring'} form
+ * @param {boolean} superTarget
+ * @returns {void}
+ */
+function assertCachedComputedTargetRelinked(form, superTarget) {
+  const realmA = createRealm({ maxStackDepth: 140 });
+  const realmB = createRealm({ maxStackDepth: 110 });
+  const realmC = createRealm({ maxStackDepth: 70 });
+  const realms = [realmA, realmB, realmC];
+  let keyCoercions = 0;
+  let setCalls = 0;
+
+  const assertLinked = (
+    /** @type {string} */ stage,
+    /** @type {number} */ expectedMaxDepth,
+  ) => {
+    const roots = realms.map((realm) => generatorHostChainRoot(realm.agent));
+    const participating =
+      stage.startsWith('put') && form === 'assignment'
+        ? roots.slice(0, 2)
+        : roots;
+
+    if (
+      participating[0] === null ||
+      participating.some((root) => root !== participating[0]) ||
+      participating[0].maxDepth !== expectedMaxDepth
+    ) {
+      throw new Error(`${stage} did not rejoin the cached target chain`);
+    }
+  };
+  const inspectKey = realmC.createNativeFunction({
+    name: 'inspectKey',
+    length: 0,
+    call() {
+      keyCoercions += 1;
+      assertLinked('key', 70);
+      return 'slot';
+    },
+  });
+  const inspectPut = realmB.createNativeFunction({
+    name: 'inspectPut',
+    length: 0,
+    call() {
+      assertLinked('put body', form === 'assignment' ? 110 : 70);
+    },
+  });
+  const overflow =
+    /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+      evaluateScript(
+        realmB,
+        'function overflow() { return overflow(); } overflow;',
+      ).value
+    );
+
+  class InspectingSetObject extends EngineObject {
+    /**
+     * @param {string | symbol} name
+     * @param {unknown} value
+     * @param {unknown} receiver
+     * @param {boolean} throwOnError
+     * @param {import('../src/runtime/realm.js').Realm} [callerRealm]
+     * @returns {boolean}
+     */
+    set(name, value, receiver, throwOnError, callerRealm) {
+      setCalls += 1;
+      assertLinked('put', form === 'assignment' ? 140 : 70);
+      inspectPut.callFunction(undefined, [], callerRealm);
+      overflow.callFunction(undefined, [], callerRealm);
+      return super.set(name, value, receiver, throwOnError, callerRealm);
+    }
+  }
+
+  const foreignBase = new InspectingSetObject(
+    realmB.intrinsics.objectPrototype,
+  );
+
+  defineGlobal(realmC, 'inspectKey', inspectKey);
+  evaluateScript(
+    realmC,
+    `
+      var foreignKey = {};
+      foreignKey[Symbol.toPrimitive] = function () {
+        return inspectKey();
+      };
+    `,
+  );
+  defineGlobal(realmA, 'foreignBase', foreignBase);
+  defineGlobal(realmA, 'foreignKey', realmC.globalObject.get('foreignKey'));
+
+  const base = superTarget ? 'super' : 'foreignBase';
+  const target = `${base}[foreignKey]`;
+  const operation = {
+    assignment: `${target} = yield "pause";`,
+    'computed-key': `${base}[yield "pause"] = 41;`,
+    destructuring: `[${target} = yield "pause"] = [undefined];`,
+  }[form];
+  const body = `
+    try {
+      ${operation}
+      return "not thrown";
+    } catch (error) {
+      return error;
+    }
+  `;
+
+  if (superTarget) {
+    evaluateScript(
+      realmA,
+      `
+        var cachedTargetHolder = {
+          *method() {
+            ${body}
+          }
+        };
+        var cachedTargetIterator = cachedTargetHolder.method();
+      `,
+    );
+    const holder = /** @type {EngineObject} */ (
+      realmA.globalObject.get('cachedTargetHolder')
+    );
+    assertSame(holder.setPrototypeOf(foreignBase), true);
+  } else {
+    evaluateScript(
+      realmA,
+      `
+        function* cachedTargetGenerator() {
+          ${body}
+        }
+        var cachedTargetIterator = cachedTargetGenerator();
+      `,
+    );
+  }
+
+  const first = evaluateScript(realmA, 'cachedTargetIterator.next().value;');
+
+  assertSame(first.type, 'normal');
+  assertSame(first.value, 'pause');
+  assertSame(keyCoercions, form === 'assignment' ? 1 : 0);
+  assertSame(setCalls, 0);
+  assertGeneratorAccountingCleared(realms);
+
+  const second = evaluateScript(
+    realmA,
+    `cachedTargetIterator.next(${form === 'computed-key' ? 'foreignKey' : '41'}).value;`,
+  );
+
+  assertRealmRangeError(second, realms);
+  assertSame(
+    /** @type {EngineObject} */ (second.value).getPrototype(),
+    realmB.intrinsics.rangeErrorPrototype,
+  );
+  assertSame(keyCoercions, 1);
+  assertSame(setCalls, 1);
+  assertGeneratorAccountingCleared(realms);
+
+  for (let index = 0; index < realms.length; index += 1) {
+    assertFiniteGeneratorResume(
+      realms[index],
+      `cached-${form}-${superTarget ? 'super' : 'ordinary'}-${index}`,
+    );
+  }
   assertGeneratorAccountingCleared(realms);
 }
 
@@ -831,6 +998,84 @@ const tests = [
       );
       assertSame(realmA.stackGuard.depth, 0);
       assertSame(realmB.stackGuard.depth, 0);
+    },
+  },
+  {
+    name: 'deep ordinary cross-Agent calls seed the generator host chain',
+    run() {
+      const realms = [
+        createRealm(),
+        createRealm(),
+        createRealm(),
+        createRealm(),
+      ];
+
+      for (const realm of realms) {
+        evaluateScript(
+          realm,
+          `
+            function callRing(depth) {
+              return depth > 0
+                ? foreignCallRing(depth - 1)
+                : recursiveGenerator().next();
+            }
+            function finiteCallRing(depth) {
+              return depth > 0
+                ? foreignFiniteCallRing(depth - 1)
+                : "done";
+            }
+            function* recursiveGenerator() {
+              yield* foreignRecursiveGenerator();
+            }
+          `,
+        );
+      }
+
+      for (let index = 0; index < realms.length; index += 1) {
+        const nextRealm = realms[(index + 1) % realms.length];
+
+        defineGlobal(
+          realms[index],
+          'foreignCallRing',
+          nextRealm.globalObject.get('callRing'),
+        );
+        defineGlobal(
+          realms[index],
+          'foreignFiniteCallRing',
+          nextRealm.globalObject.get('finiteCallRing'),
+        );
+        defineGlobal(
+          realms[index],
+          'foreignRecursiveGenerator',
+          nextRealm.globalObject.get('recursiveGenerator'),
+        );
+      }
+
+      assertSame(
+        evaluateScript(realms[0], 'finiteCallRing(100);').value,
+        'done',
+      );
+      assertGeneratorAccountingCleared(realms);
+
+      const completion = evaluateScript(
+        realms[0],
+        `
+          try {
+            callRing(375);
+            "not thrown";
+          } catch (error) {
+            error;
+          }
+        `,
+      );
+
+      assertRealmRangeError(completion, realms);
+      assertGeneratorAccountingCleared(realms);
+
+      for (let index = 0; index < realms.length; index += 1) {
+        assertFiniteGeneratorResume(realms[index], `ordinary-ring-${index}`);
+      }
+      assertGeneratorAccountingCleared(realms);
     },
   },
   {
@@ -1643,6 +1888,27 @@ const tests = [
         42,
       );
       assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'cached computed assignment targets rejoin before PutValue',
+    run() {
+      assertCachedComputedTargetRelinked('assignment', false);
+      assertCachedComputedTargetRelinked('assignment', true);
+    },
+  },
+  {
+    name: 'suspended computed keys rejoin their cached assignment bases',
+    run() {
+      assertCachedComputedTargetRelinked('computed-key', false);
+      assertCachedComputedTargetRelinked('computed-key', true);
+    },
+  },
+  {
+    name: 'cached computed destructuring targets rejoin before ToPropertyKey',
+    run() {
+      assertCachedComputedTargetRelinked('destructuring', false);
+      assertCachedComputedTargetRelinked('destructuring', true);
     },
   },
   {

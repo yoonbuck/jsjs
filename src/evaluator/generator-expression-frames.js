@@ -1354,6 +1354,10 @@ function finishMemberReference(execution, frame) {
   const result = captureGeneratorOperation(execution.realm, () => {
     if (frame.node.object.type === 'Super') {
       const superBase = getSuperBase(frame.context.functionEnvironment);
+
+      linkValueToGeneratorHostChain(execution.realm, superBase);
+      linkValueToGeneratorHostChain(execution.realm, frame.thisValue);
+      linkValueToGeneratorHostChain(execution.realm, frame.property);
       return new Reference(
         new SuperReferenceBase(superBase, frame.thisValue),
         propertyNameFromValue(
@@ -1366,6 +1370,8 @@ function finishMemberReference(execution, frame) {
       );
     }
 
+    linkValueToGeneratorHostChain(execution.realm, frame.base);
+    linkValueToGeneratorHostChain(execution.realm, frame.property);
     checkObjectCoercible(frame.base);
     return new Reference(
       toObjectBase(frame.context.realm, frame.base),

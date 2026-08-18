@@ -48,11 +48,12 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
  * Counts the engine frames one realm currently has on the host stack and turns
  * the moment the count would exceed `maxDepth` into a guest-visible error.
  * During a synchronous generator resume, the first Agent also owns a temporary
- * complete host-chain count: every guarded frame entered until the outermost
- * resume unwinds charges that count, including frames in another Realm or Agent.
- * A merged chain retains the smallest `maxDepth` observed from its participating
- * Realms, so adding a Realm can only tighten the complete host-chain budget;
- * each Realm's ordinary evaluator count and configured limit remain unchanged.
+ * complete host-chain count. Frames that were already active on a participating
+ * synchronous Agent call path are adopted when the chain begins; every guarded
+ * frame entered afterward charges it normally. A merged chain retains the
+ * smallest `maxDepth` observed from its participating Realms, so adding a Realm
+ * can only tighten the complete host-chain budget; each Realm's ordinary
+ * evaluator count and configured limit remain unchanged.
  *
  * Three kinds of work enter the guard, because all three recurse on the host
  * stack proportionally to something guest source controls:
@@ -131,6 +132,9 @@ export class StackGuard {
       this.agent?.enterGeneratorHostFrame(this.maxDepth) ?? null;
 
     this.depth += 1;
+    if (this.depth === 1) {
+      this.agent?.registerActiveStackGuard(this);
+    }
 
     if (chargedGeneratorHostChain !== null) {
       this._generatorHostChainFrames.push(chargedGeneratorHostChain);
@@ -142,17 +146,53 @@ export class StackGuard {
    * @returns {void}
    */
   exit() {
+    if (this.depth <= 0) {
+      throw new TypeError('StackGuard depth underflow');
+    }
+
     this.depth -= 1;
 
-    if (this.generatorHostChainDepth > 0) {
-      const chargedGeneratorHostChain = this._generatorHostChainFrames.pop();
+    try {
+      if (this.generatorHostChainDepth > 0) {
+        const chargedGeneratorHostChain = this._generatorHostChainFrames.pop();
 
-      if (chargedGeneratorHostChain === undefined) {
-        throw new TypeError('Generator host-chain frame stack is empty');
+        if (chargedGeneratorHostChain === undefined) {
+          throw new TypeError('Generator host-chain frame stack is empty');
+        }
+
+        this.generatorHostChainDepth -= 1;
+        this.agent?.exitGeneratorHostFrame(chargedGeneratorHostChain);
       }
+    } finally {
+      if (this.depth === 0) {
+        this.agent?.unregisterActiveStackGuard(this);
+      }
+    }
+  }
 
-      this.generatorHostChainDepth -= 1;
-      this.agent?.exitGeneratorHostFrame(chargedGeneratorHostChain);
+  /**
+   * Charges frames that entered before a generator host chain existed. Tokens
+   * are appended in stack order so the existing `exit` path releases each
+   * adopted frame exactly once.
+   *
+   * @param {import('./agent.js').GeneratorHostChain} chain
+   * @returns {void}
+   */
+  adoptGeneratorHostChain(chain) {
+    const unchargedDepth = this.depth - this.generatorHostChainDepth;
+
+    if (unchargedDepth < 0) {
+      throw new TypeError(
+        'Generator host-chain depth exceeds StackGuard depth',
+      );
+    }
+
+    chain.maxDepth = Math.min(chain.maxDepth, this.maxDepth);
+    chain.depth += unchargedDepth;
+
+    for (let index = 0; index < unchargedDepth; index += 1) {
+      this._generatorHostChainFrames.push(chain);
+      this.generatorHostChainDepth += 1;
     }
   }
 }

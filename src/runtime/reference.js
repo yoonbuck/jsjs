@@ -313,6 +313,7 @@ export function putValue(reference, value, callerRealm) {
   }
 
   if (isPropertyReferenceBase(reference.base)) {
+    linkValueToGeneratorHostChain(callerRealm, reference.base);
     reference.base.setReferencedValue(
       reference.referencedName,
       value,

@@ -1,10 +1,9 @@
-import { callAccessor } from './object.js';
+import { EngineObject, callAccessor } from './object.js';
 import { isDataDescriptor } from './descriptors.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
- * @typedef {import('./object.js').EngineObject} EngineObject
  */
 
 /**
@@ -78,6 +77,8 @@ export class SuperReferenceBase {
       );
     }
 
+    linkSuperTargetToGeneratorHostChain(callerRealm, superBase);
+    linkSuperTargetToGeneratorHostChain(callerRealm, this.receiver);
     superBase.set(name, value, this.receiver, strict, callerRealm);
   }
 
@@ -90,5 +91,20 @@ export class SuperReferenceBase {
       'ReferenceError',
       'Unsupported reference to a super property',
     );
+  }
+}
+
+/**
+ * @param {import('./realm.js').Realm | undefined} callerRealm
+ * @param {unknown} value
+ * @returns {void}
+ */
+function linkSuperTargetToGeneratorHostChain(callerRealm, value) {
+  if (
+    callerRealm !== undefined &&
+    value instanceof EngineObject &&
+    value.agent !== null
+  ) {
+    callerRealm.agent.linkGeneratorHostChain(value.agent);
   }
 }

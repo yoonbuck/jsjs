@@ -1103,6 +1103,8 @@ function evaluateMemberPropertyValue(node, context) {
  * @returns {Reference}
  */
 function createOrdinaryMemberReference(baseValue, propertyValue, context) {
+  linkValueToGeneratorHostChain(context.realm, baseValue);
+  linkValueToGeneratorHostChain(context.realm, propertyValue);
   checkObjectCoercible(baseValue);
 
   return new Reference(
@@ -1126,6 +1128,10 @@ function createSuperMemberReference(
   propertyValue,
   context,
 ) {
+  linkValueToGeneratorHostChain(context.realm, superBase);
+  linkValueToGeneratorHostChain(context.realm, thisValue);
+  linkValueToGeneratorHostChain(context.realm, propertyValue);
+
   return new Reference(
     new SuperReferenceBase(superBase, thisValue),
     toPropertyKey(propertyValue),
