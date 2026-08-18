@@ -376,6 +376,307 @@ export default [
     },
   },
   {
+    name: 'cross-Agent reactions run on the handler Agent and settle source-Agent children',
+    run: () => {
+      /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
+      const sourceCheckpoints = [];
+      /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
+      const handlerCheckpoints = [];
+      /** @type {Array<[unknown, 'reject' | 'handle']>} */
+      const rejectionEvents = [];
+      const sourceAgent = createAgent({
+        jobHost: {
+          scheduleMicrotask(checkpoint) {
+            sourceCheckpoints.push(checkpoint);
+          },
+          promiseRejectionTracker(promise, operation) {
+            rejectionEvents.push([promise, operation]);
+          },
+        },
+      });
+      const handlerAgent = createAgent({
+        jobHost: {
+          scheduleMicrotask(checkpoint) {
+            handlerCheckpoints.push(checkpoint);
+          },
+        },
+      });
+      const sourceRealm = createRealm({ agent: sourceAgent });
+      const handlerRealm = createRealm({ agent: handlerAgent });
+      const fulfilled = promiseObject(
+        evaluateScript(sourceRealm, 'Promise.resolve("fulfilled")').value,
+      );
+      const pending = createPendingPromise(sourceRealm, 'crossAgentPending');
+      const rejected = promiseObject(
+        evaluateScript(sourceRealm, 'Promise.reject("rejected")').value,
+      );
+      const then =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            sourceRealm.intrinsics.promisePrototype
+          ).get('then')
+        );
+      const allocated = new EngineObject(
+        handlerRealm.intrinsics.objectPrototype,
+      );
+      const hostError = new Error('cross-Agent handler host defect');
+      /** @type {Array<import('../src/runtime/realm.js').Realm | null>} */
+      const runningRealms = [];
+      const normalHandler = handlerRealm.createNativeFunction({
+        name: 'normalHandler',
+        length: 1,
+        call() {
+          runningRealms.push(handlerAgent.currentJobRealm);
+          return allocated;
+        },
+      });
+      const pendingHandler = handlerRealm.createNativeFunction({
+        name: 'pendingHandler',
+        length: 1,
+        call(_thisValue, args) {
+          runningRealms.push(handlerAgent.currentJobRealm);
+          return `${String(args[0])}-handled`;
+        },
+      });
+      const rejectedHandler = handlerRealm.createNativeFunction({
+        name: 'rejectedHandler',
+        length: 1,
+        call(_thisValue, args) {
+          runningRealms.push(handlerAgent.currentJobRealm);
+          return `${String(args[0])}-recovered`;
+        },
+      });
+      const abruptHandler = handlerRealm.createNativeFunction({
+        name: 'abruptHandler',
+        length: 1,
+        call() {
+          runningRealms.push(handlerAgent.currentJobRealm);
+          throw new GuestErrorSignal('TypeError', 'cross-Agent handler abrupt');
+        },
+      });
+      const hostFailureHandler = handlerRealm.createNativeFunction({
+        name: 'hostFailureHandler',
+        length: 1,
+        call() {
+          runningRealms.push(handlerAgent.currentJobRealm);
+          throw hostError;
+        },
+      });
+
+      const normalChild = promiseObject(
+        then.callFunction(fulfilled, [normalHandler], sourceRealm),
+      );
+      const abruptChild = promiseObject(
+        then.callFunction(fulfilled, [abruptHandler], sourceRealm),
+      );
+      const hostFailureChild = promiseObject(
+        then.callFunction(fulfilled, [hostFailureHandler], sourceRealm),
+      );
+      const pendingChild = promiseObject(
+        then.callFunction(pending.promise, [pendingHandler], sourceRealm),
+      );
+      const rejectedChild = promiseObject(
+        then.callFunction(rejected, [undefined, rejectedHandler], sourceRealm),
+      );
+
+      pending.resolve.callFunction(undefined, ['pending'], sourceRealm);
+      assertSame(sourceCheckpoints.length, 0);
+      assertSame(handlerCheckpoints.length, 1);
+      assertSame(sourceAgent.checkpointState, 'idle');
+      assertSame(handlerAgent.checkpointState, 'scheduled');
+      const report = handlerCheckpoints[0]();
+
+      assertSame(report.processed, 5);
+      assertSame(report.failures.length, 1);
+      assertSame(report.failures[0].job?.kind, 'promise-reaction');
+      assertSame(report.failures[0].error, hostError);
+      assertSame(
+        runningRealms.every((realm) => realm === handlerRealm),
+        true,
+      );
+      assertSame(normalChild.promiseState, 'fulfilled');
+      assertSame(normalChild.promiseResult, allocated);
+      assertSame(pendingChild.promiseState, 'fulfilled');
+      assertSame(pendingChild.promiseResult, 'pending-handled');
+      assertSame(rejectedChild.promiseState, 'fulfilled');
+      assertSame(rejectedChild.promiseResult, 'rejected-recovered');
+      assertSame(abruptChild.promiseState, 'rejected');
+      assertSame(
+        /** @type {EngineObject} */ (abruptChild.promiseResult).getPrototype(),
+        handlerRealm.intrinsics.typeErrorPrototype,
+      );
+      assertSame(hostFailureChild.promiseState, 'pending');
+      assertSame(sourceAgent.takeJobFailures().length, 0);
+      const durableFailures = handlerAgent.takeJobFailures();
+      assertSame(durableFailures.length, 1);
+      assertSame(durableFailures[0].category, 'job');
+      assertSame(durableFailures[0].error, hostError);
+      assertSame(rejectionEvents.length, 3);
+      assertSame(rejectionEvents[0][0], rejected);
+      assertSame(rejectionEvents[0][1], 'reject');
+      assertSame(rejectionEvents[1][0], rejected);
+      assertSame(rejectionEvents[1][1], 'handle');
+      assertSame(rejectionEvents[2][0], abruptChild);
+      assertSame(rejectionEvents[2][1], 'reject');
+
+      let observedReason;
+      const localRejectHandler = sourceRealm.createNativeFunction({
+        name: 'localRejectHandler',
+        length: 1,
+        call(_thisValue, args) {
+          observedReason = args[0];
+          return 'locally recovered';
+        },
+      });
+      const recoveryChild = promiseObject(
+        then.callFunction(
+          abruptChild,
+          [undefined, localRejectHandler],
+          sourceRealm,
+        ),
+      );
+
+      assertSame(sourceCheckpoints.length, 1);
+      assertSame(handlerCheckpoints.length, 1);
+      assertSame(rejectionEvents.length, 4);
+      assertSame(rejectionEvents[3][0], abruptChild);
+      assertSame(rejectionEvents[3][1], 'handle');
+      assertSame(sourceCheckpoints[0]().failures.length, 0);
+      assertSame(observedReason, abruptChild.promiseResult);
+      assertSame(recoveryChild.promiseState, 'fulfilled');
+      assertSame(recoveryChild.promiseResult, 'locally recovered');
+    },
+  },
+  {
+    name: 'cross-Agent thenable jobs run on the then Agent without losing settlement',
+    run: () => {
+      /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
+      const sourceCheckpoints = [];
+      /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
+      const thenCheckpoints = [];
+      /** @type {Array<[unknown, 'reject' | 'handle']>} */
+      const rejectionEvents = [];
+      const sourceAgent = createAgent({
+        jobHost: {
+          scheduleMicrotask(checkpoint) {
+            sourceCheckpoints.push(checkpoint);
+          },
+          promiseRejectionTracker(promise, operation) {
+            rejectionEvents.push([promise, operation]);
+          },
+        },
+      });
+      const thenAgent = createAgent({
+        jobHost: {
+          scheduleMicrotask(checkpoint) {
+            thenCheckpoints.push(checkpoint);
+          },
+        },
+      });
+      const sourceRealm = createRealm({ agent: sourceAgent });
+      const thenRealm = createRealm({ agent: thenAgent });
+      const fulfilled = createPendingPromise(sourceRealm, 'thenableFulfilled');
+      const rejected = createPendingPromise(sourceRealm, 'thenableRejected');
+      const failed = createPendingPromise(sourceRealm, 'thenableFailed');
+      const allocation = new EngineObject(thenRealm.intrinsics.objectPrototype);
+      const hostError = new Error('cross-Agent thenable host defect');
+      /** @type {Array<import('../src/runtime/realm.js').Realm | null>} */
+      const runningRealms = [];
+      const createThenable = (
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ then,
+      ) => {
+        const thenable = new EngineObject(thenRealm.intrinsics.objectPrototype);
+        thenable.defineOwnProperty('then', {
+          value: then,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        return thenable;
+      };
+      const fulfillingThenable = createThenable(
+        thenRealm.createNativeFunction({
+          name: 'then',
+          length: 2,
+          call(_thisValue, args) {
+            runningRealms.push(thenAgent.currentJobRealm);
+            return /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+              args[0]
+            ).callFunction(undefined, [allocation], thenRealm);
+          },
+        }),
+      );
+      const rejectingThenable = createThenable(
+        thenRealm.createNativeFunction({
+          name: 'then',
+          length: 2,
+          call() {
+            runningRealms.push(thenAgent.currentJobRealm);
+            throw new GuestErrorSignal(
+              'TypeError',
+              'cross-Agent thenable abrupt',
+            );
+          },
+        }),
+      );
+      const failingThenable = createThenable(
+        thenRealm.createNativeFunction({
+          name: 'then',
+          length: 2,
+          call() {
+            runningRealms.push(thenAgent.currentJobRealm);
+            throw hostError;
+          },
+        }),
+      );
+
+      fulfilled.resolve.callFunction(
+        undefined,
+        [fulfillingThenable],
+        sourceRealm,
+      );
+      rejected.resolve.callFunction(
+        undefined,
+        [rejectingThenable],
+        sourceRealm,
+      );
+      failed.resolve.callFunction(undefined, [failingThenable], sourceRealm);
+
+      assertSame(sourceCheckpoints.length, 0);
+      assertSame(thenCheckpoints.length, 1);
+      assertSame(sourceAgent.checkpointState, 'idle');
+      assertSame(thenAgent.checkpointState, 'scheduled');
+      const report = thenCheckpoints[0]();
+
+      assertSame(report.processed, 3);
+      assertSame(report.failures.length, 1);
+      assertSame(report.failures[0].job?.kind, 'promise-resolve-thenable');
+      assertSame(report.failures[0].error, hostError);
+      assertSame(
+        runningRealms.every((realm) => realm === thenRealm),
+        true,
+      );
+      assertSame(fulfilled.promise.promiseState, 'fulfilled');
+      assertSame(fulfilled.promise.promiseResult, allocation);
+      assertSame(rejected.promise.promiseState, 'rejected');
+      assertSame(
+        /** @type {EngineObject} */ (
+          rejected.promise.promiseResult
+        ).getPrototype(),
+        thenRealm.intrinsics.typeErrorPrototype,
+      );
+      assertSame(failed.promise.promiseState, 'pending');
+      assertSame(sourceAgent.takeJobFailures().length, 0);
+      const durableFailures = thenAgent.takeJobFailures();
+      assertSame(durableFailures.length, 1);
+      assertSame(durableFailures[0].category, 'job');
+      assertSame(durableFailures[0].error, hostError);
+      assertSame(rejectionEvents.length, 1);
+      assertSame(rejectionEvents[0][0], rejected.promise);
+      assertSame(rejectionEvents[0][1], 'reject');
+    },
+  },
+  {
     name: 'reaction jobs use null, handler, and fallback lookup Realms',
     run: () => {
       const agent = createAgent();

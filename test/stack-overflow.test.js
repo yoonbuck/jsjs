@@ -284,6 +284,247 @@ function assertGeneratorWrapperRecursionContained(wrapper) {
 }
 
 /**
+ * @param {boolean} shareAgent
+ * @returns {void}
+ */
+function assertInvalidForeignGeneratorReceiversDoNotActivate(shareAgent) {
+  const sharedAgent = shareAgent ? createAgent() : undefined;
+  const callerRealm = createRealm({
+    ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+    maxStackDepth: 300,
+  });
+  const methodRealm = createRealm({
+    ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+    maxStackDepth: 40,
+  });
+  const realms = [callerRealm, methodRealm];
+  const agents = [...new Set(realms.map((realm) => realm.agent))];
+  let activations = 0;
+
+  for (const agent of agents) {
+    const enterReference = agent.enterGeneratorHostChainReference;
+    agent.enterGeneratorHostChainReference = (maxDepth) => {
+      activations += 1;
+      return enterReference.call(agent, maxDepth);
+    };
+  }
+
+  evaluateScript(
+    callerRealm,
+    `
+      function callInvalidGeneratorMethod(depth) {
+        if (depth > 0) {
+          return callInvalidGeneratorMethod(depth - 1);
+        }
+        try {
+          foreignGeneratorMethod.call({});
+          return "not thrown";
+        } catch (error) {
+          return error;
+        }
+      }
+    `,
+  );
+
+  for (const method of ['next', 'return', 'throw']) {
+    defineGlobal(
+      callerRealm,
+      'foreignGeneratorMethod',
+      evaluateScript(methodRealm, `(function* () {})().${method}`).value,
+    );
+    const completion = evaluateScript(
+      callerRealm,
+      'callInvalidGeneratorMethod(10)',
+    );
+    const error = /** @type {EngineObject} */ (completion.value);
+
+    assertSame(completion.type, 'normal');
+    assertSame(error instanceof EngineObject, true);
+    assertSame(error.get('name'), 'TypeError');
+    assertSame(
+      error.getPrototype(),
+      methodRealm.intrinsics.typeErrorPrototype,
+      `${method} must validate its receiver before activating a generator chain`,
+    );
+    assertSame(
+      activations,
+      0,
+      `${method} on an invalid receiver must not create a generator-chain reference`,
+    );
+    assertGeneratorAccountingCleared(realms);
+  }
+}
+
+/**
+ * @param {'same-realm' | 'shared-agent' | 'different-agents'} topology
+ * @param {boolean} abrupt
+ * @returns {void}
+ */
+function assertGeneratorChainDetachesBetweenResumes(topology, abrupt) {
+  const sharedAgent = topology === 'shared-agent' ? createAgent() : undefined;
+  const callerRealm = createRealm({
+    ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+    maxStackDepth: 400,
+  });
+  const ownerRealm =
+    topology === 'same-realm'
+      ? callerRealm
+      : createRealm({
+          ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+          maxStackDepth: 130,
+        });
+  const realms = [...new Set([callerRealm, ownerRealm])];
+  const expectedMaxDepth = topology === 'same-realm' ? 400 : 130;
+  /** @type {any[]} */
+  const activeResumeRoots = [];
+  /** @type {Array<null | {
+   *   linked: boolean,
+   *   resumes: number,
+   *   references: number,
+   *   depth: number,
+   *   maxDepth: number,
+   * }>} */
+  const postResumeSnapshots = [];
+  const inspectDuringResume = ownerRealm.createNativeFunction({
+    name: 'inspectDuringResume',
+    length: 0,
+    call() {
+      const roots = realms.map((realm) => generatorHostChainRoot(realm.agent));
+
+      if (
+        roots[0] === null ||
+        roots.some((root) => root !== roots[0]) ||
+        roots[0].maxDepth !== expectedMaxDepth
+      ) {
+        throw new Error(
+          `${topology} resume did not re-adopt every participant`,
+        );
+      }
+
+      activeResumeRoots.push(roots[0]);
+    },
+  });
+  const inspectAfterResume = callerRealm.createNativeFunction({
+    name: 'inspectAfterResume',
+    length: 0,
+    call() {
+      const roots = realms.map((realm) => generatorHostChainRoot(realm.agent));
+      const root = roots.find((candidate) => candidate !== null) ?? null;
+
+      postResumeSnapshots.push(
+        root === null
+          ? null
+          : {
+              linked: roots.every((candidate) => candidate === root),
+              resumes: root.resumes,
+              references: root.references,
+              depth: root.depth,
+              maxDepth: root.maxDepth,
+            },
+      );
+    },
+  });
+
+  defineGlobal(ownerRealm, 'inspectDuringResume', inspectDuringResume);
+  evaluateScript(
+    ownerRealm,
+    `
+      var lifecycleIterator = (function* () {
+        inspectDuringResume();
+        yield "yielded";
+        inspectDuringResume();
+        ${abrupt ? 'throw new Error("abrupt");' : 'return "complete";'}
+      }());
+    `,
+  );
+  defineGlobal(
+    callerRealm,
+    'lifecycleIterator',
+    ownerRealm.globalObject.get('lifecycleIterator'),
+  );
+  defineGlobal(callerRealm, 'inspectAfterResume', inspectAfterResume);
+
+  const completion = evaluateScript(
+    callerRealm,
+    `
+      function ordinaryAfterResume(depth) {
+        return depth > 0 ? ordinaryAfterResume(depth - 1) : "done";
+      }
+      function outerGeneratorCaller(depth) {
+        if (depth > 0) {
+          return outerGeneratorCaller(depth - 1);
+        }
+
+        var first = lifecycleIterator.next();
+        inspectAfterResume();
+        var afterYield;
+        try {
+          afterYield = ordinaryAfterResume(30);
+        } catch (error) {
+          afterYield = error.name;
+        }
+
+        var terminal;
+        try {
+          var second = lifecycleIterator.next();
+          terminal = second.value + "|" + second.done;
+        } catch (error) {
+          terminal = error.message;
+        }
+        inspectAfterResume();
+
+        var afterTerminal;
+        try {
+          afterTerminal = ordinaryAfterResume(30);
+        } catch (error) {
+          afterTerminal = error.name;
+        }
+
+        return [
+          first.value,
+          first.done,
+          afterYield,
+          terminal,
+          afterTerminal
+        ].join("|");
+      }
+      outerGeneratorCaller(7);
+    `,
+  );
+
+  for (const snapshot of postResumeSnapshots) {
+    if (snapshot !== null) {
+      assertSame(snapshot.linked, true);
+      assertSame(snapshot.resumes, 0);
+      assertSame(snapshot.references, 0);
+      assertSame(snapshot.depth > 0, true);
+      assertSame(snapshot.maxDepth, expectedMaxDepth);
+    }
+  }
+
+  assertSame(completion.type, 'normal');
+  assertSame(
+    completion.value,
+    abrupt
+      ? 'yielded|false|done|abrupt|done'
+      : 'yielded|false|done|complete|true|done',
+    `${topology} ${abrupt ? 'abrupt' : 'complete'} resume must release its temporary chain before ordinary caller work`,
+  );
+  assertSame(
+    JSON.stringify(postResumeSnapshots),
+    '[null,null]',
+    `${topology} generator chains must detach while outer frames remain active`,
+  );
+  assertSame(activeResumeRoots.length, 2);
+  assertSame(
+    activeResumeRoots[0] === activeResumeRoots[1],
+    false,
+    `${topology} later resume must re-adopt outer frames into a fresh chain`,
+  );
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
  * @param {boolean} borrowed
  * @param {boolean} [throughCall=false]
  * @returns {void}
@@ -1200,6 +1441,37 @@ const tests = [
     name: 'bound ordinary cross-Agent recursion stays outside generator budgets',
     run() {
       assertOrdinaryForeignRecursionRemainsUnbudgeted('bind');
+    },
+  },
+  {
+    name: 'deep cross-Realm invalid generator receivers validate before chain activation',
+    run() {
+      assertInvalidForeignGeneratorReceiversDoNotActivate(true);
+    },
+  },
+  {
+    name: 'deep cross-Agent invalid generator receivers validate before chain activation',
+    run() {
+      assertInvalidForeignGeneratorReceiversDoNotActivate(false);
+    },
+  },
+  {
+    name: 'generator chains detach and re-adopt inside one outer caller',
+    run() {
+      for (const topology of [
+        'different-agents',
+        'shared-agent',
+        'same-realm',
+      ]) {
+        for (const abrupt of [false, true]) {
+          assertGeneratorChainDetachesBetweenResumes(
+            /** @type {'same-realm' | 'shared-agent' | 'different-agents'} */ (
+              topology
+            ),
+            abrupt,
+          );
+        }
+      }
     },
   },
   {

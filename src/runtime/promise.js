@@ -275,7 +275,8 @@ export function performPromiseThen(
     promise.promiseRejectReactions.push(rejectReaction);
     markPromiseHandled(promise);
   } else if (promise.promiseState === 'fulfilled') {
-    promise.realm.agent.enqueueJob(
+    enqueuePromiseJob(
+      promise.realm.agent,
       newPromiseReactionJob(
         fulfillReaction,
         promise.promiseResult,
@@ -437,7 +438,8 @@ export function createResolvingFunctions(promise, currentRealm) {
         return undefined;
       }
 
-      promise.realm.agent.enqueueJob(
+      enqueuePromiseJob(
+        promise.realm.agent,
         newPromiseResolveThenableJob(promise, resolution, then, currentRealm),
       );
       return undefined;
@@ -725,7 +727,8 @@ function triggerPromiseReactions(promise, reactions, argument, currentRealm) {
 
   for (const reaction of reactions) {
     try {
-      promise.realm.agent.enqueueJob(
+      enqueuePromiseJob(
+        promise.realm.agent,
         newPromiseReactionJob(reaction, argument, currentRealm),
       );
     } catch (error) {
@@ -757,6 +760,18 @@ function getReactionJobRealm(handler, currentRealm) {
   }
 
   return currentRealm;
+}
+
+/**
+ * A non-null Job Realm selects both the execution context and the Agent queue
+ * that owns it. Null-Realm jobs stay on the Promise's Agent.
+ *
+ * @param {import('./agent.js').Agent} promiseAgent
+ * @param {import('./jobs.js').JobRecord} job
+ * @returns {void}
+ */
+function enqueuePromiseJob(promiseAgent, job) {
+  (job.realm?.agent ?? promiseAgent).enqueueJob(job);
 }
 
 /**
@@ -853,7 +868,10 @@ function enqueueRejectedPromiseReaction(
       index += 1
     ) {
       try {
-        promise.realm.agent.enqueueJob(promise.promiseReactionJobs[index]);
+        enqueuePromiseJob(
+          promise.realm.agent,
+          promise.promiseReactionJobs[index],
+        );
       } catch (error) {
         if (!didThrow) {
           didThrow = true;

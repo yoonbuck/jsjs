@@ -25,7 +25,6 @@ import { toBoolean, toUint32 } from '../runtime/conversion.js';
  *   ) => EngineObject) | undefined,
  *   prototype?: EngineObject | undefined,
  *   retargetConstructionResult?: boolean,
- *   generatorResume?: boolean,
  * }} NativeFunctionOptions
  */
 
@@ -48,7 +47,6 @@ export class NativeFunction extends EngineObject {
       construct,
       prototype,
       retargetConstructionResult = true,
-      generatorResume = false,
     },
   ) {
     super(realm.intrinsics.functionPrototype, 'Function');
@@ -65,9 +63,6 @@ export class NativeFunction extends EngineObject {
     this._isConstructor = construct !== undefined;
     /** @type {boolean} */
     this._retargetConstructionResult = retargetConstructionResult;
-    /** @type {boolean} */
-    this._generatorResume = generatorResume;
-
     this.defineOwnProperty('length', {
       value: length,
       writable: false,
@@ -103,52 +98,28 @@ export class NativeFunction extends EngineObject {
     const callChain = methodAgent.enterSynchronousCallChain(callerRealm?.agent);
 
     try {
-      const hostChainReference = this._generatorResume
-        ? methodAgent.enterGeneratorHostChainReference(
-            Math.min(
-              guard.maxDepth,
-              callerRealm?.stackGuard.maxDepth ?? Number.POSITIVE_INFINITY,
-            ),
-          )
-        : null;
+      callerRealm?.agent.linkGeneratorHostChain(methodAgent);
+      const activeRealm = callerRealm ?? this.realm;
+
+      linkCallResult(activeRealm, thisValue);
+      for (const argument of args) {
+        linkCallResult(activeRealm, argument);
+      }
+
+      // Built-ins enter the realm's stack budget exactly like guest functions
+      // do, so a recursion that threads through `[].map`, a getter, or a
+      // coercion is measured by the host frames it really spends.
+      guard.enter();
 
       try {
-        callerRealm?.agent.linkGeneratorHostChain(methodAgent);
+        const result = runNativeBody(this.realm, () =>
+          this._call(thisValue, args, this, callerRealm),
+        );
 
-        if (
-          this._generatorResume &&
-          thisValue instanceof EngineObject &&
-          thisValue.agent !== null
-        ) {
-          methodAgent.linkGeneratorHostChain(thisValue.agent);
-        }
-
-        const activeRealm = callerRealm ?? this.realm;
-
-        linkCallResult(activeRealm, thisValue);
-        for (const argument of args) {
-          linkCallResult(activeRealm, argument);
-        }
-
-        // Built-ins enter the realm's stack budget exactly like guest functions
-        // do, so a recursion that threads through `[].map`, a getter, or a
-        // coercion is measured by the host frames it really spends.
-        guard.enter();
-
-        try {
-          const result = runNativeBody(this.realm, () =>
-            this._call(thisValue, args, this, callerRealm),
-          );
-
-          linkCallResult(callerRealm ?? this.realm, result);
-          return result;
-        } finally {
-          guard.exit();
-        }
+        linkCallResult(callerRealm ?? this.realm, result);
+        return result;
       } finally {
-        if (hostChainReference !== null) {
-          methodAgent.exitGeneratorHostChainReference(hostChainReference);
-        }
+        guard.exit();
       }
     } finally {
       methodAgent.exitSynchronousCallChain(callChain);

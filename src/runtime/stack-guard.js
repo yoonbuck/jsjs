@@ -195,4 +195,48 @@ export class StackGuard {
       this.generatorHostChainDepth += 1;
     }
   }
+
+  /**
+   * Releases every active frame token charged to a generator chain while
+   * leaving the ordinary Realm depth untouched.
+   *
+   * @param {import('./agent.js').GeneratorHostChain} chain
+   * @returns {number}
+   */
+  detachGeneratorHostChain(chain) {
+    const root = generatorHostChainRoot(chain);
+    const retainedFrames = [];
+    let detached = 0;
+
+    for (const frame of this._generatorHostChainFrames) {
+      if (generatorHostChainRoot(frame) === root) {
+        detached += 1;
+      } else {
+        retainedFrames.push(frame);
+      }
+    }
+
+    this._generatorHostChainFrames = retainedFrames;
+    this.generatorHostChainDepth -= detached;
+
+    if (this.generatorHostChainDepth < 0) {
+      throw new TypeError('Generator host-chain depth underflow');
+    }
+
+    return detached;
+  }
+}
+
+/**
+ * @param {import('./agent.js').GeneratorHostChain} chain
+ * @returns {import('./agent.js').GeneratorHostChain}
+ */
+function generatorHostChainRoot(chain) {
+  let root = chain;
+
+  while (root.parent !== null) {
+    root = root.parent;
+  }
+
+  return root;
 }

@@ -151,13 +151,13 @@ The Test262 feature manifest has executable probes for the supported ES2015
 syntax tags: arrows, classes, computed names, defaults, destructuring,
 rest parameters, spread, and templates. A small pinned suite in
 `test/ci/es2015-syntax-test262.test.js` covers their positive, negative, and
-classified-neighbor cases. The checkout-dependent
+classified-neighbor cases. The global Test262 feature manifest includes
+`generators`; exactly 11 approved generator roots enter broad selection, while
+Promise and static-module roots remain focused-only. The checkout-dependent
 `test/ci/es2015-generator-test262.test.js` separately runs focused generator
-coverage with an explicit feature allowlist, without broadening the global
-feature manifest or regenerated coverage artifacts.
-`test/ci/es2015-module-test262.test.js` similarly runs focused static-module
-coverage with its explicit `Symbol.toStringTag` allowlist. It does not add a
-bare module feature probe, broaden selection, or rewrite generated reports.
+coverage over those approved roots. The Promise and static-module suites retain
+their explicit focused allowlists; the module suite does not add a bare module
+feature probe.
 Conformance methodology, live coverage, and the detailed report are in
 [docs/conformance.md](docs/conformance.md).
 

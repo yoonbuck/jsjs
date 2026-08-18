@@ -54,8 +54,10 @@ import { GuestErrorSignal } from './completion.js';
  * keep their existing per-Realm budgets. If a generator starts before that path
  * unwinds, its host chain adopts every participant's already-active guarded
  * frames, then cross-Agent calls, iterator operations, and nested resumes keep
- * unioning the same record. Neither transient union retains a guest value, and
- * both clear when their synchronous calls, resumes, and guarded frames unwind.
+ * unioning the same record. When the final resume/reference ends, adopted frame
+ * tokens detach even if their ordinary calls remain active; a later resume can
+ * re-adopt them from the synchronous participant chain. Neither transient union
+ * retains a guest value.
  */
 export class Agent {
   /**
@@ -607,7 +609,23 @@ function attachAgentToGeneratorHostChain(agent, chain) {
  * @returns {void}
  */
 function releaseGeneratorHostChain(chain) {
-  if (chain.resumes !== 0 || chain.references !== 0 || chain.depth !== 0) {
+  if (chain.resumes !== 0 || chain.references !== 0) {
+    return;
+  }
+
+  for (const agent of chain.agents) {
+    for (const guard of agent._activeStackGuards) {
+      const detached = guard.detachGeneratorHostChain(chain);
+
+      if (detached > chain.depth) {
+        throw new TypeError('Generator host-chain depth underflow');
+      }
+
+      chain.depth -= detached;
+    }
+  }
+
+  if (chain.depth !== 0) {
     return;
   }
 

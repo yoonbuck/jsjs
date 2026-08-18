@@ -1636,11 +1636,11 @@ export default [
         'README must retain the async function, async generator, await, and dynamic-import exclusions',
       );
       assertSame(
-        /\bfocused generator coverage\b[^.]*\bwithout broadening the global feature manifest or regenerated coverage artifacts\b/iu.test(
+        /\bglobal Test262 feature manifest includes `generators`[^.]*\bexactly 11 approved generator roots enter broad selection\b[^.]*\bPromise and static-module roots remain focused-only\b/iu.test(
           normalizedReadme,
         ),
         true,
-        'README must keep focused generator coverage separate from broad feature-manifest and report integration',
+        'README must describe the exact generator broad-selection boundary while keeping Promise and module roots focused',
       );
 
       const documentedBoundaries = [
@@ -1653,10 +1653,6 @@ export default [
         [
           'async functions or generators are implemented',
           /\b(?:implements|supports)\b[^.]*\basync (?:functions?|generators?|iteration)\b/iu,
-        ],
-        [
-          'generators are integrated into the broad feature manifest or generated report',
-          /\b(?:generators?|generator coverage)\b[^.]*?(?<!not )(?<!without )\b(?:add(?:ed|s|ing)?|integrat(?:e|ed|es|ing)|broaden(?:ed|s|ing)?|regenerat(?:e|ed|es|ing))\b[^.]*\b(?:global feature manifest|broad (?:coverage )?report|generated coverage (?:report|artifacts?))\b|\b(?:global feature manifest|broad (?:coverage )?report|generated coverage (?:report|artifacts?))\b[^.]*?(?<!not )(?<!without )\b(?:includes?|integrates?|publishes?)\b[^.]*\bgenerators?\b/iu,
         ],
         [
           'generator work completes the final release',

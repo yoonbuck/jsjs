@@ -91,12 +91,15 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'next',
       length: 1,
-      generatorResume: true,
-      call(thisValue, args) {
+      call(thisValue, args, _functionObject, callerRealm) {
         const generator = requireGenerator(thisValue, 'next');
 
-        realm.agent.linkGeneratorHostChain(generator.realm.agent);
-        return generator.resume(createNormalCompletion(args[0]), realm);
+        return resumeGenerator(
+          generator,
+          createNormalCompletion(args[0]),
+          realm,
+          callerRealm,
+        );
       },
     }),
   );
@@ -106,12 +109,15 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'return',
       length: 1,
-      generatorResume: true,
-      call(thisValue, args) {
+      call(thisValue, args, _functionObject, callerRealm) {
         const generator = requireGenerator(thisValue, 'return');
 
-        realm.agent.linkGeneratorHostChain(generator.realm.agent);
-        return generator.resume(createReturnCompletion(args[0]), realm);
+        return resumeGenerator(
+          generator,
+          createReturnCompletion(args[0]),
+          realm,
+          callerRealm,
+        );
       },
     }),
   );
@@ -121,12 +127,15 @@ export function createGeneratorIntrinsics(realm) {
     realm.createNativeFunction({
       name: 'throw',
       length: 1,
-      generatorResume: true,
-      call(thisValue, args) {
+      call(thisValue, args, _functionObject, callerRealm) {
         const generator = requireGenerator(thisValue, 'throw');
 
-        realm.agent.linkGeneratorHostChain(generator.realm.agent);
-        return generator.resume(createThrowCompletion(args[0]), realm);
+        return resumeGenerator(
+          generator,
+          createThrowCompletion(args[0]),
+          realm,
+          callerRealm,
+        );
       },
     }),
   );
@@ -157,6 +166,30 @@ function requireGenerator(value, method) {
   }
 
   return value;
+}
+
+/**
+ * @param {GeneratorObject} generator
+ * @param {import('../runtime/generator-object.js').GeneratorResumeCompletion} completion
+ * @param {Realm} methodRealm
+ * @param {Realm | undefined} callerRealm
+ * @returns {EngineObject}
+ */
+function resumeGenerator(generator, completion, methodRealm, callerRealm) {
+  const methodAgent = methodRealm.agent;
+  const hostChainReference = methodAgent.enterGeneratorHostChainReference(
+    Math.min(
+      methodRealm.stackGuard.maxDepth,
+      callerRealm?.stackGuard.maxDepth ?? Number.POSITIVE_INFINITY,
+    ),
+  );
+
+  try {
+    methodAgent.linkGeneratorHostChain(generator.realm.agent);
+    return generator.resume(completion, methodRealm);
+  } finally {
+    methodAgent.exitGeneratorHostChainReference(hostChainReference);
+  }
 }
 
 /**
