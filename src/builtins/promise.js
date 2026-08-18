@@ -49,10 +49,12 @@ export function createPromiseIntrinsics(realm) {
         );
       }
 
-      const promise = new PromiseObject(
+      const allocation = promiseAllocationFromNewTarget(
+        newTarget,
         realm,
-        prototypeFromNewTarget(newTarget, promisePrototype),
+        promisePrototype,
       );
+      const promise = new PromiseObject(allocation.realm, allocation.prototype);
       const resolvingFunctions = createResolvingFunctions(promise, realm);
 
       try {
@@ -277,20 +279,26 @@ export function installPromiseConstructor(globalObject, intrinsics) {
 
 /**
  * @param {unknown} newTarget
+ * @param {Realm} defaultRealm
  * @param {EngineObject} defaultPrototype
- * @returns {EngineObject}
+ * @returns {{ realm: Realm, prototype: EngineObject }}
  */
-function prototypeFromNewTarget(newTarget, defaultPrototype) {
+function promiseAllocationFromNewTarget(
+  newTarget,
+  defaultRealm,
+  defaultPrototype,
+) {
   if (!(newTarget instanceof EngineObject)) {
-    return defaultPrototype;
+    return { realm: defaultRealm, prototype: defaultPrototype };
   }
 
-  const prototype = newTarget.get('prototype');
-  if (prototype instanceof EngineObject) {
-    return prototype;
-  }
+  const prototype = newTarget.get('prototype', defaultRealm);
   if (!isCallable(newTarget)) {
-    return defaultPrototype;
+    return {
+      realm: defaultRealm,
+      prototype:
+        prototype instanceof EngineObject ? prototype : defaultPrototype,
+    };
   }
 
   const realmCompletion = getFunctionRealm(newTarget);
@@ -304,9 +312,17 @@ function prototypeFromNewTarget(newTarget, defaultPrototype) {
     );
   }
 
-  return /** @type {EngineObject} */ (
-    realmCompletion.value.intrinsics.promisePrototype
-  );
+  const allocationRealm = realmCompletion.value;
+
+  return {
+    realm: allocationRealm,
+    prototype:
+      prototype instanceof EngineObject
+        ? prototype
+        : /** @type {EngineObject} */ (
+            allocationRealm.intrinsics.promisePrototype
+          ),
+  };
 }
 
 /**

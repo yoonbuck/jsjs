@@ -500,6 +500,196 @@ export default [
     },
   },
   {
+    name: 'cross-Agent Promise subclasses allocate, schedule, and track on the newTarget Agent',
+    run: () => {
+      /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
+      const subclassCheckpoints = [];
+      /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
+      const baseCheckpoints = [];
+      /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
+      const handlerCheckpoints = [];
+      /** @type {Array<[unknown, 'reject' | 'handle']>} */
+      const subclassRejectionEvents = [];
+      /** @type {Array<[unknown, 'reject' | 'handle']>} */
+      const baseRejectionEvents = [];
+      const subclassAgent = createAgent({
+        jobHost: {
+          scheduleMicrotask(checkpoint) {
+            subclassCheckpoints.push(checkpoint);
+          },
+          promiseRejectionTracker(promise, operation) {
+            subclassRejectionEvents.push([promise, operation]);
+          },
+        },
+      });
+      const baseAgent = createAgent({
+        jobHost: {
+          scheduleMicrotask(checkpoint) {
+            baseCheckpoints.push(checkpoint);
+          },
+          promiseRejectionTracker(promise, operation) {
+            baseRejectionEvents.push([promise, operation]);
+          },
+        },
+      });
+      const handlerAgent = createAgent({
+        jobHost: {
+          scheduleMicrotask(checkpoint) {
+            handlerCheckpoints.push(checkpoint);
+          },
+        },
+      });
+      const subclassRealm = createRealm({ agent: subclassAgent });
+      const baseRealm = createRealm({ agent: baseAgent });
+      const handlerRealm = createRealm({ agent: handlerAgent });
+      const foreignPromise = baseRealm.globalObject.get('Promise');
+      /** @type {Array<import('../src/runtime/realm.js').Realm | null>} */
+      const runningHandlerRealms = [];
+      const foreignFulfillHandler = handlerRealm.createNativeFunction({
+        name: 'foreignFulfillHandler',
+        length: 1,
+        call(_thisValue, args) {
+          runningHandlerRealms.push(handlerAgent.currentJobRealm);
+          return `${String(args[0])}-handled`;
+        },
+      });
+      const foreignRejectHandler = handlerRealm.createNativeFunction({
+        name: 'foreignRejectHandler',
+        length: 1,
+        call(_thisValue, args) {
+          runningHandlerRealms.push(handlerAgent.currentJobRealm);
+          return `${String(args[0])}-recovered`;
+        },
+      });
+
+      subclassRealm.globalObject.defineOwnProperty('ForeignPromise', {
+        value: foreignPromise,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      subclassRealm.globalObject.defineOwnProperty('foreignFulfillHandler', {
+        value: foreignFulfillHandler,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      subclassRealm.globalObject.defineOwnProperty('foreignRejectHandler', {
+        value: foreignRejectHandler,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertNormalValue(
+        evaluateScript(
+          subclassRealm,
+          [
+            'class Sub extends ForeignPromise {}',
+            'Object.defineProperty(Sub, Symbol.species, {',
+            '  value: Sub,',
+            '  writable: true,',
+            '  configurable: true',
+            '});',
+            'var executorCalls = 0;',
+            'var capturedResolve;',
+            'var capturedReject;',
+            'var fulfilled = new Sub(function (resolve, reject) {',
+            '  executorCalls += 1;',
+            '  capturedResolve = resolve;',
+            '  capturedReject = reject;',
+            '  resolve("value");',
+            '});',
+            'var rejected = new Sub(function (resolve, reject) {',
+            '  executorCalls += 1;',
+            '  reject("reason");',
+            '});',
+            'var identityChild = fulfilled.then();',
+            'var handlerChild = fulfilled.then(foreignFulfillHandler);',
+            'var rejectionChild = rejected.then(undefined, foreignRejectHandler);',
+            'executorCalls;',
+          ].join('\n'),
+        ),
+        2,
+      );
+
+      const sub = /** @type {EngineObject} */ (
+        evaluateScript(subclassRealm, 'Sub').value
+      );
+      const subPrototype = /** @type {EngineObject} */ (sub.get('prototype'));
+      const fulfilled = promiseObject(
+        subclassRealm.globalObject.get('fulfilled'),
+      );
+      const rejected = promiseObject(
+        subclassRealm.globalObject.get('rejected'),
+      );
+      const identityChild = promiseObject(
+        subclassRealm.globalObject.get('identityChild'),
+      );
+      const handlerChild = promiseObject(
+        subclassRealm.globalObject.get('handlerChild'),
+      );
+      const rejectionChild = promiseObject(
+        subclassRealm.globalObject.get('rejectionChild'),
+      );
+      const capturedResolve =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          subclassRealm.globalObject.get('capturedResolve')
+        );
+      const capturedReject =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          subclassRealm.globalObject.get('capturedReject')
+        );
+
+      for (const promise of [
+        fulfilled,
+        rejected,
+        identityChild,
+        handlerChild,
+        rejectionChild,
+      ]) {
+        assertSame(promise.realm, subclassRealm);
+        assertSame(promise.agent, subclassAgent);
+        assertSame(promise.getPrototype(), subPrototype);
+      }
+      assertSame(capturedResolve.getFunctionRealm().value, baseRealm);
+      assertSame(capturedReject.getFunctionRealm().value, baseRealm);
+      assertSame(baseCheckpoints.length, 0);
+      assertSame(subclassCheckpoints.length, 1);
+      assertSame(handlerCheckpoints.length, 1);
+      assertSame(baseRejectionEvents.length, 0);
+      assertSame(subclassRejectionEvents.length, 2);
+      assertSame(subclassRejectionEvents[0][0], rejected);
+      assertSame(subclassRejectionEvents[0][1], 'reject');
+      assertSame(subclassRejectionEvents[1][0], rejected);
+      assertSame(subclassRejectionEvents[1][1], 'handle');
+
+      const subclassReport = subclassCheckpoints[0]();
+
+      assertSame(subclassReport.processed, 1);
+      assertSame(subclassReport.failures.length, 0);
+      assertSame(identityChild.promiseState, 'fulfilled');
+      assertSame(identityChild.promiseResult, 'value');
+      assertSame(handlerChild.promiseState, 'pending');
+      assertSame(rejectionChild.promiseState, 'pending');
+
+      const handlerReport = handlerCheckpoints[0]();
+
+      assertSame(handlerReport.processed, 2);
+      assertSame(handlerReport.failures.length, 0);
+      assertSame(
+        runningHandlerRealms.every((realm) => realm === handlerRealm),
+        true,
+      );
+      assertSame(handlerChild.promiseState, 'fulfilled');
+      assertSame(handlerChild.promiseResult, 'value-handled');
+      assertSame(rejectionChild.promiseState, 'fulfilled');
+      assertSame(rejectionChild.promiseResult, 'reason-recovered');
+      assertSame(subclassAgent.checkpointState, 'idle');
+      assertSame(baseAgent.checkpointState, 'idle');
+      assertSame(handlerAgent.checkpointState, 'idle');
+    },
+  },
+  {
     name: 'cross-Agent reactions run on the handler Agent and settle source-Agent children',
     run: () => {
       /** @type {Array<() => import('../src/runtime/jobs.js').JobDrainReport>} */
