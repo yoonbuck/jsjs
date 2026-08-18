@@ -43,9 +43,13 @@ function isStringNumericWhitespace(unit) {
 
 /**
  * @param {string} value
+ * @param {(value: string, start: number, end: number) => string} [copyRange=codeUnitsBetween]
  * @returns {string}
  */
-function trimStringNumericWhitespace(value) {
+export function trimStringNumericWhitespace(
+  value,
+  copyRange = codeUnitsBetween,
+) {
   let start = 0;
 
   while (start < value.length && isStringNumericWhitespace(value[start])) {
@@ -58,7 +62,9 @@ function trimStringNumericWhitespace(value) {
     end -= 1;
   }
 
-  return codeUnitsBetween(value, start, end);
+  return start === 0 && end === value.length
+    ? value
+    : copyRange(value, start, end);
 }
 
 /**

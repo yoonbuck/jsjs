@@ -690,10 +690,27 @@ const tests = [
           'strings:677005',
           'json:18589934',
           'regexp:8900000',
+          'number-invalid-megabyte:1048576',
         ].join(','),
       );
       assertSame(Object.isFrozen(WORKLOADS), true);
       assertSame(Object.isFrozen(WORKLOADS[0]), true);
+    },
+  },
+  {
+    name: 'numeric conversion smoke covers a 1 MiB no-whitespace invalid string',
+    run() {
+      const workload = workloadsForProfile('smoke').find(
+        ({ name }) => name === 'number-invalid-megabyte',
+      );
+
+      assertSame(workload !== undefined, true);
+      assertSame(workload?.source.includes('text.length === 1048576'), true);
+      assertSame(workload?.source.includes('Number(text)'), true);
+      assertSame(
+        Function(`return ${workload?.source};`)(),
+        workload?.expectedChecksum,
+      );
     },
   },
   {
