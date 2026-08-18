@@ -286,6 +286,52 @@ export default [
     },
   },
   {
+    name: 'Promise internal Agent follows newTarget allocation despite a foreign prototype',
+    run: () => {
+      const baseRealm = createRealm();
+      const allocationRealm = createRealm();
+      const prototypeRealm = createRealm();
+      const promiseConstructor =
+        /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
+          baseRealm.globalObject.get('Promise')
+        );
+      const newTarget =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(allocationRealm, 'function Sub(executor) {} Sub;')
+            .value
+        );
+      const foreignPrototype = new EngineObject(
+        prototypeRealm.intrinsics.objectPrototype,
+      );
+      const executor = baseRealm.createNativeFunction({
+        name: 'executor',
+        length: 2,
+        call() {
+          return undefined;
+        },
+      });
+
+      newTarget.defineOwnProperty(
+        'prototype',
+        { value: foreignPrototype },
+        true,
+        allocationRealm,
+      );
+      const promise = assertPromiseObject(
+        promiseConstructor.constructFunction(
+          [executor],
+          newTarget,
+          allocationRealm,
+        ),
+      );
+
+      assertSame(promise.realm, allocationRealm);
+      assertSame(promise.agent, allocationRealm.agent);
+      assertSame(promise.getPrototype(), foreignPrototype);
+      assertSame(promise.agent === prototypeRealm.agent, false);
+    },
+  },
+  {
     name: 'newPromiseCapability accepts a conforming constructor result',
     run: () => {
       const realm = createRealm();

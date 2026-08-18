@@ -34,7 +34,7 @@ export class PromiseObject extends EngineObject {
    * @param {EngineObject | null} prototype
    */
   constructor(realm, prototype) {
-    super(prototype);
+    super(prototype, 'Object', realm.agent);
     this.realm = realm;
     /** @type {'pending' | 'fulfilled' | 'rejected'} */
     this.promiseState = 'pending';

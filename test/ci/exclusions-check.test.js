@@ -318,6 +318,24 @@ export default [
       assertSame(clean.staleExclusions.length, 0);
       assertSame(clean.staleApprovals.length, 0);
 
+      const mixedDiagnostic = evaluateExclusionGate(
+        [
+          {
+            path: 'test/approved.js',
+            category: 'runtime',
+            verdict: 'unverifiable',
+            message:
+              'non-strict: harness-error: known harness dependency; strict: engine-error: new infrastructure failure',
+          },
+        ],
+        approvals.slice(0, 1),
+      );
+
+      assertSame(mixedDiagnostic.exitCode, 1);
+      assertSame(mixedDiagnostic.approvedUnverifiable.length, 0);
+      assertSame(mixedDiagnostic.unapprovedUnverifiable.length, 1);
+      assertSame(mixedDiagnostic.staleApprovals.length, 1);
+
       const changedDiagnostic = evaluateExclusionGate(
         [
           {

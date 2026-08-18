@@ -2231,6 +2231,47 @@ const tests = [
     },
   },
   {
+    name: 'cross-Agent Date defaultValue charges the executing Realm before starting a generator',
+    run() {
+      const callerRealm = createRealm({ maxStackDepth: 80 });
+      const objectRealm = createRealm({ maxStackDepth: 5000 });
+      const methodRealm = createRealm({ maxStackDepth: 5000 });
+      const realms = [callerRealm, objectRealm, methodRealm];
+      const method = createDeepGeneratorStarter(methodRealm, 'dateValueOf');
+      const date = /** @type {EngineObject} */ (
+        evaluateScript(objectRealm, 'new Date(0)').value
+      );
+
+      date.defineOwnProperty('valueOf', {
+        value: method,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(callerRealm, 'foreignValueOf', method);
+      defineGlobal(callerRealm, 'foreignDate', date);
+
+      assertSame(
+        evaluateScript(
+          callerRealm,
+          'try { foreignValueOf(); "not thrown"; } catch (error) { error.name; }',
+        ).value,
+        'RangeError',
+        'direct-call control',
+      );
+      assertGeneratorAccountingCleared(realms);
+      assertSame(
+        evaluateScript(
+          callerRealm,
+          'try { +foreignDate; "not thrown"; } catch (error) { error.name; }',
+        ).value,
+        'RangeError',
+        'Date defaultValue conversion',
+      );
+      assertGeneratorAccountingCleared(realms);
+    },
+  },
+  {
     name: 'cross-Agent Array map getters charge the executing Realm before starting a generator',
     run() {
       const callerRealm = createRealm({ maxStackDepth: 80 });

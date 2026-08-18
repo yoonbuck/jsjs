@@ -67,6 +67,7 @@ function readRepositoryFile(path) {
  *   category: string,
  *   verdict: 'passed' | 'failed' | 'unverifiable',
  *   message?: string,
+ *   diagnostics?: string[],
  * }} ExclusionCheckResult
  */
 
@@ -159,11 +160,13 @@ export async function checkExclusions(options) {
     const allSkipped = records.every((r) => r.status === 'skipped');
 
     if (infrastructureFailures.length > 0) {
+      const diagnostics = nonPassingRecords.map(recordDiagnostic);
       results.push({
         path: exclusion.path,
         category: exclusion.category,
         verdict: 'unverifiable',
-        message: nonPassingRecords.map(recordDiagnostic).join('; '),
+        message: diagnostics.join('; '),
+        diagnostics,
       });
     } else if (records.length === 0) {
       results.push({
@@ -257,9 +260,10 @@ export function parseUnverifiableAllowlist(text) {
 
 /**
  * Applies the reviewed unverifiable policy without changing raw execution
- * verdicts. An approval matches only one exact path and one diagnostic
- * fragment; diagnostic drift therefore reopens the result for review. An
- * approval not consumed by a current unverifiable result is stale.
+ * verdicts. An approval matches only one exact path and only when every variant
+ * diagnostic contains its reviewed fragment; an additional or changed failure
+ * therefore reopens the whole result for review. An approval not consumed by a
+ * current unverifiable result is stale.
  *
  * @param {readonly ExclusionCheckResult[]} results
  * @param {readonly UnverifiableApproval[]} approvals
@@ -293,9 +297,15 @@ export function evaluateExclusionGate(results, approvals) {
     }
 
     const approval = approvalsByPath.get(result.path);
+    const diagnostics =
+      result.diagnostics ??
+      (result.message === undefined ? [] : result.message.split('; '));
     if (
       approval !== undefined &&
-      result.message?.includes(approval.diagnosticIncludes) === true
+      diagnostics.length > 0 &&
+      diagnostics.every((diagnostic) =>
+        diagnostic.includes(approval.diagnosticIncludes),
+      )
     ) {
       matchedApprovalPaths.add(approval.path);
       approvedUnverifiable.push({
