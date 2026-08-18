@@ -47,6 +47,11 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
 /**
  * Counts the engine frames one realm currently has on the host stack and turns
  * the moment the count would exceed `maxDepth` into a guest-visible error.
+ * During a synchronous generator resume, the first Agent also owns a temporary
+ * complete host-chain count: every guarded frame entered until the outermost
+ * resume unwinds charges that count, including frames in another Realm or Agent.
+ * The entering Realm's `maxDepth` remains the limit at each edge, so its ordinary
+ * evaluator semantics and independently configured budget are unchanged.
  *
  * Three kinds of work enter the guard, because all three recurse on the host
  * stack proportionally to something guest source controls:
@@ -70,9 +75,11 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
  * `RangeError`. Nothing else is caught or reinterpreted: a host exception
  * raised by an engine defect still escapes as itself.
  *
- * The count is per realm rather than per process because a realm is the
- * engine's unit of isolation and there is no cross-realm call path; a realm
- * whose script overflows leaves every other realm's budget untouched.
+ * The ordinary count remains per Realm. The generator host-chain count exists
+ * only while synchronous resumes are nested, because those resumes can cross
+ * Realm and Agent boundaries without unwinding the shared host stack. Both
+ * counts return to zero through `finally`; sequential work in any Realm or Agent
+ * receives its full configured budget.
  *
  * Every `enter` is paired with an `exit` through a `try`/`finally`, so the
  * count is exact whether a frame returns or throws, and no boundary has to
@@ -83,8 +90,9 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
 export class StackGuard {
   /**
    * @param {number} [maxDepth=DEFAULT_MAX_STACK_DEPTH]
+   * @param {import('./agent.js').Agent} [agent]
    */
-  constructor(maxDepth = DEFAULT_MAX_STACK_DEPTH) {
+  constructor(maxDepth = DEFAULT_MAX_STACK_DEPTH, agent) {
     if (!Number.isInteger(maxDepth) || maxDepth < 1) {
       throw new TypeError(
         `maxStackDepth must be a positive integer, received ${String(maxDepth)}`,
@@ -95,6 +103,8 @@ export class StackGuard {
     this.maxDepth = maxDepth;
     /** @type {number} */
     this.depth = 0;
+    this.agent = agent;
+    this.generatorHostChainDepth = 0;
   }
 
   /**
@@ -114,7 +124,14 @@ export class StackGuard {
       );
     }
 
+    const chargedGeneratorHostChain =
+      this.agent?.enterGeneratorHostFrame(this.maxDepth) === true;
+
     this.depth += 1;
+
+    if (chargedGeneratorHostChain) {
+      this.generatorHostChainDepth += 1;
+    }
   }
 
   /**
@@ -122,5 +139,10 @@ export class StackGuard {
    */
   exit() {
     this.depth -= 1;
+
+    if (this.generatorHostChainDepth > 0) {
+      this.generatorHostChainDepth -= 1;
+      this.agent?.exitGeneratorHostFrame();
+    }
   }
 }

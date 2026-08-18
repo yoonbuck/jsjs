@@ -20,8 +20,7 @@
  */
 
 import { assertSame, assertThrows } from './harness/assert.js';
-import { createRealm } from '../src/runtime/realm.js';
-import { evaluateScript } from '../src/api.js';
+import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { EngineObject } from '../src/runtime/object.js';
 
 /**
@@ -32,6 +31,53 @@ import { EngineObject } from '../src/runtime/object.js';
 function run(source, options) {
   const realm = createRealm(options);
   return evaluateScript(realm, source).value;
+}
+
+/**
+ * @param {import('../src/runtime/realm.js').Realm} realm
+ * @param {string} name
+ * @param {unknown} value
+ * @returns {void}
+ */
+function defineGlobal(realm, name, value) {
+  realm.globalObject.defineOwnProperty(name, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * @param {number | undefined} maxDepthA
+ * @param {number | undefined} maxDepthB
+ * @param {boolean} [sharedAgent=true]
+ * @returns {{
+ *   realmA: import('../src/runtime/realm.js').Realm,
+ *   realmB: import('../src/runtime/realm.js').Realm,
+ * }}
+ */
+function createMutuallyDelegatingRealms(
+  maxDepthA,
+  maxDepthB,
+  sharedAgent = true,
+) {
+  const agent = sharedAgent ? createAgent() : undefined;
+  const realmA = createRealm({
+    ...(agent === undefined ? {} : { agent }),
+    ...(maxDepthA === undefined ? {} : { maxStackDepth: maxDepthA }),
+  });
+  const realmB = createRealm({
+    ...(agent === undefined ? {} : { agent }),
+    ...(maxDepthB === undefined ? {} : { maxStackDepth: maxDepthB }),
+  });
+
+  evaluateScript(realmA, 'function* fromA() { yield* fromB(); }');
+  evaluateScript(realmB, 'function* fromB() { yield* fromA(); }');
+  defineGlobal(realmA, 'fromB', realmB.globalObject.get('fromB'));
+  defineGlobal(realmB, 'fromA', realmA.globalObject.get('fromA'));
+
+  return { realmA, realmB };
 }
 
 /** A budget small enough to overflow instantly, large enough for real work. */
@@ -409,6 +455,140 @@ const tests = [
           }
         `),
         'RangeError|true|Maximum call stack size exceeded',
+      );
+    },
+  },
+  {
+    name: 'the default limit contains mutual yield delegation across shared-Agent Realms',
+    run() {
+      const { realmA, realmB } = createMutuallyDelegatingRealms(
+        undefined,
+        undefined,
+      );
+      const completion = evaluateScript(
+        realmA,
+        `
+          try {
+            fromA().next();
+            "not thrown";
+          } catch (error) {
+            error;
+          }
+        `,
+      );
+      const error = /** @type {EngineObject} */ (completion.value);
+
+      assertSame(completion.type, 'normal');
+      assertSame(error instanceof EngineObject, true);
+      assertSame(error.get('name'), 'RangeError');
+      assertSame(error.get('message'), 'Maximum call stack size exceeded');
+      assertSame(
+        error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
+          error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+        true,
+      );
+      assertSame(realmA.stackGuard.depth, 0);
+      assertSame(realmB.stackGuard.depth, 0);
+    },
+  },
+  {
+    name: 'the default limit contains mutual yield delegation across Agents',
+    run() {
+      const { realmA, realmB } = createMutuallyDelegatingRealms(
+        undefined,
+        undefined,
+        false,
+      );
+      const completion = evaluateScript(
+        realmA,
+        'try { fromA().next(); "not thrown"; } catch (error) { error; }',
+      );
+      const error = /** @type {EngineObject} */ (completion.value);
+
+      assertSame(completion.type, 'normal');
+      assertSame(error instanceof EngineObject, true);
+      assertSame(error.get('name'), 'RangeError');
+      assertSame(error.get('message'), 'Maximum call stack size exceeded');
+      assertSame(
+        error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
+          error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+        true,
+      );
+      assertSame(realmA.stackGuard.depth, 0);
+      assertSame(realmB.stackGuard.depth, 0);
+    },
+  },
+  {
+    name: 'cross-Realm generator recursion preserves each Realm stack budget',
+    run() {
+      for (const [maxDepthA, maxDepthB] of [
+        [80, 240],
+        [240, 80],
+      ]) {
+        const { realmA, realmB } = createMutuallyDelegatingRealms(
+          /** @type {number} */ (maxDepthA),
+          /** @type {number} */ (maxDepthB),
+        );
+        const completion = evaluateScript(
+          realmA,
+          'try { fromA().next(); } catch (error) { error; }',
+        );
+        const error = /** @type {EngineObject} */ (completion.value);
+
+        assertSame(completion.type, 'normal');
+        assertSame(error instanceof EngineObject, true);
+        assertSame(error.get('name'), 'RangeError');
+        assertSame(
+          error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
+            error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+          true,
+        );
+        assertSame(realmA.stackGuard.depth, 0);
+        assertSame(realmB.stackGuard.depth, 0);
+      }
+    },
+  },
+  {
+    name: 'finite cross-Realm yield delegation preserves shared and separate Agent behavior',
+    run() {
+      const sharedAgent = createAgent();
+      const sharedCaller = createRealm({ agent: sharedAgent });
+      const sharedOwner = createRealm({ agent: sharedAgent });
+      const isolatedCaller = createRealm();
+      const isolatedOwner = createRealm();
+
+      evaluateScript(
+        sharedOwner,
+        'function* sharedValues() { yield "shared"; }',
+      );
+      defineGlobal(
+        sharedCaller,
+        'foreignValues',
+        sharedOwner.globalObject.get('sharedValues'),
+      );
+      assertSame(
+        evaluateScript(
+          sharedCaller,
+          'function* values() { yield* foreignValues(); } values().next().value;',
+        ).value,
+        'shared',
+      );
+
+      evaluateScript(
+        isolatedOwner,
+        'function* isolatedValues() { yield "isolated"; }',
+      );
+      defineGlobal(
+        isolatedCaller,
+        'foreignValues',
+        isolatedOwner.globalObject.get('isolatedValues'),
+      );
+      assertSame(
+        evaluateScript(
+          isolatedCaller,
+          'function* values() { yield* foreignValues(); } values().next().value;',
+        ).value,
+        'isolated',
       );
     },
   },

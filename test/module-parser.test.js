@@ -1,7 +1,21 @@
 import { assertSame, assertThrows } from './harness/assert.js';
-import { createRealm } from '../src/index.js';
-import { parseModule, parseScript } from '../src/parser.js';
+import { createRealm, parseModule } from '../src/index.js';
+import { parseScript } from '../src/parser.js';
 import { SourceTextModuleRecord } from '../src/runtime/module-record.js';
+
+/** @type {readonly ('parse' | 'program')[]} */
+const CUSTOM_MODULE_AST_ENTRIES = ['parse', 'program'];
+
+/**
+ * @param {'parse' | 'program'} entry
+ * @param {any} ast
+ * @returns {any}
+ */
+function parseCustomModule(entry, ast) {
+  return entry === 'parse'
+    ? parseModule('', { parse: () => ast })
+    : parseModule('', { program: ast });
+}
 
 export default [
   {
@@ -173,6 +187,155 @@ export default [
         result.body[0].declaration.declarations[0].id.name,
         'existing',
       );
+    },
+  },
+  {
+    name: 'custom module ASTs accept exact import and export shorthand aliases',
+    run() {
+      for (const [source, peerField] of [
+        ['import { imported } from "dep";', 'imported'],
+        ['const exported = 1; export { exported };', 'exported'],
+      ]) {
+        for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+          const ast = parseModule(source);
+          const declaration = ast.body.find(
+            (/** @type {any} */ node) =>
+              Array.isArray(node.specifiers) && node.specifiers.length > 0,
+          );
+          const specifier = declaration.specifiers[0];
+
+          assertSame(specifier.local, specifier[peerField]);
+          assertSame(parseCustomModule(entry, ast).sourceType, 'module');
+        }
+      }
+    },
+  },
+  {
+    name: 'custom module AST shorthand handling stays limited to exact specifier aliases',
+    run() {
+      for (const source of [
+        'import { imported as local } from "dep";',
+        'const local = 1; export { local as publicName };',
+      ]) {
+        for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+          const ast = parseModule(source);
+          const declaration = ast.body.find(
+            (/** @type {any} */ node) =>
+              Array.isArray(node.specifiers) && node.specifiers.length > 0,
+          );
+          const specifier = declaration.specifiers[0];
+
+          assertSame(
+            specifier.local === (specifier.imported ?? specifier.exported),
+            false,
+          );
+          assertSame(parseCustomModule(entry, ast).sourceType, 'module');
+        }
+      }
+
+      for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+        const ast = parseModule('export default (true ? 1 : 2);');
+        ast.body[0].declaration.alternate = ast.body[0].declaration.consequent;
+        const error = /** @type {any} */ (
+          assertThrows(() => parseCustomModule(entry, ast), SyntaxError)
+        );
+
+        if (!error.message.includes('structural tree')) {
+          throw new Error(`Expected structural tree rejection, got ${error}`);
+        }
+      }
+    },
+  },
+  {
+    name: 'custom module ASTs accept only neutral modern import and export-all fields',
+    run() {
+      /** @type {readonly [string, (declaration: any) => void][]} */
+      const neutralFields = [
+        [
+          'import { imported as local } from "dep";',
+          (/** @type {any} */ declaration) => {
+            declaration.assertions = [];
+            declaration.attributes = [];
+          },
+        ],
+        [
+          'export * from "dep";',
+          (/** @type {any} */ declaration) => {
+            declaration.exported = null;
+            declaration.assertions = [];
+            declaration.attributes = [];
+          },
+        ],
+      ];
+
+      for (const [source, decorate] of neutralFields) {
+        for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+          const ast = parseModule(source);
+          decorate(ast.body[0]);
+          assertSame(parseCustomModule(entry, ast).sourceType, 'module');
+        }
+      }
+
+      for (const field of ['assertions', 'attributes']) {
+        for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+          const ast = parseModule('import { imported as local } from "dep";');
+          ast.body[0][field] = [{}];
+          assertThrows(() => parseCustomModule(entry, ast), SyntaxError);
+        }
+      }
+
+      for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+        const ast = parseModule('export * from "dep";');
+        ast.body[0].exported = { type: 'Identifier', name: 'namespace' };
+        assertThrows(() => parseCustomModule(entry, ast), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'parseModule options.parse normalizes engine AST validation failures',
+    run() {
+      const ast = parseModule('export const value = 1;');
+      ast.body[0] = { type: 'Bogus' };
+      const error = /** @type {any} */ (
+        assertThrows(() => parseModule('', { parse: () => ast }), SyntaxError)
+      );
+
+      assertSame(error.name, 'SyntaxError');
+      if (!error.message.includes('Bogus')) {
+        throw new Error(`Expected Bogus-node diagnostic, got ${error}`);
+      }
+    },
+  },
+  {
+    name: 'parseModule options.program normalizes engine Program shape failures',
+    run() {
+      const ast = parseModule('');
+      ast.sourceType = 'script';
+      const error = /** @type {any} */ (
+        assertThrows(() => parseModule('', { program: ast }), SyntaxError)
+      );
+
+      assertSame(error.name, 'SyntaxError');
+      if (!error.message.includes('module Program')) {
+        throw new Error(`Expected module Program diagnostic, got ${error}`);
+      }
+    },
+  },
+  {
+    name: 'parseModule rethrows custom parser implementation errors unchanged',
+    run() {
+      const parserError = new Error('custom parser failed');
+      const thrown = assertThrows(
+        () =>
+          parseModule('', {
+            parse() {
+              throw parserError;
+            },
+          }),
+        Error,
+      );
+
+      assertSame(thrown, parserError);
     },
   },
   {

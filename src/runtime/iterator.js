@@ -122,6 +122,10 @@ export function getIterator(realm, obj, method) {
       throw new TypeError('EngineObject protocol lookup requires an agent');
     }
 
+    if (iteratorAgent !== realm.agent) {
+      realm.agent.linkGeneratorHostChain(iteratorAgent);
+    }
+
     iteratorMethod = getMethod(
       realm,
       obj,

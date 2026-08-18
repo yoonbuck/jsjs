@@ -1,8 +1,14 @@
 import { WELL_KNOWN_SYMBOL_NAMES, createSymbol, isSymbol } from './symbol.js';
 import { AgentJobQueue } from './jobs.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./symbol.js').WellKnownSymbolName} WellKnownSymbolName
+ * @typedef {{
+ *   agents: Set<Agent>,
+ *   resumes: number,
+ *   depth: number,
+ * }} GeneratorHostChain
  */
 
 /**
@@ -34,6 +40,11 @@ import { AgentJobQueue } from './jobs.js';
  *
  * A `Realm` takes an agent (`createRealm({ agent })`) or, given none, makes
  * its own. See `docs/architecture.md` for the embedding lifecycle.
+ *
+ * The Agent also owns transient generator host-chain accounting. Shared-Agent
+ * Realms naturally charge one chain; cross-Agent iterator delegation links the
+ * participating Agents only until the outermost synchronous resume unwinds.
+ * The chain retains no guest value and is cleared in `finally`.
  */
 export class Agent {
   /**
@@ -65,6 +76,8 @@ export class Agent {
     /** @type {WeakSet<object>} */
     this._realms = new WeakSet();
     this._jobQueue = new AgentJobQueue(options.jobHost, this);
+    /** @type {GeneratorHostChain | null} */
+    this._generatorHostChain = null;
   }
 
   /**
@@ -181,6 +194,105 @@ export class Agent {
     return (
       typeof realm === 'object' && realm !== null && this._realms.has(realm)
     );
+  }
+
+  /**
+   * Begins one synchronous generator resume on the active host chain. The first
+   * resume owns the chain; nested cross-Agent resumes keep charging that owner
+   * because they consume the same host stack.
+   *
+   * @returns {void}
+   */
+  enterGeneratorHostChain() {
+    if (this._generatorHostChain === null) {
+      this._generatorHostChain = {
+        agents: new Set([this]),
+        resumes: 0,
+        depth: 0,
+      };
+    }
+
+    this._generatorHostChain.resumes += 1;
+  }
+
+  /**
+   * @returns {void}
+   */
+  exitGeneratorHostChain() {
+    const chain = this._generatorHostChain;
+
+    if (chain === null) {
+      return;
+    }
+
+    chain.resumes -= 1;
+
+    if (chain.resumes === 0) {
+      chain.depth = 0;
+
+      for (const agent of chain.agents) {
+        if (agent._generatorHostChain === chain) {
+          agent._generatorHostChain = null;
+        }
+      }
+
+      chain.agents.clear();
+    }
+  }
+
+  /**
+   * Makes a foreign iterator Agent participate in the currently active chain.
+   * The link exists only until the outermost resume unwinds.
+   *
+   * @param {Agent} agent
+   * @returns {void}
+   */
+  linkGeneratorHostChain(agent) {
+    const chain = this._generatorHostChain;
+
+    if (
+      chain === null ||
+      agent._generatorHostChain !== null ||
+      chain.agents.has(agent)
+    ) {
+      return;
+    }
+
+    agent._generatorHostChain = chain;
+    chain.agents.add(agent);
+  }
+
+  /**
+   * Charges one guarded engine frame to the complete active generator chain.
+   *
+   * @param {number} maxDepth
+   * @returns {boolean} Whether an active generator chain was charged.
+   */
+  enterGeneratorHostFrame(maxDepth) {
+    const chain = this._generatorHostChain;
+
+    if (chain === null) {
+      return false;
+    }
+
+    if (chain.depth >= maxDepth) {
+      throw new GuestErrorSignal(
+        'RangeError',
+        'Maximum call stack size exceeded',
+      );
+    }
+
+    chain.depth += 1;
+    return true;
+  }
+
+  /**
+   * @returns {void}
+   */
+  exitGeneratorHostFrame() {
+    if (this._generatorHostChain !== null) {
+      this._generatorHostChain.depth -= 1;
+    }
   }
 }
 

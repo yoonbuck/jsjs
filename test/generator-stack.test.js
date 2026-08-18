@@ -1,6 +1,5 @@
 import { assertSame } from './harness/assert.js';
-import { createRealm } from '../src/runtime/realm.js';
-import { evaluateScript } from '../src/api.js';
+import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { ThrowSignal } from '../src/runtime/completion.js';
 import { createGeneratorExecution } from '../src/evaluator/generator-machine.js';
@@ -118,6 +117,45 @@ const tests = [
       const completed = next(iterator, undefined);
       assertSame(completed.get('done'), true);
       assertSame(realm.stackGuard.depth, 0);
+    },
+  },
+  {
+    name: 'sequential cross-Realm delegation resumes do not accumulate Agent depth',
+    run() {
+      const agent = createAgent();
+      const realmA = createRealm({ agent, maxStackDepth: 40 });
+      const realmB = createRealm({ agent, maxStackDepth: 40 });
+      const foreign = evaluateScript(
+        realmB,
+        '(function* foreign(value) { yield value; })',
+      ).value;
+
+      realmA.globalObject.defineOwnProperty('foreign', {
+        value: foreign,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const completion = evaluateScript(
+        realmA,
+        `
+          var total = 0;
+          for (var index = 0; index < 1000; index = index + 1) {
+            var iterator = (function* () { yield* foreign(index); })();
+            total = total + iterator.next().value;
+            if (!iterator.next().done) {
+              throw new Error("delegate did not complete");
+            }
+          }
+          total;
+        `,
+      );
+
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 499500);
+      assertSame(realmA.stackGuard.depth, 0);
+      assertSame(realmB.stackGuard.depth, 0);
     },
   },
   {

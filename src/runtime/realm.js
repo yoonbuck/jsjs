@@ -128,7 +128,7 @@ export class Realm {
     // The recursion boundary is built before any guest work can happen: every
     // activation and every evaluator frame in this realm consults it, so it
     // must outlive the intrinsic graph installed below.
-    this.stackGuard = new StackGuard(options.maxStackDepth);
+    this.stackGuard = new StackGuard(options.maxStackDepth, this.agent);
     this.dateHost = createDateHost({
       ...options,
       ...options.dateHost,

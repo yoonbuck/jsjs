@@ -82,56 +82,63 @@ export class GeneratorObject extends EngineObject {
 
     const starting = this.state === 'suspendedStart';
     const guard = this.realm.stackGuard;
+    const agent = this.realm.agent;
 
-    guard.enter();
-    this.state = 'executing';
+    agent.enterGeneratorHostChain();
 
     try {
-      const result = continuation.resume(
-        starting ? { type: 'normal', value: undefined } : completion,
-      );
+      guard.enter();
+      this.state = 'executing';
 
-      if (result.type === 'yield') {
-        this.state = 'suspendedYield';
-        return createIterResultObject(this.realm, result.value, false);
-      }
+      try {
+        const result = continuation.resume(
+          starting ? { type: 'normal', value: undefined } : completion,
+        );
 
-      if (result.type === 'yield-result') {
-        if (!(result.result instanceof EngineObject)) {
+        if (result.type === 'yield') {
+          this.state = 'suspendedYield';
+          return createIterResultObject(this.realm, result.value, false);
+        }
+
+        if (result.type === 'yield-result') {
+          if (!(result.result instanceof EngineObject)) {
+            throw new TypeError(
+              'Generator continuation returned an invalid yield result',
+            );
+          }
+
+          this.state = 'suspendedYield';
+          return result.result;
+        }
+
+        if (result.type !== 'complete') {
           throw new TypeError(
-            'Generator continuation returned an invalid yield result',
+            'Generator continuation returned an invalid result',
           );
         }
 
-        this.state = 'suspendedYield';
-        return result.result;
-      }
+        this.complete();
 
-      if (result.type !== 'complete') {
-        throw new TypeError(
-          'Generator continuation returned an invalid result',
-        );
+        switch (result.completion.type) {
+          case 'normal':
+            return createIterResultObject(resultRealm, undefined, true);
+          case 'return':
+            return createIterResultObject(
+              resultRealm,
+              result.completion.value,
+              true,
+            );
+          case 'throw':
+            throw new ThrowSignal(result.completion.value);
+        }
+      } catch (error) {
+        this.complete();
+        throw error;
+      } finally {
+        guard.exit();
       }
-
-      this.complete();
-
-      switch (result.completion.type) {
-        case 'normal':
-          return createIterResultObject(resultRealm, undefined, true);
-        case 'return':
-          return createIterResultObject(
-            resultRealm,
-            result.completion.value,
-            true,
-          );
-        case 'throw':
-          throw new ThrowSignal(result.completion.value);
-      }
-    } catch (error) {
-      this.complete();
-      throw error;
     } finally {
-      guard.exit();
+      agent.exitGeneratorHostChain();
     }
 
     throw new TypeError(

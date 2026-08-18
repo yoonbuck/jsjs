@@ -323,13 +323,17 @@ export function parseModule(source, options = {}) {
   }
 
   if (hasReusableProgram) {
-    sourceIndependentNodes = new WeakSet();
-    reusableProgramSnapshot = snapshotProgramGraph(
-      reusableProgram,
-      sourceIndependentNodes,
-    );
-    validateReusableProgram(reusableProgramSnapshot, true);
-    delete parserOptions.program;
+    try {
+      sourceIndependentNodes = new WeakSet();
+      reusableProgramSnapshot = snapshotProgramGraph(
+        reusableProgram,
+        sourceIndependentNodes,
+      );
+      validateReusableProgram(reusableProgramSnapshot, true);
+      delete parserOptions.program;
+    } catch (error) {
+      throw asModuleValidationFailure(error);
+    }
   }
 
   let program;
@@ -343,21 +347,25 @@ export function parseModule(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
-  if (hasCustomParse) {
-    sourceIndependentNodes = new WeakSet();
-    program = snapshotProgramGraph(program, sourceIndependentNodes);
-  }
+  try {
+    if (hasCustomParse) {
+      sourceIndependentNodes = new WeakSet();
+      program = snapshotProgramGraph(program, sourceIndependentNodes);
+    }
 
-  if (hasReusableProgram) {
-    program = mergeReusableProgram(reusableProgramSnapshot, program);
-  }
+    if (hasReusableProgram) {
+      program = mergeReusableProgram(reusableProgramSnapshot, program);
+    }
 
-  return validateModuleProgram(
-    program,
-    source,
-    hasCustomParse || hasCustomProgram,
-    sourceIndependentNodes,
-  );
+    return validateModuleProgram(
+      program,
+      source,
+      hasCustomParse || hasCustomProgram,
+      sourceIndependentNodes,
+    );
+  } catch (error) {
+    throw asModuleValidationFailure(error);
+  }
 }
 
 /**
@@ -1356,7 +1364,7 @@ function validateModuleItem(node) {
  * @returns {void}
  */
 function validateImportDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
 
   const specifiers = moduleField(node, 'specifiers');
 
@@ -1406,7 +1414,7 @@ function validateImportSpecifier(node) {
  * @returns {void}
  */
 function validateExportNamedDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
   const source = moduleField(node, 'source');
   const declaration = moduleField(node, 'declaration');
   const specifiers = moduleField(node, 'specifiers');
@@ -1445,7 +1453,7 @@ function validateExportNamedDeclaration(node) {
  * @returns {void}
  */
 function validateExportDefaultDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
   const declaration = moduleField(node, 'declaration');
 
   if (
@@ -1462,11 +1470,12 @@ function validateExportDefaultDeclaration(node) {
  * @returns {void}
  */
 function validateExportAllDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
+  const exported = Object.getOwnPropertyDescriptor(node, 'exported');
 
   if (
     !isModuleStringLiteral(moduleField(node, 'source')) ||
-    Object.getOwnPropertyDescriptor(node, 'exported') !== undefined
+    (exported !== undefined && moduleField(node, 'exported') !== null)
   ) {
     throw new UnsupportedNodeError('ExportAllDeclaration');
   }
@@ -1553,12 +1562,24 @@ function moduleField(node, field) {
 }
 
 /**
+ * Modern ESTree parsers may expose empty assertion/attribute lists even when
+ * parsing ES2015 syntax. Empty lists are neutral; any entry requires unsupported
+ * import-attributes semantics.
+ *
  * @param {object} node
  * @returns {void}
  */
-function rejectModuleAttributes(node) {
+function validateModuleAttributes(node) {
   for (const field of ['assertions', 'attributes']) {
-    if (Object.getOwnPropertyDescriptor(node, field) !== undefined) {
+    const descriptor = Object.getOwnPropertyDescriptor(node, field);
+
+    if (descriptor === undefined) {
+      continue;
+    }
+
+    const value = moduleField(node, field);
+
+    if (!Array.isArray(value) || value.length !== 0) {
       throw new UnsupportedNodeError(field);
     }
   }
@@ -1738,12 +1759,12 @@ function untrustedAstSyntaxError(message) {
 }
 
 /**
- * Requires a custom parser's evaluator-relevant child graph to be a tree.
- * Native Acorn output has this shape, while rejecting shared nodes and child
- * arrays at the untrusted boundary prevents later tree-oriented static
- * semantics from expanding a compact DAG exponentially. Metadata is outside
- * `AST_CHILD_PROPERTY_KEYS`, so it may still share or cycle. The explicit
- * worklist avoids recursive host stack use.
+ * Requires a custom parser's evaluator-relevant child graph to be a tree,
+ * except for Acorn's exact leaf alias in import/export shorthand specifiers.
+ * Rejecting every other shared node and child array at the untrusted boundary
+ * prevents later tree-oriented static semantics from expanding a compact DAG
+ * exponentially. Metadata is outside `AST_CHILD_PROPERTY_KEYS`, so it may still
+ * share or cycle. The explicit worklist avoids recursive host stack use.
  *
  * @param {any} root
  * @returns {void}
@@ -1798,11 +1819,35 @@ function checkStructuralAstTree(root) {
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       const key = keys[index];
 
-      if (typeof key === 'string' && AST_CHILD_PROPERTY_KEYS.has(key)) {
+      if (
+        typeof key === 'string' &&
+        AST_CHILD_PROPERTY_KEYS.has(key) &&
+        !isModuleSpecifierShorthandAliasEdge(value, key)
+      ) {
         pending.push(/** @type {any} */ (value)[key]);
       }
     }
   }
+}
+
+/**
+ * Acorn represents `import { name }` and `export { name }` with one Identifier
+ * object referenced by both grammar fields. Those two fields are one shorthand
+ * syntactic edge; every other repeated structural value remains a rejected DAG.
+ *
+ * @param {any} node
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isModuleSpecifierShorthandAliasEdge(node, key) {
+  return (
+    (node.type === 'ImportSpecifier' &&
+      key === 'imported' &&
+      node.local === node.imported) ||
+    (node.type === 'ExportSpecifier' &&
+      key === 'exported' &&
+      node.local === node.exported)
+  );
 }
 
 /**
@@ -6632,6 +6677,21 @@ function asParseFailure(error, ownParser) {
   }
 
   return error;
+}
+
+/**
+ * Module shape and capability checks are part of parsing, not parser-hook
+ * execution. Normalize only their deliberate validation error classes; an
+ * arbitrary exception thrown by `options.parse` is handled before this boundary
+ * and continues to propagate unchanged.
+ *
+ * @param {unknown} error
+ * @returns {unknown}
+ */
+function asModuleValidationFailure(error) {
+  return error instanceof UnsupportedNodeError || error instanceof TypeError
+    ? normalizeSyntaxError(error)
+    : error;
 }
 
 /**
