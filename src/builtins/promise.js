@@ -73,6 +73,7 @@ export function createPromiseIntrinsics(realm) {
 
       return promise;
     },
+    retargetConstructionResult: false,
   });
 
   promisePrototype.defineOwnProperty('constructor', {
