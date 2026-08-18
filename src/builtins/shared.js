@@ -357,9 +357,10 @@ export function requireObjectReceiver(value, message) {
  * Implements ES5 8.10.5 `ToPropertyDescriptor`.
  *
  * @param {unknown} value
+ * @param {Realm} [callerRealm]
  * @returns {PropertyDescriptorRecord}
  */
-export function toPropertyDescriptor(value) {
+export function toPropertyDescriptor(value, callerRealm) {
   const object = requireObjectReceiver(
     value,
     'Property description must be an object',
@@ -368,23 +369,25 @@ export function toPropertyDescriptor(value) {
   const descriptor = {};
 
   if (object.hasProperty('enumerable')) {
-    descriptor.enumerable = toBoolean(object.get('enumerable'));
+    descriptor.enumerable = toBoolean(object.get('enumerable', callerRealm));
   }
 
   if (object.hasProperty('configurable')) {
-    descriptor.configurable = toBoolean(object.get('configurable'));
+    descriptor.configurable = toBoolean(
+      object.get('configurable', callerRealm),
+    );
   }
 
   if (object.hasProperty('value')) {
-    descriptor.value = object.get('value');
+    descriptor.value = object.get('value', callerRealm);
   }
 
   if (object.hasProperty('writable')) {
-    descriptor.writable = toBoolean(object.get('writable'));
+    descriptor.writable = toBoolean(object.get('writable', callerRealm));
   }
 
   if (object.hasProperty('get')) {
-    const getter = object.get('get');
+    const getter = object.get('get', callerRealm);
 
     if (getter !== undefined) {
       requireCallable(getter, 'Getter must be callable or undefined');
@@ -394,7 +397,7 @@ export function toPropertyDescriptor(value) {
   }
 
   if (object.hasProperty('set')) {
-    const setter = object.get('set');
+    const setter = object.get('set', callerRealm);
 
     if (setter !== undefined) {
       requireCallable(setter, 'Setter must be callable or undefined');
@@ -451,15 +454,16 @@ export function fromPropertyDescriptor(realm, descriptor) {
 /**
  * @param {unknown} value
  * @param {{ preserveHoles?: boolean }} [options]
+ * @param {Realm} [callerRealm]
  * @returns {unknown[]}
  */
-export function createListFromArrayLike(value, options = {}) {
+export function createListFromArrayLike(value, options = {}, callerRealm) {
   const object = requireObjectReceiver(
     value,
     'Array-like value must be an object',
   );
   const preserveHoles = options.preserveHoles === true;
-  const length = toUint32(object.get('length'));
+  const length = toUint32(object.get('length', callerRealm), callerRealm);
   const list = new Array(length);
 
   for (let index = 0; index < length; index += 1) {
@@ -469,7 +473,7 @@ export function createListFromArrayLike(value, options = {}) {
       continue;
     }
 
-    list[index] = object.get(name);
+    list[index] = object.get(name, callerRealm);
   }
 
   return list;

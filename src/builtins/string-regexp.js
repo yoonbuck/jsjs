@@ -47,13 +47,13 @@ import { regExpExec } from './regexp.js';
  * @returns {EngineArray | null}
  */
 export function matchWithRegExp(realm, rx, S) {
-  const global = toBoolean(rx.get('global'));
+  const global = toBoolean(rx.get('global', realm));
 
   if (!global) {
     return regExpExec(realm, rx, S);
   }
 
-  rx.put('lastIndex', 0, true);
+  rx.put('lastIndex', 0, true, realm);
 
   const A = new EngineArray(realm.intrinsics.arrayPrototype);
   let previousLastIndex = 0;
@@ -66,16 +66,16 @@ export function matchWithRegExp(realm, rx, S) {
       break;
     }
 
-    const thisIndex = toInteger(rx.get('lastIndex'));
+    const thisIndex = toInteger(rx.get('lastIndex', realm), realm);
 
     if (thisIndex === previousLastIndex) {
-      rx.put('lastIndex', thisIndex + 1, true);
+      rx.put('lastIndex', thisIndex + 1, true, realm);
       previousLastIndex = thisIndex + 1;
     } else {
       previousLastIndex = thisIndex;
     }
 
-    defineDataProperty(A, String(n), toString(result.get('0')));
+    defineDataProperty(A, String(n), toString(result.get('0', realm), realm));
     n += 1;
   }
 
@@ -109,10 +109,10 @@ export function matchWithRegExp(realm, rx, S) {
  * @returns {string}
  */
 export function replaceWithRegExp(realm, rx, S, computeReplacement) {
-  const global = toBoolean(rx.get('global'));
+  const global = toBoolean(rx.get('global', realm));
 
   if (global) {
-    rx.put('lastIndex', 0, true);
+    rx.put('lastIndex', 0, true, realm);
   }
 
   let output = '';
@@ -127,18 +127,18 @@ export function replaceWithRegExp(realm, rx, S, computeReplacement) {
     }
 
     if (global) {
-      const thisIndex = toInteger(rx.get('lastIndex'));
+      const thisIndex = toInteger(rx.get('lastIndex', realm), realm);
 
       if (thisIndex === previousLastIndex) {
-        rx.put('lastIndex', thisIndex + 1, true);
+        rx.put('lastIndex', thisIndex + 1, true, realm);
         previousLastIndex = thisIndex + 1;
       } else {
         previousLastIndex = thisIndex;
       }
     }
 
-    const position = toInteger(match.get('index'));
-    const matched = toString(match.get('0'));
+    const position = toInteger(match.get('index', realm), realm);
+    const matched = toString(match.get('0', realm), realm);
     const captures = readCaptures(rx, match);
 
     output += codeUnitsBetween(S, tailStart, position);

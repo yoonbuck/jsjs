@@ -390,16 +390,17 @@ export function createDateHost(adapter = {}) {
  *
  * @param {readonly unknown[]} args
  * @param {DateHost} host
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function dateFromLocalArguments(args, host) {
-  const year = toNumberValue(args[0]);
-  const month = toNumberValue(args[1]);
-  const date = args.length > 2 ? toNumberValue(args[2]) : 1;
-  const hour = args.length > 3 ? toNumberValue(args[3]) : 0;
-  const minute = args.length > 4 ? toNumberValue(args[4]) : 0;
-  const second = args.length > 5 ? toNumberValue(args[5]) : 0;
-  const millisecond = args.length > 6 ? toNumberValue(args[6]) : 0;
+export function dateFromLocalArguments(args, host, callerRealm) {
+  const year = toNumberValue(args[0], callerRealm);
+  const month = toNumberValue(args[1], callerRealm);
+  const date = args.length > 2 ? toNumberValue(args[2], callerRealm) : 1;
+  const hour = args.length > 3 ? toNumberValue(args[3], callerRealm) : 0;
+  const minute = args.length > 4 ? toNumberValue(args[4], callerRealm) : 0;
+  const second = args.length > 5 ? toNumberValue(args[5], callerRealm) : 0;
+  const millisecond = args.length > 6 ? toNumberValue(args[6], callerRealm) : 0;
   const localTime = dateFromComponents(
     year,
     month,
@@ -418,16 +419,17 @@ export function dateFromLocalArguments(args, host) {
  * trailing fields receive defaults.
  *
  * @param {readonly unknown[]} args
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function dateUTC(args) {
-  const year = toNumberValue(args[0]);
-  const month = toNumberValue(args[1]);
-  const date = args.length > 2 ? toNumberValue(args[2]) : 1;
-  const hour = args.length > 3 ? toNumberValue(args[3]) : 0;
-  const minute = args.length > 4 ? toNumberValue(args[4]) : 0;
-  const second = args.length > 5 ? toNumberValue(args[5]) : 0;
-  const millisecond = args.length > 6 ? toNumberValue(args[6]) : 0;
+export function dateUTC(args, callerRealm) {
+  const year = toNumberValue(args[0], callerRealm);
+  const month = toNumberValue(args[1], callerRealm);
+  const date = args.length > 2 ? toNumberValue(args[2], callerRealm) : 1;
+  const hour = args.length > 3 ? toNumberValue(args[3], callerRealm) : 0;
+  const minute = args.length > 4 ? toNumberValue(args[4], callerRealm) : 0;
+  const second = args.length > 5 ? toNumberValue(args[5], callerRealm) : 0;
+  const millisecond = args.length > 6 ? toNumberValue(args[6], callerRealm) : 0;
 
   return timeClip(
     dateFromComponents(year, month, date, hour, minute, second, millisecond),
@@ -828,10 +830,11 @@ export function utcFromLocalTime(localTime, host) {
 
 /**
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-function toNumberValue(value) {
-  return toNumber(value);
+function toNumberValue(value, callerRealm) {
+  return toNumber(value, callerRealm);
 }
 
 /**

@@ -39,7 +39,9 @@ class BoundFunction extends NativeFunction {
    */
   constructor(realm, target, boundThis, boundArgs) {
     const targetLength =
-      target instanceof EngineObject ? toInteger(target.get('length')) : 0;
+      target instanceof EngineObject
+        ? toInteger(target.get('length', realm), realm)
+        : 0;
     const length =
       targetLength > boundArgs.length ? targetLength - boundArgs.length : 0;
     /** @type {import('./shared.js').NativeFunctionOptions['construct']} */
@@ -64,7 +66,7 @@ class BoundFunction extends NativeFunction {
     }
 
     const targetName =
-      target instanceof EngineObject ? target.get('name') : undefined;
+      target instanceof EngineObject ? target.get('name', realm) : undefined;
     const boundName = `bound ${typeof targetName === 'string' ? targetName : ''}`;
     const targetPrototype =
       target instanceof EngineObject
@@ -232,6 +234,8 @@ export function createFunctionIntrinsics(realm) {
                 argumentArray,
                 'Function.prototype.apply arguments must be an object',
               ),
+              {},
+              realm,
             );
       return target.callFunction(
         thisArgument,

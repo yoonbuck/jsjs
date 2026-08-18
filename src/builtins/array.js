@@ -117,60 +117,60 @@ function defineNativeMethod(realm, target, name, length, call) {
 function installMutatingArrayMethods(realm, arrayPrototype) {
   defineNativeMethod(realm, arrayPrototype, 'push', 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    let length = arrayLikeLength(object);
+    let length = arrayLikeLength(object, realm);
 
     for (const value of args) {
-      object.put(String(length), value, true);
+      object.put(String(length), value, true, realm);
       length += 1;
     }
 
-    object.put('length', length, true);
+    object.put('length', length, true, realm);
     return length;
   });
   defineNativeMethod(realm, arrayPrototype, 'pop', 0, (thisValue) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
 
     if (length === 0) {
-      object.put('length', 0, true);
+      object.put('length', 0, true, realm);
       return undefined;
     }
 
     const index = String(length - 1);
-    const element = object.get(index);
+    const element = object.get(index, realm);
     object.delete(index, true);
-    object.put('length', length - 1, true);
+    object.put('length', length - 1, true, realm);
     return element;
   });
   defineNativeMethod(realm, arrayPrototype, 'shift', 0, (thisValue) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
 
     if (length === 0) {
-      object.put('length', 0, true);
+      object.put('length', 0, true, realm);
       return undefined;
     }
 
-    const first = object.get('0');
+    const first = object.get('0', realm);
 
     for (let index = 1; index < length; index += 1) {
       const from = String(index);
       const to = String(index - 1);
 
       if (object.hasProperty(from)) {
-        object.put(to, object.get(from), true);
+        object.put(to, object.get(from, realm), true, realm);
       } else {
         object.delete(to, true);
       }
     }
 
     object.delete(String(length - 1), true);
-    object.put('length', length - 1, true);
+    object.put('length', length - 1, true, realm);
     return first;
   });
   defineNativeMethod(realm, arrayPrototype, 'unshift', 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
     const itemCount = args.length;
 
     for (let index = length; index > 0; index -= 1) {
@@ -178,23 +178,23 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
       const to = String(index + itemCount - 1);
 
       if (object.hasProperty(from)) {
-        object.put(to, object.get(from), true);
+        object.put(to, object.get(from, realm), true, realm);
       } else {
         object.delete(to, true);
       }
     }
 
     for (let index = 0; index < itemCount; index += 1) {
-      object.put(String(index), args[index], true);
+      object.put(String(index), args[index], true, realm);
     }
 
     const newLength = length + itemCount;
-    object.put('length', newLength, true);
+    object.put('length', newLength, true, realm);
     return newLength;
   });
   defineNativeMethod(realm, arrayPrototype, 'reverse', 0, (thisValue) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
     const middle = Math.floor(length / 2);
 
     for (let lower = 0; lower < middle; lower += 1) {
@@ -202,19 +202,19 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
       const lowerName = String(lower);
       const upperName = String(upper);
       const lowerExists = object.hasProperty(lowerName);
-      const lowerValue = lowerExists ? object.get(lowerName) : undefined;
+      const lowerValue = lowerExists ? object.get(lowerName, realm) : undefined;
       const upperExists = object.hasProperty(upperName);
-      const upperValue = upperExists ? object.get(upperName) : undefined;
+      const upperValue = upperExists ? object.get(upperName, realm) : undefined;
 
       if (lowerExists && upperExists) {
-        object.put(lowerName, upperValue, true);
-        object.put(upperName, lowerValue, true);
+        object.put(lowerName, upperValue, true, realm);
+        object.put(upperName, lowerValue, true, realm);
       } else if (!lowerExists && upperExists) {
-        object.put(lowerName, upperValue, true);
+        object.put(lowerName, upperValue, true, realm);
         object.delete(upperName, true);
       } else if (lowerExists) {
         object.delete(lowerName, true);
-        object.put(upperName, lowerValue, true);
+        object.put(upperName, lowerValue, true, realm);
       }
     }
 
@@ -222,7 +222,7 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
   });
   defineNativeMethod(realm, arrayPrototype, 'sort', 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
     const compareArgument = args[0];
     const compare =
       compareArgument === undefined
@@ -242,7 +242,7 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
         continue;
       }
 
-      const value = object.get(name);
+      const value = object.get(name, realm);
 
       if (value === undefined) {
         undefinedCount += 1;
@@ -254,12 +254,12 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
     let writeIndex = 0;
 
     for (const value of sorted) {
-      object.put(String(writeIndex), value, true);
+      object.put(String(writeIndex), value, true, realm);
       writeIndex += 1;
     }
 
     for (let index = 0; index < undefinedCount; index += 1) {
-      object.put(String(writeIndex), undefined, true);
+      object.put(String(writeIndex), undefined, true, realm);
       writeIndex += 1;
     }
 
@@ -272,8 +272,8 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
   });
   defineNativeMethod(realm, arrayPrototype, 'splice', 2, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
-    const relativeStart = toInteger(args[0]);
+    const length = arrayLikeLength(object, realm);
+    const relativeStart = toInteger(args[0], realm);
     const actualStart =
       relativeStart < 0
         ? maximum(length + relativeStart, 0)
@@ -285,7 +285,7 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
         ? args.length === 0
           ? 0
           : length - actualStart
-        : minimum(maximum(toInteger(args[1]), 0), length - actualStart);
+        : minimum(maximum(toInteger(args[1], realm), 0), length - actualStart);
     const itemCount = args.length > 2 ? args.length - 2 : 0;
     const removed = new EngineArray(realm.intrinsics.arrayPrototype);
 
@@ -294,7 +294,7 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
 
       if (object.hasProperty(from)) {
         removed.defineOwnProperty(String(index), {
-          value: object.get(from),
+          value: object.get(from, realm),
           writable: true,
           enumerable: true,
           configurable: true,
@@ -310,7 +310,7 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
         const to = String(index + itemCount);
 
         if (object.hasProperty(from)) {
-          object.put(to, object.get(from), true);
+          object.put(to, object.get(from, realm), true, realm);
         } else {
           object.delete(to, true);
         }
@@ -329,7 +329,7 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
         const to = String(index + itemCount - 1);
 
         if (object.hasProperty(from)) {
-          object.put(to, object.get(from), true);
+          object.put(to, object.get(from, realm), true, realm);
         } else {
           object.delete(to, true);
         }
@@ -337,10 +337,10 @@ function installMutatingArrayMethods(realm, arrayPrototype) {
     }
 
     for (let index = 0; index < itemCount; index += 1) {
-      object.put(String(actualStart + index), args[index + 2], true);
+      object.put(String(actualStart + index), args[index + 2], true, realm);
     }
 
-    object.put('length', length - deleteCount + itemCount, true);
+    object.put('length', length - deleteCount + itemCount, true, realm);
     return removed;
   });
 }
@@ -358,7 +358,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
 
   defineNativeMethod(realm, arrayPrototype, 'toString', 0, (thisValue) => {
     const object = toObject(realm, thisValue);
-    const join = object.get('join');
+    const join = object.get('join', realm);
 
     if (isCallable(join)) {
       return join.callFunction(object, [], realm);
@@ -373,7 +373,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
     0,
     (thisValue) => {
       const object = toObject(realm, thisValue);
-      const length = arrayLikeLength(object);
+      const length = arrayLikeLength(object, realm);
       let result = '';
 
       for (let index = 0; index < length; index += 1) {
@@ -381,7 +381,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
           result += ',';
         }
 
-        const element = object.get(String(index));
+        const element = object.get(String(index), realm);
 
         if (element === null || element === undefined) {
           continue;
@@ -396,12 +396,13 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
         // never re-boxes this — still see an object.
         const elementObject = toObject(realm, element);
         const toLocaleString = requireCallable(
-          elementObject.get('toLocaleString'),
+          elementObject.get('toLocaleString', realm),
           'Array element toLocaleString property is not callable',
         );
 
         result += toString(
           toLocaleString.callFunction(elementObject, [], realm),
+          realm,
         );
       }
 
@@ -418,13 +419,17 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
      */
     function append(value) {
       if (value instanceof EngineArray) {
-        const length = arrayLikeLength(value);
+        const length = arrayLikeLength(value, realm);
 
         for (let index = 0; index < length; index += 1) {
           const name = String(index);
 
           if (value.hasProperty(name)) {
-            createDataProperty(result, String(nextIndex), value.get(name));
+            createDataProperty(
+              result,
+              String(nextIndex),
+              value.get(name, realm),
+            );
           }
 
           nextIndex += 1;
@@ -445,8 +450,8 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
   });
   defineNativeMethod(realm, arrayPrototype, 'join', 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
-    const separator = args[0] === undefined ? ',' : toString(args[0]);
+    const length = arrayLikeLength(object, realm);
+    const separator = args[0] === undefined ? ',' : toString(args[0], realm);
     let result = '';
 
     for (let index = 0; index < length; index += 1) {
@@ -454,10 +459,10 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
         result += separator;
       }
 
-      const element = object.get(String(index));
+      const element = object.get(String(index), realm);
 
       if (element !== null && element !== undefined) {
-        result += toString(element);
+        result += toString(element, realm);
       }
     }
 
@@ -465,12 +470,12 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
   });
   defineNativeMethod(realm, arrayPrototype, 'slice', 2, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
-    const start = clampRelativeIndex(toInteger(args[0]), length);
+    const length = arrayLikeLength(object, realm);
+    const start = clampRelativeIndex(toInteger(args[0], realm), length);
     const end =
       args[1] === undefined
         ? length
-        : clampRelativeIndex(toInteger(args[1]), length);
+        : clampRelativeIndex(toInteger(args[1], realm), length);
     const result = new EngineArray(realm.intrinsics.arrayPrototype);
     let nextIndex = 0;
 
@@ -478,7 +483,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
       const name = String(index);
 
       if (object.hasProperty(name)) {
-        createDataProperty(result, String(nextIndex), object.get(name));
+        createDataProperty(result, String(nextIndex), object.get(name, realm));
       }
 
       nextIndex += 1;
@@ -489,13 +494,13 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
   });
   defineNativeMethod(realm, arrayPrototype, 'indexOf', 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
 
     if (length === 0) {
       return -1;
     }
 
-    const fromIndex = args.length > 1 ? toInteger(args[1]) : 0;
+    const fromIndex = args.length > 1 ? toInteger(args[1], realm) : 0;
 
     if (fromIndex >= length) {
       return -1;
@@ -514,7 +519,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
 
       if (
         object.hasProperty(name) &&
-        strictEqualityComparison(object.get(name), args[0])
+        strictEqualityComparison(object.get(name, realm), args[0])
       ) {
         return index;
       }
@@ -531,13 +536,14 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
     1,
     (thisValue, args) => {
       const object = toObject(realm, thisValue);
-      const length = arrayLikeLength(object);
+      const length = arrayLikeLength(object, realm);
 
       if (length === 0) {
         return -1;
       }
 
-      const fromIndex = args.length > 1 ? toInteger(args[1]) : length - 1;
+      const fromIndex =
+        args.length > 1 ? toInteger(args[1], realm) : length - 1;
 
       if (fromIndex < -length) {
         return -1;
@@ -556,7 +562,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
 
         if (
           object.hasProperty(name) &&
-          strictEqualityComparison(object.get(name), args[0])
+          strictEqualityComparison(object.get(name, realm), args[0])
         ) {
           return index;
         }
@@ -602,7 +608,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
   );
   defineNativeMethod(realm, arrayPrototype, 'map', 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
     const callback = requireCallable(
       args[0],
       'Array map callback is not callable',
@@ -622,7 +628,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
         name,
         callback.callFunction(
           args[1],
-          [object.get(name), index, object],
+          [object.get(name, realm), index, object],
           realm,
         ),
       );
@@ -632,7 +638,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
   });
   defineNativeMethod(realm, arrayPrototype, 'filter', 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
     const callback = requireCallable(
       args[0],
       'Array filter callback is not callable',
@@ -647,7 +653,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
         continue;
       }
 
-      const value = object.get(name);
+      const value = object.get(name, realm);
 
       if (callback.callFunction(args[1], [value, index, object], realm)) {
         createDataProperty(result, String(nextIndex), value);
@@ -678,7 +684,7 @@ function defineIterationMethod(
 ) {
   defineNativeMethod(realm, arrayPrototype, name, 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
     const callback = requireCallable(
       args[0],
       `Array ${name} callback is not callable`,
@@ -694,7 +700,7 @@ function defineIterationMethod(
       const completion = visit(
         callback.callFunction(
           args[1],
-          [object.get(property), index, object],
+          [object.get(property, realm), index, object],
           realm,
         ),
       );
@@ -718,7 +724,7 @@ function defineIterationMethod(
 function defineReduceMethod(realm, arrayPrototype, name, rightToLeft) {
   defineNativeMethod(realm, arrayPrototype, name, 1, (thisValue, args) => {
     const object = toObject(realm, thisValue);
-    const length = arrayLikeLength(object);
+    const length = arrayLikeLength(object, realm);
     const callback = requireCallable(
       args[0],
       `Array ${name} callback is not callable`,
@@ -737,7 +743,7 @@ function defineReduceMethod(realm, arrayPrototype, name, rightToLeft) {
         const property = String(index);
 
         if (object.hasProperty(property)) {
-          accumulator = object.get(property);
+          accumulator = object.get(property, realm);
           found = true;
           index += step;
           break;
@@ -760,7 +766,7 @@ function defineReduceMethod(realm, arrayPrototype, name, rightToLeft) {
       if (object.hasProperty(property)) {
         accumulator = callback.callFunction(
           undefined,
-          [accumulator, object.get(property), index, object],
+          [accumulator, object.get(property, realm), index, object],
           realm,
         );
       }
@@ -804,10 +810,11 @@ function clampRelativeIndex(relativeIndex, length) {
 
 /**
  * @param {EngineObject} object
+ * @param {Realm} callerRealm
  * @returns {number}
  */
-function arrayLikeLength(object) {
-  return toUint32(object.get('length'));
+function arrayLikeLength(object, callerRealm) {
+  return toUint32(object.get('length', callerRealm), callerRealm);
 }
 
 /**
@@ -842,12 +849,13 @@ function compareArrayValues(left, right, compare, callerRealm) {
   if (compare !== undefined) {
     const result = toNumber(
       compare.callFunction(undefined, [left, right], callerRealm),
+      callerRealm,
     );
     return Number.isNaN(result) ? 0 : result;
   }
 
-  const leftString = toString(left);
-  const rightString = toString(right);
+  const leftString = toString(left, callerRealm);
+  const rightString = toString(right, callerRealm);
 
   if (leftString < rightString) {
     return -1;

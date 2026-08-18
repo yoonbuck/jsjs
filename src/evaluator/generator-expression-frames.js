@@ -1364,6 +1364,7 @@ function finishMemberReference(execution, frame) {
           frame.node.property,
           frame.node.computed,
           frame.property,
+          execution.realm,
         ),
         frame.context.strict,
         frame.thisValue,
@@ -1379,6 +1380,7 @@ function finishMemberReference(execution, frame) {
         frame.node.property,
         frame.node.computed,
         frame.property,
+        execution.realm,
       ),
       frame.context.strict,
       frame.base,
@@ -1774,7 +1776,7 @@ function dispatchObjectPatternProperty(execution, frame) {
     }
 
     const key = captureGeneratorOperation(execution.realm, () =>
-      propertyNameFromValue(frame.node.key, false, undefined),
+      propertyNameFromValue(frame.node.key, false, undefined, execution.realm),
     );
 
     if (key.type === 'completion') {
@@ -1801,7 +1803,12 @@ function dispatchObjectPatternProperty(execution, frame) {
 
   if (frame.phase === 'key') {
     const key = captureGeneratorOperation(execution.realm, () =>
-      propertyNameFromValue(frame.node.key, true, result.value),
+      propertyNameFromValue(
+        frame.node.key,
+        true,
+        result.value,
+        execution.realm,
+      ),
     );
 
     if (key.type === 'completion') {
@@ -2445,7 +2452,10 @@ function dispatchUpdate(execution, frame) {
   }
 
   return popOperation(execution, () => {
-    const oldValue = toNumber(getValue(result.reference, execution.realm));
+    const oldValue = toNumber(
+      getValue(result.reference, execution.realm),
+      execution.realm,
+    );
     const newValue = frame.node.operator === '++' ? oldValue + 1 : oldValue - 1;
     putValue(result.reference, newValue, execution.realm);
     return frame.node.prefix ? newValue : oldValue;
@@ -2829,7 +2839,7 @@ function dispatchObjectLiteral(execution, frame) {
     }
 
     const key = captureGeneratorOperation(execution.realm, () =>
-      toEvaluatedPropertyKey(result.value),
+      toEvaluatedPropertyKey(result.value, execution.realm),
     );
 
     if (key.type === 'completion') {
@@ -2886,7 +2896,7 @@ function dispatchObjectLiteral(execution, frame) {
       }
 
       const key = captureGeneratorOperation(execution.realm, () =>
-        propertyNameFromValue(property.key, false, undefined),
+        propertyNameFromValue(property.key, false, undefined, execution.realm),
       );
 
       if (key.type === 'completion') {
@@ -3036,7 +3046,7 @@ function dispatchClassDefinition(execution, frame) {
     }
 
     const key = captureGeneratorOperation(execution.realm, () =>
-      toEvaluatedPropertyKey(result.value),
+      toEvaluatedPropertyKey(result.value, execution.realm),
     );
 
     if (key.type === 'completion') {
@@ -3077,7 +3087,7 @@ function dispatchClassDefinition(execution, frame) {
     }
 
     const key = captureGeneratorOperation(execution.realm, () =>
-      propertyNameFromValue(definition.key, false, undefined),
+      propertyNameFromValue(definition.key, false, undefined, execution.realm),
     );
 
     if (key.type === 'completion') {
@@ -3198,7 +3208,7 @@ function dispatchTemplate(execution, frame) {
   }
 
   const appended = captureGeneratorOperation(execution.realm, () => {
-    frame.value += toString(result.value);
+    frame.value += toString(result.value, execution.realm);
     frame.value += requiredCookedTemplateValue(
       frame.node.quasis[frame.index + 1],
     );
@@ -3385,49 +3395,49 @@ function applyBinaryOperator(operator, left, right, realm) {
 
   switch (operator) {
     case '+':
-      return add(left, right);
+      return add(left, right, realm);
     case '-':
-      return subtract(left, right);
+      return subtract(left, right, realm);
     case '*':
-      return multiply(left, right);
+      return multiply(left, right, realm);
     case '/':
-      return divide(left, right);
+      return divide(left, right, realm);
     case '%':
-      return remainder(left, right);
+      return remainder(left, right, realm);
     case '==':
-      return abstractEqualityComparison(left, right);
+      return abstractEqualityComparison(left, right, realm);
     case '!=':
-      return !abstractEqualityComparison(left, right);
+      return !abstractEqualityComparison(left, right, realm);
     case '===':
       return strictEqualityComparison(left, right);
     case '!==':
       return !strictEqualityComparison(left, right);
     case '<': {
-      const result = abstractRelationalComparison(left, right, true);
+      const result = abstractRelationalComparison(left, right, true, realm);
       return result === undefined ? false : result;
     }
     case '>': {
-      const result = abstractRelationalComparison(right, left, false);
+      const result = abstractRelationalComparison(right, left, false, realm);
       return result === undefined ? false : result;
     }
     case '<=': {
-      const result = abstractRelationalComparison(right, left, false);
+      const result = abstractRelationalComparison(right, left, false, realm);
       return result === undefined || result === true ? false : true;
     }
     case '>=': {
-      const result = abstractRelationalComparison(left, right, true);
+      const result = abstractRelationalComparison(left, right, true, realm);
       return result === undefined || result === true ? false : true;
     }
     case '<<':
-      return leftShift(left, right);
+      return leftShift(left, right, realm);
     case '>>':
-      return signedRightShift(left, right);
+      return signedRightShift(left, right, realm);
     case '>>>':
-      return unsignedRightShift(left, right);
+      return unsignedRightShift(left, right, realm);
     case '&':
-      return bitwiseAND(left, right);
+      return bitwiseAND(left, right, realm);
     case '^':
-      return bitwiseXOR(left, right);
+      return bitwiseXOR(left, right, realm);
     case 'in':
       if (!(right instanceof EngineObject)) {
         throwGuestTypeError(
@@ -3436,7 +3446,7 @@ function applyBinaryOperator(operator, left, right, realm) {
           }`,
         );
       }
-      return right.hasProperty(toPropertyKey(left));
+      return right.hasProperty(toPropertyKey(left, realm));
     case 'instanceof':
       if (!(right instanceof EngineObject)) {
         throwGuestTypeError("Right-hand side of 'instanceof' is not an object");
@@ -3446,7 +3456,7 @@ function applyBinaryOperator(operator, left, right, realm) {
       }
       return right.hasInstance(left);
     default:
-      return bitwiseOR(left, right);
+      return bitwiseOR(left, right, realm);
   }
 }
 
@@ -3504,11 +3514,11 @@ function applyUnaryOperator(operator, result, realm) {
     case '!':
       return !toBoolean(result.value);
     case '-':
-      return -toNumber(result.value);
+      return -toNumber(result.value, realm);
     case '+':
-      return toNumber(result.value);
+      return toNumber(result.value, realm);
     case '~':
-      return ~toInt32(result.value);
+      return ~toInt32(result.value, realm);
     default:
       throw createUnsupportedOperatorError('unary', operator);
   }

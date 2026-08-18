@@ -77,10 +77,10 @@ export function createDateIntrinsics(realm) {
     configurable: true,
   });
   defineMethod(realm, dateConstructor, 'parse', 1, (_thisValue, args) =>
-    parseDateString(toString(args[0])),
+    parseDateString(toString(args[0], realm)),
   );
   defineMethod(realm, dateConstructor, 'UTC', 7, (_thisValue, args) =>
-    dateUTC(args),
+    dateUTC(args, realm),
   );
   defineMethod(realm, dateConstructor, 'now', 0, () =>
     timeClip(realm.dateHost.now()),
@@ -183,12 +183,12 @@ function installDatePrototypeMethods(realm, datePrototype) {
   });
   defineMethod(realm, datePrototype, 'toJSON', 1, (thisValue) => {
     const object = toObject(realm, thisValue);
-    const primitive = toPrimitive(object, 'number');
+    const primitive = toPrimitive(object, 'number', realm);
     if (typeof primitive === 'number' && !Number.isFinite(primitive)) {
       return null;
     }
 
-    const toISOString = object.get('toISOString');
+    const toISOString = object.get('toISOString', realm);
     if (!isCallable(toISOString)) {
       throw new GuestErrorSignal('TypeError', 'toISOString is not callable');
     }
@@ -205,7 +205,7 @@ function installDatePrototypeMethods(realm, datePrototype) {
 
   defineMethod(realm, datePrototype, 'setTime', 1, (thisValue, args) => {
     const date = requireDate(thisValue);
-    date.timeValue = timeClip(toNumber(args[0]));
+    date.timeValue = timeClip(toNumber(args[0], realm));
     return date.timeValue;
   });
   installDateSetters(realm, datePrototype);
@@ -257,9 +257,9 @@ function installDateSetters(realm, datePrototype) {
   /** @type {(name: string, length: number, local: boolean, start: number, recover?: boolean) => void} */
   const fieldSetter = (name, length, local, start, recover = false) => {
     set(name, length, (date, args) => {
-      const values = [toNumber(args[0])];
+      const values = [toNumber(args[0], realm)];
       for (let index = 1; index < length && index < args.length; index += 1) {
-        values.push(toNumber(args[index]));
+        values.push(toNumber(args[index], realm));
       }
       const fields = dateFields(date, realm, local, recover);
       if (fields === undefined) {
@@ -289,7 +289,7 @@ function installDateSetters(realm, datePrototype) {
   fieldSetter('setFullYear', 3, true, 0, true);
   fieldSetter('setUTCFullYear', 3, false, 0, true);
   set('setYear', 1, (date, args) => {
-    let year = toNumber(args[0]);
+    let year = toNumber(args[0], realm);
     const fields = dateFields(date, realm, true, true);
     if (fields === undefined) {
       date.timeValue = NaN;
@@ -297,7 +297,7 @@ function installDateSetters(realm, datePrototype) {
     }
 
     if (Number.isFinite(year)) {
-      year = toInteger(year);
+      year = toInteger(year, realm);
       if (year >= 0 && year <= 99) {
         year += 1900;
       }
@@ -396,13 +396,13 @@ function dateValueFromArguments(realm, args) {
 
   if (args.length === 1) {
     const value = args[0];
-    const primitive = toPrimitive(value);
+    const primitive = toPrimitive(value, 'default', realm);
     return typeof primitive === 'string'
       ? parseDateString(primitive)
-      : timeClip(toNumber(primitive));
+      : timeClip(toNumber(primitive, realm));
   }
 
-  return dateFromLocalArguments(args, realm.dateHost);
+  return dateFromLocalArguments(args, realm.dateHost, realm);
 }
 
 /**

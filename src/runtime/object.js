@@ -350,9 +350,10 @@ export class EngineObject {
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false) {
+  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
     // Fast path: a {value}-only update on an existing writable data descriptor
     // avoids validatePropertyDescriptor, completePropertyDescriptor, and the
     // full branching logic below. This is the hottest path from `put`.
@@ -544,20 +545,26 @@ export class EngineObject {
 
   /**
    * @param {'string' | 'number' | 'default'} [hint='number']
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {string | number | boolean | symbol | null | undefined}
    */
-  defaultValue(hint = 'number') {
+  defaultValue(hint = 'number', callerRealm) {
     const methodNames =
       hint === 'string' ? ['toString', 'valueOf'] : ['valueOf', 'toString'];
 
     for (const name of methodNames) {
-      const method = this.get(name);
+      const method = this.get(name, callerRealm);
 
       if (typeof method !== 'function' && !isCallable(method)) {
         continue;
       }
 
-      const result = callAccessor(/** @type {any} */ (method), this, []);
+      const result = callAccessor(
+        /** @type {any} */ (method),
+        this,
+        [],
+        callerRealm,
+      );
 
       if (isPrimitive(result)) {
         return result;
@@ -861,7 +868,12 @@ function setWithOwnDescriptor(
     }
 
     if (ownerIsReceiver) {
-      return receiver.defineOwnProperty(name, { value }, throwOnError);
+      return receiver.defineOwnProperty(
+        name,
+        { value },
+        throwOnError,
+        callerRealm,
+      );
     }
 
     const existing = receiver.getOwnProperty(name);
@@ -874,13 +886,19 @@ function setWithOwnDescriptor(
         );
       }
 
-      return receiver.defineOwnProperty(name, { value }, throwOnError);
+      return receiver.defineOwnProperty(
+        name,
+        { value },
+        throwOnError,
+        callerRealm,
+      );
     }
 
     return receiver.defineOwnProperty(
       name,
       { value, writable: true, enumerable: true, configurable: true },
       throwOnError,
+      callerRealm,
     );
   }
 

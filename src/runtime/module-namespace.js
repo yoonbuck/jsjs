@@ -99,13 +99,19 @@ export class ModuleNamespaceObject extends EngineObject {
    * @param {PropertyKey} key
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(key, descriptor, throwOnError = false) {
+  defineOwnProperty(key, descriptor, throwOnError = false, callerRealm) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
 
     if (resolved === undefined) {
-      return super.defineOwnProperty(key, descriptor, throwOnError);
+      return super.defineOwnProperty(
+        key,
+        descriptor,
+        throwOnError,
+        callerRealm,
+      );
     }
 
     const candidate = validatePropertyDescriptor(descriptor);

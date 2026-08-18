@@ -103,7 +103,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
     // symbol-to-text conversion the language offers; `new String(sym)` still
     // goes through ToString and throws.
     callConvert: (value) =>
-      isSymbol(value) ? symbolDescriptiveString(value) : toString(value),
+      isSymbol(value) ? symbolDescriptiveString(value) : toString(value, realm),
     defaultValue: '',
   });
   const numberConstructor = createWrapperConstructor(realm, {
@@ -156,8 +156,8 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       call(thisValue, args) {
         // ES5 15.5.4.4 is generic: CheckObjectCoercible + ToString(this),
         // not the strict "this string value" check toString/valueOf use.
-        const value = stringMethodReceiver(thisValue);
-        const position = toInteger(args[0]);
+        const value = stringMethodReceiver(thisValue, realm);
+        const position = toInteger(args[0], realm);
 
         return position < 0 || position >= value.length ? '' : value[position];
       },
@@ -175,8 +175,8 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // own `charCodeOfCodeUnit` -- never by host
         // `String.prototype.charCodeAt`, which would be delegating exactly
         // the semantics this method exists to define.
-        const value = stringMethodReceiver(thisValue);
-        const position = toInteger(args[0]);
+        const value = stringMethodReceiver(thisValue, realm);
+        const position = toInteger(args[0], realm);
 
         return position < 0 || position >= value.length
           ? NaN
@@ -191,10 +191,10 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'concat',
       length: 1,
       call(thisValue, args) {
-        let value = stringMethodReceiver(thisValue);
+        let value = stringMethodReceiver(thisValue, realm);
 
         for (const arg of args) {
-          value += toString(arg);
+          value += toString(arg, realm);
         }
 
         return value;
@@ -210,12 +210,12 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       call(thisValue, args) {
         // ES5 15.5.4.13: unlike substring, out-of-order start/end are never
         // swapped -- `from > to` simply yields a zero-length (empty) result.
-        const value = stringMethodReceiver(thisValue);
+        const value = stringMethodReceiver(thisValue, realm);
         const length = value.length;
-        const relativeStart = toInteger(args[0]);
+        const relativeStart = toInteger(args[0], realm);
         const endArgument = args[1];
         const relativeEnd =
-          endArgument === undefined ? length : toInteger(endArgument);
+          endArgument === undefined ? length : toInteger(endArgument, realm);
 
         const from =
           relativeStart < 0
@@ -239,12 +239,12 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       call(thisValue, args) {
         // ES5 15.5.4.15: both bounds clamp to [0, length] independently, and
         // an out-of-order pair is swapped rather than yielding "".
-        const value = stringMethodReceiver(thisValue);
+        const value = stringMethodReceiver(thisValue, realm);
         const length = value.length;
-        const startInteger = toInteger(args[0]);
+        const startInteger = toInteger(args[0], realm);
         const endArgument = args[1];
         const endInteger =
-          endArgument === undefined ? length : toInteger(endArgument);
+          endArgument === undefined ? length : toInteger(endArgument, realm);
 
         const finalStart = clampToLength(startInteger, length);
         const finalEnd = clampToLength(endInteger, length);
@@ -281,12 +281,14 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // engine behaviour via `stringMethodReceiver`. See
         // `number-format.js`'s module JSDoc for the full errata-policy
         // rationale.
-        const value = stringMethodReceiver(thisValue);
+        const value = stringMethodReceiver(thisValue, realm);
         const length = value.length;
-        let start = toInteger(args[0]);
+        let start = toInteger(args[0], realm);
         const lengthArgument = args[1];
         const requestedLength =
-          lengthArgument === undefined ? Infinity : toInteger(lengthArgument);
+          lengthArgument === undefined
+            ? Infinity
+            : toInteger(lengthArgument, realm);
 
         if (start < 0) {
           start = Math.max(length + start, 0);
@@ -313,9 +315,9 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // ES5 15.5.4.7: receiver, then searchString, then position -- and
         // `ToInteger(undefined)` is +0, so an omitted position starts the
         // search at the beginning.
-        const value = stringMethodReceiver(thisValue);
-        const search = toString(args[0]);
-        const position = toInteger(args[1]);
+        const value = stringMethodReceiver(thisValue, realm);
+        const search = toString(args[0], realm);
+        const position = toInteger(args[1], realm);
         const start = clampToLength(position, value.length);
 
         return stringIndexOf(value, search, start);
@@ -332,12 +334,12 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // ES5 15.5.4.8 steps 4-5 differ from indexOf's: the position goes
         // through ToNumber first, and a NaN result (which includes an
         // omitted argument) means +Infinity, not +0.
-        const value = stringMethodReceiver(thisValue);
-        const search = toString(args[0]);
-        const numberPosition = toNumber(args[1]);
+        const value = stringMethodReceiver(thisValue, realm);
+        const search = toString(args[0], realm);
+        const numberPosition = toNumber(args[1], realm);
         const position = Number.isNaN(numberPosition)
           ? Infinity
-          : toInteger(numberPosition);
+          : toInteger(numberPosition, realm);
         const start = clampToLength(position, value.length);
 
         return stringLastIndexOf(value, search, start);
@@ -354,9 +356,9 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // ES5 15.5.4.9 leaves the ordering implementation-defined; this
         // engine defines it as code-unit lexicographic order (see
         // `string-search.js`), which is deterministic and host-locale-free.
-        const value = stringMethodReceiver(thisValue);
+        const value = stringMethodReceiver(thisValue, realm);
 
-        return compareCodeUnits(value, toString(args[0]));
+        return compareCodeUnits(value, toString(args[0], realm));
       },
     }),
   );
@@ -367,7 +369,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'toLowerCase',
       length: 0,
       call(thisValue) {
-        return toLowerCaseString(stringMethodReceiver(thisValue));
+        return toLowerCaseString(stringMethodReceiver(thisValue, realm));
       },
     }),
   );
@@ -382,7 +384,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // change the result. This engine has no locale of its own and must
         // not consult the host's, so it is a documented deterministic alias
         // of `toLowerCase` -- the locale-insensitive mapping, everywhere.
-        return toLowerCaseString(stringMethodReceiver(thisValue));
+        return toLowerCaseString(stringMethodReceiver(thisValue, realm));
       },
     }),
   );
@@ -393,7 +395,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'toUpperCase',
       length: 0,
       call(thisValue) {
-        return toUpperCaseString(stringMethodReceiver(thisValue));
+        return toUpperCaseString(stringMethodReceiver(thisValue, realm));
       },
     }),
   );
@@ -406,7 +408,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       call(thisValue) {
         // ES5 15.5.4.19, the same deterministic alias as
         // `toLocaleLowerCase` above.
-        return toUpperCaseString(stringMethodReceiver(thisValue));
+        return toUpperCaseString(stringMethodReceiver(thisValue, realm));
       },
     }),
   );
@@ -417,7 +419,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'trim',
       length: 0,
       call(thisValue) {
-        return trimString(stringMethodReceiver(thisValue));
+        return trimString(stringMethodReceiver(thisValue, realm));
       },
     }),
   );
@@ -433,7 +435,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // RegExp(ToString(pattern))` (an omitted argument becomes the empty
         // pattern, which matches at position 0); one that already is a
         // RegExp object is used as-is, `global`/`lastIndex` included.
-        const value = stringMethodReceiver(thisValue);
+        const value = stringMethodReceiver(thisValue, realm);
         const rx = toRegExp(realm, args[0]);
 
         return matchWithRegExp(realm, rx, value);
@@ -450,7 +452,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // ES5 15.5.4.12, the same pattern treatment as `match`, but
         // `lastIndex`/`global` are ignored entirely and there is no position
         // argument: the search always starts at 0.
-        const value = stringMethodReceiver(thisValue);
+        const value = stringMethodReceiver(thisValue, realm);
         const rx = toRegExp(realm, args[0]);
 
         return searchWithRegExp(rx, value);
@@ -464,7 +466,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
       name: 'replace',
       length: 2,
       call(thisValue, args) {
-        const value = stringMethodReceiver(thisValue);
+        const value = stringMethodReceiver(thisValue, realm);
         const searchValue = args[0];
         const replaceValue = args[1];
 
@@ -485,11 +487,12 @@ export function createPrimitiveWrapperIntrinsics(realm) {
                     [matched, ...captures, position, whole],
                     realm,
                   ),
+                  realm,
                 ),
             );
           }
 
-          const replacement = toString(replaceValue);
+          const replacement = toString(replaceValue, realm);
 
           return replaceWithRegExp(
             realm,
@@ -512,7 +515,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // replacement is converted implicit; ES2015 made it explicit (before
         // the search, so it happens even when nothing matches) and that is
         // what every engine does, so it is what this engine does too.
-        const search = toString(searchValue);
+        const search = toString(searchValue, realm);
 
         if (isCallable(replaceValue)) {
           return replaceFirst(value, search, (matched, position, whole) =>
@@ -522,11 +525,12 @@ export function createPrimitiveWrapperIntrinsics(realm) {
                 [matched, position, whole],
                 realm,
               ),
+              realm,
             ),
           );
         }
 
-        const replacement = toString(replaceValue);
+        const replacement = toString(replaceValue, realm);
 
         return replaceFirst(value, search, (matched, position, whole) =>
           expandReplacement(replacement, matched, position, whole, []),
@@ -545,8 +549,9 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // separator's [[Class]] is examined at all (step 8), and an
         // undefined separator yields the whole string rather than a search
         // for "undefined" (step 10).
-        const value = stringMethodReceiver(thisValue);
-        const limit = args[1] === undefined ? 4294967295 : toUint32(args[1]);
+        const value = stringMethodReceiver(thisValue, realm);
+        const limit =
+          args[1] === undefined ? 4294967295 : toUint32(args[1], realm);
         const separatorArg = args[0];
 
         if (isRegExpObject(separatorArg)) {
@@ -558,7 +563,9 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // A String separator is never turned into a RegExp -- it stays a
         // literal search, ES5 15.5.4.14 steps 9-14.
         const separator =
-          separatorArg === undefined ? undefined : toString(separatorArg);
+          separatorArg === undefined
+            ? undefined
+            : toString(separatorArg, realm);
 
         return splitOnString(realm, value, separator, limit);
       },
@@ -583,7 +590,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         let result = '';
 
         for (const arg of args) {
-          result += codeUnitFromCharCode(toUint16(arg));
+          result += codeUnitFromCharCode(toUint16(arg, realm));
         }
 
         return result;
@@ -618,7 +625,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
           return numberToStringRadix(number, 10);
         }
 
-        const radix = toInteger(radixArgument);
+        const radix = toInteger(radixArgument, realm);
 
         if (radix < 2 || radix > 36) {
           throw new GuestErrorSignal(
@@ -665,7 +672,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         // rationale.
         const number = thisNumberValue(thisValue);
 
-        return numberToFixed(number, toInteger(args[0]));
+        return numberToFixed(number, toInteger(args[0], realm));
       },
     }),
   );
@@ -681,7 +688,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
 
         return numberToExponential(
           number,
-          toInteger(fractionDigits),
+          toInteger(fractionDigits, realm),
           fractionDigits === undefined,
         );
       },
@@ -703,7 +710,7 @@ export function createPrimitiveWrapperIntrinsics(realm) {
           return numberToStringRadix(number, 10);
         }
 
-        return numberToPrecision(number, toInteger(precision));
+        return numberToPrecision(number, toInteger(precision, realm));
       },
     }),
   );
@@ -744,12 +751,13 @@ export function createPrimitiveWrapperIntrinsics(realm) {
  * in the normal `ToPrimitive` order.
  *
  * @param {unknown} thisValue
+ * @param {Realm} realm
  * @returns {string}
  */
-function stringMethodReceiver(thisValue) {
+function stringMethodReceiver(thisValue, realm) {
   checkObjectCoercible(thisValue);
 
-  return toString(thisValue);
+  return toString(thisValue, realm);
 }
 
 /**
@@ -771,7 +779,7 @@ function toRegExp(realm, pattern) {
 
   return createRegExpFromPattern(
     realm,
-    pattern === undefined ? '' : toString(pattern),
+    pattern === undefined ? '' : toString(pattern, realm),
     '',
   );
 }
@@ -829,8 +837,8 @@ export function installPrimitiveWrapperConstructors(globalObject, intrinsics) {
  * @param {{
  *   name: string,
  *   prototype: EngineObject,
- *   convert: (value: unknown) => string | number | boolean,
- *   callConvert?: (value: unknown) => string | number | boolean,
+ *   convert: (value: unknown, callerRealm?: Realm) => string | number | boolean,
+ *   callConvert?: (value: unknown, callerRealm?: Realm) => string | number | boolean,
  *   defaultValue: string | number | boolean,
  * }} options
  * @returns {import('./shared.js').NativeFunction}
@@ -845,10 +853,10 @@ function createWrapperConstructor(
     length: 1,
     prototype,
     call(_thisValue, args) {
-      return args.length === 0 ? defaultValue : convertForCall(args[0]);
+      return args.length === 0 ? defaultValue : convertForCall(args[0], realm);
     },
     construct(args) {
-      const value = args.length === 0 ? defaultValue : convert(args[0]);
+      const value = args.length === 0 ? defaultValue : convert(args[0], realm);
       return createPrimitiveWrapper(realm, value);
     },
   });

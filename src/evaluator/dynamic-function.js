@@ -64,7 +64,7 @@ export function createDynamicFunction(realm, args, kind = 'normal') {
     throw new TypeError(`Unsupported dynamic function kind: ${kind}`);
   }
 
-  const { parameterText, bodyText } = coerceArguments(args);
+  const { parameterText, bodyText } = coerceArguments(args, realm);
   const functionNode = parseDynamicFunction(parameterText, bodyText, kind);
 
   // The Global Environment is the created function's scope, and a fresh
@@ -97,9 +97,10 @@ export function createDynamicFunction(realm, args, kind = 'normal') {
  * throwing `toString` (or `valueOf`) is observed in that order.
  *
  * @param {readonly unknown[]} args
+ * @param {import('../runtime/realm.js').Realm} realm
  * @returns {{ parameterText: string, bodyText: string }}
  */
-function coerceArguments(args) {
+function coerceArguments(args, realm) {
   const argCount = args.length;
 
   if (argCount === 0) {
@@ -107,16 +108,16 @@ function coerceArguments(args) {
   }
 
   if (argCount === 1) {
-    return { parameterText: '', bodyText: toString(args[0]) };
+    return { parameterText: '', bodyText: toString(args[0], realm) };
   }
 
-  let parameterText = toString(args[0]);
+  let parameterText = toString(args[0], realm);
 
   for (let k = 1; k < argCount - 1; k += 1) {
-    parameterText += ',' + toString(args[k]);
+    parameterText += ',' + toString(args[k], realm);
   }
 
-  const bodyText = toString(args[argCount - 1]);
+  const bodyText = toString(args[argCount - 1], realm);
 
   return { parameterText, bodyText };
 }

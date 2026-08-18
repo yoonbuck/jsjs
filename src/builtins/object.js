@@ -52,7 +52,7 @@ export function createObjectIntrinsics(realm) {
 
     const candidate =
       newTarget instanceof EngineObject
-        ? newTarget.get('prototype')
+        ? newTarget.get('prototype', realm)
         : undefined;
     return new EngineObject(
       candidate instanceof EngineObject ? candidate : objectPrototype,
@@ -107,7 +107,7 @@ export function createObjectIntrinsics(realm) {
         // when it is a String, so every ES5 tag is unchanged (no ES5 object
         // carries the property) and a non-string tag falls back rather than
         // being coerced.
-        const tag = object.get(agent.wellKnownSymbols.toStringTag);
+        const tag = object.get(agent.wellKnownSymbols.toStringTag, realm);
 
         return `[object ${typeof tag === 'string' ? tag : object.getClassName()}]`;
       },
@@ -122,7 +122,7 @@ export function createObjectIntrinsics(realm) {
       call(thisValue) {
         const object = toObject(realm, thisValue);
         const method = requireCallable(
-          object.get('toString'),
+          object.get('toString', realm),
           'toString is not callable',
         );
         return method.callFunction(object, [], realm);
@@ -151,7 +151,7 @@ export function createObjectIntrinsics(realm) {
         // coercion runs before ToObject(this), so a throwing V-coercion must
         // pre-empt a throwing/absent `this`. ES2015 replaced ToString with
         // ToPropertyKey so a symbol key is looked up by identity.
-        const propertyKey = toPropertyKey(args[0]);
+        const propertyKey = toPropertyKey(args[0], realm);
         return (
           toObject(realm, thisValue).getOwnProperty(propertyKey) !== undefined
         );
@@ -196,7 +196,7 @@ export function createObjectIntrinsics(realm) {
         // ES5.1 15.2.4.7 steps 1-2 (ES2015 19.1.3.4 steps 1-2): P is derived
         // from V before O = ToObject(this), so a throwing V-coercion must
         // pre-empt a throwing/absent `this` (e.g. a bare, unbound call).
-        const propertyKey = toPropertyKey(args[0]);
+        const propertyKey = toPropertyKey(args[0], realm);
         const descriptor = toObject(realm, thisValue).getOwnProperty(
           propertyKey,
         );
@@ -299,7 +299,9 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     (_this, args) =>
       fromPropertyDescriptor(
         realm,
-        requireObjectArgument(args[0]).getOwnProperty(toPropertyKey(args[1])),
+        requireObjectArgument(args[0]).getOwnProperty(
+          toPropertyKey(args[1], realm),
+        ),
       ),
   );
   defineNativeMethod(
@@ -359,9 +361,9 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     3,
     (_this, args) => {
       const object = requireObjectArgument(args[0]);
-      const name = toPropertyKey(args[1]);
-      const descriptor = toPropertyDescriptor(args[2]);
-      object.defineOwnProperty(name, descriptor, true);
+      const name = toPropertyKey(args[1], realm);
+      const descriptor = toPropertyDescriptor(args[2], realm);
+      object.defineOwnProperty(name, descriptor, true, realm);
       return object;
     },
   );
@@ -469,12 +471,12 @@ function defineProperties(realm, object, propertiesValue) {
 
     definitions.push({
       name,
-      descriptor: toPropertyDescriptor(properties.get(name)),
+      descriptor: toPropertyDescriptor(properties.get(name, realm), realm),
     });
   }
 
   for (const { name, descriptor } of definitions) {
-    object.defineOwnProperty(name, descriptor, true);
+    object.defineOwnProperty(name, descriptor, true, realm);
   }
 
   return object;

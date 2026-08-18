@@ -410,13 +410,22 @@ function evaluateUnaryExpression(node, context) {
     case '!':
       return !toBoolean(evaluateExpressionValue(node.argument, context));
     case '-':
-      return -toNumber(evaluateExpressionValue(node.argument, context));
+      return -toNumber(
+        evaluateExpressionValue(node.argument, context),
+        context.realm,
+      );
     case '+':
-      return toNumber(evaluateExpressionValue(node.argument, context));
+      return toNumber(
+        evaluateExpressionValue(node.argument, context),
+        context.realm,
+      );
     case '~':
       // ECMA-262 5.1 §11.4.8: ~ applies the bitwise complement to the
       // operand's ToInt32 value, matching the binary bitwise operators.
-      return ~toInt32(evaluateExpressionValue(node.argument, context));
+      return ~toInt32(
+        evaluateExpressionValue(node.argument, context),
+        context.realm,
+      );
     default:
       throw createUnsupportedOperatorError('unary', node.operator);
   }
@@ -495,54 +504,55 @@ function evaluateTypeofExpression(argument, context) {
  * @param {string} operator
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('../runtime/realm.js').Realm} realm
  * @returns {unknown}
  */
-function applyBinaryOperator(operator, left, right) {
+function applyBinaryOperator(operator, left, right, realm) {
   switch (operator) {
     case '+':
-      return add(left, right);
+      return add(left, right, realm);
     case '-':
-      return subtract(left, right);
+      return subtract(left, right, realm);
     case '*':
-      return multiply(left, right);
+      return multiply(left, right, realm);
     case '/':
-      return divide(left, right);
+      return divide(left, right, realm);
     case '%':
-      return remainder(left, right);
+      return remainder(left, right, realm);
     case '==':
-      return abstractEqualityComparison(left, right);
+      return abstractEqualityComparison(left, right, realm);
     case '!=':
-      return !abstractEqualityComparison(left, right);
+      return !abstractEqualityComparison(left, right, realm);
     case '===':
       return strictEqualityComparison(left, right);
     case '!==':
       return !strictEqualityComparison(left, right);
     case '<': {
-      const result = abstractRelationalComparison(left, right, true);
+      const result = abstractRelationalComparison(left, right, true, realm);
       return result === undefined ? false : result;
     }
     case '>': {
-      const result = abstractRelationalComparison(right, left, false);
+      const result = abstractRelationalComparison(right, left, false, realm);
       return result === undefined ? false : result;
     }
     case '<=': {
-      const result = abstractRelationalComparison(right, left, false);
+      const result = abstractRelationalComparison(right, left, false, realm);
       return result === undefined || result === true ? false : true;
     }
     case '>=': {
-      const result = abstractRelationalComparison(left, right, true);
+      const result = abstractRelationalComparison(left, right, true, realm);
       return result === undefined || result === true ? false : true;
     }
     case '<<':
-      return leftShift(left, right);
+      return leftShift(left, right, realm);
     case '>>':
-      return signedRightShift(left, right);
+      return signedRightShift(left, right, realm);
     case '>>>':
-      return unsignedRightShift(left, right);
+      return unsignedRightShift(left, right, realm);
     case '&':
-      return bitwiseAND(left, right);
+      return bitwiseAND(left, right, realm);
     case '^':
-      return bitwiseXOR(left, right);
+      return bitwiseXOR(left, right, realm);
     case 'in': {
       // ES5 11.8.7 step 5: check RHS type BEFORE any key coercion on the
       // LHS, so a guest toString/valueOf on the LHS cannot run or override
@@ -554,7 +564,7 @@ function applyBinaryOperator(operator, left, right) {
         );
       }
 
-      return right.hasProperty(toPropertyKey(left));
+      return right.hasProperty(toPropertyKey(left, realm));
     }
     case 'instanceof': {
       if (!(right instanceof EngineObject)) {
@@ -575,7 +585,7 @@ function applyBinaryOperator(operator, left, right) {
     }
     default:
       // '|'
-      return bitwiseOR(left, right);
+      return bitwiseOR(left, right, realm);
   }
 }
 
@@ -594,7 +604,7 @@ function evaluateBinaryExpression(node, context) {
   const left = evaluateExpressionValue(node.left, context);
   const right = evaluateExpressionValue(node.right, context);
 
-  return applyBinaryOperator(operator, left, right);
+  return applyBinaryOperator(operator, left, right, context.realm);
 }
 
 /**
@@ -678,7 +688,12 @@ function evaluateAssignmentExpression(node, context) {
 
   const leftValue = getValue(reference, context.realm);
   const rightValue = evaluateExpressionValue(node.right, context);
-  const result = applyBinaryOperator(binaryOperator, leftValue, rightValue);
+  const result = applyBinaryOperator(
+    binaryOperator,
+    leftValue,
+    rightValue,
+    context.realm,
+  );
   putValue(reference, result, context.realm);
   return result;
 }
@@ -704,7 +719,7 @@ function evaluateUpdateExpression(node, context) {
   const reference = /** @type {Reference} */ (
     evaluateExpression(node.argument, context)
   );
-  const oldValue = toNumber(getValue(reference, context.realm));
+  const oldValue = toNumber(getValue(reference, context.realm), context.realm);
   const newValue = node.operator === '++' ? oldValue + 1 : oldValue - 1;
   putValue(reference, newValue, context.realm);
   return node.prefix ? newValue : oldValue;
@@ -850,6 +865,7 @@ function evaluateTemplateLiteral(node, context) {
   for (let index = 0; index < node.expressions.length; index += 1) {
     value += toString(
       evaluateExpressionValue(node.expressions[index], context),
+      context.realm,
     );
     value += requiredCookedTemplateValue(node.quasis[index + 1]);
   }
@@ -1109,7 +1125,7 @@ function createOrdinaryMemberReference(baseValue, propertyValue, context) {
 
   return new Reference(
     toObjectBase(context.realm, baseValue),
-    toPropertyKey(propertyValue),
+    toPropertyKey(propertyValue, context.realm),
     context.strict,
     baseValue,
   );
@@ -1134,7 +1150,7 @@ function createSuperMemberReference(
 
   return new Reference(
     new SuperReferenceBase(superBase, thisValue),
-    toPropertyKey(propertyValue),
+    toPropertyKey(propertyValue, context.realm),
     context.strict,
     thisValue,
   );

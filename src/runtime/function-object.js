@@ -733,11 +733,17 @@ export class ArgumentsObject extends EngineObject {
    * @param {PropertyKey} name
    * @param {import('./descriptors.js').PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false) {
+  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
     const parameterName = this._parameterMap.get(name);
-    const defined = super.defineOwnProperty(name, descriptor, throwOnError);
+    const defined = super.defineOwnProperty(
+      name,
+      descriptor,
+      throwOnError,
+      callerRealm,
+    );
 
     if (!defined || parameterName === undefined) {
       return defined;

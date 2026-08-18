@@ -112,6 +112,35 @@ function assertFiniteGeneratorResume(realm, label) {
 }
 
 /**
+ * Creates a foreign guest function whose body starts a finite but deep
+ * generator chain. The caller Realm's deliberately smaller budget must govern
+ * that chain whenever an abstract operation invokes the function.
+ *
+ * @param {import('../src/runtime/realm.js').Realm} realm
+ * @param {string} name
+ * @returns {import('../src/runtime/descriptors.js').CallableLike}
+ */
+function createDeepGeneratorStarter(realm, name) {
+  return /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+    evaluateScript(
+      realm,
+      `
+        function* ${name}Generator(depth) {
+          if (depth === 0) {
+            return 41;
+          }
+          return ${name}Generator(depth - 1).next().value;
+        }
+        function ${name}() {
+          return ${name}Generator(120).next().value;
+        }
+        ${name};
+      `,
+    ).value
+  );
+}
+
+/**
  * @param {{ type: string, value: unknown }} completion
  * @param {readonly import('../src/runtime/realm.js').Realm[]} realms
  * @returns {void}
@@ -2150,6 +2179,150 @@ const tests = [
       assertSame(completion.type, 'normal');
       assertSame(completion.value, 42);
       assertGeneratorAccountingCleared([realmA, realmB, realmC]);
+    },
+  },
+  {
+    name: 'cross-Agent ToPrimitive calls charge the executing Realm before starting a generator',
+    run() {
+      for (const kind of ['exotic', 'ordinary']) {
+        const callerRealm = createRealm({ maxStackDepth: 80 });
+        const objectRealm = createRealm({ maxStackDepth: 5000 });
+        const methodRealm = createRealm({ maxStackDepth: 5000 });
+        const realms = [callerRealm, objectRealm, methodRealm];
+        const method = createDeepGeneratorStarter(
+          methodRealm,
+          `${kind}Coercion`,
+        );
+        const object = new EngineObject(objectRealm.intrinsics.objectPrototype);
+
+        object.defineOwnProperty(
+          kind === 'exotic'
+            ? objectRealm.agent.wellKnownSymbols.toPrimitive
+            : 'valueOf',
+          {
+            value: method,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          },
+        );
+        defineGlobal(callerRealm, 'foreignCoercion', method);
+        defineGlobal(callerRealm, 'foreignObject', object);
+
+        assertSame(
+          evaluateScript(
+            callerRealm,
+            'try { foreignCoercion(); "not thrown"; } catch (error) { error.name; }',
+          ).value,
+          'RangeError',
+          `${kind} direct-call control`,
+        );
+        assertGeneratorAccountingCleared(realms);
+        assertSame(
+          evaluateScript(
+            callerRealm,
+            'try { +foreignObject; "not thrown"; } catch (error) { error.name; }',
+          ).value,
+          'RangeError',
+          `${kind} unary conversion`,
+        );
+        assertGeneratorAccountingCleared(realms);
+      }
+    },
+  },
+  {
+    name: 'cross-Agent Array map getters charge the executing Realm before starting a generator',
+    run() {
+      const callerRealm = createRealm({ maxStackDepth: 80 });
+      const objectRealm = createRealm({ maxStackDepth: 5000 });
+      const accessorRealm = createRealm({ maxStackDepth: 5000 });
+      const realms = [callerRealm, objectRealm, accessorRealm];
+      const getter = createDeepGeneratorStarter(accessorRealm, 'indexedGet');
+      const object = new EngineObject(objectRealm.intrinsics.objectPrototype);
+
+      object.defineOwnProperty('length', {
+        value: 1,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      object.defineOwnProperty('0', {
+        get: getter,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(callerRealm, 'foreignArrayLike', object);
+
+      assertSame(
+        evaluateScript(
+          callerRealm,
+          'try { foreignArrayLike[0]; "not thrown"; } catch (error) { error.name; }',
+        ).value,
+        'RangeError',
+        'direct-read control',
+      );
+      assertGeneratorAccountingCleared(realms);
+      assertSame(
+        evaluateScript(
+          callerRealm,
+          `
+            try {
+              Array.prototype.map.call(foreignArrayLike, function (value) {
+                return value;
+              });
+              "not thrown";
+            } catch (error) {
+              error.name;
+            }
+          `,
+        ).value,
+        'RangeError',
+        'Array.prototype.map getter',
+      );
+      assertGeneratorAccountingCleared(realms);
+    },
+  },
+  {
+    name: 'cross-Agent Array mutator setters charge the executing Realm before starting a generator',
+    run() {
+      const callerRealm = createRealm({ maxStackDepth: 80 });
+      const objectRealm = createRealm({ maxStackDepth: 5000 });
+      const accessorRealm = createRealm({ maxStackDepth: 5000 });
+      const realms = [callerRealm, objectRealm, accessorRealm];
+      const setter = createDeepGeneratorStarter(accessorRealm, 'indexedSet');
+      const object = new EngineObject(objectRealm.intrinsics.objectPrototype);
+
+      object.defineOwnProperty('length', {
+        value: 0,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      object.defineOwnProperty('0', {
+        set: setter,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(callerRealm, 'foreignArrayLike', object);
+
+      assertSame(
+        evaluateScript(
+          callerRealm,
+          'try { foreignArrayLike[0] = 1; "not thrown"; } catch (error) { error.name; }',
+        ).value,
+        'RangeError',
+        'direct-write control',
+      );
+      assertGeneratorAccountingCleared(realms);
+      assertSame(
+        evaluateScript(
+          callerRealm,
+          'try { Array.prototype.push.call(foreignArrayLike, 1); "not thrown"; } catch (error) { error.name; }',
+        ).value,
+        'RangeError',
+        'Array.prototype.push setter',
+      );
+      assertGeneratorAccountingCleared(realms);
     },
   },
   {
