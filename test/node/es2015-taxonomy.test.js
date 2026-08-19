@@ -9,6 +9,10 @@ import {
   renderEs2015Taxonomy,
   summarizeEs2015Classification,
 } from '../../tools/test262/es2015-taxonomy.js';
+import {
+  Es2015AuditError,
+  main as auditEs2015Taxonomy,
+} from '../../tools/test262/es2015-audit.js';
 
 const FIXTURE_ROOT = new URL('../fixtures/es2015-taxonomy/', import.meta.url);
 const POLICY = JSON.stringify({
@@ -55,7 +59,239 @@ function json(value) {
   return JSON.stringify(value);
 }
 
+const AUDIT_PATH = 'tools/test262/es2015-taxonomy.json';
+const AUDIT_PIN = {
+  repository: 'https://github.com/tc39/test262.git',
+  revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
+  checkoutPath: 'vendor/test262',
+};
+const AUDIT_SUBSET = JSON.stringify({
+  version: 1,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  groups: [
+    {
+      name: 'fixture',
+      summary: 'A selected fixture root.',
+      paths: ['test/language/selected.js'],
+    },
+  ],
+});
+const AUDIT_FEATURES = JSON.stringify({ version: 1, features: [] });
+const AUDIT_ROOTS = new Map([
+  [
+    'test/language/audited.js',
+    '/*---\ndescription: Audited fixture.\nes6id: 13.2\n---*/\n',
+  ],
+  [
+    'test/language/selected.js',
+    '/*---\ndescription: Selected fixture.\nes5id: 15.1\n---*/\n',
+  ],
+]);
+
+/**
+ * @param {{
+ *   timezone?: string,
+ *   files?: Map<string, string>,
+ *   roots?: Map<string, string>,
+ *   auditRecords?: readonly object[],
+ *   assertPinnedCheckout?: (pin: any) => Promise<void>,
+ * }} [options]
+ */
+function auditDependencies(options = {}) {
+  const files = new Map([
+    ['package.json', JSON.stringify({ test262: AUDIT_PIN })],
+    ['tools/test262/es2015-policy.json', POLICY],
+    ['tools/test262/es2015-anchors.json', ANCHORS],
+    ['tools/test262/upstream-subset.json', AUDIT_SUBSET],
+    ['tools/test262/features.json', AUDIT_FEATURES],
+    [
+      'docs/test262-report.jsonl',
+      `${JSON.stringify({
+        type: 'test',
+        file: 'test/language/selected.js',
+        variant: 'non-strict',
+        status: 'passed',
+      })}\n${JSON.stringify({
+        type: 'test',
+        file: 'test/language/selected.js',
+        variant: 'strict',
+        status: 'passed',
+      })}\n`,
+    ],
+    ...(options.files ?? []),
+  ]);
+  const roots = options.roots ?? AUDIT_ROOTS;
+  /** @type {string[]} */
+  const writes = [];
+
+  return {
+    environment: { TZ: options.timezone ?? 'UTC' },
+    readFile: async (/** @type {string} */ path) => {
+      const value = files.get(path);
+      if (value === undefined) {
+        throw new Error(`missing fixture file ${path}`);
+      }
+      return value;
+    },
+    writeFile: async (
+      /** @type {string} */ path,
+      /** @type {string} */ value,
+    ) => {
+      writes.push(path);
+      files.set(path, value);
+    },
+    listRoots: async () => [...roots.keys()],
+    readRoot: async (/** @type {string} */ path) => {
+      const value = roots.get(path);
+      if (value === undefined) {
+        throw new Error(`missing fixture root ${path}`);
+      }
+      return value;
+    },
+    readIncludeDefinitions: async () => new Map(),
+    assertPinnedCheckout:
+      options.assertPinnedCheckout ??
+      (async (pin) => {
+        assertSame(pin.repository, AUDIT_PIN.repository);
+        assertSame(pin.revision, AUDIT_PIN.revision);
+        assertSame(pin.checkoutPath, AUDIT_PIN.checkoutPath);
+      }),
+    readAuditEvidence: async () => ({
+      records: options.auditRecords ?? [
+        {
+          type: 'test',
+          file: 'test/language/audited.js',
+          variant: 'non-strict',
+          status: 'passed',
+        },
+        {
+          type: 'test',
+          file: 'test/language/audited.js',
+          variant: 'strict',
+          status: 'passed',
+        },
+      ],
+      blockers: {},
+      intentionalDeviations: [],
+    }),
+    stderr: () => {},
+    files,
+    writes,
+  };
+}
+
+/**
+ * @param {() => Promise<unknown>} action
+ * @returns {Promise<Error>}
+ */
+async function rejected(action) {
+  try {
+    await action();
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  throw new Error('Expected the audit command to reject');
+}
+
 export default [
+  {
+    name: 'ES2015 audit rejects non-UTC, pin, source, and inventory drift',
+    run: async () => {
+      const nonUtc = await rejected(() =>
+        auditEs2015Taxonomy(
+          [],
+          auditDependencies({ timezone: 'America/Los_Angeles' }),
+        ),
+      );
+      assertSame(nonUtc instanceof Es2015AuditError, true);
+      assertSame(nonUtc.message.includes('UTC'), true);
+
+      const pinDrift = await rejected(() =>
+        auditEs2015Taxonomy(
+          [],
+          auditDependencies({
+            assertPinnedCheckout: async () => {
+              throw new Error('vendor/test262 HEAD drifted');
+            },
+          }),
+        ),
+      );
+      assertSame(pinDrift.message.includes('HEAD drifted'), true);
+
+      const sourceDrift = await rejected(() =>
+        auditEs2015Taxonomy(
+          [],
+          auditDependencies({
+            files: new Map([
+              [
+                'tools/test262/es2015-anchors.json',
+                ANCHORS.replace(
+                  '4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0',
+                  '0000000000000000000000000000000000000000000000000000000000000000',
+                ),
+              ],
+            ]),
+          }),
+        ),
+      );
+      assertSame(sourceDrift.message.includes('Sixth Edition source'), true);
+
+      const unknownDependency = await rejected(() =>
+        auditEs2015Taxonomy(
+          [],
+          auditDependencies({
+            roots: new Map([
+              [
+                'test/language/missing-include.js',
+                '/*---\ndescription: Missing dependency.\nes6id: 13.2\nincludes: [not-reviewed.js]\n---*/\n',
+              ],
+            ]),
+          }),
+        ),
+      );
+      assertSame(unknownDependency instanceof Es2015TaxonomyError, true);
+    },
+  },
+  {
+    name: 'ES2015 audit emits deterministic balanced bytes and checks stale artifacts without writing',
+    run: async () => {
+      const first = auditDependencies();
+      assertSame(await auditEs2015Taxonomy([], first), 0);
+      const output = first.files.get(AUDIT_PATH);
+      assertSame(typeof output, 'string');
+      if (typeof output !== 'string') {
+        throw new Error('audit did not write its taxonomy');
+      }
+      assertSame(output.includes('timestamp'), false);
+      assertSame(first.writes.length, 1);
+
+      const report = /** @type {any} */ (JSON.parse(output));
+      assertSame(report.summary.roots, 2);
+      assertSame(report.summary.variants, 4);
+      assertSame(report.classifications.length, 2);
+      assertSame(
+        report.classifications
+          .map((/** @type {any} */ entry) => entry.path)
+          .join(','),
+        'test/language/audited.js,test/language/selected.js',
+      );
+
+      const second = auditDependencies({
+        files: new Map([[AUDIT_PATH, output]]),
+      });
+      assertSame(await auditEs2015Taxonomy([], second), 0);
+      assertSame(second.files.get(AUDIT_PATH), output);
+
+      const stale = auditDependencies({
+        files: new Map([[AUDIT_PATH, 'stale\n']]),
+      });
+      assertSame(await auditEs2015Taxonomy(['--check'], stale), 1);
+      assertSame(stale.files.get(AUDIT_PATH), 'stale\n');
+      assertSame(stale.writes.length, 0);
+    },
+  },
   {
     name: 'ES2015 taxonomy classifies precedence, partitions, statuses, and variants',
     run: async () => {
@@ -580,6 +816,41 @@ export default [
             provenance: ['feature:async-functions'],
           },
         ]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy does not treat an Annex B path alone as ES2015 evidence',
+    run: () => {
+      const classifications = classifyEs2015Inventory({
+        policy: parseEs2015Policy(POLICY),
+        anchors: parseEs2015Anchors(ANCHORS),
+        inventory: buildEs2015Inventory({
+          roots: [
+            {
+              path: 'test/annexB/unversioned.js',
+              metadata: {
+                description: 'An unversioned Annex B test.',
+                es5id: null,
+                es6id: null,
+                esid: null,
+                features: [],
+                flags: [],
+                includes: [],
+              },
+            },
+          ],
+        }),
+      });
+
+      assertSame(
+        json(
+          classifications.map(({ partition, status }) => ({
+            partition,
+            status,
+          })),
+        ),
+        json([{ partition: 'unknown-edition', status: 'unknown-edition' }]),
       );
     },
   },

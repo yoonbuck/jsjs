@@ -509,11 +509,6 @@ function classifyRoot(context) {
     ...features
       .filter((feature) => policy.es2015Features.includes(feature))
       .map((feature) => `feature:${feature}`),
-    ...rules
-      .filter(
-        (/** @type {any} */ rule) => rule.partition !== 'later-or-non-es2015',
-      )
-      .map((/** @type {any} */ rule) => `path:${rule.prefix}`),
   ];
   if (affirmative.length === 0) {
     return record(
@@ -552,7 +547,12 @@ function classifyRoot(context) {
     features,
     flags,
     includes,
-    sortStrings(affirmative),
+    sortStrings([
+      ...affirmative,
+      ...rules
+        .filter((/** @type {any} */ rule) => rule.partition === 'annex-b')
+        .map((/** @type {any} */ rule) => `path:${rule.prefix}`),
+    ]),
   );
 }
 

@@ -25,6 +25,7 @@ import benchmarkSummary from './node/benchmark-summary.test.js';
 import profileAnalysis from './node/profile-analysis.test.js';
 import profilingCli from './node/profiling-cli.test.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
+import es2015Taxonomy from './node/es2015-taxonomy.test.js';
 import upstreamSelect from './node/upstream-select.test.js';
 import workflowContract from './node/workflow-contract.test.js';
 
@@ -65,6 +66,10 @@ const NODE_ONLY_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/node/repository-invariants.test.js',
     tests: repositoryInvariants,
+  }),
+  Object.freeze({
+    file: 'test/node/es2015-taxonomy.test.js',
+    tests: es2015Taxonomy,
   }),
   Object.freeze({
     file: 'test/node/upstream-select.test.js',
