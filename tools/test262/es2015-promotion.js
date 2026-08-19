@@ -32,6 +32,7 @@ const ENTRY_KEYS = Object.freeze([
 ]);
 const REVISION_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+/** @type {readonly string[]} */
 const EMPTY_FEATURES = Object.freeze([]);
 const entriesByManifest = new WeakMap();
 
@@ -362,6 +363,10 @@ export function createEs2015PromotionAuthorization(options) {
   });
 
   const roots = new Map(options.inventory.map((root) => [root.path, root]));
+  /**
+   * @param {string} file
+   * @param {{ features?: readonly string[] }} metadata
+   */
   return (file, metadata) =>
     supportedFeaturesForPromotedPath(
       promotion,
@@ -464,7 +469,7 @@ function parseEntry(value, index) {
  */
 function sortedStringList(value, label) {
   const sorted = normalizedStringList(value, label);
-  if (!sameStrings(value, sorted)) {
+  if (!Array.isArray(value) || !sameStrings(value, sorted)) {
     throw new Es2015PromotionError(`${label} must be code-unit sorted`);
   }
   return sorted;
@@ -490,7 +495,7 @@ function normalizedStringList(value, label) {
 
 /** @param {unknown} value */
 function positiveInteger(value) {
-  return Number.isInteger(value) && value > 0;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 /**

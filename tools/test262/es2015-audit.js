@@ -189,8 +189,10 @@ export async function main(argv = [], dependencies = {}) {
   );
   const selectedResults = recordsByPath(
     [
-      ...parseReportRecords(reportText).filter((record) =>
-        selectedPaths.includes(record.file),
+      ...parseReportRecords(reportText).filter(
+        (record) =>
+          selectedPaths.includes(record.file) &&
+          !promotionPathSet.has(record.file),
       ),
       ...evidence.records.filter((record) => promotionPathSet.has(record.file)),
     ],

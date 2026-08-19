@@ -114,10 +114,19 @@ function promotionFixture(overrides = {}) {
 
 /**
  * @param {Partial<{
- *   pin: object,
- *   policy: object,
+ *   pin: { repository: string, revision: string },
+ *   policy: {
+ *     es2015Features: readonly string[],
+ *     neutralFeatures: readonly string[],
+ *     laterFeatures: readonly string[],
+ *   },
  *   selectedPaths: readonly string[],
- *   inventory: readonly object[],
+ *   inventory: readonly {
+ *     path: string,
+ *     variants: number,
+ *     metadata: { features?: readonly string[] } | null,
+ *     includeFeatures: readonly string[],
+ *   }[],
  * }>} [overrides]
  */
 function promotionValidationOptions(overrides = {}) {

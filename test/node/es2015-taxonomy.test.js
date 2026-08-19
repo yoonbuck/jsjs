@@ -335,6 +335,7 @@ async function createRealAuditFixture() {
  *     supportedFeaturesForPath: (file: string, metadata: object) => readonly string[],
  *   }) => Promise<readonly object[]>,
  * }} [options]
+ * @returns {any}
  */
 function auditDependencies(options = {}) {
   const files = new Map([
@@ -345,7 +346,9 @@ function auditDependencies(options = {}) {
     ['tools/test262/features.json', AUDIT_FEATURES],
     ...(options.promotion === undefined
       ? []
-      : [['tools/test262/es2015-promotion.json', options.promotion]]),
+      : /** @type {[string, string][]} */ ([
+          ['tools/test262/es2015-promotion.json', options.promotion],
+        ])),
     [
       'docs/test262-report.jsonl',
       `${JSON.stringify({
@@ -394,7 +397,7 @@ function auditDependencies(options = {}) {
       return value;
     },
     readIncludeDefinitions: async () => new Map(),
-    readPathsFile: async (path) => {
+    readPathsFile: async (/** @type {string} */ path) => {
       const value = options.pathFiles?.get(path);
       if (value === undefined) {
         throw new Error(`missing paths file ${path}`);
@@ -429,6 +432,15 @@ async function rejected(action) {
   }
 
   throw new Error('Expected the audit command to reject');
+}
+
+/** @param {any} dependencies @param {string} path */
+function fixtureOutput(dependencies, path) {
+  const value = dependencies.files.get(path);
+  if (typeof value !== 'string') {
+    throw new Error(`Fixture did not write ${path}`);
+  }
+  return value;
 }
 
 export default [
@@ -775,7 +787,7 @@ export default [
   {
     name: 'ES2015 audit writes execution only for the exact reviewed promotion ledger',
     run: async () => {
-      /** @type {readonly object[] | undefined} */
+      /** @type {readonly string[] | undefined} */
       let executedPaths;
       const dependencies = auditDependencies({
         subset: AUDIT_PROMOTION_SUBSET,
@@ -802,19 +814,14 @@ export default [
       );
       assertSame(
         JSON.stringify(
-          JSON.parse(
-            /** @type {Map<string, string>} */ (dependencies.files).get(
-              AUDIT_EVIDENCE_PATH,
-            ),
-          ).auditRecords,
+          JSON.parse(fixtureOutput(dependencies, AUDIT_EVIDENCE_PATH))
+            .auditRecords,
         ),
         JSON.stringify(AUDIT_RECORDS),
       );
 
       assertSame(await auditEs2015Taxonomy([], dependencies), 0);
-      const artifact = JSON.parse(
-        /** @type {Map<string, string>} */ (dependencies.files).get(AUDIT_PATH),
-      );
+      const artifact = JSON.parse(fixtureOutput(dependencies, AUDIT_PATH));
       assertSame(
         JSON.stringify(artifact.statusTables.core),
         JSON.stringify([
@@ -842,6 +849,54 @@ export default [
       );
       assertSame(error instanceof Es2015AuditError, true);
       assertSame(error.message.includes('does not match'), true);
+    },
+  },
+  {
+    name: 'ES2015 audit gives exact promotion evidence precedence over upstream selected records',
+    run: async () => {
+      const dependencies = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        files: new Map([
+          [
+            'docs/test262-report.jsonl',
+            `${JSON.stringify({
+              type: 'test',
+              file: 'test/language/audited.js',
+              variant: 'non-strict',
+              status: 'failed',
+            })}\n${JSON.stringify({
+              type: 'test',
+              file: 'test/language/audited.js',
+              variant: 'strict',
+              status: 'failed',
+            })}\n${JSON.stringify({
+              type: 'test',
+              file: 'test/language/selected.js',
+              variant: 'non-strict',
+              status: 'passed',
+            })}\n${JSON.stringify({
+              type: 'test',
+              file: 'test/language/selected.js',
+              variant: 'strict',
+              status: 'passed',
+            })}\n`,
+          ],
+        ]),
+      });
+
+      assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      const artifact = JSON.parse(fixtureOutput(dependencies, AUDIT_PATH));
+      assertSame(
+        JSON.stringify(artifact.statusTables.core),
+        JSON.stringify([
+          {
+            name: 'selected-passing',
+            roots: 2,
+            variants: 4,
+          },
+        ]),
+      );
     },
   },
   {

@@ -940,6 +940,7 @@ export default [
   {
     name: 'exact path feature authorization never widens an adjacent Test262 root',
     run: async () => {
+      /** @type {readonly string[]} */
       const globallySupported = Object.freeze([]);
       const exactAuthorization = Object.freeze(['exact-path-feature']);
       const { records } = await runMemorySuite(
