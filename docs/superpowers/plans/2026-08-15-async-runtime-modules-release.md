@@ -974,9 +974,21 @@ was required.
       defect.
 - [x] Fix the Acorn shared-empty-array defect RED-first in
       `dc4d814cfc3126f9e7b4f06b5093e13a9cce979f`.
-- [ ] Obtain scoped re-review of the parser fix and repeat the
-      maximum-capability whole-milestone review on the resulting exact head until
-      it has no unresolved high-confidence finding.
+- [x] Obtain scoped re-review of the parser fix: no significant issue.
+- [x] Repeat the maximum-capability whole-milestone review. It found the final
+      checkout-dependent Node import, inherited cross-Agent coercion protocols,
+      and Test262 identifier portability issues.
+- [x] Fix those findings RED-first in
+      `3b926e1d4d0c6ba73d20c9a7a33fd888aa9ec4a2`. Scoped review additionally
+      found URL scheme/drive and harness-include boundary escapes; both were
+      fixed RED-first, and final scoped re-review was clean.
+- [x] Re-run the final host and repository gates: Node 2,247, Chromium 2,103,
+      JavaScriptCore 2,103, focused UTC Test262 4, fixtures 17 plus 1 expected
+      skip, generated selection 14,107 paths across 58 groups, and benchmark
+      smoke all passed.
+- [ ] Repeat the maximum-capability whole-milestone review on exact head
+      `3b926e1d4d0c6ba73d20c9a7a33fd888aa9ec4a2` until it has no unresolved
+      high-confidence finding.
 - [ ] Push the reviewed head, open the focused release PR, and synchronously
       watch the exact `ci.yml` pull-request run.
 - [ ] Verify both post-squash CodeQL default-setup analyses on the exact main

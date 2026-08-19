@@ -2,7 +2,7 @@
 
 ## Disposition
 
-- Status: **SECOND REVIEW FIX DONE; RE-REVIEW PENDING**
+- Status: **FINAL REVIEW FIX DONE; WHOLE-MILESTONE RE-REVIEW PENDING**
 - Review base:
   `1a0f011f4e179bfcb83c99108a626b7f4806cc94`
 - Fix commit:
@@ -154,3 +154,66 @@ GREEN:
 The exact parser fix commit is
 `dc4d814cfc3126f9e7b4f06b5093e13a9cce979f`. No broad upstream Test262
 command was run locally.
+
+## Final review wave
+
+The parser fix's scoped re-review returned no significant issue. The following
+maximum-capability whole-milestone review found three additional issues.
+
+### Checkout-independent Node test graph
+
+`test/node/upstream-select.test.js` imported checkout validation from
+`upstream-run.js`, pulling checkout-dependent execution code into the default
+Node suite. Pin parsing and clean-checkout validation now live in
+`tools/test262/pin.js`; `upstream-run.js` re-exports the API, while the unit test
+imports the checkout-independent helper directly.
+
+RED: the repository invariant reported the exact import chain from
+`test/run-node.js` to `tools/test262/upstream-run.js`.
+
+GREEN: the repository invariant and dirty-checkout regressions pass.
+
+### Inherited cross-Agent coercion protocols
+
+`ToPrimitive` and `Object.prototype.toString` selected the caller Agent's
+physical `@@toPrimitive` and `@@toStringTag` keys for an entire prototype chain.
+They now use `EngineObject#getWellKnownSymbol`, preserving semantic protocol
+identity at each cross-Agent prototype boundary.
+
+RED: a caller-owned object inheriting both hooks from a foreign-Agent prototype
+fell back to `[object Object]`.
+
+GREEN: coercion returns the foreign primitive and `[object ForeignTag]`.
+
+### Portable Test262 host boundaries
+
+Root tests were read before their identifiers were validated, nested module
+identifiers accepted URL-stripped controls, and metadata harness includes
+bypassed validation. A shared canonical repository-relative path guard now
+rejects URL-sensitive delimiters, scheme/drive forms, literal backslashes,
+ASCII controls and space, absolute paths, and noncanonical segments. Root tests
+and includes fail before their host read, and normalized nested identifiers are
+revalidated.
+
+RED evidence covered `%`, `?`, `#`, `file:/`, `C:/`, `C|/`, tab, LF, CR,
+traversal, encoded aliases, and host-read counters.
+
+The first scoped review found the scheme/drive escape. Its re-review found the
+include boundary. Both were fixed RED-first, and the final scoped re-review
+returned no significant issue.
+
+### Exact implementation and verification
+
+The final review-fix commit is
+`3b926e1d4d0c6ba73d20c9a7a33fd888aa9ec4a2`.
+
+- Node: **2,247 passed**, 0 failed.
+- Chromium: **2,103 passed**, 0 failed.
+- JavaScriptCore: **2,103 passed**, 0 failed.
+- Focused UTC Promise/generator/module Test262: **4 passed**, 0 failed.
+- Portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip.
+- Generated selection: **14,107 paths across 58 groups**, current.
+- Type checking, lint, formatting, vendor/generated CI/Unicode drift,
+  repository invariants, `git diff --check`, and benchmark smoke passed.
+
+No broad upstream Test262 command was run locally.

@@ -2,7 +2,7 @@
 
 ## Disposition
 
-- Status: **SECOND REVIEW FIX COMPLETE; RE-REVIEW PENDING**
+- Status: **FINAL REVIEW FIX COMPLETE; WHOLE-MILESTONE RE-REVIEW PENDING**
 - Recovered candidate:
   `5a9db65e17a8b46f9e20880d902b1bca398f2863`
 - Current `origin/main`:
@@ -95,10 +95,47 @@ in `dc4d814cfc3126f9e7b4f06b5093e13a9cce979f`.
 
 The candidate still requires:
 
-1. scoped re-review of the parser fix and a clean repeated
-   maximum-capability whole-milestone review on the resulting exact head;
+1. a clean repeated maximum-capability whole-milestone review on exact head
+   `3b926e1d4d0c6ba73d20c9a7a33fd888aa9ec4a2`;
 2. a focused release PR and successful exact-head `ci.yml` pull-request run;
 3. squash merge and exact-main CodeQL default-setup evidence for both
    `javascript-typescript` and `actions`, with zero alerts and zero
    extraction/parse diagnostics; and
 4. a fresh child/criteria audit before closing #61, #28, and #24.
+
+## Final review-fix wave
+
+The parser fix received a clean scoped review. The next maximum-capability
+whole-milestone review found three remaining issues:
+
+- the default Node test graph imported checkout-dependent Test262 execution
+  code;
+- inherited cross-Agent `@@toPrimitive` and `@@toStringTag` lookups used the
+  caller Agent's physical symbols;
+- root Test262 identifiers and URL-stripped control whitespace were not
+  rejected before host reads.
+
+All three were reproduced RED-first and fixed in
+`3b926e1d4d0c6ba73d20c9a7a33fd888aa9ec4a2`. Checkout pin validation now lives
+in a checkout-independent helper, both protocols use semantic
+`getWellKnownSymbol` lookup, and one portable path guard covers root tests,
+nested modules, and harness includes.
+
+The fresh scoped review found and closed two additional cases in the same path
+boundary: URL scheme/drive-pipe identifiers and unvalidated metadata harness
+includes. The final scoped re-review returned no significant issue.
+
+Fresh exact-head local evidence:
+
+| Gate | Result |
+| --- | --- |
+| Full Node suite | 2,247 passed, 0 failed |
+| Full Chromium suite | 2,103 passed, 0 failed |
+| Full JavaScriptCore suite | 2,103 passed, 0 failed |
+| Focused UTC Promise/generator/module Test262 | 4 passed, 0 failed |
+| Portable Test262 fixtures | 17 passed, 0 failed, 1 expected skip |
+| Generated Test262 selection check | 14,107 paths across 58 groups |
+| Static/generated/invariant checks | passed |
+| Clean-tree benchmark smoke | passed |
+
+No broad upstream Test262 command was run locally.
