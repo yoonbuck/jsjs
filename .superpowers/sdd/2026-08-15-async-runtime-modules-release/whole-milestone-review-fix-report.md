@@ -218,6 +218,41 @@ The final review-fix commit is
 
 No broad upstream Test262 command was run locally.
 
+## Deep module evaluation closure
+
+The final maximum-capability review of `86c0f4a` found one Important remaining
+host-stack dependency: module dependency evaluation recursively called
+`evaluateModuleRecord`. A valid 2,400-module chain could consume the host stack,
+leak a host `RangeError`, roll records back to `unevaluated`, and execute the
+leaf twice after retry.
+
+The defect was reproduced RED-first. Exact implementation commit `bb6f0f9`
+replaces recursive dependency evaluation with an explicit source-order frame
+stack while preserving SCC back edges, external deferral, abrupt completion,
+host-error rollback, and completed-body state. The regression verifies a
+2,400-module chain completes, catches guest recursion, and executes its leaf
+exactly once across retry.
+
+Scoped review found repeated abrupt completion of one SCC could become cubic.
+A second RED regression measured 4,161 Set additions for a 64-module abrupt
+cycle. Completion is now deduplicated by SCC root and each SCC is marked once;
+the bounded-work regression passes below 1,000 additions. Scoped re-review's
+only follow-up was a missing test JSDoc type annotation.
+
+Fresh exact-commit evidence:
+
+- Node: **2,264 passed**, 0 failed.
+- Chromium: **2,120 passed**, 0 failed.
+- JavaScriptCore: **2,120 passed**, 0 failed.
+- Focused UTC Promise/generator/module Test262: **4 passed**, 0 failed.
+- Portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip.
+- Generated selection: **14,107 paths across 58 groups**, current.
+- Repository invariants/workflow contracts: **69 passed**, 0 failed.
+- Type checking, lint, formatting, vendor/generated CI/Unicode drift,
+  exclusions, `git diff --check`, and clean-tree benchmark smoke passed.
+
+No broad upstream Test262 command was run locally.
+
 ## Exact-head milestone review closure
 
 The maximum-capability review of evidence-bearing head `b065d4d` found four

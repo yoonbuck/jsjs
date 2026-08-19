@@ -235,3 +235,32 @@ Fresh exact-commit local evidence:
 
 No broad upstream Test262 command was run locally. One final whole-milestone
 review of the exact evidence-bearing head remains required before push.
+
+## Deep-graph final review fix
+
+The maximum-capability review of `86c0f4a` found recursive dependency
+evaluation could exhaust the host stack on a valid deep graph, roll modules
+back, and execute the leaf again on retry. Exact commit `bb6f0f9` replaces that
+recursion with an explicit source-order evaluation stack.
+
+The 2,400-module RED/GREEN regression now proves host-stack independence and
+at-most-once leaf execution. Scoped review found and closed cubic repeated SCC
+abrupt completion with a bounded-work regression; its only re-review follow-up
+was a test type annotation.
+
+Fresh exact-commit local evidence:
+
+| Gate | Result |
+| --- | --- |
+| Full Node suite | 2,264 passed, 0 failed |
+| Full Chromium suite | 2,120 passed, 0 failed |
+| Full JavaScriptCore suite | 2,120 passed, 0 failed |
+| Focused UTC Promise/generator/module Test262 | 4 passed, 0 failed |
+| Portable Test262 fixtures | 17 passed, 0 failed, 1 expected skip |
+| Generated Test262 selection check | 14,107 paths across 58 groups |
+| Repository invariants and workflow contracts | 69 passed, 0 failed |
+| Static/generated/exclusion checks | passed |
+| Clean-tree benchmark smoke | passed |
+
+No broad upstream Test262 command was run locally. One final exact-head
+whole-milestone review remains required before push.

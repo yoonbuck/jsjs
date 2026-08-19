@@ -1022,6 +1022,17 @@ was required.
       focused UTC Test262 4, fixtures 17 plus 1 expected skip, repository
       contracts 69, generated selection 14,107 paths across 58 groups, and all
       static/generated/exclusion/benchmark gates passed.
+- [x] Obtain a final maximum-capability whole-milestone review of `86c0f4a`. It
+      found recursive dependency evaluation could exhaust the host stack and
+      violate at-most-once module execution after rollback/retry.
+- [x] Fix the deep-graph defect RED-first in exact implementation commit
+      `bb6f0f9`. Scoped review additionally found cubic abrupt SCC completion;
+      that was fixed RED-first, and re-review's only follow-up was a test type
+      annotation.
+- [x] Re-run final local gates: Node 2,264, Chromium 2,120, JavaScriptCore 2,120,
+      focused UTC Test262 4, fixtures 17 plus 1 expected skip, repository
+      contracts 69, generated selection 14,107 paths across 58 groups, and all
+      static/generated/exclusion/benchmark gates passed.
 - [ ] Obtain a final maximum-capability whole-milestone review of the exact
       evidence-bearing head with no unresolved high-confidence finding.
 - [ ] Push the reviewed head, open the focused release PR, and synchronously
