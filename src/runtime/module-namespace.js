@@ -221,27 +221,35 @@ function resolveNamespaceExports(record) {
  * @returns {Set<string>}
  */
 function exportedNames(record, exportStarSet) {
-  if (exportStarSet.has(record)) {
-    return new Set();
-  }
-
-  exportStarSet.add(record);
   /** @type {Set<string>} */
   const names = new Set();
+  const pending = [record];
 
-  for (const entry of record.localExportEntries) {
-    names.add(entry.exportName);
-  }
-  for (const entry of record.indirectExportEntries) {
-    names.add(entry.exportName);
-  }
-  for (const entry of record.starExportEntries) {
-    const target = requestedModuleForStarEntry(record, entry);
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || exportStarSet.has(current)) {
+      continue;
+    }
 
-    for (const name of exportedNames(target, exportStarSet)) {
-      if (name !== 'default') {
-        names.add(name);
+    exportStarSet.add(current);
+    for (const entry of current.localExportEntries) {
+      if (current === record || entry.exportName !== 'default') {
+        names.add(entry.exportName);
       }
+    }
+    for (const entry of current.indirectExportEntries) {
+      if (current === record || entry.exportName !== 'default') {
+        names.add(entry.exportName);
+      }
+    }
+    for (
+      let index = current.starExportEntries.length - 1;
+      index >= 0;
+      index -= 1
+    ) {
+      pending.push(
+        requestedModuleForStarEntry(current, current.starExportEntries[index]),
+      );
     }
   }
 

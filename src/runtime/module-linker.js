@@ -93,8 +93,8 @@ function initializeNamespaceImportBindings(records) {
 
 /**
  * Resolves one exported name using the module-record pair identity required by
- * ResolveExport. Recursive branches share the same pair set and module-only star
- * set, while each top-level resolution supplies fresh sets.
+ * ResolveExport. Branches share the same pair sets while each top-level
+ * resolution supplies fresh sets.
  *
  * @param {SourceTextModuleRecord} module
  * @param {string} exportName
@@ -103,12 +103,6 @@ function initializeNamespaceImportBindings(records) {
  * @returns {ExportResolution}
  */
 export function resolveExport(module, exportName, resolveSet, exportStarSet) {
-  if (!(module instanceof SourceTextModuleRecord)) {
-    throw new TypeError('Expected a SourceTextModuleRecord');
-  }
-  if (typeof exportName !== 'string') {
-    throw new TypeError('Expected export name string');
-  }
   if (!(resolveSet instanceof Set)) {
     throw new TypeError('Expected ResolveExport pair set');
   }
@@ -116,85 +110,137 @@ export function resolveExport(module, exportName, resolveSet, exportStarSet) {
     throw new TypeError('Expected ResolveExport star set');
   }
 
-  const pair = resolveExportPairKey(module, exportName);
-
-  if (resolveSet.has(pair)) {
-    return NOT_FOUND;
-  }
-
-  resolveSet.add(pair);
-  const localEntry = module.localExportEntries.find(
-    (entry) => entry.exportName === exportName,
-  );
-
-  if (localEntry !== undefined) {
-    return {
-      type: 'resolved',
+  /** @type {any[]} */
+  const pending = [
+    {
       module,
-      bindingName: localEntry.localName,
-    };
-  }
-
-  const indirectEntry = module.indirectExportEntries.find(
-    (entry) => entry.exportName === exportName,
-  );
-
-  if (indirectEntry !== undefined) {
-    const requestedModule = requestedModuleForEntry(module, indirectEntry);
-    if (indirectEntry.importName === '*') {
-      return {
-        type: 'resolved',
-        module: requestedModule,
-        bindingName: MODULE_NAMESPACE_BINDING,
-      };
-    }
-    return resolveExport(
-      requestedModule,
-      indirectEntry.importName,
-      resolveSet,
-      exportStarSet,
-    );
-  }
-
-  if (exportName === 'default') {
-    return NOT_FOUND;
-  }
-
-  if (exportStarSet.has(pair)) {
-    return NOT_FOUND;
-  }
-
-  exportStarSet.add(pair);
-  /** @type {ExportResolution} */
-  let starResolution = NOT_FOUND;
-
-  for (const starEntry of module.starExportEntries) {
-    const resolution = resolveExport(
-      requestedModuleForEntry(module, starEntry),
       exportName,
-      resolveSet,
-      exportStarSet,
-    );
+      stage: 'enter',
+      starIndex: 0,
+      starResolution: NOT_FOUND,
+      childResolution: null,
+    },
+  ];
 
-    if (resolution.type === 'ambiguous') {
-      return AMBIGUOUS;
+  while (pending.length > 0) {
+    const frame = pending[pending.length - 1];
+    /** @type {ExportResolution | null} */
+    let completion = null;
+
+    if (frame.stage === 'enter') {
+      if (!(frame.module instanceof SourceTextModuleRecord)) {
+        throw new TypeError('Expected a SourceTextModuleRecord');
+      }
+      if (typeof frame.exportName !== 'string') {
+        throw new TypeError('Expected export name string');
+      }
+
+      const pair = resolveExportPairKey(frame.module, frame.exportName);
+      if (resolveSet.has(pair)) {
+        completion = NOT_FOUND;
+      } else {
+        resolveSet.add(pair);
+        const localEntry = frame.module.localExportEntries.find(
+          (/** @type {any} */ entry) => entry.exportName === frame.exportName,
+        );
+
+        if (localEntry !== undefined) {
+          completion = {
+            type: 'resolved',
+            module: frame.module,
+            bindingName: localEntry.localName,
+          };
+        } else {
+          const indirectEntry = frame.module.indirectExportEntries.find(
+            (/** @type {any} */ entry) => entry.exportName === frame.exportName,
+          );
+
+          if (indirectEntry !== undefined) {
+            const requestedModule = requestedModuleForEntry(
+              frame.module,
+              indirectEntry,
+            );
+            if (indirectEntry.importName === '*') {
+              completion = {
+                type: 'resolved',
+                module: requestedModule,
+                bindingName: MODULE_NAMESPACE_BINDING,
+              };
+            } else {
+              frame.stage = 'indirect';
+              pending.push({
+                module: requestedModule,
+                exportName: indirectEntry.importName,
+                stage: 'enter',
+                starIndex: 0,
+                starResolution: NOT_FOUND,
+                childResolution: null,
+              });
+              continue;
+            }
+          } else if (
+            frame.exportName === 'default' ||
+            exportStarSet.has(pair)
+          ) {
+            completion = NOT_FOUND;
+          } else {
+            exportStarSet.add(pair);
+            frame.stage = 'star';
+            continue;
+          }
+        }
+      }
+    } else if (frame.stage === 'indirect') {
+      completion = frame.childResolution;
+    } else {
+      const childResolution = frame.childResolution;
+      if (childResolution !== null) {
+        frame.childResolution = null;
+        if (childResolution.type === 'ambiguous') {
+          completion = AMBIGUOUS;
+        } else if (childResolution.type === 'resolved') {
+          if (frame.starResolution.type === 'not-found') {
+            frame.starResolution = childResolution;
+          } else if (
+            !sameResolvedBinding(frame.starResolution, childResolution)
+          ) {
+            completion = AMBIGUOUS;
+          }
+        }
+      }
+
+      if (
+        completion === null &&
+        frame.starIndex < frame.module.starExportEntries.length
+      ) {
+        const starEntry = frame.module.starExportEntries[frame.starIndex];
+        frame.starIndex += 1;
+        pending.push({
+          module: requestedModuleForEntry(frame.module, starEntry),
+          exportName: frame.exportName,
+          stage: 'enter',
+          starIndex: 0,
+          starResolution: NOT_FOUND,
+          childResolution: null,
+        });
+        continue;
+      }
+      if (completion === null) {
+        completion = frame.starResolution;
+      }
     }
 
-    if (resolution.type === 'not-found') {
-      continue;
+    pending.pop();
+    if (pending.length === 0) {
+      if (completion === null) {
+        throw new TypeError('ResolveExport completed without a resolution');
+      }
+      return completion;
     }
-
-    if (starResolution.type === 'not-found') {
-      starResolution = resolution;
-      continue;
-    }
-
-    if (!sameResolvedBinding(starResolution, resolution)) {
-      return AMBIGUOUS;
-    }
+    pending[pending.length - 1].childResolution = completion;
   }
 
-  return starResolution;
+  throw new TypeError('ResolveExport worklist unexpectedly empty');
 }
 
 /**
@@ -203,76 +249,95 @@ export function resolveExport(module, exportName, resolveSet, exportStarSet) {
  * @returns {void}
  */
 function linkRecord(record, transaction) {
-  if (record.status === 'linked') {
-    return;
-  }
+  /** @type {{ record: SourceTextModuleRecord, dependencyIndex: number, entered: boolean }[]} */
+  const pending = [{ record, dependencyIndex: 0, entered: false }];
 
-  if (record.status === 'linking') {
-    return;
-  }
+  while (pending.length > 0) {
+    const frame = pending[pending.length - 1];
+    const current = frame.record;
 
-  if (record.status !== 'unlinked') {
-    throw new TypeError(`Invalid module link status ${String(record.status)}`);
-  }
-
-  assertCompleteGraph(record);
-  transaction.touch(record);
-  record.status = 'linking';
-  record.dfsIndex = transaction.nextDfsIndex;
-  record.dfsAncestorIndex = transaction.nextDfsIndex;
-  record.dfsOnStack = true;
-  transaction.nextDfsIndex += 1;
-  transaction.stack.push(record);
-
-  for (const request of record.resolvedRequestedModules) {
-    const dependency = request.module;
-    linkRecord(dependency, transaction);
-
-    if (dependency.status === 'linking' && dependency.dfsOnStack) {
-      record.dfsAncestorIndex = Math.min(
-        requiredDfsAncestorIndex(record),
-        requiredDfsAncestorIndex(dependency),
-      );
-    }
-  }
-
-  record.environment = new ModuleEnvironmentRecord(
-    record.realm.globalEnvironment,
-  );
-  record.resolvedImportEntries = resolveImportEntries(record);
-  moduleDeclarationInstantiation(record);
-  validateLocalExportBindings(record);
-  validateIndirectExportEntries(record);
-
-  if (requiredDfsAncestorIndex(record) !== requiredDfsIndex(record)) {
-    return;
-  }
-
-  /** @type {SourceTextModuleRecord[]} */
-  const sccMembers = [];
-
-  while (transaction.stack.length > 0) {
-    const member = transaction.stack.pop();
-
-    if (member === undefined) {
-      throw new TypeError('Module DFS stack unexpectedly empty');
-    }
-
-    member.dfsOnStack = false;
-    member.status = 'linked';
-    sccMembers.push(member);
-
-    if (member === record) {
-      const frozenMembers = Object.freeze(sccMembers);
-      for (const sccMember of frozenMembers) {
-        sccMember.evaluationSccRoot = record;
-        sccMember.evaluationSccMembers = frozenMembers;
+    if (!frame.entered) {
+      if (current.status === 'linked' || current.status === 'linking') {
+        pending.pop();
+        continue;
       }
-      return;
-    }
-  }
+      if (current.status !== 'unlinked') {
+        throw new TypeError(
+          `Invalid module link status ${String(current.status)}`,
+        );
+      }
 
-  throw new TypeError('Module DFS root was not on the stack');
+      assertCompleteGraph(current);
+      transaction.touch(current);
+      current.status = 'linking';
+      current.dfsIndex = transaction.nextDfsIndex;
+      current.dfsAncestorIndex = transaction.nextDfsIndex;
+      current.dfsOnStack = true;
+      transaction.nextDfsIndex += 1;
+      transaction.stack.push(current);
+      frame.entered = true;
+    }
+
+    if (frame.dependencyIndex < current.resolvedRequestedModules.length) {
+      const dependency =
+        current.resolvedRequestedModules[frame.dependencyIndex].module;
+      if (dependency.status === 'unlinked') {
+        pending.push({
+          record: dependency,
+          dependencyIndex: 0,
+          entered: false,
+        });
+        continue;
+      }
+      if (dependency.status === 'linking' && dependency.dfsOnStack) {
+        current.dfsAncestorIndex = Math.min(
+          requiredDfsAncestorIndex(current),
+          requiredDfsAncestorIndex(dependency),
+        );
+      }
+      frame.dependencyIndex += 1;
+      continue;
+    }
+
+    current.environment = new ModuleEnvironmentRecord(
+      current.realm.globalEnvironment,
+    );
+    current.resolvedImportEntries = resolveImportEntries(current);
+    moduleDeclarationInstantiation(current);
+    validateLocalExportBindings(current);
+    validateIndirectExportEntries(current);
+
+    if (requiredDfsAncestorIndex(current) === requiredDfsIndex(current)) {
+      /** @type {SourceTextModuleRecord[]} */
+      const sccMembers = [];
+
+      while (transaction.stack.length > 0) {
+        const member = transaction.stack.pop();
+        if (member === undefined) {
+          throw new TypeError('Module DFS stack unexpectedly empty');
+        }
+
+        member.dfsOnStack = false;
+        member.status = 'linked';
+        sccMembers.push(member);
+
+        if (member === current) {
+          const frozenMembers = Object.freeze(sccMembers);
+          for (const sccMember of frozenMembers) {
+            sccMember.evaluationSccRoot = current;
+            sccMember.evaluationSccMembers = frozenMembers;
+          }
+          break;
+        }
+      }
+
+      if (current.status !== 'linked') {
+        throw new TypeError('Module DFS root was not on the stack');
+      }
+    }
+
+    pending.pop();
+  }
 }
 
 /**

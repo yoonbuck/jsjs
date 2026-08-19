@@ -172,6 +172,29 @@ export default [
     },
   },
   {
+    name: 'deep star-export namespaces resolve without consuming host stack',
+    async run() {
+      const depth = 4000;
+      /** @type {Record<string, string>} */
+      const sources = {
+        entry:
+          'import * as deep from "module-0"; export const observed = deep.value;',
+        [`module-${depth}`]: 'export const value = 42;',
+      };
+      for (let index = depth - 1; index >= 0; index -= 1) {
+        sources[`module-${index}`] = `export * from "module-${index + 1}";`;
+      }
+
+      const loader = loaderFor(sources);
+      const entry = await loader.loadAndEvaluate('entry');
+      const deep = await loader.loadAndEvaluate('module-0');
+
+      assertSame(entry.get('observed'), 42);
+      assertSame(deep.get('value'), 42);
+      assertSame(await loader.loadAndEvaluate('module-0'), deep);
+    },
+  },
+  {
     name: 'namespace imports and reexports preserve target namespace identity',
     async run() {
       const loader = loaderFor({

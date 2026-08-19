@@ -85,7 +85,7 @@ export default [
         enumerable: true,
         configurable: true,
       });
-      const depth = 2400;
+      const depth = 4000;
       /** @type {Record<string, string>} */
       const sources = {
         [`module-${depth}`]:
