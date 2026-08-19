@@ -96,8 +96,44 @@ export default [
         anchors,
         inventory,
         selected: new Set(['test/language/es5.js']),
-        selectedResults: new Map([['test/language/es5.js', 'passed']]),
-        auditResults: new Map([['test/language/anchor.js', 'passed']]),
+        selectedResults: new Map([
+          [
+            'test/language/es5.js',
+            [
+              {
+                type: 'test',
+                file: 'test/language/es5.js',
+                variant: 'non-strict',
+                status: 'passed',
+              },
+              {
+                type: 'test',
+                file: 'test/language/es5.js',
+                variant: 'strict',
+                status: 'passed',
+              },
+            ],
+          ],
+        ]),
+        auditResults: new Map([
+          [
+            'test/language/anchor.js',
+            [
+              {
+                type: 'test',
+                file: 'test/language/anchor.js',
+                variant: 'non-strict',
+                status: 'passed',
+              },
+              {
+                type: 'test',
+                file: 'test/language/anchor.js',
+                variant: 'strict',
+                status: 'passed',
+              },
+            ],
+          ],
+        ]),
         blockers: new Map([['test/language/blocked.js', 'regexp-unicode']]),
         intentionalDeviations: new Set(['test/language/deviation.js']),
       });
@@ -333,6 +369,234 @@ export default [
             includeDefinitions: {},
           }),
         Es2015TaxonomyError,
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy rejects incomplete, duplicate, and foreign execution records',
+    run: () => {
+      const policy = parseEs2015Policy(POLICY);
+      const anchors = parseEs2015Anchors(ANCHORS);
+      const inventory = buildEs2015Inventory({
+        roots: [
+          {
+            path: 'test/language/two-variants.js',
+            metadata: {
+              description: 'A test that runs twice.',
+              es5id: '15.1',
+              es6id: null,
+              esid: null,
+              features: [],
+              flags: [],
+              includes: [],
+            },
+          },
+        ],
+      });
+
+      assertThrows(
+        () =>
+          classifyEs2015Inventory({
+            policy,
+            anchors,
+            inventory,
+            selected: new Set(['test/language/two-variants.js']),
+            selectedResults: new Map([
+              [
+                'test/language/two-variants.js',
+                [
+                  {
+                    type: 'test',
+                    file: 'test/language/two-variants.js',
+                    variant: 'strict',
+                    status: 'passed',
+                  },
+                ],
+              ],
+            ]),
+          }),
+        Es2015TaxonomyError,
+      );
+      assertThrows(
+        () =>
+          classifyEs2015Inventory({
+            policy,
+            anchors,
+            inventory,
+            auditResults: new Map([
+              [
+                'test/language/two-variants.js',
+                [
+                  {
+                    type: 'test',
+                    file: 'test/language/two-variants.js',
+                    variant: 'strict',
+                    status: 'passed',
+                  },
+                  {
+                    type: 'test',
+                    file: 'test/language/two-variants.js',
+                    variant: 'strict',
+                    status: 'passed',
+                  },
+                ],
+              ],
+            ]),
+          }),
+        Es2015TaxonomyError,
+      );
+      assertThrows(
+        () =>
+          classifyEs2015Inventory({
+            policy,
+            anchors,
+            inventory,
+            auditResults: new Map([
+              [
+                'test/language/outside-inventory.js',
+                [
+                  {
+                    type: 'test',
+                    file: 'test/language/outside-inventory.js',
+                    variant: 'strict',
+                    status: 'passed',
+                  },
+                ],
+              ],
+            ]),
+          }),
+        Es2015TaxonomyError,
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy resolves include names instead of trusting supplied closures',
+    run: () => {
+      assertThrows(
+        () =>
+          buildEs2015Inventory({
+            roots: [
+              {
+                path: 'test/language/precomputed-include.js',
+                metadata: {
+                  description: 'A root with an unreviewed include.',
+                  es5id: null,
+                  es6id: null,
+                  esid: null,
+                  features: [],
+                  flags: [],
+                  includes: ['missing.js'],
+                },
+                includeFeatures: ['let'],
+              },
+            ],
+          }),
+        Es2015TaxonomyError,
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy gives later features precedence over es5id, anchors, and ES2015 features',
+    run: () => {
+      const classifications = classifyEs2015Inventory({
+        policy: parseEs2015Policy(POLICY),
+        anchors: parseEs2015Anchors(ANCHORS),
+        inventory: buildEs2015Inventory({
+          roots: [
+            {
+              path: 'test/language/later-anchor.js',
+              metadata: {
+                description: 'Later feature overrides anchor.',
+                es5id: null,
+                es6id: null,
+                esid: 'sec-anchor',
+                features: ['async-functions'],
+                flags: [],
+                includes: [],
+              },
+            },
+            {
+              path: 'test/language/later-es5.js',
+              metadata: {
+                description: 'Later feature overrides es5id.',
+                es5id: '15.1',
+                es6id: null,
+                esid: null,
+                features: ['async-functions'],
+                flags: [],
+                includes: [],
+              },
+            },
+            {
+              path: 'test/language/later-feature.js',
+              metadata: {
+                description: 'Later feature overrides ES2015 feature.',
+                es5id: null,
+                es6id: null,
+                esid: null,
+                features: ['async-functions', 'let'],
+                flags: [],
+                includes: [],
+              },
+            },
+          ],
+        }),
+      });
+
+      assertSame(
+        json(classifications),
+        json([
+          {
+            path: 'test/language/later-anchor.js',
+            variants: 2,
+            partition: 'later-or-non-es2015',
+            status: 'later-or-non-es2015',
+            blocker: null,
+            features: ['async-functions'],
+            flags: [],
+            includes: [],
+            provenance: ['feature:async-functions'],
+          },
+          {
+            path: 'test/language/later-es5.js',
+            variants: 2,
+            partition: 'later-or-non-es2015',
+            status: 'later-or-non-es2015',
+            blocker: null,
+            features: ['async-functions'],
+            flags: [],
+            includes: [],
+            provenance: ['feature:async-functions'],
+          },
+          {
+            path: 'test/language/later-feature.js',
+            variants: 2,
+            partition: 'later-or-non-es2015',
+            status: 'later-or-non-es2015',
+            blocker: null,
+            features: ['async-functions', 'let'],
+            flags: [],
+            includes: [],
+            provenance: ['feature:async-functions'],
+          },
+        ]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy names the anchor artifact in anchor sorting diagnostics',
+    run: () => {
+      const error = assertThrows(
+        () =>
+          parseEs2015Anchors(
+            ANCHORS.replace('sec-anchor', 'sec-z", "sec-anchor'),
+          ),
+        Es2015TaxonomyError,
+      );
+
+      assertSame(
+        error.message,
+        'tools/test262/es2015-anchors.json anchors must be code-unit sorted',
       );
     },
   },

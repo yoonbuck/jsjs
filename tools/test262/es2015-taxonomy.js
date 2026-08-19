@@ -53,6 +53,16 @@ const KNOWN_FLAGS = new Set([
   'CanBlockIsTrue',
   'non-deterministic',
 ]);
+const EXECUTION_STATUSES = new Set(['passed', 'failed', 'skipped']);
+
+/**
+ * @typedef {{
+ *   type: 'test',
+ *   file: string,
+ *   variant: string,
+ *   status: 'passed' | 'failed' | 'skipped',
+ * }} Es2015ExecutionRecord
+ */
 
 export class Es2015TaxonomyError extends Error {
   /** @param {string} message */
@@ -150,7 +160,7 @@ export function parseEs2015Anchors(text) {
     );
   }
 
-  const anchors = stringList(record.anchors, 'anchors');
+  const anchors = stringList(record.anchors, 'anchors', ES2015_ANCHORS_FILE);
 
   return Object.freeze({
     version: ES2015_TAXONOMY_VERSION,
@@ -193,6 +203,11 @@ export function buildEs2015Inventory(options) {
       throw new Es2015TaxonomyError(`ES2015 inventory repeats root ${path}`);
     }
     paths.add(path);
+    if (root.includeFeatures !== undefined) {
+      throw new Es2015TaxonomyError(
+        `ES2015 root ${path} must resolve include features from include definitions`,
+      );
+    }
 
     const parsed = parseRootMetadata(root);
     if (parsed.error !== null) {
@@ -201,24 +216,24 @@ export function buildEs2015Inventory(options) {
         metadata: null,
         metadataError: parsed.error,
         variants: 0,
+        executionVariants: Object.freeze([]),
         includeFeatures: Object.freeze([]),
       });
     }
 
     const metadata = normalizeMetadata(parsed.metadata);
-    const includeFeatures =
-      root.includeFeatures === undefined
-        ? resolveIncludeFeatures(metadata.includes, definitions)
-        : normalizedStringValues(
-            root.includeFeatures,
-            `${path} includeFeatures`,
-          );
+    const executionVariants = expandVariants(/** @type {any} */ (metadata));
+    const includeFeatures = resolveIncludeFeatures(
+      metadata.includes,
+      definitions,
+    );
 
     return Object.freeze({
       path,
       metadata,
       metadataError: null,
-      variants: expandVariants(/** @type {any} */ (metadata)).length,
+      variants: executionVariants.length,
+      executionVariants: Object.freeze(executionVariants),
       includeFeatures: Object.freeze(sortStrings(includeFeatures)),
     });
   });
@@ -232,8 +247,8 @@ export function buildEs2015Inventory(options) {
  *   anchors: ReturnType<typeof parseEs2015Anchors>,
  *   inventory: readonly object[],
  *   selected?: ReadonlySet<string> | readonly string[],
- *   selectedResults?: ReadonlyMap<string, unknown> | Record<string, unknown>,
- *   auditResults?: ReadonlyMap<string, unknown> | Record<string, unknown>,
+ *   selectedResults?: ReadonlyMap<string, readonly Es2015ExecutionRecord[]> | Record<string, readonly Es2015ExecutionRecord[]>,
+ *   auditResults?: ReadonlyMap<string, readonly Es2015ExecutionRecord[]> | Record<string, readonly Es2015ExecutionRecord[]>,
  *   blockers?: ReadonlyMap<string, string> | Record<string, string>,
  *   intentionalDeviations?: ReadonlySet<string> | readonly string[],
  * }} options
@@ -262,7 +277,8 @@ export function classifyEs2015Inventory(options) {
   const blockers = valueMap(options.blockers);
   const intentionalDeviations = stringSet(options.intentionalDeviations);
   const paths = new Set();
-  const records = inventory.map((entry) => {
+  const executionVariants = new Map();
+  const entries = inventory.map((entry) => {
     if (typeof entry !== 'object' || entry === null) {
       throw new Es2015TaxonomyError('ES2015 inventory entries must be objects');
     }
@@ -274,6 +290,14 @@ export function classifyEs2015Inventory(options) {
       );
     }
     paths.add(path);
+    executionVariants.set(path, inventoryExecutionVariants(entry, path));
+    return entry;
+  });
+  validateExecutionResults(selectedResults, executionVariants, 'selected');
+  validateExecutionResults(auditResults, executionVariants, 'audit');
+
+  const records = entries.map((entry) => {
+    const path = entry.path;
     return classifyRoot({
       path,
       metadata: entry.metadata,
@@ -602,6 +626,91 @@ function record(
   });
 }
 
+/**
+ * @param {any} entry
+ * @param {string} path
+ * @returns {readonly string[]}
+ */
+function inventoryExecutionVariants(entry, path) {
+  if (entry.metadataError !== null && entry.metadataError !== undefined) {
+    if (entry.variants !== 0) {
+      throw new Es2015TaxonomyError(
+        `ES2015 root ${path} has invalid variants for malformed metadata`,
+      );
+    }
+    return [];
+  }
+
+  const variants = expandVariants(
+    /** @type {any} */ (normalizeMetadata(entry.metadata)),
+  );
+  if (entry.variants !== variants.length) {
+    throw new Es2015TaxonomyError(
+      `ES2015 root ${path} has an invalid variant count`,
+    );
+  }
+  if (entry.executionVariants !== undefined) {
+    const supplied = normalizedStringValues(
+      entry.executionVariants,
+      `${path} execution variants`,
+    );
+    if (supplied.join('\u0000') !== variants.join('\u0000')) {
+      throw new Es2015TaxonomyError(
+        `ES2015 root ${path} has inconsistent execution variants`,
+      );
+    }
+  }
+  return variants;
+}
+
+/**
+ * @param {Map<string, any>} results
+ * @param {Map<string, readonly string[]>} expectedVariants
+ * @param {string} source
+ */
+function validateExecutionResults(results, expectedVariants, source) {
+  for (const [path, records] of results) {
+    const expected = expectedVariants.get(path);
+    if (expected === undefined) {
+      throw new Es2015TaxonomyError(
+        `ES2015 ${source} execution names root outside inventory ${path}`,
+      );
+    }
+    if (!Array.isArray(records) || records.length !== expected.length) {
+      throw new Es2015TaxonomyError(
+        `ES2015 ${source} execution for ${path} must contain ${expected.length} records`,
+      );
+    }
+
+    const variants = new Set();
+    for (const execution of records) {
+      if (
+        typeof execution !== 'object' ||
+        execution === null ||
+        Array.isArray(execution) ||
+        execution.type !== 'test' ||
+        execution.file !== path ||
+        typeof execution.variant !== 'string' ||
+        !EXECUTION_STATUSES.has(execution.status)
+      ) {
+        throw new Es2015TaxonomyError(
+          `ES2015 ${source} execution for ${path} must contain Test262 test records`,
+        );
+      }
+      variants.add(execution.variant);
+    }
+
+    if (
+      variants.size !== expected.length ||
+      expected.some((variant) => !variants.has(variant))
+    ) {
+      throw new Es2015TaxonomyError(
+        `ES2015 ${source} execution for ${path} has incorrect variants`,
+      );
+    }
+  }
+}
+
 /** @param {any} root */
 function parseRootMetadata(root) {
   if (typeof root.metadataError === 'string' && root.metadataError !== '') {
@@ -819,18 +928,18 @@ function requireExactKeys(record, expected, label) {
   }
 }
 
-/** @param {any} value @param {string} field */
-function stringList(value, field) {
+/** @param {any} value @param {string} field @param {string} [subject] */
+function stringList(value, field, subject = ES2015_POLICY_FILE) {
   if (
     !Array.isArray(value) ||
     value.some((entry) => typeof entry !== 'string' || entry === '')
   ) {
     throw new Es2015TaxonomyError(
-      `${ES2015_POLICY_FILE} ${field} must be non-empty strings`,
+      `${subject} ${field} must be non-empty strings`,
     );
   }
   const values = [...value];
-  assertSortedUnique(values, field);
+  assertSortedUnique(values, field, subject);
   return values;
 }
 
@@ -845,16 +954,20 @@ function normalizedStringValues(value, field) {
   return sortStrings([...new Set(value)]);
 }
 
-/** @param {readonly string[]} values @param {string} field */
-function assertSortedUnique(values, field) {
+/**
+ * @param {readonly string[]} values
+ * @param {string} field
+ * @param {string} [subject]
+ */
+function assertSortedUnique(values, field, subject = ES2015_POLICY_FILE) {
   if (new Set(values).size !== values.length) {
     throw new Es2015TaxonomyError(
-      `${ES2015_POLICY_FILE} ${field} must not repeat entries`,
+      `${subject} ${field} must not repeat entries`,
     );
   }
   if (values.join('\u0000') !== sortStrings(values).join('\u0000')) {
     throw new Es2015TaxonomyError(
-      `${ES2015_POLICY_FILE} ${field} must be code-unit sorted`,
+      `${subject} ${field} must be code-unit sorted`,
     );
   }
 }
