@@ -11,7 +11,7 @@ import {
   inspectEngineGrammar,
   selectPaths,
 } from '../../tools/test262/upstream-select-paths.js';
-import { assertPinnedCheckout } from '../../tools/test262/upstream-run.js';
+import { assertPinnedCheckout } from '../../tools/test262/pin.js';
 
 const EXCLUDED_PATH = 'test/staging/not-read.js';
 const MODULE_PATH = 'test/built-ins/Array/module.js';

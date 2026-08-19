@@ -107,7 +107,7 @@ export function createObjectIntrinsics(realm) {
         // when it is a String, so every ES5 tag is unchanged (no ES5 object
         // carries the property) and a non-string tag falls back rather than
         // being coerced.
-        const tag = object.get(agent.wellKnownSymbols.toStringTag, realm);
+        const tag = object.getWellKnownSymbol('toStringTag', realm);
 
         return `[object ${typeof tag === 'string' ? tag : object.getClassName()}]`;
       },

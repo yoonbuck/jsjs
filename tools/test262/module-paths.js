@@ -7,6 +7,38 @@
  */
 
 /**
+ * Rejects root identifiers that host path and URL APIs could interpret
+ * differently.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+export function assertPortableTest262Path(path) {
+  if (typeof path !== 'string' || path === '') {
+    throw new TypeError('Test262 path must be a non-empty string');
+  }
+  if (path.includes('\\')) {
+    throw new RangeError('Test262 path cannot contain literal backslashes');
+  }
+
+  rejectEncodedStructuralPath(path);
+  rejectUrlSensitivePath(path);
+
+  if (
+    path.startsWith('/') ||
+    path
+      .split('/')
+      .some((segment) => segment === '' || segment === '.' || segment === '..')
+  ) {
+    throw new RangeError(
+      'Test262 path must be a canonical repository-relative path',
+    );
+  }
+
+  return path;
+}
+
+/**
  * @param {string} specifier
  * @param {string} referrer
  * @returns {string}
@@ -18,15 +50,14 @@ export function resolveTest262ModulePath(specifier, referrer) {
   if (typeof referrer !== 'string' || referrer === '') {
     throw new TypeError('Test262 module referrer must be a non-empty string');
   }
-  if (specifier.includes('\\') || referrer.includes('\\')) {
+  assertPortableTest262Path(referrer);
+  if (specifier.includes('\\')) {
     throw new RangeError(
       'Test262 module request cannot contain literal backslashes',
     );
   }
   rejectEncodedStructuralPath(specifier);
-  rejectEncodedStructuralPath(referrer);
   rejectUrlSensitivePath(specifier);
-  rejectUrlSensitivePath(referrer);
   if (!isRelativeSpecifier(specifier)) {
     throw new TypeError(
       `Test262 module specifier must be relative: ${specifier}`,
@@ -59,7 +90,7 @@ export function resolveTest262ModulePath(specifier, referrer) {
     );
   }
 
-  return segments.join('/');
+  return assertPortableTest262Path(segments.join('/'));
 }
 
 /**
@@ -105,7 +136,7 @@ function rejectEncodedStructuralPath(path) {
  * @returns {void}
  */
 function rejectUrlSensitivePath(path) {
-  if (/[%?#]/u.test(path)) {
+  if (/[%?#:|\u0000-\u0020\u007f]/u.test(path)) {
     throw new RangeError(
       'Test262 module request cannot contain URL-sensitive characters',
     );

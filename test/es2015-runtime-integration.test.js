@@ -7,6 +7,7 @@ import {
   iteratorValue,
 } from '../src/runtime/iterator.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { toPrimitive } from '../src/runtime/conversion.js';
 import { evaluateScript } from '../src/api.js';
 
 /**
@@ -154,6 +155,35 @@ const tests = [
       assertSame(
         record.iterator.getPrototype(),
         owner.intrinsics.arrayIteratorPrototype,
+      );
+    },
+  },
+  {
+    name: 'cross-Agent coercion finds inherited owner protocol keys',
+    run() {
+      const owner = createRealm({ agent: createAgent() });
+      const caller = createRealm({ agent: createAgent() });
+      const prototype = /** @type {EngineObject} */ (
+        val(
+          owner,
+          [
+            'var prototype = {};',
+            'prototype[Symbol.toPrimitive] = function () { return "FOREIGN"; };',
+            'prototype[Symbol.toStringTag] = "ForeignTag";',
+            'prototype;',
+          ].join('\n'),
+        )
+      );
+      const object = new EngineObject(prototype, 'Object', caller.agent);
+      const objectToString =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          val(caller, 'Object.prototype.toString')
+        );
+
+      assertSame(toPrimitive(object, 'default', caller), 'FOREIGN');
+      assertSame(
+        objectToString.callFunction(object, [], caller),
+        '[object ForeignTag]',
       );
     },
   },

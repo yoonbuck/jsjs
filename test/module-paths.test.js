@@ -101,11 +101,27 @@ export default [
         ['./literal%25name.js', 'test/language/module-code/root.js'],
         ['./child.js?query', 'test/language/module-code/root.js'],
         ['./child.js#fragment', 'test/language/module-code/root.js'],
+        ['../../file:/outside.js', 'test/language/root.js'],
+        ['../../C|/outside.js', 'test/language/root.js'],
         ['./child.js', 'test/language/module-code/root.js?query'],
         ['./child.js', 'test/language/module-code/root.js#fragment'],
       ]) {
         const error = captureError(() =>
           resolveTest262ModulePath(specifier, referrer),
+        );
+        assertSame(error.message.includes('URL-sensitive'), true);
+      }
+    },
+  },
+  {
+    name: 'portable module paths reject URL-stripped control whitespace',
+    run: () => {
+      for (const control of ['\t', '\n', '\r']) {
+        const error = captureError(() =>
+          resolveTest262ModulePath(
+            `./dependency${control}name_FIXTURE.js`,
+            'test/language/module-code/root.js',
+          ),
         );
         assertSame(error.message.includes('URL-sensitive'), true);
       }

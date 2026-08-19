@@ -34,7 +34,10 @@ import {
   sortStrings,
   sortTestPaths,
 } from './selection.js';
-import { resolveTest262ModulePath } from './module-paths.js';
+import {
+  assertPortableTest262Path,
+  resolveTest262ModulePath,
+} from './module-paths.js';
 
 export { DEFAULT_INCLUDES };
 
@@ -262,6 +265,20 @@ export async function runTest262Suite(options) {
 export async function runTest262File(options) {
   const { engine, host, file } = options;
 
+  try {
+    assertPortableTest262Path(file);
+  } catch {
+    return [
+      createTestRecord({
+        file,
+        status: 'failed',
+        reason: 'load-error',
+        message:
+          'Test262 test path must be a portable repository-relative path',
+      }),
+    ];
+  }
+
   if (isTest262FixtureDependencyPath(file)) {
     return [];
   }
@@ -338,6 +355,16 @@ export async function runTest262File(options) {
 }
 
 /**
+ * @param {Test262Host} host
+ * @param {string} name
+ * @returns {Promise<string>}
+ */
+async function readPortableInclude(host, name) {
+  assertPortableTest262Path(name);
+  return host.readInclude(name);
+}
+
+/**
  * @param {{
  *   engine: Test262Engine,
  *   host: Test262Host,
@@ -407,7 +434,7 @@ async function runVariant({
     let includeSource;
 
     try {
-      includeSource = await host.readInclude(name);
+      includeSource = await readPortableInclude(host, name);
     } catch (error) {
       return failed(
         'load-error',
@@ -521,7 +548,7 @@ async function runModuleVariant({
     let includeSource;
 
     try {
-      includeSource = await host.readInclude(name);
+      includeSource = await readPortableInclude(host, name);
     } catch (error) {
       return failed(
         'load-error',
@@ -753,7 +780,7 @@ async function runAsyncVariant({
     let includeSource;
 
     try {
-      includeSource = await host.readInclude(name);
+      includeSource = await readPortableInclude(host, name);
     } catch (error) {
       return failed(
         'load-error',

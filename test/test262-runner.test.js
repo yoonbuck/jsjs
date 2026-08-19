@@ -807,6 +807,54 @@ export default [
     },
   },
   {
+    name: 'non-portable include identifiers fail before the host reads them',
+    run: async () => {
+      const invalidIncludes = [
+        '../../../../README.md',
+        'assert.js?ignored',
+        '%61ssert.js',
+      ];
+      /** @type {string[]} */
+      const invalidReads = [];
+      const tests = Object.fromEntries(
+        invalidIncludes.map((name, index) => [
+          `invalid-include-${index}.js`,
+          fixture(
+            'must not load a non-portable include',
+            'var a = 1;',
+            `includes: [${name}]\n`,
+          ),
+        ]),
+      );
+      const host = createMemoryHost(tests);
+      const { records } = await runTest262Suite({
+        engine,
+        host: {
+          ...host,
+          readInclude(name) {
+            if (invalidIncludes.includes(name)) {
+              invalidReads.push(name);
+            }
+            return host.readInclude(name);
+          },
+        },
+        paths: Object.keys(tests),
+        supportedFeatures: [],
+        skipFeatures: [],
+      });
+
+      assertSame(invalidReads.length, 0);
+      assertSame(records.length, invalidIncludes.length * 2);
+      assertSame(
+        records.every(
+          (record) =>
+            record.status === 'failed' && record.reason === 'load-error',
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'a throwing include is reported as a harness error',
     run: async () => {
       const { records } = await runMemorySuite({
@@ -893,6 +941,49 @@ export default [
       );
       assertSame(records[0].message, 'Missing Test262 frontmatter block');
       assertSame(summary.failed, 1);
+    },
+  },
+  {
+    name: 'non-portable root identifiers fail before the host reads them',
+    run: async () => {
+      const paths = [
+        'test/percent%2fescape.js',
+        'test/query?.js',
+        'test/fragment#.js',
+        'file:/outside.js',
+        'C:/outside.js',
+        'C|/outside.js',
+        'test/tab\tname.js',
+        'test/line\nname.js',
+        'test/carriage\rname.js',
+      ];
+      let reads = 0;
+      const { records } = await runTest262Suite({
+        engine,
+        host: {
+          ...createMemoryHost({}),
+          readTest() {
+            reads += 1;
+            return fixture('must not load', 'var a = 1;');
+          },
+        },
+        paths,
+        supportedFeatures: [],
+        skipFeatures: [],
+      });
+
+      assertSame(reads, 0);
+      assertSame(records.length, paths.length);
+      assertSame(
+        records.every(
+          (record) =>
+            record.status === 'failed' &&
+            record.reason === 'load-error' &&
+            record.message ===
+              'Test262 test path must be a portable repository-relative path',
+        ),
+        true,
+      );
     },
   },
   {

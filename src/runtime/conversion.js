@@ -131,8 +131,8 @@ export function toPrimitive(value, preferredType = 'default', callerRealm) {
     throw new TypeError('EngineObject protocol lookup requires an agent');
   }
 
-  const exoticToPrimitive = value.get(
-    agent.wellKnownSymbols.toPrimitive,
+  const exoticToPrimitive = value.getWellKnownSymbol(
+    'toPrimitive',
     callerRealm,
   );
 

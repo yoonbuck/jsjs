@@ -32,9 +32,8 @@
  * the local contract proves the committed files are the real output.
  */
 
-import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { createNodeTest262Host } from './adapters/node.js';
 import { createJsjsTest262Engine } from './engine.js';
 import { formatRecordLine, formatReportLines } from './report.js';
@@ -67,14 +66,17 @@ import {
   upstreamRunResultPasses,
   upstreamSubsetPaths,
 } from './upstream.js';
+import { assertPinnedCheckout, readTest262Pin } from './pin.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
 /** Re-exported for consumers that import from this module. */
 export {
+  assertPinnedCheckout,
   COVERAGE_DOCUMENT_FILE,
   COVERAGE_MARKER_BEGIN,
   COVERAGE_MARKER_END,
+  readTest262Pin,
   replaceGeneratedBlock,
   readGeneratedBlock,
 };
@@ -111,98 +113,6 @@ function relativePath(from, to) {
  */
 function readRepositoryFile(path) {
   return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
-}
-
-/**
- * @returns {Promise<{ repository: string, revision: string, checkoutPath: string }>}
- */
-export async function readTest262Pin() {
-  const manifest = JSON.parse(await readRepositoryFile('package.json'));
-  const pin = manifest.test262;
-
-  if (
-    pin === undefined ||
-    typeof pin.repository !== 'string' ||
-    typeof pin.revision !== 'string' ||
-    typeof pin.checkoutPath !== 'string'
-  ) {
-    throw new Error('package.json must pin the upstream Test262 tree');
-  }
-
-  return pin;
-}
-
-/**
- * @param {{ repository: string, revision: string, checkoutPath: string }} pin
- * @returns {string}
- */
-function checkoutHint(pin) {
-  return [
-    'Check the pinned upstream tree out first:',
-    `  git clone --filter=blob:none ${pin.repository} ${pin.checkoutPath}`,
-    `  git -C ${pin.checkoutPath} checkout ${pin.revision}`,
-    'Then run:',
-    `  ${formatTest262UpstreamCommand()}`,
-  ].join('\n');
-}
-
-/**
- * Confirms the checkout really is the pinned revision. A detached `HEAD` holds
- * the raw commit id, which is exactly what a pinned checkout must have; a
- * branch reference means someone checked out something else.
- *
- * @param {{ repository: string, revision: string, checkoutPath: string }} pin
- * @returns {Promise<void>}
- */
-export async function assertPinnedCheckout(pin) {
-  /** @type {string} */
-  let head;
-
-  try {
-    head = (await readRepositoryFile(`${pin.checkoutPath}/.git/HEAD`)).trim();
-  } catch {
-    throw new Error(
-      `${pin.checkoutPath} is not a git checkout.\n${checkoutHint(pin)}`,
-    );
-  }
-
-  if (head !== pin.revision) {
-    throw new Error(
-      `${pin.checkoutPath} is at ${head}, but package.json pins ${pin.revision}.\n${checkoutHint(
-        pin,
-      )}`,
-    );
-  }
-
-  let status;
-
-  try {
-    status = execFileSync(
-      'git',
-      ['status', '--porcelain=v1', '--untracked-files=all'],
-      {
-        cwd: fileURLToPath(
-          new URL(
-            `${pin.checkoutPath.replace(/\/$/u, '')}/`,
-            REPOSITORY_ROOT_URL,
-          ),
-        ),
-        encoding: 'utf8',
-      },
-    ).trim();
-  } catch {
-    throw new Error(
-      `${pin.checkoutPath} Git status could not be read.\n${checkoutHint(pin)}`,
-    );
-  }
-
-  if (status !== '') {
-    throw new Error(
-      `${pin.checkoutPath} has uncommitted changes:\n${status}\n${checkoutHint(
-        pin,
-      )}`,
-    );
-  }
 }
 
 /**
