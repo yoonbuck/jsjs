@@ -502,6 +502,15 @@ export default [
     },
   },
   {
+    name: 'parseModule rejects duplicate lexical declarations in nested custom AST scopes',
+    run() {
+      const ast = parseModule('{ let first; let second; }');
+      ast.body[0].body[1].declarations[0].id.name = 'first';
+
+      assertThrows(() => parseModule('', { parse: () => ast }), SyntaxError);
+    },
+  },
+  {
     name: 'parseModule records named and anonymous default generator declarations',
     run() {
       for (const [source, localName] of [

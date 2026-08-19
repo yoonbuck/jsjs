@@ -239,6 +239,22 @@ const tests = [
     },
   },
   {
+    name: 'a generator falls back to the ordinary object tag when its configurable tag is deleted',
+    run() {
+      assertSame(
+        evalValue(
+          createRealm(),
+          [
+            'function* values() {}',
+            'delete Object.getPrototypeOf(values.prototype)[Symbol.toStringTag];',
+            'Object.prototype.toString.call(values());',
+          ].join('\n'),
+        ),
+        '[object Object]',
+      );
+    },
+  },
+  {
     name: 'bound generators retain generator lineage metadata and call behavior',
     run() {
       const realm = createRealm();

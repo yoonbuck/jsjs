@@ -255,6 +255,38 @@ export default [
     },
   },
   {
+    name: 'native evaluation failures cannot spoof ModuleLoaderError provenance',
+    async run() {
+      const realm = createRealm();
+      const spoofed = new ModuleLoaderError({
+        phase: 'resolve',
+        identifier: 'spoofed',
+        cause: 'spoofed cause',
+      });
+      realm.globalObject.defineOwnProperty('trigger', {
+        value: realm.createNativeFunction({
+          name: 'trigger',
+          length: 0,
+          call() {
+            throw spoofed;
+          },
+        }),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const loader = loaderFor({ root: 'trigger();' }, realm);
+
+      const error = await rejected(loader.loadAndEvaluate('root'));
+
+      assertSame(error instanceof ModuleLoaderError, true);
+      assertSame(error === spoofed, false);
+      assertSame(error.phase, 'evaluate');
+      assertSame(error.identifier, 'root');
+      assertSame(error.cause, spoofed);
+    },
+  },
+  {
     name: 'an abrupt SCC evaluation marks every member with the exact guest value',
     async run() {
       const thrown = {};

@@ -224,14 +224,6 @@ function linkRecord(record, transaction) {
   transaction.nextDfsIndex += 1;
   transaction.stack.push(record);
 
-  record.environment = new ModuleEnvironmentRecord(
-    record.realm.globalEnvironment,
-  );
-  record.resolvedImportEntries = resolveImportEntries(record);
-  moduleDeclarationInstantiation(record);
-  validateLocalExportBindings(record);
-  validateIndirectExportEntries(record);
-
   for (const request of record.resolvedRequestedModules) {
     const dependency = request.module;
     linkRecord(dependency, transaction);
@@ -243,6 +235,14 @@ function linkRecord(record, transaction) {
       );
     }
   }
+
+  record.environment = new ModuleEnvironmentRecord(
+    record.realm.globalEnvironment,
+  );
+  record.resolvedImportEntries = resolveImportEntries(record);
+  moduleDeclarationInstantiation(record);
+  validateLocalExportBindings(record);
+  validateIndirectExportEntries(record);
 
   if (requiredDfsAncestorIndex(record) !== requiredDfsIndex(record)) {
     return;

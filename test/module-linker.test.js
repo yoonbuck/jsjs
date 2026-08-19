@@ -502,6 +502,33 @@ export default [
     },
   },
   {
+    name: 'linking reports an earlier dependency failure before a later local import failure',
+    async run() {
+      const root = await loadModuleGraph(
+        loaderFor({
+          root: 'import "first"; import { missing } from "later";',
+          first: 'import { absent } from "first-dependency";',
+          'first-dependency': 'export const present = 1;',
+          later: 'export const present = 2;',
+        }),
+        'root',
+      );
+      const error = /** @type {ModuleLoaderError} */ (
+        assertThrows(() => linkModuleGraph(root), ModuleLoaderError)
+      );
+
+      assertSame(error.phase, 'link');
+      assertSame(error.identifier, 'first');
+      assertSame(
+        /** @type {{ get: (name: string) => unknown }} */ (error.cause).get(
+          'name',
+        ),
+        'SyntaxError',
+      );
+      assertUnlinked(root);
+    },
+  },
+  {
     name: 'namespace-import local exports from separate intermediaries make a named import ambiguous',
     async run() {
       const root = await loadModuleGraph(

@@ -40,7 +40,7 @@ export class GeneratorObject extends EngineObject {
    * @param {GeneratorContinuation} continuation
    */
   constructor(realm, prototype, continuation) {
-    super(prototype, 'Generator', realm.agent);
+    super(prototype, 'Object', realm.agent);
 
     /** @type {Realm} */
     this.realm = realm;

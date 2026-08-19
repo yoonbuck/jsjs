@@ -360,6 +360,62 @@ const tests = [
     },
   },
   {
+    name: 'custom parser validates deeply nested declaration scopes in bounded work',
+    run() {
+      const size = 128;
+      /** @type {any} */
+      let nested = { type: 'EmptyStatement' };
+
+      for (let depth = 0; depth < size; depth += 1) {
+        nested = {
+          type: 'BlockStatement',
+          body: [
+            {
+              type: 'VariableDeclaration',
+              kind: 'var',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: `value${depth}` },
+                  init: null,
+                },
+              ],
+            },
+            nested,
+          ],
+        };
+      }
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [nested],
+      };
+      const push = Array.prototype.push;
+      let pushCalls = 0;
+
+      Array.prototype.push = function countedPush(
+        /** @type {any[]} */ ...values
+      ) {
+        pushCalls += 1;
+        return push.apply(this, values);
+      };
+
+      try {
+        const parsed = parseScript('', { parse: () => program });
+        assertSame(parsed.body.length, 1);
+      } finally {
+        Array.prototype.push = push;
+      }
+
+      if (pushCalls >= 10000) {
+        throw new Error(
+          `Expected fewer than 10000 worklist pushes, got ${pushCalls}`,
+        );
+      }
+    },
+  },
+  {
     name: 'custom parser rejects repeated nodes in one structural child list',
     run() {
       const shared = { type: 'Literal', value: 1 };
@@ -1326,6 +1382,92 @@ const tests = [
         SyntaxError,
       );
       assertSame(iteratorCalls, 0);
+    },
+  },
+  {
+    name: 'custom ASTs reject duplicate lexical declarations in nested scopes',
+    run() {
+      for (const program of [
+        parseScript('{ let first; let second; }'),
+        parseScript('function scope() { let first; let second; }'),
+      ]) {
+        const body =
+          program.body[0].type === 'BlockStatement'
+            ? program.body[0].body
+            : program.body[0].body.body;
+        body[1].declarations[0].id.name = 'first';
+
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom function bodies reject lexical and function declaration conflicts',
+    run() {
+      const program = parseScript(
+        'function outer() { let first; function second() {} }',
+      );
+      program.body[0].body.body[1].id.name = 'first';
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom sloppy ASTs preserve Annex B duplicate block functions',
+    run() {
+      for (const program of [
+        parseScript('{ function repeated() {} function repeated() {} }'),
+        parseScript(
+          '{ first: function repeated() {} second: function repeated() {} }',
+        ),
+        parseScript(
+          'switch (0) { case 0: function repeated() {} case 1: function repeated() {} }',
+        ),
+      ]) {
+        assertSame(parseScript('', { parse: () => program }).type, 'Program');
+      }
+    },
+  },
+  {
+    name: 'custom blocks reject lexical conflicts with labelled functions',
+    run() {
+      const program = parseScript('{ let first; label: function second() {} }');
+      program.body[0].body[1].body.id.name = 'first';
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom ASTs reject declaration conflicts in switch, catch, and loop scopes',
+    run() {
+      const switchProgram = parseScript(
+        'switch (value) { case 0: let first; break; case 1: let second; }',
+      );
+      switchProgram.body[0].cases[1].consequent[0].declarations[0].id.name =
+        'first';
+
+      const catchProgram = parseScript('try {} catch (first) { let second; }');
+      catchProgram.body[0].handler.body.body[0].declarations[0].id.name =
+        'first';
+
+      const loopProgram = parseScript('for (let first, second; false; ) {}');
+      loopProgram.body[0].init.declarations[1].id.name = 'first';
+
+      for (const program of [switchProgram, catchProgram, loopProgram]) {
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
     },
   },
   {

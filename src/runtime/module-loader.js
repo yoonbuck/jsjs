@@ -183,7 +183,7 @@ export class ModuleLoader {
           );
         }
 
-        throw asModuleLoaderError('evaluate', record.identifier, error);
+        throw wrapModuleLoaderError('evaluate', record.identifier, error);
       }
     });
     state.evaluationInFlight.set(record, evaluation);
@@ -852,24 +852,10 @@ function validateModuleSource(result) {
 }
 
 /**
- * @param {'resolve' | 'load' | 'parse' | 'link' | 'evaluate'} phase
- * @param {string | undefined} identifier
- * @param {unknown} error
- * @returns {ModuleLoaderError}
- */
-function asModuleLoaderError(phase, identifier, error) {
-  if (error instanceof ModuleLoaderError) {
-    return error;
-  }
-
-  return new ModuleLoaderError({ phase, identifier, cause: error });
-}
-
-/**
  * Wraps a phase boundary failure without trusting the public ModuleLoaderError
  * class to imply that the error originated inside this loader.
  *
- * @param {'resolve' | 'load' | 'parse'} phase
+ * @param {'resolve' | 'load' | 'parse' | 'evaluate'} phase
  * @param {string | undefined} identifier
  * @param {unknown} error
  * @returns {ModuleLoaderError}

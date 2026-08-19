@@ -9,6 +9,7 @@ import {
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import {
   boundNames,
+  lexicallyDeclaredNames,
   summarizeBoundNames,
   topLevelLexicallyDeclaredNames,
   topLevelVarDeclaredNames,
@@ -2980,6 +2981,8 @@ function checkStatementPositionFunctionDeclarations(
   const seen = new WeakMap();
   /** @type {WeakMap<object, { fn: any, labeled: boolean } | null>} */
   const labelFunctionDeclarations = new WeakMap();
+  const customFunctions = [];
+  const customStrictness = new WeakMap();
 
   while (pending.length > 0) {
     const item = /** @type {SyntaxWalkItem} */ (pending.pop());
@@ -3071,6 +3074,12 @@ function checkStatementPositionFunctionDeclarations(
 
     if (typeof node.type !== 'string') {
       continue;
+    }
+    if (validationContext.allOwnKeys && isFunctionNode(node)) {
+      customFunctions.push(node);
+    }
+    if (validationContext.allOwnKeys) {
+      customStrictness.set(node, strict);
     }
 
     if (item.nestedArray) {
@@ -3182,6 +3191,14 @@ function checkStatementPositionFunctionDeclarations(
         );
       }
     }
+  }
+  if (validationContext.allOwnKeys) {
+    checkCustomDeclarationEarlyErrors(
+      root,
+      validationContext.module,
+      customFunctions,
+      customStrictness,
+    );
   }
 }
 
@@ -3562,6 +3579,352 @@ function customLabelTargetsIteration(label, cache) {
   }
 
   return iteration;
+}
+
+/**
+ * Reapplies declaration early errors to custom ASTs in one pass per variable
+ * scope. Nested functions are analyzed separately so declarations never cross
+ * a function boundary.
+ *
+ * @param {any} program
+ * @param {boolean} module
+ * @param {any[]} functions
+ * @param {WeakMap<object, boolean>} strictness
+ * @returns {void}
+ */
+function checkCustomDeclarationEarlyErrors(
+  program,
+  module,
+  functions,
+  strictness,
+) {
+  checkCustomVariableScope(
+    program.body,
+    module ? 'none' : 'top-level',
+    program,
+    strictness,
+  );
+
+  for (let index = 0; index < functions.length; index += 1) {
+    const node = functions[index];
+    if (node.body.type !== 'BlockStatement') {
+      continue;
+    }
+
+    const lexicalNames = topLevelLexicallyDeclaredNames(node.body.body);
+    checkDisjointDeclarationNames(
+      boundNamesFromList(node.params),
+      lexicalNames,
+    );
+    checkProgramDeclarationEarlyErrors(node.body.body);
+    checkCustomVariableScope(
+      node.body.body,
+      'top-level',
+      node.body,
+      strictness,
+    );
+  }
+}
+
+/**
+ * @param {any[]} bindings
+ * @returns {string[]}
+ */
+function boundNamesFromList(bindings) {
+  const names = [];
+  for (let index = 0; index < bindings.length; index += 1) {
+    const bindingNames = boundNames(bindings[index]);
+    for (let nameIndex = 0; nameIndex < bindingNames.length; nameIndex += 1) {
+      names.push(bindingNames[nameIndex]);
+    }
+  }
+  return names;
+}
+
+/**
+ * @param {any[]} statements
+ * @param {'none' | 'top-level'} rootSemantics
+ * @param {any} root
+ * @param {WeakMap<object, boolean>} strictness
+ * @returns {void}
+ */
+function checkCustomVariableScope(statements, rootSemantics, root, strictness) {
+  /** @type {Map<string, number>} */
+  const activeLexicalNames = new Map();
+  /** @type {any[]} */
+  const pending = [
+    {
+      kind: 'list',
+      statements,
+      semantics: rootSemantics,
+      owner: root,
+    },
+  ];
+
+  while (pending.length > 0) {
+    const event = pending.pop();
+
+    if (event.kind === 'exit') {
+      removeActiveDeclarationNames(activeLexicalNames, event.names);
+      continue;
+    }
+
+    if (event.kind === 'list') {
+      /** @type {string[]} */
+      let lexicalNames = [];
+      if (event.semantics === 'top-level') {
+        lexicalNames = topLevelLexicallyDeclaredNames(event.statements);
+      } else if (event.semantics === 'block') {
+        lexicalNames = lexicallyDeclaredNames(event.statements);
+      }
+
+      if (event.semantics === 'block') {
+        checkBlockDeclarationDuplicateNames(
+          event.statements,
+          strictness.get(event.owner) ?? true,
+        );
+      } else {
+        checkDuplicateDeclarationNames(lexicalNames);
+      }
+      addActiveDeclarationNames(activeLexicalNames, lexicalNames);
+      pending.push({ kind: 'exit', names: lexicalNames });
+      for (let index = event.statements.length - 1; index >= 0; index -= 1) {
+        pending.push({ kind: 'statement', node: event.statements[index] });
+      }
+      continue;
+    }
+
+    if (event.kind === 'scoped') {
+      checkDuplicateDeclarationNames(event.names);
+      addActiveDeclarationNames(activeLexicalNames, event.names);
+      pending.push({ kind: 'exit', names: event.names });
+      pending.push({ kind: 'statement', node: event.node });
+      continue;
+    }
+
+    const node = event.node;
+    if (node.type === 'VariableDeclaration') {
+      if (node.kind === 'var') {
+        checkActiveDeclarationNames(activeLexicalNames, boundNames(node));
+      }
+      continue;
+    }
+    if (isFunctionNode(node)) {
+      continue;
+    }
+
+    switch (node.type) {
+      case 'BlockStatement':
+        pending.push({
+          kind: 'list',
+          statements: node.body,
+          semantics: 'block',
+          owner: node,
+        });
+        break;
+      case 'IfStatement':
+        if (node.alternate !== null) {
+          pending.push({ kind: 'statement', node: node.alternate });
+        }
+        pending.push({ kind: 'statement', node: node.consequent });
+        break;
+      case 'DoWhileStatement':
+      case 'WhileStatement':
+      case 'WithStatement':
+      case 'LabeledStatement':
+        pending.push({ kind: 'statement', node: node.body });
+        break;
+      case 'ForStatement':
+        pending.push({
+          kind: 'scoped',
+          node: node.body,
+          names:
+            node.init?.type === 'VariableDeclaration' &&
+            node.init.kind !== 'var'
+              ? boundNames(node.init)
+              : [],
+        });
+        if (node.init?.type === 'VariableDeclaration') {
+          pending.push({ kind: 'statement', node: node.init });
+        }
+        break;
+      case 'ForInStatement':
+      case 'ForOfStatement':
+        pending.push({
+          kind: 'scoped',
+          node: node.body,
+          names:
+            node.left.type === 'VariableDeclaration' && node.left.kind !== 'var'
+              ? boundNames(node.left)
+              : [],
+        });
+        if (node.left.type === 'VariableDeclaration') {
+          pending.push({ kind: 'statement', node: node.left });
+        }
+        break;
+      case 'SwitchStatement': {
+        const switchStatements = [];
+        for (let caseIndex = 0; caseIndex < node.cases.length; caseIndex += 1) {
+          const consequent = node.cases[caseIndex].consequent;
+          for (let index = 0; index < consequent.length; index += 1) {
+            switchStatements.push(consequent[index]);
+          }
+        }
+        pending.push({
+          kind: 'list',
+          statements: switchStatements,
+          semantics: 'block',
+          owner: node,
+        });
+        break;
+      }
+      case 'TryStatement':
+        if (node.finalizer !== null) {
+          pending.push({ kind: 'statement', node: node.finalizer });
+        }
+        if (node.handler !== null) {
+          pending.push({ kind: 'statement', node: node.handler });
+        }
+        pending.push({ kind: 'statement', node: node.block });
+        break;
+      case 'CatchClause':
+        if (node.param !== null) {
+          const parameterNames = boundNames(node.param);
+          checkDuplicateDeclarationNames(parameterNames);
+          checkDisjointDeclarationNames(
+            parameterNames,
+            lexicallyDeclaredNames(node.body.body),
+          );
+        }
+        pending.push({
+          kind: 'list',
+          statements: node.body.body,
+          semantics: 'block',
+          owner: node.body,
+        });
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+/**
+ * Annex B permits repeated ordinary block functions in sloppy code, while
+ * every other repeated lexical binding remains an early error.
+ *
+ * @param {any[]} statements
+ * @param {boolean} strict
+ * @returns {void}
+ */
+function checkBlockDeclarationDuplicateNames(statements, strict) {
+  /** @type {Map<string, boolean>} */
+  const declarations = new Map();
+
+  for (let index = 0; index < statements.length; index += 1) {
+    let statement = statements[index];
+    while (statement.type === 'LabeledStatement') {
+      statement = statement.body;
+    }
+    const lexical =
+      (statement.type === 'VariableDeclaration' && statement.kind !== 'var') ||
+      statement.type === 'ClassDeclaration' ||
+      statement.type === 'FunctionDeclaration';
+    if (!lexical) {
+      continue;
+    }
+
+    const annexBFunction =
+      !strict &&
+      statement.type === 'FunctionDeclaration' &&
+      statement.generator !== true &&
+      statement.async !== true;
+    const names = boundNames(statement);
+    for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+      const name = names[nameIndex];
+      const previousWasAnnexBFunction = declarations.get(name);
+      if (
+        previousWasAnnexBFunction !== undefined &&
+        !(previousWasAnnexBFunction && annexBFunction)
+      ) {
+        throw new SyntaxError(`Identifier '${name}' has already been declared`);
+      }
+      declarations.set(name, annexBFunction);
+    }
+  }
+}
+
+/**
+ * @param {string[]} names
+ * @returns {void}
+ */
+function checkDuplicateDeclarationNames(names) {
+  const seen = new Set();
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (seen.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+    seen.add(name);
+  }
+}
+
+/**
+ * @param {string[]} leftNames
+ * @param {string[]} rightNames
+ * @returns {void}
+ */
+function checkDisjointDeclarationNames(leftNames, rightNames) {
+  const left = new Set(leftNames);
+  for (let index = 0; index < rightNames.length; index += 1) {
+    const name = rightNames[index];
+    if (left.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+  }
+}
+
+/**
+ * @param {Map<string, number>} activeNames
+ * @param {string[]} names
+ * @returns {void}
+ */
+function addActiveDeclarationNames(activeNames, names) {
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    activeNames.set(name, (activeNames.get(name) ?? 0) + 1);
+  }
+}
+
+/**
+ * @param {Map<string, number>} activeNames
+ * @param {string[]} names
+ * @returns {void}
+ */
+function removeActiveDeclarationNames(activeNames, names) {
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    const count = activeNames.get(name);
+    if (count === 1) {
+      activeNames.delete(name);
+    } else if (count !== undefined) {
+      activeNames.set(name, count - 1);
+    }
+  }
+}
+
+/**
+ * @param {Map<string, number>} activeNames
+ * @param {string[]} names
+ * @returns {void}
+ */
+function checkActiveDeclarationNames(activeNames, names) {
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (activeNames.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+  }
 }
 
 /**
