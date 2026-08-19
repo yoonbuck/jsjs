@@ -520,6 +520,48 @@ export default [
     },
   },
   {
+    name: 'host-thrown ModuleLoaderError values are wrapped at resolve and load boundaries',
+    async run() {
+      const hostError = new ModuleLoaderError({
+        phase: 'evaluate',
+        identifier: 'nested',
+        value: 'host value',
+      });
+      const resolveLoader = createModuleLoader(createRealm(), {
+        resolve() {
+          throw hostError;
+        },
+        load() {
+          return 'export const x = 1;';
+        },
+      });
+      const loadLoader = createModuleLoader(createRealm(), {
+        resolve() {
+          return 'canonical';
+        },
+        load() {
+          return Promise.reject(hostError);
+        },
+      });
+
+      const resolveError = await rejected(
+        loadModuleGraph(resolveLoader, 'root'),
+      );
+      const loadError = await rejected(loadModuleGraph(loadLoader, 'root'));
+
+      assertSame(resolveError instanceof ModuleLoaderError, true);
+      assertSame(resolveError === hostError, false);
+      assertSame(resolveError.phase, 'resolve');
+      assertSame(resolveError.identifier, undefined);
+      assertSame(resolveError.cause, hostError);
+      assertSame(loadError instanceof ModuleLoaderError, true);
+      assertSame(loadError === hostError, false);
+      assertSame(loadError.phase, 'load');
+      assertSame(loadError.identifier, 'canonical');
+      assertSame(loadError.cause, hostError);
+    },
+  },
+  {
     name: 'loader retries a parsed parent graph after a child load failure',
     async run() {
       let childLoads = 0;

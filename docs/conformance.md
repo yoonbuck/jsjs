@@ -285,9 +285,10 @@ needs them: `@@toPrimitive` is consulted by `ToPrimitive` ahead of
 `valueOf`/`toString`, and `Object.prototype.toString` prefers a **string**
 `@@toStringTag` over the ES5.1 `[[Class]]` tag. No ES5 object carries either
 property, so every ES5 tag and conversion is unchanged. `@@iterator` is honoured
-too, driving the ES2015 iteration protocol (yoonbuck/jsjs#47). The other eight
+too, driving the ES2015 iteration protocol (yoonbuck/jsjs#47), and Promise
+chaining reads `@@species` to select its derived constructor. The other seven
 well-known symbols are defined values whose protocols are not yet honoured —
-see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only-toprimitive-tostringtag-and-iterator-are-honoured).
+see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only-toprimitive-tostringtag-iterator-and-species-are-honoured).
 
 ## Layer 4: Integrated pinned release and broad evidence
 

@@ -92,7 +92,6 @@ import { isRealm } from './realm.js';
  *   lastActiveGraphSequence: ActiveGraphSequence | null,
  *   activeLoadIdentifiers: Set<string>,
  *   evaluationInFlight: WeakMap<SourceTextModuleRecord, Promise<any>>,
- *   linkErrors: WeakMap<SourceTextModuleRecord, ModuleLoaderError>,
  *   evaluationErrors: WeakMap<SourceTextModuleRecord, ModuleLoaderError>,
  * }} ModuleLoaderState
  */
@@ -142,7 +141,6 @@ export class ModuleLoader {
       lastActiveGraphSequence: null,
       activeLoadIdentifiers: new Set(),
       evaluationInFlight: new WeakMap(),
-      linkErrors: new WeakMap(),
       evaluationErrors: new WeakMap(),
     });
   }
@@ -164,18 +162,7 @@ export class ModuleLoader {
     }
 
     const evaluation = Promise.resolve().then(() => {
-      const cachedLinkError = state.linkErrors.get(record);
-      if (cachedLinkError !== undefined) {
-        throw cachedLinkError;
-      }
-      try {
-        linkModuleGraph(record);
-      } catch (error) {
-        if (error instanceof ModuleLoaderError) {
-          state.linkErrors.set(record, error);
-        }
-        throw error;
-      }
+      linkModuleGraph(record);
 
       try {
         evaluateModuleGraph(record);
@@ -356,7 +343,7 @@ function resolveModule(loader, specifier, referrer) {
       return identifier;
     })
     .catch((error) => {
-      throw asModuleLoaderError('resolve', undefined, error);
+      throw wrapModuleLoaderError('resolve', undefined, error);
     })
     .finally(() => {
       byReferrer.delete(referrer);
@@ -724,32 +711,38 @@ function acquireSourceRecord(loader, identifier) {
       try {
         result = bindings.load.call(bindings.receiver, identifier);
       } catch (error) {
-        throw asModuleLoaderError('load', identifier, error);
+        throw wrapModuleLoaderError('load', identifier, error);
       } finally {
         state.activeLoadIdentifiers.delete(identifier);
       }
 
       try {
         result = await result;
-        const sourceText = validateModuleSource(result);
-        let ast;
-
-        try {
-          ast = parseModule(sourceText);
-        } catch (error) {
-          throw asModuleLoaderError('parse', identifier, error);
-        }
-
-        const record = new SourceTextModuleRecord({
-          realm: bindings.realm,
-          identifier,
-          ast,
-        });
-        state.records.set(identifier, record);
-        return record;
       } catch (error) {
-        throw asModuleLoaderError('load', identifier, error);
+        throw wrapModuleLoaderError('load', identifier, error);
       }
+
+      let sourceText;
+      try {
+        sourceText = validateModuleSource(result);
+      } catch (error) {
+        throw wrapModuleLoaderError('load', identifier, error);
+      }
+
+      let ast;
+      try {
+        ast = parseModule(sourceText);
+      } catch (error) {
+        throw wrapModuleLoaderError('parse', identifier, error);
+      }
+
+      const record = new SourceTextModuleRecord({
+        realm: bindings.realm,
+        identifier,
+        ast,
+      });
+      state.records.set(identifier, record);
+      return record;
     })
     .finally(() => {
       state.loadInFlight.delete(identifier);
@@ -869,6 +862,19 @@ function asModuleLoaderError(phase, identifier, error) {
     return error;
   }
 
+  return new ModuleLoaderError({ phase, identifier, cause: error });
+}
+
+/**
+ * Wraps a phase boundary failure without trusting the public ModuleLoaderError
+ * class to imply that the error originated inside this loader.
+ *
+ * @param {'resolve' | 'load' | 'parse'} phase
+ * @param {string | undefined} identifier
+ * @param {unknown} error
+ * @returns {ModuleLoaderError}
+ */
+function wrapModuleLoaderError(phase, identifier, error) {
   return new ModuleLoaderError({ phase, identifier, cause: error });
 }
 

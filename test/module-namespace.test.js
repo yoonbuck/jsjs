@@ -291,7 +291,7 @@ export default [
     },
   },
   {
-    name: 'unused namespace imports instantiate before evaluation and cache their public link failure',
+    name: 'unused namespace imports retry sequential link failures and dedupe concurrent attempts',
     async run() {
       const realm = createRealm();
       const sources = {
@@ -317,8 +317,8 @@ export default [
         realm.intrinsics.syntaxErrorPrototype,
       );
       assertSame(first.cause.get('name'), 'SyntaxError');
-      assertSame(second, first);
-      assertSame(second.cause, first.cause);
+      assertSame(second === first, false);
+      assertSame(second.cause === first.cause, false);
       assertSame(concurrentFirst, concurrentSecond);
       assertSame(concurrentFirst.cause, concurrentSecond.cause);
     },
