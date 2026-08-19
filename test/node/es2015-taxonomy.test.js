@@ -853,7 +853,11 @@ export default [
             ],
           ],
         ]),
-        blockers: new Map([['test/language/blocked.js', 'regexp-unicode']]),
+        blockers: new Map([
+          ['test/annexB/optional.js', 'annex-b'],
+          ['test/language/blocked.js', 'regexp-unicode'],
+          ['test/language/feature.js', 'feature-unavailable'],
+        ]),
         intentionalDeviations: new Set(['test/language/deviation.js']),
       });
 
@@ -930,8 +934,8 @@ export default [
             path: 'test/language/feature.js',
             variants: 1,
             partition: 'core',
-            status: 'blocked:unexecuted',
-            blocker: 'unexecuted',
+            status: 'blocked:feature-unavailable',
+            blocker: 'feature-unavailable',
             features: ['let'],
             flags: ['onlyStrict'],
             includes: [],
@@ -1220,6 +1224,61 @@ export default [
       assertSame(
         error.message,
         'ES2015 unselected root test/language/unexecuted.js requires exact audit execution evidence',
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy rejects unselected failed audit evidence without a disposition',
+    run: () => {
+      const path = 'test/language/failed-without-disposition.js';
+      const inventory = buildEs2015Inventory({
+        roots: [
+          {
+            path,
+            metadata: {
+              description: 'An unselected ES2015 root with a failed audit.',
+              es5id: null,
+              es6id: '13.2',
+              esid: null,
+              features: [],
+              flags: [],
+              includes: [],
+            },
+          },
+        ],
+      });
+      const error = assertThrows(
+        () =>
+          classifyEs2015Inventory({
+            policy: parseEs2015Policy(POLICY),
+            anchors: parseEs2015Anchors(ANCHORS),
+            inventory,
+            auditResults: new Map([
+              [
+                path,
+                [
+                  {
+                    type: 'test',
+                    file: path,
+                    variant: 'non-strict',
+                    status: 'failed',
+                  },
+                  {
+                    type: 'test',
+                    file: path,
+                    variant: 'strict',
+                    status: 'failed',
+                  },
+                ],
+              ],
+            ]),
+          }),
+        Es2015TaxonomyError,
+      );
+
+      assertSame(
+        error.message,
+        `ES2015 unselected root ${path} has failed audit execution evidence without a blocker or intentional deviation`,
       );
     },
   },
@@ -1538,8 +1597,8 @@ export default [
           path: 'test/b.js',
           variants: 2,
           partition: 'core',
-          status: 'blocked:unexecuted',
-          blocker: 'unexecuted',
+          status: 'blocked:fixture-blocker',
+          blocker: 'fixture-blocker',
           features: [],
           flags: [],
           includes: [],

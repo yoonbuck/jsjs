@@ -305,31 +305,37 @@ export function classifyEs2015Inventory(options) {
   validateExecutionResults(selectedResults, executionVariants, 'selected');
   validateExecutionResults(auditResults, executionVariants, 'audit');
 
-  const records = entries.map((entry) => {
-    const path = entry.path;
-    return classifyRoot({
-      path,
-      metadata: entry.metadata,
-      metadataError: entry.metadataError,
-      variants: entry.variants,
-      includeFeatures: entry.includeFeatures,
-      policy,
-      knownFeatures,
-      anchorSet,
-      selected,
-      selectedResults,
-      auditResults,
-      blockers,
-      intentionalDeviations,
-    });
-  });
+  const contexts = entries.map((entry) => ({
+    path: entry.path,
+    metadata: entry.metadata,
+    metadataError: entry.metadataError,
+    variants: entry.variants,
+    includeFeatures: entry.includeFeatures,
+    policy,
+    knownFeatures,
+    anchorSet,
+    selected,
+    selectedResults,
+    auditResults,
+    blockers,
+    intentionalDeviations,
+  }));
+  const preliminaryRecords = contexts.map((context) =>
+    classifyRoot(context, true),
+  );
   validateUnselectedEvidenceScope({
-    records,
+    records: preliminaryRecords,
     selected,
     auditResults,
     blockers,
     intentionalDeviations,
   });
+  validateUnselectedEvidenceCompleteness({
+    records: preliminaryRecords,
+    selected,
+    auditResults,
+  });
+  const records = contexts.map((context) => classifyRoot(context));
 
   return Object.freeze(
     records.sort((left, right) => compareStrings(left.path, right.path)),
@@ -435,8 +441,11 @@ export function renderEs2015Taxonomy(report) {
   return `${lines.join('\n')}\n`;
 }
 
-/** @param {any} context */
-function classifyRoot(context) {
+/**
+ * @param {any} context
+ * @param {boolean} [withoutStatus]
+ */
+function classifyRoot(context, withoutStatus = false) {
   const {
     path,
     metadataError,
@@ -564,15 +573,16 @@ function classifyRoot(context) {
   )
     ? 'annex-b'
     : 'core';
-  const status = classifiedStatus(
-    path,
-    selected,
-    selectedResults,
-    auditResults,
-    blockers,
-    intentionalDeviations,
-    partition,
-  );
+  const status = withoutStatus
+    ? { name: partition, blocker: null }
+    : classifiedStatus(
+        path,
+        selected,
+        selectedResults,
+        auditResults,
+        blockers,
+        intentionalDeviations,
+      );
   return record(
     path,
     context.variants,
@@ -598,7 +608,6 @@ function classifyRoot(context) {
  * @param {Map<string, any>} auditResults
  * @param {Map<string, any>} blockers
  * @param {Set<string>} intentionalDeviations
- * @param {string} partition
  */
 function classifiedStatus(
   path,
@@ -607,13 +616,7 @@ function classifiedStatus(
   auditResults,
   blockers,
   intentionalDeviations,
-  partition,
 ) {
-  if (!selected.has(path) && !auditResults.has(path)) {
-    throw new Es2015TaxonomyError(
-      `ES2015 unselected root ${path} requires exact audit execution evidence`,
-    );
-  }
   if (intentionalDeviations.has(path)) {
     return { name: 'intentional-deviation', blocker: null };
   }
@@ -627,8 +630,9 @@ function classifiedStatus(
   if (!selected.has(path) && resultPassed(auditResults.get(path))) {
     return { name: 'audit-passing-unselected', blocker: null };
   }
-  const fallback = partition === 'annex-b' ? 'annex-b' : 'unexecuted';
-  return { name: `blocked:${fallback}`, blocker: fallback };
+  throw new Es2015TaxonomyError(
+    `ES2015 unselected root ${path} has failed audit execution evidence without a blocker or intentional deviation`,
+  );
 }
 
 /**
@@ -679,6 +683,30 @@ function validateUnselectedEvidenceScope(options) {
   }
   for (const path of options.intentionalDeviations) {
     assertScope(path, 'intentional deviation evidence');
+  }
+}
+
+/**
+ * Every unselected core or Annex B root must have complete execution evidence.
+ * This runs after root partitioning but before final status classification.
+ *
+ * @param {{
+ *   records: readonly any[],
+ *   selected: Set<string>,
+ *   auditResults: Map<string, any>,
+ * }} options
+ */
+function validateUnselectedEvidenceCompleteness(options) {
+  for (const record of options.records) {
+    if (
+      !options.selected.has(record.path) &&
+      UNSELECTED_ES2015_PARTITIONS.has(record.partition) &&
+      !options.auditResults.has(record.path)
+    ) {
+      throw new Es2015TaxonomyError(
+        `ES2015 unselected root ${record.path} requires exact audit execution evidence`,
+      );
+    }
   }
 }
 
