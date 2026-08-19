@@ -2,24 +2,16 @@ import { assertSame } from '../harness/assert.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
 import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
 import { runTest262 } from '../../tools/test262/runner.js';
+import { ASYNC_RUNTIME_RELEASE_MANIFEST } from '../../tools/test262/async-runtime-release-manifest.js';
 import {
   assertPinnedCheckout,
   readTest262Pin,
 } from '../../tools/test262/upstream-run.js';
 
-const FOCUSED_PATHS = Object.freeze([
-  'test/built-ins/Promise/Symbol.species/prop-desc.js',
-  'test/built-ins/Promise/all/capability-resolve-throws-no-close.js',
-  'test/built-ins/Promise/all/capability-resolve-throws-reject.js',
-  'test/built-ins/Promise/all/resolve-non-thenable.js',
-  'test/built-ins/Promise/constructor.js',
-  'test/built-ins/Promise/prototype/Symbol.toStringTag.js',
-  'test/built-ins/Promise/prototype/then/rxn-handler-identity.js',
-  'test/built-ins/Promise/prototype/then/rxn-handler-thrower.js',
-  'test/built-ins/Promise/race/resolved-sequence.js',
-  'test/built-ins/Promise/resolve-thenable-immed.js',
-  'test/built-ins/Promise/resolve/resolve-thenable.js',
-]);
+const RELEASE = ASYNC_RUNTIME_RELEASE_MANIFEST.promise;
+const FOCUSED_PATHS = Object.freeze(
+  RELEASE.records.map((record) => record.path),
+);
 
 export default [
   {
@@ -38,11 +30,7 @@ export default [
         engine: createJsjsTest262Engine(),
         host: createNodeTest262Host({ root: pin.checkoutPath }),
         paths: FOCUSED_PATHS,
-        supportedFeatures: [
-          'Symbol.iterator',
-          'Symbol.species',
-          'Symbol.toStringTag',
-        ],
+        supportedFeatures: RELEASE.supportedFeatures,
         skipFeatures: [],
       });
       const problems = records.filter((record) => record.status !== 'passed');

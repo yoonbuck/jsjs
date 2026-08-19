@@ -202,14 +202,37 @@ export class EngineObject {
    * @returns {boolean}
    */
   hasProperty(name) {
-    return this.getProperty(name) !== undefined;
+    /** @type {EngineObject | null} */
+    let current = this;
+
+    while (current !== null) {
+      if (current._peekOwnDescriptor(name) !== undefined) {
+        return true;
+      }
+
+      /** @type {EngineObject | null} */
+      const proto = current._prototype;
+
+      if (proto === null) {
+        return false;
+      }
+
+      if (proto.hasProperty !== EngineObject.prototype.hasProperty) {
+        return proto.hasProperty(name);
+      }
+
+      current = proto;
+    }
+
+    return false;
   }
 
   /**
    * @param {PropertyKey} name
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  get(name) {
+  get(name, callerRealm) {
     const descriptor = this.getProperty(name);
 
     if (descriptor === undefined) {
@@ -217,12 +240,52 @@ export class EngineObject {
     }
 
     if (isDataDescriptor(descriptor)) {
-      return descriptor.value;
+      return linkObjectValueAgent(this.agent, descriptor.value);
     }
 
-    return descriptor.get === undefined
-      ? undefined
-      : callAccessor(descriptor.get, this, []);
+    const value =
+      descriptor.get === undefined
+        ? undefined
+        : callAccessor(descriptor.get, this, [], callerRealm);
+
+    return linkObjectValueAgent(this.agent, value);
+  }
+
+  /**
+   * Looks up one semantic well-known-symbol property across Agent boundaries.
+   * Each object in the prototype chain owns a distinct physical symbol key, so
+   * the walk derives that object's key before checking only its own descriptor.
+   *
+   * @param {import('./symbol.js').WellKnownSymbolName} name
+   * @param {import('./realm.js').Realm} [callerRealm]
+   * @returns {unknown}
+   */
+  getWellKnownSymbol(name, callerRealm) {
+    /** @type {EngineObject | null} */
+    let current = this;
+
+    while (current !== null) {
+      const key = current.agent?.wellKnownSymbols[name];
+      const descriptor =
+        key === undefined ? undefined : current._peekOwnDescriptor(key);
+
+      if (descriptor !== undefined) {
+        if (isDataDescriptor(descriptor)) {
+          return linkObjectValueAgent(this.agent, descriptor.value);
+        }
+
+        const value =
+          descriptor.get === undefined
+            ? undefined
+            : callAccessor(descriptor.get, this, [], callerRealm);
+
+        return linkObjectValueAgent(this.agent, value);
+      }
+
+      current = current._prototype;
+    }
+
+    return undefined;
   }
 
   /**
@@ -279,9 +342,10 @@ export class EngineObject {
    * @param {unknown} value
    * @param {unknown} receiver
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  set(name, value, receiver, throwOnError = false) {
+  set(name, value, receiver, throwOnError = false, callerRealm) {
     /** @type {EngineObject | null} */
     let current = this;
 
@@ -296,6 +360,7 @@ export class EngineObject {
           value,
           receiver,
           throwOnError,
+          callerRealm,
         );
       }
 
@@ -310,6 +375,7 @@ export class EngineObject {
           value,
           receiver,
           throwOnError,
+          callerRealm,
         );
       }
 
@@ -317,7 +383,7 @@ export class EngineObject {
         // `proto` overrides `set` with exotic semantics (for example
         // `ModuleNamespaceObject`): defer to it rather than assuming its
         // own-property lookup is ordinary.
-        return proto.set(name, value, receiver, throwOnError);
+        return proto.set(name, value, receiver, throwOnError, callerRealm);
       }
 
       current = proto;
@@ -332,19 +398,21 @@ export class EngineObject {
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  put(name, value, throwOnError = false) {
-    return this.set(name, value, this, throwOnError);
+  put(name, value, throwOnError = false, callerRealm) {
+    return this.set(name, value, this, throwOnError, callerRealm);
   }
 
   /**
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [_callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false) {
+  defineOwnProperty(name, descriptor, throwOnError = false, _callerRealm) {
     // Fast path: a {value}-only update on an existing writable data descriptor
     // avoids validatePropertyDescriptor, completePropertyDescriptor, and the
     // full branching logic below. This is the hottest path from `put`.
@@ -536,20 +604,26 @@ export class EngineObject {
 
   /**
    * @param {'string' | 'number' | 'default'} [hint='number']
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {string | number | boolean | symbol | null | undefined}
    */
-  defaultValue(hint = 'number') {
+  defaultValue(hint = 'number', callerRealm) {
     const methodNames =
       hint === 'string' ? ['toString', 'valueOf'] : ['valueOf', 'toString'];
 
     for (const name of methodNames) {
-      const method = this.get(name);
+      const method = this.get(name, callerRealm);
 
       if (typeof method !== 'function' && !isCallable(method)) {
         continue;
       }
 
-      const result = callAccessor(/** @type {any} */ (method), this, []);
+      const result = callAccessor(
+        /** @type {any} */ (method),
+        this,
+        [],
+        callerRealm,
+      );
 
       if (isPrimitive(result)) {
         return result;
@@ -564,20 +638,22 @@ export class EngineObject {
 
   /**
    * @param {PropertyKey} name
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  getReferencedValue(name) {
-    return this.get(name);
+  getReferencedValue(name, callerRealm) {
+    return this.get(name, callerRealm);
   }
 
   /**
    * @param {PropertyKey} name
    * @param {unknown} value
    * @param {boolean} [strict=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {void}
    */
-  setReferencedValue(name, value, strict = false) {
-    this.put(name, value, strict);
+  setReferencedValue(name, value, strict = false, callerRealm) {
+    this.put(name, value, strict, callerRealm);
   }
 }
 
@@ -716,15 +792,28 @@ export function isEnumerableForIn(object, key) {
  * @param {((...args: any[]) => unknown) | import('./descriptors.js').CallableLike} accessor
  * @param {unknown} thisValue
  * @param {unknown[]} args
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {unknown}
  */
-export function callAccessor(accessor, thisValue, args) {
+export function callAccessor(accessor, thisValue, args, callerRealm) {
   if (typeof accessor === 'function') {
     return accessor.call(thisValue, ...args);
   }
 
   if (isCallable(accessor)) {
-    return accessor.callFunction(thisValue, args);
+    const sourceAgent =
+      callerRealm?.agent ??
+      (thisValue instanceof EngineObject ? thisValue.agent : null);
+
+    if (
+      sourceAgent !== null &&
+      accessor instanceof EngineObject &&
+      accessor.agent !== null
+    ) {
+      sourceAgent.linkGeneratorHostChain(accessor.agent);
+    }
+
+    return accessor.callFunction(thisValue, args, callerRealm);
   }
 
   throw new TypeError('Accessor is not callable');
@@ -749,6 +838,23 @@ function rejectOperation(throwOnError, message) {
   }
 
   return false;
+}
+
+/**
+ * @param {import('./agent.js').Agent | null} sourceAgent
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function linkObjectValueAgent(sourceAgent, value) {
+  if (
+    sourceAgent !== null &&
+    value instanceof EngineObject &&
+    value.agent !== null
+  ) {
+    sourceAgent.linkGeneratorHostChain(value.agent);
+  }
+
+  return value;
 }
 
 /**
@@ -793,6 +899,7 @@ const IMPLICIT_DATA_DESCRIPTOR = {
  * @param {unknown} value
  * @param {unknown} receiver
  * @param {boolean} throwOnError
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {boolean}
  */
 function setWithOwnDescriptor(
@@ -802,6 +909,7 @@ function setWithOwnDescriptor(
   value,
   receiver,
   throwOnError,
+  callerRealm,
 ) {
   if (isDataDescriptor(ownDesc)) {
     if (!ownDesc.writable) {
@@ -819,7 +927,12 @@ function setWithOwnDescriptor(
     }
 
     if (ownerIsReceiver) {
-      return receiver.defineOwnProperty(name, { value }, throwOnError);
+      return receiver.defineOwnProperty(
+        name,
+        { value },
+        throwOnError,
+        callerRealm,
+      );
     }
 
     const existing = receiver.getOwnProperty(name);
@@ -832,13 +945,19 @@ function setWithOwnDescriptor(
         );
       }
 
-      return receiver.defineOwnProperty(name, { value }, throwOnError);
+      return receiver.defineOwnProperty(
+        name,
+        { value },
+        throwOnError,
+        callerRealm,
+      );
     }
 
     return receiver.defineOwnProperty(
       name,
       { value, writable: true, enumerable: true, configurable: true },
       throwOnError,
+      callerRealm,
     );
   }
 
@@ -849,7 +968,7 @@ function setWithOwnDescriptor(
     return rejectOperation(throwOnError, 'Cannot assign to accessor property');
   }
 
-  callAccessor(ownDesc.set, receiver, [value]);
+  callAccessor(ownDesc.set, receiver, [value], callerRealm);
   return true;
 }
 

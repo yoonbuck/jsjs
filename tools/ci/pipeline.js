@@ -79,6 +79,51 @@ export const TEST262_REPORT_FILE = 'docs/test262-report.jsonl';
 export { COVERAGE_DOCUMENT_FILE };
 
 /**
+ * The exact process environment required by broad pinned Test262 runs.
+ *
+ * This is Node tooling policy, not engine/runtime policy: keeping it here lets
+ * the generated workflow, local CI contract, and diagnostics share one value
+ * without introducing host assumptions into portable engine modules.
+ */
+export const TEST262_UPSTREAM_ENVIRONMENT = Object.freeze({
+  NODE_OPTIONS: '--max-old-space-size=4096',
+  TZ: 'UTC',
+});
+
+/**
+ * Preserves the full contract's UTC baseline for every script and adds the
+ * authoritative heap allowance only for scripts that execute the broad run.
+ *
+ * @param {string} script
+ * @param {Readonly<Record<string, string | undefined>>} environment
+ * @returns {Readonly<Record<string, string | undefined>>}
+ */
+export function environmentForTest262NpmScript(script, environment) {
+  const utcEnvironment = {
+    ...environment,
+    TZ: TEST262_UPSTREAM_ENVIRONMENT.TZ,
+  };
+
+  if (script !== 'test262:upstream' && script !== 'test262:upstream:check') {
+    return utcEnvironment;
+  }
+
+  return { ...utcEnvironment, ...TEST262_UPSTREAM_ENVIRONMENT };
+}
+
+/**
+ * Formats the copy-pasteable broad command used in diagnostics and docs.
+ *
+ * @param {string} [script]
+ * @returns {string}
+ */
+export function formatTest262UpstreamCommand(script = 'test262:upstream') {
+  return `${Object.entries(TEST262_UPSTREAM_ENVIRONMENT)
+    .map(([name, value]) => `${name}=${value}`)
+    .join(' ')} npm run ${script}`;
+}
+
+/**
  * The command that fails CI when the committed report or the coverage
  * document's generated block no longer matches what the run just produced. It
  * follows the run in the same job, so it compares a freshly written tree
@@ -247,8 +292,9 @@ export function toGithubSlug(repository) {
  *
  * The three Test262 jobs are deliberately separate. `test262-fixtures` runs the
  * local hand-written fixture tree, which exercises the runner's semantics.
- * `test262-modules` checks out the exact pinned tree for the focused static
- * module suite. It never runs broad selection or writes broad report artifacts.
+ * `test262-es2015-release` checks out the exact pinned tree for the focused
+ * Promise, generator, and static module suites. It never runs broad selection or
+ * writes broad report artifacts.
  * `test262-upstream` checks out the real `tc39/test262` tree at exactly the
  * pinned revision and runs the curated subset against it, which exercises the
  * engine — and uploads its report even on failure, because a red conformance run
@@ -309,8 +355,8 @@ export function createCiJobs(test262) {
       ['vendor'],
     ),
     Object.freeze({
-      id: 'test262-modules',
-      name: 'Pinned Test262 static modules',
+      id: 'test262-es2015-release',
+      name: 'Pinned Test262 ES2015 async runtime and modules',
       needs: Object.freeze(['vendor']),
       steps: Object.freeze([
         usesStep('Check out the project', 'actions/checkout', {
@@ -328,8 +374,8 @@ export function createCiJobs(test262) {
         }),
         runStep('Install dependencies', 'npm ci'),
         runStep(
-          'Run focused static-module Test262',
-          'npm run test262:modules',
+          'Run focused ES2015 async runtime and module Test262',
+          'npm run test262:es2015-release',
           {
             TZ: 'UTC',
           },
@@ -350,6 +396,10 @@ export function createCiJobs(test262) {
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
         }),
+        runStep(
+          'Remove the committed Test262 report',
+          `rm -f ${TEST262_REPORT_FILE}`,
+        ),
         usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
           repository: upstreamSlug,
           ref: test262.revision,
@@ -365,9 +415,11 @@ export function createCiJobs(test262) {
           'Check the ES5 selection is current',
           'npm run test262:select:check',
         ),
-        runStep('Run the pinned Test262 subset', 'npm run test262:upstream', {
-          TZ: 'UTC',
-        }),
+        runStep(
+          'Run the pinned Test262 subset',
+          'npm run test262:upstream',
+          TEST262_UPSTREAM_ENVIRONMENT,
+        ),
         runStep(
           'Check for stale exclusions',
           'npm run test262:exclusions:check',
@@ -384,7 +436,7 @@ export function createCiJobs(test262) {
             path: TEST262_REPORT_FILE,
             'if-no-files-found': 'error',
           },
-          'always()',
+          `always() && hashFiles('${TEST262_REPORT_FILE}') != ''`,
         ),
       ]),
     }),

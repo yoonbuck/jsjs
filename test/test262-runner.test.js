@@ -9,6 +9,7 @@ import {
 } from '../tools/test262/metadata.js';
 import {
   DEFAULT_INCLUDES,
+  UNSUPPORTED_FLAGS,
   decideSkip,
   runTest262,
   runTest262Suite,
@@ -55,9 +56,10 @@ const FIXTURE_TESTS = [
   'test/feature-skip.js',
   'test/includes.js',
   'test/language/module-code/basic.js',
+  'test/language/module-code/raw.js',
   'test/no-strict.js',
   'test/only-strict.js',
-  'test/parse-negative.js',
+  'test/parse-negative.js.txt',
   'test/positive.js',
   'test/raw.js',
   'test/runtime-negative.js',
@@ -66,7 +68,7 @@ const FIXTURE_TESTS = [
 
 const FIXTURE_MALFORMED = [
   'malformed/missing-frontmatter.js',
-  'malformed/negative-without-type.js',
+  'malformed/negative-without-type.js.txt',
 ];
 
 /** Every fixture file, in the code-unit order the inventory reports them in. */
@@ -178,10 +180,11 @@ const FIXTURE_TEST_LINES = [
   '{"type":"test","file":"test/includes.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/includes.js","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/language/module-code/basic.js","variant":"non-strict","status":"passed"}',
+  '{"type":"test","file":"test/language/module-code/raw.js","variant":"raw","status":"passed"}',
   '{"type":"test","file":"test/no-strict.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/only-strict.js","variant":"strict","status":"passed"}',
-  '{"type":"test","file":"test/parse-negative.js","variant":"non-strict","status":"passed"}',
-  '{"type":"test","file":"test/parse-negative.js","variant":"strict","status":"passed"}',
+  '{"type":"test","file":"test/parse-negative.js.txt","variant":"non-strict","status":"passed"}',
+  '{"type":"test","file":"test/parse-negative.js.txt","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/positive.js","variant":"non-strict","status":"passed"}',
   '{"type":"test","file":"test/positive.js","variant":"strict","status":"passed"}',
   '{"type":"test","file":"test/raw.js","variant":"raw","status":"passed"}',
@@ -193,13 +196,13 @@ const FIXTURE_TEST_LINES = [
 
 const FIXTURE_MALFORMED_LINES = [
   '{"type":"test","file":"malformed/missing-frontmatter.js","variant":null,"status":"failed","reason":"metadata-error","message":"Missing Test262 frontmatter block"}',
-  '{"type":"test","file":"malformed/negative-without-type.js","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
+  '{"type":"test","file":"malformed/negative-without-type.js.txt","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
 ];
 
 /** The default selection: exactly what `npm run test262:fixtures` writes. */
 const FIXTURE_REPORT = [
   ...FIXTURE_TEST_LINES,
-  '{"type":"summary","total":17,"passed":16,"failed":0,"skipped":1}',
+  '{"type":"summary","total":18,"passed":17,"failed":0,"skipped":1}',
   '',
 ].join('\n');
 
@@ -207,7 +210,7 @@ const FIXTURE_REPORT = [
 const FIXTURE_MALFORMED_REPORT = [
   ...FIXTURE_MALFORMED_LINES,
   ...FIXTURE_TEST_LINES,
-  '{"type":"summary","total":19,"passed":16,"failed":2,"skipped":1}',
+  '{"type":"summary","total":20,"passed":17,"failed":2,"skipped":1}',
   '',
 ].join('\n');
 
@@ -453,6 +456,75 @@ export default [
     },
   },
   {
+    name: 'metadata accepts the valid module plus async flag combination',
+    run: () => {
+      const metadata = parseTest262Metadata(
+        '/*---\ndescription: unsupported async module\nflags: [module, async]\n---*/\n',
+      );
+
+      assertSame(JSON.stringify(metadata.flags), '["module","async"]');
+      assertSame(
+        JSON.stringify(UNSUPPORTED_FLAGS),
+        '["CanBlockIsFalse","CanBlockIsTrue","non-deterministic"]',
+      );
+    },
+  },
+  {
+    name: 'the runner skips module plus async before invoking engine hooks',
+    run: async () => {
+      let engineHooks = 0;
+      const metadata = parseTest262Metadata(
+        '/*---\ndescription: unsupported async module\nflags: [module, async]\n---*/\n',
+      );
+      const decision = decideSkip(metadata);
+
+      assertSame(decision?.reason, 'unsupported-flag-combination');
+      assertSame(
+        decision?.message,
+        'unsupported flag combination: module and async',
+      );
+
+      const { records } = await runTest262Suite({
+        engine: {
+          createRealm() {
+            engineHooks += 1;
+            throw new Error('createRealm must not run');
+          },
+          evaluateScript() {
+            engineHooks += 1;
+            throw new Error('evaluateScript must not run');
+          },
+          async evaluateModule() {
+            engineHooks += 1;
+            throw new Error('evaluateModule must not run');
+          },
+          installDone() {
+            engineHooks += 1;
+            throw new Error('installDone must not run');
+          },
+          runJobs() {
+            engineHooks += 1;
+            throw new Error('runJobs must not run');
+          },
+        },
+        host: createMemoryHost({
+          'module-async.js':
+            '/*---\ndescription: unsupported async module\nflags: [module, async]\n---*/\n',
+        }),
+        paths: ['module-async.js'],
+      });
+
+      assertSame(engineHooks, 0);
+      assertSame(records.length, 1);
+      assertSame(records[0].status, 'skipped');
+      assertSame(records[0].reason, 'unsupported-flag-combination');
+      assertSame(
+        records[0].message,
+        'unsupported flag combination: module and async',
+      );
+    },
+  },
+  {
     name: 'variant expansion honours the strictness flags',
     run: () => {
       const variantsOf = (/** @type {string} */ flags) =>
@@ -468,6 +540,7 @@ export default [
       assertSame(variantsOf('flags: [onlyStrict]\n'), '["strict"]');
       assertSame(variantsOf('flags: [noStrict]\n'), '["non-strict"]');
       assertSame(variantsOf('flags: [raw]\n'), '["raw"]');
+      assertSame(variantsOf('flags: [module, raw]\n'), '["raw"]');
     },
   },
   {
@@ -734,6 +807,54 @@ export default [
     },
   },
   {
+    name: 'non-portable include identifiers fail before the host reads them',
+    run: async () => {
+      const invalidIncludes = [
+        '../../../../README.md',
+        'assert.js?ignored',
+        '%61ssert.js',
+      ];
+      /** @type {string[]} */
+      const invalidReads = [];
+      const tests = Object.fromEntries(
+        invalidIncludes.map((name, index) => [
+          `invalid-include-${index}.js`,
+          fixture(
+            'must not load a non-portable include',
+            'var a = 1;',
+            `includes: [${name}]\n`,
+          ),
+        ]),
+      );
+      const host = createMemoryHost(tests);
+      const { records } = await runTest262Suite({
+        engine,
+        host: {
+          ...host,
+          readInclude(name) {
+            if (invalidIncludes.includes(name)) {
+              invalidReads.push(name);
+            }
+            return host.readInclude(name);
+          },
+        },
+        paths: Object.keys(tests),
+        supportedFeatures: [],
+        skipFeatures: [],
+      });
+
+      assertSame(invalidReads.length, 0);
+      assertSame(records.length, invalidIncludes.length * 2);
+      assertSame(
+        records.every(
+          (record) =>
+            record.status === 'failed' && record.reason === 'load-error',
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'a throwing include is reported as a harness error',
     run: async () => {
       const { records } = await runMemorySuite({
@@ -820,6 +941,49 @@ export default [
       );
       assertSame(records[0].message, 'Missing Test262 frontmatter block');
       assertSame(summary.failed, 1);
+    },
+  },
+  {
+    name: 'non-portable root identifiers fail before the host reads them',
+    run: async () => {
+      const paths = [
+        'test/percent%2fescape.js',
+        'test/query?.js',
+        'test/fragment#.js',
+        'file:/outside.js',
+        'C:/outside.js',
+        'C|/outside.js',
+        'test/tab\tname.js',
+        'test/line\nname.js',
+        'test/carriage\rname.js',
+      ];
+      let reads = 0;
+      const { records } = await runTest262Suite({
+        engine,
+        host: {
+          ...createMemoryHost({}),
+          readTest() {
+            reads += 1;
+            return fixture('must not load', 'var a = 1;');
+          },
+        },
+        paths,
+        supportedFeatures: [],
+        skipFeatures: [],
+      });
+
+      assertSame(reads, 0);
+      assertSame(records.length, paths.length);
+      assertSame(
+        records.every(
+          (record) =>
+            record.status === 'failed' &&
+            record.reason === 'load-error' &&
+            record.message ===
+              'Test262 test path must be a portable repository-relative path',
+        ),
+        true,
+      );
     },
   },
   {
@@ -1272,7 +1436,56 @@ export default [
     },
   },
   {
-    name: 'the fixture manifest matches the fixture directory listing',
+    name: 'invalid disk fixtures stay out of extraction while remaining runnable',
+    run: async () => {
+      const host = await createFixtureTest262Host();
+      const invalidPaths = [
+        'test/parse-negative.js.txt',
+        'malformed/negative-without-type.js.txt',
+      ];
+
+      for (const file of invalidPaths) {
+        assertSame(file.endsWith('.js'), false, file);
+      }
+
+      assertSame(
+        (await host.readTest('test/parse-negative.js.txt')).includes('var = ;'),
+        true,
+      );
+
+      const parseNegative = await runTest262({
+        engine,
+        host,
+        paths: ['test/parse-negative.js.txt'],
+      });
+      assertSame(parseNegative.failed, 0);
+      assertSame(parseNegative.summary.passed, 2);
+
+      const malformedMetadata = await runTest262({
+        engine,
+        host,
+        paths: ['malformed/negative-without-type.js.txt'],
+      });
+      assertSame(malformedMetadata.failed, 1);
+      assertSame(
+        malformedMetadata.lines[0],
+        '{"type":"test","file":"malformed/negative-without-type.js.txt","variant":null,"status":"failed","reason":"metadata-error","message":"negative requires both a phase and a type"}',
+      );
+
+      if (typeof host.listTests !== 'function') {
+        return;
+      }
+
+      const listed = await host.listTests();
+
+      for (const file of invalidPaths) {
+        assertSame(file.endsWith('.js'), false, file);
+        assertSame(listed.includes(file), false, file);
+      }
+    },
+  },
+  {
+    name: 'extractable fixture files match the fixture directory listing',
     run: async () => {
       const host = await createFixtureTest262Host();
 
@@ -1285,9 +1498,10 @@ export default [
         includeMalformed: true,
       });
 
+      const extractable = declared.filter((file) => file.endsWith('.js'));
       assertSame(
         sortTestPaths(await host.listTests()).join(','),
-        sortTestPaths(declared).join(','),
+        sortTestPaths(extractable).join(','),
       );
     },
   },
@@ -1301,11 +1515,11 @@ export default [
       });
 
       assertSame(inventory.files.join(','), FIXTURE_INVENTORY_PATHS.join(','));
-      assertSame(inventory.totals.files, 13);
+      assertSame(inventory.totals.files, 14);
       assertSame(
         inventory.totals.records,
-        18,
-        'eleven fixture tests expand into eighteen (file, variant) records',
+        19,
+        'twelve fixture tests expand into nineteen (file, variant) records',
       );
       assertSame(inventory.totals.malformed, 2);
       assertSame(inventory.malformed.join(','), FIXTURE_MALFORMED.join(','));
@@ -1313,6 +1527,7 @@ export default [
       assertSame(inventory.variants.get('test/only-strict.js'), 1);
       assertSame(inventory.variants.get('test/no-strict.js'), 1);
       assertSame(inventory.variants.get('test/raw.js'), 1);
+      assertSame(inventory.variants.get('test/language/module-code/raw.js'), 1);
       assertSame(
         inventory.variants.get('test/feature-skip.js'),
         2,
@@ -1336,15 +1551,26 @@ export default [
             'var value = 1;',
             'flags: [raw]\n',
           ),
+          'test/module-raw.js': fixture(
+            'One raw module variant',
+            'export const value = 1;',
+            'flags: [module, raw]\n',
+          ),
           'test/broken.js': 'var withoutFrontmatter = 1;\n',
         }),
-        paths: ['test/plain.js', 'test/raw.js', 'test/broken.js'],
+        paths: [
+          'test/plain.js',
+          'test/raw.js',
+          'test/module-raw.js',
+          'test/broken.js',
+        ],
       });
 
-      assertSame(inventory.totals.files, 3);
-      assertSame(inventory.totals.records, 3);
+      assertSame(inventory.totals.files, 4);
+      assertSame(inventory.totals.records, 4);
       assertSame(inventory.totals.malformed, 1);
       assertSame(inventory.malformed.join(','), 'test/broken.js');
+      assertSame(inventory.variants.get('test/module-raw.js'), 1);
     },
   },
   {
@@ -1426,19 +1652,19 @@ export default [
         ).records,
       });
 
-      assertSame(coverage.files.total, 13);
-      assertSame(coverage.files.selected, 11);
+      assertSame(coverage.files.total, 14);
+      assertSame(coverage.files.selected, 12);
       assertSame(
         coverage.files.attempted,
-        10,
+        11,
         'the feature-skipped file is selected but never attempted',
       );
-      assertSame(coverage.files.passed, 10);
+      assertSame(coverage.files.passed, 11);
       assertSame(coverage.files.malformed, 2);
-      assertSame(coverage.records.total, 18);
-      assertSame(coverage.records.selected, 18);
-      assertSame(coverage.records.attempted, 16);
-      assertSame(coverage.records.passed, 16);
+      assertSame(coverage.records.total, 19);
+      assertSame(coverage.records.selected, 19);
+      assertSame(coverage.records.attempted, 17);
+      assertSame(coverage.records.passed, 17);
     },
   },
   {
@@ -1461,12 +1687,12 @@ export default [
         ).records,
       });
 
-      assertSame(coverage.files.selectedPercent, 84.615);
-      assertSame(coverage.files.attemptedPercent, 76.923);
-      assertSame(coverage.files.passedPercent, 76.923);
+      assertSame(coverage.files.selectedPercent, 85.714);
+      assertSame(coverage.files.attemptedPercent, 78.571);
+      assertSame(coverage.files.passedPercent, 78.571);
       assertSame(coverage.records.selectedPercent, 100);
-      assertSame(coverage.records.attemptedPercent, 88.889);
-      assertSame(coverage.records.passedPercent, 88.889);
+      assertSame(coverage.records.attemptedPercent, 89.474);
+      assertSame(coverage.records.passedPercent, 89.474);
 
       const empty = summarizeTest262Coverage({
         inventory: await collectTest262Inventory({
@@ -1504,9 +1730,9 @@ export default [
       assertSame(
         formatCoverageLines(coverage).join('\n'),
         [
-          '{"type":"inventory","files":13,"records":18,"malformed":2}',
-          '{"type":"coverage","scope":"files","total":13,"selected":11,"attempted":10,"passed":10,"selectedPercent":84.615,"attemptedPercent":76.923,"passedPercent":76.923}',
-          '{"type":"coverage","scope":"records","total":18,"selected":18,"attempted":16,"passed":16,"selectedPercent":100,"attemptedPercent":88.889,"passedPercent":88.889}',
+          '{"type":"inventory","files":14,"records":19,"malformed":2}',
+          '{"type":"coverage","scope":"files","total":14,"selected":12,"attempted":11,"passed":11,"selectedPercent":85.714,"attemptedPercent":78.571,"passedPercent":78.571}',
+          '{"type":"coverage","scope":"records","total":19,"selected":19,"attempted":17,"passed":17,"selectedPercent":100,"attemptedPercent":89.474,"passedPercent":89.474}',
         ].join('\n'),
       );
     },
@@ -1540,10 +1766,10 @@ export default [
         [
           '| Denominator     | Whole suite | Selected | Attempted | Passed | Passing |',
           '| --------------- | ----------- | -------- | --------- | ------ | ------- |',
-          '| Files           | 13          | 11       | 10        | 10     | 76.923% |',
-          '| (file, variant) | 18          | 18       | 16        | 16     | 88.889% |',
+          '| Files           | 14          | 12       | 11        | 11     | 78.571% |',
+          '| (file, variant) | 19          | 19       | 17        | 17     | 89.474% |',
           '',
-          '2 of the 13 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.',
+          '2 of the 14 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.',
           'Full per-test records: [docs/test262-report.jsonl](docs/test262-report.jsonl).',
         ].join('\n'),
       );

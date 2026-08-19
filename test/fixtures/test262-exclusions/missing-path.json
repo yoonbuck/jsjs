@@ -1,9 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "excludedDirectories": [],
   "builtins": ["Array"],
   "excludedLanguageDirectories": [],
   "featureAreas": [],
+  "expansionFeatures": ["generators"],
   "exclusions": [
     {
       "path": "test/built-ins/Array/missing-exclusion-fixture.js",

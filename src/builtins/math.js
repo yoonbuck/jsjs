@@ -63,24 +63,32 @@ export function createMathIntrinsics(realm) {
 
   /** @type {[string, number, (args: readonly unknown[]) => number][]} */
   const functions = [
-    ['abs', 1, (args) => mathAbs(toNumber(args[0]))],
-    ['acos', 1, (args) => mathAcos(toNumber(args[0]))],
-    ['asin', 1, (args) => mathAsin(toNumber(args[0]))],
-    ['atan', 1, (args) => mathAtan(toNumber(args[0]))],
-    ['atan2', 2, (args) => mathAtan2(toNumber(args[0]), toNumber(args[1]))],
-    ['ceil', 1, (args) => mathCeil(toNumber(args[0]))],
-    ['cos', 1, (args) => mathCos(toNumber(args[0]))],
-    ['exp', 1, (args) => mathExp(toNumber(args[0]))],
-    ['floor', 1, (args) => mathFloor(toNumber(args[0]))],
-    ['log', 1, (args) => mathLog(toNumber(args[0]))],
-    ['max', 2, (args) => mathMax(coerceAll(args))],
-    ['min', 2, (args) => mathMin(coerceAll(args))],
-    ['pow', 2, (args) => mathPow(toNumber(args[0]), toNumber(args[1]))],
+    ['abs', 1, (args) => mathAbs(toNumber(args[0], realm))],
+    ['acos', 1, (args) => mathAcos(toNumber(args[0], realm))],
+    ['asin', 1, (args) => mathAsin(toNumber(args[0], realm))],
+    ['atan', 1, (args) => mathAtan(toNumber(args[0], realm))],
+    [
+      'atan2',
+      2,
+      (args) => mathAtan2(toNumber(args[0], realm), toNumber(args[1], realm)),
+    ],
+    ['ceil', 1, (args) => mathCeil(toNumber(args[0], realm))],
+    ['cos', 1, (args) => mathCos(toNumber(args[0], realm))],
+    ['exp', 1, (args) => mathExp(toNumber(args[0], realm))],
+    ['floor', 1, (args) => mathFloor(toNumber(args[0], realm))],
+    ['log', 1, (args) => mathLog(toNumber(args[0], realm))],
+    ['max', 2, (args) => mathMax(coerceAll(args, realm))],
+    ['min', 2, (args) => mathMin(coerceAll(args, realm))],
+    [
+      'pow',
+      2,
+      (args) => mathPow(toNumber(args[0], realm), toNumber(args[1], realm)),
+    ],
     ['random', 0, () => mathRandom()],
-    ['round', 1, (args) => mathRound(toNumber(args[0]))],
-    ['sin', 1, (args) => mathSin(toNumber(args[0]))],
-    ['sqrt', 1, (args) => mathSqrt(toNumber(args[0]))],
-    ['tan', 1, (args) => mathTan(toNumber(args[0]))],
+    ['round', 1, (args) => mathRound(toNumber(args[0], realm))],
+    ['sin', 1, (args) => mathSin(toNumber(args[0], realm))],
+    ['sqrt', 1, (args) => mathSqrt(toNumber(args[0], realm))],
+    ['tan', 1, (args) => mathTan(toNumber(args[0], realm))],
   ];
 
   for (const [name, length, body] of functions) {
@@ -123,14 +131,15 @@ export function installMathObject(globalObject, { mathObject }) {
  * first NaN would skip the observable `valueOf` calls of later arguments.
  *
  * @param {readonly unknown[]} args
+ * @param {Realm} realm
  * @returns {number[]}
  */
-function coerceAll(args) {
+function coerceAll(args, realm) {
   /** @type {number[]} */
   const numbers = [];
 
   for (let index = 0; index < args.length; index += 1) {
-    numbers.push(toNumber(args[index]));
+    numbers.push(toNumber(args[index], realm));
   }
 
   return numbers;

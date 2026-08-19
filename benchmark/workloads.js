@@ -42,6 +42,22 @@ function scaleWorkload(workload, repetitions) {
   );
 }
 
+const NUMBER_INVALID_MEGABYTE_WORKLOAD = createWorkload(
+  'number-invalid-megabyte',
+  workloadSource([
+    '(function () {',
+    '  var text = "x";',
+    '  var i;',
+    '  for (i = 0; i < 20; i += 1) {',
+    '    text += text;',
+    '  }',
+    '  var number = Number(text);',
+    '  return number !== number && text.length === 1048576 ? text.length : 0;',
+    '}())',
+  ]),
+  1048576,
+);
+
 export const WORKLOADS = Object.freeze([
   createWorkload(
     'arithmetic-loops',
@@ -168,6 +184,7 @@ export const WORKLOADS = Object.freeze([
     ]),
     8900000,
   ),
+  NUMBER_INVALID_MEGABYTE_WORKLOAD,
 ]);
 
 const SMOKE_WORKLOAD_BASES = Object.freeze([
@@ -296,6 +313,7 @@ const SMOKE_WORKLOAD_BASES = Object.freeze([
     ]),
     9941,
   ),
+  NUMBER_INVALID_MEGABYTE_WORKLOAD,
 ]);
 
 const SMOKE_WORKLOADS = Object.freeze(

@@ -139,7 +139,7 @@ export default [
     },
   },
   {
-    name: 'Promise.all rejects an abrupt final resolve element capability call',
+    name: 'late Promise.all resolve element propagates an abrupt capability resolve',
     run: () => {
       const realm = createRealm();
 
@@ -169,15 +169,18 @@ export default [
         ),
         undefined,
       );
-      assertNormalValue(
-        evaluateScript(realm, 'resolveElement("value");'),
-        undefined,
-      );
+      const completion = evaluateScript(realm, 'resolveElement("value");');
+      assertSame(completion.type, 'throw');
+      assertSame(completion.value, 'resolve element failure');
 
       assertSame(realm.agent.runJobs().failures.length, 0);
       assertNormalValue(
         evaluateScript(realm, 'rejects + ":" + observed'),
-        '1:resolve element failure',
+        '0:undefined',
+      );
+      assertSame(
+        promiseObject(realm.globalObject.get('result')).promiseState,
+        'pending',
       );
     },
   },
@@ -325,11 +328,13 @@ export default [
     },
   },
   {
-    name: 'Promise.all closes an iterator when next, value, resolve, or then setup is abrupt',
+    name: 'Promise.all closes only before done-marked iterator failures',
     run: () => {
+      /** @type {Array<[string, number, string[]]>} */
       const cases = [
         [
           'next',
+          0,
           [
             'var iterator = {',
             '  next: function () { throw original; },',
@@ -339,6 +344,7 @@ export default [
         ],
         [
           'value',
+          0,
           [
             'var step = { done: false };',
             'Object.defineProperty(step, "value", { get: function () { throw original; } });',
@@ -350,6 +356,7 @@ export default [
         ],
         [
           'resolve',
+          1,
           [
             'class C extends Promise {}',
             'C.resolve = function () { throw original; };',
@@ -361,6 +368,7 @@ export default [
         ],
         [
           'resolve getter',
+          1,
           [
             'class C extends Promise {}',
             'Object.defineProperty(C, "resolve", {',
@@ -374,6 +382,7 @@ export default [
         ],
         [
           'then',
+          1,
           [
             'class C extends Promise {}',
             'C.resolve = function () {',
@@ -391,6 +400,7 @@ export default [
         ],
         [
           'then call',
+          1,
           [
             'class C extends Promise {}',
             'C.resolve = function () {',
@@ -404,7 +414,7 @@ export default [
         ],
       ];
 
-      for (const [stage, setup] of cases) {
+      for (const [stage, expectedCloseCount, setup] of cases) {
         const realm = createRealm();
         const constructor =
           stage === 'next' || stage === 'value' ? 'Promise' : 'C';
@@ -428,13 +438,13 @@ export default [
         assertSame(realm.agent.runJobs().failures.length, 0);
         assertNormalValue(
           evaluateScript(realm, 'closed + ":" + observed'),
-          '1:original',
+          `${expectedCloseCount}:original`,
         );
       }
     },
   },
   {
-    name: 'Promise.race closes an iterator and preserves the original abrupt completion',
+    name: 'Promise.race does not close after IteratorStep marks the iterator done',
     run: () => {
       const realm = createRealm();
       assertNormalValue(
@@ -460,7 +470,7 @@ export default [
       assertSame(realm.agent.runJobs().failures.length, 0);
       assertNormalValue(
         evaluateScript(realm, 'closed + ":" + observed'),
-        '1:original',
+        '0:original',
       );
     },
   },
@@ -492,7 +502,7 @@ export default [
             'closed + ":" + calls + ":" + thrown;',
           ].join('\n'),
         ),
-        '1:1:reject failure',
+        '0:1:reject failure',
       );
     },
   },

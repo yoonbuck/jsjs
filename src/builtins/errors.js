@@ -116,7 +116,7 @@ function buildErrorConstructor(realm, name, errorPrototype) {
 
     if (args[0] !== undefined) {
       instance.defineOwnProperty('message', {
-        value: toString(args[0]),
+        value: toString(args[0], realm),
         writable: true,
         enumerable: false,
         configurable: true,
@@ -178,11 +178,12 @@ function installErrorPrototypeToString(realm, errorPrototype) {
           'Error.prototype.toString called on a non-object',
         );
 
-        const rawName = object.get('name');
-        const name = rawName === undefined ? 'Error' : toString(rawName);
+        const rawName = object.get('name', realm);
+        const name = rawName === undefined ? 'Error' : toString(rawName, realm);
 
-        const rawMessage = object.get('message');
-        const message = rawMessage === undefined ? '' : toString(rawMessage);
+        const rawMessage = object.get('message', realm);
+        const message =
+          rawMessage === undefined ? '' : toString(rawMessage, realm);
 
         if (message === '') {
           return name;

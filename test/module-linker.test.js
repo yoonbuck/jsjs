@@ -125,8 +125,8 @@ export default [
       const root = await loadModuleGraph(loader, 'root', null);
       linkModuleGraph(root);
 
-      const x = resolveExport(root, 'x', new Set());
-      const y = resolveExport(root, 'y', new Set());
+      const x = resolveExport(root, 'x', new Set(), new Set());
+      const y = resolveExport(root, 'y', new Set(), new Set());
       assertSame(x.type, 'resolved');
       if (x.type !== 'resolved') {
         throw new Error('Expected x to resolve');
@@ -138,7 +138,10 @@ export default [
         throw new Error('Expected y to resolve');
       }
       assertSame(y.bindingName, 'y');
-      assertSame(resolveExport(root, 'default', new Set()).type, 'not-found');
+      assertSame(
+        resolveExport(root, 'default', new Set(), new Set()).type,
+        'not-found',
+      );
     },
   },
   {
@@ -235,6 +238,47 @@ export default [
     },
   },
   {
+    name: 'mixed imported and direct re-exports keep their exact request entries',
+    async run() {
+      const loader = loaderFor({
+        root: 'import { x } from "a"; export { x }; export { y } from "b";',
+        a: 'export const x = 1;',
+        b: 'export const y = 2;',
+      });
+
+      const namespace = await loader.loadAndEvaluate('root');
+
+      assertSame(namespace.get('x'), 1);
+      assertSame(namespace.get('y'), 2);
+    },
+  },
+  {
+    name: 'mixed re-exports preserve duplicate specifier request ordering',
+    async run() {
+      let dependencyResolutions = 0;
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          if (specifier === 'root') {
+            return 'root';
+          }
+          dependencyResolutions += 1;
+          return `dep-${dependencyResolutions}`;
+        },
+        load(identifier) {
+          if (identifier === 'root') {
+            return 'import { value as x } from "dep"; export { x }; export { value as y } from "dep";';
+          }
+          return `export const value = "${identifier}";`;
+        },
+      });
+
+      const namespace = await loader.loadAndEvaluate('root');
+
+      assertSame(namespace.get('x'), 'dep-1');
+      assertSame(namespace.get('y'), 'dep-2');
+    },
+  },
+  {
     name: 'linking creates live cycle imports and pair-identity export resolution terminates',
     async run() {
       const loader = loaderFor({
@@ -257,7 +301,10 @@ export default [
       );
       b.environment.setMutableBinding('b', 'updated', true);
       assertSame(a.environment.getBindingValue('b', true), 'updated');
-      assertSame(resolveExport(a, 'missing', new Set()).type, 'not-found');
+      assertSame(
+        resolveExport(a, 'missing', new Set(), new Set()).type,
+        'not-found',
+      );
     },
   },
   {
@@ -294,7 +341,7 @@ export default [
         }),
       ]);
 
-      const resolution = resolveExport(first, 'value', new Set());
+      const resolution = resolveExport(first, 'value', new Set(), new Set());
       assertSame(resolution.type, 'resolved');
       if (resolution.type !== 'resolved') {
         throw new Error(
@@ -303,6 +350,116 @@ export default [
       }
       assertSame(resolution.module, third);
       assertSame(resolution.bindingName, 'value');
+    },
+  },
+  {
+    name: 'a renamed star cycle preserves ambiguity for a named import',
+    async run() {
+      const root = await loadModuleGraph(
+        loaderFor({
+          root: 'import { x } from "A";',
+          A: 'export * from "D"; export * from "E";',
+          D: 'export { y as x } from "A"; export const y = 1;',
+          E: 'export const x = 2;',
+        }),
+        'root',
+      );
+      const error = /** @type {ModuleLoaderError} */ (
+        assertThrows(() => linkModuleGraph(root), ModuleLoaderError)
+      );
+
+      assertSame(error.phase, 'link');
+      assertSame(
+        /** @type {{ get: (name: string) => unknown }} */ (error.cause).get(
+          'name',
+        ),
+        'SyntaxError',
+      );
+      assertUnlinked(root);
+    },
+  },
+  {
+    name: 'ResolveExport shares visited pairs across a star-export diamond',
+    async run() {
+      const depth = 12;
+      /** @type {Record<string, string>} */
+      const sources = {
+        root: 'export * from "left-0"; export * from "right-0";',
+        leaf: 'export const shared = 1;',
+      };
+
+      for (let level = 0; level < depth; level += 1) {
+        const source =
+          level === depth - 1
+            ? 'export * from "leaf";'
+            : `export * from "left-${level + 1}"; export * from "right-${level + 1}";`;
+        sources[`left-${level}`] = source;
+        sources[`right-${level}`] = source;
+      }
+
+      const root = await loadModuleGraph(loaderFor(sources), 'root');
+      /** @type {SourceTextModuleRecord[]} */
+      const records = [];
+      const pending = [root];
+      const seen = new Set();
+
+      while (pending.length > 0) {
+        const record = pending.pop();
+        if (record === undefined || seen.has(record)) {
+          continue;
+        }
+
+        seen.add(record);
+        records.push(record);
+        for (const request of record.resolvedRequestedModules) {
+          pending.push(request.module);
+        }
+      }
+
+      const leaf = records.find((record) => record.identifier === 'leaf');
+      if (leaf === undefined) {
+        throw new Error('Expected the shared leaf module');
+      }
+
+      let resolutionVisits = 0;
+      for (const record of records) {
+        const localExportEntries = record.localExportEntries;
+        Object.defineProperty(record, 'localExportEntries', {
+          configurable: true,
+          get() {
+            resolutionVisits += 1;
+            return localExportEntries;
+          },
+        });
+      }
+
+      const resolveSet = new Set();
+      const started = Date.now();
+      const resolution = resolveExport(root, 'shared', resolveSet, new Set());
+      const elapsed = Date.now() - started;
+
+      assertSame(resolution.type, 'resolved');
+      if (resolution.type !== 'resolved') {
+        throw new Error('Expected the shared export to resolve');
+      }
+      assertSame(resolution.module, leaf);
+      assertSame(resolution.bindingName, 'shared');
+      assertSame(
+        resolutionVisits,
+        records.length,
+        'each module/export pair should be visited once',
+      );
+      assertSame(resolveSet.size, records.length);
+      assertSame(elapsed < 10000, true, 'resolution should finish promptly');
+
+      resolutionVisits = 0;
+      const repeated = resolveExport(root, 'shared', new Set(), new Set());
+      assertSame(repeated.type, 'resolved');
+      assertSame(
+        resolutionVisits,
+        records.length,
+        'a fresh top-level resolution must use a fresh visited set',
+      );
     },
   },
   {
@@ -318,7 +475,10 @@ export default [
       );
       linkModuleGraph(root);
 
-      assertSame(resolveExport(root, 'shared', new Set()).type, 'ambiguous');
+      assertSame(
+        resolveExport(root, 'shared', new Set(), new Set()).type,
+        'ambiguous',
+      );
     },
   },
   {
@@ -330,6 +490,60 @@ export default [
           barrel: 'export * from "a"; export * from "b";',
           a: 'export const shared = 1;',
           b: 'export const shared = 2;',
+        }),
+        'root',
+      );
+      const error = /** @type {ModuleLoaderError} */ (
+        assertThrows(() => linkModuleGraph(root), ModuleLoaderError)
+      );
+
+      assertSame(error.phase, 'link');
+      assertSame(
+        /** @type {{ get: (name: string) => unknown }} */ (error.cause).get(
+          'name',
+        ),
+        'SyntaxError',
+      );
+      assertUnlinked(root);
+    },
+  },
+  {
+    name: 'linking reports an earlier dependency failure before a later local import failure',
+    async run() {
+      const root = await loadModuleGraph(
+        loaderFor({
+          root: 'import "first"; import { missing } from "later";',
+          first: 'import { absent } from "first-dependency";',
+          'first-dependency': 'export const present = 1;',
+          later: 'export const present = 2;',
+        }),
+        'root',
+      );
+      const error = /** @type {ModuleLoaderError} */ (
+        assertThrows(() => linkModuleGraph(root), ModuleLoaderError)
+      );
+
+      assertSame(error.phase, 'link');
+      assertSame(error.identifier, 'first');
+      assertSame(
+        /** @type {{ get: (name: string) => unknown }} */ (error.cause).get(
+          'name',
+        ),
+        'SyntaxError',
+      );
+      assertUnlinked(root);
+    },
+  },
+  {
+    name: 'namespace-import local exports from separate intermediaries make a named import ambiguous',
+    async run() {
+      const root = await loadModuleGraph(
+        loaderFor({
+          root: 'import { ns } from "barrel";',
+          barrel: 'export * from "left"; export * from "right";',
+          left: 'import * as ns from "dep"; export { ns };',
+          right: 'import * as ns from "dep"; export { ns };',
+          dep: 'export const value = 1;',
         }),
         'root',
       );

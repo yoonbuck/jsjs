@@ -1,7 +1,71 @@
-import { EngineObject } from './object.js';
+import { EngineObject, callAccessor } from './object.js';
 import { createPrimitiveWrapper } from './primitive-object.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
+import { codeUnitsBetween } from './code-units.js';
+
+/**
+ * @param {string} unit
+ * @returns {boolean}
+ */
+function isStringNumericWhitespace(unit) {
+  switch (unit) {
+    case '\u0009':
+    case '\u000a':
+    case '\u000b':
+    case '\u000c':
+    case '\u000d':
+    case '\u0020':
+    case '\u00a0':
+    case '\u1680':
+    case '\u2000':
+    case '\u2001':
+    case '\u2002':
+    case '\u2003':
+    case '\u2004':
+    case '\u2005':
+    case '\u2006':
+    case '\u2007':
+    case '\u2008':
+    case '\u2009':
+    case '\u200a':
+    case '\u2028':
+    case '\u2029':
+    case '\u202f':
+    case '\u205f':
+    case '\u3000':
+    case '\ufeff':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * @param {string} value
+ * @param {(value: string, start: number, end: number) => string} [copyRange=codeUnitsBetween]
+ * @returns {string}
+ */
+export function trimStringNumericWhitespace(
+  value,
+  copyRange = codeUnitsBetween,
+) {
+  let start = 0;
+
+  while (start < value.length && isStringNumericWhitespace(value[start])) {
+    start += 1;
+  }
+
+  let end = value.length;
+
+  while (end > start && isStringNumericWhitespace(value[end - 1])) {
+    end -= 1;
+  }
+
+  return start === 0 && end === value.length
+    ? value
+    : copyRange(value, start, end);
+}
 
 /**
  * @param {unknown} value
@@ -49,9 +113,10 @@ export function toObject(realm, value) {
  *
  * @param {unknown} value
  * @param {'string' | 'number' | 'default'} [preferredType='default']
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {string | number | boolean | symbol | null | undefined}
  */
-export function toPrimitive(value, preferredType = 'default') {
+export function toPrimitive(value, preferredType = 'default', callerRealm) {
   if (isPrimitive(value)) {
     return value;
   }
@@ -66,7 +131,10 @@ export function toPrimitive(value, preferredType = 'default') {
     throw new TypeError('EngineObject protocol lookup requires an agent');
   }
 
-  const exoticToPrimitive = value.get(agent.wellKnownSymbols.toPrimitive);
+  const exoticToPrimitive = value.getWellKnownSymbol(
+    'toPrimitive',
+    callerRealm,
+  );
 
   if (exoticToPrimitive !== undefined && exoticToPrimitive !== null) {
     if (!isCallable(exoticToPrimitive)) {
@@ -76,7 +144,12 @@ export function toPrimitive(value, preferredType = 'default') {
       );
     }
 
-    const result = exoticToPrimitive.callFunction(value, [preferredType]);
+    const result = callAccessor(
+      exoticToPrimitive,
+      value,
+      [preferredType],
+      callerRealm,
+    );
 
     if (!isPrimitive(result)) {
       throw new GuestErrorSignal(
@@ -88,7 +161,7 @@ export function toPrimitive(value, preferredType = 'default') {
     return result;
   }
 
-  return value.defaultValue(preferredType);
+  return value.defaultValue(preferredType, callerRealm);
 }
 
 /**
@@ -98,12 +171,13 @@ export function toPrimitive(value, preferredType = 'default') {
  * becomes a string, exactly as ES5.1 always did.
  *
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {string | symbol}
  */
-export function toPropertyKey(value) {
-  const key = toPrimitive(value, 'string');
+export function toPropertyKey(value, callerRealm) {
+  const key = toPrimitive(value, 'string', callerRealm);
 
-  return typeof key === 'symbol' ? key : toString(key);
+  return typeof key === 'symbol' ? key : toString(key, callerRealm);
 }
 
 /**
@@ -129,10 +203,13 @@ export function toBoolean(value) {
 
 /**
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function toNumber(value) {
-  const primitive = isPrimitive(value) ? value : toPrimitive(value, 'number');
+export function toNumber(value, callerRealm) {
+  const primitive = isPrimitive(value)
+    ? value
+    : toPrimitive(value, 'number', callerRealm);
 
   if (primitive === undefined) {
     return NaN;
@@ -169,10 +246,7 @@ export function toNumber(value) {
    * @returns {number}
    */
   function stringToNumber(value) {
-    const source = value.replace(
-      /^[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/g,
-      '',
-    );
+    const source = trimStringNumericWhitespace(value);
 
     if (source === '') {
       return 0;
@@ -183,7 +257,7 @@ export function toNumber(value) {
     }
 
     if (/^0[xX][0-9a-fA-F]+$/.test(source)) {
-      return Number.parseInt(source.slice(2), 16);
+      return Number.parseInt(codeUnitsBetween(source, 2, source.length), 16);
     }
 
     if (
@@ -198,10 +272,11 @@ export function toNumber(value) {
 
 /**
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function toInteger(value) {
-  const number = toNumber(value);
+export function toInteger(value, callerRealm) {
+  const number = toNumber(value, callerRealm);
 
   if (Number.isNaN(number)) {
     return 0;
@@ -216,10 +291,13 @@ export function toInteger(value) {
 
 /**
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {string}
  */
-export function toString(value) {
-  const primitive = isPrimitive(value) ? value : toPrimitive(value, 'string');
+export function toString(value, callerRealm) {
+  const primitive = isPrimitive(value)
+    ? value
+    : toPrimitive(value, 'string', callerRealm);
 
   if (primitive === undefined) {
     return 'undefined';
@@ -262,10 +340,11 @@ function isPrimitive(value) {
  * ECMA-262 5.1 §9.5 ToInt32.
  *
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function toInt32(value) {
-  const number = toNumber(value);
+export function toInt32(value, callerRealm) {
+  const number = toNumber(value, callerRealm);
 
   if (!Number.isFinite(number)) {
     return +0;
@@ -291,10 +370,11 @@ export function toInt32(value) {
  * ECMA-262 5.1 §9.6 ToUint32.
  *
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function toUint32(value) {
-  const number = toNumber(value);
+export function toUint32(value, callerRealm) {
+  const number = toNumber(value, callerRealm);
 
   if (!Number.isFinite(number)) {
     return +0;
@@ -325,8 +405,9 @@ export function toUint32(value) {
  * coercion, so a guest `valueOf`/`toString` still runs exactly once.
  *
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function toUint16(value) {
-  return toUint32(value) % 2 ** 16;
+export function toUint16(value, callerRealm) {
+  return toUint32(value, callerRealm) % 2 ** 16;
 }

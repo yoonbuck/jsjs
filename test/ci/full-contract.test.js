@@ -24,12 +24,18 @@ import { assertSame } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
 import { parseTest262Metadata } from '../../tools/test262/metadata.js';
 import { runTest262File } from '../../tools/test262/runner.js';
-import { TEST262_REPORT_FILE } from '../../tools/ci/pipeline.js';
+import {
+  TEST262_REPORT_FILE,
+  environmentForTest262NpmScript,
+  formatTest262UpstreamCommand,
+} from '../../tools/ci/pipeline.js';
 import {
   ES5_SELECTION_FILE,
+  isStructurallyEligiblePath,
   matchExclusion,
   parseEs5Selection,
 } from '../../tools/test262/es5-selection.js';
+import { selectPaths } from '../../tools/test262/upstream-select-paths.js';
 import {
   COVERAGE_MARKER_BEGIN,
   COVERAGE_MARKER_END,
@@ -58,6 +64,8 @@ import {
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
+import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
+import { ASYNC_RUNTIME_RELEASE_MANIFEST } from '../../tools/test262/async-runtime-release-manifest.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT_URL);
@@ -96,6 +104,7 @@ const SELECTION_SYNTAX_FEATURES = Object.freeze(
 );
 
 const UNSUPPORTED_NEIGHBOR_FEATURES = Object.freeze([
+  'async-generators',
   'async-iteration',
   'async-functions',
   'class-fields-private',
@@ -106,10 +115,23 @@ const UNSUPPORTED_NEIGHBOR_FEATURES = Object.freeze([
   'class-static-fields-public',
   'class-static-methods-private',
   'decorators',
-  'generators',
+  'dynamic-import',
   'new.target',
   'object-rest',
   'object-spread',
+]);
+
+const PINNED_GENERATOR_NEIGHBORS = Object.freeze([
+  'test/language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-generator-function-declaration.js',
+  'test/language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-yield-expression.js',
+  'test/language/expressions/class/cpn-class-expr-computed-property-name-from-generator-function-declaration.js',
+  'test/language/expressions/class/cpn-class-expr-computed-property-name-from-yield-expression.js',
+  'test/language/expressions/object/cpn-obj-lit-computed-property-name-from-generator-function-declaration.js',
+  'test/language/expressions/object/cpn-obj-lit-computed-property-name-from-yield-expression.js',
+  'test/language/statements/class/cpn-class-decl-accessors-computed-property-name-from-generator-function-declaration.js',
+  'test/language/statements/class/cpn-class-decl-accessors-computed-property-name-from-yield-expression.js',
+  'test/language/statements/class/cpn-class-decl-computed-property-name-from-generator-function-declaration.js',
+  'test/language/statements/class/cpn-class-decl-computed-property-name-from-yield-expression.js',
 ]);
 
 /**
@@ -216,17 +238,15 @@ function readRepositoryFile(path) {
  * @param {string} command
  * @param {readonly string[]} args
  * @param {string} [hint] Appended to the failure message.
+ * @param {Readonly<Record<string, string | undefined>>} [env]
  * @returns {string} stdout
  */
-function run(command, args, hint) {
+function run(command, args, hint, env = process.env) {
   const result = spawnSync(command, [...args], {
     cwd: REPOSITORY_ROOT_PATH,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    // Pin the time zone to UTC so the generated Test262 artifacts are a pure
-    // function of the engine and the pinned tree, matching the CI environment
-    // regardless of the contributor's local zone (see assertUtcTimeZone).
-    env: { ...process.env, TZ: 'UTC' },
+    env,
   });
 
   if (result.error !== undefined) {
@@ -254,7 +274,12 @@ function run(command, args, hint) {
  * @returns {string}
  */
 function npmRun(script, hint) {
-  return run('npm', ['run', '--silent', script], hint);
+  return run(
+    'npm',
+    ['run', '--silent', script],
+    hint,
+    environmentForTest262NpmScript(script, process.env),
+  );
 }
 
 /**
@@ -358,6 +383,104 @@ function numberRenderings(value) {
   return [...new Set([String(value), formatCount(value)])];
 }
 
+const STRUCTURAL_LAYER_LABEL_PATTERN = /\bLayer(?: |-)[1-4]\b/gu;
+const SYNTHETIC_COVERAGE_EXAMPLE_MARKER = 'test262-coverage-synthetic-example';
+
+/**
+ * Removes structural Layer labels from prose without touching other numbers.
+ *
+ * @param {string} line
+ * @returns {string}
+ */
+function stripStructuralLayerLabel(line) {
+  return line.replace(STRUCTURAL_LAYER_LABEL_PATTERN, 'Layer');
+}
+
+/**
+ * @param {string} line
+ * @returns {{ character: string, length: number, synthetic: boolean } | undefined}
+ */
+function markdownFenceOpening(line) {
+  const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line);
+
+  if (opening === null) {
+    return undefined;
+  }
+
+  if (opening[1][0] === '`' && opening[2].includes('`')) {
+    return undefined;
+  }
+
+  return {
+    character: opening[1][0],
+    length: opening[1].length,
+    synthetic: opening[2]
+      .trim()
+      .split(/\s+/u)
+      .includes(SYNTHETIC_COVERAGE_EXAMPLE_MARKER),
+  };
+}
+
+/**
+ * @param {string} line
+ * @param {{ character: string, length: number }} opening
+ * @returns {boolean}
+ */
+function closesMarkdownFence(line, opening) {
+  const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/u.exec(line);
+
+  return (
+    closing !== null &&
+    closing[1][0] === opening.character &&
+    closing[1].length >= opening.length
+  );
+}
+
+/**
+ * Finds live coverage counts in non-generated Markdown lines.
+ *
+ * @param {string} outside
+ * @param {Set<number>} live
+ * @returns {string[]}
+ */
+function findCoverageNumberOffenders(outside, live) {
+  const offenders = [];
+  /** @type {{ character: string, length: number, synthetic: boolean } | undefined} */
+  let markdownFence;
+
+  for (const line of outside.split(/\r?\n/)) {
+    if (markdownFence !== undefined) {
+      const synthetic = markdownFence.synthetic;
+
+      if (closesMarkdownFence(line, markdownFence)) {
+        markdownFence = undefined;
+      }
+
+      if (synthetic) {
+        continue;
+      }
+    } else {
+      markdownFence = markdownFenceOpening(line);
+
+      if (markdownFence?.synthetic === true) {
+        continue;
+      }
+    }
+
+    const scanLine = stripStructuralLayerLabel(line);
+
+    for (const value of live) {
+      for (const rendering of numberRenderings(value)) {
+        if (wholeNumberPattern(rendering).test(scanLine)) {
+          offenders.push(`${rendering} -> ${line.trim()}`);
+        }
+      }
+    }
+  }
+
+  return offenders;
+}
+
 /**
  * Runs an npm script that is *expected* to fail and returns its output, so a
  * contract can assert on the failure itself instead of only on the happy path.
@@ -373,7 +496,7 @@ function npmRunExpectingFailure(script) {
     cwd: REPOSITORY_ROOT_PATH,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, TZ: 'UTC' },
+    env: environmentForTest262NpmScript(script, process.env),
   });
 
   if (result.error !== undefined) {
@@ -447,7 +570,173 @@ export default [
     },
   },
   {
-    name: 'every feature area admits a tagged selected path from the pinned tree',
+    name: 'the async runtime release claims the exact focused Test262 metadata policy',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const policy = parseEs5Selection(
+        await readRepositoryFile(ES5_SELECTION_FILE),
+      );
+      const { checkoutPath } = await readTest262Pin();
+      const host = createNodeTest262Host({ root: checkoutPath });
+      const generator = manifest.features.find(
+        (feature) => feature.name === 'generators',
+      );
+
+      assertSame(
+        generator !== undefined,
+        true,
+        'the implemented generators feature must have an executable release probe',
+      );
+
+      if (generator === undefined) {
+        return;
+      }
+
+      assertSame(
+        runFeatureProbe({ engine, feature: generator }).outcome,
+        'completed',
+      );
+      assertSame(
+        JSON.stringify(
+          manifest.features
+            .map((feature) => feature.name)
+            .filter((name) => ['Promise', 'async', 'module'].includes(name)),
+        ),
+        '[]',
+        'Promise has no invented feature tag, while async and module remain flags',
+      );
+      assertSame(
+        JSON.stringify(policy.excludedLanguageDirectories),
+        JSON.stringify(['export', 'import', 'module-code']),
+      );
+      assertSame(policy.expansionFeatures.includes('generators'), true);
+
+      const generatorRelease = ASYNC_RUNTIME_RELEASE_MANIFEST.generator;
+      const generatorPaths = generatorRelease.records.map(
+        (record) => record.path,
+      );
+      const exactGeneratorAreas = policy.featureAreas.filter((area) =>
+        generatorPaths.includes(area.prefix),
+      );
+
+      assertSame(
+        JSON.stringify(exactGeneratorAreas.map((area) => area.prefix)),
+        JSON.stringify(generatorPaths),
+        'generated selection may expand only to the eleven proven generator roots',
+      );
+
+      const selectedGeneratorPaths = await selectPaths({
+        files: [...generatorPaths, ...PINNED_GENERATOR_NEIGHBORS].sort(),
+        policy,
+        previouslySelected: new Set(),
+        harnessParsing: new Map(),
+        readSource: (path) => host.readTest(path),
+      });
+
+      assertSame(
+        JSON.stringify(selectedGeneratorPaths),
+        JSON.stringify(generatorPaths),
+        'the eleven exact syntax-authorized roots must be the only generator selection delta',
+      );
+
+      for (const { path, features, flags } of generatorRelease.records) {
+        const metadata = parseTest262Metadata(await host.readTest(path));
+        const area = exactGeneratorAreas.find(
+          (candidate) => candidate.prefix === path,
+        );
+
+        assertSame(JSON.stringify(metadata.features), JSON.stringify(features));
+        assertSame(JSON.stringify(metadata.flags), JSON.stringify(flags));
+        assertSame(
+          JSON.stringify(area?.features),
+          JSON.stringify([...features].sort()),
+          `${path} area features must equal its pinned metadata exactly`,
+        );
+        assertSame(
+          area?.generatorSyntax,
+          true,
+          `${path} must carry exact-file generator syntax authorization`,
+        );
+      }
+
+      const promiseRelease = ASYNC_RUNTIME_RELEASE_MANIFEST.promise;
+      const promiseEngine = createJsjsTest262Engine();
+
+      for (const { path, features, flags } of promiseRelease.records) {
+        const metadata = parseTest262Metadata(await host.readTest(path));
+
+        assertSame(JSON.stringify(metadata.features), JSON.stringify(features));
+        assertSame(JSON.stringify(metadata.flags), JSON.stringify(flags));
+        assertSame(metadata.features.includes('Promise'), false);
+
+        const records = await runTest262File({
+          engine: promiseEngine,
+          host,
+          file: path,
+          supportedFeatures: promiseRelease.supportedFeatures,
+        });
+
+        assertSame(
+          records.every((record) => record.status === 'passed'),
+          true,
+          `${path} must remain runnable in the focused Promise release suite`,
+        );
+      }
+
+      const asyncPromisePath = promiseRelease.records.find((record) =>
+        record.flags.includes('async'),
+      )?.path;
+
+      if (asyncPromisePath === undefined) {
+        throw new Error('the focused Promise suite must retain async roots');
+      }
+
+      const recordsWithoutDoneHooks = await runTest262File({
+        engine: {
+          createRealm: promiseEngine.createRealm,
+          evaluateScript: promiseEngine.evaluateScript,
+        },
+        host,
+        file: asyncPromisePath,
+        supportedFeatures: promiseRelease.supportedFeatures,
+      });
+
+      assertSame(
+        recordsWithoutDoneHooks.every(
+          (record) =>
+            record.status === 'failed' && record.reason === 'engine-error',
+        ),
+        true,
+        'async Promise roots require guest installDone and deterministic runJobs hooks',
+      );
+
+      const moduleRelease = ASYNC_RUNTIME_RELEASE_MANIFEST.module;
+
+      for (const { path, features, flags } of moduleRelease.records) {
+        const metadata = parseTest262Metadata(await host.readTest(path));
+
+        assertSame(JSON.stringify(metadata.features), JSON.stringify(features));
+        assertSame(JSON.stringify(metadata.flags), JSON.stringify(flags));
+        assertSame(
+          isStructurallyEligiblePath(path, policy),
+          false,
+          `${path} must remain outside script-oriented broad selection`,
+        );
+      }
+
+      for (const neighbor of UNSUPPORTED_NEIGHBOR_FEATURES) {
+        assertSame(
+          policy.featureAreas.some((area) => area.features.includes(neighbor)),
+          false,
+          `release policy must not claim unsupported neighboring feature ${neighbor}`,
+        );
+      }
+    },
+  },
+  {
+    name: 'every feature area admits matching pinned evidence without unclaimed neighbors',
     run: async () => {
       await readUpstreamHead();
 
@@ -465,9 +754,12 @@ export default [
       const neighbors = [];
 
       for (const area of policy.featureAreas) {
-        const paths = selected.filter(
-          (path) => path === area.prefix || path.startsWith(`${area.prefix}/`),
-        );
+        const paths = area.prefix.endsWith('.js')
+          ? [area.prefix]
+          : selected.filter(
+              (path) =>
+                path === area.prefix || path.startsWith(`${area.prefix}/`),
+            );
         let admitsTaggedPath = false;
 
         for (const path of paths) {
@@ -476,12 +768,13 @@ export default [
             .filter(
               (candidate) =>
                 path === candidate.prefix ||
-                path.startsWith(`${candidate.prefix}/`),
+                (!candidate.prefix.endsWith('.js') &&
+                  path.startsWith(`${candidate.prefix}/`)),
             )
             .sort((left, right) => right.prefix.length - left.prefix.length)[0];
 
           if (
-            metadata.features.length > 0 &&
+            (metadata.features.length > 0 || area.prefix === path) &&
             metadata.features.every((feature) =>
               area.features.includes(feature),
             )
@@ -696,6 +989,34 @@ export default [
     },
   },
   {
+    name: 'npm run test262:es2015-release passes all focused async runtime suites without skips',
+    run: () => {
+      const results = parseJsonLines(npmRun('test262:es2015-release'));
+
+      assertSame(
+        JSON.stringify(results),
+        JSON.stringify([
+          {
+            name: 'focused ES2015 Promise upstream Test262 files all pass',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 generator upstream Test262 files all pass',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 static-module Test262 roots all pass at the pinned revision',
+            status: 'passed',
+          },
+          {
+            name: 'pinned module raw metadata expands once without harness rewriting',
+            status: 'passed',
+          },
+        ]),
+      );
+    },
+  },
+  {
     name: 'npm run test:browser launches the configured headless browser for real',
     run: () => {
       const results = parseJsonLines(
@@ -750,7 +1071,7 @@ export default [
       assertSame(
         committedReport,
         report,
-        `${TEST262_REPORT_FILE} is stale; run npm run test262:upstream`,
+        `${TEST262_REPORT_FILE} is stale; run ${formatTest262UpstreamCommand()}`,
       );
       assertSame(
         stdout.includes(TEST262_REPORT_FILE),
@@ -907,7 +1228,7 @@ export default [
       assertSame(
         committedCoverageDoc,
         coverageDoc,
-        `${COVERAGE_DOCUMENT_FILE} is stale; run npm run test262:upstream`,
+        `${COVERAGE_DOCUMENT_FILE} is stale; run ${formatTest262UpstreamCommand()}`,
       );
 
       const block = readGeneratedBlock(coverageDoc);
@@ -946,6 +1267,162 @@ export default [
     },
   },
   {
+    name: 'coverage drift helper ignores live counts in Layer labels and Markdown headings',
+    run: () => {
+      for (const layer of [1, 2, 3, 4]) {
+        assertSame(
+          findCoverageNumberOffenders(
+            `## Layer ${layer}: Static modules`,
+            new Set([layer]),
+          ).join('\n'),
+          '',
+        );
+
+        assertSame(
+          findCoverageNumberOffenders(
+            `## Layer-${layer}: Static modules with 14,107 selected files`,
+            new Set([layer, 14107]),
+          ).join('\n'),
+          `14,107 -> ## Layer-${layer}: Static modules with 14,107 selected files`,
+        );
+      }
+
+      assertSame(
+        findCoverageNumberOffenders(
+          'The exotics are the Layered-3 contract.',
+          new Set([3]),
+        ).join('\n'),
+        '3 -> The exotics are the Layered-3 contract.',
+      );
+      assertSame(
+        findCoverageNumberOffenders(
+          '## Coverage: 14,107 selected files',
+          new Set([14107]),
+        ).join('\n'),
+        '14,107 -> ## Coverage: 14,107 selected files',
+      );
+      assertSame(
+        findCoverageNumberOffenders(
+          'The Layer 14107 contract.',
+          new Set([14107]),
+        ).join('\n'),
+        '14107 -> The Layer 14107 contract.',
+      );
+      assertSame(
+        findCoverageNumberOffenders(
+          'The Layer 14,107 contract.',
+          new Set([14107]),
+        ).join('\n'),
+        '14,107 -> The Layer 14,107 contract.',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json test262-coverage-synthetic-example',
+            '{"version": 1}',
+            '```',
+            'An ordinary prose claim still says 1 file.',
+            '```json',
+            '{"malformed": 1}',
+            '```',
+          ].join('\n'),
+          new Set([1]),
+        ).join('\n'),
+        [
+          '1 -> An ordinary prose claim still says 1 file.',
+          '1 -> {"malformed": 1}',
+        ].join('\n'),
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '````markdown',
+            '```json test262-coverage-synthetic-example',
+            '{"malformed": 1}',
+            '```',
+            '````',
+          ].join('\n'),
+          new Set([1]),
+        ).join('\n'),
+        '1 -> {"malformed": 1}',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json` test262-coverage-synthetic-example',
+            'An invalid fence must not hide 1 live count.',
+            '```',
+          ].join('\n'),
+          new Set([1]),
+        ).join('\n'),
+        '1 -> An invalid fence must not hide 1 live count.',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json test262-coverage-synthetic-example',
+            '{"version": 1}',
+            '```',
+            'An ordinary prose claim still says 1 file.',
+          ].join('\r\n'),
+          new Set([1]),
+        ).join('\n'),
+        '1 -> An ordinary prose claim still says 1 file.',
+      );
+
+      assertSame(
+        findCoverageNumberOffenders(
+          [
+            '```json',
+            '{"malformed": 1}',
+            '```',
+            'A CRLF fence still leaves 1 visible count behind it.',
+          ].join('\r\n'),
+          new Set([1]),
+        ).join('\n'),
+        [
+          '1 -> {"malformed": 1}',
+          '1 -> A CRLF fence still leaves 1 visible count behind it.',
+        ].join('\n'),
+      );
+    },
+  },
+  {
+    name: 'marked synthetic coverage schemas do not collide with the current final report',
+    run: async () => {
+      const coverageDoc = await readRepositoryFile(COVERAGE_DOCUMENT_FILE);
+      const report = await readRepositoryFile(TEST262_REPORT_FILE);
+      const begin = coverageDoc.indexOf(COVERAGE_MARKER_BEGIN);
+      const end =
+        coverageDoc.indexOf(COVERAGE_MARKER_END) + COVERAGE_MARKER_END.length;
+      const outside = `${coverageDoc.slice(0, begin)}${coverageDoc.slice(end)}`;
+      /** @type {Set<number>} */
+      const live = new Set();
+
+      for (const record of parseJsonLines(report)) {
+        if (record.type !== 'inventory' && record.type !== 'coverage') {
+          continue;
+        }
+
+        for (const value of Object.values(record)) {
+          if (typeof value === 'number') {
+            live.add(value);
+          }
+        }
+      }
+
+      assertSame(
+        findCoverageNumberOffenders(outside, live).join('\n'),
+        '',
+        'only explicitly marked synthetic schema fences may repeat live coverage counts outside the generated block',
+      );
+    },
+  },
+  {
     name: 'every live coverage number in docs/conformance.md is inside the generated block, where the drift check can reach it',
     run: async () => {
       const { coverageDoc, report } = await readUpstreamRun();
@@ -974,23 +1451,7 @@ export default [
         'the report must publish the numbers this check is about',
       );
 
-      const lines = outside.split('\n');
-      /** @type {string[]} */
-      const offenders = [];
-
-      for (const value of live) {
-        for (const rendering of numberRenderings(value)) {
-          const match = wholeNumberPattern(rendering).exec(outside);
-
-          if (match === null) {
-            continue;
-          }
-
-          const line = outside.slice(0, match.index).split('\n').length;
-
-          offenders.push(`${rendering} -> ${lines[line - 1].trim()}`);
-        }
-      }
+      const offenders = findCoverageNumberOffenders(outside, live);
 
       assertSame(
         offenders.join('\n'),

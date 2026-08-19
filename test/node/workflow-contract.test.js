@@ -3,13 +3,13 @@
  * checked-in Test262 manifests.
  *
  * This suite runs inside `npm run test:node`, so it must stay deterministic
- * and machine-independent: it never spawns a subprocess, never touches the
- * network, and never runs the CI pipeline it describes. Everything here is
- * either structured data parsed from a real file (the workflow YAML through a
- * real YAML parser, `package.json`, the two manifests) or a real execution of
- * the engine against manifest-declared source. The commands themselves are
- * executed by `npm run ci:contract` (`test/ci/full-contract.test.js`), which is
- * deliberately *not* registered with the Node runner.
+ * and machine-independent: it never touches the network or runs the CI pipeline
+ * it describes. Everything here is either structured data parsed from a real
+ * file (the workflow YAML through a real YAML parser, `package.json`, the two
+ * manifests), a bounded subprocess for the UTC diagnostic guard, or a real
+ * execution of the engine against manifest-declared source. The commands
+ * themselves are executed by `npm run ci:contract` (`test/ci/full-contract.test.js`),
+ * which is deliberately *not* registered with the Node runner.
  *
  * The workflow is a generated artifact of `tools/ci/pipeline.js`, but a
  * byte comparison against its own generator proves only that nobody hand-edited
@@ -19,11 +19,26 @@
  * expectation table written out here rather than imported from the generator.
  */
 
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { load as parseYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
-import { runTest262Suite } from '../../tools/test262/runner.js';
+import {
+  UNSUPPORTED_FLAGS,
+  decideSkip,
+  runTest262Suite,
+} from '../../tools/test262/runner.js';
+import {
+  expandVariants,
+  parseTest262Metadata,
+  resolveIncludes,
+} from '../../tools/test262/metadata.js';
+import {
+  ES5_SELECTION_FILE,
+  parseEs5Selection,
+} from '../../tools/test262/es5-selection.js';
 import {
   ACTION_PINS,
   TEST262_REPORT_FILE,
@@ -48,8 +63,19 @@ import {
   summarizeUpstreamRun,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
+import * as upstreamOperations from '../../tools/test262/upstream.js';
+import {
+  ASYNC_RUNTIME_RELEASE_MANIFEST,
+  ASYNC_RUNTIME_RELEASE_MANIFEST_FILE,
+} from '../../tools/test262/async-runtime-release-manifest.js';
+import * as ciPipeline from '../../tools/ci/pipeline.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+const NON_UTC_UPSTREAM_DIAGNOSTIC_ENV = Object.freeze({ TZ: 'Etc/GMT+1' });
+const UTC_GUARD_MODULE_URL = new URL(
+  '../../tools/test262/upstream-run.js',
+  import.meta.url,
+).href;
 
 /**
  * The command each CI job is supposed to run, spelled out here instead of
@@ -66,7 +92,7 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
   'test-browser': 'npm run test:browser',
   'test-jsc': 'npm run test:jsc',
   'test262-fixtures': 'npm run test262:fixtures',
-  'test262-modules': 'npm run test262:modules',
+  'test262-es2015-release': 'npm run test262:es2015-release',
   'test262-upstream': 'npm run test262:upstream',
   'benchmark-smoke': 'npm run benchmark:smoke',
 });
@@ -125,6 +151,9 @@ const EXPECTED_DRIFT_COMMAND =
   'git ls-files --error-unmatch docs/test262-report.jsonl docs/conformance.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl docs/conformance.md';
 
 const engine = { createRealm, evaluateScript };
+
+const GENERATOR_PROBE =
+  "function* sequence() {\n  var input = yield 1;\n  return input + 1;\n}\nvar iterator = sequence();\nif (iterator[Symbol.iterator]() !== iterator) {\n  throw new Error('generator is not iterable');\n}\nvar first = iterator.next();\nvar second = iterator.next(2);\nif (first.value !== 1 || first.done || second.value !== 3 || !second.done) {\n  throw new Error('generator resume semantics failed');\n}";
 
 /**
  * @param {string} path Repository-relative.
@@ -185,6 +214,72 @@ function usesSteps(job, action) {
     (/** @type {any} */ step) =>
       typeof step.uses === 'string' && step.uses.startsWith(`${action}@`),
   );
+}
+
+function nonUtcUpstreamDiagnosticInvocation() {
+  return {
+    command: /** @type {{ execPath: string }} */ (
+      /** @type {unknown} */ (process)
+    ).execPath,
+    args: ['tools/test262/upstream-run.js'],
+    options: /** @type {{
+      cwd: string,
+      env: typeof NON_UTC_UPSTREAM_DIAGNOSTIC_ENV,
+      encoding: 'utf8',
+      maxBuffer: number,
+    }} */ ({
+      cwd: fileURLToPath(REPOSITORY_ROOT_URL),
+      env: NON_UTC_UPSTREAM_DIAGNOSTIC_ENV,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024,
+    }),
+  };
+}
+
+/**
+ * @param {string} zone
+ */
+function utcGuardInvocation(zone) {
+  return {
+    command: /** @type {{ execPath: string }} */ (
+      /** @type {unknown} */ (process)
+    ).execPath,
+    args: [
+      '--input-type=module',
+      '--eval',
+      [
+        `import { assertUtcTimeZone } from ${JSON.stringify(UTC_GUARD_MODULE_URL)};`,
+        'try {',
+        '  assertUtcTimeZone();',
+        '} catch (error) {',
+        '  process.exitCode = 1;',
+        '  process.stderr.write(`${error.message}\\n`);',
+        '}',
+      ].join('\n'),
+    ],
+    options: {
+      cwd: fileURLToPath(REPOSITORY_ROOT_URL),
+      env: { TZ: zone },
+      encoding: /** @type {const} */ ('utf8'),
+      maxBuffer: 64 * 1024,
+    },
+  };
+}
+
+/**
+ * @param {{ stderr?: unknown }} result
+ * @returns {string}
+ */
+function stderrText(result) {
+  if (typeof result.stderr === 'string') {
+    return result.stderr;
+  }
+
+  if (result.stderr instanceof Uint8Array) {
+    return new globalThis.TextDecoder().decode(result.stderr);
+  }
+
+  return '';
 }
 
 /**
@@ -413,11 +508,11 @@ export default [
     },
   },
   {
-    name: 'the focused module Test262 job checks out the pinned revision without broad artifact work',
+    name: 'the focused ES2015 Test262 release job checks out the pinned revision and runs all async runtime suites',
     run: async () => {
       const { workflow } = await readWorkflow();
       const packageManifest = await readPackageManifest();
-      const job = requireJob(workflow, 'test262-modules');
+      const job = requireJob(workflow, 'test262-es2015-release');
       const checkouts = usesSteps(job, 'actions/checkout');
       const upstream = checkouts.filter(
         (step) => step.with?.repository !== undefined,
@@ -431,28 +526,198 @@ export default [
 
       const commands = runCommands(job);
       const runStep = job.steps.find(
-        (/** @type {any} */ step) => step.run === 'npm run test262:modules',
+        (/** @type {any} */ step) =>
+          step.run === 'npm run test262:es2015-release',
       );
 
+      assertSame(job.name, 'Pinned Test262 ES2015 async runtime and modules');
+      assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
+      assertSame(
+        packageManifest.scripts['test262:es2015-release'],
+        'node test/run-node.js test/ci/es2015-promise-test262.test.js test/ci/es2015-generator-test262.test.js test/ci/es2015-module-test262.test.js',
+        'the release script must run Promise, generator, and module suites',
+      );
       assertSame(
         runStep?.env?.TZ,
         'UTC',
-        'the focused module suite must run under TZ=UTC',
+        'the focused release suites must run under TZ=UTC',
       );
       assertSame(
         commands.includes('npm run test262:upstream'),
         false,
-        'the focused module job must not run the broad upstream suite',
+        'the focused release job must not run the broad upstream suite',
       );
       assertSame(
         commands.some((command) => command.includes(TEST262_REPORT_FILE)),
         false,
-        'the focused module job must not rewrite or check the broad report',
+        'the focused release job must not rewrite or check the broad report',
       );
     },
   },
   {
-    name: 'the Test262 job checks out the pinned upstream revision and publishes its report even on failure',
+    name: 'only the broad Test262 execution step receives the exact required Node heap allowance',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, 'test262-upstream');
+      const runStep = job.steps.find(
+        (/** @type {any} */ step) => step.run === 'npm run test262:upstream',
+      );
+
+      assertSame(
+        runStep !== undefined,
+        true,
+        'the broad Test262 execution step must exist',
+      );
+      assertSame(
+        workflow.env === undefined,
+        true,
+        'the heap allowance must not be workflow-global',
+      );
+      assertSame(
+        job.env === undefined,
+        true,
+        'the heap allowance must not be job-global',
+      );
+      assertSame(
+        JSON.stringify(runStep.env),
+        JSON.stringify(ciPipeline.TEST262_UPSTREAM_ENVIRONMENT),
+        'the generated broad execution step must use the authoritative Test262 environment',
+      );
+      assertSame(
+        runStep.env.NODE_OPTIONS,
+        '--max-old-space-size=4096',
+        'the broad execution step must use the proven 4096 MiB heap allowance',
+      );
+      assertSame(runStep.env.TZ, 'UTC');
+    },
+  },
+  {
+    name: 'the full contract environment helper keeps UTC global and scopes heap to broad npm scripts',
+    run: () => {
+      const base = Object.freeze({
+        PATH: '/contract/bin',
+        TZ: 'America/Los_Angeles',
+      });
+      const environmentForScript = ciPipeline.environmentForTest262NpmScript;
+
+      assertSame(
+        typeof environmentForScript,
+        'function',
+        'the full contract needs a testable broad-script environment helper',
+      );
+
+      for (const script of ['test262:upstream', 'test262:upstream:check']) {
+        const environment = environmentForScript(script, base);
+
+        assertSame(environment.PATH, base.PATH);
+        assertSame(environment.NODE_OPTIONS, '--max-old-space-size=4096');
+        assertSame(environment.TZ, 'UTC');
+      }
+
+      const unrelatedEnvironment = environmentForScript('format', base);
+
+      assertSame(unrelatedEnvironment.PATH, base.PATH);
+      assertSame(unrelatedEnvironment.TZ, 'UTC');
+      assertSame(
+        unrelatedEnvironment.NODE_OPTIONS,
+        undefined,
+        'unrelated commands must not receive the broad Test262 heap allowance',
+      );
+    },
+  },
+  {
+    name: 'non-UTC upstream diagnostic prints the exact heap and UTC remediation command',
+    run: async () => {
+      const { command, args, options } = nonUtcUpstreamDiagnosticInvocation();
+      const result = spawnSync(command, args, options);
+
+      assertSame(result.error, undefined);
+      assertSame(result.status, 1);
+      assertSame(
+        stderrText(result).includes(
+          'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream',
+        ),
+        true,
+        `non-UTC remediation was:\n${stderrText(result)}`,
+      );
+    },
+  },
+  {
+    name: 'UTC guard requires the canonical TZ value rather than historical offsets',
+    run: () => {
+      const historicalInvocation = utcGuardInvocation('Africa/Monrovia');
+      const utcInvocation = utcGuardInvocation('UTC');
+      const historical = spawnSync(
+        historicalInvocation.command,
+        historicalInvocation.args,
+        historicalInvocation.options,
+      );
+      const utc = spawnSync(
+        utcInvocation.command,
+        utcInvocation.args,
+        utcInvocation.options,
+      );
+      const diagnostic = stderrText(historical);
+
+      assertSame(historical.error, undefined);
+      assertSame(historical.status, 1);
+      assertSame(
+        diagnostic.includes('this process is running in Africa/Monrovia.'),
+        true,
+      );
+      assertSame(
+        diagnostic.includes(
+          'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream',
+        ),
+        true,
+      );
+      assertSame(utc.error, undefined);
+      assertSame(utc.status, 0);
+      assertSame(stderrText(utc), '');
+    },
+  },
+  {
+    name: 'non-UTC upstream diagnostic uses process.execPath and isolated TZ-only environment',
+    run: () => {
+      const invocation = nonUtcUpstreamDiagnosticInvocation();
+
+      assertSame(
+        invocation.command,
+        /** @type {{ execPath: string }} */ (/** @type {unknown} */ (process))
+          .execPath,
+      );
+      assertSame(
+        JSON.stringify(invocation.args),
+        JSON.stringify(['tools/test262/upstream-run.js']),
+      );
+      assertSame(
+        JSON.stringify(invocation.options),
+        JSON.stringify({
+          cwd: fileURLToPath(REPOSITORY_ROOT_URL),
+          env: NON_UTC_UPSTREAM_DIAGNOSTIC_ENV,
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024,
+        }),
+      );
+    },
+  },
+  {
+    name: 'limitations document gives the exact heap and UTC broad Test262 command',
+    run: async () => {
+      const limitations = await readRepositoryFile('docs/limitations.md');
+      const exact =
+        'NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream';
+
+      assertSame(limitations.includes(exact), true);
+      assertSame(
+        limitations.includes('`TZ=UTC npm run test262:upstream`'),
+        false,
+        'the documented broad remediation must not omit the heap allowance',
+      );
+    },
+  },
+  {
+    name: 'the Test262 job publishes only a report produced by the candidate run',
     run: async () => {
       const { workflow } = await readWorkflow();
       const packageManifest = await readPackageManifest();
@@ -476,7 +741,10 @@ export default [
       const uploads = usesSteps(job, 'actions/upload-artifact');
 
       assertSame(uploads.length, 1, 'exactly one artifact upload step');
-      assertSame(uploads[0].if, 'always()');
+      assertSame(
+        uploads[0].if,
+        "always() && hashFiles('docs/test262-report.jsonl') != ''",
+      );
       assertSame(uploads[0].with.path, TEST262_REPORT_FILE);
       assertSame(uploads[0].with['if-no-files-found'], 'error');
 
@@ -484,6 +752,13 @@ export default [
       const run = commands.indexOf('npm run test262:upstream');
       const drift = commands.indexOf(EXPECTED_DRIFT_COMMAND);
       const select = commands.indexOf('npm run test262:select:check');
+      const scrub = commands.indexOf(`rm -f ${TEST262_REPORT_FILE}`);
+
+      assertSame(
+        scrub >= 0 && scrub < select,
+        true,
+        'the committed report must be removed before any upstream prerequisite can fail',
+      );
 
       assertSame(
         select >= 0 && select < run,
@@ -607,6 +882,264 @@ export default [
         assertSame(unsupported.records[0].status, 'skipped');
         assertSame(unsupported.records[0].reason, 'unsupported-feature');
       }
+    },
+  },
+  {
+    name: 'the async runtime release manifest is host-neutral, immutable, and deterministic',
+    run: async () => {
+      const release = ASYNC_RUNTIME_RELEASE_MANIFEST;
+      const suites = /** @type {const} */ (['generator', 'module', 'promise']);
+      const expectedCounts = Object.freeze({
+        generator: 11,
+        module: 13,
+        promise: 15,
+      });
+      const expectedSupportedFeatures = Object.freeze({
+        generator: ['Symbol.iterator', 'Symbol.toStringTag', 'generators'],
+        module: ['Symbol.toStringTag'],
+        promise: ['Symbol.iterator', 'Symbol.species', 'Symbol.toStringTag'],
+      });
+
+      assertSame(
+        await readRepositoryFile(ASYNC_RUNTIME_RELEASE_MANIFEST_FILE).then(
+          (source) => source.includes('node:'),
+        ),
+        false,
+        'the shared release manifest must stay host-neutral',
+      );
+      assertSame(Object.isFrozen(release), true);
+      assertSame(JSON.stringify(Object.keys(release)), JSON.stringify(suites));
+
+      const allPaths = [];
+
+      for (const suite of suites) {
+        const entry = release[suite];
+        const paths = entry.records.map((record) => record.path);
+
+        assertSame(Object.isFrozen(entry), true);
+        assertSame(Object.isFrozen(entry.records), true);
+        assertSame(Object.isFrozen(entry.supportedFeatures), true);
+        assertSame(entry.records.length, expectedCounts[suite]);
+        assertSame(JSON.stringify(paths), JSON.stringify([...paths].sort()));
+        assertSame(
+          JSON.stringify(entry.supportedFeatures),
+          JSON.stringify(expectedSupportedFeatures[suite]),
+        );
+
+        for (const record of entry.records) {
+          assertSame(Object.isFrozen(record), true);
+          assertSame(Object.isFrozen(record.features), true);
+          assertSame(Object.isFrozen(record.flags), true);
+        }
+
+        allPaths.push(...paths);
+      }
+
+      assertSame(new Set(allPaths).size, allPaths.length);
+      assertSame(
+        release.generator.records.every(
+          (record) => JSON.stringify(record.flags) === '[]',
+        ),
+        true,
+        'focused generator records must assert their exact empty flag lists',
+      );
+      assertSame(
+        release.module.records.every(
+          (record) => JSON.stringify(record.flags) === '["module"]',
+        ),
+        true,
+      );
+      assertSame(
+        release.promise.records.some((record) =>
+          record.flags.includes('async'),
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'the focused async runtime release policy is explicit and deterministic',
+    run: async () => {
+      const manifest = parseFeatureManifest(
+        await readRepositoryFile(FEATURES_MANIFEST_FILE),
+      );
+      const policy = parseEs5Selection(
+        await readRepositoryFile(ES5_SELECTION_FILE),
+      );
+      const names = featureNames(manifest);
+      const generator = manifest.features.find(
+        (feature) => feature.name === 'generators',
+      );
+
+      assertSame(JSON.stringify(names), JSON.stringify([...names].sort()));
+      assertSame(new Set(names).size, names.length);
+      assertSame(generator?.probe, GENERATOR_PROBE);
+      assertSame(
+        JSON.stringify(generator?.tests),
+        JSON.stringify(
+          ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records
+            .filter((record) => record.features.includes('generators'))
+            .map((record) => record.path),
+        ),
+        'generator probe evidence must be the nine focused roots tagged generators',
+      );
+      if (generator === undefined) {
+        throw new Error('features.json must claim generators');
+      }
+
+      assertSame(
+        runFeatureProbe({ engine, feature: generator }).outcome,
+        'completed',
+      );
+      assertSame(
+        JSON.stringify(
+          names.filter((name) => ['Promise', 'async', 'module'].includes(name)),
+        ),
+        '[]',
+        'Promise is untagged coverage and async/module are Test262 flags',
+      );
+      assertSame(
+        JSON.stringify(UNSUPPORTED_FLAGS),
+        JSON.stringify([
+          'CanBlockIsFalse',
+          'CanBlockIsTrue',
+          'non-deterministic',
+        ]),
+      );
+      assertSame(
+        JSON.stringify(policy.excludedLanguageDirectories),
+        JSON.stringify(['export', 'import', 'module-code']),
+      );
+      assertSame(policy.expansionFeatures.includes('generators'), true);
+
+      for (const suite of /** @type {const} */ ([
+        'generator',
+        'module',
+        'promise',
+      ])) {
+        const paths = ASYNC_RUNTIME_RELEASE_MANIFEST[suite].records.map(
+          (record) => record.path,
+        );
+        const source = await readRepositoryFile(
+          `test/ci/es2015-${suite}-test262.test.js`,
+        );
+
+        assertSame(JSON.stringify(paths), JSON.stringify([...paths].sort()));
+        assertSame(
+          source.includes('ASYNC_RUNTIME_RELEASE_MANIFEST'),
+          true,
+          `focused ${suite} suite must consume the shared release manifest`,
+        );
+      }
+
+      const allFocusedPaths = Object.values(
+        ASYNC_RUNTIME_RELEASE_MANIFEST,
+      ).flatMap((suite) => suite.records.map((record) => record.path));
+
+      assertSame(new Set(allFocusedPaths).size, allFocusedPaths.length);
+
+      const generatorPaths =
+        ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records.map(
+          (record) => record.path,
+        );
+      const generatorAreas = policy.featureAreas.filter((area) =>
+        generatorPaths.includes(area.prefix),
+      );
+
+      assertSame(
+        JSON.stringify(generatorAreas.map((area) => area.prefix)),
+        JSON.stringify(generatorPaths),
+      );
+      for (const record of ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records) {
+        const area = generatorAreas.find(
+          (candidate) => candidate.prefix === record.path,
+        );
+
+        assertSame(
+          JSON.stringify(area?.features),
+          JSON.stringify([...record.features].sort()),
+          `${record.path} area features must equal its pinned metadata exactly`,
+        );
+        assertSame(
+          area?.generatorSyntax,
+          true,
+          `${record.path} must carry exact-file generator syntax authorization`,
+        );
+      }
+      assertSame(
+        policy.featureAreas.some((area) =>
+          [
+            'test/built-ins/GeneratorFunction',
+            'test/built-ins/GeneratorPrototype',
+          ].includes(area.prefix),
+        ),
+        false,
+        'generator admission must stay in exact-file structured policy',
+      );
+
+      const moduleMetadata = parseTest262Metadata(
+        '/*---\ndescription: module\nflags: [module]\n---*/\n',
+      );
+      const asyncMetadata = parseTest262Metadata(
+        '/*---\ndescription: async\nflags: [async]\n---*/\n',
+      );
+      const moduleAsyncMetadata = parseTest262Metadata(
+        '/*---\ndescription: async module\nflags: [module, async]\n---*/\n',
+      );
+      const moduleRawMetadata = parseTest262Metadata(
+        '/*---\ndescription: raw module\nflags: [module, raw]\n---*/\n',
+      );
+
+      assertSame(JSON.stringify(moduleMetadata.features), '[]');
+      assertSame(JSON.stringify(asyncMetadata.features), '[]');
+      assertSame(
+        JSON.stringify(moduleAsyncMetadata.flags),
+        '["module","async"]',
+      );
+      assertSame(
+        JSON.stringify(decideSkip(moduleAsyncMetadata)),
+        JSON.stringify({
+          reason: 'unsupported-flag-combination',
+          message: 'unsupported flag combination: module and async',
+        }),
+      );
+      assertSame(
+        JSON.stringify(expandVariants(moduleMetadata)),
+        '["non-strict"]',
+      );
+      assertSame(
+        JSON.stringify(expandVariants(asyncMetadata)),
+        '["non-strict","strict"]',
+      );
+      assertSame(JSON.stringify(expandVariants(moduleRawMetadata)), '["raw"]');
+      assertSame(JSON.stringify(resolveIncludes(moduleRawMetadata)), '[]');
+      assertSame(
+        JSON.stringify(
+          expandVariants(
+            parseTest262Metadata(
+              '/*---\ndescription: strict\nflags: [onlyStrict]\n---*/\n',
+            ),
+          ),
+        ),
+        '["strict"]',
+      );
+      assertSame(
+        JSON.stringify(
+          expandVariants(
+            parseTest262Metadata(
+              '/*---\ndescription: sloppy\nflags: [noStrict]\n---*/\n',
+            ),
+          ),
+        ),
+        '["non-strict"]',
+      );
+      assertThrows(
+        () =>
+          parseTest262Metadata(
+            '/*---\ndescription: raw async\nflags: [raw, async]\n---*/\n',
+          ),
+        Error,
+      );
     },
   },
   {
@@ -1065,6 +1598,44 @@ export default [
         summary.groups.reduce((total, group) => total + group.skipped, 0),
         1,
       );
+    },
+  },
+  {
+    name: 'broad Test262 result policy rejects skips and incomplete coverage',
+    run: () => {
+      const resultPasses = /** @type {any} */ (upstreamOperations)
+        .upstreamRunResultPasses;
+      assertSame(typeof resultPasses, 'function');
+
+      const summary = { total: 2, passed: 2, failed: 0, skipped: 0 };
+      const coverage = {
+        files: { selected: 1, attempted: 1, passed: 1 },
+        records: { selected: 2, attempted: 2, passed: 2 },
+      };
+      assertSame(resultPasses({ summary, coverage }), true);
+
+      for (const incomplete of [
+        {
+          summary: { ...summary, passed: 1, skipped: 1 },
+          coverage,
+        },
+        {
+          summary,
+          coverage: {
+            ...coverage,
+            files: { selected: 1, attempted: 0, passed: 0 },
+          },
+        },
+        {
+          summary,
+          coverage: {
+            ...coverage,
+            records: { selected: 2, attempted: 2, passed: 1 },
+          },
+        },
+      ]) {
+        assertSame(resultPasses(incomplete), false);
+      }
     },
   },
   {

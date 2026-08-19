@@ -55,28 +55,28 @@ export function createNumericGlobalIntrinsics(realm) {
     name: 'parseInt',
     length: 2,
     call(_thisValue, args) {
-      return parseIntegerLiteral(args[0], args[1]);
+      return parseIntegerLiteral(args[0], args[1], realm);
     },
   });
   const parseFloatFunction = realm.createNativeFunction({
     name: 'parseFloat',
     length: 1,
     call(_thisValue, args) {
-      return parseDecimalLiteral(args[0]);
+      return parseDecimalLiteral(args[0], realm);
     },
   });
   const isNaNFunction = realm.createNativeFunction({
     name: 'isNaN',
     length: 1,
     call(_thisValue, args) {
-      return Number.isNaN(toNumber(args[0]));
+      return Number.isNaN(toNumber(args[0], realm));
     },
   });
   const isFiniteFunction = realm.createNativeFunction({
     name: 'isFinite',
     length: 1,
     call(_thisValue, args) {
-      return Number.isFinite(toNumber(args[0]));
+      return Number.isFinite(toNumber(args[0], realm));
     },
   });
 
@@ -125,10 +125,11 @@ export function installNumericGlobals(globalObject, intrinsics) {
  *
  * @param {unknown} stringArgument
  * @param {unknown} radixArgument
+ * @param {Realm} realm
  * @returns {number}
  */
-function parseIntegerLiteral(stringArgument, radixArgument) {
-  const inputString = toString(stringArgument);
+function parseIntegerLiteral(stringArgument, radixArgument, realm) {
+  const inputString = toString(stringArgument, realm);
   let index = skipStrWhiteSpace(inputString, 0);
   let sign = 1;
 
@@ -143,7 +144,7 @@ function parseIntegerLiteral(stringArgument, radixArgument) {
     }
   }
 
-  let radix = toInt32(radixArgument);
+  let radix = toInt32(radixArgument, realm);
   let stripPrefix = true;
 
   if (radix === 0) {
@@ -193,10 +194,11 @@ function parseIntegerLiteral(stringArgument, radixArgument) {
  * mathematical value.
  *
  * @param {unknown} stringArgument
+ * @param {Realm} realm
  * @returns {number}
  */
-function parseDecimalLiteral(stringArgument) {
-  const inputString = toString(stringArgument);
+function parseDecimalLiteral(stringArgument, realm) {
+  const inputString = toString(stringArgument, realm);
   const start = skipStrWhiteSpace(inputString, 0);
   const end = scanStrDecimalLiteral(inputString, start);
 

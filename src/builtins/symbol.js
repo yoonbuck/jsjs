@@ -54,7 +54,7 @@ export function createSymbolIntrinsics(realm) {
       const description = args[0];
 
       return createSymbol(
-        description === undefined ? undefined : toString(description),
+        description === undefined ? undefined : toString(description, realm),
       );
     },
   });
@@ -82,7 +82,7 @@ export function createSymbolIntrinsics(realm) {
       name: 'for',
       length: 1,
       call(_thisValue, args) {
-        return agent.symbolFor(toString(args[0]));
+        return agent.symbolFor(toString(args[0], realm));
       },
     }),
   );

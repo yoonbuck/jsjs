@@ -10,16 +10,18 @@
  * API: it parses text and computes, so it is importable from any host and
  * testable without a checkout. The Node entry point `upstream-select.js` walks
  * the tree, parses each file with the engine's own `parseScript`, reads the
- * known-good subset, and hands this module strings, booleans, and that path set.
+ * known-good subset, and hands this module source facts and that path set.
  *
  * The policy expresses path-only structural filters as data — excluded
  * top-level directories, the allowed `test/built-ins/<name>` list, the excluded
  * `test/language/<dir>` list, and exact classified exclusions — plus a
- * `featureAreas` list that names, per directory prefix, exactly which Test262
- * `features:` tags the engine is willing to run there. Source-dependent
- * decisions ("source parses under the engine's supported grammar", "frontmatter
- * carries no `module` flag", and claimed feature tags) deliberately remain
- * separate, so a caller can eliminate impossible paths without reading them.
+ * `featureAreas` list that names, per directory or exact-file prefix, exactly
+ * which Test262 `features:` tags the engine is willing to run there. An exact
+ * file may claim an empty metadata list and may independently authorize
+ * generator syntax; directory claims may do neither. Source-dependent decisions
+ * ("source parses under the engine's supported grammar", "frontmatter carries no
+ * `module` flag", and claimed feature tags) deliberately remain separate, so a
+ * caller can eliminate impossible paths without reading them.
  *
  * `featureAreas` is what lets a post-ES5.1 feature the engine has actually
  * implemented earn coverage without reopening the whole tree. The
@@ -31,6 +33,7 @@
  */
 
 import { sortStrings } from './selection.js';
+import { assertPortableTest262Path } from './module-paths.js';
 import { UPSTREAM_SUBSET_VERSION } from './upstream.js';
 
 /** Repository-relative path to the policy, for messages and callers. */
@@ -71,6 +74,7 @@ const POLICY_KEYS = Object.freeze([
 const EXCLUSION_KEYS = Object.freeze(['path', 'prefix', 'category', 'reason']);
 
 const FEATURE_AREA_KEYS = Object.freeze(['prefix', 'features', 'reason']);
+const FEATURE_AREA_OPTIONAL_KEYS = Object.freeze(['generatorSyntax']);
 
 const TEST_ROOT = 'test/';
 
@@ -88,6 +92,7 @@ const EMPTY_PREVIOUSLY_SELECTED = new Set();
  * @typedef {{
  *   prefix: string,
  *   features: readonly string[],
+ *   generatorSyntax?: true,
  *   reason: string,
  * }} Es5FeatureArea
  *
@@ -105,6 +110,7 @@ const EMPTY_PREVIOUSLY_SELECTED = new Set();
  *   declaresFeatures: boolean,
  *   features: readonly string[],
  *   isModule: boolean,
+ *   usesGeneratorSyntax?: boolean,
  *   parsesUnderEngineGrammar: boolean,
  *   includesParseUnderEngineGrammar: boolean,
  * }} Es5CandidateInfo
@@ -268,6 +274,7 @@ function parseFeatureArea(entry) {
     record,
     FEATURE_AREA_KEYS,
     `${ES5_SELECTION_FILE} featureAreas entries`,
+    FEATURE_AREA_OPTIONAL_KEYS,
   );
 
   const { prefix } = record;
@@ -280,8 +287,23 @@ function parseFeatureArea(entry) {
 
   const features = parseStringList(record.features, `featureAreas ${prefix}`, {
     requireTestPrefix: false,
-    allowEmpty: false,
+    allowEmpty: prefix.endsWith('.js'),
   });
+
+  if (
+    Object.prototype.hasOwnProperty.call(record, 'generatorSyntax') &&
+    record.generatorSyntax !== true
+  ) {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas entry ${prefix} generatorSyntax must be true when present`,
+    );
+  }
+
+  if (record.generatorSyntax === true && !prefix.endsWith('.js')) {
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} featureAreas entry ${prefix} may authorize generator syntax only for an exact .js path`,
+    );
+  }
 
   if (typeof record.reason !== 'string' || record.reason.trim() === '') {
     throw new Es5SelectionError(
@@ -289,11 +311,20 @@ function parseFeatureArea(entry) {
     );
   }
 
-  return Object.freeze({
-    prefix,
-    features: Object.freeze(features),
-    reason: record.reason,
-  });
+  return Object.freeze(
+    record.generatorSyntax === true
+      ? {
+          prefix,
+          features: Object.freeze(features),
+          generatorSyntax: true,
+          reason: record.reason,
+        }
+      : {
+          prefix,
+          features: Object.freeze(features),
+          reason: record.reason,
+        },
+  );
 }
 
 /**
@@ -411,6 +442,17 @@ function parseExclusion(entry) {
   if (typeof target !== 'string' || target === '') {
     throw new Es5SelectionError(
       `${ES5_SELECTION_FILE} exclusion ${targetField} must be a non-empty string`,
+    );
+  }
+
+  try {
+    assertPortableTest262Path(target);
+  } catch (error) {
+    if (!(error instanceof TypeError) && !(error instanceof RangeError)) {
+      throw error;
+    }
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} exclusion ${targetField} ${target} must be a canonical repository-relative path`,
     );
   }
 
@@ -538,13 +580,15 @@ export function isStructurallyEligiblePath(path, policy) {
  * Whether a path and its source-derived information survive the selection
  * policy. Every known-good path is retained after the structural guards below.
  * A path outside that baseline must declare at least one `expansionFeatures`
- * tag and must be fully claimed by a matching **feature area**
+ * tag and must be fully claimed by a matching **feature area**, unless an
+ * exact-file area explicitly claims its empty pinned metadata
  * (`featureAreas` in the policy). Both halves matter. Requiring the expansion
  * tag keeps a grammar widening from dragging in newly parseable untagged tests
  * or unrelated tagged tests such as `Symbol.species`; requiring the prefix and
  * *every* declared tag keeps a test that also needs `cross-realm` or
- * `Symbol.matchAll` out. Every remaining file and harness include must parse
- * under the engine grammar.
+ * `Symbol.matchAll` out. Generator-bearing files and harness includes additionally
+ * require the including file's exact syntax authorization. Every remaining file
+ * and harness include must parse under the engine grammar.
  *
  * @param {string} path Repository-relative upstream path, e.g. `test/built-ins/Array/x.js`.
  * @param {Es5CandidateInfo} info
@@ -566,17 +610,45 @@ export function isCandidatePath(
     return false;
   }
 
+  if (
+    info.usesGeneratorSyntax === true &&
+    !isGeneratorSyntaxAuthorized(path, policy)
+  ) {
+    return false;
+  }
+
   if (!previouslySelected.has(path)) {
-    if (
-      !info.declaresFeatures ||
-      !info.features.some((name) => policy.expansionFeatures.includes(name)) ||
-      !isClaimedByFeatureArea(path, info, policy)
-    ) {
+    const claimedByArea = isClaimedByFeatureArea(path, info, policy);
+    const expandsTaggedFeature =
+      info.declaresFeatures &&
+      info.features.some((name) => policy.expansionFeatures.includes(name));
+    const isExactUntaggedClaim =
+      !info.declaresFeatures &&
+      policy.featureAreas.some(
+        (area) => area.prefix === path && info.features.length === 0,
+      );
+
+    if (!claimedByArea || (!expandsTaggedFeature && !isExactUntaggedClaim)) {
       return false;
     }
   }
 
   return info.parsesUnderEngineGrammar && info.includesParseUnderEngineGrammar;
+}
+
+/**
+ * Whether the policy authorizes generator grammar for exactly this test file.
+ * Metadata feature claims remain independent: directory areas and a
+ * `features: [generators]` entry do not grant syntax authorization.
+ *
+ * @param {string} path
+ * @param {Es5SelectionPolicy} policy
+ * @returns {boolean}
+ */
+export function isGeneratorSyntaxAuthorized(path, policy) {
+  return policy.featureAreas.some(
+    (area) => area.prefix === path && area.generatorSyntax === true,
+  );
 }
 
 /**
@@ -591,12 +663,8 @@ export function isCandidatePath(
  * @returns {boolean}
  */
 function isClaimedByFeatureArea(path, info, policy) {
-  if (info.features.length === 0) {
-    return false;
-  }
-
   for (const area of policy.featureAreas) {
-    if (path !== area.prefix && !path.startsWith(`${area.prefix}/`)) {
+    if (!featureAreaMatchesPath(path, area)) {
       continue;
     }
 
@@ -606,6 +674,21 @@ function isClaimedByFeatureArea(path, info, policy) {
   }
 
   return false;
+}
+
+/**
+ * Exact-file areas end in `.js` and match only equality. Directory areas match
+ * on a segment boundary.
+ *
+ * @param {string} path
+ * @param {Es5FeatureArea} area
+ * @returns {boolean}
+ */
+function featureAreaMatchesPath(path, area) {
+  return (
+    path === area.prefix ||
+    (!area.prefix.endsWith('.js') && path.startsWith(`${area.prefix}/`))
+  );
 }
 
 /**
@@ -799,11 +882,12 @@ function inlineShortPathArrays(json) {
  * @param {Record<string, unknown>} record
  * @param {readonly string[]} keys
  * @param {string} subject
+ * @param {readonly string[]} [optionalKeys]
  * @returns {void}
  */
-function requireExactKeys(record, keys, subject) {
+function requireExactKeys(record, keys, subject, optionalKeys = []) {
   for (const key of Object.keys(record)) {
-    if (!keys.includes(key)) {
+    if (!keys.includes(key) && !optionalKeys.includes(key)) {
       throw new Es5SelectionError(`${subject} carries an unknown key: ${key}`);
     }
   }

@@ -39,7 +39,9 @@ class BoundFunction extends NativeFunction {
    */
   constructor(realm, target, boundThis, boundArgs) {
     const targetLength =
-      target instanceof EngineObject ? toInteger(target.get('length')) : 0;
+      target instanceof EngineObject
+        ? toInteger(target.get('length', realm), realm)
+        : 0;
     const length =
       targetLength > boundArgs.length ? targetLength - boundArgs.length : 0;
     /** @type {import('./shared.js').NativeFunctionOptions['construct']} */
@@ -48,10 +50,11 @@ class BoundFunction extends NativeFunction {
     let boundFunction;
 
     if (isConstructor(target)) {
-      construct = (args, _functionObject, newTarget) => {
+      construct = (args, _functionObject, newTarget, callerRealm) => {
         const result = target.constructFunction(
           combineArguments(boundArgs, args),
           newTarget === boundFunction ? target : newTarget,
+          callerRealm ?? realm,
         );
 
         if (!(result instanceof EngineObject)) {
@@ -63,7 +66,7 @@ class BoundFunction extends NativeFunction {
     }
 
     const targetName =
-      target instanceof EngineObject ? target.get('name') : undefined;
+      target instanceof EngineObject ? target.get('name', realm) : undefined;
     const boundName = `bound ${typeof targetName === 'string' ? targetName : ''}`;
     const targetPrototype =
       target instanceof EngineObject
@@ -73,10 +76,11 @@ class BoundFunction extends NativeFunction {
     super(realm, {
       name: boundName,
       length,
-      call(_thisValue, args) {
+      call(_thisValue, args, _functionObject, callerRealm) {
         return target.callFunction(
           boundThis,
           combineArguments(boundArgs, args),
+          callerRealm ?? realm,
         );
       },
       construct,
@@ -215,7 +219,7 @@ export function createFunctionIntrinsics(realm) {
     functionPrototype,
     'apply',
     2,
-    (thisValue, args) => {
+    (thisValue, args, _functionObject, callerRealm) => {
       const target = requireCallable(
         thisValue,
         'Function.prototype.apply receiver is not callable',
@@ -230,23 +234,35 @@ export function createFunctionIntrinsics(realm) {
                 argumentArray,
                 'Function.prototype.apply arguments must be an object',
               ),
+              {},
+              realm,
             );
-      return target.callFunction(thisArgument, callArguments);
+      return target.callFunction(
+        thisArgument,
+        callArguments,
+        callerRealm ?? realm,
+      );
     },
   );
-  defineNativeMethod(realm, functionPrototype, 'call', 1, (thisValue, args) => {
-    const target = requireCallable(
-      thisValue,
-      'Function.prototype.call receiver is not callable',
-    );
-    const callArguments = [];
+  defineNativeMethod(
+    realm,
+    functionPrototype,
+    'call',
+    1,
+    (thisValue, args, _functionObject, callerRealm) => {
+      const target = requireCallable(
+        thisValue,
+        'Function.prototype.call receiver is not callable',
+      );
+      const callArguments = [];
 
-    for (let index = 1; index < args.length; index += 1) {
-      callArguments.push(args[index]);
-    }
+      for (let index = 1; index < args.length; index += 1) {
+        callArguments.push(args[index]);
+      }
 
-    return target.callFunction(args[0], callArguments);
-  });
+      return target.callFunction(args[0], callArguments, callerRealm ?? realm);
+    },
+  );
   defineNativeMethod(realm, functionPrototype, 'bind', 1, (thisValue, args) => {
     const target = requireCallable(
       thisValue,

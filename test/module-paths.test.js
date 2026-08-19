@@ -84,14 +84,6 @@ export default [
         assertSame(error.message.includes('encoded'), true);
       }
 
-      assertSame(
-        resolveTest262ModulePath(
-          './literal%25name.js',
-          'test/language/module-code/root.js',
-        ),
-        'test/language/module-code/literal%25name.js',
-      );
-
       const encodedReferrer = captureError(() =>
         resolveTest262ModulePath(
           './child.js',
@@ -99,6 +91,54 @@ export default [
         ),
       );
       assertSame(encodedReferrer.message.includes('encoded'), true);
+    },
+  },
+  {
+    name: 'portable module paths reject URL-sensitive identifier characters',
+    run: () => {
+      for (const [specifier, referrer] of [
+        ['./literal%name.js', 'test/language/module-code/root.js'],
+        ['./literal%25name.js', 'test/language/module-code/root.js'],
+        ['./child.js?query', 'test/language/module-code/root.js'],
+        ['./child.js#fragment', 'test/language/module-code/root.js'],
+        ['../../file:/outside.js', 'test/language/root.js'],
+        ['../../C|/outside.js', 'test/language/root.js'],
+        ['./child.js', 'test/language/module-code/root.js?query'],
+        ['./child.js', 'test/language/module-code/root.js#fragment'],
+      ]) {
+        const error = captureError(() =>
+          resolveTest262ModulePath(specifier, referrer),
+        );
+        assertSame(error.message.includes('URL-sensitive'), true);
+      }
+    },
+  },
+  {
+    name: 'portable module paths reject URL-stripped control whitespace',
+    run: () => {
+      for (const control of ['\t', '\n', '\r']) {
+        const error = captureError(() =>
+          resolveTest262ModulePath(
+            `./dependency${control}name_FIXTURE.js`,
+            'test/language/module-code/root.js',
+          ),
+        );
+        assertSame(error.message.includes('URL-sensitive'), true);
+      }
+    },
+  },
+  {
+    name: 'portable module paths reject literal backslashes before normalization',
+    run: () => {
+      for (const [specifier, referrer] of [
+        ['./nested\\child.js', 'test/language/module-code/root.js'],
+        ['./child.js', 'test\\language/module-code/root.js'],
+      ]) {
+        const error = captureError(() =>
+          resolveTest262ModulePath(specifier, referrer),
+        );
+        assertSame(error.message.includes('literal backslashes'), true);
+      }
     },
   },
 ];

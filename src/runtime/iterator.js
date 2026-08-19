@@ -8,9 +8,10 @@
  * §7.4 threads through the operations: `iterator` is the guest iterator object,
  * `nextMethod` is the `next` function looked up once when the record is created
  * (so a later redefinition of `next` cannot be observed mid-iteration), and
- * `done` records whether the record's consumer has already stopped — which is
- * what keeps `IteratorClose` from calling `return` on an iterator that has
- * already reported completion.
+ * `done` records whether the record's consumer has already stopped. The
+ * executing Agent is retained too, so a later `next`/`return`/`throw` after a
+ * suspension can transiently relink the actual iterator's Agent to the new
+ * synchronous generator chain.
  *
  * Nothing in this module reaches into the host: it calls guest functions
  * through `callFunction`, reads guest properties through `[[Get]]`, and reports
@@ -29,6 +30,7 @@ import { toBoolean, toObject } from './conversion.js';
 
 /**
  * @typedef {import('./realm.js').Realm} Realm
+ * @typedef {import('./agent.js').Agent} Agent
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
  * @typedef {import('./descriptors.js').CallableLike} CallableLike
  *
@@ -36,6 +38,7 @@ import { toBoolean, toObject } from './conversion.js';
  *   iterator: EngineObject,
  *   nextMethod: unknown,
  *   done: boolean,
+ *   realm?: Realm,
  * }} IteratorRecord
  */
 
@@ -54,7 +57,10 @@ import { toBoolean, toObject } from './conversion.js';
 export function getMethod(realm, value, key) {
   const receiver =
     value instanceof EngineObject ? value : toObject(realm, value);
-  const func = receiver.get(key);
+
+  linkGeneratorHostChainToAgent(realm.agent, receiver.agent);
+  const func = receiver.get(key, realm);
+  linkGeneratorHostChainToValue(realm.agent, func);
 
   if (func === undefined || func === null) {
     return undefined;
@@ -113,20 +119,21 @@ export function createIterResultObject(realm, value, done) {
  * @returns {IteratorRecord}
  */
 export function getIterator(realm, obj, method) {
+  /** @type {unknown} */
   let iteratorMethod = method;
+  const iterableAgent = obj instanceof EngineObject ? obj.agent : realm.agent;
+
+  linkGeneratorHostChainToAgent(realm.agent, iterableAgent);
 
   if (iteratorMethod === undefined) {
-    const iteratorAgent = obj instanceof EngineObject ? obj.agent : realm.agent;
-
-    if (iteratorAgent === null) {
+    if (iterableAgent === null) {
       throw new TypeError('EngineObject protocol lookup requires an agent');
     }
 
-    iteratorMethod = getMethod(
-      realm,
-      obj,
-      iteratorAgent.wellKnownSymbols.iterator,
-    );
+    iteratorMethod =
+      obj instanceof EngineObject
+        ? obj.getWellKnownSymbol('iterator', realm)
+        : getMethod(realm, obj, iterableAgent.wellKnownSymbols.iterator);
   }
 
   if (iteratorMethod === undefined || !isCallable(iteratorMethod)) {
@@ -136,7 +143,8 @@ export function getIterator(realm, obj, method) {
     );
   }
 
-  const iterator = iteratorMethod.callFunction(obj, []);
+  linkGeneratorHostChainToValue(realm.agent, iteratorMethod);
+  const iterator = iteratorMethod.callFunction(obj, [], realm);
 
   if (!(iterator instanceof EngineObject)) {
     throw new GuestErrorSignal(
@@ -145,7 +153,16 @@ export function getIterator(realm, obj, method) {
     );
   }
 
-  return { iterator, nextMethod: iterator.get('next'), done: false };
+  linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
+  const nextMethod = iterator.get('next', realm);
+
+  linkGeneratorHostChainToValue(realm.agent, nextMethod);
+  return {
+    iterator,
+    nextMethod,
+    done: false,
+    realm,
+  };
 }
 
 /**
@@ -157,21 +174,34 @@ export function getIterator(realm, obj, method) {
  * @param {unknown} method
  * @param {{ value: unknown }} [sent] The value to forward to `next`, wrapped so
  *   forwarding `undefined` stays distinguishable from forwarding nothing.
+ * @param {Realm} [callerRealm]
  * @returns {EngineObject}
  */
-export function iteratorNextWithMethod(iterator, method, sent) {
+export function iteratorNextWithMethod(iterator, method, sent, callerRealm) {
   if (!isCallable(method)) {
     throw new GuestErrorSignal('TypeError', 'iterator.next is not a function');
   }
 
   const iteratorMethod = /** @type {CallableLike} */ (method);
+  const activeAgent = callerRealm?.agent ?? iterator.agent ?? undefined;
+
+  if (activeAgent !== undefined) {
+    linkGeneratorHostChainToAgent(activeAgent, iterator.agent);
+    linkGeneratorHostChainToValue(activeAgent, iteratorMethod);
+  }
+
   const result = iteratorMethod.callFunction(
     iterator,
     sent === undefined ? [] : [sent.value],
+    callerRealm,
   );
 
   if (!(result instanceof EngineObject)) {
     throw new GuestErrorSignal('TypeError', 'Iterator result is not an object');
+  }
+
+  if (activeAgent !== undefined) {
+    linkGeneratorHostChainToAgent(activeAgent, result.agent);
   }
 
   return result;
@@ -187,27 +217,40 @@ export function iteratorNextWithMethod(iterator, method, sent) {
  * @returns {EngineObject}
  */
 export function iteratorNext(record, sent) {
-  return iteratorNextWithMethod(record.iterator, record.nextMethod, sent);
+  return iteratorNextWithMethod(
+    record.iterator,
+    record.nextMethod,
+    sent,
+    record.realm,
+  );
 }
 
 /**
  * ECMA-262 §7.4.3 `IteratorComplete ( iterResult )`.
  *
  * @param {EngineObject} result
+ * @param {Realm} [realm]
  * @returns {boolean}
  */
-export function iteratorComplete(result) {
-  return toBoolean(result.get('done'));
+export function iteratorComplete(result, realm) {
+  return toBoolean(result.get('done', realm));
 }
 
 /**
  * ECMA-262 §7.4.4 `IteratorValue ( iterResult )`.
  *
  * @param {EngineObject} result
+ * @param {Realm} [realm]
  * @returns {unknown}
  */
-export function iteratorValue(result) {
-  return result.get('value');
+export function iteratorValue(result, realm) {
+  const value = result.get('value', realm);
+
+  if (realm !== undefined) {
+    linkGeneratorHostChainToValue(realm.agent, value);
+  }
+
+  return value;
 }
 
 /**
@@ -220,7 +263,7 @@ export function iteratorValue(result) {
 export function iteratorStep(record) {
   const result = iteratorNext(record);
 
-  return iteratorComplete(result) ? false : result;
+  return iteratorComplete(result, record.realm) ? false : result;
 }
 
 /**
@@ -252,6 +295,7 @@ export function iteratorClose(realm, record, completionIsThrow) {
   let innerThrew = false;
 
   try {
+    linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
     const returnMethod = getMethod(realm, iterator, 'return');
 
     if (returnMethod === undefined) {
@@ -260,7 +304,8 @@ export function iteratorClose(realm, record, completionIsThrow) {
       return;
     }
 
-    innerValue = returnMethod.callFunction(iterator, []);
+    linkGeneratorHostChainToValue(realm.agent, returnMethod);
+    innerValue = returnMethod.callFunction(iterator, [], realm);
   } catch (error) {
     innerThrew = true;
     innerError = error;
@@ -308,4 +353,26 @@ function describeValue(value) {
   }
 
   return typeof value === 'symbol' ? String(value) : String(value);
+}
+
+/**
+ * @param {Agent} callerAgent
+ * @param {Agent | null} targetAgent
+ * @returns {void}
+ */
+function linkGeneratorHostChainToAgent(callerAgent, targetAgent) {
+  if (targetAgent !== null && targetAgent !== callerAgent) {
+    callerAgent.linkGeneratorHostChain(targetAgent);
+  }
+}
+
+/**
+ * @param {Agent} callerAgent
+ * @param {unknown} value
+ * @returns {void}
+ */
+function linkGeneratorHostChainToValue(callerAgent, value) {
+  if (value instanceof EngineObject) {
+    linkGeneratorHostChainToAgent(callerAgent, value.agent);
+  }
 }

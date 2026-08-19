@@ -157,17 +157,49 @@ export default [
 
       linkModuleGraph(record);
       const namespace = record.getNamespace();
+      const inheritor = new EngineObject(
+        namespace,
+        'Object',
+        record.realm.agent,
+      );
 
+      assertSame(namespace.hasProperty('value'), true);
+      assertSame(namespace.hasProperty('missing'), false);
+      assertSame(inheritor.hasProperty('value'), true);
       assertThrows(() => namespace.get('value'), GuestErrorSignal);
       evaluateModuleGraph(record);
       assertSame(namespace.get('value'), 1);
     },
   },
   {
+    name: 'deep star-export namespaces resolve without consuming host stack',
+    async run() {
+      const depth = 4000;
+      /** @type {Record<string, string>} */
+      const sources = {
+        entry:
+          'import * as deep from "module-0"; export const observed = deep.value;',
+        [`module-${depth}`]: 'export const value = 42;',
+      };
+      for (let index = depth - 1; index >= 0; index -= 1) {
+        sources[`module-${index}`] = `export * from "module-${index + 1}";`;
+      }
+
+      const loader = loaderFor(sources);
+      const entry = await loader.loadAndEvaluate('entry');
+      const deep = await loader.loadAndEvaluate('module-0');
+
+      assertSame(entry.get('observed'), 42);
+      assertSame(deep.get('value'), 42);
+      assertSame(await loader.loadAndEvaluate('module-0'), deep);
+    },
+  },
+  {
     name: 'namespace imports and reexports preserve target namespace identity',
     async run() {
       const loader = loaderFor({
-        entry: 'import * as ns from "dep"; export { ns };',
+        entry:
+          'import * as ns from "dep"; import * as same from "dep"; export { ns, same };',
         reexport: 'import { ns } from "entry"; export { ns as forwarded };',
         dep: 'export const value = 1;',
       });
@@ -177,9 +209,34 @@ export default [
       const dependency = await loader.loadAndEvaluate('dep');
 
       assertSame(entry.get('ns'), dependency);
+      assertSame(entry.get('same'), dependency);
+      assertSame(entry.get('ns'), entry.get('ns'));
       assertSame(reexport.get('forwarded'), dependency);
       assertSame(entry, await loader.loadAndEvaluate('entry'));
       assertSame(reexport, await loader.loadAndEvaluate('reexport'));
+    },
+  },
+  {
+    name: 'namespace omits namespace-import local exports that are ambiguous across intermediaries',
+    async run() {
+      const loader = loaderFor({
+        root: 'export * from "left"; export * from "right";',
+        left: 'import * as ns from "dep"; export { ns };',
+        right: 'import * as ns from "dep"; export { ns };',
+        dep: 'export const value = 1;',
+      });
+
+      const root = await loader.loadAndEvaluate('root');
+      const left = await loader.loadAndEvaluate('left');
+      const right = await loader.loadAndEvaluate('right');
+      const dependency = await loader.loadAndEvaluate('dep');
+
+      assertSame(root.hasProperty('ns'), false);
+      assertSame(root.getOwnProperty('ns'), undefined);
+      assertSame(root.get('ns'), undefined);
+      assertSame(left.get('ns'), dependency);
+      assertSame(right.get('ns'), dependency);
+      assertSame(dependency, await loader.loadAndEvaluate('dep'));
     },
   },
   {
@@ -200,6 +257,116 @@ export default [
       assertSame(keys, 'leftOnly,rightOnly');
       assertSame(namespace.getOwnProperty('shared'), undefined);
       assertSame(namespace.get('shared'), undefined);
+    },
+  },
+  {
+    name: 'namespace creation and named imports resolve a renamed star cycle',
+    async run() {
+      const realm = createRealm();
+      const cycle = {
+        root: 'export * from "A";',
+        A: 'export * from "D";',
+        D: 'export { y as x } from "A"; export const y = 1;',
+      };
+      const cycleLoader = loaderFor(cycle, realm);
+      const namespace = await cycleLoader.loadAndEvaluate('root');
+      const repeatedNamespace = await cycleLoader.loadAndEvaluate('root');
+
+      assertSame(namespace.get('x'), 1);
+      assertSame(repeatedNamespace, namespace);
+
+      const imported = await loaderFor(
+        {
+          entry: 'import { x } from "root"; export const observed = x;',
+          ...cycle,
+        },
+        realm,
+      ).loadAndEvaluate('entry');
+
+      assertSame(imported.get('observed'), 1);
+    },
+  },
+  {
+    name: 'unused namespace imports cache renamed star-cycle success',
+    async run() {
+      const realm = createRealm();
+      const sources = {
+        entry: 'import * as ns from "A"; export const reached = true;',
+        A: 'export * from "D";',
+        D: 'export { y as x } from "A"; export const y = 1;',
+      };
+      const loader = loaderFor(sources, realm);
+      const first = await loader.loadAndEvaluate('entry');
+      const second = await loader.loadAndEvaluate('entry');
+      const concurrentLoader = loaderFor(sources, realm);
+      const [concurrentFirst, concurrentSecond] = await Promise.all([
+        concurrentLoader.loadAndEvaluate('entry'),
+        concurrentLoader.loadAndEvaluate('entry'),
+      ]);
+
+      assertSame(first.get('reached'), true);
+      assertSame(second, first);
+      assertSame(concurrentFirst.get('reached'), true);
+      assertSame(concurrentSecond, concurrentFirst);
+    },
+  },
+  {
+    name: 'namespace instantiation retains earlier namespaces across renamed star cycles',
+    async run() {
+      const loader = loaderFor({
+        entry:
+          'import * as valid from "valid"; import * as renamed from "A"; export const total = valid.value + renamed.x;',
+        valid: 'export const value = 1;',
+        A: 'export * from "D";',
+        D: 'export { y as x } from "A"; export const y = 1;',
+      });
+      const entry = await loadModuleGraph(loader, 'entry');
+      const valid = entry.resolvedRequestedModules[0].module;
+      const namespace = await loader.loadAndEvaluate('entry');
+
+      assertSame(namespace.get('total'), 2);
+      assertSame(valid.getNamespace().get('value'), 1);
+    },
+  },
+  {
+    name: 'used namespace imports expose renamed star-cycle bindings',
+    async run() {
+      const realm = createRealm();
+      realm.globalObject.defineOwnProperty('bodyRuns', {
+        value: 0,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const namespace = await loaderFor(
+        {
+          entry:
+            'import * as ns from "A"; bodyRuns += 1; export const observed = ns.x;',
+          A: 'export * from "D";',
+          D: 'export { y as x } from "A"; export const y = 1;',
+        },
+        realm,
+      ).loadAndEvaluate('entry');
+
+      assertSame(namespace.get('observed'), 1);
+      assertSame(realm.globalObject.get('bodyRuns'), 1);
+    },
+  },
+  {
+    name: 'cyclic namespace imports instantiate after their complete SCC is linked',
+    async run() {
+      const loader = loaderFor({
+        a: 'import * as b from "b"; export const value = "a"; export function readB() { return b.value; }',
+        b: 'import * as a from "a"; export const value = "b"; export function readA() { return a.value; }',
+      });
+
+      const a = await loader.loadAndEvaluate('a');
+      const b = await loader.loadAndEvaluate('b');
+
+      assertSame(a.get('readB').callFunction(undefined, []), 'b');
+      assertSame(b.get('readA').callFunction(undefined, []), 'a');
+      assertSame(await loader.loadAndEvaluate('a'), a);
+      assertSame(await loader.loadAndEvaluate('b'), b);
     },
   },
   {

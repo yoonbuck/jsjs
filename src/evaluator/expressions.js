@@ -1,14 +1,15 @@
 import {
   Reference,
   getValue,
+  linkValueToGeneratorHostChain,
   putValue,
   isEnvironmentRecord,
 } from '../runtime/reference.js';
 import {
   getIdentifierBindingValue,
   getIdentifierReference,
+  getSuperBase,
   getThisBinding,
-  getSuperHomeObject,
   newDeclarativeEnvironment,
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
@@ -80,7 +81,7 @@ import {
  *   | { kind: 'member', baseValue: unknown, propertyValue: unknown }
  *   | {
  *       kind: 'superMember',
- *       homeObject: EngineObject,
+ *       superBase: EngineObject | null,
  *       thisValue: unknown,
  *       propertyValue: unknown,
  *     }
@@ -252,11 +253,22 @@ export function evaluateExpressionValue(node, context) {
     guard.enter();
     guard.exit();
 
-    return getIdentifierBindingValue(context.env, node.name, context.strict);
+    return linkValueToGeneratorHostChain(
+      context.realm,
+      getIdentifierBindingValue(
+        context.env,
+        node.name,
+        context.strict,
+        context.realm,
+      ),
+    );
   }
 
   const result = evaluateExpression(node, context);
-  return result instanceof Reference ? getValue(result) : result;
+  return linkValueToGeneratorHostChain(
+    context.realm,
+    result instanceof Reference ? getValue(result, context.realm) : result,
+  );
 }
 
 /**
@@ -284,11 +296,14 @@ export function prepareAssignmentTarget(target, context) {
   }
 
   if (target.object.type === 'Super') {
+    const thisValue = getContextThisBinding(context);
+    const propertyValue = evaluateMemberPropertyValue(target, context);
+    const superBase = getSuperBase(context.functionEnvironment);
     return {
       kind: 'superMember',
-      homeObject: getSuperHomeObject(context.functionEnvironment),
-      thisValue: getContextThisBinding(context),
-      propertyValue: evaluateMemberPropertyValue(target, context),
+      superBase,
+      thisValue,
+      propertyValue,
     };
   }
 
@@ -311,7 +326,7 @@ export function prepareAssignmentTarget(target, context) {
 export function applyPreparedAssignmentTarget(prepared, value, context) {
   switch (prepared.kind) {
     case 'reference':
-      putValue(prepared.reference, value);
+      putValue(prepared.reference, value, context.realm);
       return;
     case 'member':
       putValue(
@@ -321,17 +336,19 @@ export function applyPreparedAssignmentTarget(prepared, value, context) {
           context,
         ),
         value,
+        context.realm,
       );
       return;
     case 'superMember':
       putValue(
         createSuperMemberReference(
-          prepared.homeObject,
+          prepared.superBase,
           prepared.thisValue,
           prepared.propertyValue,
           context,
         ),
         value,
+        context.realm,
       );
       return;
   }
@@ -393,13 +410,22 @@ function evaluateUnaryExpression(node, context) {
     case '!':
       return !toBoolean(evaluateExpressionValue(node.argument, context));
     case '-':
-      return -toNumber(evaluateExpressionValue(node.argument, context));
+      return -toNumber(
+        evaluateExpressionValue(node.argument, context),
+        context.realm,
+      );
     case '+':
-      return toNumber(evaluateExpressionValue(node.argument, context));
+      return toNumber(
+        evaluateExpressionValue(node.argument, context),
+        context.realm,
+      );
     case '~':
       // ECMA-262 5.1 §11.4.8: ~ applies the bitwise complement to the
       // operand's ToInt32 value, matching the binary bitwise operators.
-      return ~toInt32(evaluateExpressionValue(node.argument, context));
+      return ~toInt32(
+        evaluateExpressionValue(node.argument, context),
+        context.realm,
+      );
     default:
       throw createUnsupportedOperatorError('unary', node.operator);
   }
@@ -464,7 +490,7 @@ function evaluateTypeofExpression(argument, context) {
       return 'undefined';
     }
 
-    return typeOf(getValue(reference));
+    return typeOf(getValue(reference, context.realm));
   }
 
   return typeOf(evaluateExpressionValue(argument, context));
@@ -478,54 +504,55 @@ function evaluateTypeofExpression(argument, context) {
  * @param {string} operator
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('../runtime/realm.js').Realm} realm
  * @returns {unknown}
  */
-function applyBinaryOperator(operator, left, right) {
+function applyBinaryOperator(operator, left, right, realm) {
   switch (operator) {
     case '+':
-      return add(left, right);
+      return add(left, right, realm);
     case '-':
-      return subtract(left, right);
+      return subtract(left, right, realm);
     case '*':
-      return multiply(left, right);
+      return multiply(left, right, realm);
     case '/':
-      return divide(left, right);
+      return divide(left, right, realm);
     case '%':
-      return remainder(left, right);
+      return remainder(left, right, realm);
     case '==':
-      return abstractEqualityComparison(left, right);
+      return abstractEqualityComparison(left, right, realm);
     case '!=':
-      return !abstractEqualityComparison(left, right);
+      return !abstractEqualityComparison(left, right, realm);
     case '===':
       return strictEqualityComparison(left, right);
     case '!==':
       return !strictEqualityComparison(left, right);
     case '<': {
-      const result = abstractRelationalComparison(left, right, true);
+      const result = abstractRelationalComparison(left, right, true, realm);
       return result === undefined ? false : result;
     }
     case '>': {
-      const result = abstractRelationalComparison(right, left, false);
+      const result = abstractRelationalComparison(right, left, false, realm);
       return result === undefined ? false : result;
     }
     case '<=': {
-      const result = abstractRelationalComparison(right, left, false);
+      const result = abstractRelationalComparison(right, left, false, realm);
       return result === undefined || result === true ? false : true;
     }
     case '>=': {
-      const result = abstractRelationalComparison(left, right, true);
+      const result = abstractRelationalComparison(left, right, true, realm);
       return result === undefined || result === true ? false : true;
     }
     case '<<':
-      return leftShift(left, right);
+      return leftShift(left, right, realm);
     case '>>':
-      return signedRightShift(left, right);
+      return signedRightShift(left, right, realm);
     case '>>>':
-      return unsignedRightShift(left, right);
+      return unsignedRightShift(left, right, realm);
     case '&':
-      return bitwiseAND(left, right);
+      return bitwiseAND(left, right, realm);
     case '^':
-      return bitwiseXOR(left, right);
+      return bitwiseXOR(left, right, realm);
     case 'in': {
       // ES5 11.8.7 step 5: check RHS type BEFORE any key coercion on the
       // LHS, so a guest toString/valueOf on the LHS cannot run or override
@@ -537,7 +564,7 @@ function applyBinaryOperator(operator, left, right) {
         );
       }
 
-      return right.hasProperty(toPropertyKey(left));
+      return right.hasProperty(toPropertyKey(left, realm));
     }
     case 'instanceof': {
       if (!(right instanceof EngineObject)) {
@@ -558,7 +585,7 @@ function applyBinaryOperator(operator, left, right) {
     }
     default:
       // '|'
-      return bitwiseOR(left, right);
+      return bitwiseOR(left, right, realm);
   }
 }
 
@@ -577,7 +604,7 @@ function evaluateBinaryExpression(node, context) {
   const left = evaluateExpressionValue(node.left, context);
   const right = evaluateExpressionValue(node.right, context);
 
-  return applyBinaryOperator(operator, left, right);
+  return applyBinaryOperator(operator, left, right, context.realm);
 }
 
 /**
@@ -648,7 +675,7 @@ function evaluateAssignmentExpression(node, context) {
       node.left.type === 'Identifier'
         ? evaluateNamedExpression(node.right, context, node.left.name)
         : evaluateExpressionValue(node.right, context);
-    putValue(reference, value);
+    putValue(reference, value, context.realm);
     return value;
   }
 
@@ -659,10 +686,15 @@ function evaluateAssignmentExpression(node, context) {
     throw createUnsupportedOperatorError('assignment', node.operator);
   }
 
-  const leftValue = getValue(reference);
+  const leftValue = getValue(reference, context.realm);
   const rightValue = evaluateExpressionValue(node.right, context);
-  const result = applyBinaryOperator(binaryOperator, leftValue, rightValue);
-  putValue(reference, result);
+  const result = applyBinaryOperator(
+    binaryOperator,
+    leftValue,
+    rightValue,
+    context.realm,
+  );
+  putValue(reference, result, context.realm);
   return result;
 }
 
@@ -687,9 +719,9 @@ function evaluateUpdateExpression(node, context) {
   const reference = /** @type {Reference} */ (
     evaluateExpression(node.argument, context)
   );
-  const oldValue = toNumber(getValue(reference));
+  const oldValue = toNumber(getValue(reference, context.realm), context.realm);
   const newValue = node.operator === '++' ? oldValue + 1 : oldValue - 1;
-  putValue(reference, newValue);
+  putValue(reference, newValue, context.realm);
   return node.prefix ? newValue : oldValue;
 }
 
@@ -720,7 +752,7 @@ function evaluateCallExpression(node, context) {
   const calleeReference = evaluateExpression(node.callee, context);
   const callee =
     calleeReference instanceof Reference
-      ? getValue(calleeReference)
+      ? getValue(calleeReference, context.realm)
       : calleeReference;
   const thisValue = referenceThisValue(calleeReference);
   const args = evaluateArguments(node.arguments, context);
@@ -738,7 +770,7 @@ function evaluateCallExpression(node, context) {
 
   return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
     callee
-  ).callFunction(thisValue, args);
+  ).callFunction(thisValue, args, context.realm);
 }
 
 /**
@@ -833,6 +865,7 @@ function evaluateTemplateLiteral(node, context) {
   for (let index = 0; index < node.expressions.length; index += 1) {
     value += toString(
       evaluateExpressionValue(node.expressions[index], context),
+      context.realm,
     );
     value += requiredCookedTemplateValue(node.quasis[index + 1]);
   }
@@ -852,7 +885,9 @@ function evaluateTemplateLiteral(node, context) {
 function evaluateTaggedTemplateExpression(node, context) {
   const tagReference = evaluateExpression(node.tag, context);
   const tag =
-    tagReference instanceof Reference ? getValue(tagReference) : tagReference;
+    tagReference instanceof Reference
+      ? getValue(tagReference, context.realm)
+      : tagReference;
   const thisValue = referenceThisValue(tagReference);
   /** @type {unknown[]} */
   const args = [context.realm.getTemplateObject(node.quasi)];
@@ -870,7 +905,7 @@ function evaluateTaggedTemplateExpression(node, context) {
 
   return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
     tag
-  ).callFunction(thisValue, args);
+  ).callFunction(thisValue, args, context.realm);
 }
 
 /**
@@ -910,7 +945,11 @@ function evaluateNewExpression(node, context) {
     );
   }
 
-  return /** @type {any} */ (callee).constructFunction(args);
+  return /** @type {any} */ (callee).constructFunction(
+    args,
+    callee,
+    context.realm,
+  );
 }
 
 /**
@@ -1050,12 +1089,12 @@ function evaluateMemberExpression(node, context) {
  * @returns {Reference}
  */
 function evaluateSuperMemberExpression(node, context) {
-  const homeObject = getSuperHomeObject(context.functionEnvironment);
   const thisValue = getContextThisBinding(context);
   const propertyValue = evaluateMemberPropertyValue(node, context);
+  const superBase = getSuperBase(context.functionEnvironment);
 
   return createSuperMemberReference(
-    homeObject,
+    superBase,
     thisValue,
     propertyValue,
     context,
@@ -1080,32 +1119,38 @@ function evaluateMemberPropertyValue(node, context) {
  * @returns {Reference}
  */
 function createOrdinaryMemberReference(baseValue, propertyValue, context) {
+  linkValueToGeneratorHostChain(context.realm, baseValue);
+  linkValueToGeneratorHostChain(context.realm, propertyValue);
   checkObjectCoercible(baseValue);
 
   return new Reference(
     toObjectBase(context.realm, baseValue),
-    toPropertyKey(propertyValue),
+    toPropertyKey(propertyValue, context.realm),
     context.strict,
     baseValue,
   );
 }
 
 /**
- * @param {EngineObject} homeObject
+ * @param {EngineObject | null} superBase
  * @param {unknown} thisValue
  * @param {unknown} propertyValue
  * @param {EvaluationContext} context
  * @returns {Reference}
  */
 function createSuperMemberReference(
-  homeObject,
+  superBase,
   thisValue,
   propertyValue,
   context,
 ) {
+  linkValueToGeneratorHostChain(context.realm, superBase);
+  linkValueToGeneratorHostChain(context.realm, thisValue);
+  linkValueToGeneratorHostChain(context.realm, propertyValue);
+
   return new Reference(
-    new SuperReferenceBase(homeObject, thisValue),
-    toPropertyKey(propertyValue),
+    new SuperReferenceBase(superBase, thisValue),
+    toPropertyKey(propertyValue, context.realm),
     context.strict,
     thisValue,
   );

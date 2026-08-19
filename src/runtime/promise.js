@@ -34,7 +34,7 @@ export class PromiseObject extends EngineObject {
    * @param {EngineObject | null} prototype
    */
   constructor(realm, prototype) {
-    super(prototype);
+    super(prototype, 'Object', realm.agent);
     this.realm = realm;
     /** @type {'pending' | 'fulfilled' | 'rejected'} */
     this.promiseState = 'pending';
@@ -85,7 +85,11 @@ export function newPromiseCapability(constructor, currentRealm) {
       return undefined;
     },
   });
-  const promise = constructor.constructFunction([executor]);
+  const promise = constructor.constructFunction(
+    [executor],
+    constructor,
+    currentRealm,
+  );
 
   if (!(promise instanceof EngineObject)) {
     throw new GuestErrorSignal(
@@ -129,12 +133,7 @@ export function performPromiseAll(
     try {
       next = iteratorStep(iteratorRecord);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     if (next === false) {
@@ -148,14 +147,9 @@ export function performPromiseAll(
     /** @type {unknown} */
     let nextValue;
     try {
-      nextValue = iteratorValue(next);
+      nextValue = iteratorValue(next, currentRealm);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     values.defineOwnProperty(String(index), {
@@ -174,7 +168,7 @@ export function performPromiseAll(
     remainingElementsCount.value += 1;
 
     try {
-      const nextPromise = promiseResolve(constructor, nextValue);
+      const nextPromise = promiseResolve(constructor, nextValue, currentRealm);
       invokeThen(
         currentRealm,
         nextPromise,
@@ -216,12 +210,7 @@ export function performPromiseRace(
     try {
       next = iteratorStep(iteratorRecord);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     if (next === false) {
@@ -231,18 +220,13 @@ export function performPromiseRace(
     /** @type {unknown} */
     let nextValue;
     try {
-      nextValue = iteratorValue(next);
+      nextValue = iteratorValue(next, currentRealm);
     } catch (error) {
-      return rejectAfterIteratorClose(
-        currentRealm,
-        iteratorRecord,
-        resultCapability,
-        error,
-      );
+      return rejectPromiseCapability(currentRealm, resultCapability, error);
     }
 
     try {
-      const nextPromise = promiseResolve(constructor, nextValue);
+      const nextPromise = promiseResolve(constructor, nextValue, currentRealm);
       invokeThen(
         currentRealm,
         nextPromise,
@@ -291,7 +275,8 @@ export function performPromiseThen(
     promise.promiseRejectReactions.push(rejectReaction);
     markPromiseHandled(promise);
   } else if (promise.promiseState === 'fulfilled') {
-    promise.realm.agent.enqueueJob(
+    enqueuePromiseJob(
+      promise.realm.agent,
       newPromiseReactionJob(
         fulfillReaction,
         promise.promiseResult,
@@ -347,7 +332,11 @@ export function newPromiseReactionJob(reaction, argument, currentRealm) {
       }
 
       try {
-        handlerResult = reaction.handler.callFunction(undefined, [argument]);
+        handlerResult = reaction.handler.callFunction(
+          undefined,
+          [argument],
+          /** @type {Realm} */ (jobRealm ?? currentRealm),
+        );
       } catch (error) {
         return callPromiseCapability(
           reaction.capability,
@@ -374,7 +363,7 @@ export function newPromiseReactionJob(reaction, argument, currentRealm) {
  * @returns {unknown}
  */
 export function speciesConstructor(object, defaultConstructor, currentRealm) {
-  const constructor = object.get('constructor');
+  const constructor = object.get('constructor', currentRealm);
 
   if (constructor === undefined) {
     return defaultConstructor;
@@ -386,7 +375,15 @@ export function speciesConstructor(object, defaultConstructor, currentRealm) {
     );
   }
 
-  const species = constructor.get(currentRealm.agent.wellKnownSymbols.species);
+  const constructorAgent = constructor.agent;
+  if (constructorAgent === null) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Promise constructor object has no owning Agent',
+    );
+  }
+
+  const species = constructor.getWellKnownSymbol('species', currentRealm);
 
   if (species === undefined || species === null) {
     return defaultConstructor;
@@ -438,7 +435,7 @@ export function createResolvingFunctions(promise, currentRealm) {
       /** @type {unknown} */
       let then;
       try {
-        then = resolution.get('then');
+        then = resolution.get('then', currentRealm);
       } catch (error) {
         rejectPromise(promise, abruptValue(currentRealm, error), currentRealm);
         return undefined;
@@ -449,7 +446,8 @@ export function createResolvingFunctions(promise, currentRealm) {
         return undefined;
       }
 
-      promise.realm.agent.enqueueJob(
+      enqueuePromiseJob(
+        promise.realm.agent,
         newPromiseResolveThenableJob(promise, resolution, then, currentRealm),
       );
       return undefined;
@@ -506,7 +504,11 @@ function createPromiseAllResolveElementFunction(
       remainingElementsCount.value -= 1;
 
       if (remainingElementsCount.value === 0) {
-        resolvePromiseAllCapability(resultCapability, values, currentRealm);
+        resultCapability.resolve.callFunction(
+          undefined,
+          [values],
+          currentRealm,
+        );
       }
 
       return undefined;
@@ -526,11 +528,13 @@ function createPromiseAllResolveElementFunction(
  */
 function resolvePromiseAllCapability(resultCapability, values, currentRealm) {
   try {
-    resultCapability.resolve.callFunction(undefined, [values]);
+    resultCapability.resolve.callFunction(undefined, [values], currentRealm);
   } catch (error) {
-    resultCapability.reject.callFunction(undefined, [
-      abruptValue(currentRealm, error),
-    ]);
+    resultCapability.reject.callFunction(
+      undefined,
+      [abruptValue(currentRealm, error)],
+      currentRealm,
+    );
   }
 }
 
@@ -540,10 +544,11 @@ function resolvePromiseAllCapability(resultCapability, values, currentRealm) {
  *
  * @param {EngineObject} constructor
  * @param {unknown} value
+ * @param {Realm} currentRealm
  * @returns {unknown}
  */
-function promiseResolve(constructor, value) {
-  const resolve = constructor.get('resolve');
+function promiseResolve(constructor, value, currentRealm) {
+  const resolve = constructor.get('resolve', currentRealm);
 
   if (!isCallable(resolve)) {
     throw new GuestErrorSignal(
@@ -552,7 +557,7 @@ function promiseResolve(constructor, value) {
     );
   }
 
-  return resolve.callFunction(constructor, [value]);
+  return resolve.callFunction(constructor, [value], currentRealm);
 }
 
 /**
@@ -563,7 +568,7 @@ function promiseResolve(constructor, value) {
  * @returns {unknown}
  */
 function invokeThen(currentRealm, promise, onFulfilled, onRejected) {
-  const then = toObject(currentRealm, promise).get('then');
+  const then = toObject(currentRealm, promise).get('then', currentRealm);
 
   if (!isCallable(then)) {
     throw new GuestErrorSignal(
@@ -572,7 +577,7 @@ function invokeThen(currentRealm, promise, onFulfilled, onRejected) {
     );
   }
 
-  return then.callFunction(promise, [onFulfilled, onRejected]);
+  return then.callFunction(promise, [onFulfilled, onRejected], currentRealm);
 }
 
 /**
@@ -589,9 +594,21 @@ function rejectAfterIteratorClose(
   error,
 ) {
   iteratorClose(currentRealm, iteratorRecord, true);
-  resultCapability.reject.callFunction(undefined, [
-    abruptValue(currentRealm, error),
-  ]);
+  return rejectPromiseCapability(currentRealm, resultCapability, error);
+}
+
+/**
+ * @param {Realm} currentRealm
+ * @param {PromiseCapabilityRecord} resultCapability
+ * @param {unknown} error
+ * @returns {EngineObject}
+ */
+function rejectPromiseCapability(currentRealm, resultCapability, error) {
+  resultCapability.reject.callFunction(
+    undefined,
+    [abruptValue(currentRealm, error)],
+    currentRealm,
+  );
   return resultCapability.promise;
 }
 
@@ -641,14 +658,17 @@ export function newPromiseResolveThenableJob(
       );
 
       try {
-        then.callFunction(thenable, [
-          resolvingFunctions.resolve,
-          resolvingFunctions.reject,
-        ]);
+        then.callFunction(
+          thenable,
+          [resolvingFunctions.resolve, resolvingFunctions.reject],
+          /** @type {Realm} */ (jobRealm),
+        );
       } catch (error) {
-        resolvingFunctions.reject.callFunction(undefined, [
-          abruptValue(/** @type {Realm} */ (jobRealm), error),
-        ]);
+        resolvingFunctions.reject.callFunction(
+          undefined,
+          [abruptValue(/** @type {Realm} */ (jobRealm), error)],
+          /** @type {Realm} */ (jobRealm),
+        );
       }
 
       return createNormalCompletion(undefined);
@@ -715,7 +735,8 @@ function triggerPromiseReactions(promise, reactions, argument, currentRealm) {
 
   for (const reaction of reactions) {
     try {
-      promise.realm.agent.enqueueJob(
+      enqueuePromiseJob(
+        promise.realm.agent,
         newPromiseReactionJob(reaction, argument, currentRealm),
       );
     } catch (error) {
@@ -750,6 +771,18 @@ function getReactionJobRealm(handler, currentRealm) {
 }
 
 /**
+ * A non-null Job Realm selects both the execution context and the Agent queue
+ * that owns it. Null-Realm jobs stay on the Promise's Agent.
+ *
+ * @param {import('./agent.js').Agent} promiseAgent
+ * @param {import('./jobs.js').JobRecord} job
+ * @returns {void}
+ */
+function enqueuePromiseJob(promiseAgent, job) {
+  (job.realm?.agent ?? promiseAgent).enqueueJob(job);
+}
+
+/**
  * @param {PromiseCapabilityRecord | null} capability
  * @param {'resolve' | 'reject'} operation
  * @param {unknown} value
@@ -762,7 +795,7 @@ function callPromiseCapability(capability, operation, value, realm) {
   }
 
   try {
-    capability[operation].callFunction(undefined, [value]);
+    capability[operation].callFunction(undefined, [value], realm);
     return createNormalCompletion(undefined);
   } catch (error) {
     return { type: 'throw', value: abruptValue(realm, error) };
@@ -843,7 +876,10 @@ function enqueueRejectedPromiseReaction(
       index += 1
     ) {
       try {
-        promise.realm.agent.enqueueJob(promise.promiseReactionJobs[index]);
+        enqueuePromiseJob(
+          promise.realm.agent,
+          promise.promiseReactionJobs[index],
+        );
       } catch (error) {
         if (!didThrow) {
           didThrow = true;

@@ -37,10 +37,7 @@ import {
   upstreamSubsetPaths,
 } from './upstream.js';
 import { assertPinnedCheckout, readTest262Pin } from './upstream-run.js';
-import {
-  parsesUnderEngineGrammar,
-  selectPaths,
-} from './upstream-select-paths.js';
+import { inspectEngineGrammar, selectPaths } from './upstream-select-paths.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
@@ -109,14 +106,14 @@ async function listTestFiles(checkoutPath) {
  *
  * @param {string} checkoutPath
  * @param {import('./es5-selection.js').Es5SelectionPolicy} policy
- * @returns {Promise<Map<string, boolean>>}
+ * @returns {Promise<Map<string, ReturnType<typeof inspectEngineGrammar>>>}
  */
 async function readHarnessParsing(checkoutPath, policy) {
   const entries = await readdir(
     new URL(`${checkoutPath}/${HARNESS_DIRECTORY}`, REPOSITORY_ROOT_URL),
     { withFileTypes: true },
   );
-  /** @type {Map<string, boolean>} */
+  /** @type {Map<string, ReturnType<typeof inspectEngineGrammar>>} */
   const parsing = new Map();
 
   for (const entry of entries) {
@@ -128,7 +125,7 @@ async function readHarnessParsing(checkoutPath, policy) {
       `${checkoutPath}/${HARNESS_DIRECTORY}/${entry.name}`,
     );
 
-    parsing.set(entry.name, parsesUnderEngineGrammar(source, policy));
+    parsing.set(entry.name, inspectEngineGrammar(source, policy));
   }
 
   return parsing;

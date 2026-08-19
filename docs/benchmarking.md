@@ -320,7 +320,7 @@ the acceptance summary. The Markdown is the same content in review form.
 
 ## Workloads and profiles
 
-The default profile runs seven deterministic workloads:
+The default profile runs eight deterministic workloads:
 
 - `arithmetic-loops`
 - `calls-recursion`
@@ -329,8 +329,9 @@ The default profile runs seven deterministic workloads:
 - `strings`
 - `json`
 - `regexp`
+- `number-invalid-megabyte`
 
-The smoke profile keeps the same seven workload names but uses reduced source
+The smoke profile keeps the same eight workload names but uses reduced source
 repeated 32 times inside each invocation. The wrapper returns the final
 repetition's committed checksum. This keeps cold samples unbatched while making
 one source-to-result invocation large enough for coarse Chromium and JSC clocks.

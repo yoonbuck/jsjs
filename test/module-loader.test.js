@@ -6,7 +6,9 @@ import {
   ModuleLoaderError,
   Realm,
 } from '../src/index.js';
-import { loadModuleGraph } from '../src/runtime/module-loader.js';
+import * as moduleLoaderInternals from '../src/runtime/module-loader.js';
+
+const { loadModuleGraph } = moduleLoaderInternals;
 
 /**
  * @param {Promise<unknown>} promise
@@ -31,6 +33,41 @@ function deferred() {
     resolve = () => complete(undefined);
   });
   return { promise, resolve };
+}
+
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @returns {Promise<T>}
+ */
+async function resolvesPromptly(promise) {
+  let settled = false;
+  /** @type {T | undefined} */
+  let value;
+  /** @type {unknown} */
+  let failure;
+  promise.then(
+    (result) => {
+      settled = true;
+      value = result;
+    },
+    (error) => {
+      settled = true;
+      failure = error;
+    },
+  );
+
+  for (let turn = 0; turn < 100 && !settled; turn += 1) {
+    await Promise.resolve();
+  }
+
+  if (!settled) {
+    throw new Error('Expected concurrent cyclic module roots to settle');
+  }
+  if (failure !== undefined) {
+    throw failure;
+  }
+  return /** @type {T} */ (value);
 }
 
 export default [
@@ -483,6 +520,48 @@ export default [
     },
   },
   {
+    name: 'host-thrown ModuleLoaderError values are wrapped at resolve and load boundaries',
+    async run() {
+      const hostError = new ModuleLoaderError({
+        phase: 'evaluate',
+        identifier: 'nested',
+        value: 'host value',
+      });
+      const resolveLoader = createModuleLoader(createRealm(), {
+        resolve() {
+          throw hostError;
+        },
+        load() {
+          return 'export const x = 1;';
+        },
+      });
+      const loadLoader = createModuleLoader(createRealm(), {
+        resolve() {
+          return 'canonical';
+        },
+        load() {
+          return Promise.reject(hostError);
+        },
+      });
+
+      const resolveError = await rejected(
+        loadModuleGraph(resolveLoader, 'root'),
+      );
+      const loadError = await rejected(loadModuleGraph(loadLoader, 'root'));
+
+      assertSame(resolveError instanceof ModuleLoaderError, true);
+      assertSame(resolveError === hostError, false);
+      assertSame(resolveError.phase, 'resolve');
+      assertSame(resolveError.identifier, undefined);
+      assertSame(resolveError.cause, hostError);
+      assertSame(loadError instanceof ModuleLoaderError, true);
+      assertSame(loadError === hostError, false);
+      assertSame(loadError.phase, 'load');
+      assertSame(loadError.identifier, 'canonical');
+      assertSame(loadError.cause, hostError);
+    },
+  },
+  {
     name: 'loader retries a parsed parent graph after a child load failure',
     async run() {
       let childLoads = 0;
@@ -551,6 +630,451 @@ export default [
       ]);
       assertSame(a.resolvedRequestedModules[0].module, b);
       assertSame(b.resolvedRequestedModules[0].module, a);
+    },
+  },
+  {
+    name: 'public loader waits for a complete overlapping graph before linking concurrent roots',
+    async run() {
+      const realm = createRealm();
+      realm.globalObject.defineOwnProperty('aRuns', {
+        value: 0,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      realm.globalObject.defineOwnProperty('bRuns', {
+        value: 0,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const loader = createModuleLoader(realm, {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          return identifier === 'a'
+            ? 'import "a"; import "b"; aRuns += 1; export const value = aRuns;'
+            : 'import "a"; import "b"; bRuns += 1; export const value = bRuns;';
+        },
+      });
+
+      const [a, b] = await resolvesPromptly(
+        Promise.all([loader.loadAndEvaluate('a'), loader.loadAndEvaluate('b')]),
+      );
+
+      assertSame(a.get('value'), 1);
+      assertSame(b.get('value'), 1);
+      assertSame(realm.globalObject.get('aRuns'), 1);
+      assertSame(realm.globalObject.get('bRuns'), 1);
+      assertSame(await loader.loadAndEvaluate('a'), a);
+      assertSame(await loader.loadAndEvaluate('b'), b);
+    },
+  },
+  {
+    name: 'public loader does not await its owner across a same-SCC dependency edge',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'a') {
+            return 'import "b"; export const value = "a";';
+          }
+          if (identifier === 'b') {
+            return 'import "c"; export const value = "b";';
+          }
+          return 'import "a"; import "b"; export const value = "c";';
+        },
+      });
+
+      const [a, b, c] = await resolvesPromptly(
+        Promise.all([
+          loader.loadAndEvaluate('a'),
+          loader.loadAndEvaluate('b'),
+          loader.loadAndEvaluate('c'),
+        ]),
+      );
+
+      assertSame(a.get('value'), 'a');
+      assertSame(b.get('value'), 'b');
+      assertSame(c.get('value'), 'c');
+      assertSame(await loader.loadAndEvaluate('a'), a);
+      assertSame(await loader.loadAndEvaluate('b'), b);
+      assertSame(await loader.loadAndEvaluate('c'), c);
+    },
+  },
+  {
+    name: 'public loader preserves an older failure wave across a later retry',
+    async run() {
+      for (const retryAfterFailure of [false, true]) {
+        const firstXLoadStarted = deferred();
+        const firstXFailure = deferred();
+        const delayedYLoadStarted = deferred();
+        const delayedYSource = deferred();
+        const retryXLoadStarted = deferred();
+        const retryXSource = deferred();
+        const failureCause = new Error('x failed');
+        /** @type {string[]} */
+        const loads = [];
+        let xLoads = 0;
+        const loader = createModuleLoader(createRealm(), {
+          resolve(specifier) {
+            return specifier;
+          },
+          load(identifier) {
+            loads.push(identifier);
+            if (identifier === 'p') {
+              return 'import "x"; export const value = "p";';
+            }
+            if (identifier === 'b') {
+              return 'import "delayed-y"; export const value = "b";';
+            }
+            if (identifier === 'delayed-y') {
+              delayedYLoadStarted.resolve();
+              return delayedYSource.promise.then(
+                () => 'import "p"; export const value = "delayed-y";',
+              );
+            }
+
+            xLoads += 1;
+            if (xLoads === 1) {
+              firstXLoadStarted.resolve();
+              return firstXFailure.promise.then(() => {
+                throw failureCause;
+              });
+            }
+            retryXLoadStarted.resolve();
+            return retryXSource.promise.then(() => 'export const value = "x";');
+          },
+        });
+
+        const failedP = loader.loadAndEvaluate('p');
+        await firstXLoadStarted.promise;
+        const olderB = loader.loadAndEvaluate('b');
+        await delayedYLoadStarted.promise;
+        firstXFailure.resolve();
+        const pError = await rejected(failedP);
+        assertSame(pError instanceof ModuleLoaderError, true);
+        assertSame(pError.phase, 'load');
+        assertSame(pError.identifier, 'x');
+        assertSame(pError.cause, failureCause);
+
+        if (retryAfterFailure) {
+          const retriedP = loader.loadAndEvaluate('p');
+          await retryXLoadStarted.promise;
+          retryXSource.resolve();
+          const namespace = await retriedP;
+          assertSame(namespace.get('value'), 'p');
+        }
+
+        delayedYSource.resolve();
+        const bError = await rejected(olderB);
+        assertSame(bError, pError);
+        assertSame(
+          loads.join(','),
+          retryAfterFailure ? 'p,x,b,delayed-y,x' : 'p,x,b,delayed-y',
+        );
+        assertSame(xLoads, retryAfterFailure ? 2 : 1);
+      }
+    },
+  },
+  {
+    name: 'loader reclaims settled failure waves without changing active roots',
+    async run() {
+      const failureCauses = Array.from(
+        { length: 3 },
+        (_, index) => new Error(`x failure ${index}`),
+      );
+      const olderAttempts = Array.from({ length: 3 }, () => ({
+        started: deferred(),
+        release: deferred(),
+      }));
+      const keeperAttempt = {
+        started: deferred(),
+        release: deferred(),
+      };
+      const xAttempts = [
+        ...failureCauses.map((cause) => ({
+          started: deferred(),
+          release: deferred(),
+          cause,
+        })),
+        { started: deferred(), release: deferred(), cause: undefined },
+      ];
+      /** @type {Map<string, number>} */
+      const cycleLoads = new Map();
+      let xLoads = 0;
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'p') {
+            return 'import "x"; export const value = "p";';
+          }
+          if (identifier.startsWith('older-')) {
+            const index = Number(identifier.slice('older-'.length));
+            const attempt = olderAttempts[index];
+            attempt.started.resolve();
+            return attempt.release.promise.then(
+              () => `import "p"; export const value = ${index};`,
+            );
+          }
+          if (identifier === 'x') {
+            const attempt = xAttempts[xLoads];
+            xLoads += 1;
+            attempt.started.resolve();
+            return attempt.release.promise.then(() => {
+              if (attempt.cause !== undefined) {
+                throw attempt.cause;
+              }
+              return 'export const value = "x";';
+            });
+          }
+          if (identifier === 'keeper') {
+            keeperAttempt.started.resolve();
+            return keeperAttempt.release.promise.then(
+              () => 'export const value = "keeper";',
+            );
+          }
+          if (identifier.startsWith('cycle-x-')) {
+            const loads = (cycleLoads.get(identifier) ?? 0) + 1;
+            cycleLoads.set(identifier, loads);
+            if (loads === 1) {
+              throw new Error(`${identifier} failed`);
+            }
+            return 'export const value = 1;';
+          }
+          if (identifier.startsWith('cycle-')) {
+            return `import "${identifier.replace('cycle-', 'cycle-x-')}"; export const value = 1;`;
+          }
+          throw new Error(`Unexpected module ${identifier}`);
+        },
+      });
+
+      /** @type {Promise<any>[]} */
+      const olderRoots = [];
+      /** @type {any[]} */
+      const waveErrors = [];
+      for (let wave = 0; wave < failureCauses.length; wave += 1) {
+        const failedWave = loader.loadAndEvaluate('p');
+        await xAttempts[wave].started.promise;
+        olderRoots.push(loader.loadAndEvaluate(`older-${wave}`));
+        await olderAttempts[wave].started.promise;
+        xAttempts[wave].release.resolve();
+        const waveError = await rejected(failedWave);
+        waveErrors.push(waveError);
+        assertSame(waveError.cause, failureCauses[wave]);
+        const coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(
+          coordination.activeGraphSequences.join(','),
+          Array.from({ length: wave + 1 }, (_, index) => 2 + index * 2).join(
+            ',',
+          ),
+        );
+        assertSame(coordination.requestFailures.length, 1);
+        assertSame(coordination.requestFailures[0].identifier, 'p');
+        assertSame(coordination.requestFailures[0].outcomeCount, wave + 1);
+        assertSame(coordination.requestFailureOutcomeCount, wave + 1);
+        assertSame(coordination.requestFailureStorageSize, wave + 1);
+      }
+
+      const successfulRetry = loader.loadAndEvaluate('p');
+      const successfulAttempt = xAttempts[failureCauses.length];
+      await successfulAttempt.started.promise;
+      successfulAttempt.release.resolve();
+      const namespace = await successfulRetry;
+      assertSame(namespace.get('value'), 'p');
+      let coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.join(','), '2,4,6');
+      assertSame(coordination.requestFailures[0].outcomeCount, 3);
+
+      const keeperRoot = loader.loadAndEvaluate('keeper');
+      await keeperAttempt.started.promise;
+      const releaseOrder = [1, 2, 0];
+      const remainingActiveSequences = ['2,6,8', '2,8', '8'];
+      for (let release = 0; release < releaseOrder.length; release += 1) {
+        const wave = releaseOrder[release];
+        olderAttempts[wave].release.resolve();
+        assertSame(await rejected(olderRoots[wave]), waveErrors[wave]);
+        coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(
+          coordination.activeGraphSequences.join(','),
+          remainingActiveSequences[release],
+        );
+        const remaining = releaseOrder.length - release - 1;
+        if (remaining === 0) {
+          assertSame(coordination.requestFailures.length, 0);
+          assertSame(coordination.requestFailureOutcomeCount, 0);
+          assertSame(coordination.requestFailureStorageSize, 0);
+          assertSame(coordination.requestFailureQueueCount, 0);
+        } else {
+          assertSame(coordination.requestFailures[0].outcomeCount, remaining);
+          assertSame(coordination.requestFailureOutcomeCount, remaining);
+          assertSame(coordination.requestFailureStorageSize, remaining);
+        }
+      }
+
+      keeperAttempt.release.resolve();
+      assertSame((await keeperRoot).get('value'), 'keeper');
+      coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.length, 0);
+      assertSame(coordination.requestFailureQueueCount, 0);
+
+      for (let cycle = 0; cycle < 4; cycle += 1) {
+        const identifier = `cycle-${cycle}`;
+        await rejected(loader.loadAndEvaluate(identifier));
+        coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(coordination.activeGraphSequences.length, 0);
+        assertSame(coordination.requestFailures.length, 0);
+        assertSame(coordination.requestFailureOutcomeCount, 0);
+        assertSame(coordination.requestFailureStorageSize, 0);
+        const retried = await loader.loadAndEvaluate(identifier);
+        assertSame(retried.get('value'), 1);
+        coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(coordination.activeGraphSequences.length, 0);
+        assertSame(coordination.requestFailures.length, 0);
+        assertSame(coordination.requestFailureOutcomeCount, 0);
+        assertSame(coordination.requestFailureStorageSize, 0);
+      }
+    },
+  },
+  {
+    name: 'loader retains only failure intervals observable by an active root',
+    async run() {
+      const waveCount = 64;
+      const oldestStarted = deferred();
+      const oldestSource = deferred();
+      const failureCauses = Array.from(
+        { length: waveCount },
+        (_, index) => new Error(`failure wave ${index}`),
+      );
+      const xAttempts = Array.from({ length: waveCount + 1 }, (_, index) => ({
+        started: deferred(),
+        release: deferred(),
+        cause: failureCauses[index],
+      }));
+      let xLoads = 0;
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'oldest') {
+            oldestStarted.resolve();
+            return oldestSource.promise.then(
+              () => 'import "p"; export const value = "oldest";',
+            );
+          }
+          if (identifier === 'p') {
+            return 'import "x"; export const value = "p";';
+          }
+          if (identifier === 'x') {
+            const attempt = xAttempts[xLoads];
+            xLoads += 1;
+            attempt.started.resolve();
+            return attempt.release.promise.then(() => {
+              if (attempt.cause !== undefined) {
+                throw attempt.cause;
+              }
+              return 'export const value = "x";';
+            });
+          }
+          throw new Error(`Unexpected module ${identifier}`);
+        },
+      });
+
+      const oldestRoot = loader.loadAndEvaluate('oldest');
+      await oldestStarted.promise;
+      /** @type {any} */
+      let firstWaveError;
+      for (let wave = 0; wave < waveCount; wave += 1) {
+        const failedWave = loader.loadAndEvaluate('p');
+        const attempt = xAttempts[wave];
+        await attempt.started.promise;
+        attempt.release.resolve();
+        const waveError = await rejected(failedWave);
+        assertSame(waveError.cause, failureCauses[wave]);
+        if (wave === 0) {
+          firstWaveError = waveError;
+        }
+
+        const coordination =
+          moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+        assertSame(coordination.activeGraphSequences.join(','), '1');
+        assertSame(coordination.requestFailures.length, 1);
+        assertSame(coordination.requestFailureQueueCount, 1);
+        assertSame(coordination.requestFailures[0].identifier, 'p');
+        assertSame(coordination.requestFailures[0].outcomeCount, 1);
+        assertSame(coordination.requestFailureOutcomeCount, 1);
+        assertSame(coordination.requestFailureStorageSize, 1);
+      }
+
+      const successfulRetry = loader.loadAndEvaluate('p');
+      const successfulAttempt = xAttempts[waveCount];
+      await successfulAttempt.started.promise;
+      successfulAttempt.release.resolve();
+      const namespace = await successfulRetry;
+      assertSame(namespace.get('value'), 'p');
+      let coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.join(','), '1');
+      assertSame(coordination.requestFailures.length, 1);
+      assertSame(coordination.requestFailureQueueCount, 1);
+      assertSame(coordination.requestFailures[0].outcomeCount, 1);
+      assertSame(coordination.requestFailureOutcomeCount, 1);
+      assertSame(coordination.requestFailureStorageSize, 1);
+
+      oldestSource.resolve();
+      assertSame(await rejected(oldestRoot), firstWaveError);
+      coordination =
+        moduleLoaderInternals.getModuleLoaderCoordinationState(loader);
+      assertSame(coordination.activeGraphSequences.length, 0);
+      assertSame(coordination.requestFailures.length, 0);
+      assertSame(coordination.requestFailureQueueCount, 0);
+      assertSame(coordination.requestFailureOutcomeCount, 0);
+      assertSame(coordination.requestFailureStorageSize, 0);
+      assertSame(xLoads, waveCount + 1);
+    },
+  },
+  {
+    name: 'loader settles concurrent roots across an overlapping source cycle',
+    async run() {
+      const loader = createModuleLoader(createRealm(), {
+        resolve(specifier) {
+          return specifier;
+        },
+        load(identifier) {
+          if (identifier === 'a') {
+            return 'import "b"; import "c"; export const a = 1;';
+          }
+          if (identifier === 'b') {
+            return 'import "a"; export const b = 1;';
+          }
+          return 'import "b"; export const c = 1;';
+        },
+      });
+
+      const [a, b, c] = await resolvesPromptly(
+        Promise.all([
+          loadModuleGraph(loader, 'a'),
+          loadModuleGraph(loader, 'b'),
+          loadModuleGraph(loader, 'c'),
+        ]),
+      );
+
+      assertSame(a.resolvedRequestedModules[0].module, b);
+      assertSame(a.resolvedRequestedModules[1].module, c);
+      assertSame(b.resolvedRequestedModules[0].module, a);
+      assertSame(c.resolvedRequestedModules[0].module, b);
     },
   },
   {

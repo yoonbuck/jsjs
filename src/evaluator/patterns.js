@@ -149,7 +149,7 @@ export function assignBindingPattern(pattern, value, context) {
         target.name,
         context.strict,
       );
-      putValue(reference, nextValue);
+      putValue(reference, nextValue, context.realm);
     },
   });
 }
@@ -275,6 +275,7 @@ function applyObjectPattern(pattern, value, context, targetOperations) {
     );
     const propertyValue = getValue(
       new Reference(object, key, context.strict, value),
+      context.realm,
     );
     applyPattern(
       property.value,
@@ -324,7 +325,7 @@ function applyArrayPattern(pattern, value, context, targetOperations) {
           break;
         }
 
-        const nextValue = iteratorValue(step);
+        const nextValue = iteratorValue(step, context.realm);
         rest.defineOwnProperty(String(index), {
           value: nextValue,
           writable: true,
@@ -365,7 +366,7 @@ function applyArrayPattern(pattern, value, context, targetOperations) {
       if (step === false) {
         done = true;
       } else if (element !== null) {
-        nextValue = iteratorValue(step);
+        nextValue = iteratorValue(step, context.realm);
       }
     }
 

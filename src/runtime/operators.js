@@ -40,9 +40,10 @@ export function strictEqualityComparison(left, right) {
 /**
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {boolean}
  */
-export function abstractEqualityComparison(left, right) {
+export function abstractEqualityComparison(left, right, callerRealm) {
   const leftType = getSpecificationType(left);
   const rightType = getSpecificationType(right);
 
@@ -58,33 +59,57 @@ export function abstractEqualityComparison(left, right) {
   }
 
   if (leftType === 'Number' && rightType === 'String') {
-    return abstractEqualityComparison(left, toNumber(right));
+    return abstractEqualityComparison(
+      left,
+      toNumber(right, callerRealm),
+      callerRealm,
+    );
   }
 
   if (leftType === 'String' && rightType === 'Number') {
-    return abstractEqualityComparison(toNumber(left), right);
+    return abstractEqualityComparison(
+      toNumber(left, callerRealm),
+      right,
+      callerRealm,
+    );
   }
 
   if (leftType === 'Boolean') {
-    return abstractEqualityComparison(toNumber(left), right);
+    return abstractEqualityComparison(
+      toNumber(left, callerRealm),
+      right,
+      callerRealm,
+    );
   }
 
   if (rightType === 'Boolean') {
-    return abstractEqualityComparison(left, toNumber(right));
+    return abstractEqualityComparison(
+      left,
+      toNumber(right, callerRealm),
+      callerRealm,
+    );
   }
 
   if (
     (leftType === 'String' || leftType === 'Number' || leftType === 'Symbol') &&
     rightType === 'Object'
   ) {
-    return abstractEqualityComparison(left, toPrimitive(right));
+    return abstractEqualityComparison(
+      left,
+      toPrimitive(right, 'default', callerRealm),
+      callerRealm,
+    );
   }
 
   if (
     leftType === 'Object' &&
     (rightType === 'String' || rightType === 'Number' || rightType === 'Symbol')
   ) {
-    return abstractEqualityComparison(toPrimitive(left), right);
+    return abstractEqualityComparison(
+      toPrimitive(left, 'default', callerRealm),
+      right,
+      callerRealm,
+    );
   }
 
   return false;
@@ -93,79 +118,95 @@ export function abstractEqualityComparison(left, right) {
 /**
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {string | number}
  */
-export function add(left, right) {
-  const leftPrimitive = toPrimitive(left);
-  const rightPrimitive = toPrimitive(right);
+export function add(left, right, callerRealm) {
+  const leftPrimitive = toPrimitive(left, 'default', callerRealm);
+  const rightPrimitive = toPrimitive(right, 'default', callerRealm);
 
   if (typeof leftPrimitive === 'string' || typeof rightPrimitive === 'string') {
-    return toString(leftPrimitive) + toString(rightPrimitive);
+    return (
+      toString(leftPrimitive, callerRealm) +
+      toString(rightPrimitive, callerRealm)
+    );
   }
 
-  return toNumber(leftPrimitive) + toNumber(rightPrimitive);
+  return (
+    toNumber(leftPrimitive, callerRealm) + toNumber(rightPrimitive, callerRealm)
+  );
 }
 
 /**
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function subtract(left, right) {
-  return toNumber(left) - toNumber(right);
+export function subtract(left, right, callerRealm) {
+  return toNumber(left, callerRealm) - toNumber(right, callerRealm);
 }
 
 /**
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function multiply(left, right) {
-  return toNumber(left) * toNumber(right);
+export function multiply(left, right, callerRealm) {
+  return toNumber(left, callerRealm) * toNumber(right, callerRealm);
 }
 
 /**
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function divide(left, right) {
-  return toNumber(left) / toNumber(right);
+export function divide(left, right, callerRealm) {
+  return toNumber(left, callerRealm) / toNumber(right, callerRealm);
 }
 
 /**
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function remainder(left, right) {
-  return toNumber(left) % toNumber(right);
+export function remainder(left, right, callerRealm) {
+  return toNumber(left, callerRealm) % toNumber(right, callerRealm);
 }
 
 /**
  * @param {unknown} left
  * @param {unknown} right
  * @param {boolean} [leftFirst=true]
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {boolean | undefined}
  */
-export function abstractRelationalComparison(left, right, leftFirst = true) {
+export function abstractRelationalComparison(
+  left,
+  right,
+  leftFirst = true,
+  callerRealm,
+) {
   let leftPrimitive;
   let rightPrimitive;
 
   if (leftFirst) {
-    leftPrimitive = toPrimitive(left, 'number');
-    rightPrimitive = toPrimitive(right, 'number');
+    leftPrimitive = toPrimitive(left, 'number', callerRealm);
+    rightPrimitive = toPrimitive(right, 'number', callerRealm);
   } else {
-    rightPrimitive = toPrimitive(right, 'number');
-    leftPrimitive = toPrimitive(left, 'number');
+    rightPrimitive = toPrimitive(right, 'number', callerRealm);
+    leftPrimitive = toPrimitive(left, 'number', callerRealm);
   }
 
   if (typeof leftPrimitive === 'string' && typeof rightPrimitive === 'string') {
     return leftPrimitive < rightPrimitive;
   }
 
-  const leftNumber = toNumber(leftPrimitive);
-  const rightNumber = toNumber(rightPrimitive);
+  const leftNumber = toNumber(leftPrimitive, callerRealm);
+  const rightNumber = toNumber(rightPrimitive, callerRealm);
 
   if (Number.isNaN(leftNumber) || Number.isNaN(rightNumber)) {
     return undefined;
@@ -179,10 +220,11 @@ export function abstractRelationalComparison(left, right, leftFirst = true) {
  *
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function leftShift(left, right) {
-  return toInt32(left) << (toUint32(right) & 0x1f);
+export function leftShift(left, right, callerRealm) {
+  return toInt32(left, callerRealm) << (toUint32(right, callerRealm) & 0x1f);
 }
 
 /**
@@ -190,10 +232,11 @@ export function leftShift(left, right) {
  *
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function signedRightShift(left, right) {
-  return toInt32(left) >> (toUint32(right) & 0x1f);
+export function signedRightShift(left, right, callerRealm) {
+  return toInt32(left, callerRealm) >> (toUint32(right, callerRealm) & 0x1f);
 }
 
 /**
@@ -201,10 +244,11 @@ export function signedRightShift(left, right) {
  *
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function unsignedRightShift(left, right) {
-  return toUint32(left) >>> (toUint32(right) & 0x1f);
+export function unsignedRightShift(left, right, callerRealm) {
+  return toUint32(left, callerRealm) >>> (toUint32(right, callerRealm) & 0x1f);
 }
 
 /**
@@ -212,10 +256,11 @@ export function unsignedRightShift(left, right) {
  *
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function bitwiseAND(left, right) {
-  return toInt32(left) & toInt32(right);
+export function bitwiseAND(left, right, callerRealm) {
+  return toInt32(left, callerRealm) & toInt32(right, callerRealm);
 }
 
 /**
@@ -223,10 +268,11 @@ export function bitwiseAND(left, right) {
  *
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function bitwiseXOR(left, right) {
-  return toInt32(left) ^ toInt32(right);
+export function bitwiseXOR(left, right, callerRealm) {
+  return toInt32(left, callerRealm) ^ toInt32(right, callerRealm);
 }
 
 /**
@@ -234,10 +280,11 @@ export function bitwiseXOR(left, right) {
  *
  * @param {unknown} left
  * @param {unknown} right
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {number}
  */
-export function bitwiseOR(left, right) {
-  return toInt32(left) | toInt32(right);
+export function bitwiseOR(left, right, callerRealm) {
+  return toInt32(left, callerRealm) | toInt32(right, callerRealm);
 }
 
 /**

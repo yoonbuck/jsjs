@@ -9,6 +9,7 @@ import {
 import { hasUseStrictDirective } from './evaluator/directive.js';
 import {
   boundNames,
+  lexicallyDeclaredNames,
   summarizeBoundNames,
   topLevelLexicallyDeclaredNames,
   topLevelVarDeclaredNames,
@@ -39,6 +40,87 @@ const SCRIPT_VALIDATION_CONTEXT = Object.freeze({
   module: false,
   allOwnKeys: false,
 });
+
+const ALWAYS_RESERVED_IDENTIFIER_WORDS = new Set([
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'false',
+]);
+
+const STRICT_RESERVED_IDENTIFIER_WORDS = new Set([
+  'implements',
+  'interface',
+  'let',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'static',
+  'yield',
+]);
+
+const ITERATION_STATEMENT_TYPES = new Set([
+  'WhileStatement',
+  'DoWhileStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+]);
+
+/**
+ * @typedef {{ name: string, iteration: boolean }} ControlLabel
+ * @typedef {{
+ *   node: any,
+ *   strict: boolean,
+ *   yieldAllowed: boolean,
+ *   yieldIdentifierRestricted: boolean,
+ *   superAllowed: boolean,
+ *   superCallAllowed: boolean,
+ *   classDerived: boolean | undefined,
+ *   inFunction: boolean,
+ *   breakAllowed: boolean,
+ *   continueAllowed: boolean,
+ *   lexicalBinding: boolean,
+ *   parent: any,
+ *   parentKey: string | number | undefined,
+ *   parentIndex: number | undefined,
+ *   nestedArray: boolean,
+ *   patternContext: 'binding' | 'assignment' | undefined,
+ * }} SyntaxWalkItem
+ */
 
 /**
  * Parses with Acorn's base script parser. A named wrapper rather than a
@@ -304,9 +386,36 @@ export function parseScript(source, options = {}) {
  */
 export function parseModule(source, options = {}) {
   const { parse = parseWithScriptParser, ...parserOptions } = options;
+  const hasCustomParse = parse !== parseWithScriptParser;
+  const hasCustomProgram = Object.prototype.propertyIsEnumerable.call(
+    parserOptions,
+    'program',
+  );
+  const hasReusableProgram =
+    !hasCustomParse && hasCustomProgram && Boolean(parserOptions.program);
+  const reusableProgram = hasReusableProgram
+    ? parserOptions.program
+    : undefined;
+  let reusableProgramSnapshot;
+  /** @type {WeakSet<object> | undefined} */
+  let sourceIndependentNodes;
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
+  }
+
+  if (hasReusableProgram) {
+    try {
+      sourceIndependentNodes = new WeakSet();
+      reusableProgramSnapshot = snapshotProgramGraph(
+        reusableProgram,
+        sourceIndependentNodes,
+      );
+      validateReusableProgram(reusableProgramSnapshot, true);
+      delete parserOptions.program;
+    } catch (error) {
+      throw asModuleValidationFailure(error);
+    }
   }
 
   let program;
@@ -320,21 +429,25 @@ export function parseModule(source, options = {}) {
     throw asParseFailure(error, parse === parseWithScriptParser);
   }
 
-  const customAst = parse !== parseWithScriptParser;
-  /** @type {WeakSet<object> | undefined} */
-  let customAstSnapshotValues;
+  try {
+    if (hasCustomParse) {
+      sourceIndependentNodes = new WeakSet();
+      program = snapshotProgramGraph(program, sourceIndependentNodes);
+    }
 
-  if (customAst) {
-    customAstSnapshotValues = new WeakSet();
-    program = snapshotProgramGraph(program, customAstSnapshotValues);
+    if (hasReusableProgram) {
+      program = mergeReusableProgram(reusableProgramSnapshot, program);
+    }
+
+    return validateModuleProgram(
+      program,
+      source,
+      hasCustomParse || hasCustomProgram,
+      sourceIndependentNodes,
+    );
+  } catch (error) {
+    throw asModuleValidationFailure(error);
   }
-
-  return validateModuleProgram(
-    program,
-    source,
-    customAst,
-    customAstSnapshotValues,
-  );
 }
 
 /**
@@ -458,7 +571,9 @@ function validateModuleProgram(
   customAst,
   sourceIndependentNodes,
 ) {
-  checkUntrustedAstDescriptors(program);
+  if (customAst) {
+    checkUntrustedAstDescriptors(program);
+  }
 
   if (!isModuleProgram(program)) {
     throw new TypeError('Expected parser to return a module Program node');
@@ -484,7 +599,7 @@ function validateModuleProgram(
     );
   }
 
-  checkModuleDeclarationEarlyErrors(body);
+  checkModuleDeclarationEarlyErrors(body, customAst);
 
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
@@ -503,12 +618,14 @@ function validateModuleProgram(
  * declarations are lexical in a module, unlike their script top-level role.
  *
  * @param {readonly any[]} body
+ * @param {boolean} checkLocalExportBindings
  * @returns {void}
  */
-function checkModuleDeclarationEarlyErrors(body) {
+function checkModuleDeclarationEarlyErrors(body, checkLocalExportBindings) {
   const exportedNames = new Set();
   const lexicalNames = new Set();
   const varNames = new Set();
+  const localExportNames = [];
 
   /** @param {string} name */
   const addExportName = (name) => {
@@ -594,6 +711,7 @@ function checkModuleDeclarationEarlyErrors(body) {
         break;
       case 'ExportNamedDeclaration': {
         const declaration = moduleField(item, 'declaration');
+        const source = moduleField(item, 'source');
 
         if (declaration !== null) {
           addDeclarationBindings(declaration);
@@ -611,6 +729,16 @@ function checkModuleDeclarationEarlyErrors(body) {
               )
             ),
           );
+          if (checkLocalExportBindings && source === null) {
+            localExportNames.push(
+              /** @type {string} */ (
+                moduleField(
+                  /** @type {object} */ (moduleField(specifier, 'local')),
+                  'name',
+                )
+              ),
+            );
+          }
         }
         break;
       }
@@ -640,6 +768,12 @@ function checkModuleDeclarationEarlyErrors(body) {
           addDeclarationBindings(item);
         }
         break;
+    }
+  }
+
+  for (const name of localExportNames) {
+    if (!lexicalNames.has(name) && !varNames.has(name)) {
+      throw new SyntaxError(`Export '${name}' is not defined`);
     }
   }
 }
@@ -934,20 +1068,23 @@ function checkOmittedArrayMetadata(roots) {
 }
 
 /**
- * Validates a Program supplied for Acorn-style statement appending. parseScript
+ * Validates a Program supplied for Acorn-style statement appending. The parser
  * never gives the caller-owned graph to Acorn: it validates and uses only the
  * engine-owned snapshot while callbacks can mutate the ignored original.
  * Requiring Acorn's location shape also turns malformed reuse targets into a
  * parser-boundary TypeError without partially writing to them.
  *
  * @param {unknown} program
+ * @param {boolean} [module=false]
  * @returns {void}
  */
-function validateReusableProgram(program) {
+function validateReusableProgram(program, module = false) {
   checkUntrustedAstDescriptors(program);
 
-  if (!isScriptProgram(program)) {
-    throw new TypeError('Expected parser to return a script Program node');
+  if (module ? !isModuleProgram(program) : !isScriptProgram(program)) {
+    throw new TypeError(
+      `Expected parser to return a ${module ? 'module' : 'script'} Program node`,
+    );
   }
 
   if (!hasReusableProgramPositionShape(/** @type {any} */ (program))) {
@@ -956,7 +1093,10 @@ function validateReusableProgram(program) {
     );
   }
 
-  checkCustomAstDefenses(/** @type {any} */ (program));
+  checkCustomAstDefenses(
+    /** @type {any} */ (program),
+    module ? { module: true, allOwnKeys: true } : SCRIPT_VALIDATION_CONTEXT,
+  );
 }
 
 /**
@@ -1306,7 +1446,7 @@ function validateModuleItem(node) {
  * @returns {void}
  */
 function validateImportDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
 
   const specifiers = moduleField(node, 'specifiers');
 
@@ -1317,8 +1457,46 @@ function validateImportDeclaration(node) {
     throw new UnsupportedNodeError('ImportDeclaration');
   }
 
-  for (const specifier of specifiers) {
+  let sawDefault = false;
+  let sawNamespace = false;
+  let sawNamed = false;
+
+  for (let index = 0; index < specifiers.length; index += 1) {
+    const specifier = specifiers[index];
+
     validateImportSpecifier(specifier);
+
+    switch (moduleField(specifier, 'type')) {
+      case 'ImportDefaultSpecifier':
+        if (sawDefault || index !== 0) {
+          throw new UnsupportedNodeError(
+            'ImportDeclaration default specifier order',
+          );
+        }
+        sawDefault = true;
+        break;
+      case 'ImportNamespaceSpecifier':
+        if (
+          sawNamespace ||
+          sawNamed ||
+          index !== (sawDefault ? 1 : 0) ||
+          index !== specifiers.length - 1
+        ) {
+          throw new UnsupportedNodeError(
+            'ImportDeclaration namespace specifier combination',
+          );
+        }
+        sawNamespace = true;
+        break;
+      case 'ImportSpecifier':
+        if (sawNamespace) {
+          throw new UnsupportedNodeError(
+            'ImportDeclaration named and namespace specifier combination',
+          );
+        }
+        sawNamed = true;
+        break;
+    }
   }
 }
 
@@ -1356,7 +1534,7 @@ function validateImportSpecifier(node) {
  * @returns {void}
  */
 function validateExportNamedDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
   const source = moduleField(node, 'source');
   const declaration = moduleField(node, 'declaration');
   const specifiers = moduleField(node, 'specifiers');
@@ -1395,7 +1573,7 @@ function validateExportNamedDeclaration(node) {
  * @returns {void}
  */
 function validateExportDefaultDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
   const declaration = moduleField(node, 'declaration');
 
   if (
@@ -1412,11 +1590,12 @@ function validateExportDefaultDeclaration(node) {
  * @returns {void}
  */
 function validateExportAllDeclaration(node) {
-  rejectModuleAttributes(node);
+  validateModuleAttributes(node);
+  const exported = Object.getOwnPropertyDescriptor(node, 'exported');
 
   if (
     !isModuleStringLiteral(moduleField(node, 'source')) ||
-    Object.getOwnPropertyDescriptor(node, 'exported') !== undefined
+    (exported !== undefined && moduleField(node, 'exported') !== null)
   ) {
     throw new UnsupportedNodeError('ExportAllDeclaration');
   }
@@ -1503,12 +1682,24 @@ function moduleField(node, field) {
 }
 
 /**
+ * Modern ESTree parsers may expose empty assertion/attribute lists even when
+ * parsing ES2015 syntax. Empty lists are neutral; any entry requires unsupported
+ * import-attributes semantics.
+ *
  * @param {object} node
  * @returns {void}
  */
-function rejectModuleAttributes(node) {
+function validateModuleAttributes(node) {
   for (const field of ['assertions', 'attributes']) {
-    if (Object.getOwnPropertyDescriptor(node, field) !== undefined) {
+    const descriptor = Object.getOwnPropertyDescriptor(node, field);
+
+    if (descriptor === undefined) {
+      continue;
+    }
+
+    const value = moduleField(node, field);
+
+    if (!Array.isArray(value) || value.length !== 0) {
       throw new UnsupportedNodeError(field);
     }
   }
@@ -1688,12 +1879,12 @@ function untrustedAstSyntaxError(message) {
 }
 
 /**
- * Requires a custom parser's evaluator-relevant child graph to be a tree.
- * Native Acorn output has this shape, while rejecting shared nodes and child
- * arrays at the untrusted boundary prevents later tree-oriented static
- * semantics from expanding a compact DAG exponentially. Metadata is outside
- * `AST_CHILD_PROPERTY_KEYS`, so it may still share or cycle. The explicit
- * worklist avoids recursive host stack use.
+ * Requires a custom parser's evaluator-relevant child graph to be a tree,
+ * except for Acorn's exact leaf alias in import/export shorthand specifiers.
+ * Rejecting every other shared node and child array at the untrusted boundary
+ * prevents later tree-oriented static semantics from expanding a compact DAG
+ * exponentially. Metadata is outside `AST_CHILD_PROPERTY_KEYS`, so it may still
+ * share or cycle. The explicit worklist avoids recursive host stack use.
  *
  * @param {any} root
  * @returns {void}
@@ -1719,6 +1910,10 @@ function checkStructuralAstTree(root) {
     }
 
     if (seen.has(value)) {
+      if (array && value.length === 0) {
+        continue;
+      }
+
       throw unsupportedEs2015Error(
         'Custom AST must be a structural tree',
         value,
@@ -1748,11 +1943,35 @@ function checkStructuralAstTree(root) {
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       const key = keys[index];
 
-      if (typeof key === 'string' && AST_CHILD_PROPERTY_KEYS.has(key)) {
+      if (
+        typeof key === 'string' &&
+        AST_CHILD_PROPERTY_KEYS.has(key) &&
+        !isModuleSpecifierShorthandAliasEdge(value, key)
+      ) {
         pending.push(/** @type {any} */ (value)[key]);
       }
     }
   }
+}
+
+/**
+ * Acorn represents `import { name }` and `export { name }` with one Identifier
+ * object referenced by both grammar fields. Those two fields are one shorthand
+ * syntactic edge; every other repeated structural value remains a rejected DAG.
+ *
+ * @param {any} node
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isModuleSpecifierShorthandAliasEdge(node, key) {
+  return (
+    (node.type === 'ImportSpecifier' &&
+      key === 'imported' &&
+      node.local === node.imported) ||
+    (node.type === 'ExportSpecifier' &&
+      key === 'exported' &&
+      node.local === node.exported)
+  );
 }
 
 /**
@@ -1784,7 +2003,6 @@ function checkCustomAstDefenses(
   ];
   /** @type {WeakMap<object, ValidationContextRecord | Map<any, any>>} */
   const seen = new WeakMap();
-
   while (pending.length > 0) {
     const item =
       /** @type {{ value: any, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
@@ -2064,9 +2282,14 @@ function basicValidationContextKey(nestedArray, patternContext) {
  * @param {boolean} nestedArray
  * @param {boolean} strict
  * @param {boolean} yieldAllowed
+ * @param {boolean} yieldIdentifierRestricted
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
  * @param {boolean | undefined} classDerived
+ * @param {boolean} inFunction
+ * @param {boolean} breakAllowed
+ * @param {boolean} continueAllowed
+ * @param {boolean} lexicalBinding
  * @param {'binding' | 'assignment' | undefined} patternContext
  * @returns {number}
  */
@@ -2074,9 +2297,14 @@ function syntaxValidationContextKey(
   nestedArray,
   strict,
   yieldAllowed,
+  yieldIdentifierRestricted,
   superAllowed,
   superCallAllowed,
   classDerived,
+  inFunction,
+  breakAllowed,
+  continueAllowed,
+  lexicalBinding,
   patternContext,
 ) {
   const classKey =
@@ -2084,8 +2312,13 @@ function syntaxValidationContextKey(
   let key = basicValidationContextKey(nestedArray, patternContext);
   key = key * 2 + (strict ? 1 : 0);
   key = key * 2 + (yieldAllowed ? 1 : 0);
+  key = key * 2 + (yieldIdentifierRestricted ? 1 : 0);
   key = key * 2 + (superAllowed ? 1 : 0);
   key = key * 2 + (superCallAllowed ? 1 : 0);
+  key = key * 2 + (inFunction ? 1 : 0);
+  key = key * 2 + (breakAllowed ? 1 : 0);
+  key = key * 2 + (continueAllowed ? 1 : 0);
+  key = key * 2 + (lexicalBinding ? 1 : 0);
   return key * 3 + classKey;
 }
 
@@ -2719,15 +2952,24 @@ function checkStatementPositionFunctionDeclarations(
   sourceIndependentNodes,
   rootContext = { superAllowed: false, superCallAllowed: false },
 ) {
-  /** @type {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
+  if (validationContext.allOwnKeys) {
+    checkCustomLabelEarlyErrors(root);
+  }
+
+  /** @type {SyntaxWalkItem[]} */
   const pending = [
     {
       node: root,
       strict: rootStrict,
       yieldAllowed: false,
+      yieldIdentifierRestricted: false,
       superAllowed: rootContext.superAllowed,
       superCallAllowed: rootContext.superCallAllowed,
       classDerived: undefined,
+      inFunction: false,
+      breakAllowed: false,
+      continueAllowed: false,
+      lexicalBinding: false,
       parent: null,
       parentKey: undefined,
       parentIndex: undefined,
@@ -2737,12 +2979,13 @@ function checkStatementPositionFunctionDeclarations(
   ];
   /** @type {WeakMap<object, ValidationContextRecord | Map<any, any>>} */
   const seen = new WeakMap();
+  /** @type {WeakMap<object, { fn: any, labeled: boolean } | null>} */
+  const labelFunctionDeclarations = new WeakMap();
+  const customFunctions = [];
+  const customStrictness = new WeakMap();
 
   while (pending.length > 0) {
-    const item =
-      /** @type {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
-        pending.pop()
-      );
+    const item = /** @type {SyntaxWalkItem} */ (pending.pop());
     const node = item.node;
     const strict = item.strict;
 
@@ -2761,9 +3004,14 @@ function checkStatementPositionFunctionDeclarations(
           item.nestedArray,
           strict,
           item.yieldAllowed,
+          item.yieldIdentifierRestricted,
           item.superAllowed,
           item.superCallAllowed,
           item.classDerived,
+          item.inFunction,
+          item.breakAllowed,
+          item.continueAllowed,
+          item.lexicalBinding,
           item.patternContext,
         ),
       )
@@ -2806,9 +3054,14 @@ function checkStatementPositionFunctionDeclarations(
           element,
           strict,
           item.yieldAllowed,
+          item.yieldIdentifierRestricted,
           item.superAllowed,
           item.superCallAllowed,
           item.classDerived,
+          item.inFunction,
+          item.breakAllowed,
+          item.continueAllowed,
+          item.lexicalBinding,
           nestedArray ? null : item.parent,
           nestedArray ? undefined : item.parentKey,
           item.patternContext,
@@ -2822,6 +3075,12 @@ function checkStatementPositionFunctionDeclarations(
     if (typeof node.type !== 'string') {
       continue;
     }
+    if (validationContext.allOwnKeys && isFunctionNode(node)) {
+      customFunctions.push(node);
+    }
+    if (validationContext.allOwnKeys) {
+      customStrictness.set(node, strict);
+    }
 
     if (item.nestedArray) {
       throw unsupportedEs2015Error(
@@ -2830,7 +3089,7 @@ function checkStatementPositionFunctionDeclarations(
       );
     }
 
-    checkFunctionDeclarationPosition(node, strict);
+    checkFunctionDeclarationPosition(node, strict, labelFunctionDeclarations);
     checkStrictWithStatement(node, strict);
     checkRegularExpressionLiteral(node);
     checkUnsupportedEs2015Node(
@@ -2848,6 +3107,24 @@ function checkStatementPositionFunctionDeclarations(
     );
     checkUnsupportedForOfAwait(node);
 
+    checkCustomControlFlowEarlyErrors(
+      node,
+      item.inFunction,
+      item.breakAllowed,
+      item.continueAllowed,
+      validationContext.allOwnKeys,
+    );
+    checkCustomContextualEarlyErrors(
+      node,
+      item.parent,
+      item.parentKey,
+      item.patternContext,
+      strict,
+      item.yieldIdentifierRestricted,
+      item.lexicalBinding,
+      validationContext.module,
+      validationContext.allOwnKeys,
+    );
     checkStrictBindingIdentifier(
       node,
       item.parent,
@@ -2855,7 +3132,12 @@ function checkStatementPositionFunctionDeclarations(
       item.patternContext,
       strict,
     );
-    checkFunctionParameterEarlyErrors(node, strict);
+    checkFunctionParameterEarlyErrors(
+      node,
+      strict,
+      item.parent,
+      item.parentKey,
+    );
 
     const childStrict = childScopeStrictness(node, strict);
     const childSuperAllowed = superAllowedForChildren(
@@ -2880,16 +3162,27 @@ function checkStatementPositionFunctionDeclarations(
       const parentKey = typeof key === 'string' ? key : undefined;
 
       if (typeof key !== 'string' || !NODE_POSITION_KEYS.has(key)) {
+        const controlContext = controlContextForChild(node, parentKey, item);
+
         pushChild(
           pending,
           node[key],
           childStrict,
           yieldAllowedForChild(node, parentKey, item.yieldAllowed),
+          yieldIdentifierRestrictedForChild(
+            node,
+            parentKey,
+            item.yieldIdentifierRestricted,
+          ),
           childSuperAllowed,
           childSuperCallAllowed,
           parentKey === undefined
             ? item.classDerived
             : classDerivedForChild(node, parentKey, item.classDerived),
+          controlContext.inFunction,
+          controlContext.breakAllowed,
+          controlContext.continueAllowed,
+          lexicalBindingForChild(node, parentKey, item.lexicalBinding),
           node,
           parentKey,
           parentKey === undefined
@@ -2898,6 +3191,14 @@ function checkStatementPositionFunctionDeclarations(
         );
       }
     }
+  }
+  if (validationContext.allOwnKeys) {
+    checkCustomDeclarationEarlyErrors(
+      root,
+      validationContext.module,
+      customFunctions,
+      customStrictness,
+    );
   }
 }
 
@@ -2908,9 +3209,11 @@ function checkStatementPositionFunctionDeclarations(
  *
  * @param {any} node
  * @param {boolean} strict
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
  * @returns {void}
  */
-function checkFunctionParameterEarlyErrors(node, strict) {
+function checkFunctionParameterEarlyErrors(node, strict, parent, parentKey) {
   if (!isFunctionNode(node)) {
     return;
   }
@@ -2923,8 +3226,20 @@ function checkFunctionParameterEarlyErrors(node, strict) {
     Array.isArray(node.body.body) &&
     hasUseStrictDirective(node.body.body);
   const effectiveStrict = strict || ownStrict;
+  const method =
+    parentKey === 'value' &&
+    ((parent?.type === 'Property' &&
+      (parent.method === true ||
+        parent.kind === 'get' ||
+        parent.kind === 'set')) ||
+      parent?.type === 'MethodDefinition');
+  const allowsDuplicates =
+    simple &&
+    !effectiveStrict &&
+    node.type !== 'ArrowFunctionExpression' &&
+    !method;
 
-  if (simple && !effectiveStrict && node.type !== 'ArrowFunctionExpression') {
+  if (allowsDuplicates && node.generator !== true) {
     return;
   }
 
@@ -2949,7 +3264,14 @@ function checkFunctionParameterEarlyErrors(node, strict) {
     throw error;
   }
 
-  if (summary.duplicate) {
+  if (node.generator === true && summary.names.has('yield')) {
+    throw unsupportedEs2015Error(
+      "Generator parameters may not bind 'yield'",
+      node,
+    );
+  }
+
+  if (summary.duplicate && !allowsDuplicates) {
     throw unsupportedEs2015Error(
       'Duplicate parameter name not allowed in this context',
       node,
@@ -3006,6 +3328,746 @@ function checkStrictBindingIdentifier(
   ) {
     throw unsupportedEs2015Error(`Binding ${node.name} in strict mode`, node);
   }
+}
+
+/**
+ * Applies identifier and unary-expression early errors that Acorn already owns
+ * for source text but cannot enforce on a caller-supplied AST.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @param {boolean} strict
+ * @param {boolean} yieldIdentifierRestricted
+ * @param {boolean} lexicalBinding
+ * @param {boolean} module
+ * @param {boolean} customAst
+ * @returns {void}
+ */
+function checkCustomContextualEarlyErrors(
+  node,
+  parent,
+  parentKey,
+  patternContext,
+  strict,
+  yieldIdentifierRestricted,
+  lexicalBinding,
+  module,
+  customAst,
+) {
+  if (!customAst || !isIdentifierNode(node)) {
+    return;
+  }
+
+  const identifierNameOnly = isIdentifierNameOnlyPosition(parent, parentKey);
+
+  if (
+    !identifierNameOnly &&
+    (ALWAYS_RESERVED_IDENTIFIER_WORDS.has(node.name) ||
+      (strict && STRICT_RESERVED_IDENTIFIER_WORDS.has(node.name)) ||
+      (yieldIdentifierRestricted && node.name === 'yield') ||
+      (lexicalBinding && node.name === 'let') ||
+      (module && node.name === 'await'))
+  ) {
+    throw unsupportedEs2015Error(
+      `Reserved word ${node.name} cannot be used as an Identifier`,
+      node,
+    );
+  }
+
+  if (
+    strict &&
+    (node.name === 'eval' || node.name === 'arguments') &&
+    isAssignmentIdentifierPosition(parent, parentKey, patternContext)
+  ) {
+    throw unsupportedEs2015Error(
+      `Assignment to ${node.name} in strict mode`,
+      node,
+    );
+  }
+
+  if (
+    strict &&
+    parent?.type === 'UnaryExpression' &&
+    parent.operator === 'delete' &&
+    parentKey === 'argument' &&
+    parent.argument === node
+  ) {
+    throw unsupportedEs2015Error(
+      'Deleting an unqualified identifier in strict mode',
+      node,
+    );
+  }
+}
+
+/**
+ * Validates labelled break/continue targets with one mutable map scoped by an
+ * explicit DFS event stack. Function bodies swap in a fresh map and restore the
+ * outer one on exit, while labelled bodies add/remove one entry. This keeps
+ * duplicate and target lookup constant-time without recursively walking an
+ * untrusted tree or copying the complete active-label set at every nesting
+ * level.
+ *
+ * @param {any} root
+ * @returns {void}
+ */
+function checkCustomLabelEarlyErrors(root) {
+  /** @type {Map<string, ControlLabel>} */
+  let activeLabels = new Map();
+  /** @type {WeakMap<object, boolean>} */
+  const iterationTargets = new WeakMap();
+  const seen = new WeakSet();
+  /** @type {any[]} */
+  const pending = [{ kind: 'visit', value: root }];
+
+  while (pending.length > 0) {
+    const event = pending.pop();
+
+    if (event.kind === 'set-labels') {
+      activeLabels = event.labels;
+      continue;
+    }
+
+    if (event.kind === 'enter-label') {
+      activeLabels.set(event.label.name, event.label);
+      continue;
+    }
+
+    if (event.kind === 'leave-label') {
+      activeLabels.delete(event.name);
+      continue;
+    }
+
+    const value = event.value;
+
+    if (!value || typeof value !== 'object' || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      for (let index = value.length - 1; index >= 0; index -= 1) {
+        const descriptor = ownArrayElementDescriptor(value, index);
+
+        if (descriptor !== undefined) {
+          pending.push({ kind: 'visit', value: descriptor.value });
+        }
+      }
+      continue;
+    }
+
+    if (typeof value.type !== 'string') {
+      for (const key of Reflect.ownKeys(value)) {
+        pending.push({ kind: 'visit', value: value[key] });
+      }
+      continue;
+    }
+
+    if (value.type === 'LabeledStatement' && isIdentifierNode(value.label)) {
+      if (activeLabels.has(value.label.name)) {
+        throw unsupportedEs2015Error(
+          `Label ${value.label.name} has already been declared`,
+          value,
+        );
+      }
+    } else if (
+      (value.type === 'BreakStatement' || value.type === 'ContinueStatement') &&
+      isIdentifierNode(value.label)
+    ) {
+      const target = activeLabels.get(value.label.name);
+
+      if (target === undefined) {
+        throw unsupportedEs2015Error(
+          `Undefined label ${value.label.name}`,
+          value,
+        );
+      }
+
+      if (value.type === 'ContinueStatement' && !target.iteration) {
+        throw unsupportedEs2015Error(
+          `Continue label ${value.label.name} does not target an iteration statement`,
+          value,
+        );
+      }
+    }
+
+    const keys = Reflect.ownKeys(value);
+
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      const key = keys[index];
+
+      if (typeof key !== 'string' || NODE_POSITION_KEYS.has(key)) {
+        continue;
+      }
+
+      const child = value[key];
+
+      if (!child || typeof child !== 'object') {
+        continue;
+      }
+
+      if (isFunctionNode(value) && key === 'body') {
+        pending.push({ kind: 'set-labels', labels: activeLabels });
+        pending.push({ kind: 'visit', value: child });
+        pending.push({ kind: 'set-labels', labels: new Map() });
+      } else if (
+        value.type === 'LabeledStatement' &&
+        key === 'body' &&
+        isIdentifierNode(value.label)
+      ) {
+        const label = {
+          name: value.label.name,
+          iteration: customLabelTargetsIteration(value, iterationTargets),
+        };
+
+        pending.push({ kind: 'leave-label', name: label.name });
+        pending.push({ kind: 'visit', value: child });
+        pending.push({ kind: 'enter-label', label });
+      } else {
+        pending.push({ kind: 'visit', value: child });
+      }
+    }
+  }
+}
+
+/**
+ * Resolves and memoizes a complete label chain in one pass. The first outer
+ * label pays for the chain; each nested label is then a constant-time lookup.
+ *
+ * @param {any} label
+ * @param {WeakMap<object, boolean>} cache
+ * @returns {boolean}
+ */
+function customLabelTargetsIteration(label, cache) {
+  const cached = cache.get(label);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const chain = [];
+  const visited = new WeakSet();
+  let current = label;
+  let iteration;
+
+  while (current && current.type === 'LabeledStatement') {
+    const currentCached = cache.get(current);
+
+    if (currentCached !== undefined) {
+      iteration = currentCached;
+      break;
+    }
+
+    if (visited.has(current)) {
+      iteration = false;
+      break;
+    }
+
+    visited.add(current);
+    chain.push(current);
+    current = current.body;
+  }
+
+  if (iteration === undefined) {
+    iteration = !!current && ITERATION_STATEMENT_TYPES.has(current.type);
+  }
+
+  for (const item of chain) {
+    cache.set(item, iteration);
+  }
+
+  return iteration;
+}
+
+/**
+ * Reapplies declaration early errors to custom ASTs in one pass per variable
+ * scope. Nested functions are analyzed separately so declarations never cross
+ * a function boundary.
+ *
+ * @param {any} program
+ * @param {boolean} module
+ * @param {any[]} functions
+ * @param {WeakMap<object, boolean>} strictness
+ * @returns {void}
+ */
+function checkCustomDeclarationEarlyErrors(
+  program,
+  module,
+  functions,
+  strictness,
+) {
+  checkCustomVariableScope(
+    program.body,
+    module ? 'none' : 'top-level',
+    program,
+    strictness,
+  );
+
+  for (let index = 0; index < functions.length; index += 1) {
+    const node = functions[index];
+    if (node.body.type !== 'BlockStatement') {
+      continue;
+    }
+
+    const lexicalNames = topLevelLexicallyDeclaredNames(node.body.body);
+    checkDisjointDeclarationNames(
+      boundNamesFromList(node.params),
+      lexicalNames,
+    );
+    checkProgramDeclarationEarlyErrors(node.body.body);
+    checkCustomVariableScope(
+      node.body.body,
+      'top-level',
+      node.body,
+      strictness,
+    );
+  }
+}
+
+/**
+ * @param {any[]} bindings
+ * @returns {string[]}
+ */
+function boundNamesFromList(bindings) {
+  const names = [];
+  for (let index = 0; index < bindings.length; index += 1) {
+    const bindingNames = boundNames(bindings[index]);
+    for (let nameIndex = 0; nameIndex < bindingNames.length; nameIndex += 1) {
+      names.push(bindingNames[nameIndex]);
+    }
+  }
+  return names;
+}
+
+/**
+ * @param {any[]} statements
+ * @param {'none' | 'top-level'} rootSemantics
+ * @param {any} root
+ * @param {WeakMap<object, boolean>} strictness
+ * @returns {void}
+ */
+function checkCustomVariableScope(statements, rootSemantics, root, strictness) {
+  /** @type {Map<string, number>} */
+  const activeLexicalNames = new Map();
+  /** @type {any[]} */
+  const pending = [
+    {
+      kind: 'list',
+      statements,
+      semantics: rootSemantics,
+      owner: root,
+    },
+  ];
+
+  while (pending.length > 0) {
+    const event = pending.pop();
+
+    if (event.kind === 'exit') {
+      removeActiveDeclarationNames(activeLexicalNames, event.names);
+      continue;
+    }
+
+    if (event.kind === 'list') {
+      /** @type {string[]} */
+      let lexicalNames = [];
+      if (event.semantics === 'top-level') {
+        lexicalNames = topLevelLexicallyDeclaredNames(event.statements);
+      } else if (event.semantics === 'block') {
+        lexicalNames = lexicallyDeclaredNames(event.statements);
+      }
+
+      if (event.semantics === 'block') {
+        checkBlockDeclarationDuplicateNames(
+          event.statements,
+          strictness.get(event.owner) ?? true,
+        );
+      } else {
+        checkDuplicateDeclarationNames(lexicalNames);
+      }
+      addActiveDeclarationNames(activeLexicalNames, lexicalNames);
+      pending.push({ kind: 'exit', names: lexicalNames });
+      for (let index = event.statements.length - 1; index >= 0; index -= 1) {
+        pending.push({ kind: 'statement', node: event.statements[index] });
+      }
+      continue;
+    }
+
+    if (event.kind === 'scoped') {
+      checkDuplicateDeclarationNames(event.names);
+      addActiveDeclarationNames(activeLexicalNames, event.names);
+      pending.push({ kind: 'exit', names: event.names });
+      pending.push({ kind: 'statement', node: event.node });
+      continue;
+    }
+
+    const node = event.node;
+    if (node.type === 'VariableDeclaration') {
+      if (node.kind === 'var') {
+        checkActiveDeclarationNames(activeLexicalNames, boundNames(node));
+      }
+      continue;
+    }
+    if (isFunctionNode(node)) {
+      continue;
+    }
+
+    switch (node.type) {
+      case 'BlockStatement':
+        pending.push({
+          kind: 'list',
+          statements: node.body,
+          semantics: 'block',
+          owner: node,
+        });
+        break;
+      case 'IfStatement':
+        if (node.alternate !== null) {
+          pending.push({ kind: 'statement', node: node.alternate });
+        }
+        pending.push({ kind: 'statement', node: node.consequent });
+        break;
+      case 'DoWhileStatement':
+      case 'WhileStatement':
+      case 'WithStatement':
+      case 'LabeledStatement':
+        pending.push({ kind: 'statement', node: node.body });
+        break;
+      case 'ForStatement':
+        pending.push({
+          kind: 'scoped',
+          node: node.body,
+          names:
+            node.init?.type === 'VariableDeclaration' &&
+            node.init.kind !== 'var'
+              ? boundNames(node.init)
+              : [],
+        });
+        if (node.init?.type === 'VariableDeclaration') {
+          pending.push({ kind: 'statement', node: node.init });
+        }
+        break;
+      case 'ForInStatement':
+      case 'ForOfStatement':
+        pending.push({
+          kind: 'scoped',
+          node: node.body,
+          names:
+            node.left.type === 'VariableDeclaration' && node.left.kind !== 'var'
+              ? boundNames(node.left)
+              : [],
+        });
+        if (node.left.type === 'VariableDeclaration') {
+          pending.push({ kind: 'statement', node: node.left });
+        }
+        break;
+      case 'SwitchStatement': {
+        const switchStatements = [];
+        for (let caseIndex = 0; caseIndex < node.cases.length; caseIndex += 1) {
+          const consequent = node.cases[caseIndex].consequent;
+          for (let index = 0; index < consequent.length; index += 1) {
+            switchStatements.push(consequent[index]);
+          }
+        }
+        pending.push({
+          kind: 'list',
+          statements: switchStatements,
+          semantics: 'block',
+          owner: node,
+        });
+        break;
+      }
+      case 'TryStatement':
+        if (node.finalizer !== null) {
+          pending.push({ kind: 'statement', node: node.finalizer });
+        }
+        if (node.handler !== null) {
+          pending.push({ kind: 'statement', node: node.handler });
+        }
+        pending.push({ kind: 'statement', node: node.block });
+        break;
+      case 'CatchClause':
+        if (node.param !== null) {
+          const parameterNames = boundNames(node.param);
+          checkDuplicateDeclarationNames(parameterNames);
+          checkDisjointDeclarationNames(
+            parameterNames,
+            lexicallyDeclaredNames(node.body.body),
+          );
+        }
+        pending.push({
+          kind: 'list',
+          statements: node.body.body,
+          semantics: 'block',
+          owner: node.body,
+        });
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+/**
+ * Annex B permits repeated ordinary block functions in sloppy code, while
+ * every other repeated lexical binding remains an early error.
+ *
+ * @param {any[]} statements
+ * @param {boolean} strict
+ * @returns {void}
+ */
+function checkBlockDeclarationDuplicateNames(statements, strict) {
+  /** @type {Map<string, boolean>} */
+  const declarations = new Map();
+
+  for (let index = 0; index < statements.length; index += 1) {
+    let statement = statements[index];
+    while (statement.type === 'LabeledStatement') {
+      statement = statement.body;
+    }
+    const lexical =
+      (statement.type === 'VariableDeclaration' && statement.kind !== 'var') ||
+      statement.type === 'ClassDeclaration' ||
+      statement.type === 'FunctionDeclaration';
+    if (!lexical) {
+      continue;
+    }
+
+    const annexBFunction =
+      !strict &&
+      statement.type === 'FunctionDeclaration' &&
+      statement.generator !== true &&
+      statement.async !== true;
+    const names = boundNames(statement);
+    for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+      const name = names[nameIndex];
+      const previousWasAnnexBFunction = declarations.get(name);
+      if (
+        previousWasAnnexBFunction !== undefined &&
+        !(previousWasAnnexBFunction && annexBFunction)
+      ) {
+        throw new SyntaxError(`Identifier '${name}' has already been declared`);
+      }
+      declarations.set(name, annexBFunction);
+    }
+  }
+}
+
+/**
+ * @param {string[]} names
+ * @returns {void}
+ */
+function checkDuplicateDeclarationNames(names) {
+  const seen = new Set();
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (seen.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+    seen.add(name);
+  }
+}
+
+/**
+ * @param {string[]} leftNames
+ * @param {string[]} rightNames
+ * @returns {void}
+ */
+function checkDisjointDeclarationNames(leftNames, rightNames) {
+  const left = new Set(leftNames);
+  for (let index = 0; index < rightNames.length; index += 1) {
+    const name = rightNames[index];
+    if (left.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+  }
+}
+
+/**
+ * @param {Map<string, number>} activeNames
+ * @param {string[]} names
+ * @returns {void}
+ */
+function addActiveDeclarationNames(activeNames, names) {
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    activeNames.set(name, (activeNames.get(name) ?? 0) + 1);
+  }
+}
+
+/**
+ * @param {Map<string, number>} activeNames
+ * @param {string[]} names
+ * @returns {void}
+ */
+function removeActiveDeclarationNames(activeNames, names) {
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    const count = activeNames.get(name);
+    if (count === 1) {
+      activeNames.delete(name);
+    } else if (count !== undefined) {
+      activeNames.set(name, count - 1);
+    }
+  }
+}
+
+/**
+ * @param {Map<string, number>} activeNames
+ * @param {string[]} names
+ * @returns {void}
+ */
+function checkActiveDeclarationNames(activeNames, names) {
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (activeNames.has(name)) {
+      throw new SyntaxError(`Identifier '${name}' has already been declared`);
+    }
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {boolean} inFunction
+ * @param {boolean} breakAllowed
+ * @param {boolean} continueAllowed
+ * @param {boolean} customAst
+ * @returns {void}
+ */
+function checkCustomControlFlowEarlyErrors(
+  node,
+  inFunction,
+  breakAllowed,
+  continueAllowed,
+  customAst,
+) {
+  if (!customAst) {
+    return;
+  }
+
+  if (node.type === 'ReturnStatement' && !inFunction) {
+    throw unsupportedEs2015Error('Return statement outside a function', node);
+  }
+
+  if (node.type !== 'BreakStatement' && node.type !== 'ContinueStatement') {
+    return;
+  }
+
+  const continuation = node.type === 'ContinueStatement';
+
+  if (node.label !== null && node.label !== undefined) {
+    return;
+  }
+
+  if (continuation ? !continueAllowed : !breakAllowed) {
+    throw unsupportedEs2015Error(
+      `${continuation ? 'Continue' : 'Break'} statement outside an allowed target`,
+      node,
+    );
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {string | undefined} key
+ * @param {SyntaxWalkItem} inherited
+ * @returns {{
+ *   inFunction: boolean,
+ *   breakAllowed: boolean,
+ *   continueAllowed: boolean,
+ * }}
+ */
+function controlContextForChild(node, key, inherited) {
+  if (isFunctionNode(node)) {
+    return {
+      inFunction: key === 'body',
+      breakAllowed: false,
+      continueAllowed: false,
+    };
+  }
+
+  if (ITERATION_STATEMENT_TYPES.has(node.type) && key === 'body') {
+    return {
+      inFunction: inherited.inFunction,
+      breakAllowed: true,
+      continueAllowed: true,
+    };
+  }
+
+  if (node.type === 'SwitchStatement' && key === 'cases') {
+    return {
+      inFunction: inherited.inFunction,
+      breakAllowed: true,
+      continueAllowed: inherited.continueAllowed,
+    };
+  }
+
+  return {
+    inFunction: inherited.inFunction,
+    breakAllowed: inherited.breakAllowed,
+    continueAllowed: inherited.continueAllowed,
+  };
+}
+
+/**
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {boolean}
+ */
+function isIdentifierNameOnlyPosition(parent, parentKey) {
+  if (!parent || typeof parentKey !== 'string') {
+    return false;
+  }
+
+  if (
+    parent.type === 'MemberExpression' &&
+    parent.computed === false &&
+    parentKey === 'property'
+  ) {
+    return true;
+  }
+
+  if (
+    (parent.type === 'Property' || parent.type === 'MethodDefinition') &&
+    parent.computed === false &&
+    parentKey === 'key'
+  ) {
+    return true;
+  }
+
+  if (
+    (parent.type === 'ImportSpecifier' && parentKey === 'imported') ||
+    (parent.type === 'ExportSpecifier' &&
+      (parentKey === 'local' || parentKey === 'exported')) ||
+    parent.type === 'MetaProperty'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @returns {boolean}
+ */
+function isAssignmentIdentifierPosition(parent, parentKey, patternContext) {
+  if (patternContext === 'assignment') {
+    return true;
+  }
+
+  return (
+    !!parent &&
+    typeof parentKey === 'string' &&
+    (((parent.type === 'AssignmentExpression' ||
+      parent.type === 'ForInStatement' ||
+      parent.type === 'ForOfStatement') &&
+      parentKey === 'left') ||
+      (parent.type === 'UpdateExpression' && parentKey === 'argument'))
+  );
 }
 
 /**
@@ -3164,13 +4226,14 @@ function classDerivedForChild(node, key, inherited) {
  *
  * @param {any} node
  * @param {boolean} strict
+ * @param {WeakMap<object, { fn: any, labeled: boolean } | null>} labelCache
  * @returns {void}
  */
-function checkFunctionDeclarationPosition(node, strict) {
+function checkFunctionDeclarationPosition(node, strict, labelCache) {
   const parentLabel = STATEMENT_BODY_PARENT_LABELS.get(node.type);
 
   if (parentLabel !== undefined) {
-    const offending = resolveBodyFunctionDeclaration(node.body);
+    const offending = resolveBodyFunctionDeclaration(node.body, labelCache);
 
     if (offending) {
       throw statementPositionFunctionError(
@@ -3184,7 +4247,7 @@ function checkFunctionDeclarationPosition(node, strict) {
 
   if (node.type === 'IfStatement') {
     for (const branch of [node.consequent, node.alternate]) {
-      const offending = resolveBodyFunctionDeclaration(branch);
+      const offending = resolveBodyFunctionDeclaration(branch, labelCache);
 
       if (offending) {
         throw statementPositionFunctionError(
@@ -3198,7 +4261,7 @@ function checkFunctionDeclarationPosition(node, strict) {
   }
 
   if (node.type === 'LabeledStatement') {
-    const offending = resolveBodyFunctionDeclaration(node);
+    const offending = resolveBodyFunctionDeclaration(node, labelCache);
 
     if (offending && (strict || offending.fn.generator === true)) {
       throw statementPositionFunctionError(
@@ -3214,13 +4277,18 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} pending
+ * @param {SyntaxWalkItem[]} pending
  * @param {unknown} value
  * @param {boolean} strict
  * @param {boolean} yieldAllowed
+ * @param {boolean} yieldIdentifierRestricted
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
  * @param {boolean | undefined} classDerived
+ * @param {boolean} inFunction
+ * @param {boolean} breakAllowed
+ * @param {boolean} continueAllowed
+ * @param {boolean} lexicalBinding
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
@@ -3233,9 +4301,14 @@ function pushChild(
   value,
   strict,
   yieldAllowed,
+  yieldIdentifierRestricted,
   superAllowed,
   superCallAllowed,
   classDerived,
+  inFunction,
+  breakAllowed,
+  continueAllowed,
+  lexicalBinding,
   parent,
   parentKey,
   patternContext,
@@ -3247,9 +4320,14 @@ function pushChild(
       node: value,
       strict,
       yieldAllowed,
+      yieldIdentifierRestricted,
       superAllowed,
       superCallAllowed,
       classDerived,
+      inFunction,
+      breakAllowed,
+      continueAllowed,
+      lexicalBinding,
       parent,
       parentKey,
       parentIndex,
@@ -3274,7 +4352,80 @@ function yieldAllowedForChild(parent, key, inherited) {
     return inherited;
   }
 
+  if (key === 'id') {
+    return inherited;
+  }
+
   return key === 'body' && parent.generator === true && parent.async !== true;
+}
+
+/**
+ * Tracks the grammar's contextual restriction on Identifier-form `yield`
+ * separately from whether a YieldExpression is allowed. Generator parameters
+ * forbid both forms, while an ordinary nested function resets the restriction.
+ * Arrow parameters are parsed in their enclosing context even though the arrow
+ * body starts a non-generator function context.
+ *
+ * @param {any} parent
+ * @param {string | undefined} key
+ * @param {boolean} inherited
+ * @returns {boolean}
+ */
+function yieldIdentifierRestrictedForChild(parent, key, inherited) {
+  if (!isFunctionNode(parent)) {
+    return inherited;
+  }
+
+  if (key === 'id') {
+    return parent.type === 'FunctionExpression'
+      ? parent.generator === true && parent.async !== true
+      : inherited;
+  }
+
+  if (parent.type === 'ArrowFunctionExpression') {
+    return key === 'params' ? inherited : false;
+  }
+
+  return (
+    (key === 'params' || key === 'body') &&
+    parent.generator === true &&
+    parent.async !== true
+  );
+}
+
+/**
+ * Carries the lexical-declaration `[Let]` binding restriction through nested
+ * binding patterns without applying it to initializer/default expressions or
+ * unrelated binding forms such as `var` and function parameters.
+ *
+ * @param {any} parent
+ * @param {string | undefined} key
+ * @param {boolean} inherited
+ * @returns {boolean}
+ */
+function lexicalBindingForChild(parent, key, inherited) {
+  if (parent.type === 'VariableDeclaration') {
+    return (
+      key === 'declarations' &&
+      (parent.kind === 'let' || parent.kind === 'const')
+    );
+  }
+
+  if (parent.type === 'VariableDeclarator') {
+    return key === 'id' && inherited;
+  }
+
+  if (
+    (parent.type === 'ArrayPattern' && key === 'elements') ||
+    (parent.type === 'ObjectPattern' && key === 'properties') ||
+    (parent.type === 'Property' && key === 'value') ||
+    (parent.type === 'AssignmentPattern' && key === 'left') ||
+    (parent.type === 'RestElement' && key === 'argument')
+  ) {
+    return inherited;
+  }
+
+  return false;
 }
 
 /**
@@ -3350,27 +4501,47 @@ function patternContextForChild(parent, key, inherited) {
  * hook could hand us.
  *
  * @param {any} statement
+ * @param {WeakMap<object, { fn: any, labeled: boolean } | null>} cache
  * @returns {{ fn: any, labeled: boolean } | undefined}
  */
-function resolveBodyFunctionDeclaration(statement) {
+function resolveBodyFunctionDeclaration(statement, cache) {
   let current = statement;
-  let labeled = false;
+  const chain = [];
   /** @type {WeakSet<object>} */
   const visited = new WeakSet();
+  /** @type {{ fn: any, labeled: boolean } | undefined} */
+  let result;
 
   while (current && current.type === 'LabeledStatement') {
+    const cached = cache.get(current);
+
+    if (cached !== undefined) {
+      result = cached === null ? undefined : cached;
+      break;
+    }
+
     if (visited.has(current)) {
-      return undefined;
+      result = undefined;
+      break;
     }
 
     visited.add(current);
-    labeled = true;
+    chain.push(current);
     current = current.body;
   }
 
-  return current && current.type === 'FunctionDeclaration'
-    ? { fn: current, labeled }
-    : undefined;
+  if (result === undefined && current?.type === 'FunctionDeclaration') {
+    result = { fn: current, labeled: chain.length > 0 };
+  }
+
+  for (const label of chain) {
+    cache.set(
+      label,
+      result === undefined ? null : { fn: result.fn, labeled: true },
+    );
+  }
+
+  return result;
 }
 
 /**
@@ -3745,7 +4916,8 @@ function isSupportedModulePosition(node, parent, parentKey, parentIndex) {
           direct('local')) ||
         (parent.type === 'ImportSpecifier' && direct('imported')) ||
         (parent.type === 'ExportSpecifier' &&
-          (direct('local') || direct('exported')))
+          (direct('local') || direct('exported'))) ||
+        (parent.type === 'ExportDefaultDeclaration' && direct('declaration'))
       );
     case 'VariableDeclaration':
       return parent.type === 'ExportNamedDeclaration' && direct('declaration');
@@ -5454,12 +6626,38 @@ function validateEvaluatorChildEdges(
         'expression',
         isExpressionNodeOrUnknown,
       );
-    case 'VariableDeclaration':
-      return validateChildList(
+    case 'VariableDeclaration': {
+      const declarationMessage = validateChildList(
         node,
         'declarations',
         isVariableDeclaratorOrUnknown,
       );
+      if (
+        declarationMessage !== undefined ||
+        node.kind !== 'const' ||
+        (parentKey === 'left' &&
+          (parent?.type === 'ForInStatement' ||
+            parent?.type === 'ForOfStatement'))
+      ) {
+        return declarationMessage;
+      }
+
+      for (let index = 0; index < node.declarations.length; index += 1) {
+        const declaration = node.declarations[index];
+        if (declaration?.type !== 'VariableDeclarator') {
+          continue;
+        }
+        const initializerMessage = validateRequiredChild(
+          declaration,
+          'init',
+          isExpressionNodeOrUnknown,
+        );
+        if (initializerMessage !== undefined) {
+          return initializerMessage;
+        }
+      }
+      return undefined;
+    }
     case 'VariableDeclarator':
       return (
         validateRequiredChild(node, 'id', isBindingPatternNodeOrUnknown) ??
@@ -6555,6 +7753,21 @@ function asParseFailure(error, ownParser) {
   }
 
   return error;
+}
+
+/**
+ * Module shape and capability checks are part of parsing, not parser-hook
+ * execution. Normalize only their deliberate validation error classes; an
+ * arbitrary exception thrown by `options.parse` is handled before this boundary
+ * and continues to propagate unchanged.
+ *
+ * @param {unknown} error
+ * @returns {unknown}
+ */
+function asModuleValidationFailure(error) {
+  return error instanceof UnsupportedNodeError || error instanceof TypeError
+    ? normalizeSyntaxError(error)
+    : error;
 }
 
 /**

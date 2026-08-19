@@ -34,7 +34,10 @@ import {
   sortStrings,
   sortTestPaths,
 } from './selection.js';
-import { resolveTest262ModulePath } from './module-paths.js';
+import {
+  assertPortableTest262Path,
+  resolveTest262ModulePath,
+} from './module-paths.js';
 
 export { DEFAULT_INCLUDES };
 
@@ -118,6 +121,36 @@ export const UNSUPPORTED_FLAGS = Object.freeze([
 ]);
 
 const STRICT_DIRECTIVE = '"use strict";\n';
+const STRICT_SHELL_INCLUDE = 'sm/non262-strict-shell.js';
+const STRICT_SHELL_GLOBAL_REFERENCES = Object.freeze([
+  ['globalThis.completesNormally', 'global.completesNormally'],
+  ['globalThis.raisesException', 'global.raisesException'],
+]);
+
+/**
+ * The pinned SpiderMonkey strict harness is an IIFE with an existing `global`
+ * parameter, but two initializers use the later `globalThis` spelling. Rewrite
+ * only those harness-owned references. The test source is never transformed
+ * and no `globalThis` binding is installed in its Realm.
+ *
+ * @param {string} name
+ * @param {string} source
+ * @returns {string}
+ */
+function prepareHarnessSource(name, source) {
+  if (name !== STRICT_SHELL_INCLUDE) {
+    return source;
+  }
+
+  let prepared = source;
+  for (const [
+    reference,
+    compatibleReference,
+  ] of STRICT_SHELL_GLOBAL_REFERENCES) {
+    prepared = prepared.replace(reference, compatibleReference);
+  }
+  return prepared;
+}
 
 /**
  * Decides whether a test runs at all. Explicit exclusions win over the
@@ -131,6 +164,14 @@ const STRICT_DIRECTIVE = '"use strict";\n';
 export function decideSkip(metadata, options = {}) {
   const supportedFeatures = options.supportedFeatures ?? [];
   const skipFeatures = options.skipFeatures ?? [];
+
+  if (metadata.flags.includes('module') && metadata.flags.includes('async')) {
+    return {
+      reason: 'unsupported-flag-combination',
+      message: 'unsupported flag combination: module and async',
+    };
+  }
+
   const flag = metadata.flags.find((name) => UNSUPPORTED_FLAGS.includes(name));
 
   if (flag !== undefined) {
@@ -224,6 +265,20 @@ export async function runTest262Suite(options) {
 export async function runTest262File(options) {
   const { engine, host, file } = options;
 
+  try {
+    assertPortableTest262Path(file);
+  } catch {
+    return [
+      createTestRecord({
+        file,
+        status: 'failed',
+        reason: 'load-error',
+        message:
+          'Test262 test path must be a portable repository-relative path',
+      }),
+    ];
+  }
+
   if (isTest262FixtureDependencyPath(file)) {
     return [];
   }
@@ -300,6 +355,16 @@ export async function runTest262File(options) {
 }
 
 /**
+ * @param {Test262Host} host
+ * @param {string} name
+ * @returns {Promise<string>}
+ */
+async function readPortableInclude(host, name) {
+  assertPortableTest262Path(name);
+  return host.readInclude(name);
+}
+
+/**
  * @param {{
  *   engine: Test262Engine,
  *   host: Test262Host,
@@ -369,7 +434,7 @@ async function runVariant({
     let includeSource;
 
     try {
-      includeSource = await host.readInclude(name);
+      includeSource = await readPortableInclude(host, name);
     } catch (error) {
       return failed(
         'load-error',
@@ -381,7 +446,10 @@ async function runVariant({
     let includeResult;
 
     try {
-      includeResult = engine.evaluateScript(realm, includeSource);
+      includeResult = engine.evaluateScript(
+        realm,
+        prepareHarnessSource(name, includeSource),
+      );
     } catch (error) {
       return failed(
         'harness-error',
@@ -480,7 +548,7 @@ async function runModuleVariant({
     let includeSource;
 
     try {
-      includeSource = await host.readInclude(name);
+      includeSource = await readPortableInclude(host, name);
     } catch (error) {
       return failed(
         'load-error',
@@ -492,7 +560,10 @@ async function runModuleVariant({
     let includeResult;
 
     try {
-      includeResult = engine.evaluateScript(realm, includeSource);
+      includeResult = engine.evaluateScript(
+        realm,
+        prepareHarnessSource(name, includeSource),
+      );
     } catch (error) {
       return failed(
         'harness-error',
@@ -709,7 +780,7 @@ async function runAsyncVariant({
     let includeSource;
 
     try {
-      includeSource = await host.readInclude(name);
+      includeSource = await readPortableInclude(host, name);
     } catch (error) {
       return failed(
         'load-error',
@@ -721,7 +792,10 @@ async function runAsyncVariant({
     let includeResult;
 
     try {
-      includeResult = engine.evaluateScript(realm, includeSource);
+      includeResult = engine.evaluateScript(
+        realm,
+        prepareHarnessSource(name, includeSource),
+      );
     } catch (error) {
       return failed(
         'harness-error',

@@ -303,6 +303,50 @@ const tests = [
     },
   },
   {
+    name: 'destructuring super targets capture their base after the property expression but before key coercion',
+    run() {
+      assertSame(
+        val(
+          createRealm(),
+          `
+            var writes = [];
+            var first = {};
+            var second = {};
+            var third = {};
+            Object.defineProperty(first, 'selected', {
+              set: function (value) { writes.push('first:' + value); }
+            });
+            Object.defineProperty(second, 'selected', {
+              set: function (value) { writes.push('second:' + value); }
+            });
+            Object.defineProperty(third, 'selected', {
+              set: function (value) { writes.push('third:' + value); }
+            });
+            var key = {
+              toString: function () {
+                Object.setPrototypeOf(object, third);
+                return 'selected';
+              }
+            };
+            function property() {
+              Object.setPrototypeOf(object, second);
+              return key;
+            }
+            var object = {
+              __proto__: first,
+              assign() {
+                [super[property()]] = [7];
+              }
+            };
+            object.assign();
+            [writes.join(','), Object.getPrototypeOf(object) === third].join(':');
+          `,
+        ),
+        'second:7:true',
+      );
+    },
+  },
+  {
     name: 'anonymous function defaults receive the identifier target name',
     run() {
       assertSame(

@@ -1,14 +1,17 @@
 /**
  * Source-dependent path selection for the pinned Test262 generator.
  *
- * The caller supplies its file list, parsed harness status, and source reader.
- * Keeping those boundaries injected lets the Node-only unit test prove that
- * path-only policy filters run before any test source is read.
+ * The caller supplies its file list, inspected harness grammar, and source
+ * reader. Keeping those boundaries injected lets the Node-only unit test prove
+ * that path-only policy filters run before any test source is read and that a
+ * generator-bearing include inherits only its including file's exact syntax
+ * authorization.
  */
 
 import { parseScript } from '../../src/parser.js';
 import {
   isCandidatePath,
+  isGeneratorSyntaxAuthorized,
   isStructurallyEligiblePath,
   scanFrontmatter,
 } from './es5-selection.js';
@@ -27,15 +30,30 @@ const GENERATOR_EXPANSION_FEATURE = 'generators';
  * @returns {boolean}
  */
 export function parsesUnderEngineGrammar(source, policy) {
+  return inspectEngineGrammar(source, policy).parsesUnderEngineGrammar;
+}
+
+/**
+ * @param {string} source
+ * @param {import('./es5-selection.js').Es5SelectionPolicy} policy
+ * @returns {{ parsesUnderEngineGrammar: boolean, usesGeneratorSyntax: boolean }}
+ */
+export function inspectEngineGrammar(source, policy) {
   try {
     const program = parseScript(source);
+    const usesGeneratorSyntax = containsGeneratorSyntax(program);
 
-    return (
-      policy.expansionFeatures.includes(GENERATOR_EXPANSION_FEATURE) ||
-      !containsGeneratorSyntax(program)
-    );
+    return {
+      parsesUnderEngineGrammar:
+        policy.expansionFeatures.includes(GENERATOR_EXPANSION_FEATURE) ||
+        !usesGeneratorSyntax,
+      usesGeneratorSyntax,
+    };
   } catch {
-    return false;
+    return {
+      parsesUnderEngineGrammar: false,
+      usesGeneratorSyntax: false,
+    };
   }
 }
 
@@ -85,7 +103,7 @@ function containsGeneratorSyntax(program) {
  *   files: readonly string[],
  *   policy: import('./es5-selection.js').Es5SelectionPolicy,
  *   previouslySelected: ReadonlySet<string>,
- *   harnessParsing: ReadonlyMap<string, boolean>,
+ *   harnessParsing: ReadonlyMap<string, ReturnType<typeof inspectEngineGrammar>>,
  *   readSource: (path: string) => string | Promise<string>,
  * }} options
  * @returns {Promise<string[]>}
@@ -103,14 +121,23 @@ export async function selectPaths(options) {
 
     const source = await readSource(path);
     const frontmatter = scanFrontmatter(source);
+    const grammar = inspectEngineGrammar(source, policy);
+    const generatorSyntaxAuthorized = isGeneratorSyntaxAuthorized(path, policy);
     const info = {
       declaresFeatures: frontmatter.hasFeatures,
       features: frontmatter.features,
       isModule: frontmatter.isModule,
-      parsesUnderEngineGrammar: parsesUnderEngineGrammar(source, policy),
-      includesParseUnderEngineGrammar: frontmatter.includes.every(
-        (name) => harnessParsing.get(name) !== false,
-      ),
+      usesGeneratorSyntax: grammar.usesGeneratorSyntax,
+      parsesUnderEngineGrammar: grammar.parsesUnderEngineGrammar,
+      includesParseUnderEngineGrammar: frontmatter.includes.every((name) => {
+        const includeGrammar = harnessParsing.get(name);
+
+        return (
+          includeGrammar === undefined ||
+          (includeGrammar.parsesUnderEngineGrammar &&
+            (!includeGrammar.usesGeneratorSyntax || generatorSyntaxAuthorized))
+        );
+      }),
     };
 
     if (isCandidatePath(path, info, policy, previouslySelected)) {

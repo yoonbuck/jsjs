@@ -1138,6 +1138,7 @@ export function applyVariableDeclaratorValue(
       reference ??
         getIdentifierReference(context.env, declarator.id.name, context.strict),
       value,
+      context.realm,
     );
     return;
   }

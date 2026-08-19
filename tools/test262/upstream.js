@@ -93,6 +93,31 @@ export class Test262UpstreamSubsetError extends Error {
 }
 
 /**
+ * @param {{
+ *   summary: { failed: number, skipped: number },
+ *   coverage: {
+ *     files: { selected: number, attempted: number, passed: number },
+ *     records: { selected: number, attempted: number, passed: number },
+ *   },
+ * }} result
+ * @returns {boolean}
+ */
+export function upstreamRunResultPasses(result) {
+  /**
+   * @param {{ selected: number, attempted: number, passed: number }} scope
+   */
+  const complete = (scope) =>
+    scope.selected === scope.attempted && scope.attempted === scope.passed;
+
+  return (
+    result.summary.failed === 0 &&
+    result.summary.skipped === 0 &&
+    complete(result.coverage.files) &&
+    complete(result.coverage.records)
+  );
+}
+
+/**
  * @param {string} text
  * @returns {Test262UpstreamSubset}
  */

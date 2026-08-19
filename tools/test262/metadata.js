@@ -119,9 +119,38 @@ export function parseTest262Metadata(source) {
     throw new Test262MetadataError('Unterminated Test262 frontmatter block');
   }
 
-  const lines = source.slice(bodyStart, end).split(/\r\n?|\n/);
+  const lines = normalizeBlockIndent(
+    source.slice(bodyStart, end).split(/\r\n?|\n/),
+  );
 
   return buildMetadata(parseBlock(lines));
+}
+
+/**
+ * YAML permits the complete document to be indented. Test262 normally starts
+ * root keys in column zero, but a small set of legacy files indents every root
+ * key by one space. Remove only that common document margin; relative
+ * indentation inside block scalars, sequences, and mappings stays unchanged.
+ *
+ * @param {readonly string[]} lines
+ * @returns {string[]}
+ */
+function normalizeBlockIndent(lines) {
+  const content = lines.filter(
+    (line) => line.trim() !== '' && !isComment(line),
+  );
+  if (content.length === 0) {
+    return [...lines];
+  }
+
+  const indent = Math.min(...content.map((line) => leadingSpaces(line)));
+  if (indent === 0) {
+    return [...lines];
+  }
+
+  return lines.map((line) =>
+    leadingSpaces(line) >= indent ? line.slice(indent) : line,
+  );
 }
 
 /**
@@ -489,7 +518,7 @@ function validateFlagCombinations(flags, includes) {
     return;
   }
 
-  for (const flag of ['onlyStrict', 'noStrict', 'module', 'async']) {
+  for (const flag of ['onlyStrict', 'noStrict', 'async']) {
     if (flags.includes(flag)) {
       throw new Test262MetadataError(
         `Conflicting frontmatter flags: raw and ${flag}`,

@@ -180,7 +180,10 @@ export function installIteratorMethods(realm, intrinsics) {
       length: 0,
       call(thisValue) {
         checkObjectCoercible(thisValue);
-        return new StringIterator(stringIteratorPrototype, toString(thisValue));
+        return new StringIterator(
+          stringIteratorPrototype,
+          toString(thisValue, realm),
+        );
       },
     }),
   );
@@ -208,7 +211,7 @@ function arrayIteratorNext(realm, thisValue) {
   }
 
   const index = thisValue.nextIndex;
-  const length = toLength(array.get('length'));
+  const length = toLength(array.get('length', realm), realm);
 
   if (index >= length) {
     thisValue.iteratedObject = undefined;
@@ -221,7 +224,7 @@ function arrayIteratorNext(realm, thisValue) {
     return createIterResultObject(realm, index, false);
   }
 
-  const elementValue = array.get(String(index));
+  const elementValue = array.get(String(index), realm);
 
   if (thisValue.kind === 'value') {
     return createIterResultObject(realm, elementValue, false);
@@ -297,10 +300,11 @@ function codePointUnitCount(string, position, length) {
  * to `[0, 2^53 - 1]`.
  *
  * @param {unknown} value
+ * @param {Realm} realm
  * @returns {number}
  */
-function toLength(value) {
-  const integer = toInteger(value);
+function toLength(value, realm) {
+  const integer = toInteger(value, realm);
 
   if (integer <= 0) {
     return 0;

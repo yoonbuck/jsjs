@@ -47,6 +47,17 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
 /**
  * Counts the engine frames one realm currently has on the host stack and turns
  * the moment the count would exceed `maxDepth` into a guest-visible error.
+ * During a synchronous cross-Agent call path, the participating Agents also own
+ * a temporary complete host-chain count. Frames that were already active when
+ * the path begins are adopted; every guarded frame entered afterward charges it
+ * normally. Generator resumes retain their own temporary chain because they can
+ * outlive a call edge while still synchronously resuming linked iterators. Both
+ * kinds of merged chain retain the smallest host-safety `maxDepth` observed
+ * from their participating Realms, so adding a Realm can only tighten the
+ * complete host-chain budget. A synchronous call chain floors that aggregate at
+ * the calibrated default: a smaller custom per-Realm limit remains local rather
+ * than unexpectedly constraining finite work in another Realm. Each Realm's
+ * ordinary evaluator count and configured limit remain unchanged.
  *
  * Three kinds of work enter the guard, because all three recurse on the host
  * stack proportionally to something guest source controls:
@@ -56,6 +67,9 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
  *   an `eval` chain is counted in the same units as a direct call;
  * - every expression and statement the evaluator walks into, so a call buried
  *   in a deeply nested expression costs what it really costs;
+ * - every active generator resumption, because synchronous `yield*` and
+ *   generator-backed iteration can resume another generator before the current
+ *   continuation unwinds;
  * - `JSON.parse` and `JSON.stringify`, whose recursion follows the shape of
  *   runtime *data* rather than of source, and the regular-expression pattern
  *   parser, whose recursion follows the shape of a guest-supplied pattern
@@ -67,9 +81,12 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
  * `RangeError`. Nothing else is caught or reinterpreted: a host exception
  * raised by an engine defect still escapes as itself.
  *
- * The count is per realm rather than per process because a realm is the
- * engine's unit of isolation and there is no cross-realm call path; a realm
- * whose script overflows leaves every other realm's budget untouched.
+ * The ordinary count remains per Realm. The synchronous call-chain count exists
+ * only while at least two Agents share one active call path; single-Agent work
+ * keeps its original per-Realm semantics. The generator host-chain count exists
+ * only while synchronous resumes are nested. All counts return to zero through
+ * `finally`; sequential work in any Realm or Agent receives its full configured
+ * budget.
  *
  * Every `enter` is paired with an `exit` through a `try`/`finally`, so the
  * count is exact whether a frame returns or throws, and no boundary has to
@@ -80,8 +97,9 @@ export const DEFAULT_MAX_STACK_DEPTH = 500;
 export class StackGuard {
   /**
    * @param {number} [maxDepth=DEFAULT_MAX_STACK_DEPTH]
+   * @param {import('./agent.js').Agent} [agent]
    */
-  constructor(maxDepth = DEFAULT_MAX_STACK_DEPTH) {
+  constructor(maxDepth = DEFAULT_MAX_STACK_DEPTH, agent) {
     if (!Number.isInteger(maxDepth) || maxDepth < 1) {
       throw new TypeError(
         `maxStackDepth must be a positive integer, received ${String(maxDepth)}`,
@@ -92,6 +110,13 @@ export class StackGuard {
     this.maxDepth = maxDepth;
     /** @type {number} */
     this.depth = 0;
+    this.agent = agent;
+    this.synchronousCallChainDepth = 0;
+    /** @type {import('./agent.js').SynchronousCallChain[]} */
+    this._synchronousCallChainFrames = [];
+    this.generatorHostChainDepth = 0;
+    /** @type {import('./agent.js').GeneratorHostChain[]} */
+    this._generatorHostChainFrames = [];
   }
 
   /**
@@ -111,13 +136,222 @@ export class StackGuard {
       );
     }
 
+    const chargedSynchronousCallChain =
+      this.agent?.enterSynchronousCallFrame(
+        Math.max(this.maxDepth, DEFAULT_MAX_STACK_DEPTH),
+      ) ?? null;
+    let chargedGeneratorHostChain = null;
+
+    try {
+      chargedGeneratorHostChain =
+        this.agent?.enterGeneratorHostFrame(this.maxDepth) ?? null;
+    } catch (error) {
+      if (chargedSynchronousCallChain !== null) {
+        this.agent?.exitSynchronousCallFrame(chargedSynchronousCallChain);
+      }
+
+      throw error;
+    }
+
     this.depth += 1;
+    if (this.depth === 1) {
+      this.agent?.registerActiveStackGuard(this);
+    }
+
+    if (chargedGeneratorHostChain !== null) {
+      this._generatorHostChainFrames.push(chargedGeneratorHostChain);
+      this.generatorHostChainDepth += 1;
+    }
+
+    if (chargedSynchronousCallChain !== null) {
+      this._synchronousCallChainFrames.push(chargedSynchronousCallChain);
+      this.synchronousCallChainDepth += 1;
+    }
   }
 
   /**
    * @returns {void}
    */
   exit() {
+    if (this.depth <= 0) {
+      throw new TypeError('StackGuard depth underflow');
+    }
+
     this.depth -= 1;
+
+    try {
+      try {
+        if (this.generatorHostChainDepth > 0) {
+          const chargedGeneratorHostChain =
+            this._generatorHostChainFrames.pop();
+
+          if (chargedGeneratorHostChain === undefined) {
+            throw new TypeError('Generator host-chain frame stack is empty');
+          }
+
+          this.generatorHostChainDepth -= 1;
+          this.agent?.exitGeneratorHostFrame(chargedGeneratorHostChain);
+        }
+      } finally {
+        if (this.synchronousCallChainDepth > 0) {
+          const chargedSynchronousCallChain =
+            this._synchronousCallChainFrames.pop();
+
+          if (chargedSynchronousCallChain === undefined) {
+            throw new TypeError('Synchronous call-chain frame stack is empty');
+          }
+
+          this.synchronousCallChainDepth -= 1;
+          this.agent?.exitSynchronousCallFrame(chargedSynchronousCallChain);
+        }
+      }
+    } finally {
+      if (this.depth === 0) {
+        this.agent?.unregisterActiveStackGuard(this);
+      }
+    }
   }
+
+  /**
+   * Charges frames that entered before a cross-Agent synchronous call chain
+   * existed. Tokens are appended in stack order so the ordinary `exit` path
+   * releases them exactly once.
+   *
+   * @param {import('./agent.js').SynchronousCallChain} chain
+   * @returns {void}
+   */
+  adoptSynchronousCallChain(chain) {
+    const unchargedDepth = this.depth - this.synchronousCallChainDepth;
+
+    if (unchargedDepth < 0) {
+      throw new TypeError(
+        'Synchronous call-chain depth exceeds StackGuard depth',
+      );
+    }
+
+    chain.maxDepth = Math.min(
+      chain.maxDepth,
+      Math.max(this.maxDepth, DEFAULT_MAX_STACK_DEPTH),
+    );
+    chain.depth += unchargedDepth;
+
+    for (let index = 0; index < unchargedDepth; index += 1) {
+      this._synchronousCallChainFrames.push(chain);
+      this.synchronousCallChainDepth += 1;
+    }
+  }
+
+  /**
+   * Releases active frame tokens charged to a completed synchronous call chain
+   * while leaving the ordinary Realm depth untouched.
+   *
+   * @param {import('./agent.js').SynchronousCallChain} chain
+   * @returns {number}
+   */
+  detachSynchronousCallChain(chain) {
+    const root = synchronousCallChainRoot(chain);
+    const retainedFrames = [];
+    let detached = 0;
+
+    for (const frame of this._synchronousCallChainFrames) {
+      if (synchronousCallChainRoot(frame) === root) {
+        detached += 1;
+      } else {
+        retainedFrames.push(frame);
+      }
+    }
+
+    this._synchronousCallChainFrames = retainedFrames;
+    this.synchronousCallChainDepth -= detached;
+
+    if (this.synchronousCallChainDepth < 0) {
+      throw new TypeError('Synchronous call-chain depth underflow');
+    }
+
+    return detached;
+  }
+
+  /**
+   * Charges frames that entered before a generator host chain existed. Tokens
+   * are appended in stack order so the existing `exit` path releases each
+   * adopted frame exactly once.
+   *
+   * @param {import('./agent.js').GeneratorHostChain} chain
+   * @returns {void}
+   */
+  adoptGeneratorHostChain(chain) {
+    const unchargedDepth = this.depth - this.generatorHostChainDepth;
+
+    if (unchargedDepth < 0) {
+      throw new TypeError(
+        'Generator host-chain depth exceeds StackGuard depth',
+      );
+    }
+
+    chain.maxDepth = Math.min(chain.maxDepth, this.maxDepth);
+    chain.depth += unchargedDepth;
+
+    for (let index = 0; index < unchargedDepth; index += 1) {
+      this._generatorHostChainFrames.push(chain);
+      this.generatorHostChainDepth += 1;
+    }
+  }
+
+  /**
+   * Releases every active frame token charged to a generator chain while
+   * leaving the ordinary Realm depth untouched.
+   *
+   * @param {import('./agent.js').GeneratorHostChain} chain
+   * @returns {number}
+   */
+  detachGeneratorHostChain(chain) {
+    const root = generatorHostChainRoot(chain);
+    const retainedFrames = [];
+    let detached = 0;
+
+    for (const frame of this._generatorHostChainFrames) {
+      if (generatorHostChainRoot(frame) === root) {
+        detached += 1;
+      } else {
+        retainedFrames.push(frame);
+      }
+    }
+
+    this._generatorHostChainFrames = retainedFrames;
+    this.generatorHostChainDepth -= detached;
+
+    if (this.generatorHostChainDepth < 0) {
+      throw new TypeError('Generator host-chain depth underflow');
+    }
+
+    return detached;
+  }
+}
+
+/**
+ * @param {import('./agent.js').GeneratorHostChain} chain
+ * @returns {import('./agent.js').GeneratorHostChain}
+ */
+function generatorHostChainRoot(chain) {
+  let root = chain;
+
+  while (root.parent !== null) {
+    root = root.parent;
+  }
+
+  return root;
+}
+
+/**
+ * @param {import('./agent.js').SynchronousCallChain} chain
+ * @returns {import('./agent.js').SynchronousCallChain}
+ */
+function synchronousCallChainRoot(chain) {
+  let root = chain;
+
+  while (root.parent !== null) {
+    root = root.parent;
+  }
+
+  return root;
 }

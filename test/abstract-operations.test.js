@@ -6,6 +6,7 @@ import {
   toString,
   toUint16,
 } from '../src/runtime/conversion.js';
+import * as conversionOperations from '../src/runtime/conversion.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { createAgent } from '../src/runtime/agent.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
@@ -135,6 +136,44 @@ const tests = [
       assertSame(toNumber('infinity'), NaN);
       assertSame(toNumber('1e'), NaN);
       assertSame(toNumber('.'), NaN);
+    },
+  },
+  {
+    name: 'numeric whitespace trimming bypasses copying for a 1 MiB untrimmed invalid string',
+    run() {
+      const trimStringNumericWhitespace =
+        /** @type {typeof import('../src/runtime/conversion.js').trimStringNumericWhitespace} */ (
+          conversionOperations.trimStringNumericWhitespace
+        );
+
+      assertSame(typeof trimStringNumericWhitespace, 'function');
+
+      const invalid = 'x'.repeat(1024 * 1024);
+      let copies = 0;
+      const unchanged = trimStringNumericWhitespace(invalid, () => {
+        copies += 1;
+        return 'copied';
+      });
+
+      assertSame(unchanged, invalid);
+      assertSame(copies, 0);
+      assertSame(Number.isNaN(toNumber(invalid)), true);
+
+      const padded = ` ${invalid}\t`;
+      const trimmed = trimStringNumericWhitespace(
+        padded,
+        (value, start, end) => {
+          copies += 1;
+          assertSame(value, padded);
+          assertSame(start, 1);
+          assertSame(end, padded.length - 1);
+          return 'trimmed range';
+        },
+      );
+
+      assertSame(trimmed, 'trimmed range');
+      assertSame(copies, 1);
+      assertSame(toNumber(' '.repeat(1024 * 1024)), 0);
     },
   },
   {

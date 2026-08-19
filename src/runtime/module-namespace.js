@@ -4,7 +4,11 @@ import {
   validatePropertyDescriptor,
 } from './descriptors.js';
 import { resolveExport } from './module-linker.js';
-import { SourceTextModuleRecord } from './module-record.js';
+import {
+  moduleRequestIndexForEntry,
+  MODULE_NAMESPACE_BINDING,
+  SourceTextModuleRecord,
+} from './module-record.js';
 import { EngineObject } from './object.js';
 
 /**
@@ -14,7 +18,7 @@ import { EngineObject } from './object.js';
  *
  * @typedef {{
  *   module: SourceTextModuleRecord,
- *   bindingName: string,
+ *   bindingName: string | typeof MODULE_NAMESPACE_BINDING,
  * }} ResolvedExport
  */
 
@@ -73,6 +77,17 @@ export class ModuleNamespaceObject extends EngineObject {
   }
 
   /**
+   * @param {PropertyKey} key
+   * @returns {boolean}
+   */
+  hasProperty(key) {
+    if (typeof key === 'string' && this._resolvedExports.has(key)) {
+      return true;
+    }
+    return super.hasProperty(key);
+  }
+
+  /**
    * @param {EngineObject | null} prototype
    * @returns {boolean}
    */
@@ -84,13 +99,19 @@ export class ModuleNamespaceObject extends EngineObject {
    * @param {PropertyKey} key
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(key, descriptor, throwOnError = false) {
+  defineOwnProperty(key, descriptor, throwOnError = false, callerRealm) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
 
     if (resolved === undefined) {
-      return super.defineOwnProperty(key, descriptor, throwOnError);
+      return super.defineOwnProperty(
+        key,
+        descriptor,
+        throwOnError,
+        callerRealm,
+      );
     }
 
     const candidate = validatePropertyDescriptor(descriptor);
@@ -169,14 +190,22 @@ function resolveNamespaceExports(record) {
   const resolvedExports = new Map();
 
   for (const exportName of exportedNames(record, new Set())) {
-    const resolution = resolveExport(record, exportName, new Set());
+    const resolution = resolveExport(record, exportName, new Set(), new Set());
 
-    if (resolution.type === 'resolved') {
-      resolvedExports.set(exportName, {
-        module: resolution.module,
-        bindingName: resolution.bindingName,
-      });
+    if (resolution.type === 'ambiguous') {
+      continue;
     }
+    if (resolution.type === 'not-found') {
+      throw new GuestErrorSignal(
+        'SyntaxError',
+        `Module namespace export '${exportName}' cannot be resolved`,
+      );
+    }
+
+    resolvedExports.set(exportName, {
+      module: resolution.module,
+      bindingName: resolution.bindingName,
+    });
   }
 
   return resolvedExports;
@@ -192,27 +221,35 @@ function resolveNamespaceExports(record) {
  * @returns {Set<string>}
  */
 function exportedNames(record, exportStarSet) {
-  if (exportStarSet.has(record)) {
-    return new Set();
-  }
-
-  exportStarSet.add(record);
   /** @type {Set<string>} */
   const names = new Set();
+  const pending = [record];
 
-  for (const entry of record.localExportEntries) {
-    names.add(entry.exportName);
-  }
-  for (const entry of record.indirectExportEntries) {
-    names.add(entry.exportName);
-  }
-  for (const entry of record.starExportEntries) {
-    const target = requestedModuleForStarEntry(record, entry);
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || exportStarSet.has(current)) {
+      continue;
+    }
 
-    for (const name of exportedNames(target, exportStarSet)) {
-      if (name !== 'default') {
-        names.add(name);
+    exportStarSet.add(current);
+    for (const entry of current.localExportEntries) {
+      if (current === record || entry.exportName !== 'default') {
+        names.add(entry.exportName);
       }
+    }
+    for (const entry of current.indirectExportEntries) {
+      if (current === record || entry.exportName !== 'default') {
+        names.add(entry.exportName);
+      }
+    }
+    for (
+      let index = current.starExportEntries.length - 1;
+      index >= 0;
+      index -= 1
+    ) {
+      pending.push(
+        requestedModuleForStarEntry(current, current.starExportEntries[index]),
+      );
     }
   }
 
@@ -225,42 +262,15 @@ function exportedNames(record, exportStarSet) {
  * @returns {SourceTextModuleRecord}
  */
 function requestedModuleForStarEntry(record, targetEntry) {
-  let requestIndex = 0;
-  let starIndex = 0;
-
-  for (const declaration of record.ast.body) {
-    if (declaration.type === 'ImportDeclaration') {
-      requestIndex += 1;
-      continue;
-    }
-
-    if (
-      declaration.type === 'ExportNamedDeclaration' &&
-      declaration.source !== null
-    ) {
-      requestIndex += 1;
-      continue;
-    }
-
-    if (declaration.type !== 'ExportAllDeclaration') {
-      continue;
-    }
-
-    const entry = record.starExportEntries[starIndex];
-    const request = record.resolvedRequestedModules[requestIndex];
-    starIndex += 1;
-    requestIndex += 1;
-
-    if (entry === targetEntry) {
-      if (request === undefined) {
-        throw new TypeError('Module graph is incomplete');
-      }
-
-      return request.module;
-    }
+  const requestIndex = moduleRequestIndexForEntry(targetEntry);
+  if (requestIndex === undefined) {
+    throw new TypeError('Star export entry has no resolved request');
   }
-
-  throw new TypeError('Star export entry has no resolved request');
+  const request = record.resolvedRequestedModules[requestIndex];
+  if (request === undefined) {
+    throw new TypeError('Module graph is incomplete');
+  }
+  return request.module;
 }
 
 /**
@@ -268,6 +278,15 @@ function requestedModuleForStarEntry(record, targetEntry) {
  * @returns {CompletePropertyDescriptor}
  */
 function exportDescriptor(resolved) {
+  if (resolved.bindingName === MODULE_NAMESPACE_BINDING) {
+    return {
+      value: resolved.module.getNamespace(),
+      writable: true,
+      enumerable: true,
+      configurable: false,
+    };
+  }
+
   const environment = resolved.module.environment;
 
   if (environment === null) {

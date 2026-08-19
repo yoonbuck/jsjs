@@ -23,6 +23,15 @@
  *   error: unknown,
  * }} JobFailure
  *
+ * @typedef {{
+ *   job: null,
+ *   category: 'overflow',
+ *   error: undefined,
+ *   dropped: number,
+ * }} JobFailureOverflow
+ *
+ * @typedef {JobFailure | JobFailureOverflow} DurableJobFailure
+ *
  * @typedef {{ processed: number, failures: readonly JobFailure[] }} JobDrainReport
  */
 
@@ -32,6 +41,9 @@ const EMPTY_JOB_DRAIN_REPORT = Object.freeze({
   processed: 0,
   failures: Object.freeze([]),
 });
+const JOB_QUEUE_COMPACTION_THRESHOLD = 1024;
+const DURABLE_JOB_FAILURE_DETAIL_LIMIT = 256;
+const DURABLE_JOB_FAILURE_EDGE_SIZE = 128;
 
 export class AgentJobQueue {
   /**
@@ -41,11 +53,12 @@ export class AgentJobQueue {
   constructor(jobHost, agent) {
     this.jobHost = validateJobHost(jobHost);
     this.agent = agent;
-    /** @type {JobRecord[]} */
+    /** @type {(JobRecord | undefined)[]} */
     this.jobs = [];
     this.jobHead = 0;
-    /** @type {JobFailure[]} */
+    /** @type {DurableJobFailure[]} */
     this.failures = [];
+    this.failureOverflowCount = 0;
     /** @type {'idle' | 'scheduled' | 'draining'} */
     this.checkpointState = 'idle';
     /** @type {Realm | null} */
@@ -84,7 +97,9 @@ export class AgentJobQueue {
     try {
       while (this.jobHead < this.jobs.length) {
         const job = /** @type {JobRecord} */ (this.jobs[this.jobHead]);
+        this.jobs[this.jobHead] = undefined;
         this.jobHead += 1;
+        this.compactConsumedJobs();
         processed += 1;
         const previousRealm = this.jobRealm;
         let failed = false;
@@ -128,11 +143,12 @@ export class AgentJobQueue {
   }
 
   /**
-   * @returns {readonly JobFailure[]}
+   * @returns {readonly DurableJobFailure[]}
    */
   takeFailures() {
     const failures = Object.freeze([...this.failures]);
     this.failures = [];
+    this.failureOverflowCount = 0;
     return failures;
   }
 
@@ -142,7 +158,7 @@ export class AgentJobQueue {
   recordHostHookFailure(error) {
     /** @type {JobFailure} */
     const failure = { job: null, category: 'host-hook', error };
-    this.failures.push(Object.freeze(failure));
+    this.recordDurableFailure(Object.freeze(failure));
   }
 
   /**
@@ -157,6 +173,23 @@ export class AgentJobQueue {
    */
   get currentRealm() {
     return this.jobRealm;
+  }
+
+  compactConsumedJobs() {
+    if (
+      this.jobHead < JOB_QUEUE_COMPACTION_THRESHOLD ||
+      this.jobHead * 2 < this.jobs.length
+    ) {
+      return;
+    }
+
+    /** @type {(JobRecord | undefined)[]} */
+    const remainingJobs = [];
+    for (let index = this.jobHead; index < this.jobs.length; index += 1) {
+      remainingJobs.push(this.jobs[index]);
+    }
+    this.jobs = remainingJobs;
+    this.jobHead = 0;
   }
 
   scheduleCheckpoint() {
@@ -230,7 +263,7 @@ export class AgentJobQueue {
     /** @type {JobFailure} */
     const failure = { job, category: 'job', error };
     const frozenFailure = Object.freeze(failure);
-    this.failures.push(frozenFailure);
+    this.recordDurableFailure(frozenFailure);
     drainFailures.push(frozenFailure);
 
     if (this.jobHost?.reportJobError === undefined) {
@@ -247,9 +280,53 @@ export class AgentJobQueue {
         error: hookError,
       };
       const frozenHookFailure = Object.freeze(hookFailure);
-      this.failures.push(frozenHookFailure);
+      this.recordDurableFailure(frozenHookFailure);
       drainFailures.push(frozenHookFailure);
     }
+  }
+
+  /**
+   * Retains the first and most recent failure details, with one marker accounting
+   * for every omitted middle record. At most 256 records can keep a guest error,
+   * callback, or Realm reachable from the Agent.
+   *
+   * @param {JobFailure} failure
+   */
+  recordDurableFailure(failure) {
+    if (
+      this.failureOverflowCount === 0 &&
+      this.failures.length < DURABLE_JOB_FAILURE_DETAIL_LIMIT
+    ) {
+      this.failures.push(failure);
+      return;
+    }
+
+    if (this.failureOverflowCount === 0) {
+      this.failureOverflowCount = 1;
+      /** @type {DurableJobFailure[]} */
+      const retained = [];
+      for (let index = 0; index < DURABLE_JOB_FAILURE_EDGE_SIZE; index += 1) {
+        retained.push(this.failures[index]);
+      }
+      retained.push(createJobFailureOverflow(this.failureOverflowCount));
+      for (
+        let index = DURABLE_JOB_FAILURE_EDGE_SIZE + 1;
+        index < this.failures.length;
+        index += 1
+      ) {
+        retained.push(this.failures[index]);
+      }
+      retained.push(failure);
+      this.failures = retained;
+      return;
+    }
+
+    this.failureOverflowCount += 1;
+    this.failures[DURABLE_JOB_FAILURE_EDGE_SIZE] = createJobFailureOverflow(
+      this.failureOverflowCount,
+    );
+    this.failures.splice(DURABLE_JOB_FAILURE_EDGE_SIZE + 1, 1);
+    this.failures.push(failure);
   }
 }
 
@@ -332,5 +409,18 @@ function createDrainReport(processed, failures) {
   return Object.freeze({
     processed,
     failures: Object.freeze([...failures]),
+  });
+}
+
+/**
+ * @param {number} dropped
+ * @returns {JobFailureOverflow}
+ */
+function createJobFailureOverflow(dropped) {
+  return Object.freeze({
+    job: null,
+    category: 'overflow',
+    error: undefined,
+    dropped,
   });
 }

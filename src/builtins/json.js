@@ -569,12 +569,12 @@ function walk(realm, holder, name, reviver) {
  * @returns {unknown}
  */
 function walkBody(realm, holder, name, reviver) {
-  const value = holder.get(name);
+  const value = holder.get(name, realm);
 
   if (value instanceof EngineObject) {
     const keys =
       value.getClassName() === 'Array'
-        ? arrayIndexKeys(value)
+        ? arrayIndexKeys(value, realm)
         : enumerableOwnNames(value);
 
     for (const key of keys) {
@@ -592,20 +592,22 @@ function walkBody(realm, holder, name, reviver) {
             configurable: true,
           },
           false,
+          realm,
         );
       }
     }
   }
 
-  return reviver.callFunction(holder, [name, value]);
+  return reviver.callFunction(holder, [name, value], realm);
 }
 
 /**
  * @param {EngineObject} array
+ * @param {Realm} realm
  * @returns {Generator<string, void, void>}
  */
-function* arrayIndexKeys(array) {
-  const length = toUint32(array.get('length'));
+function* arrayIndexKeys(array, realm) {
+  const length = toUint32(array.get('length', realm), realm);
 
   for (let index = 0; index < length; index += 1) {
     yield String(index);
@@ -650,7 +652,7 @@ function enumerableOwnNames(object) {
  * @returns {unknown}
  */
 function jsonParse(realm, textArgument, reviver) {
-  const unfiltered = parseJSONText(realm, toString(textArgument));
+  const unfiltered = parseJSONText(realm, toString(textArgument, realm));
 
   if (!isCallable(reviver)) {
     return unfiltered;
@@ -761,27 +763,27 @@ function serializeProperty(realm, state, key, holder) {
  * @returns {string | undefined}
  */
 function serializePropertyBody(realm, state, key, holder) {
-  let value = holder.get(key);
+  let value = holder.get(key, realm);
 
   if (value instanceof EngineObject) {
-    const toJSON = value.get('toJSON');
+    const toJSON = value.get('toJSON', realm);
 
     if (isCallable(toJSON)) {
-      value = toJSON.callFunction(value, [key]);
+      value = toJSON.callFunction(value, [key], realm);
     }
   }
 
   if (state.replacerFunction !== undefined) {
-    value = state.replacerFunction.callFunction(holder, [key, value]);
+    value = state.replacerFunction.callFunction(holder, [key, value], realm);
   }
 
   if (value instanceof EngineObject) {
     const className = value.getClassName();
 
     if (className === 'Number') {
-      value = toNumber(value);
+      value = toNumber(value, realm);
     } else if (className === 'String') {
-      value = toString(value);
+      value = toString(value, realm);
     } else if (className === 'Boolean') {
       value = /** @type {{ primitiveValue: boolean }} */ (
         /** @type {unknown} */ (value)
@@ -804,7 +806,7 @@ function serializePropertyBody(realm, state, key, holder) {
   if (typeof value === 'number') {
     // NaN and the infinities have no JSON literal, so they are written as
     // null rather than as text no parser would read back.
-    return Number.isFinite(value) ? toString(value) : 'null';
+    return Number.isFinite(value) ? toString(value, realm) : 'null';
   }
 
   if (value instanceof EngineObject && !isCallable(value)) {
@@ -921,7 +923,7 @@ function serializeArray(realm, state, value) {
 
   state.indent += state.gap;
 
-  const length = toUint32(value.get('length'));
+  const length = toUint32(value.get('length', realm), realm);
 
   /** @type {string[]} */
   const partial = [];
@@ -950,21 +952,22 @@ function serializeArray(realm, state, value) {
  * property; a boolean, a null, or a plain object contributes nothing, and a
  * repeated name keeps its first position.
  *
+ * @param {Realm} realm
  * @param {EngineObject} replacer
  * @returns {string[]}
  */
-function propertyListOf(replacer) {
+function propertyListOf(realm, replacer) {
   /** @type {string[]} */
   const list = [];
   /** @type {Set<string>} */
   const seen = new Set();
 
-  for (const index of arrayIndexKeys(replacer)) {
+  for (const index of arrayIndexKeys(replacer, realm)) {
     if (!replacer.hasProperty(index)) {
       continue;
     }
 
-    const entry = replacer.get(index);
+    const entry = replacer.get(index, realm);
 
     /** @type {string | undefined} */
     let item;
@@ -972,12 +975,12 @@ function propertyListOf(replacer) {
     if (typeof entry === 'string') {
       item = entry;
     } else if (typeof entry === 'number') {
-      item = toString(entry);
+      item = toString(entry, realm);
     } else if (entry instanceof EngineObject) {
       const className = entry.getClassName();
 
       if (className === 'String' || className === 'Number') {
-        item = toString(entry);
+        item = toString(entry, realm);
       }
     }
 
@@ -993,24 +996,25 @@ function propertyListOf(replacer) {
 /**
  * ES5 15.12.3 steps 5-8: the indentation unit `space` describes.
  *
+ * @param {Realm} realm
  * @param {unknown} space
  * @returns {string}
  */
-function gapOf(space) {
+function gapOf(realm, space) {
   let normalized = space;
 
   if (normalized instanceof EngineObject) {
     const className = normalized.getClassName();
 
     if (className === 'Number') {
-      normalized = toNumber(normalized);
+      normalized = toNumber(normalized, realm);
     } else if (className === 'String') {
-      normalized = toString(normalized);
+      normalized = toString(normalized, realm);
     }
   }
 
   if (typeof normalized === 'number') {
-    const width = Math.min(MAXIMUM_GAP_WIDTH, toInteger(normalized));
+    const width = Math.min(MAXIMUM_GAP_WIDTH, toInteger(normalized, realm));
 
     let gap = '';
 
@@ -1053,11 +1057,11 @@ function jsonStringify(realm, value, replacer, space) {
     if (isCallable(replacer)) {
       state.replacerFunction = replacer;
     } else if (replacer.getClassName() === 'Array') {
-      state.propertyList = propertyListOf(replacer);
+      state.propertyList = propertyListOf(realm, replacer);
     }
   }
 
-  state.gap = gapOf(space);
+  state.gap = gapOf(realm, space);
 
   const wrapper = new EngineObject(realm.intrinsics.objectPrototype, 'Object');
 

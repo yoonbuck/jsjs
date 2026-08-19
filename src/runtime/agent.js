@@ -1,8 +1,24 @@
 import { WELL_KNOWN_SYMBOL_NAMES, createSymbol, isSymbol } from './symbol.js';
 import { AgentJobQueue } from './jobs.js';
+import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./symbol.js').WellKnownSymbolName} WellKnownSymbolName
+ * @typedef {{
+ *   parent: GeneratorHostChain | null,
+ *   agents: Set<Agent>,
+ *   resumes: number,
+ *   references: number,
+ *   depth: number,
+ *   maxDepth: number,
+ * }} GeneratorHostChain
+ * @typedef {{
+ *   parent: SynchronousCallChain | null,
+ *   agents: Set<Agent>,
+ *   calls: number,
+ *   depth: number,
+ *   maxDepth: number,
+ * }} SynchronousCallChain
  */
 
 /**
@@ -34,6 +50,17 @@ import { AgentJobQueue } from './jobs.js';
  *
  * A `Realm` takes an agent (`createRealm({ agent })`) or, given none, makes
  * its own. See `docs/architecture.md` for the embedding lifecycle.
+ *
+ * The Agent also owns transient host-stack accounting. A synchronous
+ * cross-Agent call path unions its participants' guarded frames under the
+ * strictest participating Realm limit, preventing recursion distributed across
+ * Agents from bypassing every per-Realm budget. Single-Agent calls keep their
+ * existing per-Realm semantics. If a generator starts before that path unwinds,
+ * its host chain adopts every participant's already-active guarded frames, then
+ * cross-Agent calls, iterator operations, and nested resumes keep unioning the
+ * same record. When either transient chain ends, its adopted frame tokens detach
+ * even if an outer ordinary call remains active. Neither union retains a guest
+ * value.
  */
 export class Agent {
   /**
@@ -65,6 +92,12 @@ export class Agent {
     /** @type {WeakSet<object>} */
     this._realms = new WeakSet();
     this._jobQueue = new AgentJobQueue(options.jobHost, this);
+    /** @type {GeneratorHostChain | null} */
+    this._generatorHostChain = null;
+    /** @type {SynchronousCallChain | null} */
+    this._synchronousCallChain = null;
+    /** @type {Set<import('./stack-guard.js').StackGuard>} */
+    this._activeStackGuards = new Set();
   }
 
   /**
@@ -132,7 +165,7 @@ export class Agent {
   }
 
   /**
-   * @returns {readonly import('./jobs.js').JobFailure[]}
+   * @returns {readonly import('./jobs.js').DurableJobFailure[]}
    */
   takeJobFailures() {
     return this._jobQueue.takeFailures();
@@ -182,6 +215,600 @@ export class Agent {
       typeof realm === 'object' && realm !== null && this._realms.has(realm)
     );
   }
+
+  /**
+   * Keeps the Agents on one synchronous cross-Realm call path discoverable and
+   * adopts every participant's active guarded frames into an aggregate
+   * host-safety budget. If a generator starts before the calls unwind, its host
+   * chain can independently adopt those same active frames.
+   *
+   * @param {import('./realm.js').Realm | undefined} callerRealm
+   * @param {import('./realm.js').Realm} calleeRealm
+   * @returns {SynchronousCallChain | null}
+   */
+  enterSynchronousCallChain(callerRealm, calleeRealm) {
+    if (callerRealm === undefined || callerRealm === calleeRealm) {
+      return null;
+    }
+
+    const callerAgent = callerRealm.agent;
+    let thisChain = this.synchronousCallChainRoot();
+    let callerChain = callerAgent.synchronousCallChainRoot();
+
+    if (thisChain === null && callerChain === null) {
+      thisChain = {
+        parent: null,
+        agents: new Set(),
+        calls: 0,
+        depth: 0,
+        maxDepth: Number.POSITIVE_INFINITY,
+      };
+      attachAgentToSynchronousCallChain(this, thisChain);
+      attachAgentToSynchronousCallChain(callerAgent, thisChain);
+    } else if (thisChain === null) {
+      thisChain = /** @type {SynchronousCallChain} */ (callerChain);
+      attachAgentToSynchronousCallChain(this, thisChain);
+    } else if (callerChain === null) {
+      attachAgentToSynchronousCallChain(callerAgent, thisChain);
+    } else if (thisChain !== callerChain) {
+      thisChain = mergeSynchronousCallChains(thisChain, callerChain);
+    }
+
+    thisChain = findSynchronousCallChainRoot(thisChain);
+    for (const member of thisChain.agents) {
+      member.adoptActiveSynchronousStackGuards(thisChain);
+    }
+    thisChain.calls += 1;
+    return thisChain;
+  }
+
+  /**
+   * @param {SynchronousCallChain | null} enteredChain
+   * @returns {void}
+   */
+  exitSynchronousCallChain(enteredChain) {
+    if (enteredChain === null) {
+      return;
+    }
+
+    const chain = findSynchronousCallChainRoot(enteredChain);
+
+    if (chain.calls <= 0) {
+      throw new TypeError('Synchronous Agent call-chain underflow');
+    }
+
+    chain.calls -= 1;
+    releaseSynchronousCallChain(chain);
+  }
+
+  /**
+   * @returns {SynchronousCallChain | null}
+   */
+  synchronousCallChainRoot() {
+    const chain = this._synchronousCallChain;
+
+    if (chain === null) {
+      return null;
+    }
+
+    const root = findSynchronousCallChainRoot(chain);
+    this._synchronousCallChain = root;
+    return root;
+  }
+
+  /**
+   * @param {import('./stack-guard.js').StackGuard} guard
+   * @returns {void}
+   */
+  registerActiveStackGuard(guard) {
+    this._activeStackGuards.add(guard);
+  }
+
+  /**
+   * @param {import('./stack-guard.js').StackGuard} guard
+   * @returns {void}
+   */
+  unregisterActiveStackGuard(guard) {
+    this._activeStackGuards.delete(guard);
+  }
+
+  /**
+   * Charges one guarded frame to the complete active synchronous cross-Realm
+   * call chain.
+   *
+   * @param {number} maxDepth
+   * @returns {SynchronousCallChain | null}
+   */
+  enterSynchronousCallFrame(maxDepth) {
+    const chain = this.synchronousCallChainRoot();
+
+    if (chain === null) {
+      return null;
+    }
+
+    chain.maxDepth = Math.min(chain.maxDepth, maxDepth);
+
+    if (chain.depth >= chain.maxDepth) {
+      throw new GuestErrorSignal(
+        'RangeError',
+        'Maximum call stack size exceeded',
+      );
+    }
+
+    chain.depth += 1;
+    return chain;
+  }
+
+  /**
+   * @param {SynchronousCallChain} enteredChain
+   * @returns {void}
+   */
+  exitSynchronousCallFrame(enteredChain) {
+    const chain = findSynchronousCallChainRoot(enteredChain);
+
+    if (chain.depth <= 0) {
+      throw new TypeError('Synchronous call-chain frame underflow');
+    }
+
+    chain.depth -= 1;
+    releaseSynchronousCallChain(chain);
+  }
+
+  /**
+   * @param {SynchronousCallChain} chain
+   * @returns {void}
+   */
+  adoptActiveSynchronousStackGuards(chain) {
+    for (const guard of this._activeStackGuards) {
+      guard.adoptSynchronousCallChain(chain);
+    }
+  }
+
+  /**
+   * Begins one synchronous generator resume on the active host chain. The first
+   * resume owns the chain; nested cross-Agent resumes keep charging that owner
+   * because they consume the same host stack.
+   *
+   * @param {number} [maxDepth=Number.POSITIVE_INFINITY]
+   * @returns {GeneratorHostChain}
+   */
+  enterGeneratorHostChain(maxDepth = Number.POSITIVE_INFINITY) {
+    const chain = this.ensureGeneratorHostChain(maxDepth);
+
+    chain.resumes += 1;
+    return chain;
+  }
+
+  /**
+   * @param {GeneratorHostChain | null} [enteredChain=this._generatorHostChain]
+   * @returns {void}
+   */
+  exitGeneratorHostChain(enteredChain = this._generatorHostChain) {
+    if (enteredChain === null) {
+      return;
+    }
+
+    const chain = findGeneratorHostChainRoot(enteredChain);
+
+    if (chain.resumes <= 0) {
+      return;
+    }
+
+    chain.resumes -= 1;
+    releaseGeneratorHostChain(chain);
+  }
+
+  /**
+   * Keeps a chain alive around a generator method invocation, including the
+   * method's own guarded frame before the receiver begins its resume.
+   *
+   * @param {number} [maxDepth=Number.POSITIVE_INFINITY]
+   * @returns {GeneratorHostChain}
+   */
+  enterGeneratorHostChainReference(maxDepth = Number.POSITIVE_INFINITY) {
+    const chain = this.ensureGeneratorHostChain(maxDepth);
+
+    chain.references += 1;
+    return chain;
+  }
+
+  /**
+   * @param {GeneratorHostChain} enteredChain
+   * @returns {void}
+   */
+  exitGeneratorHostChainReference(enteredChain) {
+    const chain = findGeneratorHostChainRoot(enteredChain);
+
+    if (chain.references > 0) {
+      chain.references -= 1;
+    }
+
+    releaseGeneratorHostChain(chain);
+  }
+
+  /**
+   * Makes two Agents participate in one currently active chain. An idle Agent
+   * joins the other Agent's chain, while two distinct active chains are merged
+   * rather than silently left to account for the same host stack separately.
+   * The link exists only until every merged resume and frame unwinds.
+   *
+   * @param {Agent} agent
+   * @returns {void}
+   */
+  linkGeneratorHostChain(agent) {
+    if (agent === this) {
+      return;
+    }
+
+    const thisChain = this.generatorHostChainRoot();
+    const otherChain = agent.generatorHostChainRoot();
+
+    if (thisChain === null && otherChain === null) {
+      return;
+    }
+
+    if (thisChain === null) {
+      const chain = /** @type {GeneratorHostChain} */ (otherChain);
+
+      attachAgentToGeneratorHostChain(this, chain);
+      this.adoptActiveStackGuards(chain);
+      assertGeneratorHostChainWithinBudget(chain);
+      return;
+    }
+
+    if (otherChain === null) {
+      attachAgentToGeneratorHostChain(agent, thisChain);
+      agent.adoptActiveStackGuards(thisChain);
+      assertGeneratorHostChainWithinBudget(thisChain);
+      return;
+    }
+
+    if (thisChain === otherChain) {
+      return;
+    }
+
+    const root = mergeGeneratorHostChains(thisChain, otherChain);
+
+    for (const member of root.agents) {
+      member.adoptActiveStackGuards(root);
+    }
+    assertGeneratorHostChainWithinBudget(root);
+  }
+
+  /**
+   * Charges one guarded engine frame to the complete active generator chain.
+   *
+   * @param {number} maxDepth
+   * @returns {GeneratorHostChain | null} The chain charged by this frame.
+   */
+  enterGeneratorHostFrame(maxDepth) {
+    const chain = this.generatorHostChainRoot();
+
+    if (chain === null) {
+      return null;
+    }
+
+    chain.maxDepth = Math.min(chain.maxDepth, maxDepth);
+
+    if (chain.depth >= chain.maxDepth) {
+      throw new GuestErrorSignal(
+        'RangeError',
+        'Maximum call stack size exceeded',
+      );
+    }
+
+    chain.depth += 1;
+    return chain;
+  }
+
+  /**
+   * @param {GeneratorHostChain} enteredChain
+   * @returns {void}
+   */
+  exitGeneratorHostFrame(enteredChain) {
+    const chain = findGeneratorHostChainRoot(enteredChain);
+
+    if (chain.depth <= 0) {
+      throw new TypeError('Generator host-chain frame underflow');
+    }
+
+    chain.depth -= 1;
+    releaseGeneratorHostChain(chain);
+  }
+
+  /**
+   * @returns {GeneratorHostChain | null}
+   */
+  generatorHostChainRoot() {
+    const chain = this._generatorHostChain;
+
+    if (chain === null) {
+      return null;
+    }
+
+    const root = findGeneratorHostChainRoot(chain);
+    this._generatorHostChain = root;
+    return root;
+  }
+
+  /**
+   * @param {number} maxDepth
+   * @returns {GeneratorHostChain}
+   */
+  ensureGeneratorHostChain(maxDepth) {
+    let chain = this.generatorHostChainRoot();
+
+    if (chain === null) {
+      chain = {
+        parent: null,
+        agents: new Set(),
+        resumes: 0,
+        references: 0,
+        depth: 0,
+        maxDepth,
+      };
+      attachAgentToGeneratorHostChain(this, chain);
+    } else {
+      chain.maxDepth = Math.min(chain.maxDepth, maxDepth);
+    }
+
+    const synchronousChain = this.synchronousCallChainRoot();
+
+    if (synchronousChain !== null) {
+      for (const member of synchronousChain.agents) {
+        const memberChain = member.generatorHostChainRoot();
+
+        if (memberChain === null) {
+          attachAgentToGeneratorHostChain(member, chain);
+        } else if (memberChain !== chain) {
+          chain = mergeGeneratorHostChains(chain, memberChain);
+        }
+      }
+    }
+
+    chain = findGeneratorHostChainRoot(chain);
+    chain.maxDepth = Math.min(chain.maxDepth, maxDepth);
+    for (const member of chain.agents) {
+      member.adoptActiveStackGuards(chain);
+    }
+    assertGeneratorHostChainWithinBudget(chain);
+    return chain;
+  }
+
+  /**
+   * @param {GeneratorHostChain} chain
+   * @returns {void}
+   */
+  adoptActiveStackGuards(chain) {
+    for (const guard of this._activeStackGuards) {
+      guard.adoptGeneratorHostChain(chain);
+    }
+  }
+}
+
+/**
+ * @param {GeneratorHostChain} left
+ * @param {GeneratorHostChain} right
+ * @returns {GeneratorHostChain}
+ */
+function mergeGeneratorHostChains(left, right) {
+  const leftRoot = findGeneratorHostChainRoot(left);
+  const rightRoot = findGeneratorHostChainRoot(right);
+
+  if (leftRoot === rightRoot) {
+    return leftRoot;
+  }
+
+  const [root, child] =
+    leftRoot.agents.size >= rightRoot.agents.size
+      ? [leftRoot, rightRoot]
+      : [rightRoot, leftRoot];
+
+  child.parent = root;
+  root.resumes += child.resumes;
+  root.references += child.references;
+  root.depth += child.depth;
+  root.maxDepth = Math.min(root.maxDepth, child.maxDepth);
+  child.resumes = 0;
+  child.references = 0;
+  child.depth = 0;
+
+  for (const member of child.agents) {
+    member._generatorHostChain = root;
+    root.agents.add(member);
+  }
+
+  child.agents.clear();
+  return root;
+}
+
+/**
+ * @param {GeneratorHostChain} chain
+ * @returns {void}
+ */
+function assertGeneratorHostChainWithinBudget(chain) {
+  if (chain.depth > chain.maxDepth) {
+    throw new GuestErrorSignal(
+      'RangeError',
+      'Maximum call stack size exceeded',
+    );
+  }
+}
+
+/**
+ * @param {GeneratorHostChain} chain
+ * @returns {GeneratorHostChain}
+ */
+function findGeneratorHostChainRoot(chain) {
+  let root = chain;
+
+  while (root.parent !== null) {
+    root = root.parent;
+  }
+
+  let current = chain;
+
+  while (current.parent !== null && current.parent !== root) {
+    const parent = current.parent;
+    current.parent = root;
+    current = parent;
+  }
+
+  return root;
+}
+
+/**
+ * @param {Agent} agent
+ * @param {GeneratorHostChain} chain
+ * @returns {void}
+ */
+function attachAgentToGeneratorHostChain(agent, chain) {
+  agent._generatorHostChain = chain;
+  chain.agents.add(agent);
+}
+
+/**
+ * @param {GeneratorHostChain} chain
+ * @returns {void}
+ */
+function releaseGeneratorHostChain(chain) {
+  if (chain.resumes !== 0 || chain.references !== 0) {
+    return;
+  }
+
+  for (const agent of chain.agents) {
+    for (const guard of agent._activeStackGuards) {
+      const detached = guard.detachGeneratorHostChain(chain);
+
+      if (detached > chain.depth) {
+        throw new TypeError('Generator host-chain depth underflow');
+      }
+
+      chain.depth -= detached;
+    }
+  }
+
+  if (chain.depth !== 0) {
+    return;
+  }
+
+  for (const agent of chain.agents) {
+    const memberChain = agent._generatorHostChain;
+
+    if (
+      memberChain !== null &&
+      findGeneratorHostChainRoot(memberChain) === chain
+    ) {
+      agent._generatorHostChain = null;
+    }
+  }
+
+  chain.agents.clear();
+}
+
+/**
+ * @param {SynchronousCallChain} chain
+ * @returns {SynchronousCallChain}
+ */
+function findSynchronousCallChainRoot(chain) {
+  let root = chain;
+
+  while (root.parent !== null) {
+    root = root.parent;
+  }
+
+  let current = chain;
+
+  while (current.parent !== null && current.parent !== root) {
+    const parent = current.parent;
+    current.parent = root;
+    current = parent;
+  }
+
+  return root;
+}
+
+/**
+ * @param {Agent} agent
+ * @param {SynchronousCallChain} chain
+ * @returns {void}
+ */
+function attachAgentToSynchronousCallChain(agent, chain) {
+  agent._synchronousCallChain = chain;
+  chain.agents.add(agent);
+}
+
+/**
+ * @param {SynchronousCallChain} left
+ * @param {SynchronousCallChain} right
+ * @returns {SynchronousCallChain}
+ */
+function mergeSynchronousCallChains(left, right) {
+  const leftRoot = findSynchronousCallChainRoot(left);
+  const rightRoot = findSynchronousCallChainRoot(right);
+
+  if (leftRoot === rightRoot) {
+    return leftRoot;
+  }
+
+  const [root, child] =
+    leftRoot.agents.size >= rightRoot.agents.size
+      ? [leftRoot, rightRoot]
+      : [rightRoot, leftRoot];
+
+  child.parent = root;
+  root.calls += child.calls;
+  root.depth += child.depth;
+  root.maxDepth = Math.min(root.maxDepth, child.maxDepth);
+  child.calls = 0;
+  child.depth = 0;
+
+  for (const member of child.agents) {
+    member._synchronousCallChain = root;
+    root.agents.add(member);
+  }
+
+  child.agents.clear();
+  return root;
+}
+
+/**
+ * @param {SynchronousCallChain} chain
+ * @returns {void}
+ */
+function releaseSynchronousCallChain(chain) {
+  if (chain.calls !== 0) {
+    return;
+  }
+
+  for (const agent of chain.agents) {
+    for (const guard of agent._activeStackGuards) {
+      const detached = guard.detachSynchronousCallChain(chain);
+
+      if (detached > chain.depth) {
+        throw new TypeError('Synchronous call-chain depth underflow');
+      }
+
+      chain.depth -= detached;
+    }
+  }
+
+  if (chain.depth !== 0) {
+    throw new TypeError('Synchronous call-chain retained inactive frames');
+  }
+
+  for (const agent of chain.agents) {
+    const memberChain = agent._synchronousCallChain;
+
+    if (
+      memberChain !== null &&
+      findSynchronousCallChainRoot(memberChain) === chain
+    ) {
+      agent._synchronousCallChain = null;
+    }
+  }
+
+  chain.agents.clear();
 }
 
 /**

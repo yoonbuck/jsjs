@@ -34,20 +34,32 @@ export class EngineArray extends EngineObject {
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false) {
+  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
     if (name === 'length') {
-      return this._defineLength(descriptor, throwOnError);
+      return this._defineLength(descriptor, throwOnError, callerRealm);
     }
 
     const index = toArrayIndex(name);
 
     if (index === undefined) {
-      return super.defineOwnProperty(name, descriptor, throwOnError);
+      return super.defineOwnProperty(
+        name,
+        descriptor,
+        throwOnError,
+        callerRealm,
+      );
     }
 
-    return this._defineIndex(index, name, descriptor, throwOnError);
+    return this._defineIndex(
+      index,
+      name,
+      descriptor,
+      throwOnError,
+      callerRealm,
+    );
   }
 
   /**
@@ -68,20 +80,26 @@ export class EngineArray extends EngineObject {
    *
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} throwOnError
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  _defineLength(descriptor, throwOnError) {
+  _defineLength(descriptor, throwOnError, callerRealm) {
     const current = /** @type {PropertyDescriptorRecord} */ (
       super.getOwnProperty('length')
     );
 
     if (!('value' in descriptor)) {
-      return super.defineOwnProperty('length', descriptor, throwOnError);
+      return super.defineOwnProperty(
+        'length',
+        descriptor,
+        throwOnError,
+        callerRealm,
+      );
     }
 
-    const newLength = toUint32(descriptor.value);
+    const newLength = toUint32(descriptor.value, callerRealm);
 
-    if (newLength !== toNumber(descriptor.value)) {
+    if (newLength !== toNumber(descriptor.value, callerRealm)) {
       throw new GuestErrorSignal('RangeError', 'Invalid array length');
     }
 
@@ -90,7 +108,12 @@ export class EngineArray extends EngineObject {
     const oldLength = /** @type {number} */ (current.value);
 
     if (newLength >= oldLength) {
-      return super.defineOwnProperty('length', lengthDescriptor, throwOnError);
+      return super.defineOwnProperty(
+        'length',
+        lengthDescriptor,
+        throwOnError,
+        callerRealm,
+      );
     }
 
     if (!current.writable) {
@@ -108,7 +131,14 @@ export class EngineArray extends EngineObject {
       lengthDescriptor.writable = true;
     }
 
-    if (!super.defineOwnProperty('length', lengthDescriptor, throwOnError)) {
+    if (
+      !super.defineOwnProperty(
+        'length',
+        lengthDescriptor,
+        throwOnError,
+        callerRealm,
+      )
+    ) {
       return false;
     }
 
@@ -145,9 +175,10 @@ export class EngineArray extends EngineObject {
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
    * @param {boolean} throwOnError
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  _defineIndex(index, name, descriptor, throwOnError) {
+  _defineIndex(index, name, descriptor, throwOnError, callerRealm) {
     const current = /** @type {PropertyDescriptorRecord} */ (
       super.getOwnProperty('length')
     );
@@ -160,7 +191,7 @@ export class EngineArray extends EngineObject {
       );
     }
 
-    if (!super.defineOwnProperty(name, descriptor, throwOnError)) {
+    if (!super.defineOwnProperty(name, descriptor, throwOnError, callerRealm)) {
       return false;
     }
 

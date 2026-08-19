@@ -30,12 +30,13 @@ import {
   parseEs5Selection,
   scanFrontmatter,
 } from '../../tools/test262/es5-selection.js';
+import { ASYNC_RUNTIME_RELEASE_MANIFEST } from '../../tools/test262/async-runtime-release-manifest.js';
 
 const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 
 const KNOWN_GOOD_PATH_COUNT = 12434;
 
-const GENERATED_PATH_COUNT = 14096;
+const GENERATED_PATH_COUNT = 14107;
 
 const ISSUE_25_EXPANSION_PATH_COUNT = 1662;
 
@@ -50,6 +51,16 @@ const ISSUE_25_EXPANSION_FEATURES = Object.freeze([
   'spread-syntax',
   'template',
 ]);
+
+const GENERATOR_ROOTS = Object.freeze(
+  ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records.map((record) => record.path),
+);
+
+const APPROVED_UNTAGGED_GENERATOR_ROOTS = Object.freeze(
+  ASYNC_RUNTIME_RELEASE_MANIFEST.generator.records
+    .filter((record) => record.features.length === 0)
+    .map((record) => record.path),
+);
 
 const SYMBOL_SPECIES_SUBCLASSING_PATH =
   'test/built-ins/Symbol/species/subclassing.js';
@@ -200,7 +211,7 @@ export default [
     },
   },
   {
-    name: 'generated selection retains its baseline and issue #25 expansion boundary',
+    name: 'generated selection retains issue #25 and layer-4 generator expansion',
     run: async () => {
       const pin = await readTest262Pin();
       const [policyText, baselineText, currentText, symbolSpeciesSource] =
@@ -225,6 +236,9 @@ export default [
       const nonbaselinePaths = [...currentPaths].filter(
         (path) => !baselinePathSet.has(path),
       );
+      const issue25ExpansionPaths = nonbaselinePaths.filter(
+        (path) => !GENERATOR_ROOTS.includes(path),
+      );
       const nonbaselineSources = await Promise.all(
         nonbaselinePaths.map((path) =>
           readFile(`${pin.checkoutPath}/${path}`, 'utf8'),
@@ -233,10 +247,20 @@ export default [
       const nonbaselineFrontmatter = nonbaselineSources.map(scanFrontmatter);
       const nonbaselineWithoutExpansionFeature = nonbaselinePaths.filter(
         (path, index) =>
+          !GENERATOR_ROOTS.includes(path) &&
           !nonbaselineFrontmatter[index].features.some((feature) =>
             policy.expansionFeatures.includes(feature),
           ),
       );
+      const untaggedGeneratorRoots = GENERATOR_ROOTS.filter((path) => {
+        const index = nonbaselinePaths.indexOf(path);
+        return (
+          index >= 0 &&
+          !nonbaselineFrontmatter[index].features.some((feature) =>
+            policy.expansionFeatures.includes(feature),
+          )
+        );
+      });
       const nonbaselineOutsideClaimedFeatureArea = nonbaselinePaths.filter(
         (path, index) => {
           const frontmatter = nonbaselineFrontmatter[index];
@@ -268,14 +292,14 @@ export default [
         'the generated selection must retain its exact pinned path count',
       );
       assertSame(
-        nonbaselinePaths.length,
+        issue25ExpansionPaths.length,
         ISSUE_25_EXPANSION_PATH_COUNT,
         'the generated selection must retain every pinned issue #25 expansion path',
       );
       assertSame(
         currentPaths.size - baselinePaths.length,
-        ISSUE_25_EXPANSION_PATH_COUNT,
-        'the generated total must consist of the pinned baseline plus the pinned expansion',
+        ISSUE_25_EXPANSION_PATH_COUNT + GENERATOR_ROOTS.length,
+        'the generated total must consist of the pinned baseline, issue #25 expansion, and layer-4 generator roots',
       );
       assertSame(
         missing.length,
@@ -283,14 +307,43 @@ export default [
         `current selection dropped pre-Task 9 paths: ${JSON.stringify(missing)}`,
       );
       assertSame(
-        JSON.stringify(policy.expansionFeatures),
+        JSON.stringify(
+          policy.expansionFeatures.filter(
+            (feature) => feature !== 'generators',
+          ),
+        ),
         JSON.stringify(ISSUE_25_EXPANSION_FEATURES),
         'issue #25 must retain this exact sorted expansion feature boundary',
+      );
+      assertSame(
+        policy.expansionFeatures.includes('generators'),
+        true,
+        'layer-4 generator expansion must remain enabled',
       );
       assertSame(
         nonbaselineWithoutExpansionFeature.length,
         0,
         `generated selection admitted nonbaseline paths without an issue #25 expansion tag: ${JSON.stringify(nonbaselineWithoutExpansionFeature.slice(0, 10))}`,
+      );
+      assertSame(
+        JSON.stringify([...untaggedGeneratorRoots].sort()),
+        JSON.stringify([...APPROVED_UNTAGGED_GENERATOR_ROOTS].sort()),
+        'only the two approved generator roots may lack an expansion metadata feature',
+      );
+      assertSame(
+        GENERATOR_ROOTS.length,
+        11,
+        'the layer-4 contract must retain exactly eleven generator roots',
+      );
+      assertSame(
+        APPROVED_UNTAGGED_GENERATOR_ROOTS.length,
+        2,
+        'the layer-4 contract must retain exactly two approved untagged generator roots',
+      );
+      assertSame(
+        GENERATOR_ROOTS.every((path) => currentPaths.has(path)),
+        true,
+        'generated selection must retain all eleven layer-4 generator roots',
       );
       assertSame(
         nonbaselineOutsideClaimedFeatureArea.length,

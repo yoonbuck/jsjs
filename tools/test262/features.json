@@ -143,6 +143,21 @@
       "tests": ["test/language/statements/for-of/body-put-error.js"]
     },
     {
+      "name": "generators",
+      "probe": "function* sequence() {\n  var input = yield 1;\n  return input + 1;\n}\nvar iterator = sequence();\nif (iterator[Symbol.iterator]() !== iterator) {\n  throw new Error('generator is not iterable');\n}\nvar first = iterator.next();\nvar second = iterator.next(2);\nif (first.value !== 1 || first.done || second.value !== 3 || !second.done) {\n  throw new Error('generator resume semantics failed');\n}",
+      "tests": [
+        "test/built-ins/GeneratorFunction/invoked-as-constructor-no-arguments.js",
+        "test/built-ins/GeneratorFunction/invoked-as-function-multiple-arguments.js",
+        "test/built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js",
+        "test/built-ins/GeneratorPrototype/next/consecutive-yields.js",
+        "test/built-ins/GeneratorPrototype/next/from-state-executing.js",
+        "test/built-ins/GeneratorPrototype/return/from-state-suspended-start.js",
+        "test/built-ins/GeneratorPrototype/return/try-finally-within-try.js",
+        "test/built-ins/GeneratorPrototype/throw/from-state-suspended-start.js",
+        "test/built-ins/GeneratorPrototype/throw/try-catch-within-try.js"
+      ]
+    },
+    {
       "name": "let",
       "probe": "var outer = 1;\nvar sawTdz = false;\ntry { lexical; } catch (error) { sawTdz = error instanceof ReferenceError; }\nlet lexical = 2;\nif (!sawTdz || lexical !== 2) { throw new Error(\"let TDZ or initialization failed\"); }\nlexical = 3;\nif (lexical !== 3) { throw new Error(\"let assignment failed\"); }\n{ let outer = 4; if (outer !== 4) { throw new Error(\"let block binding failed\"); } }\nif (outer !== 1) { throw new Error(\"let binding escaped its block\"); }",
       "tests": [

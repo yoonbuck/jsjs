@@ -49,25 +49,31 @@ export function createPromiseIntrinsics(realm) {
         );
       }
 
-      const promise = new PromiseObject(
+      const allocation = promiseAllocationFromNewTarget(
+        newTarget,
         realm,
-        prototypeFromNewTarget(newTarget, promisePrototype),
+        promisePrototype,
       );
+      const promise = new PromiseObject(allocation.realm, allocation.prototype);
       const resolvingFunctions = createResolvingFunctions(promise, realm);
 
       try {
-        executor.callFunction(undefined, [
-          resolvingFunctions.resolve,
-          resolvingFunctions.reject,
-        ]);
+        executor.callFunction(
+          undefined,
+          [resolvingFunctions.resolve, resolvingFunctions.reject],
+          realm,
+        );
       } catch (error) {
-        resolvingFunctions.reject.callFunction(undefined, [
-          abruptValue(realm, error),
-        ]);
+        resolvingFunctions.reject.callFunction(
+          undefined,
+          [abruptValue(realm, error)],
+          realm,
+        );
       }
 
       return promise;
     },
+    retargetConstructionResult: false,
   });
 
   promisePrototype.defineOwnProperty('constructor', {
@@ -119,7 +125,7 @@ export function createPromiseIntrinsics(realm) {
       name: 'catch',
       length: 1,
       call(thisValue, args) {
-        const then = toObject(realm, thisValue).get('then');
+        const then = toObject(realm, thisValue).get('then', realm);
         if (!isCallable(then)) {
           throw new GuestErrorSignal(
             'TypeError',
@@ -127,7 +133,7 @@ export function createPromiseIntrinsics(realm) {
           );
         }
 
-        return then.callFunction(thisValue, [undefined, args[0]]);
+        return then.callFunction(thisValue, [undefined, args[0]], realm);
       },
     }),
   );
@@ -149,7 +155,7 @@ export function createPromiseIntrinsics(realm) {
       name: 'resolve',
       length: 1,
       call(thisValue, args) {
-        if (!isConstructor(thisValue)) {
+        if (!(thisValue instanceof EngineObject)) {
           throw new GuestErrorSignal(
             'TypeError',
             'Promise.resolve called on a non-constructor',
@@ -159,13 +165,13 @@ export function createPromiseIntrinsics(realm) {
         const resolution = args[0];
         if (
           resolution instanceof PromiseObject &&
-          resolution.get('constructor') === thisValue
+          resolution.get('constructor', realm) === thisValue
         ) {
           return resolution;
         }
 
         const capability = newPromiseCapability(thisValue, realm);
-        capability.resolve.callFunction(undefined, [resolution]);
+        capability.resolve.callFunction(undefined, [resolution], realm);
         return capability.promise;
       },
     }),
@@ -185,7 +191,7 @@ export function createPromiseIntrinsics(realm) {
         }
 
         const capability = newPromiseCapability(thisValue, realm);
-        capability.reject.callFunction(undefined, [args[0]]);
+        capability.reject.callFunction(undefined, [args[0]], realm);
         return capability.promise;
       },
     }),
@@ -205,9 +211,11 @@ export function createPromiseIntrinsics(realm) {
         try {
           iteratorRecord = getIterator(realm, args[0]);
         } catch (error) {
-          resultCapability.reject.callFunction(undefined, [
-            abruptValue(realm, error),
-          ]);
+          resultCapability.reject.callFunction(
+            undefined,
+            [abruptValue(realm, error)],
+            realm,
+          );
           return resultCapability.promise;
         }
 
@@ -235,9 +243,11 @@ export function createPromiseIntrinsics(realm) {
         try {
           iteratorRecord = getIterator(realm, args[0]);
         } catch (error) {
-          resultCapability.reject.callFunction(undefined, [
-            abruptValue(realm, error),
-          ]);
+          resultCapability.reject.callFunction(
+            undefined,
+            [abruptValue(realm, error)],
+            realm,
+          );
           return resultCapability.promise;
         }
 
@@ -270,20 +280,26 @@ export function installPromiseConstructor(globalObject, intrinsics) {
 
 /**
  * @param {unknown} newTarget
+ * @param {Realm} defaultRealm
  * @param {EngineObject} defaultPrototype
- * @returns {EngineObject}
+ * @returns {{ realm: Realm, prototype: EngineObject }}
  */
-function prototypeFromNewTarget(newTarget, defaultPrototype) {
+function promiseAllocationFromNewTarget(
+  newTarget,
+  defaultRealm,
+  defaultPrototype,
+) {
   if (!(newTarget instanceof EngineObject)) {
-    return defaultPrototype;
+    return { realm: defaultRealm, prototype: defaultPrototype };
   }
 
-  const prototype = newTarget.get('prototype');
-  if (prototype instanceof EngineObject) {
-    return prototype;
-  }
+  const prototype = newTarget.get('prototype', defaultRealm);
   if (!isCallable(newTarget)) {
-    return defaultPrototype;
+    return {
+      realm: defaultRealm,
+      prototype:
+        prototype instanceof EngineObject ? prototype : defaultPrototype,
+    };
   }
 
   const realmCompletion = getFunctionRealm(newTarget);
@@ -297,9 +313,17 @@ function prototypeFromNewTarget(newTarget, defaultPrototype) {
     );
   }
 
-  return /** @type {EngineObject} */ (
-    realmCompletion.value.intrinsics.promisePrototype
-  );
+  const allocationRealm = realmCompletion.value;
+
+  return {
+    realm: allocationRealm,
+    prototype:
+      prototype instanceof EngineObject
+        ? prototype
+        : /** @type {EngineObject} */ (
+            allocationRealm.intrinsics.promisePrototype
+          ),
+  };
 }
 
 /**

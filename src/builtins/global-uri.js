@@ -573,7 +573,7 @@ export function createURIGlobalIntrinsics(realm) {
       name,
       length: 1,
       call(_thisValue, args) {
-        return transform(toString(args[0]));
+        return transform(toString(args[0], realm));
       },
     });
 

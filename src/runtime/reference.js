@@ -1,6 +1,6 @@
 import { GuestErrorSignal } from './completion.js';
 import { isAccessorDescriptor, isDataDescriptor } from './descriptors.js';
-import { callAccessor } from './object.js';
+import { EngineObject, callAccessor } from './object.js';
 
 /**
  * A Reference record (ECMA-262 8.7). `base` is the *resolution target* the
@@ -73,8 +73,17 @@ function isReference(reference) {
 /**
  * @param {unknown} base
  * @returns {base is {
- *   getBindingValue: (name: string | symbol, strict: boolean) => unknown,
- *   setMutableBinding: (name: string | symbol, value: unknown, strict: boolean) => void,
+ *   getBindingValue: (
+ *     name: string | symbol,
+ *     strict: boolean,
+ *     callerRealm?: import('./realm.js').Realm,
+ *   ) => unknown,
+ *   setMutableBinding: (
+ *     name: string | symbol,
+ *     value: unknown,
+ *     strict: boolean,
+ *     callerRealm?: import('./realm.js').Realm,
+ *   ) => void,
  *   deleteBinding: (name: string | symbol) => boolean,
  *   implicitThisValue: () => unknown,
  * }}
@@ -91,8 +100,16 @@ export function isEnvironmentRecord(base) {
 /**
  * @param {unknown} base
  * @returns {base is {
- *   getReferencedValue: (name: string | symbol) => unknown,
- *   setReferencedValue: (name: string | symbol, value: unknown, strict: boolean) => void,
+ *   getReferencedValue: (
+ *     name: string | symbol,
+ *     callerRealm?: import('./realm.js').Realm,
+ *   ) => unknown,
+ *   setReferencedValue: (
+ *     name: string | symbol,
+ *     value: unknown,
+ *     strict: boolean,
+ *     callerRealm?: import('./realm.js').Realm,
+ *   ) => void,
  * }}
  */
 function isPropertyReferenceBase(base) {
@@ -161,9 +178,10 @@ function isPrimitiveWrapperBase(base) {
  * Implements ECMA-262 8.7.1 `GetValue`.
  *
  * @param {Reference} reference
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {unknown}
  */
-export function getValue(reference) {
+export function getValue(reference, callerRealm) {
   if (!isReference(reference)) {
     throw new TypeError('Expected a Reference record');
   }
@@ -176,18 +194,26 @@ export function getValue(reference) {
   }
 
   if (isEnvironmentRecord(reference.base)) {
-    return reference.base.getBindingValue(
-      reference.referencedName,
-      reference.strict,
+    return linkValueToGeneratorHostChain(
+      callerRealm,
+      reference.base.getBindingValue(
+        reference.referencedName,
+        reference.strict,
+        callerRealm,
+      ),
     );
   }
 
   if (hasPrimitiveBase(reference) && isPrimitiveWrapperBase(reference.base)) {
-    return getPrimitiveBaseValue(reference, reference.base);
+    return getPrimitiveBaseValue(reference, reference.base, callerRealm);
   }
 
   if (isPropertyReferenceBase(reference.base)) {
-    return reference.base.getReferencedValue(reference.referencedName);
+    linkValueToGeneratorHostChain(callerRealm, reference.base);
+    return linkValueToGeneratorHostChain(
+      callerRealm,
+      reference.base.getReferencedValue(reference.referencedName, callerRealm),
+    );
   }
 
   throw new TypeError('Unsupported reference base');
@@ -207,9 +233,10 @@ export function getValue(reference) {
  * @param {{
  *   getProperty: (name: string | symbol) => import('./descriptors.js').PropertyDescriptorRecord | undefined,
  * }} object The transient `ToObject` wrapper for the primitive base.
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {unknown}
  */
-function getPrimitiveBaseValue(reference, object) {
+function getPrimitiveBaseValue(reference, object, callerRealm) {
   const descriptor = object.getProperty(reference.referencedName);
 
   if (descriptor === undefined) {
@@ -217,12 +244,32 @@ function getPrimitiveBaseValue(reference, object) {
   }
 
   if (isDataDescriptor(descriptor)) {
-    return descriptor.value;
+    return linkValueToGeneratorHostChain(callerRealm, descriptor.value);
   }
 
-  return descriptor.get === undefined
-    ? undefined
-    : callAccessor(descriptor.get, reference.thisValue, []);
+  return linkValueToGeneratorHostChain(
+    callerRealm,
+    descriptor.get === undefined
+      ? undefined
+      : callAccessor(descriptor.get, reference.thisValue, [], callerRealm),
+  );
+}
+
+/**
+ * @param {import('./realm.js').Realm | undefined} callerRealm
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+export function linkValueToGeneratorHostChain(callerRealm, value) {
+  if (
+    callerRealm !== undefined &&
+    value instanceof EngineObject &&
+    value.agent !== null
+  ) {
+    callerRealm.agent.linkGeneratorHostChain(value.agent);
+  }
+
+  return value;
 }
 
 /**
@@ -239,9 +286,10 @@ function getPrimitiveBaseValue(reference, object) {
  *
  * @param {Reference} reference
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {unknown}
  */
-export function putValue(reference, value) {
+export function putValue(reference, value, callerRealm) {
   if (!isReference(reference)) {
     throw new TypeError('Expected a Reference record');
   }
@@ -255,19 +303,22 @@ export function putValue(reference, value) {
       reference.referencedName,
       value,
       reference.strict,
+      callerRealm,
     );
     return value;
   }
 
   if (hasPrimitiveBase(reference) && isPrimitiveWrapperBase(reference.base)) {
-    return putPrimitiveBaseValue(reference, reference.base, value);
+    return putPrimitiveBaseValue(reference, reference.base, value, callerRealm);
   }
 
   if (isPropertyReferenceBase(reference.base)) {
+    linkValueToGeneratorHostChain(callerRealm, reference.base);
     reference.base.setReferencedValue(
       reference.referencedName,
       value,
       reference.strict,
+      callerRealm,
     );
     return value;
   }
@@ -306,9 +357,10 @@ export function putValue(reference, value) {
  *   getProperty: (name: string | symbol) => import('./descriptors.js').PropertyDescriptorRecord | undefined,
  * }} object The transient `ToObject` wrapper for the primitive base.
  * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {unknown}
  */
-function putPrimitiveBaseValue(reference, object, value) {
+function putPrimitiveBaseValue(reference, object, value, callerRealm) {
   const name = reference.referencedName;
 
   if (!object.canPut(name)) {
@@ -330,7 +382,7 @@ function putPrimitiveBaseValue(reference, object, value) {
     isAccessorDescriptor(descriptor) &&
     descriptor.set !== undefined
   ) {
-    callAccessor(descriptor.set, reference.thisValue, [value]);
+    callAccessor(descriptor.set, reference.thisValue, [value], callerRealm);
     return value;
   }
 

@@ -65,6 +65,7 @@ const MODES = Object.freeze(['cold', 'steady']);
 
 const BASE_COMMIT = '1111111111111111111111111111111111111111';
 const CANDIDATE_COMMIT = '2222222222222222222222222222222222222222';
+const FIXTURE_WORKLOAD_SOURCE = '(function () { return 1; }())';
 
 /**
  * Base jsjs medians in ms for one revision, before any round drift.
@@ -80,6 +81,31 @@ const BASE_MEDIANS = Object.freeze({
 });
 
 const tests = [
+  {
+    name: 'fixture reports use one fixed source for every workload',
+    run() {
+      const report = createFixtureReport({
+        host: 'node',
+        runId: 'fixed-source',
+        generatedAt: '2026-08-08T00:00:00.000Z',
+        gitCommit: BASE_COMMIT,
+        cells: Object.keys(BASE_MEDIANS).map((cell) => ({
+          workload: cell.slice(0, cell.indexOf(':')),
+          mode: /** @type {Mode} */ (cell.slice(cell.indexOf(':') + 1)),
+          medianMs: BASE_MEDIANS[cell],
+        })),
+      });
+
+      for (const workload of report.config.workloads) {
+        assertSame(workload.source, FIXTURE_WORKLOAD_SOURCE, workload.name);
+        assertSame(
+          workload.source.includes(workload.name),
+          false,
+          workload.name,
+        );
+      }
+    },
+  },
   {
     name: 'benchmark compare parses compare arguments and rejects unsafe manifest and output paths',
     run() {
@@ -1221,7 +1247,7 @@ function createFixtureReport(options) {
     maxBatchSize: 1000000,
     workloads: workloadNames.map((name) => ({
       name,
-      source: `(function () { return ${JSON.stringify(name)}; }())`,
+      source: FIXTURE_WORKLOAD_SOURCE,
       expectedChecksum: WORKLOAD_CHECKSUMS[name],
     })),
   };

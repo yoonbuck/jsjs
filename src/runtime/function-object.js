@@ -6,6 +6,7 @@ import {
   bindThisValue,
   createFunctionExecutionEnvironment,
 } from './environment.js';
+import { linkValueToGeneratorHostChain } from './reference.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -216,9 +217,10 @@ export class EngineFunction extends EngineObject {
   /**
    * @param {unknown} thisValue
    * @param {readonly unknown[]} [args=[]]
+   * @param {Realm} [callerRealm]
    * @returns {unknown}
    */
-  callFunction(thisValue, args = []) {
+  callFunction(thisValue, args = [], callerRealm) {
     if (this.functionKind === 'classConstructor') {
       throw new ThrowSignal(
         this.realm.createGuestError(
@@ -228,17 +230,55 @@ export class EngineFunction extends EngineObject {
       );
     }
 
-    const functionEnvironment = this.functionExecutionEnvironment(thisValue);
+    const callChain = this.realm.agent.enterSynchronousCallChain(
+      callerRealm,
+      this.realm,
+    );
 
-    if (
-      this.functionKind === 'generator' ||
-      this.functionKind === 'generatorMethod'
-    ) {
-      const generatorFactory = this._generatorFactory;
+    try {
+      callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+      const activeRealm = callerRealm ?? this.realm;
 
-      if (generatorFactory === undefined) {
+      linkValueToGeneratorHostChain(activeRealm, thisValue);
+      for (const argument of args) {
+        linkValueToGeneratorHostChain(activeRealm, argument);
+      }
+
+      const functionEnvironment = this.functionExecutionEnvironment(thisValue);
+
+      if (
+        this.functionKind === 'generator' ||
+        this.functionKind === 'generatorMethod'
+      ) {
+        const generatorFactory = this._generatorFactory;
+
+        if (generatorFactory === undefined) {
+          throw new TypeError(
+            'Generator function is missing a generator factory',
+          );
+        }
+
+        const completion = this.executeWithFunctionEnvironment(
+          functionEnvironment.thisValue,
+          args,
+          functionEnvironment,
+          (functionObject, resolvedThisValue, receivedArgs, environment) => ({
+            type: 'return',
+            value: generatorFactory(
+              functionObject,
+              resolvedThisValue,
+              receivedArgs,
+              environment,
+            ),
+          }),
+        );
+
+        if (completion.type === 'return') {
+          return linkValueToGeneratorHostChain(activeRealm, completion.value);
+        }
+
         throw new TypeError(
-          'Generator function is missing a generator factory',
+          'Generator factory returned an unexpected function completion',
         );
       }
 
@@ -246,50 +286,29 @@ export class EngineFunction extends EngineObject {
         functionEnvironment.thisValue,
         args,
         functionEnvironment,
-        (functionObject, resolvedThisValue, receivedArgs, environment) => ({
-          type: 'return',
-          value: generatorFactory(
-            functionObject,
-            resolvedThisValue,
-            receivedArgs,
-            environment,
-          ),
-        }),
       );
 
       if (completion.type === 'return') {
-        return completion.value;
+        return linkValueToGeneratorHostChain(activeRealm, completion.value);
       }
 
+      if (completion.type === 'normal') {
+        return undefined;
+      }
+
+      if (completion.type === 'throw') {
+        throw new ThrowSignal(completion.value);
+      }
+
+      // `break`/`continue` cannot escape a function body: the parser rejects
+      // them outside a loop, so reaching this point means the evaluator
+      // produced a completion kind that does not exist.
       throw new TypeError(
-        'Generator factory returned an unexpected function completion',
+        `Unexpected ${completion.type} completion from a function body`,
       );
+    } finally {
+      this.realm.agent.exitSynchronousCallChain(callChain);
     }
-
-    const completion = this.executeWithFunctionEnvironment(
-      functionEnvironment.thisValue,
-      args,
-      functionEnvironment,
-    );
-
-    if (completion.type === 'return') {
-      return completion.value;
-    }
-
-    if (completion.type === 'normal') {
-      return undefined;
-    }
-
-    if (completion.type === 'throw') {
-      throw new ThrowSignal(completion.value);
-    }
-
-    // `break`/`continue` cannot escape a function body: the parser rejects
-    // them outside a loop, so reaching this point means the evaluator
-    // produced a completion kind that does not exist.
-    throw new TypeError(
-      `Unexpected ${completion.type} completion from a function body`,
-    );
   }
 
   /**
@@ -307,25 +326,53 @@ export class EngineFunction extends EngineObject {
    *
    * @param {readonly unknown[]} [args=[]]
    * @param {unknown} [newTarget=this]
+   * @param {Realm} [callerRealm]
    * @returns {EngineObject}
    */
-  constructFunction(args = [], newTarget = this) {
+  constructFunction(args = [], newTarget = this, callerRealm) {
     if (!this._isConstructor) {
       throw new GuestErrorSignal('TypeError', 'Function is not a constructor');
     }
 
-    if (this.functionKind === 'classConstructor') {
-      return this.constructClass(args, newTarget);
-    }
-
-    const instance = ordinaryCreateFromConstructor(
-      newTarget,
-      this.realm.intrinsics.objectPrototype,
-      this.realm.agent,
+    const callChain = this.realm.agent.enterSynchronousCallChain(
+      callerRealm,
+      this.realm,
     );
-    const result = this.callFunction(instance, args);
 
-    return result instanceof EngineObject ? result : instance;
+    try {
+      callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+      const activeRealm = callerRealm ?? this.realm;
+
+      for (const argument of args) {
+        linkValueToGeneratorHostChain(activeRealm, argument);
+      }
+      linkValueToGeneratorHostChain(activeRealm, newTarget);
+
+      if (this.functionKind === 'classConstructor') {
+        return /** @type {EngineObject} */ (
+          linkValueToGeneratorHostChain(
+            activeRealm,
+            this.constructClass(args, newTarget),
+          )
+        );
+      }
+
+      const instance = ordinaryCreateFromConstructor(
+        newTarget,
+        this.realm.intrinsics.objectPrototype,
+        this.realm.agent,
+      );
+      const result = this.callFunction(instance, args);
+
+      return /** @type {EngineObject} */ (
+        linkValueToGeneratorHostChain(
+          activeRealm,
+          result instanceof EngineObject ? result : instance,
+        )
+      );
+    } finally {
+      this.realm.agent.exitSynchronousCallChain(callChain);
+    }
   }
 
   /**
@@ -574,6 +621,7 @@ export function constructSuper(args, functionEnvironment) {
   const value = superConstructor.constructFunction(
     args,
     functionEnvironment.newTarget,
+    functionEnvironment.activeConstructor?.realm,
   );
   return bindThisValue(functionEnvironment, value);
 }
@@ -687,11 +735,17 @@ export class ArgumentsObject extends EngineObject {
    * @param {PropertyKey} name
    * @param {import('./descriptors.js').PropertyDescriptorRecord} descriptor
    * @param {boolean} [throwOnError=false]
+   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false) {
+  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
     const parameterName = this._parameterMap.get(name);
-    const defined = super.defineOwnProperty(name, descriptor, throwOnError);
+    const defined = super.defineOwnProperty(
+      name,
+      descriptor,
+      throwOnError,
+      callerRealm,
+    );
 
     if (!defined || parameterName === undefined) {
       return defined;

@@ -1,6 +1,12 @@
 import { boundNames } from '../evaluator/static-semantics.js';
 import { ModuleNamespaceObject } from './module-namespace.js';
 
+/** @type {WeakMap<object, object>} */
+const IMPORTED_REEXPORT_IMPORT_ENTRIES = new WeakMap();
+/** @type {WeakMap<object, number>} */
+const MODULE_REQUEST_INDICES = new WeakMap();
+export const MODULE_NAMESPACE_BINDING = Symbol('Module namespace binding');
+
 /**
  * The static products of parsing an ES2015 source-text module. Linking and
  * evaluation populate the mutable record state; the AST and entry lists stay
@@ -25,22 +31,50 @@ export class SourceTextModuleRecord {
     const indirectExportEntries = [];
     /** @type {any[]} */
     const starExportEntries = [];
+    /** @type {Map<any, any[]>} */
+    const importEntriesByDeclaration = new Map();
 
-    /** @param {string} moduleRequest */
+    /**
+     * @param {string} moduleRequest
+     * @returns {number}
+     */
     const addRequest = (moduleRequest) => {
+      const requestIndex = requestedModules.length;
       requestedModules.push(moduleRequest);
+      return requestIndex;
     };
 
     for (const declaration of ast.body) {
+      if (declaration.type === 'ImportDeclaration') {
+        const firstEntry = importEntries.length;
+        extractImportEntries(declaration, importEntries);
+        const declarationEntries = [];
+        for (let index = firstEntry; index < importEntries.length; index += 1) {
+          declarationEntries.push(importEntries[index]);
+        }
+        importEntriesByDeclaration.set(declaration, declarationEntries);
+      }
+    }
+
+    for (const declaration of ast.body) {
       switch (declaration.type) {
-        case 'ImportDeclaration':
-          addRequest(declaration.source.value);
-          extractImportEntries(declaration, importEntries);
+        case 'ImportDeclaration': {
+          const requestIndex = addRequest(declaration.source.value);
+          const declarationEntries =
+            importEntriesByDeclaration.get(declaration);
+          if (declarationEntries === undefined) {
+            throw new TypeError('Import declaration entries are missing');
+          }
+          for (const entry of declarationEntries) {
+            MODULE_REQUEST_INDICES.set(entry, requestIndex);
+          }
           break;
+        }
         case 'ExportNamedDeclaration':
           extractNamedExportEntries(
             declaration,
             addRequest,
+            importEntries,
             localExportEntries,
             indirectExportEntries,
           );
@@ -53,15 +87,30 @@ export class SourceTextModuleRecord {
             }),
           );
           break;
-        case 'ExportAllDeclaration':
-          addRequest(declaration.source.value);
-          starExportEntries.push(
-            freezeEntry({ moduleRequest: declaration.source.value }),
-          );
+        case 'ExportAllDeclaration': {
+          const requestIndex = addRequest(declaration.source.value);
+          const entry = freezeEntry({
+            moduleRequest: declaration.source.value,
+          });
+          MODULE_REQUEST_INDICES.set(entry, requestIndex);
+          starExportEntries.push(entry);
           break;
+        }
         default:
           break;
       }
+    }
+
+    for (const entry of indirectExportEntries) {
+      const imported = IMPORTED_REEXPORT_IMPORT_ENTRIES.get(entry);
+      if (imported === undefined) {
+        continue;
+      }
+      const requestIndex = MODULE_REQUEST_INDICES.get(imported);
+      if (requestIndex === undefined) {
+        throw new TypeError('Imported re-export request is missing');
+      }
+      MODULE_REQUEST_INDICES.set(entry, requestIndex);
     }
 
     this.requestedModules = Object.freeze(requestedModules);
@@ -128,7 +177,7 @@ export class SourceTextModuleRecord {
  *     kind: 'named' | 'namespace',
  *   }>,
  *   targetModule: SourceTextModuleRecord,
- *   targetName?: string,
+ *   targetName?: string | typeof MODULE_NAMESPACE_BINDING,
  * }} ResolvedImportEntry
  */
 
@@ -203,7 +252,8 @@ function extractImportEntries(declaration, entries) {
 
 /**
  * @param {any} declaration
- * @param {(moduleRequest: string) => void} addRequest
+ * @param {(moduleRequest: string) => number} addRequest
+ * @param {any[]} importEntries
  * @param {any[]} localEntries
  * @param {any[]} indirectEntries
  * @returns {void}
@@ -211,6 +261,7 @@ function extractImportEntries(declaration, entries) {
 function extractNamedExportEntries(
   declaration,
   addRequest,
+  importEntries,
   localEntries,
   indirectEntries,
 ) {
@@ -223,27 +274,58 @@ function extractNamedExportEntries(
 
   if (declaration.source === null) {
     for (const specifier of declaration.specifiers) {
-      localEntries.push(
-        freezeEntry({
-          exportName: specifier.exported.name,
-          localName: specifier.local.name,
-        }),
+      const imported = importEntries.find(
+        (entry) =>
+          entry.kind === 'named' && entry.localName === specifier.local.name,
       );
+      if (imported === undefined) {
+        localEntries.push(
+          freezeEntry({
+            exportName: specifier.exported.name,
+            localName: specifier.local.name,
+          }),
+        );
+        continue;
+      }
+
+      const entry = freezeEntry({
+        moduleRequest: imported.moduleRequest,
+        importName: imported.importName,
+        exportName: specifier.exported.name,
+      });
+      IMPORTED_REEXPORT_IMPORT_ENTRIES.set(entry, imported);
+      indirectEntries.push(entry);
     }
     return;
   }
 
   const moduleRequest = declaration.source.value;
-  addRequest(moduleRequest);
+  const requestIndex = addRequest(moduleRequest);
   for (const specifier of declaration.specifiers) {
-    indirectEntries.push(
-      freezeEntry({
-        moduleRequest,
-        importName: specifier.local.name,
-        exportName: specifier.exported.name,
-      }),
-    );
+    const entry = freezeEntry({
+      moduleRequest,
+      importName: specifier.local.name,
+      exportName: specifier.exported.name,
+    });
+    MODULE_REQUEST_INDICES.set(entry, requestIndex);
+    indirectEntries.push(entry);
   }
+}
+
+/**
+ * @param {object} entry
+ * @returns {object | undefined}
+ */
+export function importedReExportImportEntry(entry) {
+  return IMPORTED_REEXPORT_IMPORT_ENTRIES.get(entry);
+}
+
+/**
+ * @param {object} entry
+ * @returns {number | undefined}
+ */
+export function moduleRequestIndexForEntry(entry) {
+  return MODULE_REQUEST_INDICES.get(entry);
 }
 
 /**

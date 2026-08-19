@@ -126,11 +126,11 @@ export function regExpExec(realm, thisValue, string) {
   const R = /** @type {EngineRegExp} */ (thisValue);
   // ToString(undefined) is the literal text "undefined": exec() with no
   // argument therefore searches for that string, not an empty pattern.
-  const S = toString(string);
+  const S = toString(string, realm);
   const length = S.length;
 
-  let i = toInteger(R.get('lastIndex'));
-  const global = toBoolean(R.get('global'));
+  let i = toInteger(R.get('lastIndex', realm), realm);
+  const global = toBoolean(R.get('global', realm));
 
   if (!global) {
     i = 0;
@@ -145,7 +145,7 @@ export function regExpExec(realm, thisValue, string) {
       // total match failure; this reset is not gated on `global` — the
       // `global` check only guards the *success* path's `lastIndex` update
       // to the match end position (step 11, below).
-      R.put('lastIndex', 0, true);
+      R.put('lastIndex', 0, true, realm);
       return null;
     }
 
@@ -159,7 +159,7 @@ export function regExpExec(realm, thisValue, string) {
   const e = matchResult.endIndex;
 
   if (global) {
-    R.put('lastIndex', e, true);
+    R.put('lastIndex', e, true, realm);
   }
 
   const n = R.capturingGroups;
@@ -280,18 +280,18 @@ function installToStringMethod(realm, regExpPrototype) {
         }
 
         const R = /** @type {EngineRegExp} */ (thisValue);
-        const source = toString(R.get('source'));
+        const source = toString(R.get('source', realm), realm);
         let flagsText = '';
 
-        if (toBoolean(R.get('global'))) {
+        if (toBoolean(R.get('global', realm))) {
           flagsText += 'g';
         }
 
-        if (toBoolean(R.get('ignoreCase'))) {
+        if (toBoolean(R.get('ignoreCase', realm))) {
           flagsText += 'i';
         }
 
-        if (toBoolean(R.get('multiline'))) {
+        if (toBoolean(R.get('multiline', realm))) {
           flagsText += 'm';
         }
 
@@ -345,7 +345,7 @@ export function createRegExpFromPattern(realm, patternSource, flagsText) {
       intrinsics.regExpConstructor
     );
   const regExpPrototype = /** @type {EngineObject} */ (
-    regExpConstructor.get('prototype')
+    regExpConstructor.get('prototype', realm)
   );
 
   return buildRegExp(realm, regExpPrototype, patternSource, flagsText);
@@ -396,8 +396,8 @@ function constructRegExp(realm, prototype, pattern, flags) {
 function buildRegExp(realm, prototype, pattern, flags) {
   // ES5 15.10.4.1: P is coerced before F, so a `toString` side effect on
   // `pattern` is observable before one on `flags`.
-  const patternSource = pattern === undefined ? '' : toString(pattern);
-  const flagsText = flags === undefined ? '' : toString(flags);
+  const patternSource = pattern === undefined ? '' : toString(pattern, realm);
+  const flagsText = flags === undefined ? '' : toString(flags, realm);
 
   // Note: ES5 15.10.4.1 checks Pattern (step 4) before flags (step 5), but
   // here we validate flags first. This is unobservable: both throw SyntaxError,

@@ -336,9 +336,10 @@ It is therefore selected rather than excluded, because in the UTC environment CI
 validates in the engine genuinely satisfies it. So that the committed report and
 coverage table stay a pure function of the engine rather than of the contributor's
 clock, `npm run test262:upstream` refuses to run outside UTC and prints the
-`TZ=UTC npm run test262:upstream` invocation to use instead; CI pins the same
-`TZ=UTC`. This is the one file whose result would otherwise move with the host
-zone, so pinning the zone is enough to make the artifacts reproducible.
+`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`
+invocation to use instead; CI pins the same broad Node environment. This is the
+one file whose result would otherwise move with the host zone, so pinning the
+zone is enough to make the artifacts reproducible.
 
 ### Number-to-string and string-to-number use the host's algorithms
 
@@ -429,25 +430,26 @@ implementation falls short of what a hosted engine should do. They are written
 down for the same reason the deviations are — an undocumented shortfall is
 indistinguishable from a bug.
 
-### Well-known symbols are defined but only @@toPrimitive, @@toStringTag and @@iterator are honoured
+### Well-known symbols are defined but only @@toPrimitive, @@toStringTag, @@iterator and @@species are honoured
 
 The engine implements ES2015 Symbols (see
 [docs/conformance.md](conformance.md#symbols-and-property-keys)) and defines all
 eleven of ECMA-262 §6.1.5.1's well-known symbols as own properties of `Symbol`,
-with the specified attributes and shared across realms. Three of them do
+with the specified attributes and shared across realms. Four of them do
 something: `@@toPrimitive` is a real step of `ToPrimitive`, a string
 `@@toStringTag` is preferred by `Object.prototype.toString`, and `@@iterator`
 drives the iteration protocol — `GetIterator` reads it, so `obj[Symbol.iterator]`
 makes `obj` iterable in `for`-`of` and every built-in iterator (Array, String,
-`arguments`) installs it (yoonbuck/jsjs#47).
+`arguments`) installs it (yoonbuck/jsjs#47). Promise chaining reads
+`@@species` to choose the constructor for the derived Promise.
 
-The other eight — `@@hasInstance`, `@@isConcatSpreadable`,
-`@@match`, `@@replace`, `@@search`, `@@species`, `@@split`, and
-`@@unscopables` — are values with no behaviour behind them. `instanceof` does not
-consult `@@hasInstance`, `Array.prototype.concat` does not consult
-`@@isConcatSpreadable`, `String.prototype.match` and friends do not dispatch
-through `@@match`/`@@replace`/`@@search`/`@@split`, no built-in reads
-`@@species`, and `with` does not consult `@@unscopables`.
+The other seven — `@@hasInstance`, `@@isConcatSpreadable`, `@@match`,
+`@@replace`, `@@search`, `@@split`, and `@@unscopables` — are values with no
+behaviour behind them. `instanceof` does not consult `@@hasInstance`,
+`Array.prototype.concat` does not consult `@@isConcatSpreadable`,
+`String.prototype.match` and friends do not dispatch through
+`@@match`/`@@replace`/`@@search`/`@@split`, and `with` does not consult
+`@@unscopables`.
 
 This is a deliberate staging boundary rather than an oversight: those protocols
 belong to the issues that introduce the machinery they need — chiefly the ES2015

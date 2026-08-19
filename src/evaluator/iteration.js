@@ -32,6 +32,6 @@ export function iterableToList(realm, value) {
       return values;
     }
 
-    values.push(iteratorValue(step));
+    values.push(iteratorValue(step, realm));
   }
 }

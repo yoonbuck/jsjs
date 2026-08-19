@@ -18,6 +18,7 @@ export function evaluatePropertyName(node, computed, context) {
     node,
     computed,
     computed ? evaluateExpressionValue(node, context) : undefined,
+    context.realm,
   );
 }
 
@@ -28,11 +29,12 @@ export function evaluatePropertyName(node, computed, context) {
  * @param {any} node
  * @param {boolean} computed
  * @param {unknown} value
+ * @param {import('../runtime/realm.js').Realm} [callerRealm]
  * @returns {string | symbol}
  */
-export function propertyNameFromValue(node, computed, value) {
+export function propertyNameFromValue(node, computed, value, callerRealm) {
   if (computed) {
-    return toEvaluatedPropertyKey(value);
+    return toEvaluatedPropertyKey(value, callerRealm);
   }
 
   if (node.type === 'Identifier') {
@@ -40,7 +42,7 @@ export function propertyNameFromValue(node, computed, value) {
   }
 
   if (node.type === 'Literal' && !node.regex) {
-    return toPropertyKey(node.value);
+    return toPropertyKey(node.value, callerRealm);
   }
 
   throw createUnsupportedNodeError(node);
@@ -48,10 +50,11 @@ export function propertyNameFromValue(node, computed, value) {
 
 /**
  * @param {unknown} value
+ * @param {import('../runtime/realm.js').Realm} [callerRealm]
  * @returns {string | symbol}
  */
-export function toEvaluatedPropertyKey(value) {
-  return toPropertyKey(value);
+export function toEvaluatedPropertyKey(value, callerRealm) {
+  return toPropertyKey(value, callerRealm);
 }
 
 /**

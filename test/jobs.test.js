@@ -3,6 +3,7 @@ import {
   createNormalCompletion,
   createThrowCompletion,
 } from '../src/runtime/completion.js';
+import { AgentJobQueue } from '../src/runtime/jobs.js';
 import { assertSame, assertThrows } from './harness/assert.js';
 
 /**
@@ -190,6 +191,43 @@ export default [
       );
       assertSame(realm.agent.runJobs().processed, 1);
       assertSame(order[2048], 2048);
+    },
+  },
+  {
+    name: 'JobQueue releases consumed records and bounds storage during a checkpoint',
+    run: () => {
+      const queue = new AgentJobQueue(undefined);
+      const jobCount = 2048;
+      let boundedStorageObserved = false;
+      let retainedConsumedRecord = false;
+      /** @type {number[]} */
+      const order = [];
+
+      for (let index = 0; index < jobCount; index += 1) {
+        const kind = `retention-${index}`;
+        queue.enqueue(
+          createJob(null, kind, () => {
+            order.push(index);
+            if (queue.jobs.some((candidate) => candidate?.kind === kind)) {
+              retainedConsumedRecord = true;
+            }
+            if (index < jobCount - 1 && queue.jobs.length <= jobCount / 2) {
+              boundedStorageObserved = true;
+            }
+            return createNormalCompletion(undefined);
+          }),
+        );
+      }
+
+      const report = queue.run();
+      assertSame(report.failures.length, 0);
+      assertSame(retainedConsumedRecord, false);
+      assertSame(boundedStorageObserved, true);
+      assertSame(order.length, jobCount);
+      assertSame(order[0], 0);
+      assertSame(order[jobCount - 1], jobCount - 1);
+      assertSame(queue.jobs.length, 0);
+      assertSame(queue.jobHead, 0);
     },
   },
   {
@@ -533,6 +571,137 @@ export default [
       assertSame(report.failures[1].error, hookError);
       assertSame(report.failures[1].job, null);
       assertSame(report.failures[1].category, 'host-hook');
+    },
+  },
+  {
+    name: 'automatic durable failures bound several waves without suppressing reports',
+    run: () => {
+      const hookError = new Error('reporter failed');
+      const waveSizes = [44, 44, 45];
+      let reportCalls = 0;
+      /** @type {import('../src/runtime/jobs.js').JobFailure | undefined} */
+      let reportedDroppedFailure;
+      const agent = createAgent({
+        jobHost: {
+          scheduleMicrotask() {},
+          reportJobError(failure) {
+            reportCalls += 1;
+            if (failure.job?.kind === 'failure-66') {
+              reportedDroppedFailure = failure;
+            }
+            throw hookError;
+          },
+        },
+      });
+      const sharedRealm = createRealm({ agent });
+      const droppedRealm = createRealm({ agent });
+      /** @type {(() => { type: 'throw', value: unknown }) | undefined} */
+      let droppedCallback;
+      let ordinal = 0;
+
+      for (const waveSize of waveSizes) {
+        for (let offset = 0; offset < waveSize; offset += 1) {
+          const current = ordinal;
+          const callback = () => createThrowCompletion({ ordinal: current });
+          if (current === 66) {
+            droppedCallback = callback;
+          }
+          agent.enqueueJob(
+            createJob(
+              current === 66 ? droppedRealm : sharedRealm,
+              `failure-${current}`,
+              callback,
+            ),
+          );
+          ordinal += 1;
+        }
+
+        const report = agent.runJobs();
+        assertSame(report.failures.length, waveSize * 2);
+      }
+
+      const retained = agent._jobQueue.failures;
+      assertSame(reportCalls, 133);
+      assertSame(retained.length, 257);
+      assertSame(retained[0].job?.kind, 'failure-0');
+      assertSame(retained[1].category, 'host-hook');
+      const overflow = retained[128];
+      assertSame(overflow.category, 'overflow');
+      if (overflow.category !== 'overflow') {
+        throw new Error('Expected a durable failure overflow marker');
+      }
+      assertSame(overflow.job, null);
+      assertSame(overflow.error, undefined);
+      assertSame(overflow.dropped, 10);
+      assertSame(Object.isFrozen(overflow), true);
+      assertSame(retained[129].job?.kind, 'failure-69');
+      assertSame(retained[256].category, 'host-hook');
+      assertSame(
+        retained.some((failure) => failure.job?.callback === droppedCallback),
+        false,
+      );
+      assertSame(
+        retained.some((failure) => failure.job?.realm === droppedRealm),
+        false,
+      );
+      assertSame(reportedDroppedFailure?.job?.callback, droppedCallback);
+      assertSame(reportedDroppedFailure?.job?.realm, droppedRealm);
+    },
+  },
+  {
+    name: 'manual durable overflow accounting is cleared by takeJobFailures',
+    run: () => {
+      const realm = createRealm();
+      const waveSizes = [100, 100, 59];
+      /** @type {(() => { type: 'throw', value: unknown }) | undefined} */
+      let droppedCallback;
+      let ordinal = 0;
+
+      for (const waveSize of waveSizes) {
+        for (let offset = 0; offset < waveSize; offset += 1) {
+          const current = ordinal;
+          const callback = () => createThrowCompletion({ ordinal: current });
+          if (current === 129) {
+            droppedCallback = callback;
+          }
+          realm.agent.enqueueJob(
+            createJob(realm, `manual-${current}`, callback),
+          );
+          ordinal += 1;
+        }
+
+        assertSame(realm.agent.checkpointState, 'idle');
+        assertSame(realm.agent.runJobs().failures.length, waveSize);
+      }
+
+      const retained = realm.agent.takeJobFailures();
+      assertSame(retained.length, 257);
+      assertSame(retained[0].job?.kind, 'manual-0');
+      assertSame(retained[127].job?.kind, 'manual-127');
+      const overflow = retained[128];
+      assertSame(overflow.category, 'overflow');
+      if (overflow.category !== 'overflow') {
+        throw new Error('Expected a durable failure overflow marker');
+      }
+      assertSame(overflow.dropped, 3);
+      assertSame(retained[129].job?.kind, 'manual-131');
+      assertSame(retained[256].job?.kind, 'manual-258');
+      assertSame(
+        retained.some((failure) => failure.job?.callback === droppedCallback),
+        false,
+      );
+      assertSame(realm.agent.takeJobFailures().length, 0);
+
+      realm.agent.enqueueJob(
+        createJob(realm, 'after-clear', () =>
+          createThrowCompletion('after-clear'),
+        ),
+      );
+      assertSame(realm.agent.runJobs().failures.length, 1);
+      const afterClear = realm.agent.takeJobFailures();
+      assertSame(afterClear.length, 1);
+      assertSame(afterClear[0].category, 'job');
+      assertSame(afterClear[0].job?.kind, 'after-clear');
     },
   },
 ];

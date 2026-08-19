@@ -10,10 +10,11 @@
  *
  * Three things are checked before a single test runs, because a conformance
  * number measured against the wrong tree is worse than no number at all: the
- * checkout must exist, its `HEAD` must be exactly the pinned revision, and the
- * subset manifest must name that same repository and revision. Any mismatch
- * fails with the commands needed to fix it rather than running a different set
- * of tests and reporting success.
+ * checkout must exist, its `HEAD` must be exactly the pinned revision, its
+ * tracked and untracked contents must be clean, and the subset manifest must
+ * name that same repository and revision. Any mismatch fails with the commands
+ * needed to fix it rather than running a different set of tests and reporting
+ * success.
  *
  * The run produces two generated artifacts from one string each, so they can
  * never disagree with each other:
@@ -37,7 +38,10 @@ import { createNodeTest262Host } from './adapters/node.js';
 import { createJsjsTest262Engine } from './engine.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
-import { TEST262_REPORT_FILE } from '../ci/pipeline.js';
+import {
+  TEST262_REPORT_FILE,
+  formatTest262UpstreamCommand,
+} from '../ci/pipeline.js';
 import {
   FEATURES_MANIFEST_FILE,
   featureNames,
@@ -59,16 +63,20 @@ import {
   formatUpstreamSummaryLines,
   parseUpstreamSubset,
   summarizeUpstreamRun,
+  upstreamRunResultPasses,
   upstreamSubsetPaths,
 } from './upstream.js';
+import { assertPinnedCheckout, readTest262Pin } from './pin.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
 /** Re-exported for consumers that import from this module. */
 export {
+  assertPinnedCheckout,
   COVERAGE_DOCUMENT_FILE,
   COVERAGE_MARKER_BEGIN,
   COVERAGE_MARKER_END,
+  readTest262Pin,
   replaceGeneratedBlock,
   readGeneratedBlock,
 };
@@ -108,66 +116,6 @@ function readRepositoryFile(path) {
 }
 
 /**
- * @returns {Promise<{ repository: string, revision: string, checkoutPath: string }>}
- */
-export async function readTest262Pin() {
-  const manifest = JSON.parse(await readRepositoryFile('package.json'));
-  const pin = manifest.test262;
-
-  if (
-    pin === undefined ||
-    typeof pin.repository !== 'string' ||
-    typeof pin.revision !== 'string' ||
-    typeof pin.checkoutPath !== 'string'
-  ) {
-    throw new Error('package.json must pin the upstream Test262 tree');
-  }
-
-  return pin;
-}
-
-/**
- * @param {{ repository: string, revision: string, checkoutPath: string }} pin
- * @returns {string}
- */
-function checkoutHint(pin) {
-  return [
-    'Check the pinned upstream tree out first:',
-    `  git clone --filter=blob:none ${pin.repository} ${pin.checkoutPath}`,
-    `  git -C ${pin.checkoutPath} checkout ${pin.revision}`,
-  ].join('\n');
-}
-
-/**
- * Confirms the checkout really is the pinned revision. A detached `HEAD` holds
- * the raw commit id, which is exactly what a pinned checkout must have; a
- * branch reference means someone checked out something else.
- *
- * @param {{ repository: string, revision: string, checkoutPath: string }} pin
- * @returns {Promise<void>}
- */
-export async function assertPinnedCheckout(pin) {
-  /** @type {string} */
-  let head;
-
-  try {
-    head = (await readRepositoryFile(`${pin.checkoutPath}/.git/HEAD`)).trim();
-  } catch {
-    throw new Error(
-      `${pin.checkoutPath} is not a git checkout.\n${checkoutHint(pin)}`,
-    );
-  }
-
-  if (head !== pin.revision) {
-    throw new Error(
-      `${pin.checkoutPath} is at ${head}, but package.json pins ${pin.revision}.\n${checkoutHint(
-        pin,
-      )}`,
-    );
-  }
-}
-
-/**
  * Refuses to run outside a UTC time zone, because the generated artifacts are
  * committed and checked byte-for-byte against a UTC continuous-integration run.
  *
@@ -181,17 +129,14 @@ export async function assertPinnedCheckout(pin) {
  * than by engine behaviour. Generating under `TZ=UTC` (the environment CI uses)
  * makes the two artifacts a pure function of the engine and the pinned tree.
  *
- * The probe uses both a January and a July instant so a zone that merely happens
- * to sit at `+00:00` for one season (for example Europe/London in winter) is
- * still rejected; only a zone that is `+00:00` year round passes.
+ * The environment must name canonical `UTC` exactly. Offset probes cannot
+ * distinguish UTC from zones such as Africa/Monrovia whose historical offset is
+ * nonzero but whose modern January and July offsets are both zero.
  *
  * @returns {void}
  */
 export function assertUtcTimeZone() {
-  const januaryOffset = new Date(Date.UTC(2020, 0, 1)).getTimezoneOffset();
-  const julyOffset = new Date(Date.UTC(2020, 6, 1)).getTimezoneOffset();
-
-  if (januaryOffset === 0 && julyOffset === 0) {
+  if (process.env.TZ === 'UTC') {
     return;
   }
 
@@ -202,8 +147,8 @@ export function assertUtcTimeZone() {
       `The Test262 report must be generated under UTC, but this process is running in ${zone}.`,
       'Some selected tests read the host time-zone offset, so a non-UTC run writes',
       'artifacts that disagree with the UTC CI run and its byte-for-byte drift check.',
-      'Re-run with the time zone pinned to UTC, exactly as CI does:',
-      '  TZ=UTC npm run test262:upstream',
+      'Re-run with the broad Node environment pinned exactly as CI does:',
+      `  ${formatTest262UpstreamCommand()}`,
     ].join('\n'),
   );
 }
@@ -274,13 +219,15 @@ export async function main(argv = []) {
 
   if (stale.length > 0) {
     process.stderr.write(
-      `${stale.join('\n')}\n${stale.length} generated file(s) are stale; run npm run test262:upstream\n`,
+      `${stale.join('\n')}\n${
+        stale.length
+      } generated file(s) are stale; run ${formatTest262UpstreamCommand()}\n`,
     );
 
     return 1;
   }
 
-  return summary.failed > 0 ? 1 : 0;
+  return upstreamRunResultPasses({ summary, coverage }) ? 0 : 1;
 }
 
 /**

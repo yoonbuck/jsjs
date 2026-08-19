@@ -286,6 +286,103 @@ export default [
     },
   },
   {
+    name: 'Promise internal Agent follows newTarget allocation despite a foreign prototype',
+    run: () => {
+      const baseRealm = createRealm();
+      const allocationRealm = createRealm();
+      const prototypeRealm = createRealm();
+      const promiseConstructor =
+        /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
+          baseRealm.globalObject.get('Promise')
+        );
+      const newTarget =
+        /** @type {import('../src/runtime/function-object.js').EngineFunction} */ (
+          evaluateScript(allocationRealm, 'function Sub(executor) {} Sub;')
+            .value
+        );
+      const foreignPrototype = new EngineObject(
+        prototypeRealm.intrinsics.objectPrototype,
+      );
+      const executor = baseRealm.createNativeFunction({
+        name: 'executor',
+        length: 2,
+        call() {
+          return undefined;
+        },
+      });
+
+      newTarget.defineOwnProperty(
+        'prototype',
+        { value: foreignPrototype },
+        true,
+        allocationRealm,
+      );
+      const promise = assertPromiseObject(
+        promiseConstructor.constructFunction(
+          [executor],
+          newTarget,
+          allocationRealm,
+        ),
+      );
+
+      assertSame(promise.realm, allocationRealm);
+      assertSame(promise.agent, allocationRealm.agent);
+      assertSame(promise.getPrototype(), foreignPrototype);
+      assertSame(promise.agent === prototypeRealm.agent, false);
+    },
+  },
+  {
+    name: 'Promise allocation reads a stateful newTarget prototype exactly once',
+    run: () => {
+      const realm = createRealm();
+      const promiseConstructor =
+        /** @type {import('../src/builtins/shared.js').NativeFunction} */ (
+          realm.globalObject.get('Promise')
+        );
+      const secondPrototype = new EngineObject(
+        realm.intrinsics.objectPrototype,
+      );
+      let prototypeReads = 0;
+      const newTarget = realm.createNativeFunction({
+        name: 'StatefulNewTarget',
+        length: 1,
+        call() {
+          return undefined;
+        },
+        construct() {
+          return new EngineObject(realm.intrinsics.objectPrototype);
+        },
+      });
+      newTarget.defineOwnProperty('prototype', {
+        get: realm.createNativeFunction({
+          name: 'get prototype',
+          length: 0,
+          call() {
+            prototypeReads += 1;
+            return prototypeReads === 1 ? 1 : secondPrototype;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+      const executor = realm.createNativeFunction({
+        name: 'executor',
+        length: 2,
+        call() {
+          return undefined;
+        },
+      });
+
+      const promise = assertPromiseObject(
+        promiseConstructor.constructFunction([executor], newTarget, realm),
+      );
+
+      assertSame(prototypeReads, 1);
+      assertSame(promise.getPrototype(), realm.intrinsics.promisePrototype);
+      assertSame(promise.getPrototype() === secondPrototype, false);
+    },
+  },
+  {
     name: 'newPromiseCapability accepts a conforming constructor result',
     run: () => {
       const realm = createRealm();

@@ -3,6 +3,20 @@ import { parseScript, parseEval } from '../src/parser.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 
+/** @type {readonly ('parse' | 'program')[]} */
+const CUSTOM_SCRIPT_AST_ENTRIES = ['parse', 'program'];
+
+/**
+ * @param {'parse' | 'program'} entry
+ * @param {any} ast
+ * @returns {any}
+ */
+function parseCustomScript(entry, ast) {
+  return entry === 'parse'
+    ? parseScript('', { parse: () => ast })
+    : parseScript('', { program: ast });
+}
+
 const tests = [
   {
     name: 'parseScript returns a script program',
@@ -263,6 +277,22 @@ const tests = [
     },
   },
   {
+    name: 'custom script entry points accept Acorn shared empty argument arrays',
+    run() {
+      const program = parseScript('new First; new Second;');
+
+      assertSame(
+        program.body[0].expression.arguments,
+        program.body[1].expression.arguments,
+      );
+
+      for (const options of [{ program }, { parse: () => program }]) {
+        const parsed = parseScript('', options);
+        assertSame(parsed.body.length, 2);
+      }
+    },
+  },
+  {
     name: 'custom parser rejects N functions sharing one N-deep parameter pattern in bounded work',
     run() {
       const size = 64;
@@ -325,6 +355,62 @@ const tests = [
       ) {
         throw new Error(
           `Expected structural tree rejection, got ${parseError}`,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom parser validates deeply nested declaration scopes in bounded work',
+    run() {
+      const size = 128;
+      /** @type {any} */
+      let nested = { type: 'EmptyStatement' };
+
+      for (let depth = 0; depth < size; depth += 1) {
+        nested = {
+          type: 'BlockStatement',
+          body: [
+            {
+              type: 'VariableDeclaration',
+              kind: 'var',
+              declarations: [
+                {
+                  type: 'VariableDeclarator',
+                  id: { type: 'Identifier', name: `value${depth}` },
+                  init: null,
+                },
+              ],
+            },
+            nested,
+          ],
+        };
+      }
+
+      const program = {
+        type: 'Program',
+        sourceType: 'script',
+        body: [nested],
+      };
+      const push = Array.prototype.push;
+      let pushCalls = 0;
+
+      Array.prototype.push = function countedPush(
+        /** @type {any[]} */ ...values
+      ) {
+        pushCalls += 1;
+        return push.apply(this, values);
+      };
+
+      try {
+        const parsed = parseScript('', { parse: () => program });
+        assertSame(parsed.body.length, 1);
+      } finally {
+        Array.prototype.push = push;
+      }
+
+      if (pushCalls >= 10000) {
+        throw new Error(
+          `Expected fewer than 10000 worklist pushes, got ${pushCalls}`,
         );
       }
     },
@@ -1296,6 +1382,103 @@ const tests = [
         SyntaxError,
       );
       assertSame(iteratorCalls, 0);
+    },
+  },
+  {
+    name: 'custom ASTs reject duplicate lexical declarations in nested scopes',
+    run() {
+      for (const program of [
+        parseScript('{ let first; let second; }'),
+        parseScript('function scope() { let first; let second; }'),
+      ]) {
+        const body =
+          program.body[0].type === 'BlockStatement'
+            ? program.body[0].body
+            : program.body[0].body.body;
+        body[1].declarations[0].id.name = 'first';
+
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom script ASTs require initializers on ordinary const declarations',
+    run() {
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        const program = parseScript('let value;');
+        program.body[0].kind = 'const';
+
+        assertThrows(() => parseCustomScript(entry, program), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'custom function bodies reject lexical and function declaration conflicts',
+    run() {
+      const program = parseScript(
+        'function outer() { let first; function second() {} }',
+      );
+      program.body[0].body.body[1].id.name = 'first';
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom sloppy ASTs preserve Annex B duplicate block functions',
+    run() {
+      for (const program of [
+        parseScript('{ function repeated() {} function repeated() {} }'),
+        parseScript(
+          '{ first: function repeated() {} second: function repeated() {} }',
+        ),
+        parseScript(
+          'switch (0) { case 0: function repeated() {} case 1: function repeated() {} }',
+        ),
+      ]) {
+        assertSame(parseScript('', { parse: () => program }).type, 'Program');
+      }
+    },
+  },
+  {
+    name: 'custom blocks reject lexical conflicts with labelled functions',
+    run() {
+      const program = parseScript('{ let first; label: function second() {} }');
+      program.body[0].body[1].body.id.name = 'first';
+
+      assertThrows(
+        () => parseScript('', { parse: () => program }),
+        SyntaxError,
+      );
+    },
+  },
+  {
+    name: 'custom ASTs reject declaration conflicts in switch, catch, and loop scopes',
+    run() {
+      const switchProgram = parseScript(
+        'switch (value) { case 0: let first; break; case 1: let second; }',
+      );
+      switchProgram.body[0].cases[1].consequent[0].declarations[0].id.name =
+        'first';
+
+      const catchProgram = parseScript('try {} catch (first) { let second; }');
+      catchProgram.body[0].handler.body.body[0].declarations[0].id.name =
+        'first';
+
+      const loopProgram = parseScript('for (let first, second; false; ) {}');
+      loopProgram.body[0].init.declarations[1].id.name = 'first';
+
+      for (const program of [switchProgram, catchProgram, loopProgram]) {
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
     },
   },
   {
@@ -2567,6 +2750,29 @@ const tests = [
           SyntaxError,
         );
       }
+
+      const validGenerator = parseScript(
+        'function* valid(value) { yield value; }',
+      );
+      assertSame(
+        parseScript('', { parse: () => validGenerator }).type,
+        'Program',
+      );
+
+      const yieldParameter = parseScript('function* g(value) {}');
+      yieldParameter.body[0].params[0].name = 'yield';
+      assertThrows(
+        () => parseScript('', { parse: () => yieldParameter }),
+        SyntaxError,
+      );
+
+      const duplicateMethod = parseScript('({ *m(a, b) {} });');
+      duplicateMethod.body[0].expression.properties[0].value.params[1].name =
+        'a';
+      assertThrows(
+        () => parseScript('', { parse: () => duplicateMethod }),
+        SyntaxError,
+      );
     },
   },
   {
@@ -2668,6 +2874,161 @@ const tests = [
           () => parseScript('', { parse: () => program }),
           SyntaxError,
         );
+      }
+    },
+  },
+  {
+    name: 'custom script ASTs reject yield identifiers in a generator context through both entry points',
+    run() {
+      for (const source of [
+        'function* g(yield) {}',
+        'function* g(){ yi\\u0065ld; }',
+        'function* g(value = yi\\u0065ld) {}',
+        '(function* yield(){})',
+      ]) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        const binding = parseScript('function* g(value) {}');
+        binding.body[0].params[0].name = 'yield';
+        assertThrows(() => parseCustomScript(entry, binding), SyntaxError);
+
+        const reference = parseScript('function* g(){ value; }');
+        reference.body[0].body.body[0].expression.name = 'yield';
+        assertThrows(() => parseCustomScript(entry, reference), SyntaxError);
+
+        const parameterReference = parseScript(
+          'function* g(value = fallback) {}',
+        );
+        parameterReference.body[0].params[0].right.name = 'yield';
+        assertThrows(
+          () => parseCustomScript(entry, parameterReference),
+          SyntaxError,
+        );
+
+        const generatorExpressionName = parseScript('(function* named(){})');
+        generatorExpressionName.body[0].expression.id.name = 'yield';
+        assertThrows(
+          () => parseCustomScript(entry, generatorExpressionName),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom script ASTs reject literal words forged as Identifiers',
+    run() {
+      for (const name of ['null', 'true', 'false']) {
+        assertThrows(() => parseScript(`var ${name};`), SyntaxError);
+
+        for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+          const binding = parseScript('var value;');
+          binding.body[0].declarations[0].id.name = name;
+          assertThrows(() => parseCustomScript(entry, binding), SyntaxError);
+
+          const reference = parseScript('value;');
+          reference.body[0].expression.name = name;
+          assertThrows(() => parseCustomScript(entry, reference), SyntaxError);
+        }
+      }
+    },
+  },
+  {
+    name: 'custom sloppy lexical declarations reject let bindings through both entry points',
+    run() {
+      for (const source of ['let let;', 'const { value: let } = source;']) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        const direct = parseScript('let value;');
+        direct.body[0].declarations[0].id.name = 'let';
+        assertThrows(() => parseCustomScript(entry, direct), SyntaxError);
+
+        const nested = parseScript('const { property: value } = source;');
+        nested.body[0].declarations[0].id.properties[0].value.name = 'let';
+        assertThrows(() => parseCustomScript(entry, nested), SyntaxError);
+      }
+
+      const variable = parseScript('var let; let;');
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        assertSame(parseCustomScript(entry, variable).sourceType, 'script');
+      }
+    },
+  },
+  {
+    name: 'custom strict script ASTs preserve contextual identifier and delete early errors',
+    run() {
+      const strictReserved = [
+        'implements',
+        'interface',
+        'let',
+        'package',
+        'private',
+        'protected',
+        'public',
+        'static',
+        'yield',
+      ];
+
+      for (const name of strictReserved) {
+        assertThrows(
+          () => parseScript(`"use strict"; var ${name};`),
+          SyntaxError,
+        );
+        assertThrows(() => parseScript(`"use strict"; ${name};`), SyntaxError);
+      }
+      for (const name of ['eval', 'arguments']) {
+        assertThrows(
+          () => parseScript(`"use strict"; ${name} = 1;`),
+          SyntaxError,
+        );
+      }
+      assertThrows(
+        () => parseScript('"use strict"; delete target;'),
+        SyntaxError,
+      );
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        for (const name of strictReserved) {
+          const binding = parseScript('"use strict"; var value;');
+          binding.body[1].declarations[0].id.name = name;
+          assertThrows(() => parseCustomScript(entry, binding), SyntaxError);
+
+          const reference = parseScript('"use strict"; value;');
+          reference.body[1].expression.name = name;
+          assertThrows(() => parseCustomScript(entry, reference), SyntaxError);
+        }
+
+        for (const name of ['eval', 'arguments']) {
+          const assignment = parseScript('"use strict"; target = 1;');
+          assignment.body[1].expression.left.name = name;
+          assertThrows(() => parseCustomScript(entry, assignment), SyntaxError);
+        }
+
+        const deletion = parseScript('"use strict"; delete target.value;');
+        deletion.body[1].expression.argument =
+          deletion.body[1].expression.argument.object;
+        assertThrows(() => parseCustomScript(entry, deletion), SyntaxError);
+      }
+    },
+  },
+  {
+    name: 'custom contextual checks preserve valid sloppy and IdentifierName controls',
+    run() {
+      for (const source of [
+        'var yield; yield; delete yield;',
+        'eval = 1; arguments = 2;',
+        'function* g(){ function f(){ var yield; return yield; } }',
+        'function* g(){ (function yield(){}) } function* yield(){}',
+        '"use strict"; object.yield; ({ implements: 1, true: 2 });',
+      ]) {
+        const ast = parseScript(source);
+
+        for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+          assertSame(parseCustomScript(entry, ast).sourceType, 'script');
+        }
       }
     },
   },
@@ -3821,6 +4182,126 @@ const tests = [
       );
       assertThrows(() => parseScript('function f(a = 1, a) {}'), SyntaxError);
       parseScript('function f(a, a) {}');
+    },
+  },
+  {
+    name: 'custom object and class methods reject duplicate simple parameters independently of generator state',
+    run() {
+      /** @type {{ source: string, functionNode: (program: any) => any }[]} */
+      const cases = [
+        {
+          source: '({ *m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+        },
+        {
+          source: '(class { m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+        },
+        {
+          source: '(class { *m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+        },
+        {
+          source: '({ m(a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+        },
+      ];
+
+      for (const methodCase of cases) {
+        const program = parseScript(methodCase.source);
+        const functionNode = methodCase.functionNode(program);
+        functionNode.params[1].name = functionNode.params[0].name;
+
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
+    name: 'custom accessors keep their arity rules while sloppy declarations and expressions retain duplicate simple parameters',
+    run() {
+      /** @type {{ source: string, functionNode: (program: any) => any, params: any[] }[]} */
+      const accessorCases = [
+        {
+          source: '({ get value() {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+          params: [{ type: 'Identifier', name: 'value' }],
+        },
+        {
+          source: '({ set value(next) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+          params: [],
+        },
+        {
+          source: '(class { get value() {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+          params: [{ type: 'Identifier', name: 'value' }],
+        },
+        {
+          source: '(class { set value(next) {} });',
+          functionNode(program) {
+            return program.body[0].expression.body.body[0].value;
+          },
+          params: [],
+        },
+      ];
+
+      for (const accessorCase of accessorCases) {
+        const program = parseScript(accessorCase.source);
+        accessorCase.functionNode(program).params = accessorCase.params;
+        assertThrows(
+          () => parseScript('', { parse: () => program }),
+          SyntaxError,
+        );
+      }
+
+      /** @type {{ source: string, functionNode: (program: any) => any }[]} */
+      const sloppyCases = [
+        {
+          source: 'function f(a, b) {}',
+          functionNode(program) {
+            return program.body[0];
+          },
+        },
+        {
+          source: '(function (a, b) {});',
+          functionNode(program) {
+            return program.body[0].expression;
+          },
+        },
+        {
+          source: '({ value: function (a, b) {} });',
+          functionNode(program) {
+            return program.body[0].expression.properties[0].value;
+          },
+        },
+      ];
+
+      for (const sloppyCase of sloppyCases) {
+        const program = parseScript(sloppyCase.source);
+        const functionNode = sloppyCase.functionNode(program);
+        functionNode.params[1].name = functionNode.params[0].name;
+        assertSame(
+          parseScript('', { parse: () => program }).sourceType,
+          'script',
+        );
+      }
     },
   },
   {
