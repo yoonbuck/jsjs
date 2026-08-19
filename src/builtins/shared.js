@@ -260,6 +260,10 @@ function runNativeCallPreflight(realm, preflight, thisValue, name) {
         `Generator.prototype.${name} called on incompatible receiver`,
       );
     }
+
+    if (thisValue.state === 'executing') {
+      throw new GuestErrorSignal('TypeError', 'Generator is already running');
+    }
   });
 }
 

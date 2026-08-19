@@ -724,6 +724,322 @@ export default [
     },
   },
   {
+    name: 'custom module ASTs preserve contextual and strict early errors through both entry points',
+    run() {
+      const strictReserved = [
+        'implements',
+        'interface',
+        'let',
+        'package',
+        'private',
+        'protected',
+        'public',
+        'static',
+        'yield',
+      ];
+
+      for (const name of strictReserved) {
+        assertThrows(() => parseModule(`var ${name};`), SyntaxError);
+        assertThrows(() => parseModule(`${name};`), SyntaxError);
+      }
+      for (const source of [
+        'let yield;',
+        'var await;',
+        'eval = 1;',
+        'arguments = 1;',
+        'delete target;',
+        'function* g(yield) {}',
+        'function* g(){ yi\\u0065ld; }',
+        'function* g(value = yi\\u0065ld) {}',
+      ]) {
+        assertThrows(() => parseModule(source), SyntaxError);
+      }
+
+      for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+        for (const name of ['null', 'true', 'false', 'await']) {
+          const binding = parseModule('var value;');
+          binding.body[0].declarations[0].id.name = name;
+          assertThrows(() => parseCustomModule(entry, binding), SyntaxError);
+
+          const reference = parseModule('value;');
+          reference.body[0].expression.name = name;
+          assertThrows(() => parseCustomModule(entry, reference), SyntaxError);
+        }
+
+        for (const name of strictReserved) {
+          const binding = parseModule('var value;');
+          binding.body[0].declarations[0].id.name = name;
+          assertThrows(() => parseCustomModule(entry, binding), SyntaxError);
+
+          const reference = parseModule('value;');
+          reference.body[0].expression.name = name;
+          assertThrows(() => parseCustomModule(entry, reference), SyntaxError);
+        }
+
+        const lexicalYield = parseModule('let value;');
+        lexicalYield.body[0].declarations[0].id.name = 'yield';
+        assertThrows(() => parseCustomModule(entry, lexicalYield), SyntaxError);
+
+        for (const name of ['eval', 'arguments']) {
+          const assignment = parseModule('target = 1;');
+          assignment.body[0].expression.left.name = name;
+          assertThrows(() => parseCustomModule(entry, assignment), SyntaxError);
+        }
+
+        const deletion = parseModule('delete target.value;');
+        deletion.body[0].expression.argument =
+          deletion.body[0].expression.argument.object;
+        assertThrows(() => parseCustomModule(entry, deletion), SyntaxError);
+
+        const generatorBinding = parseModule('function* g(value) {}');
+        generatorBinding.body[0].params[0].name = 'yield';
+        assertThrows(
+          () => parseCustomModule(entry, generatorBinding),
+          SyntaxError,
+        );
+
+        const generatorReference = parseModule('function* g(){ value; }');
+        generatorReference.body[0].body.body[0].expression.name = 'yield';
+        assertThrows(
+          () => parseCustomModule(entry, generatorReference),
+          SyntaxError,
+        );
+
+        const generatorParameterReference = parseModule(
+          'function* g(value = fallback) {}',
+        );
+        generatorParameterReference.body[0].params[0].right.name = 'yield';
+        assertThrows(
+          () => parseCustomModule(entry, generatorParameterReference),
+          SyntaxError,
+        );
+
+        for (const source of [
+          'eval; arguments;',
+          'object.yield; object.await; ({ implements: 1, true: 2 });',
+        ]) {
+          assertSame(
+            parseCustomModule(entry, parseModule(source)).sourceType,
+            'module',
+          );
+        }
+      }
+    },
+  },
+  {
+    name: 'custom module ASTs reject invalid return break continue and label contexts',
+    run() {
+      for (const source of [
+        'return 1;',
+        'break;',
+        'continue;',
+        'break missing;',
+        'continue missing;',
+        'label: { continue label; }',
+        'label: label: ;',
+        'outer: { function nested() { break outer; } }',
+      ]) {
+        assertThrows(() => parseModule(source), SyntaxError);
+      }
+
+      /** @type {readonly (() => any)[]} */
+      const invalidPrograms = [
+        () => {
+          const ast = parseModule('function f(){ return 1; }');
+          ast.body = [ast.body[0].body.body[0]];
+          return ast;
+        },
+        () => {
+          const ast = parseModule('while (true) { break; }');
+          ast.body = [ast.body[0].body.body[0]];
+          return ast;
+        },
+        () => {
+          const ast = parseModule('while (true) { continue; }');
+          ast.body = [ast.body[0].body.body[0]];
+          return ast;
+        },
+        () => {
+          const ast = parseModule('present: while (true) { break present; }');
+          ast.body[0].body.body.body[0].label.name = 'missing';
+          return ast;
+        },
+        () => {
+          const ast = parseModule(
+            'present: while (true) { continue present; }',
+          );
+          ast.body[0].body.body.body[0].label.name = 'missing';
+          return ast;
+        },
+        () => {
+          const ast = parseModule('target: while (true) { continue target; }');
+          const iteration = ast.body[0].body;
+          ast.body[0].body = {
+            type: 'BlockStatement',
+            body: [iteration],
+          };
+          return ast;
+        },
+        () => {
+          const ast = parseModule('outer: inner: while (false) {}');
+          ast.body[0].body.label.name = 'outer';
+          return ast;
+        },
+        () => {
+          const ast = parseModule('outer: { function nested() {} }');
+          ast.body[0].body.body[0].body.body = [
+            {
+              type: 'BreakStatement',
+              label: { type: 'Identifier', name: 'outer' },
+            },
+          ];
+          return ast;
+        },
+      ];
+
+      for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+        for (const createInvalidProgram of invalidPrograms) {
+          assertThrows(
+            () => parseCustomModule(entry, createInvalidProgram()),
+            SyntaxError,
+          );
+        }
+      }
+    },
+  },
+  {
+    name: 'custom module AST control-flow validation accepts valid nested targets',
+    run() {
+      for (const source of [
+        `
+          function valid(flag) {
+            outer: for (;;) {
+              switch (flag) {
+                case 0: continue outer;
+                case 1: break;
+                default: break outer;
+              }
+            }
+            return 1;
+          }
+        `,
+        'first: second: while (false) { continue first; }',
+      ]) {
+        for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+          assertSame(
+            parseCustomModule(entry, parseModule(source)).sourceType,
+            'module',
+          );
+        }
+      }
+    },
+  },
+  {
+    name: 'custom label validation uses constant-time active-label lookup',
+    run() {
+      const ast = parseModule(
+        'outer: inner: while (false) { continue outer; break inner; }',
+      );
+      const arraySome = Array.prototype.some;
+
+      Array.prototype.some = () => {
+        throw new Error('active labels must not be linearly scanned');
+      };
+
+      try {
+        for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+          assertSame(parseCustomModule(entry, ast).sourceType, 'module');
+        }
+      } finally {
+        Array.prototype.some = arraySome;
+      }
+    },
+  },
+  {
+    name: 'custom ImportDeclaration specifier lists follow ES2015 grammar',
+    run() {
+      for (const source of [
+        'import "dep";',
+        'import defaultName from "dep";',
+        'import * as namespaceName from "dep";',
+        'import { first, second as localSecond } from "dep";',
+        'import defaultName, * as namespaceName from "dep";',
+        'import defaultName, { first, second as localSecond } from "dep";',
+        'import { value as first, value as second } from "dep";',
+      ]) {
+        for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+          assertSame(
+            parseCustomModule(entry, parseModule(source)).sourceType,
+            'module',
+          );
+        }
+      }
+
+      assertThrows(
+        () =>
+          parseModule('import { first as local, second as local } from "dep";'),
+        SyntaxError,
+      );
+
+      /** @type {readonly (() => any)[]} */
+      const invalidImports = [
+        () => {
+          const ast = parseModule(
+            'import first from "a"; import second from "b";',
+          );
+          ast.body[0].specifiers.push(ast.body[1].specifiers[0]);
+          ast.body.splice(1, 1);
+          return ast;
+        },
+        () => {
+          const ast = parseModule(
+            'import * as first from "a"; import * as second from "b";',
+          );
+          ast.body[0].specifiers.push(ast.body[1].specifiers[0]);
+          ast.body.splice(1, 1);
+          return ast;
+        },
+        () => {
+          const ast = parseModule(
+            'import * as namespaceName from "a"; import { value } from "b";',
+          );
+          ast.body[0].specifiers.push(ast.body[1].specifiers[0]);
+          ast.body.splice(1, 1);
+          return ast;
+        },
+        () => {
+          const ast = parseModule('import defaultName, { value } from "dep";');
+          ast.body[0].specifiers.reverse();
+          return ast;
+        },
+        () => {
+          const ast = parseModule(
+            'import defaultName, * as namespaceName from "dep";',
+          );
+          ast.body[0].specifiers.reverse();
+          return ast;
+        },
+        () => {
+          const ast = parseModule(
+            'import { first, second as localSecond } from "dep";',
+          );
+          ast.body[0].specifiers[1].local.name =
+            ast.body[0].specifiers[0].local.name;
+          return ast;
+        },
+      ];
+
+      for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+        for (const createInvalidImport of invalidImports) {
+          assertThrows(
+            () => parseCustomModule(entry, createInvalidImport()),
+            SyntaxError,
+          );
+        }
+      }
+    },
+  },
+  {
     name: 'custom modules enforce capability and strict binding early errors',
     run() {
       const meta = parseModule('function kept() { return 1; }');

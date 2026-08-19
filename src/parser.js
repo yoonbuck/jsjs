@@ -40,6 +40,87 @@ const SCRIPT_VALIDATION_CONTEXT = Object.freeze({
   allOwnKeys: false,
 });
 
+const ALWAYS_RESERVED_IDENTIFIER_WORDS = new Set([
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'false',
+]);
+
+const STRICT_RESERVED_IDENTIFIER_WORDS = new Set([
+  'implements',
+  'interface',
+  'let',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'static',
+  'yield',
+]);
+
+const ITERATION_STATEMENT_TYPES = new Set([
+  'WhileStatement',
+  'DoWhileStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+]);
+
+/**
+ * @typedef {{ name: string, iteration: boolean }} ControlLabel
+ * @typedef {{
+ *   node: any,
+ *   strict: boolean,
+ *   yieldAllowed: boolean,
+ *   yieldIdentifierRestricted: boolean,
+ *   superAllowed: boolean,
+ *   superCallAllowed: boolean,
+ *   classDerived: boolean | undefined,
+ *   inFunction: boolean,
+ *   breakAllowed: boolean,
+ *   continueAllowed: boolean,
+ *   lexicalBinding: boolean,
+ *   parent: any,
+ *   parentKey: string | number | undefined,
+ *   parentIndex: number | undefined,
+ *   nestedArray: boolean,
+ *   patternContext: 'binding' | 'assignment' | undefined,
+ * }} SyntaxWalkItem
+ */
+
 /**
  * Parses with Acorn's base script parser. A named wrapper rather than a
  * detached `Parser.parse` reference because Acorn's static `parse` reads `this`
@@ -1375,8 +1456,46 @@ function validateImportDeclaration(node) {
     throw new UnsupportedNodeError('ImportDeclaration');
   }
 
-  for (const specifier of specifiers) {
+  let sawDefault = false;
+  let sawNamespace = false;
+  let sawNamed = false;
+
+  for (let index = 0; index < specifiers.length; index += 1) {
+    const specifier = specifiers[index];
+
     validateImportSpecifier(specifier);
+
+    switch (moduleField(specifier, 'type')) {
+      case 'ImportDefaultSpecifier':
+        if (sawDefault || index !== 0) {
+          throw new UnsupportedNodeError(
+            'ImportDeclaration default specifier order',
+          );
+        }
+        sawDefault = true;
+        break;
+      case 'ImportNamespaceSpecifier':
+        if (
+          sawNamespace ||
+          sawNamed ||
+          index !== (sawDefault ? 1 : 0) ||
+          index !== specifiers.length - 1
+        ) {
+          throw new UnsupportedNodeError(
+            'ImportDeclaration namespace specifier combination',
+          );
+        }
+        sawNamespace = true;
+        break;
+      case 'ImportSpecifier':
+        if (sawNamespace) {
+          throw new UnsupportedNodeError(
+            'ImportDeclaration named and namespace specifier combination',
+          );
+        }
+        sawNamed = true;
+        break;
+    }
   }
 }
 
@@ -1879,7 +1998,6 @@ function checkCustomAstDefenses(
   ];
   /** @type {WeakMap<object, ValidationContextRecord | Map<any, any>>} */
   const seen = new WeakMap();
-
   while (pending.length > 0) {
     const item =
       /** @type {{ value: any, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
@@ -2159,9 +2277,14 @@ function basicValidationContextKey(nestedArray, patternContext) {
  * @param {boolean} nestedArray
  * @param {boolean} strict
  * @param {boolean} yieldAllowed
+ * @param {boolean} yieldIdentifierRestricted
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
  * @param {boolean | undefined} classDerived
+ * @param {boolean} inFunction
+ * @param {boolean} breakAllowed
+ * @param {boolean} continueAllowed
+ * @param {boolean} lexicalBinding
  * @param {'binding' | 'assignment' | undefined} patternContext
  * @returns {number}
  */
@@ -2169,9 +2292,14 @@ function syntaxValidationContextKey(
   nestedArray,
   strict,
   yieldAllowed,
+  yieldIdentifierRestricted,
   superAllowed,
   superCallAllowed,
   classDerived,
+  inFunction,
+  breakAllowed,
+  continueAllowed,
+  lexicalBinding,
   patternContext,
 ) {
   const classKey =
@@ -2179,8 +2307,13 @@ function syntaxValidationContextKey(
   let key = basicValidationContextKey(nestedArray, patternContext);
   key = key * 2 + (strict ? 1 : 0);
   key = key * 2 + (yieldAllowed ? 1 : 0);
+  key = key * 2 + (yieldIdentifierRestricted ? 1 : 0);
   key = key * 2 + (superAllowed ? 1 : 0);
   key = key * 2 + (superCallAllowed ? 1 : 0);
+  key = key * 2 + (inFunction ? 1 : 0);
+  key = key * 2 + (breakAllowed ? 1 : 0);
+  key = key * 2 + (continueAllowed ? 1 : 0);
+  key = key * 2 + (lexicalBinding ? 1 : 0);
   return key * 3 + classKey;
 }
 
@@ -2814,15 +2947,24 @@ function checkStatementPositionFunctionDeclarations(
   sourceIndependentNodes,
   rootContext = { superAllowed: false, superCallAllowed: false },
 ) {
-  /** @type {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} */
+  if (validationContext.allOwnKeys) {
+    checkCustomLabelEarlyErrors(root);
+  }
+
+  /** @type {SyntaxWalkItem[]} */
   const pending = [
     {
       node: root,
       strict: rootStrict,
       yieldAllowed: false,
+      yieldIdentifierRestricted: false,
       superAllowed: rootContext.superAllowed,
       superCallAllowed: rootContext.superCallAllowed,
       classDerived: undefined,
+      inFunction: false,
+      breakAllowed: false,
+      continueAllowed: false,
+      lexicalBinding: false,
       parent: null,
       parentKey: undefined,
       parentIndex: undefined,
@@ -2832,12 +2974,11 @@ function checkStatementPositionFunctionDeclarations(
   ];
   /** @type {WeakMap<object, ValidationContextRecord | Map<any, any>>} */
   const seen = new WeakMap();
+  /** @type {WeakMap<object, { fn: any, labeled: boolean } | null>} */
+  const labelFunctionDeclarations = new WeakMap();
 
   while (pending.length > 0) {
-    const item =
-      /** @type {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }} */ (
-        pending.pop()
-      );
+    const item = /** @type {SyntaxWalkItem} */ (pending.pop());
     const node = item.node;
     const strict = item.strict;
 
@@ -2856,9 +2997,14 @@ function checkStatementPositionFunctionDeclarations(
           item.nestedArray,
           strict,
           item.yieldAllowed,
+          item.yieldIdentifierRestricted,
           item.superAllowed,
           item.superCallAllowed,
           item.classDerived,
+          item.inFunction,
+          item.breakAllowed,
+          item.continueAllowed,
+          item.lexicalBinding,
           item.patternContext,
         ),
       )
@@ -2901,9 +3047,14 @@ function checkStatementPositionFunctionDeclarations(
           element,
           strict,
           item.yieldAllowed,
+          item.yieldIdentifierRestricted,
           item.superAllowed,
           item.superCallAllowed,
           item.classDerived,
+          item.inFunction,
+          item.breakAllowed,
+          item.continueAllowed,
+          item.lexicalBinding,
           nestedArray ? null : item.parent,
           nestedArray ? undefined : item.parentKey,
           item.patternContext,
@@ -2925,7 +3076,7 @@ function checkStatementPositionFunctionDeclarations(
       );
     }
 
-    checkFunctionDeclarationPosition(node, strict);
+    checkFunctionDeclarationPosition(node, strict, labelFunctionDeclarations);
     checkStrictWithStatement(node, strict);
     checkRegularExpressionLiteral(node);
     checkUnsupportedEs2015Node(
@@ -2943,6 +3094,24 @@ function checkStatementPositionFunctionDeclarations(
     );
     checkUnsupportedForOfAwait(node);
 
+    checkCustomControlFlowEarlyErrors(
+      node,
+      item.inFunction,
+      item.breakAllowed,
+      item.continueAllowed,
+      validationContext.allOwnKeys,
+    );
+    checkCustomContextualEarlyErrors(
+      node,
+      item.parent,
+      item.parentKey,
+      item.patternContext,
+      strict,
+      item.yieldIdentifierRestricted,
+      item.lexicalBinding,
+      validationContext.module,
+      validationContext.allOwnKeys,
+    );
     checkStrictBindingIdentifier(
       node,
       item.parent,
@@ -2980,16 +3149,27 @@ function checkStatementPositionFunctionDeclarations(
       const parentKey = typeof key === 'string' ? key : undefined;
 
       if (typeof key !== 'string' || !NODE_POSITION_KEYS.has(key)) {
+        const controlContext = controlContextForChild(node, parentKey, item);
+
         pushChild(
           pending,
           node[key],
           childStrict,
           yieldAllowedForChild(node, parentKey, item.yieldAllowed),
+          yieldIdentifierRestrictedForChild(
+            node,
+            parentKey,
+            item.yieldIdentifierRestricted,
+          ),
           childSuperAllowed,
           childSuperCallAllowed,
           parentKey === undefined
             ? item.classDerived
             : classDerivedForChild(node, parentKey, item.classDerived),
+          controlContext.inFunction,
+          controlContext.breakAllowed,
+          controlContext.continueAllowed,
+          lexicalBindingForChild(node, parentKey, item.lexicalBinding),
           node,
           parentKey,
           parentKey === undefined
@@ -3127,6 +3307,400 @@ function checkStrictBindingIdentifier(
   ) {
     throw unsupportedEs2015Error(`Binding ${node.name} in strict mode`, node);
   }
+}
+
+/**
+ * Applies identifier and unary-expression early errors that Acorn already owns
+ * for source text but cannot enforce on a caller-supplied AST.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @param {boolean} strict
+ * @param {boolean} yieldIdentifierRestricted
+ * @param {boolean} lexicalBinding
+ * @param {boolean} module
+ * @param {boolean} customAst
+ * @returns {void}
+ */
+function checkCustomContextualEarlyErrors(
+  node,
+  parent,
+  parentKey,
+  patternContext,
+  strict,
+  yieldIdentifierRestricted,
+  lexicalBinding,
+  module,
+  customAst,
+) {
+  if (!customAst || !isIdentifierNode(node)) {
+    return;
+  }
+
+  const identifierNameOnly = isIdentifierNameOnlyPosition(parent, parentKey);
+
+  if (
+    !identifierNameOnly &&
+    (ALWAYS_RESERVED_IDENTIFIER_WORDS.has(node.name) ||
+      (strict && STRICT_RESERVED_IDENTIFIER_WORDS.has(node.name)) ||
+      (yieldIdentifierRestricted && node.name === 'yield') ||
+      (lexicalBinding && node.name === 'let') ||
+      (module && node.name === 'await'))
+  ) {
+    throw unsupportedEs2015Error(
+      `Reserved word ${node.name} cannot be used as an Identifier`,
+      node,
+    );
+  }
+
+  if (
+    strict &&
+    (node.name === 'eval' || node.name === 'arguments') &&
+    isAssignmentIdentifierPosition(parent, parentKey, patternContext)
+  ) {
+    throw unsupportedEs2015Error(
+      `Assignment to ${node.name} in strict mode`,
+      node,
+    );
+  }
+
+  if (
+    strict &&
+    parent?.type === 'UnaryExpression' &&
+    parent.operator === 'delete' &&
+    parentKey === 'argument' &&
+    parent.argument === node
+  ) {
+    throw unsupportedEs2015Error(
+      'Deleting an unqualified identifier in strict mode',
+      node,
+    );
+  }
+}
+
+/**
+ * Validates labelled break/continue targets with one mutable map scoped by an
+ * explicit DFS event stack. Function bodies swap in a fresh map and restore the
+ * outer one on exit, while labelled bodies add/remove one entry. This keeps
+ * duplicate and target lookup constant-time without recursively walking an
+ * untrusted tree or copying the complete active-label set at every nesting
+ * level.
+ *
+ * @param {any} root
+ * @returns {void}
+ */
+function checkCustomLabelEarlyErrors(root) {
+  /** @type {Map<string, ControlLabel>} */
+  let activeLabels = new Map();
+  /** @type {WeakMap<object, boolean>} */
+  const iterationTargets = new WeakMap();
+  const seen = new WeakSet();
+  /** @type {any[]} */
+  const pending = [{ kind: 'visit', value: root }];
+
+  while (pending.length > 0) {
+    const event = pending.pop();
+
+    if (event.kind === 'set-labels') {
+      activeLabels = event.labels;
+      continue;
+    }
+
+    if (event.kind === 'enter-label') {
+      activeLabels.set(event.label.name, event.label);
+      continue;
+    }
+
+    if (event.kind === 'leave-label') {
+      activeLabels.delete(event.name);
+      continue;
+    }
+
+    const value = event.value;
+
+    if (!value || typeof value !== 'object' || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      for (let index = value.length - 1; index >= 0; index -= 1) {
+        const descriptor = ownArrayElementDescriptor(value, index);
+
+        if (descriptor !== undefined) {
+          pending.push({ kind: 'visit', value: descriptor.value });
+        }
+      }
+      continue;
+    }
+
+    if (typeof value.type !== 'string') {
+      for (const key of Reflect.ownKeys(value)) {
+        pending.push({ kind: 'visit', value: value[key] });
+      }
+      continue;
+    }
+
+    if (value.type === 'LabeledStatement' && isIdentifierNode(value.label)) {
+      if (activeLabels.has(value.label.name)) {
+        throw unsupportedEs2015Error(
+          `Label ${value.label.name} has already been declared`,
+          value,
+        );
+      }
+    } else if (
+      (value.type === 'BreakStatement' || value.type === 'ContinueStatement') &&
+      isIdentifierNode(value.label)
+    ) {
+      const target = activeLabels.get(value.label.name);
+
+      if (target === undefined) {
+        throw unsupportedEs2015Error(
+          `Undefined label ${value.label.name}`,
+          value,
+        );
+      }
+
+      if (value.type === 'ContinueStatement' && !target.iteration) {
+        throw unsupportedEs2015Error(
+          `Continue label ${value.label.name} does not target an iteration statement`,
+          value,
+        );
+      }
+    }
+
+    const keys = Reflect.ownKeys(value);
+
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      const key = keys[index];
+
+      if (typeof key !== 'string' || NODE_POSITION_KEYS.has(key)) {
+        continue;
+      }
+
+      const child = value[key];
+
+      if (!child || typeof child !== 'object') {
+        continue;
+      }
+
+      if (isFunctionNode(value) && key === 'body') {
+        pending.push({ kind: 'set-labels', labels: activeLabels });
+        pending.push({ kind: 'visit', value: child });
+        pending.push({ kind: 'set-labels', labels: new Map() });
+      } else if (
+        value.type === 'LabeledStatement' &&
+        key === 'body' &&
+        isIdentifierNode(value.label)
+      ) {
+        const label = {
+          name: value.label.name,
+          iteration: customLabelTargetsIteration(value, iterationTargets),
+        };
+
+        pending.push({ kind: 'leave-label', name: label.name });
+        pending.push({ kind: 'visit', value: child });
+        pending.push({ kind: 'enter-label', label });
+      } else {
+        pending.push({ kind: 'visit', value: child });
+      }
+    }
+  }
+}
+
+/**
+ * Resolves and memoizes a complete label chain in one pass. The first outer
+ * label pays for the chain; each nested label is then a constant-time lookup.
+ *
+ * @param {any} label
+ * @param {WeakMap<object, boolean>} cache
+ * @returns {boolean}
+ */
+function customLabelTargetsIteration(label, cache) {
+  const cached = cache.get(label);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const chain = [];
+  const visited = new WeakSet();
+  let current = label;
+  let iteration;
+
+  while (current && current.type === 'LabeledStatement') {
+    const currentCached = cache.get(current);
+
+    if (currentCached !== undefined) {
+      iteration = currentCached;
+      break;
+    }
+
+    if (visited.has(current)) {
+      iteration = false;
+      break;
+    }
+
+    visited.add(current);
+    chain.push(current);
+    current = current.body;
+  }
+
+  if (iteration === undefined) {
+    iteration = !!current && ITERATION_STATEMENT_TYPES.has(current.type);
+  }
+
+  for (const item of chain) {
+    cache.set(item, iteration);
+  }
+
+  return iteration;
+}
+
+/**
+ * @param {any} node
+ * @param {boolean} inFunction
+ * @param {boolean} breakAllowed
+ * @param {boolean} continueAllowed
+ * @param {boolean} customAst
+ * @returns {void}
+ */
+function checkCustomControlFlowEarlyErrors(
+  node,
+  inFunction,
+  breakAllowed,
+  continueAllowed,
+  customAst,
+) {
+  if (!customAst) {
+    return;
+  }
+
+  if (node.type === 'ReturnStatement' && !inFunction) {
+    throw unsupportedEs2015Error('Return statement outside a function', node);
+  }
+
+  if (node.type !== 'BreakStatement' && node.type !== 'ContinueStatement') {
+    return;
+  }
+
+  const continuation = node.type === 'ContinueStatement';
+
+  if (node.label !== null && node.label !== undefined) {
+    return;
+  }
+
+  if (continuation ? !continueAllowed : !breakAllowed) {
+    throw unsupportedEs2015Error(
+      `${continuation ? 'Continue' : 'Break'} statement outside an allowed target`,
+      node,
+    );
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {string | undefined} key
+ * @param {SyntaxWalkItem} inherited
+ * @returns {{
+ *   inFunction: boolean,
+ *   breakAllowed: boolean,
+ *   continueAllowed: boolean,
+ * }}
+ */
+function controlContextForChild(node, key, inherited) {
+  if (isFunctionNode(node)) {
+    return {
+      inFunction: key === 'body',
+      breakAllowed: false,
+      continueAllowed: false,
+    };
+  }
+
+  if (ITERATION_STATEMENT_TYPES.has(node.type) && key === 'body') {
+    return {
+      inFunction: inherited.inFunction,
+      breakAllowed: true,
+      continueAllowed: true,
+    };
+  }
+
+  if (node.type === 'SwitchStatement' && key === 'cases') {
+    return {
+      inFunction: inherited.inFunction,
+      breakAllowed: true,
+      continueAllowed: inherited.continueAllowed,
+    };
+  }
+
+  return {
+    inFunction: inherited.inFunction,
+    breakAllowed: inherited.breakAllowed,
+    continueAllowed: inherited.continueAllowed,
+  };
+}
+
+/**
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @returns {boolean}
+ */
+function isIdentifierNameOnlyPosition(parent, parentKey) {
+  if (!parent || typeof parentKey !== 'string') {
+    return false;
+  }
+
+  if (
+    parent.type === 'MemberExpression' &&
+    parent.computed === false &&
+    parentKey === 'property'
+  ) {
+    return true;
+  }
+
+  if (
+    (parent.type === 'Property' || parent.type === 'MethodDefinition') &&
+    parent.computed === false &&
+    parentKey === 'key'
+  ) {
+    return true;
+  }
+
+  if (
+    (parent.type === 'ImportSpecifier' && parentKey === 'imported') ||
+    (parent.type === 'ExportSpecifier' &&
+      (parentKey === 'local' || parentKey === 'exported')) ||
+    parent.type === 'MetaProperty'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * @param {any} parent
+ * @param {string | number | undefined} parentKey
+ * @param {'binding' | 'assignment' | undefined} patternContext
+ * @returns {boolean}
+ */
+function isAssignmentIdentifierPosition(parent, parentKey, patternContext) {
+  if (patternContext === 'assignment') {
+    return true;
+  }
+
+  return (
+    !!parent &&
+    typeof parentKey === 'string' &&
+    (((parent.type === 'AssignmentExpression' ||
+      parent.type === 'ForInStatement' ||
+      parent.type === 'ForOfStatement') &&
+      parentKey === 'left') ||
+      (parent.type === 'UpdateExpression' && parentKey === 'argument'))
+  );
 }
 
 /**
@@ -3285,13 +3859,14 @@ function classDerivedForChild(node, key, inherited) {
  *
  * @param {any} node
  * @param {boolean} strict
+ * @param {WeakMap<object, { fn: any, labeled: boolean } | null>} labelCache
  * @returns {void}
  */
-function checkFunctionDeclarationPosition(node, strict) {
+function checkFunctionDeclarationPosition(node, strict, labelCache) {
   const parentLabel = STATEMENT_BODY_PARENT_LABELS.get(node.type);
 
   if (parentLabel !== undefined) {
-    const offending = resolveBodyFunctionDeclaration(node.body);
+    const offending = resolveBodyFunctionDeclaration(node.body, labelCache);
 
     if (offending) {
       throw statementPositionFunctionError(
@@ -3305,7 +3880,7 @@ function checkFunctionDeclarationPosition(node, strict) {
 
   if (node.type === 'IfStatement') {
     for (const branch of [node.consequent, node.alternate]) {
-      const offending = resolveBodyFunctionDeclaration(branch);
+      const offending = resolveBodyFunctionDeclaration(branch, labelCache);
 
       if (offending) {
         throw statementPositionFunctionError(
@@ -3319,7 +3894,7 @@ function checkFunctionDeclarationPosition(node, strict) {
   }
 
   if (node.type === 'LabeledStatement') {
-    const offending = resolveBodyFunctionDeclaration(node);
+    const offending = resolveBodyFunctionDeclaration(node, labelCache);
 
     if (offending && (strict || offending.fn.generator === true)) {
       throw statementPositionFunctionError(
@@ -3335,13 +3910,18 @@ function checkFunctionDeclarationPosition(node, strict) {
  * to. Children are pushed in reverse so popping visits them in source order,
  * which makes the first offending declaration in the program the one reported.
  *
- * @param {{ node: any, strict: boolean, yieldAllowed: boolean, superAllowed: boolean, superCallAllowed: boolean, classDerived: boolean | undefined, parent: any, parentKey: string | number | undefined, parentIndex: number | undefined, nestedArray: boolean, patternContext: 'binding' | 'assignment' | undefined }[]} pending
+ * @param {SyntaxWalkItem[]} pending
  * @param {unknown} value
  * @param {boolean} strict
  * @param {boolean} yieldAllowed
+ * @param {boolean} yieldIdentifierRestricted
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
  * @param {boolean | undefined} classDerived
+ * @param {boolean} inFunction
+ * @param {boolean} breakAllowed
+ * @param {boolean} continueAllowed
+ * @param {boolean} lexicalBinding
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
@@ -3354,9 +3934,14 @@ function pushChild(
   value,
   strict,
   yieldAllowed,
+  yieldIdentifierRestricted,
   superAllowed,
   superCallAllowed,
   classDerived,
+  inFunction,
+  breakAllowed,
+  continueAllowed,
+  lexicalBinding,
   parent,
   parentKey,
   patternContext,
@@ -3368,9 +3953,14 @@ function pushChild(
       node: value,
       strict,
       yieldAllowed,
+      yieldIdentifierRestricted,
       superAllowed,
       superCallAllowed,
       classDerived,
+      inFunction,
+      breakAllowed,
+      continueAllowed,
+      lexicalBinding,
       parent,
       parentKey,
       parentIndex,
@@ -3395,7 +3985,80 @@ function yieldAllowedForChild(parent, key, inherited) {
     return inherited;
   }
 
+  if (key === 'id') {
+    return inherited;
+  }
+
   return key === 'body' && parent.generator === true && parent.async !== true;
+}
+
+/**
+ * Tracks the grammar's contextual restriction on Identifier-form `yield`
+ * separately from whether a YieldExpression is allowed. Generator parameters
+ * forbid both forms, while an ordinary nested function resets the restriction.
+ * Arrow parameters are parsed in their enclosing context even though the arrow
+ * body starts a non-generator function context.
+ *
+ * @param {any} parent
+ * @param {string | undefined} key
+ * @param {boolean} inherited
+ * @returns {boolean}
+ */
+function yieldIdentifierRestrictedForChild(parent, key, inherited) {
+  if (!isFunctionNode(parent)) {
+    return inherited;
+  }
+
+  if (key === 'id') {
+    return parent.type === 'FunctionExpression'
+      ? parent.generator === true && parent.async !== true
+      : inherited;
+  }
+
+  if (parent.type === 'ArrowFunctionExpression') {
+    return key === 'params' ? inherited : false;
+  }
+
+  return (
+    (key === 'params' || key === 'body') &&
+    parent.generator === true &&
+    parent.async !== true
+  );
+}
+
+/**
+ * Carries the lexical-declaration `[Let]` binding restriction through nested
+ * binding patterns without applying it to initializer/default expressions or
+ * unrelated binding forms such as `var` and function parameters.
+ *
+ * @param {any} parent
+ * @param {string | undefined} key
+ * @param {boolean} inherited
+ * @returns {boolean}
+ */
+function lexicalBindingForChild(parent, key, inherited) {
+  if (parent.type === 'VariableDeclaration') {
+    return (
+      key === 'declarations' &&
+      (parent.kind === 'let' || parent.kind === 'const')
+    );
+  }
+
+  if (parent.type === 'VariableDeclarator') {
+    return key === 'id' && inherited;
+  }
+
+  if (
+    (parent.type === 'ArrayPattern' && key === 'elements') ||
+    (parent.type === 'ObjectPattern' && key === 'properties') ||
+    (parent.type === 'Property' && key === 'value') ||
+    (parent.type === 'AssignmentPattern' && key === 'left') ||
+    (parent.type === 'RestElement' && key === 'argument')
+  ) {
+    return inherited;
+  }
+
+  return false;
 }
 
 /**
@@ -3471,27 +4134,47 @@ function patternContextForChild(parent, key, inherited) {
  * hook could hand us.
  *
  * @param {any} statement
+ * @param {WeakMap<object, { fn: any, labeled: boolean } | null>} cache
  * @returns {{ fn: any, labeled: boolean } | undefined}
  */
-function resolveBodyFunctionDeclaration(statement) {
+function resolveBodyFunctionDeclaration(statement, cache) {
   let current = statement;
-  let labeled = false;
+  const chain = [];
   /** @type {WeakSet<object>} */
   const visited = new WeakSet();
+  /** @type {{ fn: any, labeled: boolean } | undefined} */
+  let result;
 
   while (current && current.type === 'LabeledStatement') {
+    const cached = cache.get(current);
+
+    if (cached !== undefined) {
+      result = cached === null ? undefined : cached;
+      break;
+    }
+
     if (visited.has(current)) {
-      return undefined;
+      result = undefined;
+      break;
     }
 
     visited.add(current);
-    labeled = true;
+    chain.push(current);
     current = current.body;
   }
 
-  return current && current.type === 'FunctionDeclaration'
-    ? { fn: current, labeled }
-    : undefined;
+  if (result === undefined && current?.type === 'FunctionDeclaration') {
+    result = { fn: current, labeled: chain.length > 0 };
+  }
+
+  for (const label of chain) {
+    cache.set(
+      label,
+      result === undefined ? null : { fn: result.fn, labeled: true },
+    );
+  }
+
+  return result;
 }
 
 /**

@@ -76,6 +76,7 @@ function generatorHostChainRoot(agent) {
 function assertGeneratorAccountingCleared(realms) {
   for (const realm of realms) {
     assertSame(realm.stackGuard.depth, 0);
+    assertSame(realm.stackGuard.synchronousCallChainDepth ?? 0, 0);
     assertSame(realm.stackGuard.generatorHostChainDepth, 0);
     assertSame(realm.agent._generatorHostChain, null);
     assertSame(realm.agent._synchronousCallChain, null);
@@ -552,6 +553,388 @@ function assertValidForeignGeneratorReceiverStillActivates(shareAgent, method) {
     1,
     `${method} on a valid receiver must enter the method Realm guard`,
   );
+  assertGeneratorAccountingCleared(realms);
+
+  if (method === 'next') {
+    assertSame(
+      evaluateScript(callerRealm, 'validReceiver.next().done;').value,
+      true,
+    );
+  }
+
+  baseline = { references, resumes, methodGuardEntries };
+  const completed = evaluateScript(
+    callerRealm,
+    `
+      try {
+        var completedResult = localCall.call(
+          foreignGeneratorMethod,
+          validReceiver,
+          "again"
+        );
+        completedResult.value + "|" + completedResult.done;
+      } catch (error) {
+        "thrown:" + error;
+      }
+    `,
+  );
+  const completedExpected = {
+    next: 'undefined|true',
+    return: 'again|true',
+    throw: 'thrown:again',
+  }[method];
+
+  assertSame(completed.type, 'normal');
+  assertSame(completed.value, completedExpected);
+  assertSame(
+    references - baseline.references,
+    1,
+    `${method} on a completed receiver must create one chain reference`,
+  );
+  assertSame(
+    resumes - baseline.resumes,
+    0,
+    `${method} on a completed receiver must not restart its continuation`,
+  );
+  assertSame(
+    methodGuardEntries - baseline.methodGuardEntries,
+    1,
+    `${method} on a completed receiver must retain method guard accounting`,
+  );
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
+ * @param {boolean} shareAgent
+ * @param {'next' | 'return' | 'throw'} method
+ * @returns {void}
+ */
+function assertExecutingForeignGeneratorReceiverPreflights(shareAgent, method) {
+  const sharedAgent = shareAgent ? createAgent() : undefined;
+  const callerRealm = createRealm({
+    ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+    maxStackDepth: 300,
+  });
+  const methodRealm = createRealm({
+    ...(sharedAgent === undefined ? {} : { agent: sharedAgent }),
+    maxStackDepth: 1,
+  });
+  const realms = [callerRealm, methodRealm];
+  const agents = [...new Set(realms.map((realm) => realm.agent))];
+  let links = 0;
+  let references = 0;
+  let resumes = 0;
+  let methodGuardEntries = 0;
+  let invocationCount = 0;
+  let observed = { links: 0, references: 0, resumes: 0, methodGuardEntries: 0 };
+
+  for (const agent of agents) {
+    const linkChain = agent.linkGeneratorHostChain;
+    agent.linkGeneratorHostChain = (otherAgent) => {
+      links += 1;
+      return linkChain.call(agent, otherAgent);
+    };
+    const enterReference = agent.enterGeneratorHostChainReference;
+    agent.enterGeneratorHostChainReference = (maxDepth) => {
+      references += 1;
+      return enterReference.call(agent, maxDepth);
+    };
+    const enterResume = agent.enterGeneratorHostChain;
+    agent.enterGeneratorHostChain = (maxDepth) => {
+      resumes += 1;
+      return enterResume.call(agent, maxDepth);
+    };
+  }
+
+  const enterMethodGuard = methodRealm.stackGuard.enter;
+  methodRealm.stackGuard.enter = () => {
+    methodGuardEntries += 1;
+    return enterMethodGuard.call(methodRealm.stackGuard);
+  };
+  const foreignGeneratorMethod = /** @type {any} */ (
+    /** @type {EngineObject} */ (methodRealm.intrinsics.generatorPrototype).get(
+      method,
+    )
+  );
+  const callGeneratorMethod = foreignGeneratorMethod.callFunction;
+  /** @param {any[]} args */
+  foreignGeneratorMethod.callFunction = function measuredCall(...args) {
+    const baseline = { links, references, resumes, methodGuardEntries };
+    invocationCount += 1;
+
+    try {
+      return callGeneratorMethod.apply(foreignGeneratorMethod, args);
+    } finally {
+      observed = {
+        links: links - baseline.links,
+        references: references - baseline.references,
+        resumes: resumes - baseline.resumes,
+        methodGuardEntries: methodGuardEntries - baseline.methodGuardEntries,
+      };
+    }
+  };
+
+  defineGlobal(callerRealm, 'foreignGeneratorMethod', foreignGeneratorMethod);
+
+  const completion = evaluateScript(
+    callerRealm,
+    `
+      function dive(depth) {
+        if (depth > 0) {
+          return dive(depth - 1);
+        }
+        return activeGenerator.reenter("sent");
+      }
+      function* active() {
+        try {
+          return dive(40);
+        } catch (error) {
+          return error;
+        }
+      }
+      var activeGenerator = active();
+      activeGenerator.reenter = foreignGeneratorMethod;
+      activeGenerator.next().value;
+    `,
+  );
+  const error = /** @type {EngineObject} */ (completion.value);
+
+  assertSame(completion.type, 'normal');
+  assertSame(error instanceof EngineObject, true);
+  assertSame(error.get('name'), 'TypeError');
+  assertSame(error.get('message'), 'Generator is already running');
+  assertSame(
+    error.getPrototype(),
+    methodRealm.intrinsics.typeErrorPrototype,
+    `${method} must materialize its executing-state error in the method Realm`,
+  );
+  assertSame(invocationCount, 1);
+  assertSame(
+    observed.links,
+    0,
+    `${method} must reject an executing generator before linking Agents`,
+  );
+  assertSame(
+    observed.references,
+    0,
+    `${method} must reject an executing generator before creating a chain reference`,
+  );
+  assertSame(
+    observed.resumes,
+    0,
+    `${method} must reject an executing generator before beginning a resume`,
+  );
+  assertSame(
+    observed.methodGuardEntries,
+    0,
+    `${method} must reject an executing generator before entering the method Realm guard`,
+  );
+  assertGeneratorAccountingCleared(realms);
+
+  assertFiniteGeneratorResume(
+    callerRealm,
+    `${shareAgent ? 'shared' : 'cross'}-${method}-after-reentry`,
+  );
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
+ * @param {readonly number[] | undefined} maxDepths
+ * @returns {void}
+ */
+function assertOrdinaryCrossAgentUnionContainsRecursion(maxDepths) {
+  const realms = Array.from({ length: 4 }, (_unused, index) =>
+    createRealm(
+      maxDepths === undefined ? {} : { maxStackDepth: maxDepths[index] },
+    ),
+  );
+
+  evaluateScript(
+    realms[0],
+    `
+      function startRecursiveRing() {
+        return foreignRecursiveRing();
+      }
+      function recursiveRing() {
+        return foreignRecursiveRing();
+      }
+      function finiteRing(depth) {
+        return depth > 0 ? foreignFiniteRing(depth - 1) : "done";
+      }
+    `,
+  );
+  for (let index = 1; index < realms.length; index += 1) {
+    evaluateScript(
+      realms[index],
+      `
+        function recursiveRing() {
+          return foreignRecursiveRing();
+        }
+        function finiteRing(depth) {
+          return depth > 0 ? foreignFiniteRing(depth - 1) : "done";
+        }
+      `,
+    );
+  }
+
+  defineGlobal(
+    realms[0],
+    'foreignRecursiveRing',
+    realms[1].globalObject.get('recursiveRing'),
+  );
+  for (let index = 1; index < realms.length; index += 1) {
+    const nextIndex = index === realms.length - 1 ? 0 : index + 1;
+    defineGlobal(
+      realms[index],
+      'foreignRecursiveRing',
+      realms[nextIndex].globalObject.get('recursiveRing'),
+    );
+  }
+  for (let index = 0; index < realms.length; index += 1) {
+    defineGlobal(
+      realms[index],
+      'foreignFiniteRing',
+      realms[(index + 1) % realms.length].globalObject.get('finiteRing'),
+    );
+  }
+
+  const completion = evaluateScript(
+    realms[0],
+    `
+      try {
+        startRecursiveRing();
+        "not thrown";
+      } catch (error) {
+        error;
+      }
+    `,
+  );
+
+  assertRealmRangeError(completion, realms);
+  assertGeneratorAccountingCleared(realms);
+
+  for (let index = 0; index < realms.length; index += 1) {
+    assertSame(
+      evaluateScript(realms[index], 'finiteRing(16);').value,
+      'done',
+      `Agent ${String(index)} must remain callable after aggregate overflow`,
+    );
+  }
+  assertGeneratorAccountingCleared(realms);
+}
+
+/**
+ * @param {'direct' | 'call' | 'apply' | 'accessor' | 'coercion'} shape
+ * @returns {void}
+ */
+function assertOrdinaryCrossAgentShapeContainsRecursion(shape) {
+  const realms = [700, 900, 800, 1000].map((maxStackDepth) =>
+    createRealm({ maxStackDepth }),
+  );
+  /** @type {string | undefined} */
+  let callableInvocation;
+
+  if (shape === 'direct') {
+    callableInvocation = 'foreignRecursiveRing()';
+  } else if (shape === 'call') {
+    callableInvocation = 'foreignRecursiveRing.call(null)';
+  } else if (shape === 'apply') {
+    callableInvocation = 'foreignRecursiveRing.apply(null, [])';
+  }
+
+  for (const realm of realms) {
+    if (callableInvocation !== undefined) {
+      evaluateScript(
+        realm,
+        `
+          function recursiveRing() {
+            return ${callableInvocation};
+          }
+        `,
+      );
+    } else if (shape === 'accessor') {
+      evaluateScript(
+        realm,
+        `
+          var recursiveTarget = {};
+          Object.defineProperty(recursiveTarget, "value", {
+            get: function () {
+              return foreignRecursiveTarget.value;
+            }
+          });
+        `,
+      );
+    } else {
+      evaluateScript(
+        realm,
+        `
+          var recursiveTarget = {
+            valueOf: function () {
+              return +foreignRecursiveTarget;
+            }
+          };
+        `,
+      );
+    }
+
+    evaluateScript(
+      realm,
+      `
+        function finiteRing(depth) {
+          return depth > 0 ? foreignFiniteRing(depth - 1) : "done";
+        }
+      `,
+    );
+  }
+
+  for (let index = 0; index < realms.length; index += 1) {
+    const nextRealm = realms[(index + 1) % realms.length];
+
+    if (callableInvocation !== undefined) {
+      defineGlobal(
+        realms[index],
+        'foreignRecursiveRing',
+        nextRealm.globalObject.get('recursiveRing'),
+      );
+    } else {
+      defineGlobal(
+        realms[index],
+        'foreignRecursiveTarget',
+        nextRealm.globalObject.get('recursiveTarget'),
+      );
+    }
+
+    defineGlobal(
+      realms[index],
+      'foreignFiniteRing',
+      nextRealm.globalObject.get('finiteRing'),
+    );
+  }
+
+  const expression =
+    callableInvocation !== undefined
+      ? 'recursiveRing()'
+      : shape === 'accessor'
+        ? 'recursiveTarget.value'
+        : '+recursiveTarget';
+  const completion = evaluateScript(
+    realms[0],
+    `
+      try {
+        ${expression};
+        "not thrown";
+      } catch (error) {
+        error;
+      }
+    `,
+  );
+
+  assertRealmRangeError(completion, realms);
+  assertGeneratorAccountingCleared(realms);
+
+  for (let index = 0; index < realms.length; index += 1) {
+    assertSame(evaluateScript(realms[index], 'finiteRing(16);').value, 'done');
+  }
   assertGeneratorAccountingCleared(realms);
 }
 
@@ -1620,6 +2003,28 @@ const tests = [
     },
   },
   {
+    name: 'the default aggregate cross-Agent call budget contains ordinary recursion',
+    run() {
+      assertOrdinaryCrossAgentUnionContainsRecursion(undefined);
+    },
+  },
+  {
+    name: 'the strictest custom aggregate cross-Agent call budget contains ordinary recursion',
+    run() {
+      assertOrdinaryCrossAgentUnionContainsRecursion([700, 900, 800, 1000]);
+    },
+  },
+  ...['direct', 'call', 'apply', 'accessor', 'coercion'].map((shape) => ({
+    name: `aggregate cross-Agent accounting contains ordinary ${shape} recursion`,
+    run() {
+      assertOrdinaryCrossAgentShapeContainsRecursion(
+        /** @type {'direct' | 'call' | 'apply' | 'accessor' | 'coercion'} */ (
+          shape
+        ),
+      );
+    },
+  })),
+  {
     name: 'direct ordinary cross-Agent recursion stays outside generator budgets',
     run() {
       assertOrdinaryForeignRecursionRemainsUnbudgeted('direct');
@@ -1662,6 +2067,17 @@ const tests = [
       name: `${shareAgent ? 'shared-Agent' : 'cross-Agent'} active generator ${method} retains valid receiver accounting`,
       run() {
         assertValidForeignGeneratorReceiverStillActivates(
+          shareAgent,
+          /** @type {'next' | 'return' | 'throw'} */ (method),
+        );
+      },
+    })),
+  ),
+  ...[true, false].flatMap((shareAgent) =>
+    ['next', 'return', 'throw'].map((method) => ({
+      name: `${shareAgent ? 'shared-Agent' : 'cross-Agent'} deep reentrant generator ${method} preflights executing state`,
+      run() {
+        assertExecutingForeignGeneratorReceiverPreflights(
           shareAgent,
           /** @type {'next' | 'return' | 'throw'} */ (method),
         );

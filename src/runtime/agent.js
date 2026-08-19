@@ -16,6 +16,8 @@ import { GuestErrorSignal } from './completion.js';
  *   parent: SynchronousCallChain | null,
  *   agents: Set<Agent>,
  *   calls: number,
+ *   depth: number,
+ *   maxDepth: number,
  * }} SynchronousCallChain
  */
 
@@ -50,14 +52,15 @@ import { GuestErrorSignal } from './completion.js';
  * its own. See `docs/architecture.md` for the embedding lifecycle.
  *
  * The Agent also owns transient host-stack accounting. A synchronous
- * cross-Agent call path records only its participating Agents; ordinary calls
- * keep their existing per-Realm budgets. If a generator starts before that path
- * unwinds, its host chain adopts every participant's already-active guarded
- * frames, then cross-Agent calls, iterator operations, and nested resumes keep
- * unioning the same record. When the final resume/reference ends, adopted frame
- * tokens detach even if their ordinary calls remain active; a later resume can
- * re-adopt them from the synchronous participant chain. Neither transient union
- * retains a guest value.
+ * cross-Agent call path unions its participants' guarded frames under the
+ * strictest participating Realm limit, preventing recursion distributed across
+ * Agents from bypassing every per-Realm budget. Single-Agent calls keep their
+ * existing per-Realm semantics. If a generator starts before that path unwinds,
+ * its host chain adopts every participant's already-active guarded frames, then
+ * cross-Agent calls, iterator operations, and nested resumes keep unioning the
+ * same record. When either transient chain ends, its adopted frame tokens detach
+ * even if an outer ordinary call remains active. Neither union retains a guest
+ * value.
  */
 export class Agent {
   /**
@@ -214,10 +217,10 @@ export class Agent {
   }
 
   /**
-   * Keeps the Agents on one synchronous cross-Agent call path discoverable
-   * without changing their ordinary per-Realm stack budgets. If a generator
-   * starts before the calls unwind, its host chain can adopt the already-active
-   * guarded frames from every participant.
+   * Keeps the Agents on one synchronous cross-Agent call path discoverable and
+   * adopts every participant's active guarded frames into an aggregate
+   * host-safety budget. If a generator starts before the calls unwind, its host
+   * chain can independently adopt those same active frames.
    *
    * @param {Agent | undefined} callerAgent
    * @returns {SynchronousCallChain | null}
@@ -235,6 +238,8 @@ export class Agent {
         parent: null,
         agents: new Set(),
         calls: 0,
+        depth: 0,
+        maxDepth: Number.POSITIVE_INFINITY,
       };
       attachAgentToSynchronousCallChain(this, thisChain);
       attachAgentToSynchronousCallChain(callerAgent, thisChain);
@@ -247,6 +252,10 @@ export class Agent {
       thisChain = mergeSynchronousCallChains(thisChain, callerChain);
     }
 
+    thisChain = findSynchronousCallChainRoot(thisChain);
+    for (const member of thisChain.agents) {
+      member.adoptActiveSynchronousStackGuards(thisChain);
+    }
     thisChain.calls += 1;
     return thisChain;
   }
@@ -299,6 +308,58 @@ export class Agent {
    */
   unregisterActiveStackGuard(guard) {
     this._activeStackGuards.delete(guard);
+  }
+
+  /**
+   * Charges one guarded frame to the complete active synchronous cross-Agent
+   * call chain. A chain never exists for single-Agent work.
+   *
+   * @param {number} maxDepth
+   * @returns {SynchronousCallChain | null}
+   */
+  enterSynchronousCallFrame(maxDepth) {
+    const chain = this.synchronousCallChainRoot();
+
+    if (chain === null || chain.agents.size <= 1) {
+      return null;
+    }
+
+    chain.maxDepth = Math.min(chain.maxDepth, maxDepth);
+
+    if (chain.depth >= chain.maxDepth) {
+      throw new GuestErrorSignal(
+        'RangeError',
+        'Maximum call stack size exceeded',
+      );
+    }
+
+    chain.depth += 1;
+    return chain;
+  }
+
+  /**
+   * @param {SynchronousCallChain} enteredChain
+   * @returns {void}
+   */
+  exitSynchronousCallFrame(enteredChain) {
+    const chain = findSynchronousCallChainRoot(enteredChain);
+
+    if (chain.depth <= 0) {
+      throw new TypeError('Synchronous call-chain frame underflow');
+    }
+
+    chain.depth -= 1;
+    releaseSynchronousCallChain(chain);
+  }
+
+  /**
+   * @param {SynchronousCallChain} chain
+   * @returns {void}
+   */
+  adoptActiveSynchronousStackGuards(chain) {
+    for (const guard of this._activeStackGuards) {
+      guard.adoptSynchronousCallChain(chain);
+    }
   }
 
   /**
@@ -695,7 +756,10 @@ function mergeSynchronousCallChains(left, right) {
 
   child.parent = root;
   root.calls += child.calls;
+  root.depth += child.depth;
+  root.maxDepth = Math.min(root.maxDepth, child.maxDepth);
   child.calls = 0;
+  child.depth = 0;
 
   for (const member of child.agents) {
     member._synchronousCallChain = root;
@@ -713,6 +777,22 @@ function mergeSynchronousCallChains(left, right) {
 function releaseSynchronousCallChain(chain) {
   if (chain.calls !== 0) {
     return;
+  }
+
+  for (const agent of chain.agents) {
+    for (const guard of agent._activeStackGuards) {
+      const detached = guard.detachSynchronousCallChain(chain);
+
+      if (detached > chain.depth) {
+        throw new TypeError('Synchronous call-chain depth underflow');
+      }
+
+      chain.depth -= detached;
+    }
+  }
+
+  if (chain.depth !== 0) {
+    throw new TypeError('Synchronous call-chain retained inactive frames');
   }
 
   for (const agent of chain.agents) {
