@@ -13,14 +13,95 @@
 This design is approved for the issue #71 audit branch. It is analysis and
 delivery design only; the branch must not change guest production behavior.
 
-The quantitative baseline is repository commit
+The original quantitative design baseline is repository commit
 `5326cc6e0753087db34df4b5d8c637902f57fb88` with Test262 revision
-`b363f29d3c43c626dc852744ad64a0b48a003693`. Issue #61 is still active.
-These baseline counts support the design but are not release counts.
+`b363f29d3c43c626dc852744ad64a0b48a003693`; that baseline is retained below
+only as historical context. Issue #61 is now merged on `origin/main` at
+`bf082063dfce6cd995edda4da3e350e7cd0b498f`. Every issue scope, percentage, and
+release-proof statement below now uses the definitive post-#61 UTC refresh
+manifest.
 
-After #61 merges, issue #71 must refresh every path identity and count from the
-definitive merge SHA under `TZ=UTC`. Implementation issues are created only
-after that refresh and written-spec approval.
+## Definitive post-#61 evidence
+
+- #61 merge SHA: `bf082063dfce6cd995edda4da3e350e7cd0b498f`
+- Audited `origin/main`: `bf082063dfce6cd995edda4da3e350e7cd0b498f`
+- Test262: `https://github.com/tc39/test262.git` at
+  `b363f29d3c43c626dc852744ad64a0b48a003693`
+- UTC classification artifact SHA-256:
+  `a9ee1a016d54c7dd27f952ba9adf6b5edbab2a0b7070d2d406116ae89eef182f`
+- Path delta from the design baseline: `0` added, `0` removed, `30`
+  reclassified
+
+The 30 reclassified roots break down into 16 post-#61 pass promotions, 11
+generator roots now present in the broad selected subset, and 3
+metadata/classification repairs. No roots were added or removed.
+
+### Refreshed balanced partition
+
+| Final partition              |      Roots | Executable variants |     Roots % |  Variants % |
+| ---------------------------- | ---------: | ------------------: | ----------: | ----------: |
+| Core ES2015 main body        |     24,250 |              46,424 |      45.264 |      45.110 |
+| Annex B normative-optional   |        725 |                 960 |       1.353 |       0.933 |
+| Affirmative later/non-ES2015 |     26,172 |              51,242 |      48.851 |      49.792 |
+| Unknown edition              |      2,312 |               4,054 |       4.315 |       3.939 |
+| Test262 harness validation   |        116 |                 232 |       0.217 |       0.225 |
+| Malformed metadata           |          0 |                   0 |       0.000 |       0.000 |
+| **Whole pinned tree**        | **53,575** |         **102,912** | **100.000** | **100.000** |
+
+### Refreshed core status
+
+| Core ES2015 status            |      Roots | Executable variants |     Roots % |  Variants % |
+| ----------------------------- | ---------: | ------------------: | ----------: | ----------: |
+| Selected and passing          |     13,280 |              25,350 |      54.763 |      54.605 |
+| Audit-passing, unselected     |      6,323 |              11,955 |      26.074 |      25.752 |
+| Blocked by one named core gap |      4,645 |               9,115 |      19.155 |      19.634 |
+| Mandatory deviation           |          2 |                   4 |       0.008 |       0.009 |
+| **Core total**                | **24,250** |          **46,424** | **100.000** | **100.000** |
+
+### Refreshed Annex B status
+
+| Annex B status            |   Roots | Executable variants |     Roots % |  Variants % |
+| ------------------------- | ------: | ------------------: | ----------: | ----------: |
+| Selected and passing      |      71 |                 138 |       9.793 |      14.375 |
+| Audit-passing, unselected |      23 |                  42 |       3.172 |       4.375 |
+| Blocked                   |     631 |                 780 |      87.034 |      81.250 |
+| **Annex B total**         | **725** |             **960** | **100.000** | **100.000** |
+
+### Refreshed core owning blocker ledger
+
+| Core owning blocker                    |     Roots | Executable variants |    Roots % | Variants % |
+| -------------------------------------- | --------: | ------------------: | ---------: | ---------: |
+| Binary data and TypedArrays            |     1,501 |               2,994 |      6.190 |      6.449 |
+| Remaining standard-library additions   |       775 |               1,537 |      3.196 |      3.311 |
+| Proxy/Reflect/MOP                      |       623 |               1,211 |      2.569 |      2.609 |
+| Collections                            |       534 |               1,064 |      2.202 |      2.292 |
+| Early errors/declaration instantiation |       482 |                 949 |      1.988 |      2.044 |
+| Symbol protocol dispatch               |       294 |                 574 |      1.212 |      1.236 |
+| Harness-only cross-Realm test support  |       135 |                 267 |      0.557 |      0.575 |
+| Remaining language runtime semantics   |       132 |                 215 |      0.544 |      0.463 |
+| Lexical grammar and `new.target`       |        83 |                 164 |      0.342 |      0.353 |
+| RegExp `u`/`y` direct blocker          |        54 |                 108 |      0.223 |      0.233 |
+| Proper tail calls                      |        32 |                  32 |      0.132 |      0.069 |
+| **Blocked core**                       | **4,645** |           **9,115** | **19.155** | **19.634** |
+| Mandatory deviations                   |         2 |                   4 |      0.008 |      0.009 |
+| **Blocked plus deviations**            | **4,647** |           **9,119** | **19.163** | **19.643** |
+
+### Refreshed Annex B blocker ledger
+
+| Annex B blocker                        |   Roots | Executable variants |    Roots % | Variants % |
+| -------------------------------------- | ------: | ------------------: | ---------: | ---------: |
+| Annex B web compatibility              |     386 |                 480 |     53.241 |     50.000 |
+| Early errors/declaration instantiation |     192 |                 204 |     26.483 |     21.250 |
+| Harness-only cross-Realm test support  |      36 |                  62 |      4.966 |      6.458 |
+| Proxy/Reflect/MOP                      |      13 |                  26 |      1.793 |      2.708 |
+| Symbol protocol dispatch               |       2 |                   4 |      0.276 |      0.417 |
+| Binary data and TypedArrays            |       1 |                   2 |      0.138 |      0.208 |
+| Lexical grammar and `new.target`       |       1 |                   2 |      0.138 |      0.208 |
+| **Blocked Annex B**                    | **631** |             **780** | **87.034** | **81.250** |
+
+All percentages in these tables use `toFixed(3)` output from the UTC refresh
+manifest. The malformed bucket is now `0 / 0` because the three historical
+malformed roots were reclassified during the definitive refresh.
 
 ## Decision summary
 
@@ -217,16 +298,16 @@ represents the feature's complete selected surface.
 ### Unknown-edition adjudication
 
 Unknown roots cannot remain a permanent blind spot while #70 claims core
-conformance. The baseline contains 2,311 roots and 4,052 variants:
+conformance. The definitive post-#61 manifest contains 2,312 roots and 4,054
+variants:
 
 - staging: 1,193 roots / 2,208 variants;
-- language: 772 / 1,457;
+- language: 773 / 1,459;
 - Annex B: 314 / 323; and
 - built-ins: 32 / 64.
 
-Only 104 roots / 185 variants existed in the 2015 year-end Test262 tree; 2,207
-roots / 3,867 variants were added later. That history prioritizes review but
-does not settle edition.
+Most refreshed unknown roots were added after the 2015 year-end Test262 tree.
+That history prioritizes review but does not settle edition.
 
 The adjudication stream uses exact source, Sixth Edition clauses, file/spec
 history, and reviewed manual semantic provenance. Each resolved root moves once
@@ -237,10 +318,11 @@ either:
 - reviewed per-group proof that every remaining unknown lacks affirmative
   ES2015 evidence.
 
-### Balanced baseline partition
+### Historical design baseline at `5326cc6`
 
-The 53,575 total includes the three malformed roots; they are not added after
-the total.
+The approved `5326cc6` design baseline remains historical context only. It
+records the last pre-#61 snapshot and must not drive refreshed issue scopes or
+percentages.
 
 | Final partition              |      Roots | Executable variants |
 | ---------------------------- | ---------: | ------------------: |
@@ -252,32 +334,13 @@ the total.
 | Malformed metadata           |          3 |                   0 |
 | **Whole pinned tree**        | **53,575** |         **102,908** |
 
-All 116 `test/harness/` roots are harness validation. The 52 roots currently
-selected by the broad suite are that class's selected subset; the remaining 64
-are unselected. The async-function neighbor stays in later/non-ES2015.
+The refreshed post-#61 manifest above is now the only source for roadmap issue
+scopes, percentages, and GitHub evidence. Current evidenced core coverage is
+54.763% of roots and 54.605% of variants. After semantics-neutral exact-path
+promotion, it would be:
 
-### Core and Annex B baseline
-
-| Core ES2015 status            |      Roots |   Variants |
-| ----------------------------- | ---------: | ---------: |
-| Selected and passing          |     13,269 |     25,328 |
-| Audit-passing, unselected     |      6,318 |     11,952 |
-| Blocked by one named core gap |      4,661 |      9,140 |
-| Mandatory deviation           |          2 |          4 |
-| **Core total**                | **24,250** | **46,424** |
-
-Current evidenced core coverage is 54.718% of roots and 54.558% of variants.
-After semantics-neutral exact-path promotion, it would be:
-
-- 19,587 / 24,250 = 80.771% of roots; and
-- 37,280 / 46,424 = 80.303% of variants.
-
-| Annex B status            |   Roots | Variants |
-| ------------------------- | ------: | -------: |
-| Selected and passing      |      71 |      138 |
-| Audit-passing, unselected |      23 |       42 |
-| Blocked                   |     631 |      780 |
-| **Annex B total**         | **725** |  **960** |
+- 19,603 / 24,250 = 80.837% of roots; and
+- 37,305 / 46,424 = 80.357% of variants.
 
 Shared core gaps currently stop 245 Annex B roots / 300 variants before
 Annex-B-specific behavior. The direct optional web-compatibility bucket is
@@ -296,30 +359,15 @@ share an IdentifierName/identity-escape root cause but retain separate
 acceptance records. The current limitation is updated or removed only after
 both exact paths pass.
 
-## Owning blocker ledger
+## Owning blocker ledgers
 
-Every blocked core root belongs to one row. Subtotals and downstream consumer
-references never increase these totals.
-
-| Core owning blocker                    |     Roots |  Variants |
-| -------------------------------------- | --------: | --------: |
-| Binary data and TypedArrays            |     1,501 |     2,994 |
-| Remaining standard-library additions   |       780 |     1,547 |
-| Proxy/Reflect/MOP                      |       623 |     1,211 |
-| Early errors/declaration instantiation |       489 |       956 |
-| Collections                            |       534 |     1,064 |
-| Symbol protocol dispatch               |       294 |       574 |
-| Harness-only cross-Realm test support  |       135 |       267 |
-| Remaining language runtime semantics   |       136 |       223 |
-| Lexical grammar and `new.target`       |        83 |       164 |
-| RegExp `u`/`y` direct blocker          |        54 |       108 |
-| Proper tail calls                      |        32 |        32 |
-| **Blocked core**                       | **4,661** | **9,140** |
-| Mandatory deviations                   |         2 |         4 |
-| **Blocked plus deviations**            | **4,663** | **9,144** |
+The definitive post-#61 evidence above is the only source for owning totals.
+Every blocked core root belongs to one core row, Annex B keeps a separate
+optional ledger, and downstream consumer references never increase these
+totals.
 
 The 205 / 408 RegExp/String Symbol consumers are inside the 294 / 574 Symbol
-row. The 39 / 78 residual RegExp additions are inside the 780 / 1,547 library
+row. The 39 / 78 residual RegExp additions are inside the 775 / 1,537 library
 row. RegExp delivery cross-references those paths without counting them again.
 
 After every semantic merge, the taxonomy reruns. A root moves only after exact
@@ -535,15 +583,15 @@ generator machine.
 
 ### Taxonomy, promotion, and proof
 
-- Exact core promotion: 6,318 roots / 11,952 variants.
-- Unknown adjudication: 2,311 / 4,052 to resolve, not coverage.
+- Exact core promotion: 6,323 roots / 11,955 variants.
+- Unknown adjudication: 2,312 / 4,054 to resolve, not coverage.
 - Living clause matrix: proof artifact, no coverage count.
 
 ### Parser and harness
 
 - Harness-only cross-Realm support: 135 / 267.
 - Lexical grammar and `new.target`: 83 / 164.
-- Early errors and declaration instantiation: 489 / 956.
+- Early errors and declaration instantiation: 482 / 949.
 
 ### MOP
 
@@ -593,16 +641,16 @@ RegExp delivery spans separate owning rows without double-counting:
 
 ### Residual surfaces
 
-The 780 / 1,547 library row partitions into:
+The 775 / 1,537 library row partitions into:
 
-- Array/Object: 372 / 732;
+- Array/Object: 371 / 730;
 - String/Number/Math: 253 / 506;
-- Function/Date/Error/JSON: 116 / 231; and
+- Function/Date/Error/JSON/remaining: 112 / 223; and
 - RegExp: 39 / 78.
 
-The non-RegExp library subtotals are 741 / 1,469.
+The non-RegExp library subtotals are 736 / 1,459.
 
-Remaining language runtime semantics own 136 / 223. Proper tail calls own
+Remaining language runtime semantics own 132 / 215. Proper tail calls own
 32 / 32.
 
 ## Proposed GitHub hierarchy
@@ -617,11 +665,11 @@ across other owners.
 
 | Code | Delivery | Proposed title                                                                | Current attribution                             | Dependencies                                     |
 | ---- | -------- | ----------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------ |
-| T0   | Atomic   | Publish deterministic ES2015 Test262 taxonomy and promote exact passing roots | 6,318/11,952                                    | #61, #71 design                                  |
-| T1   | Grouping | Adjudicate unknown Test262 edition provenance                                 | 2,311/4,052 to resolve                          | T0                                               |
+| T0   | Atomic   | Publish deterministic ES2015 Test262 taxonomy and promote exact passing roots | 6,323/11,955                                    | #61, #71 design                                  |
+| T1   | Grouping | Adjudicate unknown Test262 edition provenance                                 | 2,312/4,054 to resolve                          | T0                                               |
 | H0   | Atomic   | Implement portable harness-only Test262 cross-Realm support                   | 135/267                                         | T0                                               |
 | P0   | Atomic   | Complete ES2015 lexical grammar and `new.target`                              | 83/164                                          | T0                                               |
-| P1   | Grouping | Complete core ES2015 early errors and declaration instantiation               | 489/956                                         | P0, H0                                           |
+| P1   | Grouping | Complete core ES2015 early errors and declaration instantiation               | 482/949                                         | P0, H0                                           |
 | M0   | Atomic   | Formalize the ES2015 object internal-method contract                          | 240/459 subtotal                                | T0                                               |
 | M1   | Atomic   | Complete ES2015 Reflect atop the internal-method contract                     | 113/226                                         | M0                                               |
 | M2   | Atomic   | Implement ES2015 Proxy traps, revocation, and invariants                      | 270/526                                         | M0, M1                                           |
@@ -636,10 +684,10 @@ across other owners.
 | B3   | Grouping | Complete ES2015 TypedArray methods, species, iterators, and integration       | 734/1,462                                       | B2                                               |
 | R0   | Atomic   | Implement ES2015 RegExp grammar, `u`/`y`, state, and probed backend           | 54/108 plus deviations 2/4                      | H0, P0, M0, S0                                   |
 | R1   | Atomic   | Complete RegExp/String Symbol protocol integration                            | non-additive cross-references 205/408 and 39/78 | R0, S0                                           |
-| L0   | Grouping | Complete ES2015 Array and Object additions                                    | 372/732                                         | M0, S0                                           |
+| L0   | Grouping | Complete ES2015 Array and Object additions                                    | 371/730                                         | M0, S0                                           |
 | L1   | Grouping | Complete ES2015 String, Number, and Math additions                            | 253/506                                         | S0, R0, R1                                       |
-| L2   | Grouping | Complete ES2015 Function, Date, Error, and JSON additions                     | 116/231                                         | M0, S0                                           |
-| G0   | Grouping | Complete remaining core ES2015 language runtime semantics                     | 136/223                                         | P0, P1, M0, M2                                   |
+| L2   | Grouping | Complete ES2015 Function, Date, Error, JSON, and remaining library additions  | 112/223                                         | M0, S0                                           |
+| G0   | Grouping | Complete remaining core ES2015 language runtime semantics                     | 132/215                                         | P0, P1, M0, M2                                   |
 | G1   | Atomic   | Implement mandatory ES2015 proper tail calls                                  | 32/32                                           | P0, P1, M0, M2, G0                               |
 | V0   | Tracking | Build and close the mandatory Sixth Edition clause coverage matrix            | proof artifact                                  | T0, T1 initially; every mandatory layer to close |
 | A0   | Grouping | Complete optional Annex B web compatibility                                   | direct 386/480; full 725/960                    | shared layers as applicable; non-blocking        |
@@ -772,7 +820,8 @@ Only an inherent, explicitly approved host-boundary limitation may remain, with
 scope, tests, and rationale. The approved example is host RegExp backtracking
 exposure after all observable ES2015 semantics are proven.
 
-Foundational and final PRs, including F0, require exact-head CodeQL evidence:
+Foundational and final PRs, including F0, require reviewed-head CI plus
+post-merge exact-main-SHA CodeQL evidence:
 
 - zero actionable JavaScript alerts;
 - zero extraction or parse diagnostics in analyzed repository source;
@@ -862,7 +911,7 @@ F0 and #70 require:
 - every mandatory V0 row resolved;
 - deterministic UTC artifacts and drift checks;
 - full Node, Chromium, JSC, and pinned Test262 gates;
-- exact-head CI and CodeQL evidence;
+- reviewed-head CI plus post-merge exact-main-SHA CodeQL evidence;
 - no unresolved high-confidence correctness or exploitable security finding;
   and
 - documentation with balanced core, Annex B, later, unknown, harness, and

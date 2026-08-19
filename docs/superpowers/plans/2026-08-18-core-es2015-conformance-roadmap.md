@@ -166,14 +166,18 @@ git --no-pager diff --check origin/main...HEAD
 git --no-pager show --check --oneline HEAD
 node - <<'NODE'
 const checks = {
-  wholeRoots: [[24250, 725, 26170, 2311, 116, 3], 53575],
-  wholeVariants: [[46424, 960, 51240, 4052, 232, 0], 102908],
-  unknownRoots: [[1193, 772, 314, 32], 2311],
-  unknownVariants: [[2208, 1457, 323, 64], 4052],
-  coreRoots: [[13269, 6318, 4661, 2], 24250],
-  coreVariants: [[25328, 11952, 9140, 4], 46424],
-  blockerRoots: [[1501, 780, 623, 489, 534, 294, 135, 136, 83, 54, 32], 4661],
-  blockerVariants: [[2994, 1547, 1211, 956, 1064, 574, 267, 223, 164, 108, 32], 9140],
+  wholeRoots: [[24250, 725, 26172, 2312, 116, 0], 53575],
+  wholeVariants: [[46424, 960, 51242, 4054, 232, 0], 102912],
+  unknownRoots: [[1193, 773, 314, 32], 2312],
+  unknownVariants: [[2208, 1459, 323, 64], 4054],
+  coreRoots: [[13280, 6323, 4645, 2], 24250],
+  coreVariants: [[25350, 11955, 9115, 4], 46424],
+  annexRoots: [[71, 23, 631], 725],
+  annexVariants: [[138, 42, 780], 960],
+  coreBlockerRoots: [[1501, 775, 623, 534, 482, 294, 135, 132, 83, 54, 32], 4645],
+  coreBlockerVariants: [[2994, 1537, 1211, 1064, 949, 574, 267, 215, 164, 108, 32], 9115],
+  annexBlockerRoots: [[386, 192, 36, 13, 2, 1, 1], 631],
+  annexBlockerVariants: [[480, 204, 62, 26, 4, 2, 2], 780],
 };
 for (const [name, [parts, expected]] of Object.entries(checks)) {
   const actual = parts.reduce((sum, value) => sum + value, 0);
@@ -695,12 +699,13 @@ const manifest = {
     anchorsSourceArtifact:
       '/Users/jordan/.copilot/session-state/345a35c4-93fb-4884-962a-f18f57dbf052/files/ecma262-6-anchors.json',
     plannedRepositoryArtifact: 'tools/test262/es2015-anchors.json',
-    anchors: 3448,
   },
   partitions: derivedPartitions,
   coreStatuses: derivedCoreStatuses,
   annexStatuses: derivedAnnexStatuses,
   blockers: classification.blockers,
+  coreBlockers: classification.coreBlockers,
+  annexBlockers: classification.annexBlockers,
   pathDelta,
   artifacts: artifactHashes,
 };
@@ -769,7 +774,9 @@ Modify the design without changing approved architecture. Add a section after
 
 `${renderStatusTable(refresh.annexStatuses)}`
 
-`${renderBlockerTable(refresh.blockers)}`
+`${renderCoreBlockerTable(refresh.coreBlockers, refresh.coreStatuses)}`
+
+`${renderAnnexBlockerTable(refresh.annexBlockers, refresh.annexStatuses)}`
 ```
 
 Replace baseline values in sections that explicitly drive issue scopes and
@@ -780,14 +787,15 @@ three decimal places.
 - [ ] **Step 2: Verify every displayed count against the manifest**
 
 Write a one-off Node check that reads the Markdown and manifest and asserts every
-refreshed integer and percentage token used in the four tables appears exactly
+refreshed integer and percentage token used in the five refreshed tables appears exactly
 where expected. At minimum assert:
 
 - partition roots sum to refreshed whole roots;
 - partition variants sum to refreshed whole variants;
 - core statuses sum to refreshed core;
 - Annex statuses sum to refreshed Annex B;
-- blocker rows sum to refreshed blocked core; and
+- core blocker rows sum to refreshed blocked core;
+- Annex B blocker rows sum to refreshed blocked Annex B; and
 - blocker plus deviations equals the unresolved mandatory total.
 
 Expected: exit 0. Never repair a mismatch by manually changing the manifest.
@@ -839,7 +847,8 @@ Run:
 
 ```bash
 git add \
-  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md
+  docs/superpowers/specs/2026-08-18-core-es2015-conformance-roadmap-design.md \
+  docs/superpowers/plans/2026-08-18-core-es2015-conformance-roadmap.md
 git commit -m "docs: refresh core ES2015 roadmap evidence" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 git --no-pager show --check --oneline HEAD
