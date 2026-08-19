@@ -211,6 +211,19 @@ export default [
     },
   },
   {
+    name: 'custom module entry points accept Acorn shared empty specifier arrays',
+    run() {
+      const program = parseModule('import "./a.js"; import "./b.js";');
+
+      assertSame(program.body[0].specifiers, program.body[1].specifiers);
+
+      for (const options of [{ program }, { parse: () => program }]) {
+        const parsed = parseModule('', options);
+        assertSame(parsed.body.length, 2);
+      }
+    },
+  },
+  {
     name: 'custom module AST shorthand handling stays limited to exact specifier aliases',
     run() {
       for (const source of [

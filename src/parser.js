@@ -1909,6 +1909,10 @@ function checkStructuralAstTree(root) {
     }
 
     if (seen.has(value)) {
+      if (array && value.length === 0) {
+        continue;
+      }
+
       throw unsupportedEs2015Error(
         'Custom AST must be a structural tree',
         value,

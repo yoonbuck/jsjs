@@ -277,6 +277,22 @@ const tests = [
     },
   },
   {
+    name: 'custom script entry points accept Acorn shared empty argument arrays',
+    run() {
+      const program = parseScript('new First; new Second;');
+
+      assertSame(
+        program.body[0].expression.arguments,
+        program.body[1].expression.arguments,
+      );
+
+      for (const options of [{ program }, { parse: () => program }]) {
+        const parsed = parseScript('', options);
+        assertSame(parsed.body.length, 2);
+      }
+    },
+  },
+  {
     name: 'custom parser rejects N functions sharing one N-deep parameter pattern in bounded work',
     run() {
       const size = 64;
