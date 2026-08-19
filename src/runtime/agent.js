@@ -217,19 +217,21 @@ export class Agent {
   }
 
   /**
-   * Keeps the Agents on one synchronous cross-Agent call path discoverable and
+   * Keeps the Agents on one synchronous cross-Realm call path discoverable and
    * adopts every participant's active guarded frames into an aggregate
    * host-safety budget. If a generator starts before the calls unwind, its host
    * chain can independently adopt those same active frames.
    *
-   * @param {Agent | undefined} callerAgent
+   * @param {import('./realm.js').Realm | undefined} callerRealm
+   * @param {import('./realm.js').Realm} calleeRealm
    * @returns {SynchronousCallChain | null}
    */
-  enterSynchronousCallChain(callerAgent) {
-    if (callerAgent === undefined || callerAgent === this) {
+  enterSynchronousCallChain(callerRealm, calleeRealm) {
+    if (callerRealm === undefined || callerRealm === calleeRealm) {
       return null;
     }
 
+    const callerAgent = callerRealm.agent;
     let thisChain = this.synchronousCallChainRoot();
     let callerChain = callerAgent.synchronousCallChainRoot();
 
@@ -311,8 +313,8 @@ export class Agent {
   }
 
   /**
-   * Charges one guarded frame to the complete active synchronous cross-Agent
-   * call chain. A chain never exists for single-Agent work.
+   * Charges one guarded frame to the complete active synchronous cross-Realm
+   * call chain.
    *
    * @param {number} maxDepth
    * @returns {SynchronousCallChain | null}
@@ -320,7 +322,7 @@ export class Agent {
   enterSynchronousCallFrame(maxDepth) {
     const chain = this.synchronousCallChainRoot();
 
-    if (chain === null || chain.agents.size <= 1) {
+    if (chain === null) {
       return null;
     }
 

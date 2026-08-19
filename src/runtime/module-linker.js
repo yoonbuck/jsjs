@@ -99,7 +99,7 @@ function initializeNamespaceImportBindings(records) {
  * @param {SourceTextModuleRecord} module
  * @param {string} exportName
  * @param {Set<object>} resolveSet
- * @param {Set<SourceTextModuleRecord>} exportStarSet
+ * @param {Set<object>} exportStarSet
  * @returns {ExportResolution}
  */
 export function resolveExport(module, exportName, resolveSet, exportStarSet) {
@@ -160,11 +160,11 @@ export function resolveExport(module, exportName, resolveSet, exportStarSet) {
     return NOT_FOUND;
   }
 
-  if (exportStarSet.has(module)) {
+  if (exportStarSet.has(pair)) {
     return NOT_FOUND;
   }
 
-  exportStarSet.add(module);
+  exportStarSet.add(pair);
   /** @type {ExportResolution} */
   let starResolution = NOT_FOUND;
 

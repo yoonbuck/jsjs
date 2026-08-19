@@ -1,9 +1,5 @@
 import { assertSame, assertThrows } from './harness/assert.js';
-import {
-  createModuleLoader,
-  createRealm,
-  ModuleLoaderError,
-} from '../src/index.js';
+import { createModuleLoader, createRealm } from '../src/index.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import { linkModuleGraph } from '../src/runtime/module-linker.js';
@@ -241,7 +237,7 @@ export default [
     },
   },
   {
-    name: 'namespace creation rejects a not-found exported name with a Realm-owned SyntaxError while named imports still fail during linking',
+    name: 'namespace creation and named imports resolve a renamed star cycle',
     async run() {
       const realm = createRealm();
       const cycle = {
@@ -250,48 +246,25 @@ export default [
         D: 'export { y as x } from "A"; export const y = 1;',
       };
       const cycleLoader = loaderFor(cycle, realm);
-      const namespaceError = await rejected(
-        cycleLoader.loadAndEvaluate('root'),
-      );
-      const repeatedNamespaceError = await rejected(
-        cycleLoader.loadAndEvaluate('root'),
-      );
+      const namespace = await cycleLoader.loadAndEvaluate('root');
+      const repeatedNamespace = await cycleLoader.loadAndEvaluate('root');
 
-      assertSame(namespaceError instanceof ModuleLoaderError, true);
-      assertSame(namespaceError.phase, 'evaluate');
-      assertSame(namespaceError.identifier, 'root');
-      assertSame(namespaceError.cause, undefined);
-      assertSame(
-        namespaceError.value.getPrototype(),
-        realm.intrinsics.syntaxErrorPrototype,
-      );
-      assertSame(namespaceError.value.get('name'), 'SyntaxError');
-      assertSame(repeatedNamespaceError, namespaceError);
-      assertSame(repeatedNamespaceError.value, namespaceError.value);
+      assertSame(namespace.get('x'), 1);
+      assertSame(repeatedNamespace, namespace);
 
-      const importError = await rejected(
-        loaderFor(
-          {
-            entry: 'import { x } from "root";',
-            ...cycle,
-          },
-          realm,
-        ).loadAndEvaluate('entry'),
-      );
+      const imported = await loaderFor(
+        {
+          entry: 'import { x } from "root"; export const observed = x;',
+          ...cycle,
+        },
+        realm,
+      ).loadAndEvaluate('entry');
 
-      assertSame(importError instanceof ModuleLoaderError, true);
-      assertSame(importError.phase, 'link');
-      assertSame(importError.identifier, 'entry');
-      assertSame(importError.value, undefined);
-      assertSame(
-        importError.cause.getPrototype(),
-        realm.intrinsics.syntaxErrorPrototype,
-      );
-      assertSame(importError.cause.get('name'), 'SyntaxError');
+      assertSame(imported.get('observed'), 1);
     },
   },
   {
-    name: 'unused namespace imports retry sequential link failures and dedupe concurrent attempts',
+    name: 'unused namespace imports cache renamed star-cycle success',
     async run() {
       const realm = createRealm();
       const sources = {
@@ -300,53 +273,40 @@ export default [
         D: 'export { y as x } from "A"; export const y = 1;',
       };
       const loader = loaderFor(sources, realm);
-      const first = await rejected(loader.loadAndEvaluate('entry'));
-      const second = await rejected(loader.loadAndEvaluate('entry'));
+      const first = await loader.loadAndEvaluate('entry');
+      const second = await loader.loadAndEvaluate('entry');
       const concurrentLoader = loaderFor(sources, realm);
       const [concurrentFirst, concurrentSecond] = await Promise.all([
-        rejected(concurrentLoader.loadAndEvaluate('entry')),
-        rejected(concurrentLoader.loadAndEvaluate('entry')),
+        concurrentLoader.loadAndEvaluate('entry'),
+        concurrentLoader.loadAndEvaluate('entry'),
       ]);
 
-      assertSame(first instanceof ModuleLoaderError, true);
-      assertSame(first.phase, 'link');
-      assertSame(first.identifier, 'entry');
-      assertSame(first.value, undefined);
-      assertSame(
-        first.cause.getPrototype(),
-        realm.intrinsics.syntaxErrorPrototype,
-      );
-      assertSame(first.cause.get('name'), 'SyntaxError');
-      assertSame(second === first, false);
-      assertSame(second.cause === first.cause, false);
-      assertSame(concurrentFirst, concurrentSecond);
-      assertSame(concurrentFirst.cause, concurrentSecond.cause);
+      assertSame(first.get('reached'), true);
+      assertSame(second, first);
+      assertSame(concurrentFirst.get('reached'), true);
+      assertSame(concurrentSecond, concurrentFirst);
     },
   },
   {
-    name: 'failed namespace instantiation rolls back namespaces materialized earlier in the link transaction',
+    name: 'namespace instantiation retains earlier namespaces across renamed star cycles',
     async run() {
       const loader = loaderFor({
-        entry: 'import * as valid from "valid"; import * as invalid from "A";',
+        entry:
+          'import * as valid from "valid"; import * as renamed from "A"; export const total = valid.value + renamed.x;',
         valid: 'export const value = 1;',
         A: 'export * from "D";',
         D: 'export { y as x } from "A"; export const y = 1;',
       });
       const entry = await loadModuleGraph(loader, 'entry');
       const valid = entry.resolvedRequestedModules[0].module;
+      const namespace = await loader.loadAndEvaluate('entry');
 
-      const error = await rejected(loader.loadAndEvaluate('entry'));
-
-      assertSame(error instanceof ModuleLoaderError, true);
-      assertSame(error.phase, 'link');
-      assertSame(valid.status, 'unlinked');
-      assertThrows(() => valid.getNamespace(), TypeError);
-      const validNamespace = await loader.loadAndEvaluate('valid');
-      assertSame(validNamespace.get('value'), 1);
+      assertSame(namespace.get('total'), 2);
+      assertSame(valid.getNamespace().get('value'), 1);
     },
   },
   {
-    name: 'used namespace import failures occur before guest code can catch them',
+    name: 'used namespace imports expose renamed star-cycle bindings',
     async run() {
       const realm = createRealm();
       realm.globalObject.defineOwnProperty('bodyRuns', {
@@ -355,26 +315,18 @@ export default [
         enumerable: true,
         configurable: true,
       });
-      const loader = loaderFor(
+      const namespace = await loaderFor(
         {
           entry:
-            'import * as ns from "A"; try { ns.x; } catch (error) { bodyRuns += 1; }',
+            'import * as ns from "A"; bodyRuns += 1; export const observed = ns.x;',
           A: 'export * from "D";',
           D: 'export { y as x } from "A"; export const y = 1;',
         },
         realm,
-      );
-      const error = await rejected(loader.loadAndEvaluate('entry'));
+      ).loadAndEvaluate('entry');
 
-      assertSame(error instanceof ModuleLoaderError, true);
-      assertSame(error.phase, 'link');
-      assertSame(error.identifier, 'entry');
-      assertSame(
-        error.cause.getPrototype(),
-        realm.intrinsics.syntaxErrorPrototype,
-      );
-      assertSame(error.cause.get('name'), 'SyntaxError');
-      assertSame(realm.globalObject.get('bodyRuns'), 0);
+      assertSame(namespace.get('observed'), 1);
+      assertSame(realm.globalObject.get('bodyRuns'), 1);
     },
   },
   {

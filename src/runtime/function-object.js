@@ -231,7 +231,8 @@ export class EngineFunction extends EngineObject {
     }
 
     const callChain = this.realm.agent.enterSynchronousCallChain(
-      callerRealm?.agent,
+      callerRealm,
+      this.realm,
     );
 
     try {
@@ -334,7 +335,8 @@ export class EngineFunction extends EngineObject {
     }
 
     const callChain = this.realm.agent.enterSynchronousCallChain(
-      callerRealm?.agent,
+      callerRealm,
+      this.realm,
     );
 
     try {

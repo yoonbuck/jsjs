@@ -33,6 +33,7 @@
  */
 
 import { sortStrings } from './selection.js';
+import { assertPortableTest262Path } from './module-paths.js';
 import { UPSTREAM_SUBSET_VERSION } from './upstream.js';
 
 /** Repository-relative path to the policy, for messages and callers. */
@@ -441,6 +442,17 @@ function parseExclusion(entry) {
   if (typeof target !== 'string' || target === '') {
     throw new Es5SelectionError(
       `${ES5_SELECTION_FILE} exclusion ${targetField} must be a non-empty string`,
+    );
+  }
+
+  try {
+    assertPortableTest262Path(target);
+  } catch (error) {
+    if (!(error instanceof TypeError) && !(error instanceof RangeError)) {
+      throw error;
+    }
+    throw new Es5SelectionError(
+      `${ES5_SELECTION_FILE} exclusion ${targetField} ${target} must be a canonical repository-relative path`,
     );
   }
 

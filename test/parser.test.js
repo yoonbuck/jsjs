@@ -1405,6 +1405,17 @@ const tests = [
     },
   },
   {
+    name: 'custom script ASTs require initializers on ordinary const declarations',
+    run() {
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        const program = parseScript('let value;');
+        program.body[0].kind = 'const';
+
+        assertThrows(() => parseCustomScript(entry, program), SyntaxError);
+      }
+    },
+  },
+  {
     name: 'custom function bodies reject lexical and function declaration conflicts',
     run() {
       const program = parseScript(

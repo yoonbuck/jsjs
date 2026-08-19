@@ -631,6 +631,17 @@ export default [
     },
   },
   {
+    name: 'custom module ASTs require initializers on ordinary const declarations',
+    run() {
+      for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+        const program = parseModule('let value;');
+        program.body[0].kind = 'const';
+
+        assertThrows(() => parseCustomModule(entry, program), SyntaxError);
+      }
+    },
+  },
+  {
     name: 'parseModule rejects unsupported nested custom-parser module nodes',
     run() {
       /** @param {any[]} body */

@@ -554,6 +554,33 @@ export default [
     },
   },
   {
+    name: 'es5-selection rejects exclusion paths that escape test/',
+    run: () => {
+      for (const exclusion of [
+        {
+          path: 'test/../../package.json',
+          category: 'post-es5-builtin',
+          reason: 'x',
+        },
+        {
+          prefix: 'test/../../outside',
+          category: 'post-es5-builtin',
+          reason: 'x',
+        },
+      ]) {
+        assertThrows(
+          () =>
+            parseEs5Selection(
+              policyText({
+                exclusions: [exclusion],
+              }),
+            ),
+          Es5SelectionError,
+        );
+      }
+    },
+  },
+  {
     name: 'es5-selection rejects unsorted or duplicated exclusions',
     run: () => {
       assertThrows(

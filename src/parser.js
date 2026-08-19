@@ -6626,12 +6626,38 @@ function validateEvaluatorChildEdges(
         'expression',
         isExpressionNodeOrUnknown,
       );
-    case 'VariableDeclaration':
-      return validateChildList(
+    case 'VariableDeclaration': {
+      const declarationMessage = validateChildList(
         node,
         'declarations',
         isVariableDeclaratorOrUnknown,
       );
+      if (
+        declarationMessage !== undefined ||
+        node.kind !== 'const' ||
+        (parentKey === 'left' &&
+          (parent?.type === 'ForInStatement' ||
+            parent?.type === 'ForOfStatement'))
+      ) {
+        return declarationMessage;
+      }
+
+      for (let index = 0; index < node.declarations.length; index += 1) {
+        const declaration = node.declarations[index];
+        if (declaration?.type !== 'VariableDeclarator') {
+          continue;
+        }
+        const initializerMessage = validateRequiredChild(
+          declaration,
+          'init',
+          isExpressionNodeOrUnknown,
+        );
+        if (initializerMessage !== undefined) {
+          return initializerMessage;
+        }
+      }
+      return undefined;
+    }
     case 'VariableDeclarator':
       return (
         validateRequiredChild(node, 'id', isBindingPatternNodeOrUnknown) ??

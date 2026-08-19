@@ -740,12 +740,19 @@ function assertExecutingForeignGeneratorReceiverPreflights(shareAgent, method) {
 
 /**
  * @param {readonly number[] | undefined} maxDepths
+ * @param {boolean} [shareAgent]
  * @returns {void}
  */
-function assertOrdinaryCrossAgentUnionContainsRecursion(maxDepths) {
+function assertOrdinaryCrossAgentUnionContainsRecursion(
+  maxDepths,
+  shareAgent = false,
+) {
+  const agent = shareAgent ? createAgent() : undefined;
   const realms = Array.from({ length: 4 }, (_unused, index) =>
     createRealm(
-      maxDepths === undefined ? {} : { maxStackDepth: maxDepths[index] },
+      maxDepths === undefined
+        ? { agent }
+        : { agent, maxStackDepth: maxDepths[index] },
     ),
   );
 
@@ -2006,6 +2013,12 @@ const tests = [
     name: 'the default aggregate cross-Agent call budget contains ordinary recursion',
     run() {
       assertOrdinaryCrossAgentUnionContainsRecursion(undefined);
+    },
+  },
+  {
+    name: 'the aggregate call budget contains cross-Realm recursion on one Agent',
+    run() {
+      assertOrdinaryCrossAgentUnionContainsRecursion(undefined, true);
     },
   },
   {

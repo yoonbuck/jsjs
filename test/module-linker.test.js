@@ -353,23 +353,29 @@ export default [
     },
   },
   {
-    name: 'ResolveExport returns not-found for a renamed star cycle',
+    name: 'a renamed star cycle preserves ambiguity for a named import',
     async run() {
       const root = await loadModuleGraph(
         loaderFor({
-          root: 'export * from "A";',
-          A: 'export * from "D";',
+          root: 'import { x } from "A";',
+          A: 'export * from "D"; export * from "E";',
           D: 'export { y as x } from "A"; export const y = 1;',
+          E: 'export const x = 2;',
         }),
         'root',
       );
-      const resolution = resolveExport(root, 'x', new Set(), new Set());
-
-      assertSame(
-        resolution.type,
-        'not-found',
-        'a renamed star cycle must not expose D.y as root.x',
+      const error = /** @type {ModuleLoaderError} */ (
+        assertThrows(() => linkModuleGraph(root), ModuleLoaderError)
       );
+
+      assertSame(error.phase, 'link');
+      assertSame(
+        /** @type {{ get: (name: string) => unknown }} */ (error.cause).get(
+          'name',
+        ),
+        'SyntaxError',
+      );
+      assertUnlinked(root);
     },
   },
   {

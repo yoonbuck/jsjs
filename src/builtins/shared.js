@@ -107,7 +107,10 @@ export class NativeFunction extends EngineObject {
 
     const guard = this.realm.stackGuard;
     const methodAgent = this.realm.agent;
-    const callChain = methodAgent.enterSynchronousCallChain(callerRealm?.agent);
+    const callChain = methodAgent.enterSynchronousCallChain(
+      callerRealm,
+      this.realm,
+    );
 
     try {
       callerRealm?.agent.linkGeneratorHostChain(methodAgent);
@@ -153,7 +156,10 @@ export class NativeFunction extends EngineObject {
    */
   constructFunction(args = [], newTarget = this, callerRealm) {
     const methodAgent = this.realm.agent;
-    const callChain = methodAgent.enterSynchronousCallChain(callerRealm?.agent);
+    const callChain = methodAgent.enterSynchronousCallChain(
+      callerRealm,
+      this.realm,
+    );
 
     try {
       callerRealm?.agent.linkGeneratorHostChain(methodAgent);
