@@ -928,3 +928,48 @@ squash merge SHA;
 final portable and Test262 evidence;
 any explicitly deferred substantial feature issue.
 ```
+
+## 2026-08-19 Recovery Execution Ledger
+
+The preserved release candidate was recovered at
+`5a9db65e17a8b46f9e20880d902b1bca398f2863`. After fetching, current
+`origin/main` was `5326cc6e0753087db34df4b5d8c637902f57fb88`, and that exact SHA is
+the candidate's merge base. The worktree was clean, so no reconciliation commit
+was required.
+
+- [x] Recover the clean candidate and verify current `origin/main` ancestry.
+- [x] Audit #61, parent #28, roadmap #24, the implementation plan, and all
+      tracked SDD fix reports.
+- [x] Preserve the #66/#67 merged semantics, generated UTC artifacts, CodeQL
+      fixes, and both intentionally non-extractable `.js.txt` fixtures.
+- [x] Run fresh targeted Node validation: 559 passed, 0 failed.
+- [x] Run fresh targeted Chromium validation: 634 passed, 0 failed.
+- [x] Run the focused UTC Promise/generator/module Test262 release gate: 4
+      passed, 0 failed.
+- [x] Run the portable fixture adapter: 17 passed, 0 failed, 1 expected
+      unsupported-feature skip. `test/parse-negative.js.txt` executed in both
+      variants.
+- [x] Run the runner regression that proves
+      `test/parse-negative.js.txt` and
+      `malformed/negative-without-type.js.txt` remain non-extractable while the
+      runner can read and classify them.
+- [x] Verify the generated Test262 selection: 14,107 paths across 58 groups.
+- [x] Pass type checking, lint, formatting, vendor drift, generated CI drift,
+      Unicode drift, `git diff --check`, repository invariants, workflow contracts,
+      and benchmark smoke.
+- [x] Recover exact-candidate full-host evidence from
+      `origin-main-blocker-report.md`: Node 2,238, Chromium 2,095, and JavaScriptCore
+      2,095 passed with no failures. JavaScriptCore has no focused suite selector,
+      so the already recorded exact-candidate full portable run was not duplicated.
+- [ ] Obtain a fresh scoped review of the final origin-main blocker fix.
+- [ ] Obtain a maximum-capability GPT-5.6-family whole-milestone review of the
+      exact final main-based candidate.
+- [ ] Push the reviewed head, open the focused release PR, and synchronously
+      watch the exact `ci.yml` pull-request run.
+- [ ] Verify both post-squash CodeQL default-setup analyses on the exact main
+      merge SHA, then audit and close #61, #28, and #24 only if every criterion and
+      child is complete.
+
+No broad upstream Test262 command was run locally during recovery. The broad
+pinned Test262 subset and full JavaScriptCore registry remain authoritative in
+exact-head GitHub CI.
