@@ -322,6 +322,58 @@ function syntheticFeature(probe) {
 
 export default [
   {
+    name: 'npm run ci:contract selects only safe local checks',
+    run: async () => {
+      const expectedNames = [
+        'npm run vendor:check passes for real',
+        'npm run format passes for real',
+        'npm run format really checks engine sources, not only the tooling around them',
+        'npm run lint passes for real',
+        'npm run typecheck passes for real',
+        'npm run ci:check passes for real, so the committed workflow is not stale',
+        'npm run test:node passes for real and reports only passing suites',
+        'npm run test262:fixtures passes for real against the local fixture tree',
+        'npm run test:browser launches the configured headless browser for real',
+      ];
+      const contractRunner = await readRepositoryFile(
+        'test/run-ci-contract.js',
+      );
+      const fullContract = await readRepositoryFile(
+        'test/ci/full-contract.test.js',
+      );
+      const localTestList = fullContract.match(
+        /const LOCAL_CI_CONTRACT_TEST_NAMES = Object\.freeze\(\[([\s\S]*?)\]\);/,
+      );
+
+      if (localTestList === null) {
+        throw new Error(
+          'the full contract must declare its safe local test list',
+        );
+      }
+
+      const actualNames = [...localTestList[1].matchAll(/'([^']+)'/g)].map(
+        (match) => match[1],
+      );
+
+      assertSame(JSON.stringify(actualNames), JSON.stringify(expectedNames));
+      assertSame(
+        actualNames.some((name) => name.includes('test262:upstream')),
+        false,
+        'the local contract must never select the broad upstream Test262 script',
+      );
+      assertSame(
+        actualNames.some((name) => name.includes('test262:es2015')),
+        false,
+        'the local contract must exclude exact-pinned Test262 semantic execution',
+      );
+      assertSame(
+        contractRunner.includes('tests: LOCAL_CI_CONTRACT_TESTS'),
+        true,
+        'npm run ci:contract must use the explicitly safe local test list',
+      );
+    },
+  },
+  {
     name: 'the committed workflow grants least-privilege permissions at the top level',
     run: async () => {
       const { workflow } = await readWorkflow();

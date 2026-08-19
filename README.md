@@ -118,26 +118,26 @@ the exact contract. The engine still rejects async functions/generators and
 
 ## Commands
 
-| Command                                     | What it does                                                   |
-| ------------------------------------------- | -------------------------------------------------------------- |
-| `npm test`                                  | The Node suites, then the Test262 fixture suite                |
-| `npm run test:node`                         | Every portable suite plus the Node-only suites in `test/node/` |
-| `npm run test:browser`                      | Every portable suite in headless Chromium via Playwright       |
-| `npm run test:jsc`                          | Every portable suite in the `jsc` shell                        |
-| `TZ=UTC npm run test262:modules`            | Focused pinned ES2015 static-module Test262 suite              |
-| `TZ=UTC npm run test262:es2015:audit:check` | Verify the pinned ES2015 taxonomy and exact promotion          |
-| `npm run typecheck`                         | `tsc` in checkJs mode                                          |
-| `npm run format`                            | Prettier `--check` over the repository                         |
-| `npm run lint`                              | ESLint only                                                    |
-| `npm run vendor:sync`                       | Refresh `vendor/` from pinned dependencies                     |
-| `npm run ci:contract`                       | Full local CI contract: every command CI runs, for real        |
-| `npm run benchmark`                         | Cross-runtime benchmark CLI across Node, Chromium, and `jsc`   |
-| `npm run benchmark:node`                    | Benchmark only the Node host                                   |
-| `npm run benchmark:browser`                 | Benchmark only the Chromium host                               |
-| `npm run benchmark:jsc`                     | Benchmark only the `jsc` host                                  |
-| `npm run benchmark:smoke`                   | Correctness-only Node smoke benchmark                          |
-| `npm run benchmark:summary`                 | Aggregate compatible host reports into JSON and CSV            |
-| `npm run benchmark:compare`                 | Gate repeated counterbalanced captures for a real difference   |
+| Command                                     | What it does                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| `npm test`                                  | The Node suites, then the Test262 fixture suite                    |
+| `npm run test:node`                         | Every portable suite plus the Node-only suites in `test/node/`     |
+| `npm run test:browser`                      | Every portable suite in headless Chromium via Playwright           |
+| `npm run test:jsc`                          | Every portable suite in the `jsc` shell                            |
+| `TZ=UTC npm run test262:modules`            | Focused pinned ES2015 static-module Test262 suite                  |
+| `TZ=UTC npm run test262:es2015:audit:check` | Verify the pinned ES2015 taxonomy and exact promotion              |
+| `npm run typecheck`                         | `tsc` in checkJs mode                                              |
+| `npm run format`                            | Prettier `--check` over the repository                             |
+| `npm run lint`                              | ESLint only                                                        |
+| `npm run vendor:sync`                       | Refresh `vendor/` from pinned dependencies                         |
+| `npm run ci:contract`                       | Safe local CI subset through browser/fixtures; no upstream Test262 |
+| `npm run benchmark`                         | Cross-runtime benchmark CLI across Node, Chromium, and `jsc`       |
+| `npm run benchmark:node`                    | Benchmark only the Node host                                       |
+| `npm run benchmark:browser`                 | Benchmark only the Chromium host                                   |
+| `npm run benchmark:jsc`                     | Benchmark only the `jsc` host                                      |
+| `npm run benchmark:smoke`                   | Correctness-only Node smoke benchmark                              |
+| `npm run benchmark:summary`                 | Aggregate compatible host reports into JSON and CSV                |
+| `npm run benchmark:compare`                 | Gate repeated counterbalanced captures for a real difference       |
 
 The full command list, Test262 runner options, suite organization, CI jobs, and
 troubleshooting are in [docs/testing.md](docs/testing.md). Benchmark
@@ -161,7 +161,9 @@ their explicit focused allowlists; the module suite does not add a bare module
 feature probe. The deterministic ES2015 taxonomy records exact-path promotion
 evidence separately from broad feature support; it is not a broad ES2015
 feature-tag claim. See [docs/testing.md](docs/testing.md#deterministic-es2015-taxonomy-and-exact-promotion)
-for its UTC, exact-pin, focused-local, and CI-authority rules.
+for its UTC, exact-pin, focused-local, and CI-authority rules. `npm run
+ci:contract` intentionally excludes every checkout-dependent upstream Test262
+execution; exact-SHA CI alone owns the broad pinned run.
 Conformance methodology, live coverage, and the detailed report are in
 [docs/conformance.md](docs/conformance.md).
 

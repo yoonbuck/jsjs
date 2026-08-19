@@ -938,7 +938,7 @@ export default [
     },
   },
   {
-    name: 'the CI contract suites are registered with their own runner and with no other',
+    name: 'the local CI contract registers only its safe suite',
     run: async () => {
       const contractRunner = await readSource('test/run-ci-contract.js');
       const nodeRunner = await readSource('test/run-node.js');
@@ -947,15 +947,25 @@ export default [
         name.endsWith('.test.js'),
       );
       /** @type {string[]} */
-      const unregistered = [];
+      const missingSafeSuite = [];
       /** @type {string[]} */
       const leaked = [];
 
       for (const file of files) {
         const specifier = `'./${file.slice('test/'.length)}'`;
 
-        if (!contractRunner.includes(specifier)) {
-          unregistered.push(file);
+        if (
+          file === 'test/ci/full-contract.test.js' &&
+          !contractRunner.includes(specifier)
+        ) {
+          missingSafeSuite.push(file);
+        }
+
+        if (
+          file !== 'test/ci/full-contract.test.js' &&
+          contractRunner.includes(specifier)
+        ) {
+          leaked.push(`${file} is registered with npm run ci:contract`);
         }
 
         for (const [name, source] of [
@@ -968,11 +978,11 @@ export default [
         }
       }
 
-      assertSame(unregistered.join(','), '');
+      assertSame(missingSafeSuite.join(','), '');
       assertSame(
         leaked.join('\n'),
         '',
-        'the full CI contract must not run inside npm test/test:node; it would rerun the whole pipeline recursively',
+        'npm run ci:contract must exclude CI-owned exact-pinned Test262 suites',
       );
       assertSame(files.length > 0, true, 'CI contract suites were found');
     },

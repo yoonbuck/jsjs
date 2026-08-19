@@ -49,8 +49,8 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `TZ=UTC npm run test262:es2015-release`                                        | Focused pinned Promise+generator+module Test262 release gate; does not rewrite broad reports or selection                                                                                                                       |
 | `TZ=UTC npm run test262:es2015:audit`                                          | Rebuild the deterministic ES2015 taxonomy from the exact pinned checkout                                                                                                                                                        |
 | `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in ES2015 taxonomy and exact promotion provenance without writing                                                                                                                                            |
-| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | The pinned upstream subset from a real `tc39/test262` checkout; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                         |
-| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
+| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | **CI-only:** broad pinned upstream subset; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                                              |
+| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | **CI-only:** broad pinned run in check mode; fails if either generated artifact is stale                                                                                                                                        |
 | `TZ=UTC npm run test262:select`                                                | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
 | `TZ=UTC npm run test262:select:check`                                          | The same derivation, writing nothing: fails if the committed subset is stale                                                                                                                                                    |
 | `npm run test262:exclusions:check`                                             | Runs every per-file exclusion; fails on stale exclusions, unapproved unverifiable results, stale approvals, missing policy paths, or a missing/wrong pinned checkout                                                            |
@@ -66,7 +66,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run profile:browser`                                                      | Invoke the Chromium CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                                                                                           |
 | `npm run profile:smoke`                                                        | Capture a checked one-iteration Node CPU profile of steady `arithmetic-loops` to `.benchmark-results/profile-smoke`                                                                                                             |
 | `npm run profile:analyze`                                                      | Analyze paired schema-2 CPU/allocation sidecars with checksum correlation and equal-observation, interpreter-only hotspot shares; rejects a pair with a zero non-`host` denominator and writes only below `.benchmark-results/` |
-| `npm run ci:contract`                                                          | The full local CI contract: every command CI runs, for real                                                                                                                                                                     |
+| `npm run ci:contract`                                                          | Safe local CI subset: vendor, format, lint, type check, workflow, Node, fixture, and browser checks; no upstream Test262 execution                                                                                              |
 | `npm run typecheck`                                                            | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                                                                                                     |
 | `npm run format`                                                               | Prettier `--check` over the entire repository                                                                                                                                                                                   |
 | `npm run lint`                                                                 | ESLint (flat config) over the repository                                                                                                                                                                                        |
@@ -121,12 +121,17 @@ Seven suites that need a filesystem and cannot run in the browser or `jsc`:
 
 ### CI contract (`test/ci/`)
 
-`test/ci/full-contract.test.js` is the full local CI contract. It runs through
-`test/run-ci-contract.js` (`npm run ci:contract`), executing every command CI
-runs as real subprocesses. It is deliberately _not_ registered with the Node
-runner — `test/node/repository-invariants.test.js` fails if it ever is — because
-running the whole pipeline inside one of its own jobs would be recursive and
-would depend on a browser install and an upstream checkout.
+`test/ci/full-contract.test.js` supplies the safe local CI contract, run through
+`test/run-ci-contract.js` (`npm run ci:contract`). It executes the real vendor,
+format, lint, type-check, workflow, Node, fixture, and browser commands. It is
+deliberately _not_ registered with the Node runner — `test/node/repository-invariants.test.js`
+fails if it ever is — because browser checks are not machine-independent.
+
+`npm run ci:contract` does not invoke any checkout-dependent upstream Test262
+execution: not focused semantic suites, taxonomy audit/selection/exclusion
+work, or the broad pinned subset. Run reviewed focused checks directly when
+needed. The generated exact-SHA CI jobs own the taxonomy audit gate and all
+broad pinned execution.
 
 `test/ci/exclusions-check.test.js` verifies the stale-exclusion checker against
 a real upstream Test262 checkout, including its hard failures for a missing
