@@ -560,7 +560,7 @@ export default [
     },
   },
   {
-    name: 'the focused ES2015 Test262 release job checks out the pinned revision and runs all async runtime suites',
+    name: 'the focused ES2015 Test262 release job checks out the pinned revision and runs every focused suite',
     run: async () => {
       const { workflow } = await readWorkflow();
       const packageManifest = await readPackageManifest();
@@ -582,13 +582,13 @@ export default [
           step.run === 'npm run test262:es2015-release',
       );
 
-      assertSame(job.name, 'Pinned Test262 ES2015 async runtime and modules');
-      assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
       assertSame(
         packageManifest.scripts['test262:es2015-release'],
-        'node test/run-node.js test/ci/es2015-promise-test262.test.js test/ci/es2015-generator-test262.test.js test/ci/es2015-module-test262.test.js',
-        'the release script must run Promise, generator, and module suites',
+        'node test/run-node.js test/ci/es2015-promise-test262.test.js test/ci/es2015-generator-test262.test.js test/ci/es2015-module-test262.test.js test/ci/es2015-object-function-test262.test.js test/ci/es2015-syntax-test262.test.js',
+        'the release script must run every focused ES2015 suite',
       );
+      assertSame(job.name, 'Pinned Test262 ES2015 focused suites');
+      assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
       assertSame(
         runStep?.env?.TZ,
         'UTC',

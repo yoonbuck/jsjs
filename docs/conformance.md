@@ -293,8 +293,9 @@ see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only
 ## Layer 4: Integrated pinned release and broad evidence
 
 `TZ=UTC npm run test262:es2015-release` is the combined focused gate against the
-exact pinned checkout. It runs the Promise, generator, and module suites in
-`test/ci/`, with their roots and local feature allowlists owned by
+exact pinned checkout. It runs the Promise, generator, module, object/function,
+and syntax suites in `test/ci/`, with async-runtime roots and local feature
+allowlists owned by
 `tools/test262/async-runtime-release-manifest.js`. Promise roots, including
 records carrying the `async` flag, and module roots remain focused-only. The
 generator roots remain focused too, and exactly the 11 approved roots also
@@ -567,7 +568,7 @@ denominators are defined exactly under
 Issue #38 (ES2015 object/function runtime updates) is covered by a small,
 hand-picked set of upstream Test262 files, run via
 `test/ci/es2015-object-function-test262.test.js` (part of
-`npm run ci:contract`). Tests that satisfy the broad selection also run there;
+`TZ=UTC npm run test262:es2015-release`). Tests that satisfy the broad selection also run there;
 the focused suite deliberately retains the Object statics and property-order
 cases whose metadata or post-ES5 built-in paths keep them outside that baseline,
 so none of the issue's upstream coverage is silently lost:
@@ -582,8 +583,8 @@ so none of the issue's upstream coverage is silently lost:
   `vendor/test262/test/built-ins/Object/is/{length,name,not-same-value-x-y-number,not-same-value-x-y-object,object-is,same-value-x-y-number}.js` —
   the two new `Object` statics
 
-Reproduce locally: `node test/run-ci-contract.js` (requires the pinned
-upstream checkout at `vendor/test262`; see the Test262 section above).
+Reproduce locally: `TZ=UTC npm run test262:es2015-release` (requires the
+pinned upstream checkout at `vendor/test262`; see the Test262 section above).
 
 Issue #25 syntax coverage is similarly focused in
 `test/ci/es2015-syntax-test262.test.js`. Its pinned list exercises arrow lexical

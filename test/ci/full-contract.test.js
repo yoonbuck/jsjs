@@ -987,7 +987,7 @@ const FULL_CI_CONTRACT_TESTS = [
     },
   },
   {
-    name: 'npm run test262:es2015-release passes all focused async runtime suites without skips',
+    name: 'npm run test262:es2015-release passes every focused ES2015 suite without skips',
     run: () => {
       const results = parseJsonLines(npmRun('test262:es2015-release'));
 
@@ -1008,6 +1008,18 @@ const FULL_CI_CONTRACT_TESTS = [
           },
           {
             name: 'pinned module raw metadata expands once without harness rewriting',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 object/function upstream Test262 files all pass',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 syntax Test262 files pass and out-of-scope neighbors stay classified',
+            status: 'passed',
+          },
+          {
+            name: 'generated selection retains issue #25 and layer-4 generator expansion',
             status: 'passed',
           },
         ]),
