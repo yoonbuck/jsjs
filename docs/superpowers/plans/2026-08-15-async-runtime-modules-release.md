@@ -989,6 +989,17 @@ was required.
 - [ ] Repeat the maximum-capability whole-milestone review on exact head
       `3b926e1d4d0c6ba73d20c9a7a33fd888aa9ec4a2` until it has no unresolved
       high-confidence finding.
+- [x] Review exact candidate `513ffff` across the complete milestone. It found
+      sequential link-error caching, host-thrown `ModuleLoaderError` boundary
+      bypass, and stale Promise `@@species` limitations prose.
+- [x] Fix both loader findings RED-first and correct the documentation in
+      `c2042232e21833cad89e39e9b95afb6df272d36b`. Fresh scoped review returned
+      no significant issues.
+- [x] Re-run final host evidence: Node 2,248, Chromium 2,104, JavaScriptCore
+      2,104, focused UTC Test262 4, fixtures 17 plus 1 expected skip, and all
+      static/generated/benchmark gates passed.
+- [ ] Repeat the maximum-capability whole-milestone review on the exact
+      evidence-bearing head until it has no unresolved high-confidence finding.
 - [ ] Push the reviewed head, open the focused release PR, and synchronously
       watch the exact `ci.yml` pull-request run.
 - [ ] Verify both post-squash CodeQL default-setup analyses on the exact main

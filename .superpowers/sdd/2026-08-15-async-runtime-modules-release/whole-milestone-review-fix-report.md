@@ -217,3 +217,60 @@ The final review-fix commit is
   repository invariants, `git diff --check`, and benchmark smoke passed.
 
 No broad upstream Test262 command was run locally.
+
+## Whole-milestone review follow-up
+
+The maximum-capability GPT-5.6-family review of exact candidate `513ffff` found
+two Important module-loader defects and one Minor documentation mismatch.
+
+### Sequential link retry
+
+`ModuleLoader#loadAndEvaluate` cached a `ModuleLoaderError` from failed linking
+in `linkErrors`. This contradicted the published transaction contract: parsed
+records survive link rollback, but each later sequential request must retry
+linking. The cache is removed. `evaluationInFlight` still deduplicates concurrent
+callers, and the evaluator's permanent completion state still enforces
+at-most-once module execution.
+
+RED: the public namespace-link regression observed the same error and cause
+objects on two sequential calls.
+
+GREEN: sequential calls now receive distinct retried link failures, while
+concurrent calls still receive one identical failure.
+
+### Host error boundary
+
+The shared `asModuleLoaderError` helper preserved any instance of the public
+error class. A host hook could therefore throw an `evaluate`-phase
+`ModuleLoaderError` from inside `resolve` or `load` and escape with the wrong
+phase and identifier.
+
+The host boundaries now always create a new phase-correct error and retain the
+host value as `cause`. Source validation and parsing have explicit phase
+boundaries, so internal parse errors no longer depend on a broad outer catch.
+
+RED: host-thrown error values escaped by identity with phase `evaluate`.
+
+GREEN: resolve and load produce new phase-correct errors with the original host
+error as `cause`.
+
+### Promise species documentation
+
+`docs/conformance.md` and `docs/limitations.md` now agree with the implemented
+Promise species constructor behavior: four well-known-symbol protocols are
+honored and seven remain deferred.
+
+### Verification
+
+The exact fix commit is `c2042232e21833cad89e39e9b95afb6df272d36b`. Fresh
+scoped review found no significant issues.
+
+- Node: **2,248 passed**, 0 failed.
+- Chromium: **2,104 passed**, 0 failed.
+- JavaScriptCore: **2,104 passed**, 0 failed.
+- Focused UTC Promise/generator/module Test262: **4 passed**, 0 failed.
+- Portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip.
+- Type checking, lint, formatting, generated/invariant checks, `git diff
+  --check`, and clean-tree benchmark smoke passed.
+
+No broad upstream Test262 command was run locally.

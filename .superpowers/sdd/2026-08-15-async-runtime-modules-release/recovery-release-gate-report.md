@@ -139,3 +139,39 @@ Fresh exact-head local evidence:
 | Clean-tree benchmark smoke | passed |
 
 No broad upstream Test262 command was run locally.
+
+## Whole-milestone review follow-up
+
+The maximum-capability review of `513ffff` found two Important loader contract
+defects and one Minor documentation mismatch:
+
+- sequential public link failures were cached instead of retrying the
+  transaction against retained parsed records;
+- host `resolve`/`load` hooks could throw the public `ModuleLoaderError` class
+  and bypass boundary phase wrapping;
+- the limitations text still counted Promise `@@species` as unimplemented.
+
+The loader findings were reproduced RED-first. Sequential requests now retry
+linking while concurrent callers still share `evaluationInFlight`; evaluation
+success and abrupt completion remain permanently cached. Host-hook failures are
+wrapped at the active `resolve` or `load` boundary even when their value is a
+`ModuleLoaderError`, while internal parse/evaluation phase propagation remains
+intact. The documentation now records four honored well-known-symbol protocols
+and seven deferred ones.
+
+The exact fix commit is
+`c2042232e21833cad89e39e9b95afb6df272d36b`. Fresh scoped review returned no
+significant issues.
+
+Fresh affected and final host evidence:
+
+- Node: **2,248 passed**, 0 failed.
+- Chromium: **2,104 passed**, 0 failed.
+- JavaScriptCore: **2,104 passed**, 0 failed.
+- Focused UTC Promise/generator/module Test262: **4 passed**, 0 failed.
+- Portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip.
+- Static, generated, invariant, and benchmark gates: passed.
+
+No broad upstream Test262 command was run locally. A clean repeated
+whole-milestone review on the exact evidence-bearing head remains required
+before push.
