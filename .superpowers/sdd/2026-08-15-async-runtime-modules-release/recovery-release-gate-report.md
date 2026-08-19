@@ -206,3 +206,32 @@ Fresh exact-commit local evidence:
 No broad upstream Test262 command was run locally. A maximum-capability
 whole-milestone review of the exact evidence-bearing candidate remains required
 before push.
+
+## Exact-head review closure
+
+The maximum-capability review of `b065d4d` found four Important issues:
+same-Agent cross-Realm recursion accounting, module-only star-cycle tracking,
+missing custom-AST `const` initializers, and noncanonical Test262 exclusion
+paths before direct reads. Each was fixed RED-first in `473b247`.
+
+The star-cycle correction also replaced four stale namespace failure tests with
+the pinned successful renamed-cycle behavior while retaining an explicit
+ambiguity rejection graph. Scoped review found only a stale unused test import;
+after removal, no Critical or Important finding remained.
+
+Fresh exact-commit local evidence:
+
+| Gate | Result |
+| --- | --- |
+| Full Node suite | 2,262 passed, 0 failed |
+| Full Chromium suite | 2,118 passed, 0 failed |
+| Full JavaScriptCore suite | 2,118 passed, 0 failed |
+| Focused UTC Promise/generator/module Test262 | 4 passed, 0 failed |
+| Portable Test262 fixtures | 17 passed, 0 failed, 1 expected skip |
+| Generated Test262 selection check | 14,107 paths across 58 groups |
+| Repository invariants and workflow contracts | 69 passed, 0 failed |
+| Static/generated/exclusion checks | passed |
+| Clean-tree benchmark smoke | passed |
+
+No broad upstream Test262 command was run locally. One final whole-milestone
+review of the exact evidence-bearing head remains required before push.

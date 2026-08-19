@@ -218,6 +218,48 @@ The final review-fix commit is
 
 No broad upstream Test262 command was run locally.
 
+## Exact-head milestone review closure
+
+The maximum-capability review of evidence-bearing head `b065d4d` found four
+additional Important boundary defects:
+
+- recursion crossing multiple Realms on one Agent did not participate in
+  aggregate stack accounting;
+- star-export cycle tracking keyed only modules rather than
+  `(module, exportName)` pairs;
+- custom AST `const` declarations could omit initializers outside for-in/of
+  heads;
+- exclusion policy paths could escape the pinned Test262 checkout before the
+  runner's path validation.
+
+All four were reproduced RED-first and fixed in exact commit `473b247`.
+Cross-Realm calls now retain caller/callee Realm identity for aggregate stack
+accounting, export resolution uses interned module/name pairs, custom `const`
+validation is placement-sensitive, and exclusion paths/prefixes are rejected
+unless they are canonical portable repository paths before any host read.
+
+Full-host validation exposed four stale namespace tests that encoded the old
+module-only star-cycle result. The pinned renamed-star-cycle semantics resolve
+that graph to `D.y`; those tests now cover successful namespace creation,
+named imports, caching, and evaluation. A separate graph with a competing
+`E.x` binding proves ambiguity still rejects linking. Scoped re-review found
+only one stale unused test import; after its removal there was no unresolved
+Critical or Important finding.
+
+Fresh exact-commit evidence:
+
+- Node: **2,262 passed**, 0 failed.
+- Chromium: **2,118 passed**, 0 failed.
+- JavaScriptCore: **2,118 passed**, 0 failed.
+- Focused UTC Promise/generator/module Test262: **4 passed**, 0 failed.
+- Portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip.
+- Generated selection: **14,107 paths across 58 groups**, current.
+- Repository invariants/workflow contracts: **69 passed**, 0 failed.
+- Type checking, lint, formatting, vendor/generated CI/Unicode drift,
+  exclusions, `git diff --check`, and clean-tree benchmark smoke passed.
+
+No broad upstream Test262 command was run locally.
+
 ## Final four-finding review wave
 
 The repeated maximum-capability review found four remaining runtime/parser
