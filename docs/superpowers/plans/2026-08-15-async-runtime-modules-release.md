@@ -998,8 +998,20 @@ was required.
 - [x] Re-run final host evidence: Node 2,248, Chromium 2,104, JavaScriptCore
       2,104, focused UTC Test262 4, fixtures 17 plus 1 expected skip, and all
       static/generated/benchmark gates passed.
-- [ ] Repeat the maximum-capability whole-milestone review on the exact
-      evidence-bearing head until it has no unresolved high-confidence finding.
+- [x] Repeat the maximum-capability whole-milestone review. It found native
+      evaluation provenance spoofing, current-before-dependency link validation,
+      generator fallback classification, and nested custom-AST declaration
+      validation defects.
+- [x] Fix all four findings RED-first in exact implementation commit `a516e84`.
+      Three scoped review rounds closed the declaration pass's complexity,
+      function-body/Annex B, and labelled-function findings; final scoped review
+      found no Critical or Important issue.
+- [x] Re-run final local gates: Node 2,258, Chromium 2,114, JavaScriptCore 2,114,
+      focused UTC Test262 4, fixtures 17 plus 1 expected skip, repository
+      contracts 69, generated selection 14,107 paths across 58 groups, and all
+      static/generated/exclusion/benchmark gates passed.
+- [ ] Obtain a maximum-capability whole-milestone review of the exact final
+      evidence-bearing head with no unresolved high-confidence finding.
 - [ ] Push the reviewed head, open the focused release PR, and synchronously
       watch the exact `ci.yml` pull-request run.
 - [ ] Verify both post-squash CodeQL default-setup analyses on the exact main

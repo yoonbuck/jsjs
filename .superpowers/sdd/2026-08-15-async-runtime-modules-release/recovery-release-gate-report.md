@@ -175,3 +175,34 @@ Fresh affected and final host evidence:
 No broad upstream Test262 command was run locally. A clean repeated
 whole-milestone review on the exact evidence-bearing head remains required
 before push.
+
+## Final runtime and parser closure
+
+The next whole-milestone review found four remaining issues: evaluation error
+provenance spoofing, current-before-dependency link validation, generator
+fallback classification, and incomplete/quadratic custom-AST declaration
+validation. Each was fixed RED-first in exact implementation commit `a516e84`.
+
+The custom-AST fix received three scoped review rounds. It now analyzes each
+variable scope once, preserves function boundaries and sloppy Annex B repeated
+ordinary block/switch functions (including labelled forms), and rejects the
+reviewed block, switch, function, catch, and loop declaration conflicts. The
+final scoped review found no Critical or Important issue.
+
+Fresh exact-commit local evidence:
+
+| Gate | Result |
+| --- | --- |
+| Full Node suite | 2,258 passed, 0 failed |
+| Full Chromium suite | 2,114 passed, 0 failed |
+| Full JavaScriptCore suite | 2,114 passed, 0 failed |
+| Focused UTC Promise/generator/module Test262 | 4 passed, 0 failed |
+| Portable Test262 fixtures | 17 passed, 0 failed, 1 expected skip |
+| Generated Test262 selection check | 14,107 paths across 58 groups |
+| Repository invariants and workflow contracts | 69 passed, 0 failed |
+| Static/generated/exclusion checks | passed |
+| Clean-tree benchmark smoke | passed |
+
+No broad upstream Test262 command was run locally. A maximum-capability
+whole-milestone review of the exact evidence-bearing candidate remains required
+before push.

@@ -218,6 +218,52 @@ The final review-fix commit is
 
 No broad upstream Test262 command was run locally.
 
+## Final four-finding review wave
+
+The repeated maximum-capability review found four remaining runtime/parser
+contract gaps:
+
+- native evaluation failures could preserve a guest- or host-created
+  `ModuleLoaderError` and spoof evaluation provenance;
+- custom AST declaration validation missed nested declaration conflicts;
+- linking validated the current module before earlier dependencies;
+- deleting a generator's inherited `@@toStringTag` exposed a nonstandard
+  `"Generator"` fallback class.
+
+All four were reproduced RED-first. Evaluation now wraps unexpected native
+failures at the active `evaluate` boundary, linking descends through requested
+modules in source order before current-module validation, and generators use
+the ordinary `"Object"` fallback class.
+
+Custom AST declaration validation now performs one iterative pass per variable
+scope. It covers block and switch lexical declarations, function-body
+lexical/var and parameter conflicts, catch parameters, and lexical loop heads
+without crossing nested function boundaries. Review-driven regressions preserve
+sloppy Annex B repeated ordinary block/switch functions, including labelled
+forms, while strict and mixed lexical collisions still reject. A bounded-work
+regression reduced the nested-scope worklist from more than 73,000 pushes to
+below 10,000 for the fixed fixture.
+
+The exact implementation commit is
+`a516e84`. Three scoped review rounds found and closed the initial quadratic and
+incomplete traversal, function-body/Annex B semantics, and labelled-function
+classification findings. The final scoped review returned no Critical or
+Important finding.
+
+Fresh exact-commit evidence:
+
+- Node: **2,258 passed**, 0 failed.
+- Chromium: **2,114 passed**, 0 failed.
+- JavaScriptCore: **2,114 passed**, 0 failed.
+- Focused UTC Promise/generator/module Test262: **4 passed**, 0 failed.
+- Portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip.
+- Generated selection: **14,107 paths across 58 groups**, current.
+- Repository invariants/workflow contracts: **69 passed**, 0 failed.
+- Type checking, lint, formatting, vendor/generated CI/Unicode drift,
+  exclusions, `git diff --check`, and clean-tree benchmark smoke passed.
+
+No broad upstream Test262 command was run locally.
+
 ## Whole-milestone review follow-up
 
 The maximum-capability GPT-5.6-family review of exact candidate `513ffff` found
