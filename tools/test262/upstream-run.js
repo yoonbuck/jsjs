@@ -35,7 +35,19 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createNodeTest262Host } from './adapters/node.js';
+import { createAuditDependencies } from './es2015-audit.js';
+import {
+  ES2015_POLICY_FILE,
+  buildEs2015Inventory,
+  parseEs2015Policy,
+} from './es2015-taxonomy.js';
 import { createJsjsTest262Engine } from './engine.js';
+import {
+  createEs2015PromotionAuthorization,
+  ES2015_PROMOTION_FILE,
+  parseEs2015Promotion,
+  promotionPaths,
+} from './es2015-promotion.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
 import {
@@ -187,11 +199,30 @@ export async function main(argv = []) {
   );
   const host = createNodeTest262Host({ root: pin.checkoutPath });
   const paths = upstreamSubsetPaths(subset);
+  const promotionText = await readRepositoryFile(ES2015_PROMOTION_FILE);
+  const promotion = parseEs2015Promotion(promotionText);
+  const promotionRoots = [];
+  for (const path of promotionPaths(promotion)) {
+    promotionRoots.push({ path, source: await host.readTest(path) });
+  }
+  const promotionInventory = buildEs2015Inventory({
+    roots: promotionRoots,
+    includeDefinitions:
+      await createAuditDependencies().readIncludeDefinitions(),
+  });
+  const supportedFeaturesForPath = createEs2015PromotionAuthorization({
+    promotionText,
+    pin,
+    policy: parseEs2015Policy(await readRepositoryFile(ES2015_POLICY_FILE)),
+    subset,
+    inventory: promotionInventory,
+  });
   const { records, summary } = await runTest262Suite({
     engine: createJsjsTest262Engine(),
     host,
     paths,
     supportedFeatures,
+    supportedFeaturesForPath,
   });
   const coverage = summarizeTest262Coverage({
     inventory: await collectTest262Inventory({ host }),

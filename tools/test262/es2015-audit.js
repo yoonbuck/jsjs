@@ -7,6 +7,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { load as parseYaml } from 'js-yaml';
 import { createNodeTest262Host } from './adapters/node.js';
+import { createJsjsTest262Engine } from './engine.js';
 import {
   ES2015_ANCHORS_FILE,
   ES2015_POLICY_FILE,
@@ -17,8 +18,16 @@ import {
   parseEs2015Policy,
   summarizeEs2015Classification,
 } from './es2015-taxonomy.js';
-import { parseFeatureManifest } from './features.js';
+import {
+  ES2015_PROMOTION_FILE,
+  parseEs2015Promotion,
+  promotionPaths,
+  supportedFeaturesForPromotedPath,
+  validateEs2015Promotion,
+} from './es2015-promotion.js';
+import { featureNames, parseFeatureManifest } from './features.js';
 import { assertPinnedCheckout, readTest262Pin } from './pin.js';
+import { runTest262Suite } from './runner.js';
 import { sortStrings } from './selection.js';
 import { parseUpstreamSubset, upstreamSubsetPaths } from './upstream.js';
 
@@ -26,12 +35,13 @@ export const ES2015_TAXONOMY_ARTIFACT = 'tools/test262/es2015-taxonomy.json';
 export const ES2015_AUDIT_EVIDENCE_FILE =
   'tools/test262/es2015-audit-evidence.json';
 export const ES2015_AUDIT_EVIDENCE_VERSION = 1;
-export const ES2015_AUDIT_VERSION = 2;
+export const ES2015_AUDIT_VERSION = 3;
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const SUBSET_FILE = 'tools/test262/upstream-subset.json';
 const FEATURES_FILE = 'tools/test262/features.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
+const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 const AUDIT_EVIDENCE_KEYS = Object.freeze([
   'version',
   'repository',
@@ -58,6 +68,15 @@ const EXECUTION_STATUSES = new Set(['passed', 'failed', 'skipped']);
  *   listRoots: () => Promise<readonly string[]>,
  *   readRoot: (path: string) => Promise<string>,
  *   readIncludeDefinitions: () => Promise<Map<string, unknown>>,
+ *   readPathsFile: (path: string) => Promise<string>,
+ *   runPromotion: (options: {
+ *     paths: readonly string[],
+ *     supportedFeatures: readonly string[],
+ *     supportedFeaturesForPath: (
+ *       file: string,
+ *       metadata: import('./metadata.js').Test262Metadata,
+ *     ) => readonly string[],
+ *   }) => Promise<readonly unknown[]>,
  *   stderr: (text: string) => void,
  * }} AuditDependencies
  */
@@ -81,7 +100,7 @@ export class Es2015AuditError extends Error {
  * @returns {Promise<number>}
  */
 export async function main(argv = [], dependencies = {}) {
-  const check = parseOptions(argv);
+  const options = parseOptions(argv);
   const deps = { ...createAuditDependencies(), ...dependencies };
   assertUtc(deps.environment);
 
@@ -103,12 +122,17 @@ export async function main(argv = [], dependencies = {}) {
     deps.readFile(REPORT_FILE),
     deps.readFile(ES2015_AUDIT_EVIDENCE_FILE),
   ]);
+  const promotionText = await readOptionalFile(deps, ES2015_PROMOTION_FILE);
   const policy = parseEs2015Policy(policyText);
   const anchors = parseEs2015Anchors(anchorsText);
   assertPolicyPin(policy, pin);
   const subset = parseUpstreamSubset(subsetText);
   assertSubsetPin(subset, pin);
-  parseFeatureManifest(featuresText);
+  const features = parseFeatureManifest(featuresText);
+  const promotion = parsePromotion(promotionText, subset);
+  const promotionPathSet = new Set(
+    promotion === null ? [] : promotionPaths(promotion),
+  );
 
   const roots = sortStrings(await deps.listRoots()).filter(
     (path) =>
@@ -136,15 +160,44 @@ export async function main(argv = [], dependencies = {}) {
   });
   const selectedPaths = upstreamSubsetPaths(subset);
   assertSelectedRoots(selectedPaths, roots);
+  const evidence = parseAuditEvidence(auditEvidenceText, pin);
+  if (promotion !== null) {
+    validateEs2015Promotion(promotion, {
+      pin,
+      policy,
+      selectedPaths,
+      inventory: inventory.filter((root) => promotionPathSet.has(root.path)),
+    });
+  }
+
+  if (options.writeExecution) {
+    await writePromotionExecution({
+      deps,
+      pathsFile: options.pathsFile,
+      promotion,
+      evidence,
+      inventory,
+      supportedFeatures: featureNames(features),
+    });
+    return 0;
+  }
+
+  assertSelectedAuditEvidence(
+    evidence.records,
+    selectedPaths,
+    promotionPathSet,
+  );
   const selectedResults = recordsByPath(
-    parseReportRecords(reportText).filter((record) =>
-      selectedPaths.includes(record.file),
-    ),
+    [
+      ...parseReportRecords(reportText).filter((record) =>
+        selectedPaths.includes(record.file),
+      ),
+      ...evidence.records.filter((record) => promotionPathSet.has(record.file)),
+    ],
     'selected execution evidence',
   );
-  const evidence = parseAuditEvidence(auditEvidenceText, pin);
   const auditResults = recordsByPath(
-    evidence.records,
+    evidence.records.filter((record) => !promotionPathSet.has(record.file)),
     'audit execution evidence',
   );
   const classifications = classifyEs2015Inventory({
@@ -167,6 +220,7 @@ export async function main(argv = [], dependencies = {}) {
     featuresText,
     reportText,
     auditEvidenceText,
+    promotionText,
     classifications,
   });
   validateArtifact(artifact);
@@ -180,7 +234,7 @@ export async function main(argv = [], dependencies = {}) {
     // A missing artifact is stale in check mode and created in write mode.
   }
 
-  if (check) {
+  if (options.check) {
     if (current !== output) {
       deps.stderr(
         `${ES2015_TAXONOMY_ARTIFACT} is stale; run TZ=UTC npm run test262:es2015:audit\n`,
@@ -241,19 +295,317 @@ export function createAuditDependencies(options = {}) {
       const pin = await readPin();
       return readHarnessDefinitions(pin.checkoutPath, repositoryRootUrl);
     },
+    readPathsFile: (path) => readFile(path, 'utf8'),
+    runPromotion: async ({
+      paths,
+      supportedFeatures,
+      supportedFeaturesForPath,
+    }) => {
+      const pin = await readPin();
+      const { records } = await runTest262Suite({
+        engine: createJsjsTest262Engine(),
+        host: createNodeTest262Host({ root: checkoutUrl(pin) }),
+        paths,
+        supportedFeatures,
+        supportedFeaturesForPath,
+      });
+      return records;
+    },
     stderr: options.stderr ?? ((text) => process.stderr.write(text)),
   };
 }
 
 /** @param {readonly string[]} argv */
 function parseOptions(argv) {
-  if (argv.length === 0) {
-    return false;
+  let check = false;
+  /** @type {string | null} */
+  let pathsFile = null;
+  let writeExecution = false;
+
+  for (const argument of argv) {
+    if (argument === '--check') {
+      if (check) {
+        throw new Es2015AuditError('The --check option must not be repeated');
+      }
+      check = true;
+      continue;
+    }
+    if (argument === '--write-execution') {
+      if (writeExecution) {
+        throw new Es2015AuditError(
+          'The --write-execution option must not be repeated',
+        );
+      }
+      writeExecution = true;
+      continue;
+    }
+    if (argument.startsWith('--paths-file=')) {
+      if (pathsFile !== null || argument.length === '--paths-file='.length) {
+        throw new Es2015AuditError(
+          'The --paths-file option must name one paths file',
+        );
+      }
+      pathsFile = argument.slice('--paths-file='.length);
+      continue;
+    }
+    throw new Es2015AuditError(`Unknown audit option: ${argument}`);
   }
-  if (argv.length === 1 && argv[0] === '--check') {
-    return true;
+
+  if (check && (pathsFile !== null || writeExecution)) {
+    throw new Es2015AuditError(
+      'The --check option cannot be combined with promotion execution',
+    );
   }
-  throw new Es2015AuditError(`Unknown audit option: ${argv.join(' ')}`);
+  if ((pathsFile === null) !== !writeExecution) {
+    throw new Es2015AuditError(
+      'Promotion execution requires both --paths-file and --write-execution',
+    );
+  }
+  return { check, pathsFile, writeExecution };
+}
+
+/**
+ * @param {AuditDependencies} deps
+ * @param {string} path
+ * @returns {Promise<string | null>}
+ */
+async function readOptionalFile(deps, path) {
+  try {
+    return await deps.readFile(path);
+  } catch (error) {
+    if (/** @type {any} */ (error)?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * A promotion is meaningful only alongside the one exact subset group that
+ * exposes it. The pre-promotion audit has no manifest and therefore no group.
+ *
+ * @param {string | null} text
+ * @param {ReturnType<typeof parseUpstreamSubset>} subset
+ */
+function parsePromotion(text, subset) {
+  const groups = subset.groups.filter(
+    (group) => group.name === PROMOTION_GROUP,
+  );
+  if (text === null) {
+    if (groups.length > 0) {
+      throw new Es2015AuditError(
+        `${ES2015_PROMOTION_FILE} is required by ${PROMOTION_GROUP}`,
+      );
+    }
+    return null;
+  }
+  if (groups.length !== 1) {
+    throw new Es2015AuditError(
+      `${ES2015_PROMOTION_FILE} requires exactly one ${PROMOTION_GROUP} subset group`,
+    );
+  }
+
+  const promotion = parseEs2015Promotion(text);
+  const paths = promotionPaths(promotion);
+  if (!sameStrings(groups[0].paths, paths)) {
+    throw new Es2015AuditError(
+      `${PROMOTION_GROUP} must select exactly the reviewed promotion paths`,
+    );
+  }
+  return promotion;
+}
+
+/**
+ * Audit evidence normally covers only unselected roots. Promoted roots are the
+ * narrow exception: their exact audit records become selected execution
+ * evidence only after the immutable promotion manifest and subset group agree.
+ *
+ * @param {readonly any[]} records
+ * @param {readonly string[]} selectedPaths
+ * @param {ReadonlySet<string>} promoted
+ */
+function assertSelectedAuditEvidence(records, selectedPaths, promoted) {
+  const selected = new Set(selectedPaths);
+  for (const record of records) {
+    if (selected.has(record.file) && !promoted.has(record.file)) {
+      throw new Es2015AuditError(
+        `${ES2015_AUDIT_EVIDENCE_FILE} names selected non-promotion root ${record.file}`,
+      );
+    }
+  }
+}
+
+/**
+ * @param {{
+ *   deps: AuditDependencies,
+ *   pathsFile: string | null,
+ *   promotion: ReturnType<typeof parseEs2015Promotion> | null,
+ *   evidence: ReturnType<typeof parseAuditEvidence>,
+ *   inventory: readonly any[],
+ *   supportedFeatures: readonly string[],
+ * }} options
+ */
+async function writePromotionExecution(options) {
+  const { deps, pathsFile, promotion, evidence, inventory, supportedFeatures } =
+    options;
+  if (promotion === null || pathsFile === null) {
+    throw new Es2015AuditError(
+      'Promotion execution requires a reviewed promotion manifest and paths file',
+    );
+  }
+  const pathsText = await deps.readPathsFile(pathsFile);
+  const paths = parsePromotionPathsFile(pathsText, pathsFile, promotion);
+  const roots = new Map(inventory.map((root) => [root.path, root]));
+  const promoted = new Set(paths);
+
+  const execution = await deps.runPromotion({
+    paths,
+    supportedFeatures,
+    supportedFeaturesForPath(file, metadata) {
+      const root = roots.get(file);
+      if (root === undefined || root.metadata === null) {
+        throw new Es2015AuditError(
+          `${ES2015_PROMOTION_FILE} path ${file} is missing from the pinned inventory`,
+        );
+      }
+      return supportedFeaturesForPromotedPath(
+        promotion,
+        file,
+        metadata,
+        root.includeFeatures,
+      );
+    },
+  });
+  const records = execution.map((record, index) =>
+    normalizeExecutionRecord(record, index),
+  );
+  assertPromotionExecution(records, paths, roots);
+
+  const combined = sortAuditRecords([
+    ...evidence.records.filter((record) => !promoted.has(record.file)),
+    ...records,
+  ]);
+  const output = `${JSON.stringify(
+    {
+      version: ES2015_AUDIT_EVIDENCE_VERSION,
+      repository: promotion.repository,
+      revision: promotion.revision,
+      auditRecords: combined,
+      blockers: evidence.blockers,
+      intentionalDeviations: evidence.intentionalDeviations,
+    },
+    null,
+    2,
+  )}\n`;
+  await deps.writeFile(ES2015_AUDIT_EVIDENCE_FILE, output);
+}
+
+/**
+ * @param {string} text
+ * @param {string} path
+ * @param {ReturnType<typeof parseEs2015Promotion>} promotion
+ */
+function parsePromotionPathsFile(text, path, promotion) {
+  if (typeof text !== 'string' || sha256(text) !== promotion.ledgerSha256) {
+    throw new Es2015AuditError(
+      `Promotion paths file ${path} does not match ${ES2015_PROMOTION_FILE} ledgerSha256`,
+    );
+  }
+  const paths = text.endsWith('\n')
+    ? text.slice(0, -1).split('\n')
+    : text.split('\n');
+  if (
+    paths.length === 0 ||
+    paths.some((entry) => entry === '') ||
+    !sameStrings(paths, sortStrings([...paths])) ||
+    new Set(paths).size !== paths.length ||
+    !sameStrings(paths, promotionPaths(promotion))
+  ) {
+    throw new Es2015AuditError(
+      `Promotion paths file ${path} does not match the reviewed exact path set`,
+    );
+  }
+  return paths;
+}
+
+/**
+ * @param {unknown} record
+ * @param {number} index
+ */
+function normalizeExecutionRecord(record, index) {
+  const value = /** @type {any} */ (record);
+  return parseAuditRecord(
+    {
+      type: value?.type,
+      file: value?.file,
+      variant: value?.variant,
+      status: value?.status,
+    },
+    index,
+  );
+}
+
+/**
+ * @param {readonly ReturnType<typeof parseAuditRecord>[]} records
+ * @param {readonly string[]} paths
+ * @param {ReadonlyMap<string, any>} roots
+ */
+function assertPromotionExecution(records, paths, roots) {
+  const byPath = recordsByPath(records, 'promotion execution');
+  for (const record of records) {
+    if (record.status !== 'passed') {
+      throw new Es2015AuditError(
+        `Promotion execution did not pass ${record.file} (${record.variant})`,
+      );
+    }
+  }
+  for (const path of paths) {
+    const root = roots.get(path);
+    const recordsForPath = byPath.get(path);
+    if (
+      root === undefined ||
+      !Array.isArray(root.executionVariants) ||
+      recordsForPath === undefined ||
+      recordsForPath.length !== root.executionVariants.length
+    ) {
+      throw new Es2015AuditError(
+        `Promotion execution has incomplete variants for ${path}`,
+      );
+    }
+    const actual = sortStrings(recordsForPath.map((record) => record.variant));
+    if (!sameStrings(actual, root.executionVariants)) {
+      throw new Es2015AuditError(
+        `Promotion execution has incorrect variants for ${path}`,
+      );
+    }
+  }
+  if (byPath.size !== paths.length) {
+    throw new Es2015AuditError(
+      'Promotion execution names a root outside the reviewed exact path set',
+    );
+  }
+}
+
+/** @param {readonly ReturnType<typeof parseAuditRecord>[]} records */
+function sortAuditRecords(records) {
+  const keys = records.map((record) => `${record.file}\u0000${record.variant}`);
+  if (new Set(keys).size !== keys.length) {
+    throw new Es2015AuditError(
+      `${ES2015_AUDIT_EVIDENCE_FILE} must not repeat execution records`,
+    );
+  }
+  const byKey = new Map(
+    records.map((record) => [`${record.file}\u0000${record.variant}`, record]),
+  );
+  return sortStrings(keys).map((key) => {
+    const record = byKey.get(key);
+    if (record === undefined) {
+      throw new Es2015AuditError(
+        `${ES2015_AUDIT_EVIDENCE_FILE} lost an execution record`,
+      );
+    }
+    return record;
+  });
 }
 
 /** @param {Record<string, string | undefined>} environment */
@@ -495,6 +847,14 @@ function assertSortedUnique(values, label) {
   }
 }
 
+/** @param {readonly string[]} left @param {readonly string[]} right */
+function sameStrings(left, right) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
 /**
  * @param {Record<string, unknown>} record
  * @param {readonly string[]} expected
@@ -689,6 +1049,7 @@ async function listFiles(directory, prefix = '') {
  *   pin: any, policy: any, anchors: any, policyText: string, anchorsText: string,
  *   subsetText: string, featuresText: string, reportText: string,
  *   auditEvidenceText: string,
+ *   promotionText: string | null,
  *   classifications: readonly any[],
  * }} options
  */
@@ -713,6 +1074,9 @@ function buildArtifact(options) {
       featuresSha256: sha256(options.featuresText),
       selectedEvidenceSha256: sha256(options.reportText),
       auditEvidenceSha256: sha256(options.auditEvidenceText),
+      ...(options.promotionText === null
+        ? {}
+        : { promotionSha256: sha256(options.promotionText) }),
     },
     summary,
     statusTables: statusTables(options.classifications),

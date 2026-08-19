@@ -1,19 +1,35 @@
 import { spawnSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assertSame } from '../harness/assert.js';
+import { assertThrows } from '../harness/assert.js';
+import { parseTest262Metadata } from '../../tools/test262/metadata.js';
 import {
   ES5_SELECTION_VERSION,
   parseEs5Selection,
 } from '../../tools/test262/es5-selection.js';
 import {
+  createEs2015PromotionAuthorization,
+  Es2015PromotionError,
+  mergePromotionSubset,
+  parseEs2015Promotion,
+  promotionPaths,
+  supportedFeaturesForPromotedPath,
+  validateEs2015Promotion,
+} from '../../tools/test262/es2015-promotion.js';
+import {
   inspectEngineGrammar,
   selectPaths,
 } from '../../tools/test262/upstream-select-paths.js';
 import { assertPinnedCheckout } from '../../tools/test262/pin.js';
+import {
+  parseUpstreamSubset,
+  upstreamSubsetPaths,
+} from '../../tools/test262/upstream.js';
 
 const EXCLUDED_PATH = 'test/staging/not-read.js';
+const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 const MODULE_PATH = 'test/built-ins/Array/module.js';
 const MODULE_CODE_PATH = 'test/language/module-code/basic.js';
 const ELIGIBLE_PATH = 'test/built-ins/Array/eligible.js';
@@ -38,6 +54,98 @@ const PINNED_OBJECT_GENERATOR_NEIGHBOR =
   'test/language/expressions/object/cpn-obj-lit-computed-property-name-from-generator-function-declaration.js';
 const COMPUTED_PROPERTY_FRONTMATTER =
   '/*---\nfeatures: [computed-property-names]\n---*/\n';
+const PROMOTION_PIN = Object.freeze({
+  repository: 'https://example.invalid/test262.git',
+  revision: '0123456789012345678901234567890123456789',
+});
+const PROMOTION_PATHS = Object.freeze([
+  'test/language/exact.js',
+  'test/language/neighbor.js',
+]);
+const PROMOTION_LEDGER_SHA256 =
+  'eaeedcaba2a38a70dddc59794e093318d1edc1dacb41ba64966a593c5dea43ff';
+const DURABLE_LEDGER_SHA256 =
+  '3f2c617b8639c8048afb1a42b95218250b20b6d51b9313f39473b4ddc1c7c646';
+const PRE_PROMOTION_TAXONOMY_SHA256 =
+  'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
+const PRE_PROMOTION_GROUPS_SHA256 =
+  '0bda05c5dbc79a868ddedf574cdc598a52a57dc38ef374e6e909db088e164d0a';
+
+/** @param {string} text */
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * @param {Partial<{
+ *   entries: object[],
+ *   rootCount: number,
+ *   variantCount: number,
+ *   ledgerSha256: string,
+ * }>} [overrides]
+ */
+function promotionFixture(overrides = {}) {
+  return {
+    version: 1,
+    repository: PROMOTION_PIN.repository,
+    revision: PROMOTION_PIN.revision,
+    sourceTaxonomySha256:
+      '1111111111111111111111111111111111111111111111111111111111111111',
+    ledgerSha256: PROMOTION_LEDGER_SHA256,
+    rootCount: 2,
+    variantCount: 3,
+    entries: [
+      {
+        path: 'test/language/exact.js',
+        variants: 2,
+        features: ['exact-path-feature'],
+        includeFeatures: ['include-path-feature'],
+      },
+      {
+        path: 'test/language/neighbor.js',
+        variants: 1,
+        features: [],
+        includeFeatures: [],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+/**
+ * @param {Partial<{
+ *   pin: object,
+ *   policy: object,
+ *   selectedPaths: readonly string[],
+ *   inventory: readonly object[],
+ * }>} [overrides]
+ */
+function promotionValidationOptions(overrides = {}) {
+  return {
+    pin: PROMOTION_PIN,
+    policy: {
+      es2015Features: ['exact-path-feature'],
+      neutralFeatures: ['include-path-feature'],
+      laterFeatures: ['later-path-feature'],
+    },
+    selectedPaths: PROMOTION_PATHS,
+    inventory: [
+      {
+        path: 'test/language/exact.js',
+        variants: 2,
+        metadata: { features: ['exact-path-feature'] },
+        includeFeatures: ['include-path-feature'],
+      },
+      {
+        path: 'test/language/neighbor.js',
+        variants: 1,
+        metadata: { features: [] },
+        includeFeatures: [],
+      },
+    ],
+    ...overrides,
+  };
+}
 
 /**
  * @param {readonly string[]} expansionFeatures
@@ -154,6 +262,330 @@ function* focused() { yield 1; }`,
 ]);
 
 export default [
+  {
+    name: 'ES2015 promotion manifest authorizes only reviewed exact dependencies',
+    run: () => {
+      const manifest = parseEs2015Promotion(JSON.stringify(promotionFixture()));
+      const metadata = parseTest262Metadata(
+        '/*---\ndescription: exact promotion fixture\nfeatures: [exact-path-feature]\n---*/\n',
+      );
+
+      assertSame(Object.isFrozen(manifest), true);
+      assertSame(Object.isFrozen(manifest.entries), true);
+      assertSame(
+        JSON.stringify(promotionPaths(manifest)),
+        JSON.stringify(PROMOTION_PATHS),
+      );
+      assertSame(
+        JSON.stringify(
+          supportedFeaturesForPromotedPath(
+            manifest,
+            'test/language/exact.js',
+            metadata,
+            ['include-path-feature'],
+          ),
+        ),
+        '["exact-path-feature","include-path-feature"]',
+      );
+      assertSame(
+        JSON.stringify(
+          supportedFeaturesForPromotedPath(
+            manifest,
+            'test/language/not-promoted.js',
+            metadata,
+            ['include-path-feature'],
+          ),
+        ),
+        '[]',
+      );
+      assertThrows(
+        () =>
+          supportedFeaturesForPromotedPath(
+            manifest,
+            'test/language/exact.js',
+            parseTest262Metadata(
+              '/*---\ndescription: drifted metadata\nfeatures: [different-feature]\n---*/\n',
+            ),
+            ['include-path-feature'],
+          ),
+        Es2015PromotionError,
+      );
+      assertThrows(
+        () =>
+          supportedFeaturesForPromotedPath(
+            manifest,
+            'test/language/exact.js',
+            metadata,
+            ['different-include-feature'],
+          ),
+        Es2015PromotionError,
+      );
+      validateEs2015Promotion(manifest, promotionValidationOptions());
+    },
+  },
+  {
+    name: 'ES2015 promotion rejects malformed paths, counts, pins, and later dependencies',
+    run: () => {
+      const exact = promotionFixture().entries[0];
+      const neighbor = promotionFixture().entries[1];
+      const malformed = [
+        promotionFixture({ entries: [exact, exact] }),
+        promotionFixture({ entries: [neighbor, exact] }),
+        promotionFixture({ rootCount: 3 }),
+        promotionFixture({
+          ledgerSha256:
+            '0000000000000000000000000000000000000000000000000000000000000000',
+        }),
+      ];
+
+      for (const value of malformed) {
+        assertThrows(
+          () => parseEs2015Promotion(JSON.stringify(value)),
+          Es2015PromotionError,
+        );
+      }
+
+      const manifest = parseEs2015Promotion(JSON.stringify(promotionFixture()));
+      assertThrows(
+        () =>
+          validateEs2015Promotion(
+            manifest,
+            promotionValidationOptions({
+              pin: {
+                ...PROMOTION_PIN,
+                revision: '9876543210987654321098765432109876543210',
+              },
+            }),
+          ),
+        Es2015PromotionError,
+      );
+      assertThrows(
+        () =>
+          validateEs2015Promotion(
+            manifest,
+            promotionValidationOptions({
+              selectedPaths: ['test/language/exact.js'],
+            }),
+          ),
+        Es2015PromotionError,
+      );
+      assertThrows(
+        () =>
+          validateEs2015Promotion(
+            manifest,
+            promotionValidationOptions({
+              inventory: [promotionValidationOptions().inventory[0]],
+            }),
+          ),
+        Es2015PromotionError,
+      );
+
+      const later = parseEs2015Promotion(
+        JSON.stringify(
+          promotionFixture({
+            entries: [
+              {
+                ...exact,
+                features: ['later-path-feature'],
+              },
+              neighbor,
+            ],
+          }),
+        ),
+      );
+      assertThrows(
+        () =>
+          validateEs2015Promotion(
+            later,
+            promotionValidationOptions({
+              inventory: [
+                {
+                  ...promotionValidationOptions().inventory[0],
+                  metadata: { features: ['later-path-feature'] },
+                },
+                promotionValidationOptions().inventory[1],
+              ],
+            }),
+          ),
+        Es2015PromotionError,
+      );
+    },
+  },
+  {
+    name: 'upstream promotion authorization verifies the exact selected group before a runner uses it',
+    run: () => {
+      const subset = parseUpstreamSubset(
+        JSON.stringify({
+          version: 1,
+          repository: PROMOTION_PIN.repository,
+          revision: PROMOTION_PIN.revision,
+          groups: [
+            {
+              name: 'es2015/audit-passing-promotion',
+              summary: 'Exact promotion fixture.',
+              paths: PROMOTION_PATHS,
+            },
+          ],
+        }),
+      );
+      const authorization = createEs2015PromotionAuthorization({
+        promotionText: JSON.stringify(promotionFixture()),
+        pin: PROMOTION_PIN,
+        policy: promotionValidationOptions().policy,
+        subset,
+        inventory: promotionValidationOptions().inventory,
+      });
+      const metadata = parseTest262Metadata(
+        '/*---\ndescription: exact promotion fixture\nfeatures: [exact-path-feature]\n---*/\n',
+      );
+
+      assertSame(
+        JSON.stringify(authorization('test/language/exact.js', metadata)),
+        '["exact-path-feature","include-path-feature"]',
+      );
+      assertSame(
+        JSON.stringify(
+          authorization('test/language/not-promoted.js', metadata),
+        ),
+        '[]',
+      );
+      assertThrows(
+        () =>
+          createEs2015PromotionAuthorization({
+            promotionText: JSON.stringify(promotionFixture()),
+            pin: PROMOTION_PIN,
+            policy: promotionValidationOptions().policy,
+            subset: parseUpstreamSubset(
+              JSON.stringify({
+                version: 1,
+                repository: PROMOTION_PIN.repository,
+                revision: PROMOTION_PIN.revision,
+                groups: [
+                  {
+                    name: 'es2015/audit-passing-promotion',
+                    summary: 'Missing promoted root.',
+                    paths: ['test/language/exact.js'],
+                  },
+                ],
+              }),
+            ),
+            inventory: promotionValidationOptions().inventory,
+          }),
+        Es2015PromotionError,
+      );
+    },
+  },
+  {
+    name: 'upstream selection preserves the exact promotion group outside the ES5 generator',
+    run: () => {
+      const base = parseUpstreamSubset(
+        JSON.stringify({
+          version: 1,
+          repository: PROMOTION_PIN.repository,
+          revision: PROMOTION_PIN.revision,
+          groups: [
+            {
+              name: 'baseline',
+              summary: 'Generated baseline root.',
+              paths: ['test/language/base.js'],
+            },
+            {
+              name: 'harness',
+              summary: 'Generated later group.',
+              paths: ['test/language/other.js'],
+            },
+          ],
+        }),
+      );
+      const before = JSON.stringify(base.groups);
+      const promotion = parseEs2015Promotion(
+        JSON.stringify(promotionFixture()),
+      );
+      const merged = mergePromotionSubset(base, promotion);
+
+      assertSame(
+        JSON.stringify(merged.groups.map((group) => group.name)),
+        JSON.stringify([
+          'baseline',
+          'es2015/audit-passing-promotion',
+          'harness',
+        ]),
+      );
+      assertSame(
+        JSON.stringify(
+          merged.groups.find(
+            (group) => group.name === 'es2015/audit-passing-promotion',
+          )?.paths,
+        ),
+        JSON.stringify(PROMOTION_PATHS),
+      );
+      assertSame(JSON.stringify(base.groups), before);
+      assertThrows(
+        () =>
+          mergePromotionSubset(
+            parseUpstreamSubset(
+              JSON.stringify({
+                version: 1,
+                repository: PROMOTION_PIN.repository,
+                revision: PROMOTION_PIN.revision,
+                groups: [
+                  {
+                    name: 'baseline',
+                    summary: 'Overlapping generated root.',
+                    paths: ['test/language/exact.js'],
+                  },
+                ],
+              }),
+            ),
+            promotion,
+          ),
+        Es2015PromotionError,
+      );
+    },
+  },
+  {
+    name: 'checked-in ES2015 promotion exactly matches the durable ledger and one new subset group',
+    run: async () => {
+      const [promotionText, subsetText] = await Promise.all([
+        readFile(
+          new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+        readFile(
+          new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+      ]);
+      const manifest = parseEs2015Promotion(promotionText);
+      const subset = parseUpstreamSubset(subsetText);
+      const promotion = subset.groups.filter(
+        (group) => group.name === 'es2015/audit-passing-promotion',
+      );
+      const preExistingGroups = subset.groups.filter(
+        (group) => group.name !== 'es2015/audit-passing-promotion',
+      );
+      const paths = promotionPaths(manifest);
+
+      assertSame(manifest.rootCount, 6323);
+      assertSame(manifest.variantCount, 11955);
+      assertSame(manifest.ledgerSha256, DURABLE_LEDGER_SHA256);
+      assertSame(manifest.sourceTaxonomySha256, PRE_PROMOTION_TAXONOMY_SHA256);
+      assertSame(sha256(`${paths.join('\n')}\n`), DURABLE_LEDGER_SHA256);
+      assertSame(promotion.length, 1);
+      assertSame(JSON.stringify(promotion[0]?.paths), JSON.stringify(paths));
+      assertSame(
+        JSON.stringify(
+          upstreamSubsetPaths(subset).filter((path) => paths.includes(path)),
+        ),
+        JSON.stringify(paths),
+      );
+      assertSame(preExistingGroups.length, 58);
+      assertSame(
+        sha256(JSON.stringify(preExistingGroups)),
+        PRE_PROMOTION_GROUPS_SHA256,
+      );
+    },
+  },
   {
     name: 'upstream selection reads only structurally eligible paths before metadata decisions',
     run: async () => {

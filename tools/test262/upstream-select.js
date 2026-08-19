@@ -36,6 +36,11 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from './upstream.js';
+import {
+  ES2015_PROMOTION_FILE,
+  mergePromotionSubset,
+  parseEs2015Promotion,
+} from './es2015-promotion.js';
 import { assertPinnedCheckout, readTest262Pin } from './upstream-run.js';
 import { inspectEngineGrammar, selectPaths } from './upstream-select-paths.js';
 
@@ -141,12 +146,14 @@ export async function main(argv = []) {
 
   await assertPinnedCheckout(pin);
 
-  const [policyText, knownGoodText] = await Promise.all([
+  const [policyText, knownGoodText, promotionText] = await Promise.all([
     readRepositoryFile(ES5_SELECTION_FILE),
     readRepositoryFile(KNOWN_GOOD_SUBSET_FILE),
+    readRepositoryFile(ES2015_PROMOTION_FILE),
   ]);
   const policy = parseEs5Selection(policyText);
   const knownGoodSubset = parseUpstreamSubset(knownGoodText);
+  const promotion = parseEs2015Promotion(promotionText);
 
   if (
     knownGoodSubset.repository !== pin.repository ||
@@ -168,12 +175,16 @@ export async function main(argv = []) {
     harnessParsing,
     readSource: (path) => readRepositoryFile(`${pin.checkoutPath}/${path}`),
   });
-  const subset = buildUpstreamSubset({
-    repository: pin.repository,
-    revision: pin.revision,
-    paths,
-  });
+  const subset = mergePromotionSubset(
+    buildUpstreamSubset({
+      repository: pin.repository,
+      revision: pin.revision,
+      paths,
+    }),
+    promotion,
+  );
   const manifest = serializeUpstreamSubset(subset);
+  const selectedPaths = upstreamSubsetPaths(subset);
 
   // Prove the generator's own output satisfies the schema `test262:upstream`
   // enforces, so a policy change can never write a manifest that command
@@ -184,7 +195,7 @@ export async function main(argv = []) {
 
   if (current === manifest) {
     process.stdout.write(
-      `${UPSTREAM_SUBSET_FILE} is current: ${paths.length} paths across ${subset.groups.length} groups\n`,
+      `${UPSTREAM_SUBSET_FILE} is current: ${selectedPaths.length} paths across ${subset.groups.length} groups\n`,
     );
 
     return 0;
@@ -204,7 +215,7 @@ export async function main(argv = []) {
     'utf8',
   );
   process.stdout.write(
-    `Wrote ${UPSTREAM_SUBSET_FILE}: ${paths.length} paths across ${subset.groups.length} groups\n`,
+    `Wrote ${UPSTREAM_SUBSET_FILE}: ${selectedPaths.length} paths across ${subset.groups.length} groups\n`,
   );
 
   return 0;

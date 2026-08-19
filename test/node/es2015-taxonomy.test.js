@@ -82,6 +82,24 @@ const AUDIT_SUBSET = JSON.stringify({
   ],
 });
 const AUDIT_FEATURES = JSON.stringify({ version: 1, features: [] });
+const AUDIT_PROMOTION_PATH = 'test/language/audited.js';
+const AUDIT_PROMOTION_SUBSET = JSON.stringify({
+  version: 1,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  groups: [
+    {
+      name: 'es2015/audit-passing-promotion',
+      summary: 'An exact reviewed promotion fixture root.',
+      paths: [AUDIT_PROMOTION_PATH],
+    },
+    {
+      name: 'fixture',
+      summary: 'A selected fixture root.',
+      paths: ['test/language/selected.js'],
+    },
+  ],
+});
 const AUDIT_ROOTS = new Map([
   [
     'test/language/audited.js',
@@ -136,6 +154,24 @@ const AUDIT_EVIDENCE = auditEvidence();
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
+
+const AUDIT_PROMOTION = JSON.stringify({
+  version: 1,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  sourceTaxonomySha256: sha256('pre-promotion fixture taxonomy\n'),
+  ledgerSha256: sha256(`${AUDIT_PROMOTION_PATH}\n`),
+  rootCount: 1,
+  variantCount: 2,
+  entries: [
+    {
+      path: AUDIT_PROMOTION_PATH,
+      variants: 2,
+      features: [],
+      includeFeatures: [],
+    },
+  ],
+});
 
 /**
  * @param {string} cwd
@@ -290,6 +326,14 @@ async function createRealAuditFixture() {
  *   roots?: Map<string, string>,
  *   auditEvidence?: string,
  *   assertPinnedCheckout?: (pin: any) => Promise<void>,
+ *   subset?: string,
+ *   promotion?: string,
+ *   pathFiles?: ReadonlyMap<string, string>,
+ *   runPromotion?: (options: {
+ *     paths: readonly string[],
+ *     supportedFeatures: readonly string[],
+ *     supportedFeaturesForPath: (file: string, metadata: object) => readonly string[],
+ *   }) => Promise<readonly object[]>,
  * }} [options]
  */
 function auditDependencies(options = {}) {
@@ -297,8 +341,11 @@ function auditDependencies(options = {}) {
     ['package.json', JSON.stringify({ test262: AUDIT_PIN })],
     ['tools/test262/es2015-policy.json', POLICY],
     ['tools/test262/es2015-anchors.json', ANCHORS],
-    ['tools/test262/upstream-subset.json', AUDIT_SUBSET],
+    ['tools/test262/upstream-subset.json', options.subset ?? AUDIT_SUBSET],
     ['tools/test262/features.json', AUDIT_FEATURES],
+    ...(options.promotion === undefined
+      ? []
+      : [['tools/test262/es2015-promotion.json', options.promotion]]),
     [
       'docs/test262-report.jsonl',
       `${JSON.stringify({
@@ -325,7 +372,9 @@ function auditDependencies(options = {}) {
     readFile: async (/** @type {string} */ path) => {
       const value = files.get(path);
       if (value === undefined) {
-        throw new Error(`missing fixture file ${path}`);
+        const error = new Error(`missing fixture file ${path}`);
+        Object.assign(error, { code: 'ENOENT' });
+        throw error;
       }
       return value;
     },
@@ -345,6 +394,16 @@ function auditDependencies(options = {}) {
       return value;
     },
     readIncludeDefinitions: async () => new Map(),
+    readPathsFile: async (path) => {
+      const value = options.pathFiles?.get(path);
+      if (value === undefined) {
+        throw new Error(`missing paths file ${path}`);
+      }
+      return value;
+    },
+    ...(options.runPromotion === undefined
+      ? {}
+      : { runPromotion: options.runPromotion }),
     assertPinnedCheckout:
       options.assertPinnedCheckout ??
       (async (pin) => {
@@ -711,6 +770,78 @@ export default [
       } finally {
         await rm(fixturePath, { recursive: true, force: true });
       }
+    },
+  },
+  {
+    name: 'ES2015 audit writes execution only for the exact reviewed promotion ledger',
+    run: async () => {
+      /** @type {readonly object[] | undefined} */
+      let executedPaths;
+      const dependencies = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        pathFiles: new Map([
+          ['promotion-ledger.txt', `${AUDIT_PROMOTION_PATH}\n`],
+        ]),
+        runPromotion: async ({ paths }) => {
+          executedPaths = paths;
+          return AUDIT_RECORDS;
+        },
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          ['--paths-file=promotion-ledger.txt', '--write-execution'],
+          dependencies,
+        ),
+        0,
+      );
+      assertSame(
+        JSON.stringify(executedPaths),
+        JSON.stringify([AUDIT_PROMOTION_PATH]),
+      );
+      assertSame(
+        JSON.stringify(
+          JSON.parse(
+            /** @type {Map<string, string>} */ (dependencies.files).get(
+              AUDIT_EVIDENCE_PATH,
+            ),
+          ).auditRecords,
+        ),
+        JSON.stringify(AUDIT_RECORDS),
+      );
+
+      assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      const artifact = JSON.parse(
+        /** @type {Map<string, string>} */ (dependencies.files).get(AUDIT_PATH),
+      );
+      assertSame(
+        JSON.stringify(artifact.statusTables.core),
+        JSON.stringify([
+          {
+            name: 'selected-passing',
+            roots: 2,
+            variants: 4,
+          },
+        ]),
+      );
+
+      const mismatch = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        pathFiles: new Map([
+          ['wrong-ledger.txt', 'test/language/selected.js\n'],
+        ]),
+        runPromotion: async () => AUDIT_RECORDS,
+      });
+      const error = await rejected(() =>
+        auditEs2015Taxonomy(
+          ['--paths-file=wrong-ledger.txt', '--write-execution'],
+          mismatch,
+        ),
+      );
+      assertSame(error instanceof Es2015AuditError, true);
+      assertSame(error.message.includes('does not match'), true);
     },
   },
   {
