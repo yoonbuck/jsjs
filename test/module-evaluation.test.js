@@ -76,6 +76,37 @@ export default [
     },
   },
   {
+    name: 'deep dependency evaluation stays off the host stack and executes once',
+    async run() {
+      const realm = createRealm();
+      realm.globalObject.defineOwnProperty('marks', {
+        value: 0,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const depth = 2400;
+      /** @type {Record<string, string>} */
+      const sources = {
+        [`module-${depth}`]:
+          'marks += 1; function recurse() { recurse(); } try { recurse(); } catch (error) {}',
+      };
+
+      for (let index = depth - 1; index >= 0; index -= 1) {
+        sources[`module-${index}`] =
+          `import "module-${index + 1}"; export const root = ${index === 0};`;
+      }
+
+      const loader = loaderFor(sources, realm);
+      const first = await loader.loadAndEvaluate('module-0');
+
+      assertSame(first.get('root'), true);
+      assertSame(realm.globalObject.get('marks'), 1);
+      assertSame(await loader.loadAndEvaluate('module-0'), first);
+      assertSame(realm.globalObject.get('marks'), 1);
+    },
+  },
+  {
     name: 'top-level module var functions and classes do not become global properties',
     async run() {
       const realm = createRealm();
@@ -318,6 +349,45 @@ export default [
       assertSame(dependencyError.phase, 'evaluate');
       assertSame(dependencyError.value, thrown);
       assertSame(realm.globalObject.get('runs'), 1);
+    },
+  },
+  {
+    name: 'abrupt module cycles complete each SCC in bounded work',
+    async run() {
+      const size = 64;
+      /** @type {Record<string, string>} */
+      const sources = {};
+      for (let index = 0; index < size; index += 1) {
+        const next = (index + 1) % size;
+        sources[`module-${index}`] =
+          `import "module-${next}";${index === size - 1 ? ' throw 1;' : ''}`;
+      }
+
+      const root = await loadModuleGraph(loaderFor(sources), 'module-0');
+      linkModuleGraph(root);
+      const add = Set.prototype.add;
+      let addCalls = 0;
+      /** @type {unknown} */
+      let evaluationError;
+
+      Set.prototype.add = function countedAdd(/** @type {unknown} */ value) {
+        addCalls += 1;
+        return add.call(this, value);
+      };
+      try {
+        evaluateModuleGraph(root);
+      } catch (error) {
+        evaluationError = error;
+      } finally {
+        Set.prototype.add = add;
+      }
+
+      assertSame(evaluationError === undefined, false);
+      if (addCalls >= 1000) {
+        throw new Error(
+          `Expected fewer than 1000 Set additions, got ${addCalls}`,
+        );
+      }
     },
   },
   {

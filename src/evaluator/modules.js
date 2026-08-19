@@ -167,87 +167,141 @@ export function evaluateModule(record) {
  * @returns {SourceTextModuleRecord | typeof EVALUATION_DEFERRED}
  */
 function evaluateModuleRecord(record, transaction) {
-  if (!(record instanceof SourceTextModuleRecord)) {
-    throw new TypeError('Expected a SourceTextModuleRecord');
-  }
-  if (record.status !== 'linked') {
-    throw new TypeError('Module must be linked before evaluation');
-  }
-
-  if (record.evaluationStatus === 'evaluated') {
-    return record;
-  }
-  if (record.evaluationStatus === 'errored') {
-    throw new ThrowSignal(requiredAbruptValue(record));
-  }
-  if (record.evaluationStatus === 'evaluating') {
-    if (transaction.owns(record)) {
-      return record;
-    }
-
-    transaction.deferOn(record);
-    return EVALUATION_DEFERRED;
-  }
-  if (record.evaluationStatus !== 'unevaluated') {
-    throw new TypeError(
-      `Invalid module evaluation status ${String(record.evaluationStatus)}`,
-    );
-  }
-
-  const environment = record.environment;
-  if (!(environment instanceof ModuleEnvironmentRecord)) {
-    throw new TypeError('Module environment is not initialized');
-  }
-
-  record.evaluationStatus = 'evaluating';
-  transaction.enter(record);
-
+  /** @type {{ record: SourceTextModuleRecord, dependencyIndex: number, entered: boolean }[]} */
+  const pending = [{ record, dependencyIndex: 0, entered: false }];
   try {
-    for (const request of record.resolvedRequestedModules) {
-      if (
-        evaluateModuleRecord(request.module, transaction) ===
-        EVALUATION_DEFERRED
-      ) {
-        transaction.abort(record);
-        return EVALUATION_DEFERRED;
-      }
-    }
+    while (pending.length > 0) {
+      const frame = pending[pending.length - 1];
+      const current = frame.record;
 
-    if (!record.evaluationBodyCompleted) {
-      const context = moduleContext(record, environment);
-      for (const item of record.ast.body) {
-        const completion = evaluateModuleItem(item, record, context);
-
-        if (completion.type === 'throw') {
-          throw new ThrowSignal(completion.value);
+      if (!frame.entered) {
+        if (!(current instanceof SourceTextModuleRecord)) {
+          throw new TypeError('Expected a SourceTextModuleRecord');
         }
-        if (completion.type !== 'normal') {
+        if (current.status !== 'linked') {
+          throw new TypeError('Module must be linked before evaluation');
+        }
+
+        if (current.evaluationStatus === 'evaluated') {
+          pending.pop();
+          continue;
+        }
+        if (current.evaluationStatus === 'errored') {
+          throw new ThrowSignal(requiredAbruptValue(current));
+        }
+        if (current.evaluationStatus === 'evaluating') {
+          if (transaction.owns(current)) {
+            pending.pop();
+            continue;
+          }
+
+          transaction.deferOn(current);
+          abortModuleEvaluationFrames(pending, transaction);
+          return EVALUATION_DEFERRED;
+        }
+        if (current.evaluationStatus !== 'unevaluated') {
           throw new TypeError(
-            `Invalid module item completion ${String(completion.type)}`,
+            `Invalid module evaluation status ${String(
+              current.evaluationStatus,
+            )}`,
           );
         }
+        if (!(current.environment instanceof ModuleEnvironmentRecord)) {
+          throw new TypeError('Module environment is not initialized');
+        }
+
+        current.evaluationStatus = 'evaluating';
+        transaction.enter(current);
+        frame.entered = true;
       }
 
-      record.evaluationBodyCompleted = true;
+      if (frame.dependencyIndex < current.resolvedRequestedModules.length) {
+        const dependency =
+          current.resolvedRequestedModules[frame.dependencyIndex].module;
+        frame.dependencyIndex += 1;
+        pending.push({
+          record: dependency,
+          dependencyIndex: 0,
+          entered: false,
+        });
+        continue;
+      }
+
+      if (!current.evaluationBodyCompleted) {
+        const context = moduleContext(current, current.environment);
+        for (const item of current.ast.body) {
+          const completion = evaluateModuleItem(item, current, context);
+
+          if (completion.type === 'throw') {
+            throw new ThrowSignal(completion.value);
+          }
+          if (completion.type !== 'normal') {
+            throw new TypeError(
+              `Invalid module item completion ${String(completion.type)}`,
+            );
+          }
+        }
+
+        current.evaluationBodyCompleted = true;
+      }
+
+      transaction.completeNormally(current);
+      pending.pop();
     }
 
-    transaction.completeNormally(record);
     return record;
   } catch (error) {
-    if (error instanceof ThrowSignal) {
-      completeModuleAbruptly(record, error.value, transaction);
-    }
-    if (error instanceof GuestErrorSignal) {
-      completeModuleAbruptly(
-        record,
-        record.realm.createGuestError(error.typeName, error.guestMessage),
-        transaction,
-      );
+    if (error instanceof ThrowSignal || error instanceof GuestErrorSignal) {
+      const value =
+        error instanceof ThrowSignal
+          ? error.value
+          : deepestEnteredModule(pending).realm.createGuestError(
+              error.typeName,
+              error.guestMessage,
+            );
+      const completedRoots = new Set();
+      for (let index = pending.length - 1; index >= 0; index -= 1) {
+        if (pending[index].entered) {
+          const frameRecord = pending[index].record;
+          const root = requiredEvaluationSccRoot(frameRecord);
+          if (!completedRoots.has(root)) {
+            completedRoots.add(root);
+            transaction.completeAbruptly(frameRecord, value);
+          }
+        }
+      }
+      throw new ThrowSignal(value);
     }
 
-    transaction.abort(record);
+    abortModuleEvaluationFrames(pending, transaction);
     throw error;
   }
+}
+
+/**
+ * @param {{ record: SourceTextModuleRecord, entered: boolean }[]} pending
+ * @param {ModuleEvaluationTransaction} transaction
+ * @returns {void}
+ */
+function abortModuleEvaluationFrames(pending, transaction) {
+  for (let index = pending.length - 1; index >= 0; index -= 1) {
+    if (pending[index].entered) {
+      transaction.abort(pending[index].record);
+    }
+  }
+}
+
+/**
+ * @param {{ record: SourceTextModuleRecord, entered: boolean }[]} pending
+ * @returns {SourceTextModuleRecord}
+ */
+function deepestEnteredModule(pending) {
+  for (let index = pending.length - 1; index >= 0; index -= 1) {
+    if (pending[index].entered) {
+      return pending[index].record;
+    }
+  }
+  throw new TypeError('Module evaluation error has no active record');
 }
 
 /**
@@ -318,17 +372,6 @@ function evaluateDefaultExportDeclaration(declaration, record, context) {
     evaluateNamedExpression(declaration, context, 'default'),
   );
   return createNormalCompletion(EMPTY);
-}
-
-/**
- * @param {SourceTextModuleRecord} record
- * @param {unknown} value
- * @param {ModuleEvaluationTransaction} transaction
- * @returns {never}
- */
-function completeModuleAbruptly(record, value, transaction) {
-  transaction.completeAbruptly(record, value);
-  throw new ThrowSignal(value);
 }
 
 /**
@@ -429,9 +472,7 @@ class ModuleEvaluationTransaction {
     const root = requiredEvaluationSccRoot(record);
     const members = requiredEvaluationSccMembers(record);
 
-    for (const member of members) {
-      markModuleSccAbruptly(member, value);
-    }
+    markModuleSccAbruptly(record, value);
     const completed = new Set();
     for (const member of members) {
       completeDeferredDependentsAbruptly(member, value, completed);
