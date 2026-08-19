@@ -396,10 +396,6 @@ export function createCiJobs(test262) {
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
         }),
-        runStep(
-          'Remove the committed Test262 report',
-          `rm -f ${TEST262_REPORT_FILE}`,
-        ),
         usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
           repository: upstreamSlug,
           ref: test262.revision,
@@ -421,6 +417,10 @@ export function createCiJobs(test262) {
         runStep(
           'Check the ES5 selection is current',
           'npm run test262:select:check',
+        ),
+        runStep(
+          'Remove the committed Test262 report',
+          `rm -f ${TEST262_REPORT_FILE}`,
         ),
         runStep(
           'Run the pinned Test262 subset',

@@ -25,11 +25,32 @@ import {
   supportedFeaturesForPromotedPath,
   validateEs2015Promotion,
 } from './es2015-promotion.js';
+import {
+  COVERAGE_DOCUMENT_FILE,
+  collectTest262Inventory,
+  formatCoverageLines,
+  renderCoverageSummary,
+  replaceGeneratedBlock,
+  summarizeTest262Coverage,
+} from './coverage.js';
 import { featureNames, parseFeatureManifest } from './features.js';
+import { parseTest262Metadata } from './metadata.js';
 import { assertPinnedCheckout, readTest262Pin } from './pin.js';
+import {
+  createSummaryRecord,
+  createTestRecord,
+  formatRecordLine,
+  formatReportLines,
+} from './report.js';
 import { runTest262Suite } from './runner.js';
 import { sortStrings } from './selection.js';
-import { parseUpstreamSubset, upstreamSubsetPaths } from './upstream.js';
+import {
+  formatUpstreamSummaryLines,
+  parseUpstreamSubset,
+  summarizeUpstreamRun,
+  upstreamRunResultPasses,
+  upstreamSubsetPaths,
+} from './upstream.js';
 
 export const ES2015_TAXONOMY_ARTIFACT = 'tools/test262/es2015-taxonomy.json';
 export const ES2015_AUDIT_EVIDENCE_FILE =
@@ -55,6 +76,15 @@ const EXECUTION_RECORD_KEYS = Object.freeze([
   'file',
   'variant',
   'status',
+]);
+const REPORT_RECORD_KEYS = Object.freeze([
+  'type',
+  'file',
+  'variant',
+  'status',
+  'reason',
+  'message',
+  'features',
 ]);
 const EXECUTION_STATUSES = new Set(['passed', 'failed', 'skipped']);
 
@@ -187,6 +217,19 @@ export async function main(argv = [], dependencies = {}) {
     selectedPaths,
     promotionPathSet,
   );
+  if (options.syncPromotedReport) {
+    return synchronizePromotedReport({
+      deps,
+      check: options.check,
+      subset,
+      features,
+      promotion,
+      inventory,
+      reportText,
+      evidence,
+      selectedPaths,
+    });
+  }
   const selectedResults = recordsByPath(
     [
       ...parseReportRecords(reportText).filter(
@@ -323,6 +366,7 @@ function parseOptions(argv) {
   /** @type {string | null} */
   let pathsFile = null;
   let writeExecution = false;
+  let syncPromotedReport = false;
 
   for (const argument of argv) {
     if (argument === '--check') {
@@ -339,6 +383,15 @@ function parseOptions(argv) {
         );
       }
       writeExecution = true;
+      continue;
+    }
+    if (argument === '--sync-promoted-report') {
+      if (syncPromotedReport) {
+        throw new Es2015AuditError(
+          'The --sync-promoted-report option must not be repeated',
+        );
+      }
+      syncPromotedReport = true;
       continue;
     }
     if (argument.startsWith('--paths-file=')) {
@@ -363,7 +416,419 @@ function parseOptions(argv) {
       'Promotion execution requires both --paths-file and --write-execution',
     );
   }
-  return { check, pathsFile, writeExecution };
+  if (syncPromotedReport && writeExecution) {
+    throw new Es2015AuditError(
+      'Promotion execution cannot be combined with promoted-report synchronization',
+    );
+  }
+  return { check, pathsFile, writeExecution, syncPromotedReport };
+}
+
+/**
+ * Rebuilds the broad-report artifacts without re-executing the broad subset.
+ * The committed pre-promotion records remain the evidence for the existing
+ * selection, while the immutable audit evidence supplies only the exact
+ * promotion records.
+ *
+ * @param {{
+ *   deps: AuditDependencies,
+ *   check: boolean,
+ *   subset: ReturnType<typeof parseUpstreamSubset>,
+ *   features: ReturnType<typeof parseFeatureManifest>,
+ *   promotion: ReturnType<typeof parseEs2015Promotion> | null,
+ *   inventory: readonly any[],
+ *   reportText: string,
+ *   evidence: ReturnType<typeof parseAuditEvidence>,
+ *   selectedPaths: readonly string[],
+ * }} options
+ * @returns {Promise<number>}
+ */
+async function synchronizePromotedReport(options) {
+  const {
+    deps,
+    check,
+    subset,
+    features,
+    promotion,
+    inventory,
+    reportText,
+    evidence,
+    selectedPaths,
+  } = options;
+  if (promotion === null) {
+    throw new Es2015AuditError(
+      'Promoted-report synchronization requires the reviewed promotion manifest',
+    );
+  }
+
+  const promotedPaths = promotionPaths(promotion);
+  const promoted = new Set(promotedPaths);
+  const selected = new Set(selectedPaths);
+  const roots = new Map(inventory.map((root) => [root.path, root]));
+  const reported = parseReportTestRecords(reportText);
+  /** @type {import('./report.js').Test262TestRecord[]} */
+  const baseRecords = [];
+  /** @type {import('./report.js').Test262TestRecord[]} */
+  const reportedPromotionRecords = [];
+
+  for (const record of reported) {
+    if (!selected.has(record.file)) {
+      throw new Es2015AuditError(
+        `${REPORT_FILE} names a root outside the exact selected path set: ${record.file}`,
+      );
+    }
+    if (promoted.has(record.file)) {
+      reportedPromotionRecords.push(record);
+    } else {
+      baseRecords.push(record);
+    }
+  }
+
+  const basePaths = selectedPaths.filter((path) => !promoted.has(path));
+  const baseByKey = assertExactSelectedRecords(
+    baseRecords,
+    basePaths,
+    roots,
+    `${REPORT_FILE} pre-promotion records`,
+  );
+  const promotionEvidence = evidence.records.filter((record) =>
+    promoted.has(record.file),
+  );
+
+  assertPromotionExecution(promotionEvidence, promotedPaths, roots);
+  const promotedByEntry = new Map(
+    promotion.entries.map((entry) => [entry.path, entry]),
+  );
+  const rawPromotionFeatures = new Map();
+  for (const path of promotedPaths) {
+    const entry = promotedByEntry.get(path);
+    const root = roots.get(path);
+    if (entry === undefined || root === undefined || root.metadata === null) {
+      throw new Es2015AuditError(
+        `${ES2015_AUDIT_EVIDENCE_FILE} names a foreign promotion root ${path}`,
+      );
+    }
+    // Taxonomy normalizes feature sets, but broad runner records preserve source order.
+    const metadata = parseTest262Metadata(await deps.readRoot(path));
+    if (!sameStrings(sortStrings(metadata.features), entry.features)) {
+      throw new Es2015AuditError(
+        `${ES2015_PROMOTION_FILE} metadata dependencies drifted for ${path}`,
+      );
+    }
+    rawPromotionFeatures.set(path, metadata.features);
+  }
+  const promotedRecords = promotionEvidence.map((record) => {
+    const features = rawPromotionFeatures.get(record.file);
+    if (features === undefined) {
+      throw new Es2015AuditError(
+        `${ES2015_AUDIT_EVIDENCE_FILE} names a foreign promotion root ${record.file}`,
+      );
+    }
+    return createTestRecord({
+      file: record.file,
+      variant: record.variant,
+      status: record.status,
+      features,
+    });
+  });
+  const promotedByKey = assertExactSelectedRecords(
+    promotedRecords,
+    promotedPaths,
+    roots,
+    `${ES2015_AUDIT_EVIDENCE_FILE} promotion records`,
+  );
+
+  if (reportedPromotionRecords.length > 0) {
+    assertExactSelectedRecords(
+      reportedPromotionRecords,
+      promotedPaths,
+      roots,
+      `${REPORT_FILE} promotion records`,
+    );
+  }
+
+  const records = orderedSelectedRecords(
+    selectedPaths,
+    roots,
+    new Map([...baseByKey, ...promotedByKey]),
+  );
+  const summary = createSummaryRecord(records);
+  const host = /** @type {import('./runner.js').Test262Host} */ ({
+    listTests: () => deps.listRoots(),
+    readTest: (path) => deps.readRoot(path),
+  });
+  const coverage = summarizeTest262Coverage({
+    inventory: await collectTest262Inventory({ host }),
+    records,
+    selected: selectedPaths,
+  });
+  const report = `${[
+    ...formatReportLines(records),
+    ...formatUpstreamSummaryLines(
+      summarizeUpstreamRun({
+        subset,
+        records,
+        supportedFeatures: featureNames(features),
+      }),
+    ),
+    ...formatCoverageLines(coverage),
+    formatRecordLine(summary),
+  ].join('\n')}\n`;
+  const block = renderCoverageSummary({
+    coverage,
+    reportPath: REPORT_FILE,
+    reportLinkPath: REPORT_FILE.slice(REPORT_FILE.lastIndexOf('/') + 1),
+  });
+  const stale = await synchronizePromotedReportArtifacts({
+    deps,
+    report,
+    block,
+    check,
+  });
+
+  if (stale.length > 0) {
+    deps.stderr(
+      `${stale.join('\n')}\n${stale.length} generated file(s) are stale; run TZ=UTC npm run test262:es2015:sync-promoted-report\n`,
+    );
+    return 1;
+  }
+
+  return upstreamRunResultPasses({ summary, coverage }) ? 0 : 1;
+}
+
+/**
+ * Parses only test records from a prior broad report. Other report lines are
+ * intentionally regenerated from the selected records by the existing
+ * summarizers, so they cannot preserve stale totals.
+ *
+ * @param {string} text
+ * @returns {import('./report.js').Test262TestRecord[]}
+ */
+function parseReportTestRecords(text) {
+  /** @type {import('./report.js').Test262TestRecord[]} */
+  const records = [];
+  for (const [index, line] of text.split('\n').entries()) {
+    if (line === '') {
+      continue;
+    }
+    /** @type {unknown} */
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch (error) {
+      throw new Es2015AuditError(
+        `${REPORT_FILE} line ${index + 1} has invalid JSON: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed) ||
+      /** @type {Record<string, unknown>} */ (parsed).type !== 'test'
+    ) {
+      continue;
+    }
+    records.push(parseReportTestRecord(parsed, index + 1));
+  }
+  return records;
+}
+
+/**
+ * @param {object} value
+ * @param {number} line
+ * @returns {import('./report.js').Test262TestRecord}
+ */
+function parseReportTestRecord(value, line) {
+  const record = /** @type {Record<string, unknown>} */ (value);
+  for (const key of Object.keys(record)) {
+    if (!REPORT_RECORD_KEYS.includes(key)) {
+      throw new Es2015AuditError(
+        `${REPORT_FILE} line ${line} test record has unknown key ${key}`,
+      );
+    }
+  }
+  for (const key of ['type', 'file', 'variant', 'status']) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) {
+      throw new Es2015AuditError(
+        `${REPORT_FILE} line ${line} test record is missing ${key}`,
+      );
+    }
+  }
+  if (
+    record.type !== 'test' ||
+    typeof record.file !== 'string' ||
+    record.file === '' ||
+    (record.variant !== null &&
+      (typeof record.variant !== 'string' || record.variant === '')) ||
+    typeof record.status !== 'string' ||
+    !EXECUTION_STATUSES.has(record.status)
+  ) {
+    throw new Es2015AuditError(
+      `${REPORT_FILE} line ${line} has an invalid test record`,
+    );
+  }
+  if (
+    (record.reason !== undefined && typeof record.reason !== 'string') ||
+    (record.message !== undefined && typeof record.message !== 'string') ||
+    (record.features !== undefined &&
+      (!Array.isArray(record.features) ||
+        record.features.some(
+          (feature) => typeof feature !== 'string' || feature === '',
+        )))
+  ) {
+    throw new Es2015AuditError(
+      `${REPORT_FILE} line ${line} has invalid optional test fields`,
+    );
+  }
+  return createTestRecord({
+    file: record.file,
+    variant: record.variant,
+    status: /** @type {'passed' | 'failed' | 'skipped'} */ (record.status),
+    ...(record.reason === undefined ? {} : { reason: record.reason }),
+    ...(record.message === undefined ? {} : { message: record.message }),
+    ...(record.features === undefined
+      ? {}
+      : { features: /** @type {string[]} */ (record.features) }),
+  });
+}
+
+/**
+ * @param {readonly import('./report.js').Test262TestRecord[]} records
+ * @param {readonly string[]} paths
+ * @param {ReadonlyMap<string, any>} roots
+ * @param {string} label
+ * @returns {Map<string, import('./report.js').Test262TestRecord>}
+ */
+function assertExactSelectedRecords(records, paths, roots, label) {
+  const expected = expectedSelectedRecordKeys(paths, roots, label);
+  const actual = new Map();
+
+  for (const record of records) {
+    const key = reportRecordKey(record);
+    if (!expected.has(key)) {
+      throw new Es2015AuditError(
+        `${label} names a foreign selected variant ${record.file} (${String(record.variant)})`,
+      );
+    }
+    if (actual.has(key)) {
+      throw new Es2015AuditError(
+        `${label} repeats selected variant ${record.file} (${String(record.variant)})`,
+      );
+    }
+    actual.set(key, record);
+  }
+
+  for (const key of expected) {
+    if (actual.has(key)) {
+      continue;
+    }
+    const [file, variant] = key.split('\u0000');
+    throw new Es2015AuditError(
+      `${label} is missing selected variant ${file} (${variant})`,
+    );
+  }
+  return actual;
+}
+
+/**
+ * @param {readonly string[]} paths
+ * @param {ReadonlyMap<string, any>} roots
+ * @param {string} label
+ * @returns {Set<string>}
+ */
+function expectedSelectedRecordKeys(paths, roots, label) {
+  const keys = new Set();
+  for (const path of paths) {
+    const root = roots.get(path);
+    if (root === undefined || !Array.isArray(root.executionVariants)) {
+      throw new Es2015AuditError(
+        `${label} cannot determine the pinned execution variants for ${path}`,
+      );
+    }
+    for (const variant of root.executionVariants) {
+      if (typeof variant !== 'string' || variant === '') {
+        throw new Es2015AuditError(
+          `${label} cannot determine the pinned execution variants for ${path}`,
+        );
+      }
+      const key = `${path}\u0000${variant}`;
+      if (keys.has(key)) {
+        throw new Es2015AuditError(
+          `${label} repeats expected selected variant ${path} (${variant})`,
+        );
+      }
+      keys.add(key);
+    }
+  }
+  return keys;
+}
+
+/**
+ * @param {readonly string[]} paths
+ * @param {ReadonlyMap<string, any>} roots
+ * @param {ReadonlyMap<string, import('./report.js').Test262TestRecord>} records
+ * @returns {import('./report.js').Test262TestRecord[]}
+ */
+function orderedSelectedRecords(paths, roots, records) {
+  /** @type {import('./report.js').Test262TestRecord[]} */
+  const ordered = [];
+  for (const key of expectedSelectedRecordKeys(
+    paths,
+    roots,
+    'selected report records',
+  )) {
+    const record = records.get(key);
+    if (record === undefined) {
+      throw new Es2015AuditError(
+        `selected report records lost expected record ${key.replace('\u0000', ' ')}`,
+      );
+    }
+    ordered.push(record);
+  }
+  return ordered;
+}
+
+/**
+ * @param {import('./report.js').Test262TestRecord} record
+ * @returns {string}
+ */
+function reportRecordKey(record) {
+  return `${record.file}\u0000${record.variant ?? ''}`;
+}
+
+/**
+ * @param {{
+ *   deps: AuditDependencies,
+ *   report: string,
+ *   block: string,
+ *   check: boolean,
+ * }} options
+ * @returns {Promise<string[]>}
+ */
+async function synchronizePromotedReportArtifacts(options) {
+  const { deps, report, block, check } = options;
+  const conformance = await deps.readFile(COVERAGE_DOCUMENT_FILE);
+  const updatedConformance = replaceGeneratedBlock(conformance, block);
+  /** @type {string[]} */
+  const stale = [];
+
+  for (const [path, contents] of [
+    [REPORT_FILE, report],
+    [COVERAGE_DOCUMENT_FILE, updatedConformance],
+  ]) {
+    const current = await deps.readFile(path);
+    if (current === contents) {
+      continue;
+    }
+    if (check) {
+      stale.push(path);
+      continue;
+    }
+    await deps.writeFile(path, contents);
+  }
+  return stale;
 }
 
 /**

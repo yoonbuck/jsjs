@@ -240,8 +240,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: 'false'
-      - name: Remove the committed Test262 report
-        run: rm -f docs/test262-report.jsonl
       - name: Check out the pinned Test262 tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -262,6 +260,8 @@ jobs:
           TZ: 'UTC'
       - name: Check the ES5 selection is current
         run: npm run test262:select:check
+      - name: Remove the committed Test262 report
+        run: rm -f docs/test262-report.jsonl
       - name: Run the pinned Test262 subset
         run: npm run test262:upstream
         env:

@@ -172,6 +172,16 @@ const AUDIT_PROMOTION = JSON.stringify({
     },
   ],
 });
+const AUDIT_COVERAGE_DOCUMENT = [
+  '# Fixture coverage',
+  '',
+  '<!-- test262-coverage:begin -->',
+  '',
+  'stale coverage',
+  '',
+  '<!-- test262-coverage:end -->',
+  '',
+].join('\n');
 
 /**
  * @param {string} cwd
@@ -849,6 +859,286 @@ export default [
       );
       assertSame(error instanceof Es2015AuditError, true);
       assertSame(error.message.includes('does not match'), true);
+    },
+  },
+  {
+    name: 'ES2015 audit synchronizes the promoted report from immutable exact evidence',
+    run: async () => {
+      const dependencies = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        files: new Map([['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT]]),
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+        0,
+      );
+
+      const reportRecords = fixtureOutput(
+        dependencies,
+        'docs/test262-report.jsonl',
+      )
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      const records = reportRecords.filter((record) => record.type === 'test');
+      const summary = reportRecords.find((record) => record.type === 'summary');
+      const coverage = reportRecords.filter(
+        (record) => record.type === 'coverage',
+      );
+
+      assertSame(
+        JSON.stringify(
+          records.map((record) => [record.file, record.variant, record.status]),
+        ),
+        JSON.stringify([
+          [AUDIT_PROMOTION_PATH, 'non-strict', 'passed'],
+          [AUDIT_PROMOTION_PATH, 'strict', 'passed'],
+          ['test/language/selected.js', 'non-strict', 'passed'],
+          ['test/language/selected.js', 'strict', 'passed'],
+        ]),
+      );
+      assertSame(
+        JSON.stringify(summary),
+        JSON.stringify({
+          type: 'summary',
+          total: 4,
+          passed: 4,
+          failed: 0,
+          skipped: 0,
+        }),
+      );
+      assertSame(
+        JSON.stringify(
+          coverage.map((record) => [
+            record.scope,
+            record.selected,
+            record.attempted,
+            record.passed,
+          ]),
+        ),
+        JSON.stringify([
+          ['files', 2, 2, 2],
+          ['records', 4, 4, 4],
+        ]),
+      );
+      assertSame(
+        fixtureOutput(dependencies, 'docs/conformance.md').includes(
+          'Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).',
+        ),
+        true,
+      );
+
+      const report = fixtureOutput(dependencies, 'docs/test262-report.jsonl');
+      const conformance = fixtureOutput(dependencies, 'docs/conformance.md');
+      assertSame(
+        await auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+        0,
+      );
+      assertSame(
+        fixtureOutput(dependencies, 'docs/test262-report.jsonl'),
+        report,
+      );
+      assertSame(
+        fixtureOutput(dependencies, 'docs/conformance.md'),
+        conformance,
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit synchronizes promoted record features in pinned metadata order',
+    run: async () => {
+      const promotion = JSON.parse(AUDIT_PROMOTION);
+      promotion.entries[0].features = ['alpha', 'zeta'];
+      const roots = new Map(AUDIT_ROOTS);
+      roots.set(
+        AUDIT_PROMOTION_PATH,
+        '/*---\ndescription: Audited feature-order fixture.\nes6id: 13.2\nfeatures: [zeta, alpha]\n---*/\n',
+      );
+      const dependencies = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: JSON.stringify(promotion),
+        roots,
+        files: new Map([
+          [
+            'tools/test262/es2015-policy.json',
+            JSON.stringify({
+              ...JSON.parse(POLICY),
+              es2015Features: ['alpha', 'let', 'zeta'],
+            }),
+          ],
+          ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+        ]),
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+        0,
+      );
+      const record = fixtureOutput(dependencies, 'docs/test262-report.jsonl')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .find(
+          (entry) =>
+            entry.type === 'test' &&
+            entry.file === AUDIT_PROMOTION_PATH &&
+            entry.variant === 'non-strict',
+        );
+
+      assertSame(JSON.stringify(record.features), '["zeta","alpha"]');
+    },
+  },
+  {
+    name: 'ES2015 audit replaces stale promoted report details with immutable evidence',
+    run: async () => {
+      const dependencies = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        files: new Map([
+          ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+          [
+            'docs/test262-report.jsonl',
+            [
+              ...AUDIT_RECORDS.map((record) =>
+                JSON.stringify({ ...record, features: ['stale-feature'] }),
+              ),
+              JSON.stringify({
+                type: 'test',
+                file: 'test/language/selected.js',
+                variant: 'non-strict',
+                status: 'passed',
+              }),
+              JSON.stringify({
+                type: 'test',
+                file: 'test/language/selected.js',
+                variant: 'strict',
+                status: 'passed',
+              }),
+              '',
+            ].join('\n'),
+          ],
+        ]),
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+        0,
+      );
+      const record = fixtureOutput(dependencies, 'docs/test262-report.jsonl')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .find(
+          (entry) =>
+            entry.type === 'test' &&
+            entry.file === AUDIT_PROMOTION_PATH &&
+            entry.variant === 'non-strict',
+        );
+
+      assertSame(record.features, undefined);
+    },
+  },
+  {
+    name: 'ES2015 promoted-report synchronization rejects incomplete, duplicate, foreign, and mismatched evidence',
+    run: async () => {
+      const files = new Map([['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT]]);
+      const options = ['--sync-promoted-report'];
+      const missing = await rejected(() =>
+        auditEs2015Taxonomy(
+          options,
+          auditDependencies({
+            subset: AUDIT_PROMOTION_SUBSET,
+            promotion: AUDIT_PROMOTION,
+            auditEvidence: auditEvidence({
+              auditRecords: [AUDIT_RECORDS[0]],
+            }),
+            files,
+          }),
+        ),
+      );
+      assertSame(missing.message.includes('incomplete variants'), true);
+
+      const duplicate = await rejected(() =>
+        auditEs2015Taxonomy(
+          options,
+          auditDependencies({
+            subset: AUDIT_PROMOTION_SUBSET,
+            promotion: AUDIT_PROMOTION,
+            auditEvidence: auditEvidence({
+              auditRecords: [AUDIT_RECORDS[0], AUDIT_RECORDS[0]],
+            }),
+            files,
+          }),
+        ),
+      );
+      assertSame(duplicate.message.includes('must not repeat entries'), true);
+
+      const foreign = await rejected(() =>
+        auditEs2015Taxonomy(
+          options,
+          auditDependencies({
+            subset: AUDIT_PROMOTION_SUBSET,
+            promotion: AUDIT_PROMOTION,
+            auditEvidence: auditEvidence({
+              auditRecords: [
+                ...AUDIT_RECORDS,
+                {
+                  type: 'test',
+                  file: 'test/language/selected.js',
+                  variant: 'non-strict',
+                  status: 'passed',
+                },
+              ],
+            }),
+            files,
+          }),
+        ),
+      );
+      assertSame(foreign.message.includes('selected non-promotion'), true);
+
+      const wrongPin = await rejected(() =>
+        auditEs2015Taxonomy(
+          options,
+          auditDependencies({
+            subset: AUDIT_PROMOTION_SUBSET,
+            promotion: AUDIT_PROMOTION,
+            auditEvidence: AUDIT_EVIDENCE.replace(
+              AUDIT_PIN.revision,
+              '0000000000000000000000000000000000000000',
+            ),
+            files,
+          }),
+        ),
+      );
+      assertSame(wrongPin.message.includes('does not match'), true);
+
+      const incompleteSelection = await rejected(() =>
+        auditEs2015Taxonomy(
+          options,
+          auditDependencies({
+            subset: AUDIT_PROMOTION_SUBSET,
+            promotion: AUDIT_PROMOTION,
+            files: new Map([
+              ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+              [
+                'docs/test262-report.jsonl',
+                `${JSON.stringify({
+                  type: 'test',
+                  file: 'test/language/selected.js',
+                  variant: 'non-strict',
+                  status: 'passed',
+                })}\n`,
+              ],
+            ]),
+          }),
+        ),
+      );
+      assertSame(
+        incompleteSelection.message.includes('missing selected variant'),
+        true,
+      );
     },
   },
   {

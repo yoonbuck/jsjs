@@ -49,6 +49,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `TZ=UTC npm run test262:es2015-release`                                        | Focused pinned Promise+generator+module+object/function+syntax Test262 release gate; does not rewrite broad reports or selection                                                                                                |
 | `TZ=UTC npm run test262:es2015:audit`                                          | Rebuild the deterministic ES2015 taxonomy from the exact pinned checkout                                                                                                                                                        |
 | `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in ES2015 taxonomy and exact promotion provenance without writing                                                                                                                                            |
+| `TZ=UTC npm run test262:es2015:sync-promoted-report`                           | Rebuild report and coverage bytes from committed pre-promotion records plus immutable exact promotion evidence; never executes the broad subset                                                                                 |
 | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | **CI-only:** broad pinned upstream subset; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                                              |
 | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | **CI-only:** broad pinned run in check mode; fails if either generated artifact is stale                                                                                                                                        |
 | `TZ=UTC npm run test262:select`                                                | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
@@ -197,12 +198,13 @@ The upstream revision is pinned in `package.json` under the `test262` key:
 ### Running the upstream suite
 
 The broad `test262-upstream` execution is exact-SHA CI authority. Do not run
-the broad upstream subset locally or regenerate its broad report locally; use
-the focused commands below instead. In CI, the generated job checks out
+the broad upstream subset locally. Local report maintenance is limited to the
+deterministic exact-evidence synchronization below; it does not execute the
+broad subset. In CI, the generated job checks out
 `b363f29d3c43c626dc852744ad64a0b48a003693`, installs dependencies, verifies
 the ES2015 taxonomy and exact promotion under `TZ=UTC`, then runs the broad
-pinned subset. That run writes `docs/test262-report.jsonl` and the generated
-coverage block in `docs/conformance.md`.
+pinned subset. That run byte-checks `docs/test262-report.jsonl` and the
+generated coverage block in `docs/conformance.md`.
 
 ### Deterministic ES2015 taxonomy and exact promotion
 
@@ -215,12 +217,20 @@ exact pinned `vendor/test262` checkout. Both commands require
 ```sh
 TZ=UTC npm run test262:es2015:audit
 TZ=UTC npm run test262:es2015:audit:check
+TZ=UTC npm run test262:es2015:sync-promoted-report
 ```
 
 `audit` rewrites `tools/test262/es2015-taxonomy.json`; `audit:check` writes
 nothing and fails on taxonomy, pin, policy, classification, count, or
-promotion-provenance drift. The CI drift gate uses the latter command after
-the pinned checkout and `npm ci`, before the broad pinned execution.
+promotion-provenance drift. `sync-promoted-report` combines the committed
+pre-promotion selected records with immutable exact-promotion execution
+evidence, verifies the pin, exact selected path set, and every promotion
+variant, then rewrites only the report and coverage block. It never executes
+the broad subset; exact-SHA CI remains authoritative and byte-checks the
+derived artifacts after its broad execution. Invoke the package script as
+`npm run test262:es2015:sync-promoted-report` only with `TZ=UTC`, as shown
+above. The CI drift gate uses `audit:check` after the pinned checkout and
+`npm ci`, before the broad pinned execution.
 
 Local upstream execution is limited to a reviewed exact promotion ledger or a
 smaller focused fixture. To record the reviewed exact paths, provide that

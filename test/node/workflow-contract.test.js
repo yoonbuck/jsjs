@@ -852,11 +852,12 @@ export default [
       const drift = commands.indexOf(EXPECTED_DRIFT_COMMAND);
       const select = commands.indexOf('npm run test262:select:check');
       const scrub = commands.indexOf(`rm -f ${TEST262_REPORT_FILE}`);
+      const taxonomy = commands.indexOf('npm run test262:es2015:audit:check');
 
       assertSame(
-        scrub >= 0 && scrub < select,
+        scrub > taxonomy && scrub < run,
         true,
-        'the committed report must be removed before any upstream prerequisite can fail',
+        'the committed report must remain available for the taxonomy audit and be removed before broad execution',
       );
 
       assertSame(

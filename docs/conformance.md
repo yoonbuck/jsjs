@@ -544,23 +544,23 @@ implemented:
 
 ## Coverage
 
-The numbers below are generated:
+The numbers below are generated. Local maintenance uses
+`TZ=UTC npm run test262:es2015:sync-promoted-report`: it combines the committed
+pre-promotion selected records with immutable exact-promotion execution evidence,
+validates the exact pin, selected path set, and promotion variants, then rewrites
+[`docs/test262-report.jsonl`](test262-report.jsonl) and this coverage block
+without broad Test262 execution. Follow it with
+`TZ=UTC npm run test262:es2015:audit` and
+`TZ=UTC npm run test262:es2015:audit:check` to refresh and verify the taxonomy.
+
+Broad report regeneration is exact-SHA CI-only:
 `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` runs the
-pinned subset against `tc39/test262` at the revision `package.json` names, writes
-every per-test record to
-[`docs/test262-report.jsonl`](test262-report.jsonl), and rewrites this block from
-the same run.
-`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`
-fails if either artifact has drifted, and the `test262-upstream` job fails CI the
-same way, so no number here can outlive the run that produced it. The run refuses
-to start outside a UTC time zone, because a few selected tests read the host's
-local offset (see
-[the offsetless-date deviation](limitations.md#the-clock-and-the-local-time-zone-come-from-the-host)),
-so the committed artifacts are a pure function of the engine and the pinned tree,
-not of the machine that generated them; CI pins `TZ=UTC` for the same reason.
-Regenerate with
-`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`. The
-denominators are defined exactly under
+pinned subset at the revision `package.json` names and byte-checks these derived
+artifacts. It refuses to start outside UTC because a few selected tests read the
+host's local offset (see
+[the offsetless-date deviation](limitations.md#the-clock-and-the-local-time-zone-come-from-the-host));
+CI pins `TZ=UTC` so the evidence is a function of the engine and pinned tree, not
+the machine. The denominators are defined exactly under
 [What the coverage numbers count](#what-the-coverage-numbers-count).
 
 ## ES2015 focused coverage
@@ -602,8 +602,8 @@ remaining unsupported class-field and Unicode/legacy-escape forms.
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 14,107   | 14,107    | 14,107 | 26.331% |
-| (file, variant) | 102,912     | 26,858   | 26,858    | 26,858 | 26.098% |
+| Files           | 53,575      | 20,430   | 20,430    | 20,430 | 38.133% |
+| (file, variant) | 102,912     | 38,813   | 38,813    | 38,813 | 37.715% |
 
 0 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
