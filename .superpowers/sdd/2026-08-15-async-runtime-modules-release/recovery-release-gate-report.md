@@ -264,3 +264,31 @@ Fresh exact-commit local evidence:
 
 No broad upstream Test262 command was run locally. One final exact-head
 whole-milestone review remains required before push.
+
+## Deep linking and namespace final review fix
+
+The exact-head review found that Tarjan linking, export resolution, and
+namespace exported-name enumeration still recursed on the host stack. Exact
+commit `aaef88b` converts all three to explicit worklists.
+
+Public 4,000-module dependency and star-export namespace regressions now prove
+linking, evaluation, namespace imports, root namespace creation, values,
+caching, and at-most-once behavior without host-stack dependence. Scoped
+maximum-capability review found no Critical or Important issue.
+
+Fresh exact-commit local evidence:
+
+| Gate | Result |
+| --- | --- |
+| Full Node suite | 2,265 passed, 0 failed |
+| Full Chromium suite | 2,121 passed, 0 failed |
+| Full JavaScriptCore suite | 2,121 passed, 0 failed |
+| Focused UTC Promise/generator/module Test262 | 4 passed, 0 failed |
+| Portable Test262 fixtures | 17 passed, 0 failed, 1 expected skip |
+| Generated Test262 selection check | 14,107 paths across 58 groups |
+| Repository invariants and workflow contracts | 69 passed, 0 failed |
+| Static/generated/exclusion checks | passed |
+| Clean-tree benchmark smoke | passed |
+
+No broad upstream Test262 command was run locally. One final exact-head
+whole-milestone review remains required before push.

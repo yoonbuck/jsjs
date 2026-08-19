@@ -218,6 +218,43 @@ The final review-fix commit is
 
 No broad upstream Test262 command was run locally.
 
+## Deep linking and namespace closure
+
+The next exact-head review found the remaining deep-graph traversals still used
+the host stack: Tarjan linking, `ResolveExport`, and namespace exported-name
+enumeration. A public 4,000-module chain failed during linking before the
+iterative evaluator ran.
+
+RED coverage raised the public dependency chain to 4,000 modules and added a
+4,000-module star-export namespace-import graph. Exact commit `aaef88b`
+replaces all three traversals with explicit worklists:
+
+- linking retains source-order Tarjan indices, SCC metadata, rollback, and error
+  precedence;
+- export resolution retains local/indirect/star precedence, module/name pair
+  cycle identity, and ambiguity folding;
+- namespace enumeration retains module-cycle termination, default exclusion,
+  and sorted namespace keys.
+
+The deep regressions prove link/evaluate success, namespace-import creation
+during linking, direct root namespace creation, live value resolution, caching,
+and at-most-once execution. Maximum-capability scoped review found no Critical
+or Important issue.
+
+Fresh exact-commit evidence:
+
+- Node: **2,265 passed**, 0 failed.
+- Chromium: **2,121 passed**, 0 failed.
+- JavaScriptCore: **2,121 passed**, 0 failed.
+- Focused UTC Promise/generator/module Test262: **4 passed**, 0 failed.
+- Portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip.
+- Generated selection: **14,107 paths across 58 groups**, current.
+- Repository invariants/workflow contracts: **69 passed**, 0 failed.
+- Type checking, lint, formatting, vendor/generated CI/Unicode drift,
+  exclusions, `git diff --check`, and clean-tree benchmark smoke passed.
+
+No broad upstream Test262 command was run locally.
+
 ## Deep module evaluation closure
 
 The final maximum-capability review of `86c0f4a` found one Important remaining
