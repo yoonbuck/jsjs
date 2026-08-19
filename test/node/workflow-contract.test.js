@@ -717,7 +717,7 @@ export default [
     },
   },
   {
-    name: 'the Test262 job checks out the pinned upstream revision and publishes its report even on failure',
+    name: 'the Test262 job publishes only a report produced by the candidate run',
     run: async () => {
       const { workflow } = await readWorkflow();
       const packageManifest = await readPackageManifest();
@@ -741,7 +741,10 @@ export default [
       const uploads = usesSteps(job, 'actions/upload-artifact');
 
       assertSame(uploads.length, 1, 'exactly one artifact upload step');
-      assertSame(uploads[0].if, 'always()');
+      assertSame(
+        uploads[0].if,
+        "always() && hashFiles('docs/test262-report.jsonl') != ''",
+      );
       assertSame(uploads[0].with.path, TEST262_REPORT_FILE);
       assertSame(uploads[0].with['if-no-files-found'], 'error');
 
@@ -749,6 +752,13 @@ export default [
       const run = commands.indexOf('npm run test262:upstream');
       const drift = commands.indexOf(EXPECTED_DRIFT_COMMAND);
       const select = commands.indexOf('npm run test262:select:check');
+      const scrub = commands.indexOf(`rm -f ${TEST262_REPORT_FILE}`);
+
+      assertSame(
+        scrub >= 0 && scrub < select,
+        true,
+        'the committed report must be removed before any upstream prerequisite can fail',
+      );
 
       assertSame(
         select >= 0 && select < run,

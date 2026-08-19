@@ -6,6 +6,7 @@ import {
   iteratorStep,
   iteratorValue,
 } from '../src/runtime/iterator.js';
+import { EngineObject } from '../src/runtime/object.js';
 import { evaluateScript } from '../src/api.js';
 
 /**
@@ -130,6 +131,29 @@ const tests = [
           },
           callerKeyCalls: 0,
         }),
+      );
+    },
+  },
+  {
+    name: 'cross-Agent iteration finds an inherited owner protocol key',
+    run() {
+      const owner = createRealm({ agent: createAgent() });
+      const caller = createRealm({ agent: createAgent() });
+      const prototype = /** @type {EngineObject} */ (
+        val(
+          owner,
+          '({ [Symbol.iterator]: function () { return [33][Symbol.iterator](); } })',
+        )
+      );
+      const iterable = new EngineObject(prototype, 'Object', caller.agent);
+      const record = getIterator(caller, iterable);
+      const result = iteratorStep(record);
+
+      assertSame(result === false, false);
+      assertSame(iteratorValue(/** @type {EngineObject} */ (result)), 33);
+      assertSame(
+        record.iterator.getPrototype(),
+        owner.intrinsics.arrayIteratorPrototype,
       );
     },
   },

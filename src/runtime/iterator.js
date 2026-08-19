@@ -119,6 +119,7 @@ export function createIterResultObject(realm, value, done) {
  * @returns {IteratorRecord}
  */
 export function getIterator(realm, obj, method) {
+  /** @type {unknown} */
   let iteratorMethod = method;
   const iterableAgent = obj instanceof EngineObject ? obj.agent : realm.agent;
 
@@ -129,11 +130,10 @@ export function getIterator(realm, obj, method) {
       throw new TypeError('EngineObject protocol lookup requires an agent');
     }
 
-    iteratorMethod = getMethod(
-      realm,
-      obj,
-      iterableAgent.wellKnownSymbols.iterator,
-    );
+    iteratorMethod =
+      obj instanceof EngineObject
+        ? obj.getWellKnownSymbol('iterator', realm)
+        : getMethod(realm, obj, iterableAgent.wellKnownSymbols.iterator);
   }
 
   if (iteratorMethod === undefined || !isCallable(iteratorMethod)) {

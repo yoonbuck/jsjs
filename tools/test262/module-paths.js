@@ -25,6 +25,8 @@ export function resolveTest262ModulePath(specifier, referrer) {
   }
   rejectEncodedStructuralPath(specifier);
   rejectEncodedStructuralPath(referrer);
+  rejectUrlSensitivePath(specifier);
+  rejectUrlSensitivePath(referrer);
   if (!isRelativeSpecifier(specifier)) {
     throw new TypeError(
       `Test262 module specifier must be relative: ${specifier}`,
@@ -91,5 +93,21 @@ function rejectEncodedStructuralPath(path) {
         );
       }
     }
+  }
+}
+
+/**
+ * URL-oriented hosts decode percent escapes and interpret query/fragment
+ * delimiters, while the JSC shell reads identifiers as literal file paths.
+ * Reject those characters so every adapter addresses the same module.
+ *
+ * @param {string} path
+ * @returns {void}
+ */
+function rejectUrlSensitivePath(path) {
+  if (/[%?#]/u.test(path)) {
+    throw new RangeError(
+      'Test262 module request cannot contain URL-sensitive characters',
+    );
   }
 }

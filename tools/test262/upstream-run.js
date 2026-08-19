@@ -10,10 +10,11 @@
  *
  * Three things are checked before a single test runs, because a conformance
  * number measured against the wrong tree is worse than no number at all: the
- * checkout must exist, its `HEAD` must be exactly the pinned revision, and the
- * subset manifest must name that same repository and revision. Any mismatch
- * fails with the commands needed to fix it rather than running a different set
- * of tests and reporting success.
+ * checkout must exist, its `HEAD` must be exactly the pinned revision, its
+ * tracked and untracked contents must be clean, and the subset manifest must
+ * name that same repository and revision. Any mismatch fails with the commands
+ * needed to fix it rather than running a different set of tests and reporting
+ * success.
  *
  * The run produces two generated artifacts from one string each, so they can
  * never disagree with each other:
@@ -31,8 +32,9 @@
  * the local contract proves the committed files are the real output.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createNodeTest262Host } from './adapters/node.js';
 import { createJsjsTest262Engine } from './engine.js';
 import { formatRecordLine, formatReportLines } from './report.js';
@@ -167,6 +169,36 @@ export async function assertPinnedCheckout(pin) {
   if (head !== pin.revision) {
     throw new Error(
       `${pin.checkoutPath} is at ${head}, but package.json pins ${pin.revision}.\n${checkoutHint(
+        pin,
+      )}`,
+    );
+  }
+
+  let status;
+
+  try {
+    status = execFileSync(
+      'git',
+      ['status', '--porcelain=v1', '--untracked-files=all'],
+      {
+        cwd: fileURLToPath(
+          new URL(
+            `${pin.checkoutPath.replace(/\/$/u, '')}/`,
+            REPOSITORY_ROOT_URL,
+          ),
+        ),
+        encoding: 'utf8',
+      },
+    ).trim();
+  } catch {
+    throw new Error(
+      `${pin.checkoutPath} Git status could not be read.\n${checkoutHint(pin)}`,
+    );
+  }
+
+  if (status !== '') {
+    throw new Error(
+      `${pin.checkoutPath} has uncommitted changes:\n${status}\n${checkoutHint(
         pin,
       )}`,
     );

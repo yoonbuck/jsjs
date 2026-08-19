@@ -396,6 +396,10 @@ export function createCiJobs(test262) {
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
         }),
+        runStep(
+          'Remove the committed Test262 report',
+          `rm -f ${TEST262_REPORT_FILE}`,
+        ),
         usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
           repository: upstreamSlug,
           ref: test262.revision,
@@ -432,7 +436,7 @@ export function createCiJobs(test262) {
             path: TEST262_REPORT_FILE,
             'if-no-files-found': 'error',
           },
-          'always()',
+          `always() && hashFiles('${TEST262_REPORT_FILE}') != ''`,
         ),
       ]),
     }),

@@ -240,6 +240,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: 'false'
+      - name: Remove the committed Test262 report
+        run: rm -f docs/test262-report.jsonl
       - name: Check out the pinned Test262 tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -266,7 +268,7 @@ jobs:
       - name: Check the generated report is current
         run: git ls-files --error-unmatch docs/test262-report.jsonl docs/conformance.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl docs/conformance.md
       - name: Publish the Test262 report
-        if: always()
+        if: always() && hashFiles('docs/test262-report.jsonl') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: 'test262-upstream-report'

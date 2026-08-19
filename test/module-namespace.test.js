@@ -161,9 +161,15 @@ export default [
 
       linkModuleGraph(record);
       const namespace = record.getNamespace();
+      const inheritor = new EngineObject(
+        namespace,
+        'Object',
+        record.realm.agent,
+      );
 
       assertSame(namespace.hasProperty('value'), true);
       assertSame(namespace.hasProperty('missing'), false);
+      assertSame(inheritor.hasProperty('value'), true);
       assertThrows(() => namespace.get('value'), GuestErrorSignal);
       evaluateModuleGraph(record);
       assertSame(namespace.get('value'), 1);

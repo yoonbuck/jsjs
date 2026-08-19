@@ -1,3 +1,7 @@
+import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { assertSame } from '../harness/assert.js';
 import {
   ES5_SELECTION_VERSION,
@@ -7,6 +11,7 @@ import {
   inspectEngineGrammar,
   selectPaths,
 } from '../../tools/test262/upstream-select-paths.js';
+import { assertPinnedCheckout } from '../../tools/test262/upstream-run.js';
 
 const EXCLUDED_PATH = 'test/staging/not-read.js';
 const MODULE_PATH = 'test/built-ins/Array/module.js';
@@ -101,6 +106,33 @@ function selectKnownGood(sources, policy, harnessParsing = new Map()) {
       return source;
     },
   });
+}
+
+/**
+ * @param {string} cwd
+ * @param {readonly string[]} args
+ */
+function runGit(cwd, args) {
+  const result = spawnSync('git', [...args], { cwd, encoding: 'utf8' });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || 'git command failed');
+  }
+
+  return result.stdout.trim();
+}
+
+/**
+ * @param {() => Promise<unknown>} action
+ */
+async function rejectionFrom(action) {
+  try {
+    await action();
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  throw new Error('Expected the dirty pinned checkout to be rejected');
 }
 
 const GENERATOR_HARNESS_USER_SOURCES = new Map([
@@ -324,6 +356,50 @@ export default [
         JSON.stringify([FOCUSED_TAGGED_GENERATOR_PATH]),
         'an ordinary baseline candidate must not inherit generator syntax from the global expansion, while the exact authorized root remains eligible',
       );
+    },
+  },
+  {
+    name: 'pinned checkout validation rejects tracked and untracked tree changes',
+    async run() {
+      const checkoutUrl = new URL(
+        `.test262-pin-${randomUUID()}/`,
+        import.meta.url,
+      );
+      const checkoutPath = fileURLToPath(checkoutUrl);
+
+      try {
+        await mkdir(checkoutUrl);
+        runGit(checkoutPath, ['init', '--quiet']);
+        runGit(checkoutPath, ['config', 'user.name', 'JSJS Tests']);
+        runGit(checkoutPath, ['config', 'user.email', 'tests@example.invalid']);
+        await writeFile(new URL('tracked.js', checkoutUrl), 'clean\n', 'utf8');
+        runGit(checkoutPath, ['add', 'tracked.js']);
+        runGit(checkoutPath, ['commit', '--quiet', '-m', 'fixture']);
+        const revision = runGit(checkoutPath, ['rev-parse', 'HEAD']);
+        runGit(checkoutPath, ['checkout', '--quiet', '--detach', revision]);
+        const pin = {
+          repository: 'https://example.invalid/test262.git',
+          revision,
+          checkoutPath,
+        };
+
+        await assertPinnedCheckout(pin);
+
+        await writeFile(
+          new URL('tracked.js', checkoutUrl),
+          'modified\n',
+          'utf8',
+        );
+        const tracked = await rejectionFrom(() => assertPinnedCheckout(pin));
+        assertSame(tracked.message.includes('uncommitted changes'), true);
+
+        runGit(checkoutPath, ['checkout', '--', 'tracked.js']);
+        await writeFile(new URL('untracked.js', checkoutUrl), 'new\n', 'utf8');
+        const untracked = await rejectionFrom(() => assertPinnedCheckout(pin));
+        assertSame(untracked.message.includes('uncommitted changes'), true);
+      } finally {
+        await rm(checkoutUrl, { recursive: true, force: true });
+      }
     },
   },
 ];

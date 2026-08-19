@@ -202,7 +202,29 @@ export class EngineObject {
    * @returns {boolean}
    */
   hasProperty(name) {
-    return this.getProperty(name) !== undefined;
+    /** @type {EngineObject | null} */
+    let current = this;
+
+    while (current !== null) {
+      if (current._peekOwnDescriptor(name) !== undefined) {
+        return true;
+      }
+
+      /** @type {EngineObject | null} */
+      const proto = current._prototype;
+
+      if (proto === null) {
+        return false;
+      }
+
+      if (proto.hasProperty !== EngineObject.prototype.hasProperty) {
+        return proto.hasProperty(name);
+      }
+
+      current = proto;
+    }
+
+    return false;
   }
 
   /**
