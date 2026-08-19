@@ -2,7 +2,7 @@
 
 ## Disposition
 
-- Status: **READY FOR FINAL REVIEW**
+- Status: **REVIEW FIX WAVE COMPLETE; RE-REVIEW PENDING**
 - Recovered candidate:
   `5a9db65e17a8b46f9e20880d902b1bca398f2863`
 - Current `origin/main`:
@@ -82,13 +82,18 @@ authoritative in GitHub CI.
 
 ## Remaining gates
 
+The final origin-main blocker fix received a fresh scoped review with no
+significant issues. The first maximum-capability GPT-5.6-family whole-milestone
+review found three Important and two Minor issues; all five were fixed
+RED-first in `193902bff5899d8a9752e0579ef4a43da4d85305` and are documented in
+`whole-milestone-review-fix-report.md`.
+
 The candidate still requires:
 
-1. a fresh scoped review of the final origin-main blocker fix;
-2. a maximum-capability GPT-5.6-family whole-milestone review of the exact final
-   main-based candidate;
-3. a focused release PR and successful exact-head `ci.yml` pull-request run;
-4. squash merge and exact-main CodeQL default-setup evidence for both
+1. scoped re-review of that fix wave and a clean repeated maximum-capability
+   whole-milestone review on the resulting exact head;
+2. a focused release PR and successful exact-head `ci.yml` pull-request run;
+3. squash merge and exact-main CodeQL default-setup evidence for both
    `javascript-typescript` and `actions`, with zero alerts and zero
    extraction/parse diagnostics; and
-5. a fresh child/criteria audit before closing #61, #28, and #24.
+4. a fresh child/criteria audit before closing #61, #28, and #24.

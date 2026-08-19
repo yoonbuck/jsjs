@@ -961,9 +961,15 @@ was required.
       `origin-main-blocker-report.md`: Node 2,238, Chromium 2,095, and JavaScriptCore
       2,095 passed with no failures. JavaScriptCore has no focused suite selector,
       so the already recorded exact-candidate full portable run was not duplicated.
-- [ ] Obtain a fresh scoped review of the final origin-main blocker fix.
-- [ ] Obtain a maximum-capability GPT-5.6-family whole-milestone review of the
+- [x] Obtain a fresh scoped review of the final origin-main blocker fix: no
+      significant issues found.
+- [x] Obtain a maximum-capability GPT-5.6-family whole-milestone review of the
       exact final main-based candidate.
+- [x] Fix the review's three Important and two Minor findings RED-first. The
+      exact fix commit is `193902bff5899d8a9752e0579ef4a43da4d85305`.
+- [ ] Obtain scoped specification/quality re-review of the review-fix wave, then
+      repeat the maximum-capability whole-milestone review on the resulting exact
+      head until it has no unresolved high-confidence finding.
 - [ ] Push the reviewed head, open the focused release PR, and synchronously
       watch the exact `ci.yml` pull-request run.
 - [ ] Verify both post-squash CodeQL default-setup analyses on the exact main
