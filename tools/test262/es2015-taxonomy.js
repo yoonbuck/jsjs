@@ -11,6 +11,14 @@ import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
 export const ES2015_POLICY_FILE = 'tools/test262/es2015-policy.json';
 export const ES2015_ANCHORS_FILE = 'tools/test262/es2015-anchors.json';
 export const ES2015_TAXONOMY_VERSION = 1;
+export const ES2015_WHOLE_TREE_PARTITIONS = Object.freeze([
+  'annex-b',
+  'core',
+  'harness-validation',
+  'later-or-non-es2015',
+  'malformed',
+  'unknown-edition',
+]);
 
 const POLICY_KEYS = Object.freeze([
   'version',
@@ -42,6 +50,7 @@ const KNOWN_PARTITIONS = Object.freeze([
   'core',
   'later-or-non-es2015',
 ]);
+const UNSELECTED_ES2015_PARTITIONS = new Set(['annex-b', 'core']);
 const KNOWN_FLAGS = new Set([
   'onlyStrict',
   'noStrict',
@@ -314,6 +323,13 @@ export function classifyEs2015Inventory(options) {
       intentionalDeviations,
     });
   });
+  validateUnselectedEvidenceScope({
+    records,
+    selected,
+    auditResults,
+    blockers,
+    intentionalDeviations,
+  });
 
   return Object.freeze(
     records.sort((left, right) => compareStrings(left.path, right.path)),
@@ -330,7 +346,12 @@ export function summarizeEs2015Classification(classifications) {
     throw new Es2015TaxonomyError('ES2015 summary requires classifications');
   }
   const paths = new Set();
-  const totals = new Map();
+  const totals = new Map(
+    ES2015_WHOLE_TREE_PARTITIONS.map((name) => [
+      name,
+      { roots: 0, variants: 0 },
+    ]),
+  );
   let variants = 0;
 
   for (const record of classifications) {
@@ -349,16 +370,30 @@ export function summarizeEs2015Classification(classifications) {
         `ES2015 root ${record.path} has an invalid variant count`,
       );
     }
+    if (!ES2015_WHOLE_TREE_PARTITIONS.includes(record.partition)) {
+      throw new Es2015TaxonomyError(
+        `ES2015 root ${record.path} has unknown partition ${String(record.partition)}`,
+      );
+    }
     variants += record.variants;
-    const total = totals.get(record.partition) ?? { roots: 0, variants: 0 };
+    const total = totals.get(record.partition);
+    if (total === undefined) {
+      throw new Es2015TaxonomyError(
+        `ES2015 root ${record.path} has unknown partition ${String(record.partition)}`,
+      );
+    }
     total.roots += 1;
     total.variants += record.variants;
-    totals.set(record.partition, total);
   }
 
   const roots = classifications.length;
-  const partitions = sortStrings([...totals.keys()]).map((name) => {
+  const partitions = ES2015_WHOLE_TREE_PARTITIONS.map((name) => {
     const total = totals.get(name);
+    if (total === undefined) {
+      throw new Es2015TaxonomyError(
+        `ES2015 whole-tree partition ${name} is missing`,
+      );
+    }
     return Object.freeze({
       name,
       roots: total.roots,
@@ -574,6 +609,11 @@ function classifiedStatus(
   intentionalDeviations,
   partition,
 ) {
+  if (!selected.has(path) && !auditResults.has(path)) {
+    throw new Es2015TaxonomyError(
+      `ES2015 unselected root ${path} requires exact audit execution evidence`,
+    );
+  }
   if (intentionalDeviations.has(path)) {
     return { name: 'intentional-deviation', blocker: null };
   }
@@ -589,6 +629,57 @@ function classifiedStatus(
   }
   const fallback = partition === 'annex-b' ? 'annex-b' : 'unexecuted';
   return { name: `blocked:${fallback}`, blocker: fallback };
+}
+
+/**
+ * Audit execution, blocker, and intentional-deviation evidence must cover only
+ * roots whose classification can use it: unselected ES2015 core or Annex B
+ * roots. This rejects stale evidence that would otherwise be silently ignored.
+ *
+ * @param {{
+ *   records: readonly any[],
+ *   selected: Set<string>,
+ *   auditResults: Map<string, any>,
+ *   blockers: Map<string, any>,
+ *   intentionalDeviations: Set<string>,
+ * }} options
+ */
+function validateUnselectedEvidenceScope(options) {
+  const classifications = new Map(
+    options.records.map((record) => [record.path, record]),
+  );
+
+  /**
+   * @param {string} path
+   * @param {string} source
+   */
+  function assertScope(path, source) {
+    const classification = classifications.get(path);
+    if (
+      classification === undefined ||
+      options.selected.has(path) ||
+      !UNSELECTED_ES2015_PARTITIONS.has(classification.partition)
+    ) {
+      throw new Es2015TaxonomyError(
+        `ES2015 ${source} names root outside the unselected ES2015 inventory ${path}`,
+      );
+    }
+  }
+
+  for (const path of options.auditResults.keys()) {
+    assertScope(path, 'audit evidence');
+  }
+  for (const [path, blocker] of options.blockers) {
+    if (typeof blocker !== 'string' || blocker === '') {
+      throw new Es2015TaxonomyError(
+        `ES2015 audit blocker evidence for ${path} is invalid`,
+      );
+    }
+    assertScope(path, 'audit blocker evidence');
+  }
+  for (const path of options.intentionalDeviations) {
+    assertScope(path, 'intentional deviation evidence');
+  }
 }
 
 /**
@@ -672,9 +763,11 @@ function validateExecutionResults(results, expectedVariants, source) {
   for (const [path, records] of results) {
     const expected = expectedVariants.get(path);
     if (expected === undefined) {
-      throw new Es2015TaxonomyError(
-        `ES2015 ${source} execution names root outside inventory ${path}`,
-      );
+      const description =
+        source === 'audit'
+          ? 'audit evidence names root outside the unselected ES2015 inventory'
+          : `${source} execution names root outside inventory`;
+      throw new Es2015TaxonomyError(`ES2015 ${description} ${path}`);
     }
     if (!Array.isArray(records) || records.length !== expected.length) {
       throw new Es2015TaxonomyError(
@@ -792,26 +885,43 @@ function resolveIncludeFeatures(includes, definitions) {
 
   /** @param {string} name */
   function visit(name) {
-    if (resolved.has(name)) return;
-    if (visiting.has(name)) {
+    const identity = includeIdentity(name);
+    if (resolved.has(identity)) return;
+    if (visiting.has(identity)) {
       throw new Es2015TaxonomyError(
         `ES2015 include dependency cycle includes ${name}`,
       );
     }
-    const definition = definitions.get(name);
-    if (definition === undefined) {
+    const aliases = includeAliases(name).filter((alias) =>
+      definitions.has(alias),
+    );
+    if (aliases.length === 0) {
       throw new Es2015TaxonomyError(`ES2015 include ${name} is unknown`);
     }
-    visiting.add(name);
-    const facts = includeFacts(definition, name);
-    for (const nested of facts.includes) visit(nested);
-    features.push(...facts.features);
-    visiting.delete(name);
-    resolved.add(name);
+    visiting.add(identity);
+    for (const alias of aliases) {
+      const facts = includeFacts(definitions.get(alias), alias);
+      for (const nested of facts.includes) visit(nested);
+      features.push(...facts.features);
+    }
+    visiting.delete(identity);
+    resolved.add(identity);
   }
 
   for (const include of includes) visit(include);
   return normalizedStringValues(features, 'include features');
+}
+
+/** @param {string} name */
+function includeAliases(name) {
+  return name.endsWith('.js')
+    ? [name.slice(0, -'.js'.length), name]
+    : [name, `${name}.js`];
+}
+
+/** @param {string} name */
+function includeIdentity(name) {
+  return name.endsWith('.js') ? name.slice(0, -'.js'.length) : name;
 }
 
 /** @param {any} value @param {string} name */

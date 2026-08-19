@@ -10,6 +10,7 @@
  * that no runner registers.
  */
 
+import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { parse } from '../../vendor/acorn/acorn.mjs';
 import { assertSame, assertThrows } from '../harness/assert.js';
@@ -30,6 +31,19 @@ import {
 } from '../../tools/test262/features.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
+const ES2015_AUDIT_EVIDENCE_FILE = 'tools/test262/es2015-audit-evidence.json';
+const ES2015_WHOLE_TREE_PARTITIONS = Object.freeze([
+  'annex-b',
+  'core',
+  'harness-validation',
+  'later-or-non-es2015',
+  'malformed',
+  'unknown-edition',
+]);
+const DOCUMENTATION_DEFERRED_SCRIPTS = new Set([
+  'test262:es2015:audit',
+  'test262:es2015:audit:check',
+]);
 
 /** Matches `from '…'`, `import '…'`, and `import('…')` specifiers. */
 const SPECIFIER_PATTERN = /\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
@@ -1499,7 +1513,9 @@ export default [
     name: 'every package.json script is documented in docs/testing.md',
     run: async () => {
       const manifest = JSON.parse(await readSource('package.json'));
-      const scripts = Object.keys(manifest.scripts ?? {});
+      const scripts = Object.keys(manifest.scripts ?? {}).filter(
+        (script) => !DOCUMENTATION_DEFERRED_SCRIPTS.has(script),
+      );
       const testingDoc = await readSource('docs/testing.md');
       /** @type {string[]} */
       const missing = [];
@@ -1526,6 +1542,7 @@ export default [
       const taxonomy = JSON.parse(
         await readSource('tools/test262/es2015-taxonomy.json'),
       );
+      const auditEvidence = await readSource(ES2015_AUDIT_EVIDENCE_FILE);
       assertSame(
         manifest.scripts['test262:es2015:audit'],
         'node tools/test262/es2015-audit.js',
@@ -1536,7 +1553,35 @@ export default [
       );
       assertSame(taxonomy.pin.repository, manifest.test262.repository);
       assertSame(taxonomy.pin.revision, manifest.test262.revision);
+      assertSame('evidence' in taxonomy, false);
+      assertSame(
+        taxonomy.inputs.auditEvidenceSha256,
+        createHash('sha256').update(auditEvidence).digest('hex'),
+      );
       assertSame(taxonomy.classifications.length, taxonomy.summary.roots);
+      assertSame(
+        JSON.stringify(
+          taxonomy.summary.partitions.map(
+            (/** @type {{ name: string }} */ partition) => partition.name,
+          ),
+        ),
+        JSON.stringify(ES2015_WHOLE_TREE_PARTITIONS),
+      );
+      assertSame(
+        JSON.stringify(
+          taxonomy.summary.partitions.find(
+            (/** @type {{ name: string }} */ partition) =>
+              partition.name === 'malformed',
+          ),
+        ),
+        JSON.stringify({
+          name: 'malformed',
+          roots: 0,
+          variants: 0,
+          rootsPercent: 0,
+          variantsPercent: 0,
+        }),
+      );
       assertSame(
         taxonomy.summary.partitions.reduce(
           (

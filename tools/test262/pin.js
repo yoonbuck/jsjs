@@ -7,17 +7,21 @@ const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 
 /**
  * @param {string} path Repository-relative.
+ * @param {URL} [repositoryRootUrl]
  * @returns {Promise<string>}
  */
-function readRepositoryFile(path) {
-  return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
+function readRepositoryFile(path, repositoryRootUrl = REPOSITORY_ROOT_URL) {
+  return readFile(new URL(path, repositoryRootUrl), 'utf8');
 }
 
 /**
+ * @param {URL} [repositoryRootUrl]
  * @returns {Promise<{ repository: string, revision: string, checkoutPath: string }>}
  */
-export async function readTest262Pin() {
-  const manifest = JSON.parse(await readRepositoryFile('package.json'));
+export async function readTest262Pin(repositoryRootUrl = REPOSITORY_ROOT_URL) {
+  const manifest = JSON.parse(
+    await readRepositoryFile('package.json', repositoryRootUrl),
+  );
   const pin = manifest.test262;
 
   if (
@@ -50,14 +54,23 @@ function checkoutHint(pin) {
  * Confirms the checkout is the exact clean pinned revision.
  *
  * @param {{ repository: string, revision: string, checkoutPath: string }} pin
+ * @param {URL} [repositoryRootUrl]
  * @returns {Promise<void>}
  */
-export async function assertPinnedCheckout(pin) {
+export async function assertPinnedCheckout(
+  pin,
+  repositoryRootUrl = REPOSITORY_ROOT_URL,
+) {
   /** @type {string} */
   let head;
 
   try {
-    head = (await readRepositoryFile(`${pin.checkoutPath}/.git/HEAD`)).trim();
+    head = (
+      await readRepositoryFile(
+        `${pin.checkoutPath}/.git/HEAD`,
+        repositoryRootUrl,
+      )
+    ).trim();
   } catch {
     throw new Error(
       `${pin.checkoutPath} is not a git checkout.\n${checkoutHint(pin)}`,
@@ -82,7 +95,7 @@ export async function assertPinnedCheckout(pin) {
         cwd: fileURLToPath(
           new URL(
             `${pin.checkoutPath.replace(/\/$/u, '')}/`,
-            REPOSITORY_ROOT_URL,
+            repositoryRootUrl,
           ),
         ),
         encoding: 'utf8',
