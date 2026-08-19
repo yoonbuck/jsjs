@@ -47,6 +47,8 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:fixtures`                                                     | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                                                                                        |
 | `npm run test262:fixtures:manifest`                                            | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
 | `TZ=UTC npm run test262:es2015-release`                                        | Focused pinned Promise+generator+module Test262 release gate; does not rewrite broad reports or selection                                                                                                                       |
+| `TZ=UTC npm run test262:es2015:audit`                                          | Rebuild the deterministic ES2015 taxonomy from the exact pinned checkout                                                                                                                                                        |
+| `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in ES2015 taxonomy and exact promotion provenance without writing                                                                                                                                            |
 | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | The pinned upstream subset from a real `tc39/test262` checkout; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                         |
 | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
 | `TZ=UTC npm run test262:select`                                                | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
@@ -189,19 +191,48 @@ The upstream revision is pinned in `package.json` under the `test262` key:
 
 ### Running the upstream suite
 
-`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` runs
-the pinned subset against a real `tc39/test262` checkout. It refuses to run
-unless the tree's `HEAD` is exactly the pinned revision and UTC is active.
-Reproduce a CI run locally:
+The broad `test262-upstream` execution is exact-SHA CI authority. Do not run
+the broad upstream subset locally or regenerate its broad report locally; use
+the focused commands below instead. In CI, the generated job checks out
+`b363f29d3c43c626dc852744ad64a0b48a003693`, installs dependencies, verifies
+the ES2015 taxonomy and exact promotion under `TZ=UTC`, then runs the broad
+pinned subset. That run writes `docs/test262-report.jsonl` and the generated
+coverage block in `docs/conformance.md`.
+
+### Deterministic ES2015 taxonomy and exact promotion
+
+The taxonomy is a timestamp-free, code-unit-sorted classification of the
+exact pinned `vendor/test262` checkout. Both commands require
+`TZ=UTC`, the repository and revision in `package.json`, and a checkout whose
+`HEAD` is exactly
+`b363f29d3c43c626dc852744ad64a0b48a003693`:
 
 ```sh
-git clone --filter=blob:none https://github.com/tc39/test262.git vendor/test262
-git -C vendor/test262 checkout b363f29d3c43c626dc852744ad64a0b48a003693
-NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
+TZ=UTC npm run test262:es2015:audit
+TZ=UTC npm run test262:es2015:audit:check
 ```
 
-The report goes to `docs/test262-report.jsonl`, and a compact coverage summary
-goes to stdout.
+`audit` rewrites `tools/test262/es2015-taxonomy.json`; `audit:check` writes
+nothing and fails on taxonomy, pin, policy, classification, count, or
+promotion-provenance drift. The CI drift gate uses the latter command after
+the pinned checkout and `npm ci`, before the broad pinned execution.
+
+Local upstream execution is limited to a reviewed exact promotion ledger or a
+smaller focused fixture. To record the reviewed exact paths, provide that
+ledger explicitly; do not substitute a directory, glob, or broad selection:
+
+```sh
+TZ=UTC node tools/test262/es2015-audit.js \
+  --paths-file=/absolute/path/to/reviewed-T0.paths.txt \
+  --write-execution
+```
+
+The durable promotion provenance is
+[`tools/test262/es2015-promotion.json`](../tools/test262/es2015-promotion.json):
+6,323 code-unit-sorted roots, 11,955 variants, and ledger SHA-256
+`3f2c617b8639c8048afb1a42b95218250b20b6d51b9313f39473b4ddc1c7c646`.
+The command accepts only that exact reviewed ledger for the pinned checkout;
+it is not permission to run the broad upstream subset locally.
 
 ### Focused ES2015 syntax suite
 

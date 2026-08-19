@@ -412,6 +412,13 @@ export function createCiJobs(test262) {
         }),
         runStep('Install dependencies', 'npm ci'),
         runStep(
+          'Check the ES2015 taxonomy and exact promotion',
+          'npm run test262:es2015:audit:check',
+          {
+            TZ: 'UTC',
+          },
+        ),
+        runStep(
           'Check the ES5 selection is current',
           'npm run test262:select:check',
         ),

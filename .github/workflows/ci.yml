@@ -256,6 +256,10 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Check the ES2015 taxonomy and exact promotion
+        run: npm run test262:es2015:audit:check
+        env:
+          TZ: 'UTC'
       - name: Check the ES5 selection is current
         run: npm run test262:select:check
       - name: Run the pinned Test262 subset

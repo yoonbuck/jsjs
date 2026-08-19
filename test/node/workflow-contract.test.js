@@ -717,6 +717,53 @@ export default [
     },
   },
   {
+    name: 'the pinned Test262 job checks the deterministic ES2015 taxonomy before broad execution',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, 'test262-upstream');
+      const checkouts = usesSteps(job, 'actions/checkout');
+      const upstream = checkouts.find(
+        (step) => step.with?.repository === 'tc39/test262',
+      );
+      const install = job.steps.find(
+        (/** @type {any} */ step) => step.name === 'Install dependencies',
+      );
+      const taxonomyCheck = job.steps.find(
+        (/** @type {any} */ step) =>
+          step.name === 'Check the ES2015 taxonomy and exact promotion',
+      );
+      const broadRun = job.steps.find(
+        (/** @type {any} */ step) => step.run === 'npm run test262:upstream',
+      );
+
+      assertSame(
+        taxonomyCheck !== undefined,
+        true,
+        'the pinned Test262 job must check the ES2015 taxonomy and exact promotion',
+      );
+      assertSame(taxonomyCheck?.run, 'npm run test262:es2015:audit:check');
+      assertSame(taxonomyCheck?.env?.TZ, 'UTC');
+      assertSame(
+        job.steps.indexOf(/** @type {any} */ (upstream)) <
+          job.steps.indexOf(/** @type {any} */ (taxonomyCheck)),
+        true,
+        'the taxonomy check must follow the pinned Test262 checkout',
+      );
+      assertSame(
+        job.steps.indexOf(/** @type {any} */ (install)) <
+          job.steps.indexOf(/** @type {any} */ (taxonomyCheck)),
+        true,
+        'the taxonomy check must follow dependency installation',
+      );
+      assertSame(
+        job.steps.indexOf(/** @type {any} */ (taxonomyCheck)) <
+          job.steps.indexOf(/** @type {any} */ (broadRun)),
+        true,
+        'the taxonomy check must precede broad pinned Test262 execution',
+      );
+    },
+  },
+  {
     name: 'the Test262 job publishes only a report produced by the candidate run',
     run: async () => {
       const { workflow } = await readWorkflow();

@@ -609,6 +609,57 @@ Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
 
 <!-- test262-coverage:end -->
 
+## Deterministic ES2015 Test262 taxonomy
+
+[`tools/test262/es2015-taxonomy.json`](../tools/test262/es2015-taxonomy.json)
+is the timestamp-free, code-unit-sorted audit of the exact Test262 revision
+`b363f29d3c43c626dc852744ad64a0b48a003693`. It separately preserves core,
+Annex B, later/non-ES2015, unknown-edition, harness-validation, and malformed
+evidence; those partitions must not be combined into an ES2015 claim.
+
+| Edition partition     | Roots      | Variants    |
+| --------------------- | ---------- | ----------- |
+| Core                  | 24,250     | 46,424      |
+| Annex B               | 725        | 960         |
+| Later/non-ES2015      | 26,172     | 51,242      |
+| Unknown edition       | 2,312      | 4,054       |
+| Harness validation    | 116        | 232         |
+| Malformed             | 0          | 0           |
+| **Whole pinned tree** | **53,575** | **102,912** |
+
+The qualified core ES2015 evidence is:
+
+| Core status              | Roots      | Variants   |
+| ------------------------ | ---------- | ---------- |
+| Selected passing         | 19,603     | 37,305     |
+| Audit-passing unselected | 0          | 0          |
+| Blocked                  | 4,645      | 9,115      |
+| Intentional deviation    | 2          | 4          |
+| **Core total**           | **24,250** | **46,424** |
+
+Annex B remains separate:
+
+| Annex B status           | Roots   | Variants |
+| ------------------------ | ------- | -------- |
+| Selected passing         | 71      | 138      |
+| Audit-passing unselected | 23      | 42       |
+| Blocked                  | 631     | 780      |
+| Intentional deviation    | 0       | 0        |
+| **Annex B total**        | **725** | **960**  |
+
+The reviewed promotion is exact-path selection evidence only: its durable
+manifest records 6,323 roots, 11,955 variants, and ledger SHA-256
+`3f2c617b8639c8048afb1a42b95218250b20b6d51b9313f39473b4ddc1c7c646`.
+It authorizes dependencies only for those exact paths and is **not** a broad
+feature-tag claim or a claim that the engine broadly implements ES2015.
+
+Run `TZ=UTC npm run test262:es2015:audit:check` to verify the taxonomy and
+promotion without writing. It requires the exact package pin and pinned
+checkout; the generated CI job runs it after checkout and `npm ci`, before the
+broad Test262 execution. CI is the authority for that broad exact-SHA run;
+local work is restricted to the reviewed `--paths-file` promotion execution or
+smaller focused fixtures.
+
 The detailed report is JSON lines: one `test` record per (file, variant) pair,
 then the `baseline` lines that summarize the run per subset group, a `features`
 line, the `inventory` and `coverage` records, and the `summary`. The `features`
