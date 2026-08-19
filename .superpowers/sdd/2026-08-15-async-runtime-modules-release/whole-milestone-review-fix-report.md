@@ -2,7 +2,7 @@
 
 ## Disposition
 
-- Status: **DONE; SCOPED AND WHOLE RE-REVIEW PENDING**
+- Status: **SECOND REVIEW FIX DONE; RE-REVIEW PENDING**
 - Review base:
   `1a0f011f4e179bfcb83c99108a626b7f4806cc94`
 - Fix commit:
@@ -120,3 +120,37 @@ GREEN: module-path and portable Test262 runner suites pass.
 
 No broad upstream Test262 command was run locally. Broad pinned Test262 remains
 authoritative in exact-head GitHub CI.
+
+## Repeated-review parser fix
+
+The scoped re-review of the five-finding wave returned no significant issues.
+The repeated maximum-capability whole-milestone review closed all five prior
+findings and found one new Important issue: Acorn reuses singleton empty arrays
+for bare-import `specifiers` and parenthesis-less `new` expression `arguments`,
+while the custom AST structural-tree guard rejected the second occurrence as a
+DAG.
+
+The parser now permits a repeated structural array only when its length is
+zero. Shared nodes and non-empty structural arrays retain the existing
+rejection, so the evaluator cannot expand a compact DAG.
+
+RED:
+
+- both `parseModule` custom entry points rejected an Acorn program containing
+  two bare imports with `Custom AST must be a structural tree`;
+- both `parseScript` custom entry points rejected an Acorn program containing
+  two parenthesis-less `new` expressions with the same error.
+
+GREEN:
+
+- focused parser and module-parser Node suites passed;
+- focused parser and module-parser Chromium suites passed;
+- full portable JavaScriptCore registry: **2,099 passed**, 0 failed;
+- focused UTC Promise/generator/module Test262: **4 passed**, 0 failed;
+- portable Test262 fixtures: **17 passed**, 0 failed, 1 expected skip;
+- type checking, lint, formatting, vendor/generated CI/Unicode drift,
+  `git diff --check`, and clean-tree benchmark smoke passed.
+
+The exact parser fix commit is
+`dc4d814cfc3126f9e7b4f06b5093e13a9cce979f`. No broad upstream Test262
+command was run locally.

@@ -2,7 +2,7 @@
 
 ## Disposition
 
-- Status: **REVIEW FIX WAVE COMPLETE; RE-REVIEW PENDING**
+- Status: **SECOND REVIEW FIX COMPLETE; RE-REVIEW PENDING**
 - Recovered candidate:
   `5a9db65e17a8b46f9e20880d902b1bca398f2863`
 - Current `origin/main`:
@@ -88,10 +88,15 @@ review found three Important and two Minor issues; all five were fixed
 RED-first in `193902bff5899d8a9752e0579ef4a43da4d85305` and are documented in
 `whole-milestone-review-fix-report.md`.
 
+The scoped re-review of that fix wave was clean. The repeated
+maximum-capability review closed all five findings and found one Important
+Acorn shared-empty-array compatibility defect. That defect was fixed RED-first
+in `dc4d814cfc3126f9e7b4f06b5093e13a9cce979f`.
+
 The candidate still requires:
 
-1. scoped re-review of that fix wave and a clean repeated maximum-capability
-   whole-milestone review on the resulting exact head;
+1. scoped re-review of the parser fix and a clean repeated
+   maximum-capability whole-milestone review on the resulting exact head;
 2. a focused release PR and successful exact-head `ci.yml` pull-request run;
 3. squash merge and exact-main CodeQL default-setup evidence for both
    `javascript-typescript` and `actions`, with zero alerts and zero

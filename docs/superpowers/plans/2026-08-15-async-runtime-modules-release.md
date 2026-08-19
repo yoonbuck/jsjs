@@ -967,9 +967,16 @@ was required.
       exact final main-based candidate.
 - [x] Fix the review's three Important and two Minor findings RED-first. The
       exact fix commit is `193902bff5899d8a9752e0579ef4a43da4d85305`.
-- [ ] Obtain scoped specification/quality re-review of the review-fix wave, then
-      repeat the maximum-capability whole-milestone review on the resulting exact
-      head until it has no unresolved high-confidence finding.
+- [x] Obtain scoped re-review of the first review-fix wave: no significant
+      issues found.
+- [x] Repeat the maximum-capability whole-milestone review. It closed all five
+      prior findings and found one Important Acorn shared-empty-array compatibility
+      defect.
+- [x] Fix the Acorn shared-empty-array defect RED-first in
+      `dc4d814cfc3126f9e7b4f06b5093e13a9cce979f`.
+- [ ] Obtain scoped re-review of the parser fix and repeat the
+      maximum-capability whole-milestone review on the resulting exact head until
+      it has no unresolved high-confidence finding.
 - [ ] Push the reviewed head, open the focused release PR, and synchronously
       watch the exact `ci.yml` pull-request run.
 - [ ] Verify both post-squash CodeQL default-setup analyses on the exact main
