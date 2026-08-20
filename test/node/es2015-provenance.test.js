@@ -16,6 +16,10 @@ import {
   validateProvenanceFoundation,
 } from '../../tools/test262/es2015-provenance.js';
 import {
+  Es2015ProvenanceCheckError,
+  main as provenanceCheck,
+} from '../../tools/test262/es2015-provenance-check.js';
+import {
   Es2015TaxonomyError,
   buildEs2015Inventory,
   classifyEs2015Inventory,
@@ -30,6 +34,9 @@ const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
 const SPECIFICATION_SOURCE = 'https://262.ecma-international.org/6.0/';
 const SPECIFICATION_SHA256 =
   '4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0';
+const TAXONOMY_PATH = 'tools/test262/es2015-taxonomy.json';
+const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
+const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
 const APPROVED_PRODUCTION_FOUNDATION = Object.freeze({
@@ -241,6 +248,27 @@ function productionClassifications() {
 
 function productionManifest() {
   return buildProvenanceFoundation(productionClassifications());
+}
+
+function approvedProvenanceManifestText() {
+  return `${JSON.stringify(productionManifest(), null, 2)}\n`;
+}
+
+/** @param {ReturnType<typeof productionManifest>} manifest @param {string} code */
+function emptyDecisionFragmentText(manifest, code) {
+  return `${JSON.stringify(
+    {
+      version: manifest.version,
+      repository: manifest.repository,
+      revision: manifest.revision,
+      specification: manifest.specification,
+      parent: manifest.parent,
+      code,
+      decisions: [],
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 function refreshBatchLedger(batch) {
@@ -573,6 +601,84 @@ function reviewedProvenanceStub(spec) {
       }),
     ],
   ]);
+}
+
+/**
+ * @param {() => Promise<unknown>} action
+ * @returns {Promise<Error>}
+ */
+async function rejected(action) {
+  try {
+    await action();
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+  throw new Error('Expected rejection');
+}
+
+/**
+ * @param {{
+ *   timezone?: string,
+ *   files?: ReadonlyMap<string, string>,
+ *   decisionDirectoryEntries?: readonly string[],
+ * }} [options]
+ */
+function provenanceCheckDependencies(options = {}) {
+  const manifest = productionManifest();
+  const files = new Map([
+    [
+      TAXONOMY_PATH,
+      fs.readFileSync(new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url), 'utf8'),
+    ],
+    [ES2015_PROVENANCE_FILE, approvedProvenanceManifestText()],
+    ...ES2015_PROVENANCE_DECISION_CODES.map((code) => [
+      `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+      emptyDecisionFragmentText(manifest, code),
+    ]),
+    ...(options.files ?? []),
+  ]);
+  /** @type {string[]} */
+  const writes = [];
+  /** @type {string[]} */
+  const stdout = [];
+  /** @type {string[]} */
+  const stderr = [];
+  const decisionDirectoryEntries =
+    options.decisionDirectoryEntries ??
+    [...files.keys()]
+      .filter((path) => path.startsWith(`${PROVENANCE_DECISIONS_DIRECTORY}/`))
+      .map((path) => path.slice(PROVENANCE_DECISIONS_DIRECTORY.length + 1))
+      .sort();
+
+  return {
+    environment: { TZ: options.timezone ?? 'UTC' },
+    readFile: async (path) => {
+      const value = files.get(path);
+      if (value === undefined) {
+        const error = new Error(`missing fixture file ${path}`);
+        Object.assign(error, { code: 'ENOENT' });
+        throw error;
+      }
+      return value;
+    },
+    readdir: async (path) => {
+      if (path !== PROVENANCE_DECISIONS_DIRECTORY) {
+        const error = new Error(`missing fixture directory ${path}`);
+        Object.assign(error, { code: 'ENOENT' });
+        throw error;
+      }
+      return decisionDirectoryEntries;
+    },
+    writeFile: async (path, text) => {
+      writes.push(path);
+      files.set(path, text);
+    },
+    stdout: (text) => stdout.push(text),
+    stderr: (text) => stderr.push(text),
+    files,
+    writes,
+    outputs: { stdout, stderr },
+  };
 }
 
 export default [
@@ -1662,6 +1768,181 @@ export default [
         ).message,
         'Issue map is missing required code UA',
       );
+    },
+  },
+  {
+    name: 'ES2015 provenance CLI rejects invalid options, non-UTC runs, and non-empty initialize overwrites',
+    run: async () => {
+      const unknownOption = await rejected(() =>
+        provenanceCheck(['--wat'], provenanceCheckDependencies()),
+      );
+      assertSame(unknownOption instanceof Es2015ProvenanceCheckError, true);
+      assertSame(unknownOption.message, 'Unknown option --wat');
+
+      const conflicting = await rejected(() =>
+        provenanceCheck(
+          ['--initialize', '--check'],
+          provenanceCheckDependencies(),
+        ),
+      );
+      assertSame(conflicting instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        conflicting.message,
+        'Exactly one of --initialize, --check, --render-ledger=CODE, or --render-issue=CODE is required',
+      );
+
+      const nonUtc = await rejected(() =>
+        provenanceCheck([], provenanceCheckDependencies({ timezone: 'America/Los_Angeles' })),
+      );
+      assertSame(nonUtc instanceof Es2015ProvenanceCheckError, true);
+      assertSame(nonUtc.message.includes('UTC'), true);
+
+      const nonEmptyDependencies = provenanceCheckDependencies({
+        files: new Map([
+          [
+            `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`,
+            json(productionDecisionFragmentValue()),
+          ],
+        ]),
+      });
+      const nonEmpty = await rejected(() =>
+        provenanceCheck(['--initialize'], nonEmptyDependencies),
+      );
+      assertSame(nonEmpty instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        nonEmpty.message,
+        `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json must not overwrite non-empty reviewed decisions`,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance CLI initializes the exact manifest and empty fragments',
+    run: async () => {
+      const dependencies = provenanceCheckDependencies({
+        files: new Map(
+          [[TAXONOMY_PATH, fs.readFileSync(new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url), 'utf8')]],
+        ),
+        decisionDirectoryEntries: [],
+      });
+      assertSame(await provenanceCheck(['--initialize'], dependencies), 0);
+      assertSame(dependencies.writes.length, 14);
+      assertSame(
+        dependencies.files.get(ES2015_PROVENANCE_FILE),
+        approvedProvenanceManifestText(),
+      );
+      for (const code of ES2015_PROVENANCE_DECISION_CODES) {
+        assertSame(
+          dependencies.files.get(`${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`),
+          emptyDecisionFragmentText(productionManifest(), code),
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 provenance CLI check rejects missing or extra files, reports drift paths, and requires complete fragments',
+    run: async () => {
+      assertSame(await provenanceCheck(['--check'], provenanceCheckDependencies()), 0);
+
+      const drift = provenanceCheckDependencies({
+        files: new Map([[ES2015_PROVENANCE_FILE, 'drift\n']]),
+      });
+      const driftError = await rejected(() => provenanceCheck(['--check'], drift));
+      assertSame(driftError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        driftError.message,
+        `${ES2015_PROVENANCE_FILE} does not match generated provenance bytes`,
+      );
+
+      const missing = provenanceCheckDependencies({
+        decisionDirectoryEntries: ES2015_PROVENANCE_DECISION_CODES.filter(
+          (code) => code !== 'US7',
+        ).map((code) => `${code}.json`),
+      });
+      missing.files.delete(`${PROVENANCE_DECISIONS_DIRECTORY}/US7.json`);
+      const missingError = await rejected(() => provenanceCheck(['--check'], missing));
+      assertSame(missingError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        missingError.message,
+        `${PROVENANCE_DECISIONS_DIRECTORY}/US7.json is missing`,
+      );
+
+      const extra = provenanceCheckDependencies({
+        decisionDirectoryEntries: [
+          ...ES2015_PROVENANCE_DECISION_CODES.map((code) => `${code}.json`),
+          'UX.json',
+        ],
+      });
+      const extraError = await rejected(() => provenanceCheck(['--check'], extra));
+      assertSame(extraError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        extraError.message,
+        `${PROVENANCE_DECISIONS_DIRECTORY}/UX.json is not an approved provenance fragment`,
+      );
+
+      const extraNonJson = provenanceCheckDependencies({
+        decisionDirectoryEntries: [
+          ...ES2015_PROVENANCE_DECISION_CODES.map((code) => `${code}.json`),
+          '.DS_Store',
+        ],
+      });
+      const extraNonJsonError = await rejected(() =>
+        provenanceCheck(['--check'], extraNonJson),
+      );
+      assertSame(extraNonJsonError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        extraNonJsonError.message,
+        `${PROVENANCE_DECISIONS_DIRECTORY}/.DS_Store is not an approved provenance fragment`,
+      );
+
+      const incompleteError = await rejected(() =>
+        provenanceCheck(['--check', '--complete=UA'], provenanceCheckDependencies()),
+      );
+      assertSame(incompleteError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        incompleteError.message,
+        'UA must contain reviewed decisions for every ledger path',
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance CLI renders deterministic ledgers and issues',
+    run: async () => {
+      const ledgerDependencies = provenanceCheckDependencies();
+      assertSame(
+        await provenanceCheck(['--render-ledger=UA'], ledgerDependencies),
+        0,
+      );
+      assertSame(
+        ledgerDependencies.outputs.stdout.join(''),
+        renderBatchLedger(productionManifest(), 'UA'),
+      );
+
+      const issueDependencies = provenanceCheckDependencies({
+        files: new Map([[ISSUE_MAP_PATH, json(COMPLETE_ISSUE_MAP)]]),
+      });
+      assertSame(
+        await provenanceCheck(
+          ['--render-issue=UA', `--issue-map=${ISSUE_MAP_PATH}`],
+          issueDependencies,
+        ),
+        0,
+      );
+      assertSame(
+        issueDependencies.outputs.stdout.join(''),
+        renderProvenanceIssueBody(productionManifest(), 'UA', COMPLETE_ISSUE_MAP),
+      );
+
+      const incompleteIssueMap = provenanceCheckDependencies({
+        files: new Map([[ISSUE_MAP_PATH, json({ U0: 100 })]]),
+      });
+      const issueError = await rejected(() =>
+        provenanceCheck(
+          ['--render-issue=UA', `--issue-map=${ISSUE_MAP_PATH}`],
+          incompleteIssueMap,
+        ),
+      );
+      assertSame(issueError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(issueError.message, 'Issue map is missing required code UA');
     },
   },
 ];
