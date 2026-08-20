@@ -562,7 +562,8 @@ allowlist. No implementation task may add a path.
   zero PR number, and fetched/event head SHA mismatch.
 - [ ] Create those fixtures with `mkdtemp` under the OS temporary directory,
   isolate `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`, and set fixture-local
-  identity inline so the suite remains offline and host-independent.
+  identity inline. Initialize fixtures with an explicit `main` branch so the
+  suite remains offline and independent of host Git defaults.
 - [ ] Reject `allow-unsafe-pr-checkout`, a HEAD checkout, secrets, write
   permissions, caches, artifacts, reusable workflows, unpinned actions,
   command-line PR body interpolation, and any event expression in `run`.
@@ -574,10 +575,11 @@ allowlist. No implementation task may add a path.
   and that no context containing `(inactive` is eligible as the required guard.
 - [ ] Preserve the exact ordinary-event names, commands, steps, needs, pins,
   and environments of all existing jobs.
-- [ ] Add and test a byte-preserving generator assertion that every job `name`
-  and step `run` is YAML plain-scalar-safe: no line break, colon-space,
-  space-`#`, or reserved leading indicator. Keep every guard command
-  single-line with a safe leading word and colon-free diagnostics.
+- [ ] Add and test a byte-preserving generator assertion that every job `name`,
+  step `name`, and step `run` is YAML plain-scalar-safe: no line break,
+  leading/trailing whitespace, trailing colon, colon-space, space-`#`, or
+  reserved leading indicator. Keep every guard command single-line with a safe
+  leading word and colon-free diagnostics.
 - [ ] Explicitly amend the current exact job table, per-job npm-command
   assumption, inherited-permission assertion, and exact checker-event error
   expectation for the custom guard.
@@ -690,8 +692,9 @@ allowlist. No implementation task may add a path.
   `1925873700c180fc38e7e020fc4b631c1866b082`, fetch the reviewed implementation
   HEAD as inert objects, and invoke that BASE
   `tools/test262/es2015-provenance-check.js` with the actual base/head and exact
-  PR marker/body under `TZ=UTC`. Do not run the implementation branch's checker
-  as substitute evidence.
+  PR body through a named environment variable under `TZ=UTC` and
+  `GITHUB_EVENT_NAME=pull_request`. Do not run the implementation branch's
+  checker as substitute evidence.
 - [ ] Remove the temporary checkout after recording the successful command and
   identities.
 - [ ] Do not run broad Test262, audit write mode, browser, JavaScriptCore, or

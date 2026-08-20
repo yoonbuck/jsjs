@@ -318,9 +318,9 @@ The dedicated job has no dependencies on other jobs, runs on explicit
    or command from that tree is permitted.
 8. Run the checked-out base
    `tools/test262/es2015-provenance-check.js` with `--check-range`, explicit
-   base and head environment variables, and `--pr-body-env`. Its imports,
-   including `es2015-provenance.js` and `selection.js`, resolve from the base
-   checkout only.
+   base and head environment variables, `--pr-body-env`, and fixed `TZ=UTC`.
+   Its imports, including `es2015-provenance.js` and `selection.js`, resolve
+   from the base checkout only.
 
 The checker may inspect HEAD solely through its existing inert Git interface:
 full-SHA `rev-parse`, `merge-base`, NUL-delimited name/status `git diff`, and
@@ -408,13 +408,14 @@ round-trip exactly. Existing jobs retain their current steps, dependencies,
 action pins, commands, environments, and ordinary-event names.
 
 The generator adds a byte-preserving plain-scalar assertion for every job
-`name` and step `run` value. It rejects CR/LF, colon followed by space, space
-followed by `#`, and a first character that YAML reserves as a plain-scalar
-indicator (`-`, `?`, `:`, comma, brackets, braces, `#`, `&`, `*`, `!`, `|`,
-`>`, apostrophe, quotation mark, `%`, `@`, or grave accent). Guard commands use
-colon-free diagnostics and safe leading words such as `test`, `printf`, `git`,
-and `node`. This adds validation without quoting or otherwise changing existing
-generated workflow bytes.
+`name`, step `name`, and step `run` value. It rejects CR/LF, leading or trailing
+whitespace, a trailing colon, colon followed by space, space followed by `#`,
+and a first character that YAML reserves as a plain-scalar indicator (`-`, `?`,
+`:`, comma, brackets, braces, `#`, `&`, `*`, `!`, `|`, `>`, apostrophe,
+quotation mark, `%`, `@`, or grave accent). Guard commands use colon-free
+diagnostics and safe leading words such as `test`, `printf`, `git`, and `node`.
+This adds validation without quoting or otherwise changing existing generated
+workflow bytes.
 
 The base checker needs exactly two narrow changes:
 
@@ -451,8 +452,8 @@ YAML, not merely the generator objects:
   event-derived environment values;
 - `TZ: UTC` appears only on the checker step, and `PR_BODY` is unavailable to
   every other step;
-- all generated job names and run strings satisfy the explicit YAML
-  plain-scalar validator and round-trip through the parser unchanged;
+- all generated job names, step names, and run strings satisfy the explicit
+  YAML plain-scalar validator and round-trip through the parser unchanged;
 - fork-shaped event identities in which the head repository differs from the
   base repository, proving the fetch still uses only the base checkout's
   `origin` and `refs/pull/<number>/head`;
