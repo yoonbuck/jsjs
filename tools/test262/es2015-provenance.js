@@ -333,6 +333,78 @@ const BATCH_DEFINITIONS = Object.freeze(
 const BATCH_DEFINITION_MAP = new Map(
   BATCH_DEFINITIONS.map((definition) => [definition.code, definition]),
 );
+const APPROVED_BASE_LEDGER = Object.freeze({
+  rootCount: 2312,
+  variantCount: 4054,
+  pathSha256: '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc',
+});
+const APPROVED_BATCH_LEDGERS = Object.freeze({
+  UA: Object.freeze({
+    rootCount: 314,
+    variantCount: 323,
+    pathSha256: 'd29150e412486095bac0103f5d7e913917269870a9769cd8343a5cc9638af98e',
+  }),
+  UB: Object.freeze({
+    rootCount: 32,
+    variantCount: 64,
+    pathSha256: '4e21b1884213e2831ffe58fb5c5128f17d417168aeabeac3c3817f8f6350623a',
+  }),
+  UL1: Object.freeze({
+    rootCount: 434,
+    variantCount: 835,
+    pathSha256: '1bad4b5aed5f665cfcd270a57c90553b1fe4a1dabb1334fa950527b1113b937a',
+  }),
+  UL2: Object.freeze({
+    rootCount: 182,
+    variantCount: 364,
+    pathSha256: 'b5e8412e46d0bb2d976de247d312269b9ac34fa9cda77d15a2aa11c1eb0abb45',
+  }),
+  UL3: Object.freeze({
+    rootCount: 109,
+    variantCount: 212,
+    pathSha256: 'af158f399b1827dd2012030fbec2fdbbb28f184c011a310550928eb718dca406',
+  }),
+  UL4: Object.freeze({
+    rootCount: 48,
+    variantCount: 48,
+    pathSha256: '9316f73cad2c6608ad14d6e837e5383100bb2ebd0a4feb2ba9f198ee35e5d3ac',
+  }),
+  US1: Object.freeze({
+    rootCount: 210,
+    variantCount: 406,
+    pathSha256: '63ff657590ebb5aa167c19975344817789a9a67b820ce0092f990376afa873f7',
+  }),
+  US2: Object.freeze({
+    rootCount: 176,
+    variantCount: 352,
+    pathSha256: '3b3db618ae579287c0cbe5a77124c883c3129395bf83fe7523dc1f32e3fe7d15',
+  }),
+  US3: Object.freeze({
+    rootCount: 99,
+    variantCount: 190,
+    pathSha256: '42d21ddbd59de80f8c14b1508c3502c8c0bc023061ff24c16160f1bfaec7daa1',
+  }),
+  US4: Object.freeze({
+    rootCount: 176,
+    variantCount: 318,
+    pathSha256: '19bc8b322158aa59af8d0b5efd38cf58885be50fdb6394b56cc94a2b94754c0b',
+  }),
+  US5: Object.freeze({
+    rootCount: 306,
+    variantCount: 540,
+    pathSha256: 'fdc5ed38ef91366ee6bd9f8aa8d49917b5d9bbc2746cfd62a50f22a22cd03df5',
+  }),
+  US6: Object.freeze({
+    rootCount: 48,
+    variantCount: 89,
+    pathSha256: '90dfecd04460d739d4a7242b6ff14c4ef83abcf3e73d7893b392138372ce1cf1',
+  }),
+  US7: Object.freeze({
+    rootCount: 178,
+    variantCount: 313,
+    pathSha256: '1e2cda5adef593ae134f0ab0e759091f57522821460c904c7f44c4217c891e28',
+  }),
+});
 
 export class Es2015ProvenanceError extends Error {
   /** @param {string} message */
@@ -444,21 +516,28 @@ export function buildProvenanceFoundation(classifications) {
 
 /** @param {unknown} manifest @param {readonly object[]} classifications */
 export function validateProvenanceFoundation(manifest, classifications) {
-  const normalizedManifest = normalizeManifestRecord(object(manifest, ES2015_PROVENANCE_FILE), {
-    exactLists: false,
-    exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
-  });
+  const normalizedManifest = normalizeManifestRecord(
+    object(manifest, ES2015_PROVENANCE_FILE),
+    {
+      exactLists: false,
+      exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
+    },
+  );
+  if (classifications === undefined) {
+    validateManifestBytes(normalizedManifest);
+    validateImmutableApprovedFoundation(normalizedManifest);
+    return;
+  }
+
   const expected = buildProvenanceFoundation(classifications);
   const expectedBasePaths = expected.baseLedger.paths;
   const actualBasePaths = [...normalizedManifest.baseLedger.paths];
-
   if (!isSorted(actualBasePaths)) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} base ledger must remain code-unit sorted`,
     );
   }
   assertUniqueBasePaths(actualBasePaths, `${ES2015_PROVENANCE_FILE} base ledger`);
-
   const actualBaseSet = new Set(actualBasePaths);
   const expectedBaseSet = new Set(expectedBasePaths);
   for (const path of expectedBasePaths) {
@@ -473,35 +552,6 @@ export function validateProvenanceFoundation(manifest, classifications) {
   }
 
   const batchPathOwners = new Map();
-  for (const batch of normalizedManifest.batches) {
-    const paths = batch.entries.map((entry) => entry.path);
-    if (!isSorted(paths)) {
-      throw new Es2015ProvenanceError(
-        `${batch.code} batch ledger must remain code-unit sorted`,
-      );
-    }
-    const duplicates = duplicatesOf(paths);
-    if (duplicates.length > 0) {
-      throw new Es2015ProvenanceError(
-        `${batch.code} batch ledger must not repeat base paths`,
-      );
-    }
-    for (const path of paths) {
-      const owner = batchPathOwners.get(path);
-      if (owner !== undefined) {
-        throw new Es2015ProvenanceError(
-          `Base path ${path} appears in more than one provenance batch`,
-        );
-      }
-      batchPathOwners.set(path, batch.code);
-      if (!expectedBaseSet.has(path)) {
-        throw new Es2015ProvenanceError(
-          `${batch.code} batch ledger has unexpected non-base path ${path}`,
-        );
-      }
-    }
-  }
-
   for (const definition of BATCH_DEFINITIONS) {
     const actual = batchByCode(normalizedManifest, definition.code);
     if (actual.selector !== definition.selector) {
@@ -516,6 +566,31 @@ export function validateProvenanceFoundation(manifest, classifications) {
     }
     const expectedBatch = batchByCode(expected, definition.code);
     const actualPaths = actual.entries.map((entry) => entry.path);
+    if (!isSorted(actualPaths)) {
+      throw new Es2015ProvenanceError(
+        `${definition.code} batch ledger must remain code-unit sorted`,
+      );
+    }
+    const duplicates = duplicatesOf(actualPaths);
+    if (duplicates.length > 0) {
+      throw new Es2015ProvenanceError(
+        `${definition.code} batch ledger must not repeat base paths`,
+      );
+    }
+    for (const path of actualPaths) {
+      const owner = batchPathOwners.get(path);
+      if (owner !== undefined) {
+        throw new Es2015ProvenanceError(
+          `Base path ${path} appears in more than one provenance batch`,
+        );
+      }
+      batchPathOwners.set(path, definition.code);
+      if (!expectedBaseSet.has(path)) {
+        throw new Es2015ProvenanceError(
+          `${definition.code} batch ledger has unexpected non-base path ${path}`,
+        );
+      }
+    }
     const actualPathSet = new Set(actualPaths);
     const expectedPaths = expectedBatch.entries.map((entry) => entry.path);
     for (const path of expectedPaths) {
@@ -554,8 +629,7 @@ export function validateProvenanceFoundation(manifest, classifications) {
       );
     }
     if (
-      actual.variantCount !==
-      actual.entries.reduce((sum, entry) => sum + entry.variants, 0)
+      actual.variantCount !== actual.entries.reduce((sum, entry) => sum + entry.variants, 0)
     ) {
       throw new Es2015ProvenanceError(
         `${definition.code} variant count does not match its reviewed ledger`,
@@ -575,7 +649,7 @@ export function validateProvenanceFoundation(manifest, classifications) {
   }
   if (
     normalizedManifest.baseLedger.variantCount !==
-    [...batchPathOwners.entries()].reduce((sum, [path]) => {
+    [...batchPathOwners.keys()].reduce((sum, path) => {
       const entry = expected.batches
         .flatMap((batch) => batch.entries)
         .find((candidate) => candidate.path === path);
@@ -591,6 +665,144 @@ export function validateProvenanceFoundation(manifest, classifications) {
       `${ES2015_PROVENANCE_FILE} base ledger SHA-256 does not match its reviewed bytes`,
     );
   }
+  validateImmutableApprovedFoundation(normalizedManifest);
+}
+
+/** @param {{ baseLedger: { paths: readonly string[], rootCount: number, variantCount: number, pathSha256: string }, batches: readonly { code: string, selector: string, scope: string, entries: readonly { path: string, variants: number }[], rootCount: number, variantCount: number, pathSha256: string }[] }} manifest */
+function validateManifestBytes(manifest) {
+  const actualBasePaths = [...manifest.baseLedger.paths];
+  if (!isSorted(actualBasePaths)) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} base ledger must remain code-unit sorted`,
+    );
+  }
+  assertUniqueBasePaths(actualBasePaths, `${ES2015_PROVENANCE_FILE} base ledger`);
+  if (manifest.baseLedger.rootCount !== actualBasePaths.length) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} base ledger root count does not match its reviewed bytes`,
+    );
+  }
+  if (manifest.baseLedger.pathSha256 !== hashPaths(actualBasePaths)) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} base ledger SHA-256 does not match its reviewed bytes`,
+    );
+  }
+
+  const actualBaseSet = new Set(actualBasePaths);
+  const batchPathOwners = new Map();
+  let batchVariantCount = 0;
+  for (const definition of BATCH_DEFINITIONS) {
+    const actual = batchByCode(manifest, definition.code);
+    if (actual.selector !== definition.selector) {
+      throw new Es2015ProvenanceError(
+        `${definition.code} must retain selector ${definition.selector}`,
+      );
+    }
+    if (actual.scope !== definition.scope) {
+      throw new Es2015ProvenanceError(
+        `${definition.code} must retain scope ${definition.scope}`,
+      );
+    }
+    const actualPaths = actual.entries.map((entry) => entry.path);
+    if (!isSorted(actualPaths)) {
+      throw new Es2015ProvenanceError(
+        `${actual.code} batch ledger must remain code-unit sorted`,
+      );
+    }
+    const duplicates = duplicatesOf(actualPaths);
+    if (duplicates.length > 0) {
+      throw new Es2015ProvenanceError(
+        `${actual.code} batch ledger must not repeat base paths`,
+      );
+    }
+    for (const entry of actual.entries) {
+      const owner = batchPathOwners.get(entry.path);
+      if (owner !== undefined) {
+        throw new Es2015ProvenanceError(
+          `Base path ${entry.path} appears in more than one provenance batch`,
+        );
+      }
+      batchPathOwners.set(entry.path, actual.code);
+      if (!actualBaseSet.has(entry.path)) {
+        throw new Es2015ProvenanceError(
+          `${actual.code} batch ledger has unexpected non-base path ${entry.path}`,
+        );
+      }
+      batchVariantCount += entry.variants;
+    }
+    if (actual.rootCount !== actual.entries.length) {
+      throw new Es2015ProvenanceError(
+        `${actual.code} root count does not match its reviewed ledger`,
+      );
+    }
+    if (
+      actual.variantCount !== actual.entries.reduce((sum, entry) => sum + entry.variants, 0)
+    ) {
+      throw new Es2015ProvenanceError(
+        `${actual.code} variant count does not match its reviewed ledger`,
+      );
+    }
+    if (actual.pathSha256 !== hashPaths(actualPaths)) {
+      throw new Es2015ProvenanceError(
+        `${actual.code} path ledger SHA-256 does not match its reviewed bytes`,
+      );
+    }
+  }
+
+  for (const path of actualBasePaths) {
+    if (!batchPathOwners.has(path)) {
+      throw new Es2015ProvenanceError(
+        `Base path ${path} does not appear in any provenance batch`,
+      );
+    }
+  }
+  if (manifest.baseLedger.variantCount !== batchVariantCount) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} base ledger variant count does not match its reviewed bytes`,
+    );
+  }
+}
+
+/** @param {{ baseLedger: { rootCount: number, variantCount: number, pathSha256: string }, batches: readonly { code: string, rootCount: number, variantCount: number, pathSha256: string }[] }} manifest */
+function validateImmutableApprovedFoundation(manifest) {
+  if (manifest.baseLedger.rootCount !== APPROVED_BASE_LEDGER.rootCount) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} base ledger root count does not match the approved immutable ledger`,
+    );
+  }
+  if (manifest.baseLedger.variantCount !== APPROVED_BASE_LEDGER.variantCount) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} base ledger variant count does not match the approved immutable ledger`,
+    );
+  }
+  if (manifest.baseLedger.pathSha256 !== APPROVED_BASE_LEDGER.pathSha256) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} base ledger SHA-256 does not match the approved immutable ledger`,
+    );
+  }
+  for (const batch of manifest.batches) {
+    const approved = APPROVED_BATCH_LEDGERS[batch.code];
+    if (approved === undefined) {
+      throw new Es2015ProvenanceError(
+        `${batch.code} is not an approved ES2015 provenance decision code`,
+      );
+    }
+    if (batch.rootCount !== approved.rootCount) {
+      throw new Es2015ProvenanceError(
+        `${batch.code} root count does not match the approved immutable ledger`,
+      );
+    }
+    if (batch.variantCount !== approved.variantCount) {
+      throw new Es2015ProvenanceError(
+        `${batch.code} variant count does not match the approved immutable ledger`,
+      );
+    }
+    if (batch.pathSha256 !== approved.pathSha256) {
+      throw new Es2015ProvenanceError(
+        `${batch.code} path ledger SHA-256 does not match the approved immutable ledger`,
+      );
+    }
+  }
 }
 
 /**
@@ -600,10 +812,14 @@ export function validateProvenanceFoundation(manifest, classifications) {
  * @returns {ReadonlyMap<string, object>}
  */
 export function validateDecisionFragments(manifest, fragments, options = {}) {
-  const normalizedManifest = normalizeManifestRecord(object(manifest, ES2015_PROVENANCE_FILE), {
-    exactLists: false,
-    exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
-  });
+  const normalizedManifest = normalizeManifestRecord(
+    object(manifest, ES2015_PROVENANCE_FILE),
+    {
+      exactLists: false,
+      exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
+    },
+  );
+  validateProvenanceFoundation(normalizedManifest);
   const allowPendingReview = options.allowPendingReview === true;
   const requireCompleteCodes = normalizeRequiredCodes(options.requireCompleteCodes);
   const fragmentMap = normalizeFragments(fragments);
@@ -661,6 +877,13 @@ export function validateDecisionFragments(manifest, fragments, options = {}) {
       );
     }
   }
+  for (const code of requireCompleteCodes) {
+    if (!fragmentMap.has(code)) {
+      throw new Es2015ProvenanceError(
+        `${code} decision fragment is required when complete-code validation is enabled`,
+      );
+    }
+  }
 
   return new Map(decisions);
 }
@@ -685,10 +908,14 @@ export function renderBatchLedger(manifest, code) {
   if (!ES2015_PROVENANCE_DECISION_CODES.includes(code)) {
     throw new Es2015ProvenanceError(`${code} is not a known provenance ledger code`);
   }
-  const normalizedManifest = normalizeManifestRecord(object(manifest, ES2015_PROVENANCE_FILE), {
-    exactLists: false,
-    exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
-  });
+  const normalizedManifest = normalizeManifestRecord(
+    object(manifest, ES2015_PROVENANCE_FILE),
+    {
+      exactLists: false,
+      exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
+    },
+  );
+  validateProvenanceFoundation(normalizedManifest);
   const batch = batchByCode(normalizedManifest, code);
   return `${batch.entries.map((entry) => entry.path).join('\n')}\n`;
 }
@@ -699,10 +926,14 @@ export function renderProvenanceIssueBody(manifest, code, issueMap) {
   if (definition === undefined) {
     throw new Es2015ProvenanceError(`${code} is not a known provenance issue code`);
   }
-  const normalizedManifest = normalizeManifestRecord(object(manifest, ES2015_PROVENANCE_FILE), {
-    exactLists: false,
-    exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
-  });
+  const normalizedManifest = normalizeManifestRecord(
+    object(manifest, ES2015_PROVENANCE_FILE),
+    {
+      exactLists: false,
+      exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
+    },
+  );
+  validateProvenanceFoundation(normalizedManifest);
   const issues = normalizeIssueMap(issueMap);
   const ledger = renderLedgerSummary(normalizedManifest, code);
   const dependencies = definition.dependencies.map((dependencyCode) => {
@@ -1203,8 +1434,8 @@ function normalizeDecisionSpecification(record, evidenceKind, label) {
     DECISION_SPECIFICATION_KEYS,
     `${label} specification must contain exact keys`,
   );
-  const clause = nullableString(record.clause, `${label} specification.clause`);
-  const anchor = nullableString(record.anchor, `${label} specification.anchor`);
+  const clause = nullableEvidenceString(record.clause, `${label} specification.clause`);
+  const anchor = nullableEvidenceString(record.anchor, `${label} specification.anchor`);
   if (
     evidenceKind.startsWith('sixth-edition') &&
     (record.source !== SPECIFICATION_SOURCE ||
@@ -1318,10 +1549,15 @@ function normalizeReview(record, allowPendingReview, label, skipSemanticValidati
     record.reviewer === 'pending' &&
     record.reviewedAt === 'pending' &&
     record.artifact === 'pending';
+  if (record.reviewer === 'pending' && !allowPendingReview) {
+    throw new Es2015ProvenanceError(
+      `${label} review.reviewer must not be pending in strict validation`,
+    );
+  }
   if (pending) {
     if (!allowPendingReview) {
       throw new Es2015ProvenanceError(
-        `${label} review.reviewedAt must be a UTC RFC3339 timestamp`,
+        `${label} review.reviewer must not be pending in strict validation`,
       );
     }
     return {
@@ -1498,6 +1734,15 @@ function nullableString(value, label) {
     throw new Es2015ProvenanceError(`${label} must be a string or null`);
   }
   return value;
+}
+
+/** @param {unknown} value @param {string} label */
+function nullableEvidenceString(value, label) {
+  if (value === null) return null;
+  if (typeof value !== 'string') {
+    throw new Es2015ProvenanceError(`${label} must be a string or null`);
+  }
+  return value.trim() === '' ? null : value;
 }
 
 /** @param {unknown} value @param {string} label */
