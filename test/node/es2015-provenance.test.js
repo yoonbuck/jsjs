@@ -37,6 +37,10 @@ const SPECIFICATION_SHA256 =
 const TAXONOMY_PATH = 'tools/test262/es2015-taxonomy.json';
 const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
 const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
+const PRODUCTION_TAXONOMY_TEXT = fs.readFileSync(
+  new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
+  'utf8',
+);
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
 const APPROVED_PRODUCTION_FOUNDATION = Object.freeze({
@@ -252,6 +256,14 @@ function productionManifest() {
 
 function approvedProvenanceManifestText() {
   return `${JSON.stringify(productionManifest(), null, 2)}\n`;
+}
+
+function driftedTaxonomyText() {
+  const taxonomy = JSON.parse(PRODUCTION_TAXONOMY_TEXT);
+  const targetPath = productionManifest().baseLedger.paths[0];
+  const record = taxonomy.classifications.find((entry) => entry.path === targetPath);
+  record.variants += 1;
+  return `${JSON.stringify(taxonomy, null, 2)}\n`;
 }
 
 /** @param {ReturnType<typeof productionManifest>} manifest @param {string} code */
@@ -626,10 +638,7 @@ async function rejected(action) {
 function provenanceCheckDependencies(options = {}) {
   const manifest = productionManifest();
   const files = new Map([
-    [
-      TAXONOMY_PATH,
-      fs.readFileSync(new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url), 'utf8'),
-    ],
+    [TAXONOMY_PATH, PRODUCTION_TAXONOMY_TEXT],
     [ES2015_PROVENANCE_FILE, approvedProvenanceManifestText()],
     ...ES2015_PROVENANCE_DECISION_CODES.map((code) => [
       `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
@@ -1813,6 +1822,17 @@ export default [
         nonEmpty.message,
         `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json must not overwrite non-empty reviewed decisions`,
       );
+      assertSame(nonEmptyDependencies.writes.length, 0);
+
+      const driftedDependencies = provenanceCheckDependencies({
+        files: new Map([[TAXONOMY_PATH, driftedTaxonomyText()]]),
+      });
+      const drifted = await rejected(() =>
+        provenanceCheck(['--initialize'], driftedDependencies),
+      );
+      assertSame(drifted instanceof Es2015ProvenanceCheckError, true);
+      assertSame(drifted.message.includes('approved immutable ledger'), true);
+      assertSame(driftedDependencies.writes.length, 0);
     },
   },
   {
@@ -1937,12 +1957,26 @@ export default [
       });
       const issueError = await rejected(() =>
         provenanceCheck(
-          ['--render-issue=UA', `--issue-map=${ISSUE_MAP_PATH}`],
+          ['--render-issue=U0', `--issue-map=${ISSUE_MAP_PATH}`],
           incompleteIssueMap,
         ),
       );
       assertSame(issueError instanceof Es2015ProvenanceCheckError, true);
       assertSame(issueError.message, 'Issue map is missing required code UA');
+
+      const extraIssueMap = provenanceCheckDependencies({
+        files: new Map([
+          [ISSUE_MAP_PATH, json({ ...COMPLETE_ISSUE_MAP, UX: 999 })],
+        ]),
+      });
+      const extraIssueError = await rejected(() =>
+        provenanceCheck(
+          ['--render-issue=UA', `--issue-map=${ISSUE_MAP_PATH}`],
+          extraIssueMap,
+        ),
+      );
+      assertSame(extraIssueError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(extraIssueError.message, 'Issue map contains unapproved code UX');
     },
   },
 ];

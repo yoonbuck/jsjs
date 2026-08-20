@@ -132,9 +132,20 @@ const ALL_RENDER_CODES = Object.freeze([
   'UA',
   'UB',
   'UL',
-  ...ES2015_PROVENANCE_DECISION_CODES,
+  'UL1',
+  'UL2',
+  'UL3',
+  'UL4',
   'US',
+  'US1',
+  'US2',
+  'US3',
+  'US4',
+  'US5',
+  'US6',
+  'US7',
 ]);
+const ALL_RENDER_CODE_SET = new Set(ALL_RENDER_CODES);
 const LANGUAGE_ASSIGNMENT_TOPICS = new Set([
   'assignmenttargettype',
   'assignment',
@@ -1854,24 +1865,46 @@ function normalizeIssueMap(value) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Es2015ProvenanceError('Issue map must be an object');
   }
+  for (const code of Object.keys(value)) {
+    if (!ALL_RENDER_CODE_SET.has(code)) {
+      throw new Es2015ProvenanceError(`Issue map contains unapproved code ${code}`);
+    }
+  }
   const map = new Map();
+  const issueOwners = new Map([[PARENT_ISSUE, 'T1']]);
   for (const code of ALL_RENDER_CODES) {
     const entry = /** @type {Record<string, any>} */ (value)[code];
-    if (entry === undefined) continue;
-    if (Number.isInteger(entry) && entry > 0) {
-      map.set(code, entry);
-      continue;
+    if (entry === undefined) {
+      throw new Es2015ProvenanceError(`Issue map is missing required code ${code}`);
     }
-    if (
+    let issueNumber;
+    if (Number.isInteger(entry) && entry > 0) {
+      issueNumber = entry;
+    } else if (
       typeof entry === 'object' &&
       entry !== null &&
       Number.isInteger(entry.number) &&
       entry.number > 0
     ) {
-      map.set(code, entry.number);
-      continue;
+      issueNumber = entry.number;
+    } else {
+      throw new Es2015ProvenanceError(
+        `Issue map entry ${code} must provide a positive issue number`,
+      );
     }
-    throw new Es2015ProvenanceError(`Issue map entry ${code} must provide a positive issue number`);
+    const priorOwner = issueOwners.get(issueNumber);
+    if (priorOwner !== undefined) {
+      if (priorOwner === 'T1') {
+        throw new Es2015ProvenanceError(
+          `Issue map entry ${code} must not reuse parent issue #${PARENT_ISSUE}`,
+        );
+      }
+      throw new Es2015ProvenanceError(
+        `Issue map reuses issue #${issueNumber} for ${priorOwner} and ${code}`,
+      );
+    }
+    issueOwners.set(issueNumber, code);
+    map.set(code, issueNumber);
   }
   return map;
 }

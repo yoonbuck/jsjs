@@ -257,12 +257,19 @@ function resolvePrimaryMode(options) {
 
 /** @param {ProvenanceCheckDependencies} deps */
 async function initializeFoundation(deps) {
-  const { manifestText, fragmentTexts } = await expectedFoundation(deps);
-  await assertInitializableFragments(deps);
+  const { manifestText, fragmentTexts } = await preflightInitialization(deps);
   await deps.writeFile(ES2015_PROVENANCE_FILE, manifestText);
   for (const code of ES2015_PROVENANCE_DECISION_CODES) {
     await deps.writeFile(decisionFragmentPath(code), fragmentTexts.get(code));
   }
+}
+
+/** @param {ProvenanceCheckDependencies} deps */
+async function preflightInitialization(deps) {
+  const foundation = await expectedFoundation(deps);
+  await assertInitializableDecisionDirectory(deps);
+  await assertInitializableFragments(deps);
+  return foundation;
 }
 
 /** @param {ProvenanceCheckDependencies} deps @param {string | null} completeCode */
@@ -319,7 +326,9 @@ async function loadReviewedManifest(deps) {
 /** @param {ProvenanceCheckDependencies} deps */
 async function expectedFoundation(deps) {
   const classifications = taxonomyClassifications(await readRequiredFile(deps, TAXONOMY_FILE));
-  const manifest = buildProvenanceFoundation(classifications);
+  const manifestText = renderJson(buildProvenanceFoundation(classifications));
+  const manifest = parseEs2015ProvenanceManifest(manifestText);
+  validateProvenanceFoundation(manifest, classifications);
   const fragmentTexts = new Map(
     ES2015_PROVENANCE_DECISION_CODES.map((code) => [
       code,
@@ -334,10 +343,43 @@ async function expectedFoundation(deps) {
       }),
     ]),
   );
+  const fragments = new Map(
+    ES2015_PROVENANCE_DECISION_CODES.map((code) => [
+      code,
+      parseEs2015DecisionFragment(fragmentTexts.get(code), code),
+    ]),
+  );
+  validateDecisionFragments(manifest, fragments, { allowPendingReview: false });
   return {
-    manifestText: renderJson(manifest),
+    manifestText,
     fragmentTexts,
   };
+}
+
+/** @param {ProvenanceCheckDependencies} deps */
+async function assertInitializableDecisionDirectory(deps) {
+  /** @type {readonly string[]} */
+  let entries;
+  try {
+    entries = await deps.readdir(PROVENANCE_DECISIONS_DIRECTORY);
+  } catch (error) {
+    if (/** @type {any} */ (error)?.code === 'ENOENT') {
+      throw new Es2015ProvenanceCheckError(
+        `${PROVENANCE_DECISIONS_DIRECTORY} is missing`,
+      );
+    }
+    throw error;
+  }
+  const expected = new Set(
+    ES2015_PROVENANCE_DECISION_CODES.map((code) => `${code}.json`),
+  );
+  for (const name of [...entries].sort()) {
+    if (!expected.has(name)) {
+      throw new Es2015ProvenanceCheckError(
+        `${PROVENANCE_DECISIONS_DIRECTORY}/${name} is not an approved provenance fragment`,
+      );
+    }
+  }
 }
 
 /** @param {ProvenanceCheckDependencies} deps */
