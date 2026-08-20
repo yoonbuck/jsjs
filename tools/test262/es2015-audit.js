@@ -19,6 +19,14 @@ import {
   summarizeEs2015Classification,
 } from './es2015-taxonomy.js';
 import {
+  ES2015_PROVENANCE_DECISION_CODES,
+  ES2015_PROVENANCE_FILE,
+  buildProvenanceFoundation,
+  parseEs2015DecisionFragment,
+  parseEs2015ProvenanceManifest,
+  validateDecisionFragments,
+} from './es2015-provenance.js';
+import {
   ES2015_PROMOTION_FILE,
   parseEs2015Promotion,
   promotionPaths,
@@ -63,6 +71,7 @@ const SUBSET_FILE = 'tools/test262/upstream-subset.json';
 const FEATURES_FILE = 'tools/test262/features.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
 const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
+const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
 const AUDIT_EVIDENCE_KEYS = Object.freeze([
   'version',
   'repository',
@@ -98,6 +107,8 @@ const EXECUTION_STATUSES = new Set(['passed', 'failed', 'skipped']);
  *   listRoots: () => Promise<readonly string[]>,
  *   readRoot: (path: string) => Promise<string>,
  *   readIncludeDefinitions: () => Promise<Map<string, unknown>>,
+ *   readProvenanceManifest: () => Promise<string>,
+ *   readDecisionFragments: () => Promise<ReadonlyMap<string, string>>,
  *   readPathsFile: (path: string) => Promise<string>,
  *   runPromotion: (options: {
  *     paths: readonly string[],
@@ -144,6 +155,8 @@ export async function main(argv = [], dependencies = {}) {
     featuresText,
     reportText,
     auditEvidenceText,
+    provenanceManifestText,
+    decisionFragmentTexts,
   ] = await Promise.all([
     deps.readFile(ES2015_POLICY_FILE),
     deps.readFile(ES2015_ANCHORS_FILE),
@@ -151,10 +164,20 @@ export async function main(argv = [], dependencies = {}) {
     deps.readFile(FEATURES_FILE),
     deps.readFile(REPORT_FILE),
     deps.readFile(ES2015_AUDIT_EVIDENCE_FILE),
+    deps.readProvenanceManifest(),
+    deps.readDecisionFragments(),
   ]);
   const promotionText = await readOptionalFile(deps, ES2015_PROMOTION_FILE);
   const policy = parseEs2015Policy(policyText);
   const anchors = parseEs2015Anchors(anchorsText);
+  const provenanceManifest = parseEs2015ProvenanceManifest(provenanceManifestText);
+  const parsedDecisionFragments = parseDecisionFragments(decisionFragmentTexts);
+  const reviewedProvenance = withDecisionCodes(
+    validateDecisionFragments(provenanceManifest, parsedDecisionFragments, {
+      allowPendingReview: false,
+    }),
+    parsedDecisionFragments,
+  );
   assertPolicyPin(policy, pin);
   const subset = parseUpstreamSubset(subsetText);
   assertSubsetPin(subset, pin);
@@ -254,6 +277,7 @@ export async function main(argv = [], dependencies = {}) {
     auditResults,
     blockers: evidence.blockers,
     intentionalDeviations: evidence.intentionalDeviations,
+    reviewedProvenance,
   });
   const artifact = buildArtifact({
     pin,
@@ -310,9 +334,50 @@ export function createAuditDependencies(options = {}) {
   const repositoryRootUrl = options.repositoryRootUrl ?? REPOSITORY_ROOT_URL;
   const readRepositoryFile = (/** @type {string} */ path) =>
     readFile(new URL(path, repositoryRootUrl), 'utf8');
+  const readOptionalRepositoryFile = async (/** @type {string} */ path) => {
+    try {
+      return await readRepositoryFile(path);
+    } catch (error) {
+      if (/** @type {any} */ (error)?.code === 'ENOENT') {
+        return null;
+      }
+      throw error;
+    }
+  };
   const readPin = () => readTest262Pin(repositoryRootUrl);
   const checkoutUrl = (/** @type {{ checkoutPath: string }} */ pin) =>
     new URL(`${pin.checkoutPath.replace(/\/$/u, '')}/`, repositoryRootUrl);
+  const readProvenanceManifest = async () => {
+    const explicit = await readOptionalRepositoryFile(ES2015_PROVENANCE_FILE);
+    if (explicit !== null) {
+      return explicit;
+    }
+    return syntheticProvenanceManifestText(
+      await readFile(new URL(ES2015_TAXONOMY_ARTIFACT, REPOSITORY_ROOT_URL), 'utf8'),
+    );
+  };
+  const readDecisionFragments = async () => {
+    /** @type {Map<string, string>} */
+    const fragments = new Map();
+    for (const code of ES2015_PROVENANCE_DECISION_CODES) {
+      const text = await readOptionalRepositoryFile(
+        `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+      );
+      if (text !== null) {
+        fragments.set(code, text);
+      }
+    }
+    if (fragments.size > 0) {
+      return fragments;
+    }
+    const manifest = parseEs2015ProvenanceManifest(await readProvenanceManifest());
+    return new Map(
+      ES2015_PROVENANCE_DECISION_CODES.map((code) => [
+        code,
+        `${JSON.stringify(emptyDecisionFragmentRecord(manifest, code), null, 2)}\n`,
+      ]),
+    );
+  };
   return {
     environment: options.environment ?? process.env,
     readPin,
@@ -340,6 +405,8 @@ export function createAuditDependencies(options = {}) {
       const pin = await readPin();
       return readHarnessDefinitions(pin.checkoutPath, repositoryRootUrl);
     },
+    readProvenanceManifest,
+    readDecisionFragments,
     readPathsFile: (path) => readFile(path, 'utf8'),
     runPromotion: async ({
       paths,
@@ -845,6 +912,91 @@ async function readOptionalFile(deps, path) {
     }
     throw error;
   }
+}
+
+/** @param {string} text */
+function syntheticProvenanceManifestText(text) {
+  /** @type {unknown} */
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Es2015AuditError(
+      `${ES2015_TAXONOMY_ARTIFACT} cannot seed ${ES2015_PROVENANCE_FILE}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !Array.isArray(/** @type {Record<string, unknown>} */ (parsed).classifications)
+  ) {
+    throw new Es2015AuditError(
+      `${ES2015_TAXONOMY_ARTIFACT} cannot seed ${ES2015_PROVENANCE_FILE}`,
+    );
+  }
+  const manifest = buildProvenanceFoundation(
+    /** @type {Array<any>} */ (
+      /** @type {Record<string, unknown>} */ (parsed).classifications
+    ).map((record) => ({
+      path: record.path,
+      variants: record.variants,
+      partition: record.partition,
+      finalClass: record.status,
+    })),
+  );
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+/**
+ * @param {ReadonlyMap<string, string> | Record<string, string>} fragments
+ * @returns {Map<string, ReturnType<typeof parseEs2015DecisionFragment>>}
+ */
+function parseDecisionFragments(fragments) {
+  const entries =
+    fragments instanceof Map ? [...fragments] : Object.entries(fragments);
+  return new Map(
+    entries.map(([code, text]) => [code, parseEs2015DecisionFragment(text, code)]),
+  );
+}
+
+/**
+ * @param {ReadonlyMap<string, object>} decisions
+ * @param {ReadonlyMap<string, ReturnType<typeof parseEs2015DecisionFragment>>} fragments
+ */
+function withDecisionCodes(decisions, fragments) {
+  const codesByPath = new Map();
+  for (const [code, fragment] of fragments) {
+    for (const decision of fragment.decisions) {
+      codesByPath.set(decision.path, code);
+    }
+  }
+  return new Map(
+    [...decisions].map(([path, decision]) => [
+      path,
+      Object.freeze({
+        code: codesByPath.get(path),
+        ...decision,
+      }),
+    ]),
+  );
+}
+
+/**
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} manifest
+ * @param {string} code
+ */
+function emptyDecisionFragmentRecord(manifest, code) {
+  return {
+    version: manifest.version,
+    repository: manifest.repository,
+    revision: manifest.revision,
+    specification: manifest.specification,
+    parent: manifest.parent,
+    code,
+    decisions: [],
+  };
 }
 
 /**

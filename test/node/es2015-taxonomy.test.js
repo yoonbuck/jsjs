@@ -155,6 +155,7 @@ function auditEvidence(options = {}) {
 }
 
 const AUDIT_EVIDENCE = auditEvidence();
+const EXACT_PATHS_FILE = '/absolute/exact.paths.txt';
 
 /** @param {string} text */
 function sha256(text) {
@@ -902,17 +903,40 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit check stays metadata-only even with promotion fixtures present',
+    run: async () => {
+      const baseline = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+      });
+      assertSame(await auditEs2015Taxonomy([], baseline), 0);
+      const stored = fixtureOutput(baseline, AUDIT_PATH);
+      const checkOnly = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        files: new Map([[AUDIT_PATH, stored]]),
+        runPromotion: async () => {
+          throw new Error('audit check must not execute Test262');
+        },
+      });
+
+      assertSame(await auditEs2015Taxonomy(['--check'], checkOnly), 0);
+      assertSame(fixtureOutput(checkOnly, AUDIT_PATH), stored);
+      assertSame(checkOnly.writes.length, 0);
+    },
+  },
+  {
     name: 'ES2015 audit writes execution only for the exact reviewed promotion ledger',
     run: async () => {
       /** @type {readonly string[] | undefined} */
       let executedPaths;
+      let runPromotionCalls = 0;
       const dependencies = auditDependencies({
         subset: AUDIT_PROMOTION_SUBSET,
         promotion: AUDIT_PROMOTION,
-        pathFiles: new Map([
-          ['promotion-ledger.txt', `${AUDIT_PROMOTION_PATH}\n`],
-        ]),
+        pathFiles: new Map([[EXACT_PATHS_FILE, `${AUDIT_PROMOTION_PATH}\n`]]),
         runPromotion: async ({ paths }) => {
+          runPromotionCalls += 1;
           executedPaths = paths;
           return AUDIT_RECORDS;
         },
@@ -920,11 +944,12 @@ export default [
 
       assertSame(
         await auditEs2015Taxonomy(
-          ['--paths-file=promotion-ledger.txt', '--write-execution'],
+          [`--paths-file=${EXACT_PATHS_FILE}`, '--write-execution'],
           dependencies,
         ),
         0,
       );
+      assertSame(runPromotionCalls, 1);
       assertSame(
         JSON.stringify(executedPaths),
         JSON.stringify([AUDIT_PROMOTION_PATH]),
@@ -938,6 +963,7 @@ export default [
       );
 
       assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      assertSame(runPromotionCalls, 1);
       const artifact = JSON.parse(fixtureOutput(dependencies, AUDIT_PATH));
       assertSame(
         JSON.stringify(artifact.statusTables.core),
@@ -953,9 +979,7 @@ export default [
       const mismatch = auditDependencies({
         subset: AUDIT_PROMOTION_SUBSET,
         promotion: AUDIT_PROMOTION,
-        pathFiles: new Map([
-          ['wrong-ledger.txt', 'test/language/selected.js\n'],
-        ]),
+        pathFiles: new Map([['wrong-ledger.txt', 'test/language/selected.js\n']]),
         runPromotion: async () => AUDIT_RECORDS,
       });
       const error = await rejected(() =>

@@ -15,6 +15,15 @@ import {
   validateDecisionFragments,
   validateProvenanceFoundation,
 } from '../../tools/test262/es2015-provenance.js';
+import {
+  Es2015TaxonomyError,
+  buildEs2015Inventory,
+  classifyEs2015Inventory,
+  parseEs2015Anchors,
+  parseEs2015Policy,
+  renderEs2015Taxonomy,
+  summarizeEs2015Classification,
+} from '../../tools/test262/es2015-taxonomy.js';
 
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
@@ -109,6 +118,32 @@ const APPROVED_PRODUCTION_FOUNDATION = Object.freeze({
       entryLedgerSha256: '6fa9daa7322394f0f96b754ef6674ccb80b916cd4209c2308f7591eaf46f7e23',
     }),
   }),
+});
+const CLASSIFICATION_POLICY = JSON.stringify({
+  version: 1,
+  repository: TEST262_REPOSITORY,
+  revision: TEST262_REVISION,
+  specification: {
+    source: SPECIFICATION_SOURCE,
+    sourceSha256: SPECIFICATION_SHA256,
+  },
+  es2015Features: ['let'],
+  laterFeatures: ['async-functions'],
+  neutralFeatures: [],
+  laterFlags: ['CanBlockIsFalse', 'CanBlockIsTrue'],
+  pathRules: [
+    {
+      prefix: 'test/annexB/',
+      partition: 'annex-b',
+      reason: 'Annex B roots stay separate from core.',
+    },
+  ],
+});
+const CLASSIFICATION_ANCHORS = JSON.stringify({
+  version: 1,
+  source: SPECIFICATION_SOURCE,
+  sourceSha256: SPECIFICATION_SHA256,
+  anchors: ['sec-anchor'],
 });
 
 /** @param {unknown} value */
@@ -426,6 +461,119 @@ const COMPLETE_ISSUE_MAP = Object.freeze({
   US6: 114,
   US7: 115,
 });
+
+function classificationPolicy() {
+  return parseEs2015Policy(CLASSIFICATION_POLICY);
+}
+
+function classificationAnchors() {
+  return parseEs2015Anchors(CLASSIFICATION_ANCHORS);
+}
+
+/** @param {string} path */
+function passedExecution(path) {
+  return [
+    {
+      type: 'test',
+      file: path,
+      variant: 'non-strict',
+      status: 'passed',
+    },
+    {
+      type: 'test',
+      file: path,
+      variant: 'strict',
+      status: 'passed',
+    },
+  ];
+}
+
+/** @param {string} code */
+function productionBatchPath(code) {
+  const batch = productionManifest().batches.find((entry) => entry.code === code);
+  const path = batch?.entries[0]?.path;
+  if (typeof path !== 'string') {
+    throw new Error(`expected production manifest entry for ${code}`);
+  }
+  return path;
+}
+
+/** @param {{ code: string, path: string, finalPartition: string, finalStatus: string }} options */
+function reviewedDecisionWithoutHash(options) {
+  return {
+    ...decisionWithoutHash(),
+    path: options.path,
+    finalPartition: options.finalPartition,
+    finalStatus: options.finalStatus,
+    destination: options.finalStatus.startsWith('blocked:')
+      ? {
+          blocker: options.finalStatus.slice('blocked:'.length),
+          issue: 96,
+        }
+      : { blocker: null, issue: null },
+  };
+}
+
+/** @param {readonly { code: string, path: string, finalPartition: string, finalStatus: string }[]} decisions */
+function reviewedProvenanceMap(decisions) {
+  const fragments = new Map();
+  for (const spec of decisions) {
+    const decision = reviewedDecisionWithoutHash(spec);
+    const fragment =
+      fragments.get(spec.code) ??
+      {
+        ...validDecisionFragmentValue(),
+        code: spec.code,
+        decisions: [],
+      };
+    fragment.decisions.push({
+      ...decision,
+      artifactSha256: canonicalDecisionSha256(decision),
+    });
+    fragments.set(spec.code, fragment);
+  }
+  const parsed = new Map(
+    [...fragments].map(([code, value]) => [
+      code,
+      parseEs2015DecisionFragment(json(value), code),
+    ]),
+  );
+  const validated = validateDecisionFragments(productionManifest(), parsed, {
+    allowPendingReview: false,
+  });
+  return new Map(
+    decisions.map((spec) => {
+      const decision = validated.get(spec.path);
+      if (decision === undefined) {
+        throw new Error(`validated provenance is missing ${spec.path}`);
+      }
+      return [spec.path, Object.freeze({ code: spec.code, ...decision })];
+    }),
+  );
+}
+
+/** @param {{ code: string, path: string, finalPartition: string, finalStatus: string }} spec */
+function reviewedProvenanceStub(spec) {
+  const batch = productionManifest().batches.find((entry) => entry.code === spec.code);
+  const ledgerEntry = batch?.entries.find((entry) => entry.path === spec.path);
+  if (ledgerEntry === undefined) {
+    throw new Error(`expected reviewed provenance ledger entry for ${spec.code} ${spec.path}`);
+  }
+  const decision = reviewedDecisionWithoutHash(spec);
+  return new Map([
+    [
+      spec.path,
+      Object.freeze({
+        code: spec.code,
+        path: spec.path,
+        priorClass: ledgerEntry.priorClass,
+        finalPartition: spec.finalPartition,
+        finalStatus: spec.finalStatus,
+        artifactSha256: canonicalDecisionSha256(decision),
+      }),
+    ],
+  ]);
+}
 
 export default [
   {
@@ -1103,6 +1251,341 @@ export default [
           Es2015ProvenanceError,
         ).message,
         'UL3 must contain reviewed decisions for every ledger path',
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy keeps empty reviewed provenance byte-identical',
+    run: () => {
+      const inventory = buildEs2015Inventory({
+        roots: [
+          {
+            path: 'test/language/reviewed-core.js',
+            metadata: {
+              description: 'A selected ES2015 root.',
+              es5id: '15.1',
+              es6id: null,
+              esid: null,
+              features: [],
+              flags: [],
+              includes: [],
+            },
+          },
+          {
+            path: 'test/language/reviewed-unknown.js',
+            metadata: {
+              description: 'An unchanged unknown root.',
+              es5id: null,
+              es6id: null,
+              esid: null,
+              features: [],
+              flags: [],
+              includes: [],
+            },
+          },
+        ],
+      });
+      const selected = new Set(['test/language/reviewed-core.js']);
+      const selectedResults = new Map([
+        ['test/language/reviewed-core.js', passedExecution('test/language/reviewed-core.js')],
+      ]);
+      const withoutReviewed = classifyEs2015Inventory({
+        policy: classificationPolicy(),
+        anchors: classificationAnchors(),
+        inventory,
+        selected,
+        selectedResults,
+      });
+      const withEmptyReviewed = classifyEs2015Inventory({
+        policy: classificationPolicy(),
+        anchors: classificationAnchors(),
+        inventory,
+        selected,
+        selectedResults,
+        reviewedProvenance: new Map(),
+      });
+
+      const withoutSummary = summarizeEs2015Classification(withoutReviewed);
+      const withSummary = summarizeEs2015Classification(withEmptyReviewed);
+      assertSame(json(withEmptyReviewed), json(withoutReviewed));
+      assertSame(json(withSummary), json(withoutSummary));
+      assertSame(
+        renderEs2015Taxonomy({ summary: withSummary }),
+        renderEs2015Taxonomy({ summary: withoutSummary }),
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy reclassifies only exact unknown roots from reviewed provenance',
+    run: () => {
+      const corePath = PRODUCTION_UL3_PATH;
+      const annexPath = productionBatchPath('UA');
+      const laterPath = productionBatchPath('UB');
+      const reviewed = reviewedProvenanceMap([
+        {
+          code: 'UL3',
+          path: corePath,
+          finalPartition: 'core',
+          finalStatus: 'selected-passing',
+        },
+        {
+          code: 'UA',
+          path: annexPath,
+          finalPartition: 'annex-b',
+          finalStatus: 'annex-b',
+        },
+        {
+          code: 'UB',
+          path: laterPath,
+          finalPartition: 'later-or-non-es2015',
+          finalStatus: 'later-or-non-es2015',
+        },
+      ]);
+      const inventory = buildEs2015Inventory({
+        roots: [
+          corePath,
+          annexPath,
+          laterPath,
+          'test/language/untouched.js',
+        ].map((path) => ({
+          path,
+          metadata: {
+            description: `Fixture ${path}`,
+            es5id: null,
+            es6id: null,
+            esid: null,
+            features: [],
+            flags: [],
+            includes: [],
+          },
+        })),
+      });
+      const classifications = classifyEs2015Inventory({
+        policy: classificationPolicy(),
+        anchors: classificationAnchors(),
+        inventory,
+        selected: new Set([corePath]),
+        selectedResults: new Map([[corePath, passedExecution(corePath)]]),
+        auditResults: new Map([[annexPath, passedExecution(annexPath)]]),
+        reviewedProvenance: reviewed,
+      });
+      const byPath = new Map(classifications.map((record) => [record.path, record]));
+
+      assertSame(
+        json([
+          {
+            path: corePath,
+            partition: byPath.get(corePath)?.partition,
+            status: byPath.get(corePath)?.status,
+            provenance: byPath.get(corePath)?.provenance,
+          },
+          {
+            path: annexPath,
+            partition: byPath.get(annexPath)?.partition,
+            status: byPath.get(annexPath)?.status,
+            provenance: byPath.get(annexPath)?.provenance,
+          },
+          {
+            path: laterPath,
+            partition: byPath.get(laterPath)?.partition,
+            status: byPath.get(laterPath)?.status,
+            provenance: byPath.get(laterPath)?.provenance,
+          },
+          {
+            path: 'test/language/untouched.js',
+            partition: byPath.get('test/language/untouched.js')?.partition,
+            status: byPath.get('test/language/untouched.js')?.status,
+            provenance: byPath.get('test/language/untouched.js')?.provenance,
+          },
+        ]),
+        json([
+          {
+            path: corePath,
+            partition: 'core',
+            status: 'selected-passing',
+            provenance: [`review:UL3:${reviewed.get(corePath)?.artifactSha256}`],
+          },
+          {
+            path: annexPath,
+            partition: 'annex-b',
+            status: 'annex-b',
+            provenance: [
+              'path:test/annexB/',
+              `review:UA:${reviewed.get(annexPath)?.artifactSha256}`,
+            ],
+          },
+          {
+            path: laterPath,
+            partition: 'later-or-non-es2015',
+            status: 'later-or-non-es2015',
+            provenance: [`review:UB:${reviewed.get(laterPath)?.artifactSha256}`],
+          },
+          {
+            path: 'test/language/untouched.js',
+            partition: 'unknown-edition',
+            status: 'unknown-edition',
+            provenance: [],
+          },
+        ]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 taxonomy rejects conflicting reviewed provenance evidence',
+    run: () => {
+      const policy = classificationPolicy();
+      const anchors = classificationAnchors();
+      const laterCases = [
+        {
+          label: 'feature evidence',
+          path: productionBatchPath('UL1'),
+          code: 'UL1',
+          metadata: {
+            description: 'Later feature evidence.',
+            es5id: null,
+            es6id: null,
+            esid: null,
+            features: ['async-functions'],
+            flags: [],
+            includes: [],
+          },
+        },
+        {
+          label: 'include evidence',
+          path: productionBatchPath('UL2'),
+          code: 'UL2',
+          metadata: {
+            description: 'Later include evidence.',
+            es5id: null,
+            es6id: null,
+            esid: null,
+            features: [],
+            flags: [],
+            includes: ['later.js'],
+          },
+          includeDefinitions: {
+            'later.js': { features: ['async-functions'] },
+          },
+        },
+        {
+          label: 'flag evidence',
+          path: productionBatchPath('UL4'),
+          code: 'UL4',
+          metadata: {
+            description: 'Later flag evidence.',
+            es5id: null,
+            es6id: null,
+            esid: null,
+            features: [],
+            flags: ['CanBlockIsTrue'],
+            includes: [],
+          },
+        },
+      ];
+
+      for (const scenario of laterCases) {
+        const error = assertThrows(
+          () =>
+            classifyEs2015Inventory({
+              policy,
+              anchors,
+              inventory: buildEs2015Inventory({
+                roots: [
+                  {
+                    path: scenario.path,
+                    metadata: scenario.metadata,
+                  },
+                ],
+                includeDefinitions: scenario.includeDefinitions,
+              }),
+              reviewedProvenance: reviewedProvenanceStub({
+                code: scenario.code,
+                path: scenario.path,
+                finalPartition: 'core',
+                finalStatus: 'audit-passing-unselected',
+              }),
+            }),
+          Es2015TaxonomyError,
+        );
+        assertSame(
+          error.message,
+          `ES2015 reviewed provenance for ${scenario.path} expected prior class unknown-edition, got later-or-non-es2015`,
+          scenario.label,
+        );
+      }
+
+      const statusPath = productionBatchPath('US1');
+      const statusMismatch = assertThrows(
+        () =>
+          classifyEs2015Inventory({
+            policy,
+            anchors,
+            inventory: buildEs2015Inventory({
+              roots: [
+                {
+                  path: statusPath,
+                  metadata: {
+                    description: 'Reviewed status mismatch.',
+                    es5id: null,
+                    es6id: null,
+                    esid: null,
+                    features: [],
+                    flags: [],
+                    includes: [],
+                  },
+                },
+              ],
+            }),
+            auditResults: new Map([[statusPath, passedExecution(statusPath)]]),
+            reviewedProvenance: reviewedProvenanceStub({
+              code: 'US1',
+              path: statusPath,
+              finalPartition: 'core',
+              finalStatus: 'selected-passing',
+            }),
+          }),
+        Es2015TaxonomyError,
+      );
+      assertSame(
+        statusMismatch.message,
+        `ES2015 reviewed provenance for ${statusPath} expected status selected-passing, got audit-passing-unselected`,
+      );
+
+      const priorClassPath = productionBatchPath('US2');
+      const priorClassMismatch = assertThrows(
+        () =>
+          classifyEs2015Inventory({
+            policy,
+            anchors,
+            inventory: buildEs2015Inventory({
+              roots: [
+                {
+                  path: priorClassPath,
+                  metadata: {
+                    description: 'Already classified core root.',
+                    es5id: null,
+                    es6id: '13.2',
+                    esid: null,
+                    features: [],
+                    flags: [],
+                    includes: [],
+                  },
+                },
+              ],
+            }),
+            auditResults: new Map([[priorClassPath, passedExecution(priorClassPath)]]),
+            reviewedProvenance: reviewedProvenanceStub({
+              code: 'US2',
+              path: priorClassPath,
+              finalPartition: 'core',
+              finalStatus: 'audit-passing-unselected',
+            }),
+          }),
+        Es2015TaxonomyError,
+      );
+      assertSame(
+        priorClassMismatch.message,
+        `ES2015 reviewed provenance for ${priorClassPath} expected prior class unknown-edition, got audit-passing-unselected`,
       );
     },
   },
