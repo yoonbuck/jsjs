@@ -244,67 +244,10 @@ export class EngineFunction extends EngineObject {
         linkValueToGeneratorHostChain(activeRealm, argument);
       }
 
-      const functionEnvironment = this.functionExecutionEnvironment(thisValue);
-
-      if (
-        this.functionKind === 'generator' ||
-        this.functionKind === 'generatorMethod'
-      ) {
-        const generatorFactory = this._generatorFactory;
-
-        if (generatorFactory === undefined) {
-          throw new TypeError(
-            'Generator function is missing a generator factory',
-          );
-        }
-
-        const completion = this.executeWithFunctionEnvironment(
-          functionEnvironment.thisValue,
-          args,
-          functionEnvironment,
-          (functionObject, resolvedThisValue, receivedArgs, environment) => ({
-            type: 'return',
-            value: generatorFactory(
-              functionObject,
-              resolvedThisValue,
-              receivedArgs,
-              environment,
-            ),
-          }),
-        );
-
-        if (completion.type === 'return') {
-          return linkValueToGeneratorHostChain(activeRealm, completion.value);
-        }
-
-        throw new TypeError(
-          'Generator factory returned an unexpected function completion',
-        );
-      }
-
-      const completion = this.executeWithFunctionEnvironment(
-        functionEnvironment.thisValue,
+      return this.executeInvocation(
         args,
-        functionEnvironment,
-      );
-
-      if (completion.type === 'return') {
-        return linkValueToGeneratorHostChain(activeRealm, completion.value);
-      }
-
-      if (completion.type === 'normal') {
-        return undefined;
-      }
-
-      if (completion.type === 'throw') {
-        throw new ThrowSignal(completion.value);
-      }
-
-      // `break`/`continue` cannot escape a function body: the parser rejects
-      // them outside a loop, so reaching this point means the evaluator
-      // produced a completion kind that does not exist.
-      throw new TypeError(
-        `Unexpected ${completion.type} completion from a function body`,
+        this.functionExecutionEnvironment(thisValue, undefined),
+        activeRealm,
       );
     } finally {
       this.realm.agent.exitSynchronousCallChain(callChain);
@@ -362,7 +305,15 @@ export class EngineFunction extends EngineObject {
         this.realm.intrinsics.objectPrototype,
         this.realm.agent,
       );
-      const result = this.callFunction(instance, args);
+      const functionEnvironment = this.functionExecutionEnvironment(
+        instance,
+        newTarget,
+      );
+      const result = this.executeInvocation(
+        args,
+        functionEnvironment,
+        activeRealm,
+      );
 
       return /** @type {EngineObject} */ (
         linkValueToGeneratorHostChain(
@@ -377,9 +328,10 @@ export class EngineFunction extends EngineObject {
 
   /**
    * @param {unknown} thisValue
+   * @param {unknown} newTarget
    * @returns {import('./environment.js').FunctionExecutionEnvironment}
    */
-  functionExecutionEnvironment(thisValue) {
+  functionExecutionEnvironment(thisValue, newTarget) {
     if (this.thisMode === 'lexical') {
       if (this.enclosingFunctionEnvironment === undefined) {
         throw new GuestErrorSignal(
@@ -396,7 +348,79 @@ export class EngineFunction extends EngineObject {
       thisStatus: 'initialized',
       thisValue: this.resolveThisValue(thisValue),
       homeObject: this.methodHomeObject,
+      newTargetStatus: 'present',
+      newTarget,
     });
+  }
+
+  /**
+   * Executes a function body against a function execution environment that has
+   * already been created by the call or construct path.
+   *
+   * @param {readonly unknown[]} args
+   * @param {import('./environment.js').FunctionExecutionEnvironment} functionEnvironment
+   * @param {Realm} activeRealm
+   * @returns {unknown}
+   */
+  executeInvocation(args, functionEnvironment, activeRealm) {
+    if (
+      this.functionKind === 'generator' ||
+      this.functionKind === 'generatorMethod'
+    ) {
+      const generatorFactory = this._generatorFactory;
+
+      if (generatorFactory === undefined) {
+        throw new TypeError('Generator function is missing a generator factory');
+      }
+
+      const completion = this.executeWithFunctionEnvironment(
+        functionEnvironment.thisValue,
+        args,
+        functionEnvironment,
+        (functionObject, resolvedThisValue, receivedArgs, environment) => ({
+          type: 'return',
+          value: generatorFactory(
+            functionObject,
+            resolvedThisValue,
+            receivedArgs,
+            environment,
+          ),
+        }),
+      );
+
+      if (completion.type === 'return') {
+        return linkValueToGeneratorHostChain(activeRealm, completion.value);
+      }
+
+      throw new TypeError(
+        'Generator factory returned an unexpected function completion',
+      );
+    }
+
+    const completion = this.executeWithFunctionEnvironment(
+      functionEnvironment.thisValue,
+      args,
+      functionEnvironment,
+    );
+
+    if (completion.type === 'return') {
+      return linkValueToGeneratorHostChain(activeRealm, completion.value);
+    }
+
+    if (completion.type === 'normal') {
+      return undefined;
+    }
+
+    if (completion.type === 'throw') {
+      throw new ThrowSignal(completion.value);
+    }
+
+    // `break`/`continue` cannot escape a function body: the parser rejects
+    // them outside a loop, so reaching this point means the evaluator
+    // produced a completion kind that does not exist.
+    throw new TypeError(
+      `Unexpected ${completion.type} completion from a function body`,
+    );
   }
 
   /**
@@ -452,6 +476,7 @@ export class EngineFunction extends EngineObject {
       outer: this.enclosingFunctionEnvironment,
       thisStatus: derived ? 'uninitialized' : 'initialized',
       thisValue: instance,
+      newTargetStatus: 'present',
       newTarget,
       homeObject: this.methodHomeObject,
       activeConstructor: derived ? this : undefined,

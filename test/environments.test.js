@@ -8,6 +8,7 @@ import {
   ObjectEnvironmentRecord,
   bindThisValue,
   createFunctionExecutionEnvironment,
+  getNewTarget,
   getIdentifierReference,
   newDeclarativeEnvironment,
   newObjectEnvironment,
@@ -935,12 +936,16 @@ const tests = [
       const methodEnvironment = createFunctionExecutionEnvironment({
         thisStatus: 'initialized',
         thisValue: receiver,
+        newTargetStatus: 'present',
+        newTarget: undefined,
         homeObject,
       });
       const ordinaryEnvironment = createFunctionExecutionEnvironment({
         outer: methodEnvironment,
         thisStatus: 'initialized',
         thisValue: receiver,
+        newTargetStatus: 'present',
+        newTarget: undefined,
       });
       const program = parseScript(
         'var object = { method() { return () => (() => super.value)(); } };',
@@ -977,6 +982,8 @@ const tests = [
       const realm = createRealm();
       const enclosingFunctionEnvironment = createFunctionExecutionEnvironment({
         thisStatus: 'uninitialized',
+        newTargetStatus: 'present',
+        newTarget: undefined,
       });
       const unusedThisArrow = parseScript('(() => 1);').body[0].expression;
       const usedThisArrow = parseScript('(() => this);').body[0].expression;
@@ -1008,12 +1015,35 @@ const tests = [
     run() {
       const environment = createFunctionExecutionEnvironment({
         thisStatus: 'uninitialized',
+        newTargetStatus: 'present',
+        newTarget: undefined,
       });
       const value = new EngineObject(null);
 
       assertSame(bindThisValue(environment, value), value);
       assertSame(environment.thisStatus, 'initialized');
       assertSame(environment.thisValue, value);
+    },
+  },
+  {
+    name: 'function execution environments distinguish absent and present new target records',
+    run() {
+      const absent = createFunctionExecutionEnvironment({
+        thisStatus: 'initialized',
+        thisValue: undefined,
+        newTargetStatus: 'absent',
+      });
+      const present = createFunctionExecutionEnvironment({
+        thisStatus: 'initialized',
+        thisValue: undefined,
+        newTargetStatus: 'present',
+        newTarget: undefined,
+      });
+
+      assertSame(absent.newTargetStatus, 'absent');
+      assertSame(present.newTargetStatus, 'present');
+      assertThrows(() => getNewTarget(absent), GuestErrorSignal);
+      assertSame(getNewTarget(present), undefined);
     },
   },
 ];

@@ -804,7 +804,8 @@ export class GlobalEnvironmentRecord {
  *   thisStatus: 'lexical' | 'uninitialized' | 'initialized',
  *   thisValue: unknown,
  *   homeObject?: EngineObject,
- *   newTarget?: unknown,
+ *   newTargetStatus: 'absent' | 'present',
+ *   newTarget: unknown,
  *   activeConstructor?: import('./function-object.js').EngineFunction,
  * }} FunctionExecutionEnvironment
  */
@@ -815,6 +816,7 @@ export class GlobalEnvironmentRecord {
  *   thisStatus: 'lexical' | 'uninitialized' | 'initialized',
  *   thisValue?: unknown,
  *   homeObject?: EngineObject,
+ *   newTargetStatus?: 'absent' | 'present',
  *   newTarget?: unknown,
  *   activeConstructor?: import('./function-object.js').EngineFunction,
  * }} options
@@ -825,6 +827,7 @@ export function createFunctionExecutionEnvironment({
   thisStatus,
   thisValue = undefined,
   homeObject = undefined,
+  newTargetStatus = 'absent',
   newTarget = undefined,
   activeConstructor = undefined,
 }) {
@@ -833,6 +836,7 @@ export function createFunctionExecutionEnvironment({
     outer,
     thisStatus,
     thisValue,
+    newTargetStatus,
     newTarget,
   };
 
@@ -870,6 +874,27 @@ export function getThisBinding(functionEnvironment) {
   }
 
   throw new GuestErrorSignal('ReferenceError', 'This binding is not available');
+}
+
+/**
+ * @param {FunctionExecutionEnvironment | undefined} functionEnvironment
+ * @returns {unknown}
+ */
+export function getNewTarget(functionEnvironment) {
+  let current = functionEnvironment;
+
+  while (current !== undefined) {
+    if (current.newTargetStatus === 'present') {
+      return current.newTarget;
+    }
+
+    current = current.outer;
+  }
+
+  throw new GuestErrorSignal(
+    'ReferenceError',
+    'new.target is not available outside function code',
+  );
 }
 
 /**

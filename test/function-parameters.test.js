@@ -342,6 +342,33 @@ const tests = [
     },
   },
   {
+    name: 'parameter defaults and destructuring see the active new target before body execution',
+    run() {
+      assertSame(
+        run(`
+          function ordinary(a = new.target) {
+            return a;
+          }
+          function Constructed(a = new.target) {
+            this.seen = a;
+          }
+          function F(
+            { [new.target === F ? 'value' : 'missing']: value = new.target } = { value: undefined },
+            key = eval('new.target')
+          ) {
+            this.values = [value === F, key === F].join(':');
+          }
+          [
+            ordinary() === undefined,
+            new Constructed().seen === Constructed,
+            new F().values
+          ].join(':');
+        `),
+        'true:true:true:true',
+      );
+    },
+  },
+  {
     name: 'arrows reuse non-simple parameter binding semantics without an own arguments object',
     run() {
       assertSame(
