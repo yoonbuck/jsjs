@@ -8,12 +8,14 @@
  * test or reviewer can read, instead of two documents — a workflow file and a
  * description of it — that can drift apart.
  *
- * Two policies are encoded here rather than left to whoever edits the workflow
+ * Three policies are encoded here rather than left to whoever edits the workflow
  * next:
  *
- * - **Least privilege.** The workflow grants `contents: read` at the top level
- *   and no job widens it, so a compromised action in any job cannot write to
- *   the repository.
+ * - **Least privilege.** The workflow grants `contents: read` at the top level.
+ *   Every ordinary job inherits it unchanged, and the only job that declares its
+ *   own permissions — the trusted provenance base guard — declares an explicit
+ *   read-only set (`contents: read`, `pull-requests: read`), so a compromised
+ *   action in any job cannot write to the repository.
  * - **Immutable actions.** Every `uses:` names a full commit SHA, because a tag
  *   like `v4` is a moving pointer the action's owner can repoint at any time.
  *   The human-readable version follows in a comment so the pin stays reviewable.

@@ -167,14 +167,20 @@ that work only after this guard is authoritative.
 **Implementation status:** the coordinator authorized implementation of this
 design on 2026-08-20 after this design's self-review and an independent
 Actions security/spec review cleared all Critical and Important findings. The
-paired implementation plan's Future Tasks G1-G4 (RED workflow security
-contract, RED checker event contract, minimal checker extension, and the
-generated event-separated workflow) are complete against this exact trusted
-base, exact manifest SHA-256, exact profile, and exact marker above; no
-architecture, exact value, trust boundary, or future post-merge requirement in
-this design changed during that implementation. Future Task G5 (focused
-validation and live BASE evidence) is in progress; Future Task G6
-(independent review and bootstrap release) remains pending.
+paired implementation plan's Future Tasks G1-G5 (RED workflow security
+contract, RED checker event contract, minimal checker extension, the generated
+event-separated workflow, and focused validation with isolated live BASE
+evidence) are complete against this exact trusted base, exact manifest SHA-256,
+exact profile, and exact marker above; no architecture, exact value, trust
+boundary, or future post-merge requirement in this design changed during that
+implementation. Future Task G6 (independent review and bootstrap release) is in
+progress: the independent Actions security review and the independent
+provenance-specification review are both clean at
+`92715a5b3ee1a9322d0f8696b573a33ac46da9b5`, and the single authorized final fix
+wave for the whole-branch quality review's Important findings is under way.
+Scoped fix re-review, the guard pull request, ordinary exact-head CI, both
+pull-request CodeQL analyses, squash merge, exact-main verification, the first
+post-merge activation probe, and schema-v3 re-authoring all remain pending.
 
 ### Alternatives considered
 

@@ -689,21 +689,35 @@ below is done.
 
 ### Future Task G5: Focused validation and live BASE evidence
 
-**Status:** in progress. Directly related documentation/status updates (this
-commit) are the only implementation-adjacent change authorized within this
-task; G1-G4 architecture is unchanged.
+**Status:** complete. Implemented under coordinator authorization at
+documentation commit `92715a5b3ee1a9322d0f8696b573a33ac46da9b5`; every item
+below is done, with the evidence recorded in
+`.superpowers/sdd/2026-08-20-provenance-foundation-maintenance/task-G5-report.md`.
+Evidence summary: the focused pair ran GREEN (91 passed, 0 failed, exit 0);
+`npm run ci:check`, `npm run typecheck`, `npm run lint`, `npm run format`, and
+`git diff --check` all exited 0; `shasum -a 256 tools/test262/es2015-provenance.json`
+returned exactly
+`f65f9a499acb92a933fedc5ee9197cc6a4c51ce30b5180cc741b23a93c9dfe92`; the
+generated/semantic taxonomy, manifest, selection, and conformance paths were
+byte-identical to exact BASE `1925873700c180fc38e7e020fc4b631c1866b082`; and the
+isolated exact-BASE checker
+(SHA-256 `c76865bc77e5ccff7ce35d03bbd77a1055ba3e8f1ed3321737902a364392cdfe`,
+distinct from the branch checker) accepted the actual base→head range under the
+exact marker with `GITHUB_EVENT_NAME=pull_request` and `TZ=UTC`, exit 0, before
+the temporary checkout was deleted. Remote `origin/main` was verified at exact
+BASE before and after the evidence; no rebase was performed.
 
 **Files:**
 
 - Inspect every changed implementation file.
 
-- [ ] Run the focused provenance and workflow-contract Node suites together.
-- [ ] Run generated workflow drift, typecheck, lint, format, and
+- [x] Run the focused provenance and workflow-contract Node suites together.
+- [x] Run generated workflow drift, typecheck, lint, format, and
       `git diff --check`.
-- [ ] Verify the canonical provenance manifest SHA-256 remains
+- [x] Verify the canonical provenance manifest SHA-256 remains
       `f65f9a499acb92a933fedc5ee9197cc6a4c51ce30b5180cc741b23a93c9dfe92`
       and semantic/generated taxonomy outputs have no diff.
-- [ ] Materialize outside the repository worktree an isolated temporary
+- [x] Materialize outside the repository worktree an isolated temporary
       checkout of exact BASE
       `1925873700c180fc38e7e020fc4b631c1866b082`, fetch the reviewed implementation
       HEAD as inert objects, and invoke that BASE
@@ -711,23 +725,27 @@ task; G1-G4 architecture is unchanged.
       PR body through a named environment variable under `TZ=UTC` and
       `GITHUB_EVENT_NAME=pull_request`. Do not run the implementation branch's
       checker as substitute evidence.
-- [ ] Remove the temporary checkout after recording the successful command and
+- [x] Remove the temporary checkout after recording the successful command and
       identities.
-- [ ] Do not run broad Test262, audit write mode, browser, JavaScriptCore, or
+- [x] Do not run broad Test262, audit write mode, browser, JavaScriptCore, or
       `ci:contract`.
 
 ### Future Task G6: Independent review and bootstrap release
 
-**Status:** pending. Not started; blocked on Future Task G5 evidence.
+**Status:** in progress. The independent reviews below are complete and clean
+at `92715a5b3ee1a9322d0f8696b573a33ac46da9b5`; the single authorized final fix
+wave for the whole-branch quality review's Important findings is under way. No
+push, pull request, CI run, CodeQL analysis, merge, post-merge verification,
+activation probe, or schema-v3 work has started.
 
 **Files:**
 
 - Review the complete guard implementation diff and generated YAML.
 
-- [ ] Obtain an independent GitHub Actions security review for workflow source,
+- [x] Obtain an independent GitHub Actions security review for workflow source,
       permissions, checkout/fetch behavior, shell injection, HEAD non-execution,
       job/check naming, skipped-job conclusions, and required-check semantics.
-- [ ] Obtain an independent provenance-spec review for exact BASE authority,
+- [x] Obtain an independent provenance-spec review for exact BASE authority,
       foundation-maintenance allowlist, marker behavior, neutral ranges, and no
       schema/taxonomy changes.
 - [ ] Fix every Critical or Important finding, rerun focused checks, and obtain
@@ -763,8 +781,14 @@ coordinator approval.
 ### Post-authorization status
 
 The coordinator authorized implementation on 2026-08-20 after the design
-review above completed. Future Tasks G1-G4 are complete, matching the
+review above completed. Future Tasks G1-G5 are complete, matching the
 checklists above; no architecture, exact value, trust boundary, or future
-post-merge requirement changed from the reviewed design. Future Task G5
-(focused validation and live BASE evidence) is in progress; Future Task G6
-(independent review and bootstrap release) remains pending.
+post-merge requirement changed from the reviewed design. Future Task G6
+(independent review and bootstrap release) is in progress: the independent
+Actions security review and the independent provenance-specification review are
+both clean at `92715a5b3ee1a9322d0f8696b573a33ac46da9b5`, and the single
+authorized final fix wave for the whole-branch quality review's Important
+findings is under way. Scoped fix re-review, the guard pull request, ordinary
+exact-head CI, both pull-request CodeQL analyses, squash merge, exact-main
+verification, the first post-merge activation probe, and schema-v3 re-authoring
+all remain pending.

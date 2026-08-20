@@ -637,18 +637,20 @@ request's head. It differs from the ordinary jobs in every one of these ways:
   only then runs the checked-out base's
   `tools/test262/es2015-provenance-check.js` with the event base/head SHAs and
   the full PR body passed through `PR_BODY`, under fixed `TZ=UTC`.
-- the ordinary, PR-only `test262-upstream` provenance-range step is retained
-  verbatim as defense-in-depth; it does not replace this guard.
+
+The ordinary, PR-only `test262-upstream` provenance-range step is unaffected by
+this job: it is retained verbatim as defense-in-depth, and this guard does not
+replace it.
 
 ### Security properties
 
 Three properties are asserted by `test/node/workflow-contract.test.js`:
 
 - The workflow grants `permissions: contents: read` at the top level and no
-  ordinary job widens it; the guard job's narrower, explicit
+  ordinary job widens it; the guard job's explicit, read-only
   `contents: read`/`pull-requests: read` permissions are asserted separately.
 - Every `uses:` names a full 40-character commit SHA; release versions follow in
-  trailing comments. Both checkout steps pass `persist-credentials: false`.
+  trailing comments. Every checkout step passes `persist-credentials: false`.
 - The guard job never checks out, fetches raw, or executes the pull request
   head; fetched head objects stay inert, and no event-derived value is used as
   a remote URL or interpolated into a `run:` command.
