@@ -44,11 +44,42 @@
   execution after taxonomy reclassification.
 - Modify `package.json`, `tools/ci/pipeline.js`, and generated `.github/workflows/ci.yml`: add the focused H0 job to the ES2015 release gate without broad local execution.
 - Modify `tools/test262/es2015-promotion.js`, `tools/test262/upstream-select.js`, `tools/test262/upstream-run.js`, and `tools/test262/es2015-audit.js`: support generated H0 dispositions, pass-only promotion manifests, exact selection, and reviewed reassignment.
+- Create `tools/test262/es2015-h0-owner-map.json`: reviewed mapping/allowlist from normalized H0 failure signatures to existing roadmap owners only.
 - Create `tools/test262/es2015-h0-disposition.json`: deterministic root-level dispositions covering every immutable H0 root once and every required variant once.
+- Create `tools/test262/es2015-h0-owner-deltas.json`: deterministic downstream owner path/count/hash deltas generated from the disposition.
 - Create `tools/test262/es2015-h0-promotion.json`: exact H0 pass-only metadata/include authorization and ledger provenance derived only from complete-root `passed` dispositions.
+- Modify `test/ci/es2015-cross-realm-test262.test.js`: migrate the focused gate from historical all-pass RED to exact evidence/disposition validation without requiring all variants to pass.
 - Modify `test/node/es2015-taxonomy.test.js`, `test/node/upstream-select.test.js`, and `test/node/workflow-contract.test.js`: cover disposition validation, partial-promotion rejection, exact selection, reassignment, and CI contracts.
 - Regenerate `tools/test262/upstream-subset.json`, `tools/test262/es2015-audit-evidence.json`, `tools/test262/es2015-taxonomy.json`, `docs/test262-report.jsonl`, and the generated coverage block in `docs/conformance.md`.
 - Update `docs/testing.md`, `docs/conformance.md`, and `README.md` only where the new focused command, generated passed/reassigned counts, selector-zero result, or harness-only boundary is directly documented.
+
+## H0 Artifact Schemas
+
+All H0 artifacts are deterministic UTF-8 JSON with stable key order and
+code-unit-sorted arrays. The exact artifact paths are:
+
+- `tools/test262/es2015-h0-owner-map.json` — reviewed mapping/allowlist to
+  existing roadmap owners only. Content: `version`, pinned
+  `repository`/`revision`, and owner records with roadmap code, issue number,
+  existing taxonomy blocker, normalized primary failure signatures/path rules,
+  and allowed secondary evidence.
+- `tools/test262/es2015-h0-disposition.json` — generated exact root/variant
+  outcomes. Content: `version`, pin, source ledger/taxonomy/evidence/owner-map
+  hashes, root/variant totals, and code-unit-sorted root entries; each root has
+  path, required variants, per-variant status and normalized failure signature,
+  exactly one `passed` or `reassigned` outcome, primary existing owner for
+  reassigned roots, and secondary evidence.
+- `tools/test262/es2015-h0-owner-deltas.json` — generated deterministic
+  downstream path/count/hash deltas. Content: `version`, disposition hash, and
+  code-unit-sorted owner entries with code/issue/blocker, added paths, ledger
+  SHA, root count, and variant count.
+- `tools/test262/es2015-h0-promotion.json` — versioned pass-only promotion.
+  Content: immutable H0 source fields `h0LedgerSha256`, `h0RootCount`,
+  `h0VariantCount`; `dispositionSha256`; promoted subset fields
+  `promotedLedgerSha256`, `promotedRootCount`, `promotedVariantCount`; and
+  code-unit-sorted complete-root entries whose disposition is `passed`. This H0
+  schema is distinct from the existing v1 promotion schema; preserve T0's v1
+  manifest byte-for-byte.
 
 ---
 
@@ -125,7 +156,10 @@ to derive the exact metadata feature names needed by these immutable paths; do
 not require those entries to remain blocked after promotion and do not modify
 `features.json`.
 
-Make every Test262 failure observable:
+Make every Test262 failure observable. This initial all-pass assertion is the
+historical Task 1 RED gate for the pre-host-binding corpus only; Task 4 replaces
+it with disposition-aware focused validation and Tasks 4-5 own the non-all-pass
+selector-zero migration.
 
 ```js
 assertSame(summary.total, 267);
@@ -536,12 +570,15 @@ git commit -m "Implement harness-only Test262 cross-Realm bindings" \
 
 **Files:**
 
+- Create: `tools/test262/es2015-h0-owner-map.json`
 - Create: `tools/test262/es2015-h0-disposition.json`
+- Create: `tools/test262/es2015-h0-owner-deltas.json`
 - Create: `tools/test262/es2015-h0-promotion.json`
 - Modify: `tools/test262/es2015-promotion.js`
 - Modify: `tools/test262/upstream-select.js`
 - Modify: `tools/test262/upstream-run.js`
 - Modify: `tools/test262/es2015-audit.js`
+- Modify: `test/ci/es2015-cross-realm-test262.test.js`
 - Modify: `test/node/es2015-taxonomy.test.js`
 - Modify: `test/node/upstream-select.test.js`
 - Modify: `test/node/workflow-contract.test.js`
@@ -550,6 +587,9 @@ git commit -m "Implement harness-only Test262 cross-Realm bindings" \
 
 - Preserves: existing T0 manifest and group
   `es2015/audit-passing-promotion` byte-for-byte.
+- Produces: reviewed `tools/test262/es2015-h0-owner-map.json`, mapping
+  normalized primary failure signatures/path rules to existing roadmap owners
+  only, with allowed secondary evidence.
 - Produces: deterministic `tools/test262/es2015-h0-disposition.json` covering
   every immutable H0 root once and every required variant once.
 - Produces: one generated disposition per root:
@@ -559,21 +599,28 @@ git commit -m "Implement harness-only Test262 cross-Realm bindings" \
     next actual blocker under taxonomy precedence.
 - Preserves secondary prerequisite/failure evidence on reassignment records
   without replacing the single primary owner.
+- Produces: deterministic `tools/test262/es2015-h0-owner-deltas.json` for
+  downstream owner issues and #70.
 - Produces: `tools/test262/es2015-h0-promotion.json` and group
   `es2015/h0-cross-realm-passed`, generated only from complete-root `passed`
-  dispositions.
+  dispositions, with independent `h0LedgerSha256`/`h0RootCount`/
+  `h0VariantCount`, `dispositionSha256`, and `promotedLedgerSha256`/
+  `promotedRootCount`/`promotedVariantCount` identities.
 - Produces pure helpers:
-  - `buildEs2015H0Disposition({ ledgerText, executionEvidence, ownerMap })`;
+  - `buildEs2015H0Disposition({ pathsManifestText, baselineTaxonomyText, executionEvidenceText, ownerMapText, pin, inventory })`;
   - `buildEs2015Promotion({ sourceTaxonomyText, dispositionText, pin, inventory })`;
-  - `assertExactH0DispositionDelta({ before, after, disposition, promotion })`.
+  - `assertExactH0DispositionDelta({ before, after, disposition, promotion, ownerDeltas })`.
 
 - [ ] **Step 1: Write disposition and partial-promotion RED tests**
 
 Add fixture evidence proving:
 
+- the reviewed owner-map artifact validates repository, revision, code-unit order,
+  existing roadmap owner codes/issues/blockers, normalized primary failure
+  signatures/path rules, and allowed secondary evidence;
 - the disposition artifact validates its repository, revision, ledger hash,
-  root count, variant count, code-unit path order, and exact per-root variant
-  sets;
+  root count, variant count, code-unit path order, source taxonomy/evidence/
+  owner-map hashes, and exact per-root variant sets;
 - duplicate roots, duplicate variants, missing roots, missing variants, variant
   mismatches, and foreign paths fail closed;
 - skipped variants, mixed pass/fail evidence, partial pass evidence, unknown
@@ -582,7 +629,13 @@ Add fixture evidence proving:
   roadmap blockers; no new catch-all blocker is accepted;
 - each reassigned root has one primary next blocker under taxonomy precedence
   while retaining secondary evidence;
-- only complete-root `passed` dispositions are eligible for promotion;
+- the focused gate requires exact immutable ledger/hash, exactly 267 complete
+  variant records, zero skipped/missing/duplicate/foreign records, no missing
+  `$262` or harness leakage, and every failure mapped by reviewed disposition
+  evidence; it must not require all variants to pass;
+- only complete-root `passed` dispositions are eligible for promotion, with
+  independent immutable H0 source identity, disposition identity, and promoted
+  subset identity;
 - the observed pre-rebase evidence can express 40 roots / 79 variants passed and
   95 roots / 188 variants reassigned without hard-coding those as final totals;
 - generated taxonomy records disposition and promotion SHA-256 values without
@@ -594,29 +647,38 @@ Add fixture evidence proving:
 
 ```bash
 node test/run-node.js \
+  test/ci/es2015-cross-realm-test262.test.js \
   test/node/es2015-taxonomy.test.js \
   test/node/upstream-select.test.js \
   test/node/workflow-contract.test.js
 ```
 
 Expected: FAIL because tooling has no H0 disposition model, no reviewed owner
-mapping, and no pass-only H0 promotion source.
+mapping, no disposition-aware focused gate, no owner-delta artifact, and no
+pass-only H0 promotion source.
 
 - [ ] **Step 3: Implement generated dispositions and reviewed owner mapping**
 
 Define the H0 disposition source descriptor alongside immutable promotion
-sources. The generator must read exact execution evidence, recompute the H0
-ledger hash, validate every required root/variant exactly once, and produce
-root-level dispositions. It must never manually delete
+sources. The generator must read exact execution evidence through
+`buildEs2015H0Disposition({ pathsManifestText, baselineTaxonomyText, executionEvidenceText, ownerMapText, pin, inventory })`,
+recompute the H0 ledger hash, validate every required root/variant exactly once,
+and produce root-level dispositions. It must never manually delete
 `test262-cross-realm-host`; only generated taxonomy synchronization may consume
 dispositions.
 
-Implement a reviewed allowlist from concrete failure signatures to existing
-roadmap blockers. Unknown owners, unreviewed signatures, duplicate evidence,
-missing evidence, skipped evidence, mixed root outcomes, and partial-pass roots
-leave the H0 blocker unchanged. Reassignment records include secondary
-prerequisite/failure evidence, but taxonomy precedence selects one primary
-owner.
+Implement the reviewed owner allowlist from concrete failure signatures to
+existing roadmap blockers in `tools/test262/es2015-h0-owner-map.json`. Unknown
+owners, unreviewed signatures, duplicate evidence, missing evidence, skipped
+evidence, mixed root outcomes, and partial-pass roots leave the H0 blocker
+unchanged. Reassignment records include secondary prerequisite/failure evidence,
+but taxonomy precedence selects one primary owner.
+
+Use the schemas in **H0 Artifact Schemas** exactly: owner map records reviewed
+owners/signatures, disposition records source ledger/taxonomy/evidence/owner-map
+hashes, owner deltas record deterministic downstream path/count/hash deltas, and
+the H0 promotion records separate immutable source, disposition, and promoted
+subset identities. Preserve T0's v1 manifest byte-for-byte.
 
 - [ ] **Step 4: Generate the observed H0 disposition artifact**
 
@@ -625,6 +687,7 @@ Generate from the Task 3 complete evidence and immutable path manifest:
 ```bash
 TZ=UTC node tools/test262/es2015-audit.js \
   --paths-manifest=tools/test262/es2015-h0-paths.json \
+  --owner-map=tools/test262/es2015-h0-owner-map.json \
   --write-disposition=tools/test262/es2015-h0-disposition.json
 ```
 
@@ -636,8 +699,8 @@ moving-main reconciliation.
 - [ ] **Step 5: Build the exact pass-only H0 promotion manifest**
 
 Generate one code-unit-sorted entry per complete-root `passed` disposition,
-recording normalized metadata, include closure, disposition hash, source
-taxonomy hash, and ledger hash:
+recording normalized metadata, include closure, immutable H0 source identity,
+disposition identity, and promoted subset identity:
 
 ```bash
 TZ=UTC node tools/test262/es2015-audit.js \
@@ -647,8 +710,9 @@ TZ=UTC node tools/test262/es2015-audit.js \
 ```
 
 The promotion manifest must not contain reassigned or partially passing roots.
-Validate live pinned metadata/include closure and independently recompute all
-source digests before accepting it.
+Validate live pinned metadata/include closure and independently recompute
+`h0LedgerSha256`, `dispositionSha256`, and `promotedLedgerSha256` plus all
+counts before accepting it.
 
 - [ ] **Step 6: Wire selection, execution, audit, and report synchronization**
 
@@ -656,15 +720,25 @@ Update `upstream-select.js` to emit T0 plus H0 pass-only promotion groups.
 Update `upstream-run.js` to validate/authorize all promotion sources. Update
 `es2015-audit.js` so focused execution identifies the target disposition and
 promotion files, keeps T0 evidence, and writes disposition, promotion, evidence,
-taxonomy, and downstream owner-ledger deltas atomically. Missing, failed,
-skipped, duplicate, foreign, unknown-owner, or unexplained evidence writes no
-success record and removes no H0 blocker.
+taxonomy, and `tools/test262/es2015-h0-owner-deltas.json` downstream
+owner-ledger deltas atomically. Missing, failed, skipped, duplicate, foreign,
+unknown-owner, or unexplained evidence writes no success record and removes no H0
+blocker.
+
+Modify `test/ci/es2015-cross-realm-test262.test.js` so the focused gate requires
+the exact immutable ledger/hash, exactly 267 complete variant records, zero
+skipped/missing/duplicate/foreign records, no missing `$262` or harness leakage,
+and every failure matched by reviewed disposition/owner evidence. It must not
+require every variant to pass; missing or unmapped evidence keeps the command
+RED.
 
 Use explicit options:
 
 ```text
+--owner-map=tools/test262/es2015-h0-owner-map.json
 --disposition=tools/test262/es2015-h0-disposition.json
 --promotion-file=tools/test262/es2015-h0-promotion.json
+--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json
 ```
 
 with `--paths-manifest=tools/test262/es2015-h0-paths.json`, rejecting unknown
@@ -674,6 +748,7 @@ sources.
 
 ```bash
 node test/run-node.js \
+  test/ci/es2015-cross-realm-test262.test.js \
   test/node/es2015-taxonomy.test.js \
   test/node/upstream-select.test.js \
   test/node/workflow-contract.test.js
@@ -686,13 +761,14 @@ Expected: PASS.
 
 Require reviewers to verify immutable T0 provenance, exact H0 hash/counts,
 duplicate rejection, no global feature widening, deterministic UTC generation,
-partial-promotion fail-closed behavior, reviewed owner mapping, and downstream
-compatibility. Fix and repeat Step 7.
+partial-promotion fail-closed behavior, reviewed owner mapping, owner-delta
+artifacts, independent H0 source/disposition/promoted-subset identities, and
+downstream compatibility. Fix and repeat Step 7.
 
 - [ ] **Step 9: Commit the disposition and promotion tooling**
 
 ```bash
-git add tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-promotion.json tools/test262/es2015-promotion.js tools/test262/upstream-select.js tools/test262/upstream-run.js tools/test262/es2015-audit.js test/node/es2015-taxonomy.test.js test/node/upstream-select.test.js test/node/workflow-contract.test.js
+git add tools/test262/es2015-h0-owner-map.json tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-owner-deltas.json tools/test262/es2015-h0-promotion.json tools/test262/es2015-promotion.js tools/test262/upstream-select.js tools/test262/upstream-run.js tools/test262/es2015-audit.js test/ci/es2015-cross-realm-test262.test.js test/node/es2015-taxonomy.test.js test/node/upstream-select.test.js test/node/workflow-contract.test.js
 git commit -m "Add exact H0 Test262 dispositions" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
@@ -703,7 +779,9 @@ git commit -m "Add exact H0 Test262 dispositions" \
 
 **Files:**
 
+- Modify: `tools/test262/es2015-h0-owner-map.json`
 - Modify: `tools/test262/es2015-h0-disposition.json`
+- Modify: `tools/test262/es2015-h0-owner-deltas.json`
 - Modify: `tools/test262/es2015-h0-promotion.json`
 - Modify: `tools/test262/upstream-subset.json`
 - Modify: `tools/test262/es2015-audit-evidence.json`
@@ -717,12 +795,15 @@ git commit -m "Add exact H0 Test262 dispositions" \
 **Interfaces:**
 
 - Consumes: exact H0 path manifest, complete H0 execution evidence, generated H0
-  dispositions, reviewed owner mapping, and pass-only promotion manifest.
+  dispositions, reviewed owner mapping, owner deltas, and pass-only promotion
+  manifest.
 - Produces: zero core `test262-cross-realm-host` selectors by promoting only
   complete-root passes and reassigning the remaining roots to existing roadmap
   owners.
 - Produces: selected evidence, reassignment evidence, taxonomy, report, and
   downstream owner-ledger updates from one generator transaction.
+- Produces: regenerated `tools/test262/es2015-h0-owner-deltas.json` for #70 and
+  every affected downstream issue from the final disposition hash.
 
 - [ ] **Step 1: Reconcile moving `origin/main` before final evidence**
 
@@ -766,18 +847,24 @@ TZ=UTC npm run test262:cross-realm
 TZ=UTC node tools/test262/es2015-audit.js \
   --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json" \
   --paths-manifest=tools/test262/es2015-h0-paths.json \
+  --owner-map=tools/test262/es2015-h0-owner-map.json \
   --write-disposition=tools/test262/es2015-h0-disposition.json
 TZ=UTC node tools/test262/es2015-audit.js \
   --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json" \
   --paths-manifest=tools/test262/es2015-h0-paths.json \
   --disposition=tools/test262/es2015-h0-disposition.json \
-  --write-promotion=tools/test262/es2015-h0-promotion.json
+  --write-promotion=tools/test262/es2015-h0-promotion.json \
+  --write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json
 TZ=UTC npm run test262:select
 ```
 
 Expected: the exact execution evidence covers every H0 root and every required
-variant once. The generator derives final counts after rebase, not from the
-observed 40/79 and 95/188 baseline. Complete-root passes become the only
+variant once, with exact immutable ledger/hash, exactly 267 complete variant
+records, zero skipped/missing/duplicate/foreign records, no missing `$262` or
+harness leakage, and every failure matched by reviewed disposition/owner
+evidence. The command must not require all variants to pass, and missing or
+unmapped evidence keeps it RED. The generator derives final counts after rebase,
+not from the observed 40/79 and 95/188 baseline. Complete-root passes become the only
 promotion entries; all other reviewed roots are reassigned to one existing
 primary roadmap owner while retaining secondary evidence. Missing, failed,
 skipped, duplicate, foreign, unknown-owner, or unexplained evidence writes
@@ -803,13 +890,15 @@ TZ=UTC npm run test262:select:check
   exactly;
 - the pass-only promotion manifest contains exactly the complete-root `passed`
   dispositions and no reassigned or partial roots;
+- immutable H0 source identity, disposition identity, and promoted subset
+  identity are recomputed independently and match the promotion manifest;
 - every reassigned root names one reviewed existing owner and preserves secondary
   evidence;
 - expected selected/blocked/reassigned totals equal the reconciled final-base
   totals plus or minus generated root/variant deltas, without hard-coded global
   totals;
-- exact path/hash equality holds for H0 ledger, disposition, promotion, evidence,
-  taxonomy, report, and downstream owner ledgers;
+- exact path/hash equality holds for H0 ledger, owner map, disposition, owner
+  deltas, promotion, evidence, taxonomy, report, and downstream owner ledgers;
 - whole-tree, core, Annex B, unknown, and harness denominators balance; and
 - every non-H0 classification is byte-equivalent to the reconciled final base,
   except reviewed concurrent-main movement already accounted for in Step 1.
@@ -820,8 +909,8 @@ it is a reviewed rebase consequence, in which case repeat Steps 1-3.
 - [ ] **Step 4: Update direct documentation from generated totals**
 
 Document the original issue baseline, final PR base, focused command,
-harness-only boundary, exact H0 ledger/hash, generated passed/reassigned counts,
-and selector-zero result. State that `$262` remains absent from public runtime
+harness-only boundary, exact H0 ledger/hash, owner-map/disposition/owner-delta/
+promotion hashes, generated passed/reassigned counts, and selector-zero result. State that `$262` remains absent from public runtime
 APIs and normal Realm globals, that B0 owns detachment, and that #76 completed
 host support rather than making all 135 roots semantically pass.
 
@@ -845,14 +934,15 @@ broad upstream Test262.
 Use fresh maximum-effort non-Claude-Opus-5 reviewers for specification and
 quality. Require original/final base separation, exact arithmetic, ledger/source
 hashes, T0 preservation, generated disposition and blocker movement,
-complete-root-only promotion, reviewed owner reassignment, generated report and
-owner-ledger consistency, and zero unintended path movement. Fix and rerun Steps
+complete-root-only promotion identities, reviewed owner reassignment, owner-delta
+artifacts, generated report and owner-ledger consistency, and zero unintended
+path movement. Fix and rerun Steps
 1-5 if main moved; otherwise rerun Steps 2-5.
 
 - [ ] **Step 7: Commit reconciled deterministic evidence**
 
 ```bash
-git add tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-promotion.json tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
+git add tools/test262/es2015-h0-owner-map.json tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-owner-deltas.json tools/test262/es2015-h0-promotion.json tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
 git commit -m "Reclassify exact cross-Realm Test262 roots" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
@@ -1299,7 +1389,9 @@ ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236
 REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
 SQUASH_SHA=$(cat "$ARTIFACTS/h0-squash-sha.txt")
 for PATH_IN_REPO in \
+  tools/test262/es2015-h0-owner-map.json \
   tools/test262/es2015-h0-disposition.json \
+  tools/test262/es2015-h0-owner-deltas.json \
   tools/test262/es2015-h0-promotion.json \
   tools/test262/es2015-audit-evidence.json \
   tools/test262/es2015-taxonomy.json \
@@ -1331,21 +1423,24 @@ Publish on #76:
   zero open alerts;
 - exact ledger hash, generated passed/reassigned counts, and selector-zero result;
 - original issue baseline, final PR base, reviewed head, and squash SHA;
-- post-merge taxonomy/disposition/promotion SHA-256 values and balanced totals;
-- deterministic added path/hash/count deltas for every affected downstream owner
-  issue and #70; and
+- post-merge taxonomy/owner-map/disposition/owner-deltas/promotion SHA-256
+  values and balanced totals;
+- deterministic added path/hash/count deltas from
+  `tools/test262/es2015-h0-owner-deltas.json` for every affected downstream
+  owner issue and #70; and
 - `$262` non-leakage, B0/non-goal, and host-support-completion statements.
 
 Only now close #76 explicitly, after exact-main CodeQL and post-merge generated
 verification. Update #70 selected/core/reassigned counts and H0 status from the
 post-merge generated artifacts. Update every affected downstream owner issue
-with deterministic added path/hash/count deltas, explicitly naming newly
-unblocked issues. Preserve closed #74 as resolved dependency history. Update the
+with deterministic added path/hash/count deltas from
+`tools/test262/es2015-h0-owner-deltas.json`, explicitly naming newly unblocked
+issues. Preserve closed #74 as resolved dependency history. Update the
 merged PR body one final time with the squash SHA and exact-main CodeQL evidence.
 Do not describe the outcome as 135 semantic passes.
 
 - [ ] **Step 8: Report completion to the project coordinator**
 
 Send the coordinator one concise message with PR URL, squash SHA, exact CI and
-CodeQL runs, taxonomy/disposition/promotion/ledger hashes, generated
+CodeQL runs, taxonomy/owner-map/disposition/owner-deltas/promotion/ledger hashes, generated
 passed/reassigned counts, updated issue URLs, and newly unblocked roadmap nodes.

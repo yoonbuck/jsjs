@@ -35,6 +35,35 @@ bridging remains on the runner's current path and is not duplicated inside
 `$262`. Downstream runtime semantics remain out of scope for the harness-only
 implementation.
 
+## H0 Artifact Schemas
+
+All H0 artifacts are deterministic UTF-8 JSON with code-unit-sorted object arrays
+and stable key order. They are generated or reviewed from the pinned Test262
+revision, the immutable H0 ledger, and moving-main taxonomy inputs:
+
+- `tools/test262/es2015-h0-owner-map.json`: reviewed mapping/allowlist to
+  existing roadmap owners only. It records `version`, pinned
+  `repository`/`revision`, and owner records with roadmap code, issue number,
+  existing taxonomy blocker, normalized primary failure signatures/path rules,
+  and allowed secondary evidence.
+- `tools/test262/es2015-h0-disposition.json`: generated exact root/variant
+  outcomes. It records `version`, pin, source ledger/taxonomy/evidence/owner-map
+  hashes, root and variant totals, and code-unit-sorted root entries. Each root
+  records path, required variants, per-variant status and normalized failure
+  signature, exactly one `passed` or `reassigned` outcome, the primary existing
+  owner for reassigned roots, and secondary evidence.
+- `tools/test262/es2015-h0-owner-deltas.json`: generated deterministic
+  downstream path/count/hash deltas. It records `version`, disposition hash, and
+  code-unit-sorted owner entries with code, issue, blocker, added paths, ledger
+  SHA, root count, and variant count.
+- `tools/test262/es2015-h0-promotion.json`: versioned H0 pass-only promotion.
+  It preserves immutable H0 source identity in `h0LedgerSha256`, `h0RootCount`,
+  and `h0VariantCount`; records `dispositionSha256`; records promoted subset
+  identity in `promotedLedgerSha256`, `promotedRootCount`, and
+  `promotedVariantCount`; and contains only code-unit-sorted complete-root
+  entries whose disposition is `passed`. The original T0 v1 manifest stays
+  byte-for-byte unchanged.
+
 ## Architecture
 
 Extend `Test262Engine` with a required `installHostBindings(realm)` hook.
@@ -124,18 +153,22 @@ generator assigns exactly one root-level disposition:
   under taxonomy precedence.
 
 Promotion contains only complete-root passes; partially passing roots are never
-promoted. Missing variants, skipped variants, mixed pass/fail evidence,
-duplicate roots or variants, unknown owners, variant mismatches, or unexplained
-failures fail closed and leave the H0 blocker unchanged. Reassignment records
-retain secondary prerequisite/failure evidence without replacing the single
-primary owner.
+promoted. The focused gate after Task 4 validates the immutable ledger hash,
+exactly 267 complete variant records, zero skipped/missing/duplicate/foreign
+records, no missing `$262` or harness leakage, independent H0 source,
+disposition, and promoted-subset identities, and failure evidence mapped by the
+reviewed owner allowlist. It must not require every variant to pass. Missing or
+unmapped evidence stays RED, fails closed, and leaves the H0 blocker unchanged.
+Reassignment records retain secondary prerequisite/failure evidence without
+replacing the single primary owner.
 
 The current observed host-support baseline is 40 roots / 79 variants passed and
 95 roots / 188 variants reassigned. Final counts are regenerated after
-moving-main reconciliation, not hard-coded. Generator-owned disposition,
-promotion, taxonomy, and downstream owner-ledger updates make the H0 selector
-zero without manual blocker deletion, while preserving global taxonomy balance
-and the exact H0 root/variant union.
+moving-main reconciliation, not hard-coded. The reviewed owner map,
+generator-owned disposition, pass-only promotion, owner-delta, taxonomy, and
+downstream owner-ledger updates make the H0 selector zero without manual blocker
+deletion, while preserving global taxonomy balance and the exact H0 root/variant
+union.
 
 ## Gates
 
