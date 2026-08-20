@@ -53,9 +53,10 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
   paths only. `test262:es2015:audit:check` is permitted because, without
   `--write-execution`, it reads pinned metadata and stored evidence but never
   calls the Test262 runner. Never run `test262:es2015:audit`,
-  `--write-execution`, `npm run test262:upstream`, `npm run ci:contract`, or any
-  command that transitively executes broad upstream Test262 locally. Broad
-  execution is CI-only.
+  `--write-execution`, `npm run test262:upstream`, `npm run ci:contract`,
+  browser suites, JavaScriptCore, or any command that transitively executes
+  broad upstream Test262 locally for this maintenance flow. Broad execution is
+  CI-only.
 - Require independent specification and quality/provenance review for every
   atomic PR.
 - Require exact-head CI and CodeQL before every merge.
@@ -70,13 +71,29 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
   `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`.
 - Every U* PR has exactly one
   `<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:... base-ledger-sha256:... -->`
-  marker. CI supplies actual event base/head/body values and derives the
-  profile inside the range CLI; a branch cannot invent another profile.
+  marker: U0 uses `profile:foundation`, maintenance uses
+  `profile:foundation-maintenance`, and decision PRs use
+  `profile:decision:<CODE>`. CI supplies actual event base/head/body values and
+  derives the profile inside the range CLI; a branch cannot invent another
+  profile.
+- Every rendered U* issue body includes the exact sentence `History, age,
+  path/directory, and source/text similarity may prioritize review but can
+  never decide edition.`
 - `foundation` allows only the exact U0 paths/content policies and reviewed
-  cleanup deletions when the base lacks the foundation. Each
-  `decision:<CODE>` requires the initialized foundation and allows only its
+  cleanup deletions when the base lacks the foundation.
+- `foundation-maintenance` requires the initialized foundation in base. Its
+  first reviewed range bootstraps only from U0 squash
+  `8d75b48af2ee7ab04e7c5006980417227ec34568` plus canonical manifest SHA-256
+  `ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04`;
+  afterward every maintenance range is authorized by the trusted base-tree
+  `foundation-maintenance` profile before head policy is read. It permits only
+  the exact maintenance allowlist: provenance tooling/schema/tests, workflow
+  generator/contract files, the canonical manifest, the directly related docs,
+  and exact empty decision fragments. It rejects `src/**`, feature/selection or
+  taxonomy/audit-output changes, non-empty fragments, renames/copies,
+  deletions, empty ranges, and head-only profile broadening.
+- Each `decision:<CODE>` requires the initialized foundation and allows only its
   exact non-empty fragment plus manifest-listed deterministic outputs.
-  Foundation maintenance is a separate future reviewed profile/PR.
 - After U0, the #75 grouping session is controller-only. It creates/wires
   issues, verifies ledgers and graph state, coordinates child sessions, and
   publishes closure evidence; it never implements an atomic decision fragment.
