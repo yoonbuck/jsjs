@@ -162,6 +162,8 @@ const ISSUE_77_LEXICAL_MAINTENANCE_PATHS = Object.freeze([
   'src/runtime/environment.js',
   'src/runtime/function-object.js',
   'test/arrow-functions.test.js',
+  'test/ci/es2015-syntax-test262.test.js',
+  'test/ci/full-contract.test.js',
   'test/classes.test.js',
   'test/dynamic-function.test.js',
   'test/environments.test.js',
@@ -181,6 +183,7 @@ const ISSUE_77_LEXICAL_MAINTENANCE_PATHS = Object.freeze([
   'tools/test262/es2015-provenance.js',
   ES2015_PROVENANCE_FILE,
   'tools/test262/es2015-taxonomy.json',
+  'tools/test262/es5-selection.json',
   'tools/test262/upstream-subset.json',
 ]);
 const ISSUE_77_LEXICAL_GENERATED_PATHS = Object.freeze([

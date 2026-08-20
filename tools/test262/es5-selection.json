@@ -2963,11 +2963,6 @@
       "reason": "Requires the Test262 `$262` host object (cross-realm via `$262.createRealm`); this engine defines no ES5.1 `$262` host facility."
     },
     {
-      "path": "test/staging/sm/class/newTargetEval.js",
-      "category": "post-es5-syntax",
-      "reason": "Exercises `new.target`, which remains outside this ES2015 syntax subset."
-    },
-    {
       "path": "test/staging/sm/class/newTargetProxyNative.js",
       "category": "post-es5-builtin",
       "reason": "Depends on `Proxy`, an ES2015 builtin absent from ES5.1."

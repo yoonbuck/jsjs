@@ -379,13 +379,13 @@ keeps them honest, and nowhere else.
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 609 classified exclusions break down as:
+editions deliberately changed. The 608 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                |
 | -------------------- | ----- | -------------------------------------------------------------------------------------------- |
 | `post-es5-semantics` | 332   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1.              |
 | `post-es5-builtin`   | 221   | A built-in or member ES5.1 does not define.                                                  |
-| `post-es5-syntax`    | 21    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
+| `post-es5-syntax`    | 20    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
 | `host-dependent`     | 33    | The result depends on a host facility or environment.                                        |
 | `engine-deviation`   | 2     | This engine knowingly differs from ES5.1; each entry names a limitation heading.             |
 
