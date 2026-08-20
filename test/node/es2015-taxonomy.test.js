@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import {
@@ -29,6 +30,9 @@ import {
 } from '../../tools/test262/es2015-promotion.js';
 
 const FIXTURE_ROOT = new URL('../fixtures/es2015-taxonomy/', import.meta.url);
+const REPOSITORY_ROOT = fileURLToPath(
+  new URL('../../', import.meta.url),
+).replace(/[\\/]$/u, '');
 const PHYSICAL_FIXTURE_PATHS = new Map([
   ['test/language/malformed.js', 'test/language/malformed.js.txt'],
 ]);
@@ -690,15 +694,17 @@ function auditDependencies(options = {}) {
       /** @type {string} */ path,
       /** @type {string} */ value,
     ) => {
-      writes.push(path);
-      files.set(path, value);
+      const target = fixtureOutputPath(path);
+      writes.push(target);
+      files.set(target, value);
     },
     writeFilesAtomically: async (
       /** @type {readonly { path: string, text: string }[]} */ artifacts,
     ) => {
       for (const artifact of artifacts) {
-        writes.push(artifact.path);
-        files.set(artifact.path, artifact.text);
+        const target = fixtureOutputPath(artifact.path);
+        writes.push(target);
+        files.set(target, artifact.text);
       }
     },
     listRoots: async () => [...roots.keys()],
@@ -759,6 +765,17 @@ function auditDependencies(options = {}) {
     files,
     writes,
   };
+}
+
+/** @param {string} outputPath */
+function fixtureOutputPath(outputPath) {
+  if (!path.isAbsolute(outputPath)) {
+    return outputPath;
+  }
+  const rootPrefix = `${REPOSITORY_ROOT}${path.sep}`;
+  return outputPath.startsWith(rootPrefix)
+    ? outputPath.slice(rootPrefix.length).split(path.sep).join('/')
+    : outputPath;
 }
 
 /**
@@ -958,6 +975,57 @@ export default [
       );
       assertSame(
         parentAliasedH0Outputs.message.includes(
+          'must use distinct output paths',
+        ),
+        true,
+      );
+      const queryOutput = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--paths-manifest=paths.json',
+            '--disposition=disposition.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json?staged',
+            '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+          ],
+          auditDependencies(),
+        ),
+      );
+      assertSame(
+        queryOutput.message.includes(
+          'output paths must not include a URL query or fragment',
+        ),
+        true,
+      );
+      const fragmentOutput = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--paths-manifest=paths.json',
+            '--disposition=disposition.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json#staged',
+            '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+          ],
+          auditDependencies(),
+        ),
+      );
+      assertSame(
+        fragmentOutput.message.includes(
+          'output paths must not include a URL query or fragment',
+        ),
+        true,
+      );
+      const percentAliasedH0Outputs = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--paths-manifest=paths.json',
+            '--disposition=disposition.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/es2015-h0-promotion%2Ejson',
+          ],
+          auditDependencies(),
+        ),
+      );
+      assertSame(
+        percentAliasedH0Outputs.message.includes(
           'must use distinct output paths',
         ),
         true,

@@ -4,6 +4,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load as parseYaml } from 'js-yaml';
 import { createNodeTest262Host } from './adapters/node.js';
@@ -78,7 +79,6 @@ export const ES2015_AUDIT_EVIDENCE_VERSION = 1;
 export const ES2015_AUDIT_VERSION = 3;
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
-const OUTPUT_TARGET_ROOT_URL = new URL('file:///es2015-audit-output/');
 const SUBSET_FILE = 'tools/test262/upstream-subset.json';
 const FEATURES_FILE = 'tools/test262/features.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
@@ -113,6 +113,7 @@ const EXECUTION_STATUSES = new Set(['passed', 'failed', 'skipped']);
 
 /**
  * @typedef {{
+ *   repositoryRootUrl: URL,
  *   environment: Record<string, string | undefined>,
  *   readPin: () => Promise<any>,
  *   readFile: (path: string) => Promise<string>,
@@ -156,8 +157,9 @@ export class Es2015AuditError extends Error {
  * @returns {Promise<number>}
  */
 export async function main(argv = [], dependencies = {}) {
-  const options = parseOptions(argv);
-  const deps = { ...createAuditDependencies(), ...dependencies };
+  const defaultDependencies = createAuditDependencies();
+  const deps = { ...defaultDependencies, ...dependencies };
+  const options = parseOptions(argv, deps.repositoryRootUrl);
   assertUtc(deps.environment);
 
   const pin = await deps.readPin();
@@ -475,7 +477,10 @@ export async function main(argv = [], dependencies = {}) {
   }
 
   if (current !== output) {
-    await deps.writeFile(ES2015_TAXONOMY_ARTIFACT, output);
+    await deps.writeFile(
+      normalizeOutputTarget(ES2015_TAXONOMY_ARTIFACT, deps.repositoryRootUrl),
+      output,
+    );
   }
   return 0;
 }
@@ -515,15 +520,14 @@ export function createAuditDependencies(options = {}) {
       ),
     );
   return {
+    repositoryRootUrl,
     environment: options.environment ?? process.env,
     readPin,
     readFile: /** @type {(path: string) => Promise<string>} */ (
       readRepositoryFile
     ),
-    writeFile: (path, text) =>
-      writeFile(new URL(path, repositoryRootUrl), text, 'utf8'),
-    writeFilesAtomically: (files) =>
-      writeRepositoryFilesAtomically(repositoryRootUrl, files),
+    writeFile: (path, text) => writeFile(path, text, 'utf8'),
+    writeFilesAtomically: (files) => writeRepositoryFilesAtomically(files),
     assertPinnedCheckout: (pin) => assertPinnedCheckout(pin, repositoryRootUrl),
     listRoots: async () => {
       const pin = await readPin();
@@ -566,15 +570,14 @@ export function createAuditDependencies(options = {}) {
 }
 
 /**
- * @param {URL} repositoryRootUrl
  * @param {readonly { path: string, text: string }[]} files
  */
-async function writeRepositoryFilesAtomically(repositoryRootUrl, files) {
+async function writeRepositoryFilesAtomically(files) {
   const targets = files.map((file) => ({
     ...file,
-    target: new URL(file.path, repositoryRootUrl),
+    target: file.path,
   }));
-  if (new Set(targets.map((file) => file.target.href)).size !== files.length) {
+  if (new Set(targets.map((file) => file.target)).size !== files.length) {
     throw new Es2015AuditError(
       'Atomic artifact generation requires distinct output paths',
     );
@@ -594,10 +597,7 @@ async function writeRepositoryFilesAtomically(repositoryRootUrl, files) {
       return {
         ...file,
         original,
-        temporary: new URL(
-          `${file.target.pathname}.${transaction}.tmp`,
-          file.target,
-        ),
+        temporary: `${file.target}.${transaction}.tmp`,
       };
     }),
   );
@@ -636,8 +636,11 @@ async function writeRepositoryFilesAtomically(repositoryRootUrl, files) {
   }
 }
 
-/** @param {readonly string[]} argv */
-function parseOptions(argv) {
+/**
+ * @param {readonly string[]} argv
+ * @param {URL} repositoryRootUrl
+ */
+function parseOptions(argv, repositoryRootUrl) {
   let check = false;
   /** @type {string | null} */
   let pathsFile = null;
@@ -815,6 +818,10 @@ function parseOptions(argv) {
         'H0 disposition generation must run separately from promotion generation',
       );
     }
+    writeDisposition = normalizeOutputTarget(
+      writeDisposition,
+      repositoryRootUrl,
+    );
   }
   if (writePromotion !== null || writeOwnerDeltas !== null) {
     if (writePromotion === null || writeOwnerDeltas === null) {
@@ -822,10 +829,15 @@ function parseOptions(argv) {
         'H0 promotion generation must write promotion and owner deltas together',
       );
     }
-    if (
-      canonicalOutputTarget(writePromotion) ===
-      canonicalOutputTarget(writeOwnerDeltas)
-    ) {
+    writePromotion = normalizeOutputTarget(writePromotion, repositoryRootUrl);
+    writeOwnerDeltas = normalizeOutputTarget(
+      writeOwnerDeltas,
+      repositoryRootUrl,
+    );
+    if (promotionFile !== null) {
+      promotionFile = normalizeOutputTarget(promotionFile, repositoryRootUrl);
+    }
+    if (writePromotion === writeOwnerDeltas) {
       throw new Es2015AuditError(
         'H0 promotion generation must use distinct output paths',
       );
@@ -835,12 +847,7 @@ function parseOptions(argv) {
         'H0 promotion generation requires --paths-manifest and --disposition',
       );
     }
-    if (
-      promotionFile !== null &&
-      writePromotion !== null &&
-      canonicalOutputTarget(promotionFile) !==
-        canonicalOutputTarget(writePromotion)
-    ) {
+    if (promotionFile !== null && promotionFile !== writePromotion) {
       throw new Es2015AuditError(
         'The --promotion-file and --write-promotion paths must match',
       );
@@ -876,9 +883,32 @@ function parseSinglePathOption(argument, prefix, current) {
   return argument.slice(prefix.length);
 }
 
-/** @param {string} path */
-function canonicalOutputTarget(path) {
-  return new URL(path, OUTPUT_TARGET_ROOT_URL).href;
+/**
+ * @param {string} outputPath
+ * @param {URL} repositoryRootUrl
+ */
+function normalizeOutputTarget(outputPath, repositoryRootUrl) {
+  let target;
+  try {
+    target = new URL(outputPath, repositoryRootUrl);
+  } catch {
+    throw new Es2015AuditError(`output path ${outputPath} is not a valid URL`);
+  }
+  if (target.protocol !== 'file:') {
+    throw new Es2015AuditError(`output path ${outputPath} must be a file URL`);
+  }
+  if (target.search !== '' || target.hash !== '') {
+    throw new Es2015AuditError(
+      'output paths must not include a URL query or fragment',
+    );
+  }
+  try {
+    return path.resolve(fileURLToPath(target));
+  } catch {
+    throw new Es2015AuditError(
+      `output path ${outputPath} is not a valid file path`,
+    );
+  }
 }
 
 /**
