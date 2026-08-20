@@ -23,7 +23,10 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
 
 ## Global Constraints
 
-- Start from jsjs `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`.
+- Treat jsjs `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` as the
+  immutable taxonomy baseline. Reconcile U0 onto moving current `origin/main`
+  before final review; do not assume the taxonomy baseline is the final PR
+  merge base.
 - Keep Test262 pinned to
   `b363f29d3c43c626dc852744ad64a0b48a003693`.
 - Keep the Sixth Edition source identity
@@ -43,13 +46,27 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
 - History, age, directory, and source similarity may prioritize review but
   never establish edition alone.
 - Generate artifacts and timestamps with `TZ=UTC`.
-- Local Test262 commands are metadata/audit or exact targeted paths only.
-  Never run `npm run test262:upstream` or any broad upstream equivalent locally.
+- Local Test262 commands are structural metadata/hash checks or exact targeted
+  paths only. `test262:es2015:audit:check` is permitted because, without
+  `--write-execution`, it reads pinned metadata and stored evidence but never
+  calls the Test262 runner. Never run `test262:es2015:audit`,
+  `--write-execution`, `npm run test262:upstream`, `npm run ci:contract`, or any
+  command that transitively executes broad upstream Test262 locally. Broad
+  execution is CI-only.
 - Require independent specification and quality/provenance review for every
   atomic PR.
 - Require exact-head CI and CodeQL before every merge.
 - Use GPT-5.6-family models or Claude Opus 4.8 or lower; never Claude Opus 5.
-- Create no issue except U0 before U0 merges.
+- Create no U* issue and mutate no native hierarchy before U0 merges and its
+  exact-main default-setup CodeQL analyses pass.
+- The U0 PR includes the approved #75 design and plan and remains
+  tooling/data/docs only; post-U0 decisions use separate PRs.
+- After U0, the #75 grouping session is controller-only. It creates/wires
+  issues, verifies ledgers and graph state, coordinates child sessions, and
+  publishes closure evidence; it never implements an atomic decision fragment.
+- Each UA/UB/UL*/US* atomic issue owns one fresh app-native
+  session/worktree/branch/PR. Archive each child session after its reviewed PR
+  merges and issue closes.
 
 ---
 
@@ -81,10 +98,9 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
 - Modify `package.json`: add provenance write/check/render scripts.
 - Modify `tools/ci/pipeline.js` and regenerate `.github/workflows/ci.yml`: run
   the provenance check before the taxonomy audit.
-- Modify `test/node/workflow-contract.test.js`,
-  `test/node/repository-invariants.test.js`, and
-  `test/ci/full-contract.test.js`: lock scripts, generated ownership, CI
-  command order, and no-production invariants.
+- Modify `test/node/workflow-contract.test.js` and
+  `test/node/repository-invariants.test.js`: lock scripts, generated ownership,
+  CI command order, metadata-only audit behavior, and no-production invariants.
 - Modify `docs/testing.md` and `docs/conformance.md`: document provenance
   evidence, targeted-only local commands, and the unchanged unknown baseline.
 
@@ -96,6 +112,9 @@ Store resumable GitHub mutation state outside the repository under
 
 - `es2015-provenance-created-issues.json`: code to issue number, REST database
   ID, and GraphQL node ID.
+- `es2015-provenance-u0-lifecycle.json`: immutable taxonomy baseline, final
+  merge base, reviewed head, exact CI run, exact CodeQL run/analysis IDs, U0
+  squash SHA, and exact-main CodeQL IDs.
 - `es2015-provenance-rendered-issues/`: exact initial and final bodies.
 - `es2015-provenance-live-graph.json`: live hierarchy, milestones,
   dependencies, titles, bodies, and state.
@@ -106,20 +125,52 @@ the authoritative idempotency keys.
 
 ---
 
-### Task 1: Create Only the U0 Foundation Issue
+## Required Atomic PR Gate
+
+Every U0/UA/UB/UL*/US* PR uses the same identity and security protocol. The
+owning child session records distinct taxonomy baseline, final merge base,
+reviewed head, standard CI run ID, CodeQL run and analysis IDs, and squash SHA.
+
+1. Reconcile onto current `origin/main`, regenerate shared artifacts under
+   `TZ=UTC`, run only structural metadata/hash checks and exact targeted paths,
+   and review the final merge-base range.
+2. Recover an existing exact-head PR by branch marker or create one draft PR.
+   Abort on duplicates, closed-unmerged PRs, mismatched base, or stale head.
+3. Poll at most 300 seconds for the standard workflow endpoint
+   `actions/workflows/ci.yml/runs?event=pull_request&head_sha=$REVIEWED_HEAD`.
+   Accept only path `.github/workflows/ci.yml`, event `pull_request`, and the
+   exact reviewed head.
+4. Watch exactly that CI run with one synchronous `gh run watch` shell session;
+   after the initial 30-second wait, use 600-second reads on the same session.
+5. Resolve default-setup CodeQL separately from dynamic workflow runs by exact
+   reviewed head. Require both `/language:javascript-typescript` and
+   `/language:actions` analyses with zero results and empty error/warning
+   diagnostics.
+6. Re-read the PR head and required checks immediately before squash merge.
+   Never merge a stale head or create a duplicate PR.
+7. After merge, wait for exact-squash default-setup CodeQL on
+   `refs/heads/main`, require both zero-result/zero-diagnostic analyses, and
+   require zero open alerts before closing the atomic issue or updating
+   grouping completion.
+
+Broad Test262 execution remains exact-head CI-only throughout this protocol.
+
+---
+
+### Task 1: Establish the U0 Pre-Merge Lifecycle
 
 **Files:**
 
 - Read: `docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md`
 - Read: `docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md`
 - Create outside repo:
-  `$ARTIFACTS/es2015-provenance-rendered-issues/U0.initial.md`
+  `$ARTIFACTS/es2015-provenance-u0-lifecycle.json`
 
 **Interfaces:**
 
 - Consumes: approved spec commit and approved plan commit.
-- Produces: one ES2015-milestoned U0 issue, natively attached to #75; no other
-  U* issue exists yet.
+- Produces: a durable U0 lifecycle identity with no issue or hierarchy
+  mutation.
 
 - [ ] **Step 1: Verify approval and source state**
 
@@ -135,69 +186,55 @@ gh issue view 75 --repo yoonbuck/jsjs --json number,state,milestone,title
 Expected: clean worktree, baseline is an ancestor, #75 is open in milestone
 ES2015.
 
-- [ ] **Step 2: Render the exact U0 body**
-
-Write the body through `apply_patch` to the artifact path. It must begin with:
-
-```markdown
-<!-- es2015-provenance parent:T1 parent-issue:75 code:U0 base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->
-
-Parent: #75 / T1
-Delivery: atomic tooling/docs
-Base: 2,312 roots / 4,054 variants
-```
-
-Include exact source pins, one-PR boundary, schema/manifest/validator/renderer
-scope, zero-decision acceptance, no-production and no-selection non-goals,
-independent review gates, `TZ=UTC`, targeted-only local Test262 policy, and
-exact-head CI/CodeQL.
-
-- [ ] **Step 3: Check idempotency before creation**
-
-Run:
+- [ ] _*Step 2: Prove no U* issue or hierarchy mutation exists_*
 
 ```bash
 gh api --paginate 'repos/yoonbuck/jsjs/issues?state=all&per_page=100' \
   --jq '.[] | select(.body != null and (.body | contains("code:U0 base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc"))) | [.number,.id,.node_id,.title,.state] | @tsv'
-```
-
-Expected: zero rows on first execution or exactly one matching U0 issue on
-resume. More than one is a hard stop.
-
-- [ ] **Step 4: Create U0 through the issue tool**
-
-Call `create_issue` with:
-
-- title: `Build unknown-edition Test262 provenance manifests and validator`
-- body: exact bytes from `U0.initial.md`
-- repo: `yoonbuck/jsjs`
-
-Do not create UA, UB, UL, US, or any nested issue.
-
-- [ ] **Step 5: Apply milestone and native parent**
-
-Read the created issue's REST `id`, then run:
-
-```bash
-gh api --method PATCH repos/yoonbuck/jsjs/issues/$U0_NUMBER -F milestone=1
-gh api --method POST repos/yoonbuck/jsjs/issues/75/sub_issues \
-  -F sub_issue_id="$U0_REST_ID"
-```
-
-Expected: U0 is a direct sub-issue of #75 and has milestone ES2015.
-
-- [ ] **Step 6: Verify the single-node mutation**
-
-Run:
-
-```bash
-gh api repos/yoonbuck/jsjs/issues/$U0_NUMBER
 gh api --paginate repos/yoonbuck/jsjs/issues/75/sub_issues
-gh api --paginate repos/yoonbuck/jsjs/issues/75/dependencies/blocked_by
 ```
 
-Expected: U0 body bytes and milestone match, #75 now has only U0 among U*
-children, and closed #74 remains in #75's blocked-by history.
+Expected: no U* marker match and no U* sub-issue. Any existing match is a hard
+stop for coordinator review; do not create, edit, close, or attach it.
+
+- [ ] **Step 3: Record distinct immutable identities**
+
+Write canonical lifecycle JSON containing:
+
+```json
+{
+  "version": 1,
+  "taxonomyBaseline": "54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7",
+  "designCommit": "9556bed0f30b9792ea317f4a9daae8ac20862cb9",
+  "approvedPlanCommit": null,
+  "finalMergeBase": null,
+  "reviewedHead": null,
+  "ciRunId": null,
+  "codeqlRunId": null,
+  "codeqlAnalysisIds": [],
+  "squashSha": null,
+  "mainCodeqlRunId": null,
+  "mainCodeqlAnalysisIds": []
+}
+```
+
+Before writing, set `approvedPlanCommit` to the exact output of
+`git rev-parse HEAD`; execution begins only after that HEAD is the approved
+corrected plan. Never reuse one field for a different lifecycle identity.
+
+- [ ] **Step 4: Confirm U0 scope contains the approved docs**
+
+Verify both committed documents are on the branch and will be included in the
+eventual final merge-base range:
+
+```bash
+git ls-files --error-unmatch \
+  docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md \
+  docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md
+```
+
+Do not create a PR yet; Tasks 2-5 first produce the complete U0
+tooling/data/docs range.
 
 ---
 
@@ -500,7 +537,19 @@ readDecisionFragments: () => Promise<ReadonlyMap<string, string>>
 Parse and validate them before calling `classifyEs2015Inventory`. In U0 all 13
 fragments are empty, so taxonomy bytes and counts must remain unchanged.
 
-- [ ] **Step 6: Run focused taxonomy tests to GREEN**
+- [ ] **Step 6: Lock metadata-only audit-check behavior**
+
+In `test/node/es2015-taxonomy.test.js`, call the audit entry point with
+`['--check']` and inject `runPromotion` as a function that throws
+`"audit check must not execute Test262"`. Supply fixture metadata and stored
+evidence. Assert the check completes without calling the injected runner.
+
+Add the complementary test that only explicit
+`['--paths-file=/absolute/exact.paths.txt', '--write-execution']` reaches
+`runPromotion`. This execution mode is CI-only for this roadmap and must never
+appear in a local validation command.
+
+- [ ] **Step 7: Run focused taxonomy tests to GREEN**
 
 Run:
 
@@ -512,7 +561,7 @@ node test/run-node.js \
 
 Expected: all tests pass, including unchanged empty-foundation output.
 
-- [ ] **Step 7: Commit taxonomy plumbing**
+- [ ] **Step 8: Commit taxonomy plumbing**
 
 ```bash
 git add tools/test262/es2015-taxonomy.js \
@@ -657,7 +706,6 @@ git commit -m "Generate exact unknown-edition provenance batches" \
 - Modify: `.github/workflows/ci.yml`
 - Modify: `test/node/workflow-contract.test.js`
 - Modify: `test/node/repository-invariants.test.js:47-50,152-160,926-980,1584-1610`
-- Modify: `test/ci/full-contract.test.js`
 - Modify: `docs/testing.md`
 - Modify: `docs/conformance.md`
 
@@ -734,6 +782,14 @@ Document:
 - local prohibition on broad upstream Test262; and
 - unchanged U0 taxonomy counts of 2,312 / 4,054 unknown.
 
+State explicitly that:
+
+- `test262:es2015:audit:check` is metadata/hash-only and cannot call
+  `runTest262Suite`;
+- `test262:es2015:audit`, `--write-execution`, `test262:upstream`, and
+  `ci:contract` are prohibited locally for this work; and
+- commands that execute broad upstream Test262 run only in exact-head CI.
+
 - [ ] **Step 6: Run focused contracts to GREEN**
 
 ```bash
@@ -752,147 +808,265 @@ Expected: all pass.
 ```bash
 TZ=UTC npm run test262:es2015:provenance:check
 TZ=UTC npm run test262:es2015:audit:check
-npm run test:node
-npm run ci:contract
+node test/run-node.js \
+  test/node/es2015-provenance.test.js \
+  test/node/es2015-taxonomy.test.js \
+  test/node/repository-invariants.test.js \
+  test/node/workflow-contract.test.js
+npm run vendor:check
+npm run ci:check
 npm run typecheck
 npm run lint
 npm run format
 git diff --check
 ```
 
-Do not run `test262:upstream` locally. Expected: all commands pass and taxonomy
-still reports 2,312 / 4,054 unknown.
+`test262:es2015:audit:check` is permitted here only because Task 3 locks that it
+never invokes `runPromotion`/`runTest262Suite`. Do not run
+`test262:es2015:audit`, `--write-execution`, `test262:upstream`,
+`ci:contract`, or any wrapper that invokes broad upstream execution locally.
+Expected: all listed commands pass and taxonomy still reports 2,312 / 4,054
+unknown.
 
 - [ ] **Step 8: Commit repository integration**
 
 ```bash
 git add package.json test/run-node.js tools/ci/pipeline.js \
   .github/workflows/ci.yml test/node/workflow-contract.test.js \
-  test/node/repository-invariants.test.js test/ci/full-contract.test.js \
-  docs/testing.md docs/conformance.md
+  test/node/repository-invariants.test.js docs/testing.md docs/conformance.md
 git commit -m "Enforce provenance foundation in CI" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
 
 ---
 
-### Task 6: Review, Merge, and Close U0
+### Task 6: Review, Merge, and Security-Verify U0
 
 **Files:**
 
 - No new planned repository files.
-- Update GitHub U0 issue and U0 pull request.
+- Update outside repo:
+  `$ARTIFACTS/es2015-provenance-u0-lifecycle.json`
+- Create or recover one GitHub U0 pull request; create no issue.
 
 **Interfaces:**
 
-- Consumes: completed U0 commits and U0 issue number.
-- Produces: one reviewed, exact-head-clean, merged U0 PR and closed U0 issue.
+- Consumes: completed U0 commits.
+- Produces: one reviewed, exact-head-clean, merged U0 PR plus exact-main
+  default-setup CodeQL evidence that releases the hierarchy-creation gate.
 
-- [ ] **Step 1: Verify the final U0 range and no-production invariant**
+- [ ] **Step 1: Reconcile U0 onto moving current main**
 
 ```bash
+git fetch origin main
+git merge-base --is-ancestor \
+  54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7 origin/main
+FINAL_MERGE_BASE=$(git rev-parse origin/main)
+git rebase origin/main
 git status --short --branch
-git --no-pager diff --stat 54010d4...HEAD
-git --no-pager diff --name-only 54010d4...HEAD
-test -z "$(git diff --name-only 54010d4...HEAD -- src/)"
-git diff --exit-code 54010d4...HEAD -- tools/test262/features.json \
+```
+
+Record `FINAL_MERGE_BASE` separately from taxonomy baseline `54010d4` in the
+lifecycle artifact. If rebase conflicts touch taxonomy/provenance inputs,
+resolve against current main, regenerate U0 artifacts under UTC, and restart
+this task.
+
+- [ ] **Step 2: Verify the exact final merge-base range**
+
+```bash
+git --no-pager diff --stat "$FINAL_MERGE_BASE"...HEAD
+git --no-pager diff --name-only "$FINAL_MERGE_BASE"...HEAD
+test -z "$(git diff --name-only "$FINAL_MERGE_BASE"...HEAD -- src/)"
+git diff --exit-code "$FINAL_MERGE_BASE"...HEAD -- \
+  tools/test262/features.json \
   tools/test262/upstream-subset.json
+git diff --name-only "$FINAL_MERGE_BASE"...HEAD -- \
+  docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md \
+  docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md
 TZ=UTC npm run test262:es2015:provenance:check
 TZ=UTC npm run test262:es2015:audit:check
+node test/run-node.js \
+  test/node/es2015-provenance.test.js \
+  test/node/es2015-taxonomy.test.js \
+  test/node/repository-invariants.test.js \
+  test/node/workflow-contract.test.js
+npm run vendor:check
+npm run ci:check
+npm run typecheck
+npm run lint
+npm run format
+git diff --check
 ```
 
-Expected: no `src/`, feature, selection, or classification-decision changes;
-unknown remains exactly 2,312 / 4,054.
+Expected: the final range includes the approved #75 design and plan plus U0
+tooling/data/docs; no `src/`, feature, selection, or classification-decision
+changes; unknown remains exactly 2,312 / 4,054. The metadata-only audit check
+must not execute Test262.
 
-- [ ] **Step 2: Re-render and synchronize the U0 body**
+- [ ] **Step 3: Recover or create exactly one draft U0 PR**
 
-Render U0 through the implemented CLI with an issue map containing #75 and the
-actual U0 identity. Update U0 if its initial manually rendered body differs,
-then re-read it and compare SHA-256 with the local rendered file. The final
-body must contain actual issue numbers and no unresolved marker.
-
-- [ ] **Step 3: Obtain independent specification review**
-
-Invoke a fresh `rubber-duck` reviewer using GPT-5.6 Sol. Give it the approved
-spec, plan, U0 issue body, and `54010d4...HEAD` diff. Require explicit findings
-for source pins, exact partition, zero decisions, evidence schema, native graph
-renderer, targeted-only policy, and no-production boundary.
-
-Fix every valid finding and rerun Task 5 Step 7.
-
-- [ ] **Step 4: Obtain independent quality/provenance review**
-
-Invoke a fresh `code-review` reviewer using GPT-5.6 Sol against
-`54010d4...HEAD`. Require high-confidence correctness, fail-closed behavior,
-canonical hashing, generated drift, path union/overlap, and CI integration
-review.
-
-Fix every valid finding and rerun Task 5 Step 7.
-
-- [ ] **Step 5: Push and create the U0 PR**
+Query all PR states by exact head branch:
 
 ```bash
-git push -u origin yoonbuck-issue-75-provenance-ledger
+gh pr list --repo yoonbuck/jsjs --state all \
+  --head yoonbuck-issue-75-provenance-ledger \
+  --json number,state,isDraft,headRefName,headRefOid,baseRefName,mergeCommit,url
 ```
 
-Call `create_pull_request` with a title beginning `Build unknown-edition
-provenance foundation`, body linking #75 and U0, exact base ledger/hash,
-zero-decision statement, review summaries, commands, and
-`Closes #$U0_NUMBER` after resolving the actual issue number.
+Apply this idempotent state machine:
 
-- [ ] **Step 6: Record the exact reviewed head**
+1. Zero matches: push the branch and call `create_pull_request` once as a draft.
+2. One open match: require `baseRefName == "main"`, reuse it, update title/body,
+   and push only with `--force-with-lease` after a rebase.
+3. One merged match: verify its recorded reviewed head and squash SHA, create
+   nothing, and resume at post-merge verification.
+4. More than one match, a closed-unmerged match, or a mismatched head/base:
+   hard stop for coordinator adjudication.
+
+The PR body links #75, identifies U0, includes the exact base ledger/hash,
+states zero decisions, lists safe local checks, states broad execution is
+CI-only, and does not use a closing keyword because U0 does not yet exist.
+
+- [ ] **Step 4: Stabilize current main before final review and push**
+
+Immediately before final reviews:
+
+```bash
+git fetch origin main
+LATEST_MAIN=$(git rev-parse origin/main)
+test "$LATEST_MAIN" = "$FINAL_MERGE_BASE" || git rebase origin/main
+FINAL_MERGE_BASE=$(git rev-parse origin/main)
+```
+
+If main moved, regenerate/check U0 artifacts and rerun Step 2. Push the exact
+reconciled branch. Update the lifecycle artifact and PR body with the new final
+merge base. No review from the superseded range counts as final.
+
+- [ ] **Step 5: Obtain independent specification review**
+
+Invoke a fresh `rubber-duck` reviewer using GPT-5.6 Sol. Give it the approved
+spec, plan, PR body, and `FINAL_MERGE_BASE...HEAD` diff. Require explicit
+findings for source pins, exact partition, zero decisions, evidence schema,
+native graph renderer, targeted-only policy, moving-main reconciliation, and
+no-production boundary. Publish the review as a durable PR artifact.
+
+Fix every valid finding, then repeat Steps 2, 4, and 5.
+
+- [ ] **Step 6: Obtain independent quality/provenance review**
+
+Invoke a fresh `code-review` reviewer using GPT-5.6 Sol against
+`FINAL_MERGE_BASE...HEAD`. Require high-confidence correctness, fail-closed
+behavior, canonical hashing, generated drift, path union/overlap, metadata-only
+audit behavior, PR recovery, and CI integration review. Publish the review as a
+durable PR artifact.
+
+Fix every valid finding, then repeat Steps 2, 4, 5, and 6.
+
+- [ ] **Step 7: Record the exact reviewed head and immutable identities**
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq .number)
 REVIEWED_HEAD=$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)
-printf '%s\n' "$REVIEWED_HEAD"
+test "$REVIEWED_HEAD" = "$(git rev-parse HEAD)"
 ```
 
-Post specification and quality/provenance review evidence to the PR or U0
-issue. Record their durable GitHub URLs.
+Persist taxonomy baseline, final merge base, reviewed head, PR number, and both
+review artifact URLs in distinct lifecycle fields. Mark the draft ready only
+after both final-range reviews are durable.
 
-- [ ] **Step 7: Require exact-head CI and CodeQL**
+- [ ] **Step 8: Select and watch exact standard CI**
+
+Poll for at most 300 seconds:
 
 ```bash
-gh run list --branch yoonbuck-issue-75-provenance-ledger \
-  --json databaseId,workflowName,headSha,status,conclusion,event --limit 30
+for attempt in $(seq 1 30); do
+  CI_RUN_ID=$(gh api \
+    "repos/yoonbuck/jsjs/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$REVIEWED_HEAD&per_page=100" \
+    --jq '.workflow_runs | sort_by(.created_at) | reverse | .[0].id // empty')
+  test -n "$CI_RUN_ID" && break
+  sleep 10
+done
+test -n "$CI_RUN_ID"
 ```
 
-Select only runs whose `headSha == REVIEWED_HEAD`, then:
+Start `gh run watch "$CI_RUN_ID" --exit-status` with a synchronous bash tool
+call and `initial_wait=30`. If it continues, read the same shell session with
+`read_bash(delay=600)` until terminal; never launch another watcher.
+
+Then verify:
 
 ```bash
-gh run watch "$CI_RUN_ID" --exit-status
-gh run watch "$CODEQL_RUN_ID" --exit-status
+gh api "repos/yoonbuck/jsjs/actions/runs/$CI_RUN_ID" \
+  --jq '{id,path,event,head_sha,status,conclusion}'
 test "$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
 gh pr checks "$PR_NUMBER" --required
 ```
 
-Expected: CI and CodeQL both succeed at the unchanged reviewed head.
+Accept only `.github/workflows/ci.yml`, event `pull_request`, exact reviewed
+head, terminal `completed`, and conclusion `success`.
 
-- [ ] **Step 8: Squash merge and verify main**
+- [ ] **Step 9: Resolve exact-head CodeQL separately**
+
+Use a separate bounded 300-second poll over action runs filtered in the
+response to path `dynamic/github-code-scanning/codeql` and
+`head_sha == REVIEWED_HEAD`. Watch the selected run with one synchronous shell
+session and 600-second reads as in Step 8.
+
+Query:
 
 ```bash
+gh api \
+  "repos/yoonbuck/jsjs/code-scanning/analyses?pr=$PR_NUMBER&tool_name=CodeQL&per_page=100"
+```
+
+Require exact `commit_sha == REVIEWED_HEAD` analyses for categories
+`/language:javascript-typescript` and `/language:actions`, each with
+`results_count == 0`, `error == ""`, and `warning == ""`. These empty
+error/warning fields are the required zero extraction/parse diagnostics.
+Persist run and analysis IDs separately from CI.
+
+- [ ] **Step 10: Merge idempotently without a stale head**
+
+Immediately before merge, require unchanged PR head, successful exact CI,
+successful exact-head CodeQL, and both review artifacts. If the PR is already
+merged, do not merge again. Otherwise:
+
+```bash
+test "$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
 gh pr merge "$PR_NUMBER" --squash
 gh pr view "$PR_NUMBER" --json state,mergedAt,mergeCommit
 git fetch origin main
-MERGE_SHA=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq .mergeCommit.oid)
-git merge-base --is-ancestor "$MERGE_SHA" origin/main
+SQUASH_SHA=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq .mergeCommit.oid)
+git merge-base --is-ancestor "$SQUASH_SHA" origin/main
 ```
 
-Expected: merged PR and merge SHA on `origin/main`.
+Persist `SQUASH_SHA` in its own lifecycle field.
 
-- [ ] **Step 9: Publish U0 closure evidence**
+- [ ] **Step 11: Require exact-main default-setup CodeQL**
 
-Post to U0:
+Poll at most 300 seconds for the dynamic CodeQL run whose
+`head_sha == SQUASH_SHA`, path is `dynamic/github-code-scanning/codeql`, and
+ref is the push on main. Watch exactly that run with one synchronous watcher
+and 600-second reads.
 
-- reviewed head, CI run, CodeQL run, PR, and merge SHA;
-- manifest/base/batch hashes;
-- exact 2,312 / 4,054 unchanged classification;
-- zero decisions across 13 fragments;
-- no `src/`, feature, or selection changes; and
-- exact post-merge provenance/audit check results.
+Query code-scanning analyses for `refs/heads/main`. Require exact
+`commit_sha == SQUASH_SHA` analyses for both JavaScript/TypeScript and Actions
+categories with zero results, empty error, and empty warning. Also require zero
+open code-scanning alerts. Persist the exact-main run and analysis IDs.
 
-Close U0 only after the evidence comment is durable.
+- [ ] **Step 12: Verify U0 bytes on origin/main and release the hierarchy gate**
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor "$SQUASH_SHA" origin/main
+git show origin/main:docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md >/dev/null
+git show origin/main:docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md >/dev/null
+git show origin/main:tools/test262/es2015-provenance.json >/dev/null
+```
+
+Compare the spec, plan, manifest, renderer, validator, fragments, and generated
+workflow bytes with the squash commit. Only after this passes may Task 7 create
+or attach any U* issue.
 
 ---
 
@@ -911,23 +1085,32 @@ Close U0 only after the evidence comment is durable.
 
 - Consumes: merged U0 CLI and exact current `origin/main`.
 - Produces: exact initial/final bodies and an idempotent code-to-issue map for
-  UA, UB, UL, UL1-UL4, US, and US1-US7.
+  U0, UA, UB, UL, UL1-UL4, US, and US1-US7.
 
-- [ ] **Step 1: Start a clean post-U0 session from current main**
+- [ ] **Step 1: Enter controller-only mode after the security gate**
 
-Use an app-native worktree session. Verify:
+Continue in the #75 grouping session only as a controller. Do not implement a
+decision fragment, create an atomic branch, or edit repository files. Verify:
 
 ```bash
 git fetch origin main
-git rev-parse HEAD
 git rev-parse origin/main
 git status --short --branch
+git merge-base --is-ancestor "$SQUASH_SHA" origin/main
+git diff --exit-code "$SQUASH_SHA" origin/main -- \
+  docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md \
+  docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md \
+  tools/test262/es2015-provenance.js \
+  tools/test262/es2015-provenance-check.js \
+  tools/test262/es2015-provenance.json \
+  tools/test262/es2015-provenance-decisions
 TZ=UTC npm run test262:es2015:provenance:check
 TZ=UTC npm run test262:es2015:audit:check
 ```
 
-Expected: HEAD equals current main, worktree clean, exact base partition still
-2,312 / 4,054.
+Expected: U0 squash is on current main, tracked U0 bytes match, exact-main
+CodeQL IDs in the lifecycle artifact are complete, worktree is clean, and the
+base partition remains 2,312 / 4,054. The audit check is metadata/hash-only.
 
 - [ ] **Step 2: Render every batch ledger and body**
 
@@ -956,8 +1139,8 @@ gh api --paginate 'repos/yoonbuck/jsjs/issues?state=all&per_page=100' \
    {number,id,node_id,title,state,milestone:(.milestone.title // null)}'
 ```
 
-Expected: U0 has exactly one closed match; every other code has zero or one
-match. Abort on duplicates.
+Expected before first hierarchy creation: every code, including U0, has zero
+matches. On resume, each code has zero or one match. Abort on duplicates.
 
 - [ ] **Step 4: Build the resumable issue map**
 
@@ -968,19 +1151,12 @@ Write canonical JSON:
   "version": 1,
   "parent": 75,
   "baseLedgerSha256": "56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc",
-  "issues": {
-    "U0": {
-      "number": 0,
-      "id": 0,
-      "nodeId": "I_...",
-      "state": "closed"
-    }
-  }
+  "issues": {}
 }
 ```
 
-Populate discovered nodes; leave uncreated codes absent rather than using
-sentinel numbers.
+Populate discovered nodes on resume; leave uncreated codes absent rather than
+using sentinel numbers.
 
 ---
 
@@ -1001,7 +1177,21 @@ sentinel numbers.
 - Produces: complete native hierarchy and dependency graph with exact bodies,
   titles, milestones, and no duplicate issues.
 
-- [ ] **Step 1: Create direct decision and grouping nodes**
+- [ ] **Step 1: Create and close the retrospective U0 node**
+
+Call `create_issue` once with:
+
+- title: `Build unknown-edition Test262 provenance manifests and validator`;
+- exact rendered U0 body identifying #75/T1, base ledger, U0 PR, reviewed head,
+  final merge base, CI/CodeQL IDs, squash SHA, and exact-main CodeQL IDs; and
+- repo `yoonbuck/jsjs`.
+
+Immediately persist its identities, apply milestone ES2015, attach it as a
+direct sub-issue of #75, post the durable U0 closure evidence, and close it.
+Re-read body, milestone, parent, comment, and state. On resume, reuse the exact
+marker match and never create a duplicate.
+
+- [ ] **Step 2: Create direct decision and grouping nodes**
 
 For each missing code, call `create_issue` with the exact rendered body and
 these titles:
@@ -1016,7 +1206,7 @@ these titles:
 After each call, immediately persist number, REST id, and GraphQL node id in
 the issue map. On resume, re-query the marker before creating.
 
-- [ ] **Step 2: Create language atomic nodes**
+- [ ] **Step 3: Create language atomic nodes**
 
 Create missing nodes with exact rendered bodies:
 
@@ -1029,7 +1219,7 @@ Create missing nodes with exact rendered bodies:
 
 Persist each identity immediately.
 
-- [ ] **Step 3: Create staging atomic nodes**
+- [ ] **Step 4: Create staging atomic nodes**
 
 Create missing nodes with exact rendered bodies:
 
@@ -1045,7 +1235,7 @@ Create missing nodes with exact rendered bodies:
 
 Persist each identity immediately.
 
-- [ ] **Step 4: Apply ES2015 milestone idempotently**
+- [ ] **Step 5: Apply ES2015 milestone idempotently**
 
 For every U* issue:
 
@@ -1055,7 +1245,7 @@ gh api --method PATCH repos/yoonbuck/jsjs/issues/$NUMBER -F milestone=1
 
 Re-read and assert milestone title `ES2015`.
 
-- [ ] **Step 5: Attach native sub-issues idempotently**
+- [ ] **Step 6: Attach native sub-issues idempotently**
 
 Expected parent edges:
 
@@ -1073,7 +1263,7 @@ gh api --method POST \
   -F sub_issue_id="$CHILD_REST_ID"
 ```
 
-- [ ] **Step 6: Add atomic-to-U0 dependencies**
+- [ ] **Step 7: Add atomic-to-U0 dependencies**
 
 For each of UA, UB, UL1-UL4, and US1-US7:
 
@@ -1086,7 +1276,7 @@ gh api --method POST \
 Skip an exact existing edge. U0 is closed, so the relationship is durable
 history and not an open execution blocker.
 
-- [ ] **Step 7: Add grouping dependencies**
+- [ ] **Step 8: Add grouping dependencies**
 
 Add:
 
@@ -1099,7 +1289,7 @@ US blocked by US1, US2, US3, US4, US5, US6, US7
 Do not remove closed #74 from #75. Do not add U0 as another direct #75
 blocked-by edge.
 
-- [ ] **Step 8: Render and apply final bodies**
+- [ ] **Step 9: Render and apply final bodies**
 
 Render every body again with the complete issue map:
 
@@ -1112,7 +1302,7 @@ TZ=UTC node tools/test262/es2015-provenance-check.js \
 
 Update each issue with exact final bytes. Re-read body and compare SHA-256.
 
-- [ ] **Step 9: Verify the complete live graph**
+- [ ] **Step 10: Verify the complete live graph**
 
 Fetch every issue, sub-issue list, blocked-by list, and blocking list. Assert:
 
@@ -1157,8 +1347,11 @@ table to #75.
 - [ ] **Step 1: Launch at most four disjoint sessions**
 
 Create one app-native session per issue, each from current main, using GPT-5.6
-family. Give each only its exact code, issue, ledger, spec, and this task. Do
-not let a session edit another fragment.
+family. Each atomic issue owns exactly one fresh worktree, branch, and PR. Give
+each only its exact code, issue, ledger, spec, and this task. Do not let a
+session edit another fragment. The #75 controller sends instructions and
+verifies results but never edits any of the four fragments or shared generated
+artifacts.
 
 - [ ] **Step 2: Require RED decision completeness**
 
@@ -1216,7 +1409,8 @@ node test/run-node.js test/node/es2015-provenance.test.js \
 
 - [ ] **Step 7: Rebase and merge sequentially**
 
-Before final review of each PR:
+The child session owning the next PR performs every item below; the controller
+does not take over its branch. Before final review of each PR:
 
 1. update from current `origin/main`;
 2. regenerate shared artifacts under `TZ=UTC`;
@@ -1231,7 +1425,8 @@ Before final review of each PR:
 From current main, publish exact path movements, refreshed partition/status
 counts, downstream semantic issue additions/removals, fragment hash, taxonomy
 hash, CI, CodeQL, and merge SHA. Close each atomic issue only after its selector
-is empty and downstream issue comments are durable.
+is empty and downstream issue comments are durable. Archive that completed
+child session before advancing the wave.
 
 ---
 
@@ -1261,7 +1456,8 @@ audit checks under UTC. Record the refreshed unknown count as the Wave 2 base.
 Assign one exact fragment per session. UL2 owns object/class definitions; UL3
 owns the approved language complement; UL4 owns environment/module paths; US1
 owns staging containers/binary paths. No session edits guest runtime or another
-fragment.
+fragment. Each issue owns one fresh app-native worktree/branch/PR. The #75
+controller performs no implementation.
 
 - [ ] **Step 3: Prove RED then prepare complete draft evidence**
 
@@ -1289,7 +1485,8 @@ successful CI and CodeQL. Squash merge one PR at a time.
 - [ ] **Step 7: Publish UTC reclassification and downstream updates**
 
 After each merge, update exact ledgers/counts on affected roadmap issues and
-close the atomic issue only when its batch selector is empty.
+close the atomic issue only when its batch selector is empty. Archive its child
+session.
 
 ---
 
@@ -1316,7 +1513,9 @@ main.
 - [ ] **Step 2: Launch three disjoint sessions**
 
 US2 reviews RegExp/String/JSON semantics; US3 reviews Math/Number/Date/global
-semantics; US4 reviews Function/object/Symbol/Proxy/Reflect semantics.
+semantics; US4 reviews Function/object/Symbol/Proxy/Reflect semantics. Each
+issue owns one fresh app-native worktree/branch/PR; the #75 controller does not
+edit their fragments.
 
 - [ ] **Step 3: Complete normative adjudication**
 
@@ -1341,7 +1540,7 @@ the exact unchanged head.
 - [ ] **Step 7: Reclassify and update downstream issue ledgers**
 
 Publish exact movements and hashes after each merge, then close US2, US3, and
-US4 when their selectors are empty.
+US4 when their selectors are empty. Archive each completed child session.
 
 ---
 
@@ -1367,7 +1566,8 @@ unknown selector, which must equal the US5 + US7 unresolved union.
 
 US5 owns staging language-runtime topics. US7 owns regress/extensions/misc/types.
 Use long-context GPT-5.6 models because these batches require per-path semantic
-review rather than directory inference.
+review rather than directory inference. Each issue owns one fresh app-native
+worktree/branch/PR; the #75 controller remains implementation-free.
 
 - [ ] **Step 3: Complete every record with exact evidence**
 
@@ -1395,7 +1595,8 @@ and require successful CI and CodeQL before each squash merge.
 
 Update every affected downstream semantic ledger/count, publish exact movement
 and artifact hashes, and close US5 and US7 only when their selectors are empty
-or carry the approved reviewed non-ES2015 remainder proof.
+or carry the approved reviewed non-ES2015 remainder proof. Archive both child
+sessions.
 
 ---
 
