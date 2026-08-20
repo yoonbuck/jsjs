@@ -2,7 +2,7 @@ import { EngineObject } from './object.js';
 import { GuestErrorSignal } from './completion.js';
 import {
   createIterResultObject,
-  getIteratorRecord,
+  getEnumerateIteratorRecord,
   iteratorStep,
   iteratorValue,
 } from './iterator.js';
@@ -165,10 +165,7 @@ function snapshotForInCandidates(iterator) {
       current.enumerate !== EngineObject.prototype.enumerate
     ) {
       iterator.remainderBoundary = current;
-      iterator.remainder = getIteratorRecord(
-        current.enumerate(),
-        iterator.realm,
-      );
+      iterator.remainder = getEnumerateIteratorRecord(iterator.realm, current);
       return;
     }
 

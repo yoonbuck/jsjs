@@ -983,6 +983,162 @@ const tests = [
     },
   },
   {
+    name: 'generator for-in bridges a separately owned ordinary Enumerate boundary into its evaluating Realm',
+    run() {
+      const evaluatingAgent = createAgent();
+      const targetAgent = createAgent();
+      const boundaryAgent = createAgent();
+      const evaluatingRealm = createRealm({ agent: evaluatingAgent });
+      const targetRealm = createRealm({ agent: targetAgent });
+      const boundaryRealm = createRealm({ agent: boundaryAgent });
+      let enumerateCalls = 0;
+      /** @type {{ iterator: EngineObject | null }} */
+      const captured = { iterator: null };
+
+      class DelegatingBoundary extends EngineObject {
+        enumerate() {
+          assertSame(
+            boundaryAgent.activeExecutionRealm,
+            evaluatingRealm,
+            'separate boundary Agent must see the evaluating Realm',
+          );
+          enumerateCalls += 1;
+          const iterator = super.enumerate();
+          captured.iterator = iterator;
+          return iterator;
+        }
+      }
+
+      const boundary = new DelegatingBoundary(
+        boundaryRealm.intrinsics.objectPrototype,
+      );
+      boundary.defineOwnProperty('boundary', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const source = new EngineObject(targetRealm.intrinsics.objectPrototype);
+      source.defineOwnProperty('target', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(source.agent, targetAgent);
+      assertSame(boundary.agent, boundaryAgent);
+      assertSame(source.setPrototypeOf(boundary), true);
+      defineGlobal(evaluatingRealm, 'source', source);
+
+      const normal = evaluateScript(
+        evaluatingRealm,
+        'function* values() { var keys = []; for (var key in source) { ' +
+          'keys.push(key); yield key; } return keys.join(","); } ' +
+          'var valuesIterator = values(); var first = valuesIterator.next(); ' +
+          'var second = valuesIterator.next(); var done = valuesIterator.next(); ' +
+          '[first.value, second.value, done.value, done.done].join("|");',
+      );
+      assertSame(normal.type, 'normal');
+      assertSame(normal.value, 'target|boundary|target,boundary|true');
+      assertSame(enumerateCalls, 1);
+      assertSame(evaluatingAgent.activeExecutionRealm, null);
+      assertSame(targetAgent.activeExecutionRealm, null);
+      assertSame(boundaryAgent.activeExecutionRealm, null);
+      assertSame(evaluatingAgent._synchronousCallChain, null);
+      assertSame(targetAgent._synchronousCallChain, null);
+      assertSame(boundaryAgent._synchronousCallChain, null);
+      assertSame(evaluatingAgent._generatorHostChain, null);
+      assertSame(targetAgent._generatorHostChain, null);
+      assertSame(boundaryAgent._generatorHostChain, null);
+
+      const iterator = captured.iterator;
+      if (iterator === null) {
+        throw new Error('Expected boundary Enumerate to retain its iterator');
+      }
+      assertSame(
+        iterator.getPrototypeOf(),
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+      const next = /** @type {any} */ (iterator.get('next', iterator));
+      assertSame(next.realm, evaluatingRealm);
+      const result = /** @type {EngineObject} */ (
+        next.callFunction(iterator, [], evaluatingRealm)
+      );
+      assertSame(
+        result.getPrototypeOf(),
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+
+      let abruptEnumerateCalls = 0;
+      /** @type {{ iterator: EngineObject | null }} */
+      const abruptCaptured = { iterator: null };
+      class AbruptDelegatingBoundary extends EngineObject {
+        /** @returns {EngineObject} */
+        enumerate() {
+          assertSame(
+            boundaryAgent.activeExecutionRealm,
+            evaluatingRealm,
+            'abrupt boundary dispatch must see the evaluating Realm',
+          );
+          abruptEnumerateCalls += 1;
+          const iterator = super.enumerate();
+          abruptCaptured.iterator = iterator;
+          throw new GuestErrorSignal('TypeError', 'boundary enumerate abrupt');
+        }
+      }
+
+      const abruptBoundary = new AbruptDelegatingBoundary(
+        boundaryRealm.intrinsics.objectPrototype,
+      );
+      const abruptSource = new EngineObject(
+        targetRealm.intrinsics.objectPrototype,
+      );
+      assertSame(abruptSource.setPrototypeOf(abruptBoundary), true);
+      defineGlobal(evaluatingRealm, 'abruptSource', abruptSource);
+
+      const abrupt = evaluateScript(
+        evaluatingRealm,
+        'function* values() { for (var key in abruptSource) { yield key; } } ' +
+          'var message; try { values().next(); message = "normal"; } ' +
+          'catch (error) { message = error.message; } message;',
+      );
+      assertSame(abrupt.type, 'normal');
+      assertSame(abrupt.value, 'boundary enumerate abrupt');
+      assertSame(abruptEnumerateCalls, 1);
+      assertSame(evaluatingAgent.activeExecutionRealm, null);
+      assertSame(targetAgent.activeExecutionRealm, null);
+      assertSame(boundaryAgent.activeExecutionRealm, null);
+      assertSame(evaluatingAgent._synchronousCallChain, null);
+      assertSame(targetAgent._synchronousCallChain, null);
+      assertSame(boundaryAgent._synchronousCallChain, null);
+      assertSame(evaluatingAgent._generatorHostChain, null);
+      assertSame(targetAgent._generatorHostChain, null);
+      assertSame(boundaryAgent._generatorHostChain, null);
+
+      const abruptIterator = abruptCaptured.iterator;
+      if (abruptIterator === null) {
+        throw new Error(
+          'Expected abrupt boundary Enumerate to allocate an iterator',
+        );
+      }
+      assertSame(
+        abruptIterator.getPrototypeOf(),
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+      const abruptNext = /** @type {any} */ (
+        abruptIterator.get('next', abruptIterator)
+      );
+      assertSame(abruptNext.realm, evaluatingRealm);
+      const abruptResult = /** @type {EngineObject} */ (
+        abruptNext.callFunction(abruptIterator, [], evaluatingRealm)
+      );
+      assertSame(
+        abruptResult.getPrototypeOf(),
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+    },
+  },
+  {
     name: 'generator for-in retains mutation, nullish, and lexical-head behavior',
     run() {
       const realm = createRealm();
@@ -1049,6 +1205,44 @@ const tests = [
         ).value,
         'ReferenceError',
       );
+    },
+  },
+  {
+    name: 'generator for-in skips an inherited non-enumerable shadow after its own property is deleted',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        'function Base() {} ' +
+          'Object.defineProperty(Base.prototype, "hidden", ' +
+          '{ value: "base", writable: true, enumerable: false, configurable: true }); ' +
+          'var child = new Base(); child.first = 1; child.hidden = "own"; ' +
+          'function* values() { var keys = []; for (var key in child) { ' +
+          'keys.push(key); if (key === "first") { delete child.hidden; } ' +
+          'yield key; } return keys.join(","); } ' +
+          'var iterator = values(); var first = iterator.next(); var done = iterator.next(); ' +
+          '[first.value, done.value, done.done].join("|");',
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'first|first|true');
+    },
+  },
+  {
+    name: 'generator for-in yields index keys before string keys',
+    run() {
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        'var object = { 2: "two", text: "text", 1: "one" }; ' +
+          'function* values() { var keys = []; for (var key in object) { ' +
+          'keys.push(key); yield key; } return keys.join(","); } ' +
+          'var iterator = values(); var first = iterator.next(); ' +
+          'var second = iterator.next(); var third = iterator.next(); ' +
+          'var done = iterator.next(); ' +
+          '[first.value, second.value, third.value, done.value, done.done].join("|");',
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, '1|2|text|1,2,text|true');
     },
   },
   {

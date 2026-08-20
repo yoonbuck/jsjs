@@ -4261,19 +4261,104 @@ const tests = [
     },
   },
   {
-    name: 'generator for-in consumes a 50,000-link Enumerate iterator iteratively',
+    name: 'synchronous for-in consumes a 50,000-link Enumerate iterator with one exotic middle iteratively',
     run() {
       const realm = createRealm();
       const root = new EngineObject(realm.intrinsics.objectPrototype);
-      root.defineOwnProperty('key', {
+      root.defineOwnProperty('value', {
         value: 1,
         writable: true,
         enumerable: true,
         configurable: true,
       });
 
-      let source = root;
-      for (let index = 0; index < 50000; index += 1) {
+      let ownPropertyKeysCalls = 0;
+      let getOwnPropertyCalls = 0;
+      let getPrototypeOfCalls = 0;
+      class RecordingMiddle extends EngineObject {
+        ownPropertyKeys() {
+          ownPropertyKeysCalls += 1;
+          return super.ownPropertyKeys();
+        }
+
+        /**
+         * @param {import('../src/runtime/descriptors.js').PropertyKey} key
+         */
+        getOwnProperty(key) {
+          getOwnPropertyCalls += 1;
+          return super.getOwnProperty(key);
+        }
+
+        getPrototypeOf() {
+          getPrototypeOfCalls += 1;
+          return super.getPrototypeOf();
+        }
+      }
+
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
+      }
+      const middle = new RecordingMiddle(lower);
+      let source = middle;
+      for (let index = 0; index < 24999; index += 1) {
+        source = new EngineObject(source);
+      }
+      defineGlobal(realm, 'source', source);
+
+      const completion = evaluateScript(
+        realm,
+        'var key; for (key in source) { break; } key;',
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'value');
+      assertSame(ownPropertyKeysCalls, 1);
+      assertSame(getOwnPropertyCalls, 1);
+      assertSame(getPrototypeOfCalls, 2);
+    },
+  },
+  {
+    name: 'generator for-in consumes a 50,000-link Enumerate iterator with one exotic middle iteratively',
+    run() {
+      const realm = createRealm();
+      const root = new EngineObject(realm.intrinsics.objectPrototype);
+      root.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let ownPropertyKeysCalls = 0;
+      let getOwnPropertyCalls = 0;
+      let getPrototypeOfCalls = 0;
+      class RecordingMiddle extends EngineObject {
+        ownPropertyKeys() {
+          ownPropertyKeysCalls += 1;
+          return super.ownPropertyKeys();
+        }
+
+        /**
+         * @param {import('../src/runtime/descriptors.js').PropertyKey} key
+         */
+        getOwnProperty(key) {
+          getOwnPropertyCalls += 1;
+          return super.getOwnProperty(key);
+        }
+
+        getPrototypeOf() {
+          getPrototypeOfCalls += 1;
+          return super.getPrototypeOf();
+        }
+      }
+
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
+      }
+      const middle = new RecordingMiddle(lower);
+      let source = middle;
+      for (let index = 0; index < 24999; index += 1) {
         source = new EngineObject(source);
       }
       defineGlobal(realm, 'source', source);
@@ -4281,11 +4366,14 @@ const tests = [
       const completion = evaluateScript(
         realm,
         'function* values() { for (var key in source) { yield key; } } ' +
-          'var iterator = values(); var first = iterator.next(); var done = iterator.next(); ' +
-          '[first.value, first.done, done.done].join("|");',
+          'var iterator = values(); var first = iterator.next(); var closed = iterator.return(); ' +
+          '[first.value, first.done, closed.done].join("|");',
       );
       assertSame(completion.type, 'normal');
-      assertSame(completion.value, 'key|false|true');
+      assertSame(completion.value, 'value|false|true');
+      assertSame(ownPropertyKeysCalls, 1);
+      assertSame(getOwnPropertyCalls, 1);
+      assertSame(getPrototypeOfCalls, 2);
     },
   },
   {
