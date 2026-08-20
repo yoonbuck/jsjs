@@ -187,6 +187,72 @@ function productionManifest() {
   return buildProvenanceFoundation(productionClassifications());
 }
 
+function findNonUl3BatchEntry(manifest) {
+  for (const batch of manifest.batches) {
+    if (batch.code === 'UL3') continue;
+    const entry = batch.entries[0];
+    if (entry !== undefined) {
+      return {
+        code: batch.code,
+        path: entry.path,
+      };
+    }
+  }
+  throw new Error('expected a non-UL3 production batch entry');
+}
+
+function findVariantRedistributionPair(manifest) {
+  for (const batch of manifest.batches) {
+    if (batch.code === 'UL3') continue;
+    for (const source of batch.entries) {
+      if (source.variants <= 1) continue;
+      for (const target of batch.entries) {
+        if (target.path === source.path) continue;
+        return {
+          code: batch.code,
+          sourcePath: source.path,
+          targetPath: target.path,
+        };
+      }
+    }
+  }
+  throw new Error('expected production manifest entries that can redistribute variants');
+}
+
+function tamperedPriorClassManifest() {
+  const manifest = clone(productionManifest());
+  const target = findNonUl3BatchEntry(manifest);
+  const batch = manifest.batches.find((entry) => entry.code === target.code);
+  const entry = batch?.entries.find((candidate) => candidate.path === target.path);
+  if (entry === undefined) {
+    throw new Error('expected a production manifest entry to mutate priorClass');
+  }
+  entry.priorClass = `${entry.priorClass}:tampered`;
+  return {
+    manifest,
+    code: target.code,
+    path: target.path,
+  };
+}
+
+function redistributedVariantsManifest() {
+  const manifest = clone(productionManifest());
+  const target = findVariantRedistributionPair(manifest);
+  const batch = manifest.batches.find((entry) => entry.code === target.code);
+  const source = batch?.entries.find((entry) => entry.path === target.sourcePath);
+  const destination = batch?.entries.find((entry) => entry.path === target.targetPath);
+  if (source === undefined || destination === undefined) {
+    throw new Error('expected production manifest entries to redistribute variants');
+  }
+  source.variants -= 1;
+  destination.variants += 1;
+  return {
+    manifest,
+    code: target.code,
+    path: target.sourcePath,
+  };
+}
+
 function validManifestValue() {
   return buildProvenanceFoundation(foundationClassifications());
 }
@@ -847,43 +913,74 @@ export default [
   {
     name: 'ES2015 provenance fails closed before complete decisions and rendering',
     run: () => {
-      const alteredManifest = buildProvenanceFoundation(
-        productionClassifications().filter(
-          (record) =>
-            record.path !==
-            'test/annexB/built-ins/RegExp/RegExp-invalid-control-escape-character-class-range.js',
-        ),
-      );
       const fragment = parseEs2015DecisionFragment(
         json(productionDecisionFragmentValue()),
         'UL3',
       );
-      const expectedMessage =
-        `${ES2015_PROVENANCE_FILE} base ledger root count does not match the approved immutable ledger`;
-
+      const tamperedPriorClass = tamperedPriorClassManifest();
+      const priorClassMessage =
+        `${tamperedPriorClass.code} prior class for ${tamperedPriorClass.path} does not match the approved immutable ledger`;
       assertSame(
         assertThrows(
           () =>
-            validateDecisionFragments(alteredManifest, { UL3: fragment }, {
+            validateDecisionFragments(tamperedPriorClass.manifest, { UL3: fragment }, {
               allowPendingReview: false,
             }),
           Es2015ProvenanceError,
         ).message,
-        expectedMessage,
+        priorClassMessage,
       );
       assertSame(
         assertThrows(
-          () => renderBatchLedger(alteredManifest, 'UA'),
+          () => renderBatchLedger(tamperedPriorClass.manifest, tamperedPriorClass.code),
           Es2015ProvenanceError,
         ).message,
-        expectedMessage,
+        priorClassMessage,
       );
       assertSame(
         assertThrows(
-          () => renderProvenanceIssueBody(alteredManifest, 'UA', COMPLETE_ISSUE_MAP),
+          () =>
+            renderProvenanceIssueBody(
+              tamperedPriorClass.manifest,
+              tamperedPriorClass.code,
+              COMPLETE_ISSUE_MAP,
+            ),
           Es2015ProvenanceError,
         ).message,
-        expectedMessage,
+        priorClassMessage,
+      );
+
+      const redistributedVariants = redistributedVariantsManifest();
+      const variantMessage =
+        `${redistributedVariants.code} variant count for ${redistributedVariants.path} does not match the approved immutable ledger`;
+      assertSame(
+        assertThrows(
+          () =>
+            validateDecisionFragments(redistributedVariants.manifest, { UL3: fragment }, {
+              allowPendingReview: false,
+            }),
+          Es2015ProvenanceError,
+        ).message,
+        variantMessage,
+      );
+      assertSame(
+        assertThrows(
+          () => renderBatchLedger(redistributedVariants.manifest, redistributedVariants.code),
+          Es2015ProvenanceError,
+        ).message,
+        variantMessage,
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            renderProvenanceIssueBody(
+              redistributedVariants.manifest,
+              redistributedVariants.code,
+              COMPLETE_ISSUE_MAP,
+            ),
+          Es2015ProvenanceError,
+        ).message,
+        variantMessage,
       );
 
       assertSame(
