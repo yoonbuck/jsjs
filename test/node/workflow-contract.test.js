@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { load as parseYaml, dump as dumpYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
+import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
 import {
   UNSUPPORTED_FLAGS,
   decideSkip,
@@ -715,7 +716,7 @@ function runGuardShellCommand(command, cwd, env) {
   });
 }
 
-const engine = { createRealm, evaluateScript };
+const engine = createJsjsTest262Engine();
 
 const GENERATOR_PROBE =
   "function* sequence() {\n  var input = yield 1;\n  return input + 1;\n}\nvar iterator = sequence();\nif (iterator[Symbol.iterator]() !== iterator) {\n  throw new Error('generator is not iterable');\n}\nvar first = iterator.next();\nvar second = iterator.next(2);\nif (first.value !== 1 || first.done || second.value !== 3 || !second.done) {\n  throw new Error('generator resume semantics failed');\n}";
@@ -2134,6 +2135,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2169,6 +2171,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2207,6 +2210,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2245,6 +2249,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2342,6 +2347,7 @@ export default [
           // never silently accepted as `completed`.
           engine: {
             createRealm,
+            installHostBindings() {},
             evaluateScript() {
               throw new Error('synthetic engine limitation');
             },

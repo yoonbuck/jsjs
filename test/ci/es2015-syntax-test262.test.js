@@ -10,8 +10,8 @@
 
 import { readFile } from 'node:fs/promises';
 import { assertSame } from '../harness/assert.js';
-import { createRealm, evaluateScript } from '../../src/index.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
+import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
 import {
   featureNames,
   parseFeatureManifest,
@@ -149,7 +149,7 @@ export default [
         await readFile('tools/test262/features.json', 'utf8'),
       );
       const { summary, records } = await runTest262({
-        engine: { createRealm, evaluateScript },
+        engine: createJsjsTest262Engine(),
         host: createNodeTest262Host({ root: pin.checkoutPath }),
         paths: FOCUSED_PATHS,
         supportedFeatures: featureNames(manifest),

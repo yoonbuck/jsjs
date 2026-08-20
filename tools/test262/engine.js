@@ -13,6 +13,7 @@ import {
 export function createJsjsTest262Engine() {
   return Object.freeze({
     createRealm,
+    installHostBindings() {},
     evaluateScript,
     async evaluateModule(realm, source, identifier, host) {
       const loader = createModuleLoader(realm, {

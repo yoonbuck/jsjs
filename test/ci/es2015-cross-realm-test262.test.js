@@ -27,6 +27,27 @@ const EXPECTED_LEDGER_SHA256 =
 const EXPECTED_ROOT_COUNT = 135;
 const EXPECTED_VARIANT_COUNT = 267;
 
+/**
+ * @typedef {{
+ *   version: number,
+ *   repository: string,
+ *   revision: string,
+ *   sourceTaxonomySha256: string,
+ *   ledgerSha256: string,
+ *   rootCount: number,
+ *   variantCount: number,
+ *   paths: string[],
+ * }} CrossRealmArtifact
+ *
+ * @typedef {{
+ *   path: string,
+ *   partition: string,
+ *   blocker: string | null,
+ *   variants: number,
+ *   features: readonly string[],
+ * }} TaxonomyClassification
+ */
+
 export default [
   {
     name: 'cross-Realm H0 artifact matches the pre-H0 taxonomy ledger',
@@ -190,18 +211,27 @@ async function loadCrossRealmSelection() {
           `${TAXONOMY_FILE} must still classify ${path}`,
         );
 
-        return [path, normalizeFeatureList(entry.features)];
+        const features = entry === undefined ? [] : entry.features;
+        return [path, normalizeFeatureList(features)];
       }),
     ),
   };
 }
 
+/**
+ * @param {string} path
+ * @returns {Promise<string>}
+ */
 async function readRepositoryFile(path) {
   return readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 }
 
+/**
+ * @param {string} text
+ * @returns {CrossRealmArtifact}
+ */
 function parseH0Artifact(text) {
-  const artifact = JSON.parse(text);
+  const artifact = /** @type {CrossRealmArtifact} */ (JSON.parse(text));
 
   if (
     typeof artifact !== 'object' ||
@@ -215,8 +245,14 @@ function parseH0Artifact(text) {
   return artifact;
 }
 
+/**
+ * @param {string} text
+ * @returns {TaxonomyClassification[]}
+ */
 function parseTaxonomyClassifications(text) {
-  const taxonomy = JSON.parse(text);
+  const taxonomy = /** @type {{ classifications: TaxonomyClassification[] }} */ (
+    JSON.parse(text)
+  );
 
   if (
     typeof taxonomy !== 'object' ||
@@ -230,6 +266,10 @@ function parseTaxonomyClassifications(text) {
   return taxonomy.classifications;
 }
 
+/**
+ * @param {readonly string[] | unknown} features
+ * @returns {readonly string[]}
+ */
 function normalizeFeatureList(features) {
   if (!Array.isArray(features)) {
     return Object.freeze([]);
@@ -238,6 +278,10 @@ function normalizeFeatureList(features) {
   return Object.freeze(sortStrings([...features]));
 }
 
+/**
+ * @param {readonly { message?: string, reason?: string }[]} records
+ * @returns {string[]}
+ */
 function summarizeFailureKinds(records) {
   /** @type {Map<string, number>} */
   const counts = new Map();
@@ -252,6 +296,10 @@ function summarizeFailureKinds(records) {
     .map(([message, count]) => `Failure kind x${count}: ${message}`);
 }
 
+/**
+ * @param {string} text
+ * @returns {string}
+ */
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
