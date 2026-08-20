@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import * as fs from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
@@ -17,11 +18,20 @@ import {
   Es2015AuditError,
   main as auditEs2015Taxonomy,
 } from '../../tools/test262/es2015-audit.js';
+import {
+  ES2015_PROVENANCE_DECISION_CODES,
+  ES2015_PROVENANCE_FILE,
+  buildProvenanceFoundation,
+} from '../../tools/test262/es2015-provenance.js';
 
 const FIXTURE_ROOT = new URL('../fixtures/es2015-taxonomy/', import.meta.url);
 const PHYSICAL_FIXTURE_PATHS = new Map([
   ['test/language/malformed.js', 'test/language/malformed.js.txt'],
 ]);
+const readFileSyncText =
+  /** @type {(path: URL, encoding: string) => string} */ (
+    /** @type {any} */ (fs).readFileSync
+  );
 const POLICY = JSON.stringify({
   version: 1,
   repository: 'https://github.com/tc39/test262.git',
@@ -155,10 +165,69 @@ function auditEvidence(options = {}) {
 }
 
 const AUDIT_EVIDENCE = auditEvidence();
+const EXACT_PATHS_FILE = '/absolute/exact.paths.txt';
+const PROVENANCE_DECISIONS_DIRECTORY =
+  'tools/test262/es2015-provenance-decisions';
+/** @type {ReturnType<typeof buildProvenanceFoundation> | undefined} */
+let cachedApprovedProvenanceManifest;
 
 /** @param {string} text */
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
+}
+
+/** @param {ReturnType<typeof buildProvenanceFoundation>} manifest @param {string} code */
+function emptyDecisionFragmentText(manifest, code) {
+  return `${JSON.stringify(
+    {
+      version: manifest.version,
+      taxonomyBaseline: manifest.taxonomyBaseline,
+      repository: manifest.repository,
+      revision: manifest.revision,
+      specification: manifest.specification,
+      parent: manifest.parent,
+      code,
+      decisions: [],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function approvedProvenanceManifest() {
+  if (cachedApprovedProvenanceManifest !== undefined) {
+    return cachedApprovedProvenanceManifest;
+  }
+  const taxonomy = JSON.parse(
+    readFileSyncText(
+      new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  cachedApprovedProvenanceManifest = buildProvenanceFoundation(
+    taxonomy.classifications.map((/** @type {any} */ record) => ({
+      path: record.path,
+      variants: record.variants,
+      partition: record.partition,
+      finalClass: record.status,
+    })),
+  );
+  return cachedApprovedProvenanceManifest;
+}
+
+function provenanceFixtureFiles() {
+  const manifest = approvedProvenanceManifest();
+  /** @type {Map<string, string>} */
+  const files = new Map([
+    [ES2015_PROVENANCE_FILE, `${JSON.stringify(manifest, null, 2)}\n`],
+  ]);
+  for (const code of ES2015_PROVENANCE_DECISION_CODES) {
+    files.set(
+      `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+      emptyDecisionFragmentText(manifest, code),
+    );
+  }
+  return files;
 }
 
 const AUDIT_PROMOTION = JSON.stringify({
@@ -288,6 +357,9 @@ async function createRealAuditFixture() {
     }),
   );
   await writeFixtureFile(root, 'tools/test262/es2015-anchors.json', ANCHORS);
+  for (const [path, text] of provenanceFixtureFiles()) {
+    await writeFixtureFile(root, path, text);
+  }
   await writeFixtureFile(
     root,
     'tools/test262/upstream-subset.json',
@@ -430,6 +502,8 @@ function fixtureAuditDependencies(fixture, options = {}) {
  *   roots?: Map<string, string>,
  *   auditEvidence?: string,
  *   assertPinnedCheckout?: (pin: any) => Promise<void>,
+ *   readProvenanceManifest?: () => Promise<string>,
+ *   readDecisionFragments?: () => Promise<ReadonlyMap<string, string>>,
  *   subset?: string,
  *   promotion?: string,
  *   pathFiles?: ReadonlyMap<string, string>,
@@ -442,12 +516,14 @@ function fixtureAuditDependencies(fixture, options = {}) {
  * @returns {any}
  */
 function auditDependencies(options = {}) {
+  const provenanceFiles = provenanceFixtureFiles();
   const files = new Map([
     ['package.json', JSON.stringify({ test262: AUDIT_PIN })],
     ['tools/test262/es2015-policy.json', POLICY],
     ['tools/test262/es2015-anchors.json', ANCHORS],
     ['tools/test262/upstream-subset.json', options.subset ?? AUDIT_SUBSET],
     ['tools/test262/features.json', AUDIT_FEATURES],
+    ...provenanceFiles,
     ...(options.promotion === undefined
       ? []
       : /** @type {[string, string][]} */ ([
@@ -501,6 +577,34 @@ function auditDependencies(options = {}) {
       return value;
     },
     readIncludeDefinitions: async () => new Map(),
+    readProvenanceManifest:
+      options.readProvenanceManifest ??
+      (async () => {
+        const value = files.get(ES2015_PROVENANCE_FILE);
+        if (value === undefined) {
+          const error = new Error(
+            `missing fixture file ${ES2015_PROVENANCE_FILE}`,
+          );
+          Object.assign(error, { code: 'ENOENT' });
+          throw error;
+        }
+        return value;
+      }),
+    readDecisionFragments:
+      options.readDecisionFragments ??
+      (async () =>
+        new Map(
+          ES2015_PROVENANCE_DECISION_CODES.map((code) => {
+            const path = `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
+            const value = files.get(path);
+            if (value === undefined) {
+              const error = new Error(`missing fixture file ${path}`);
+              Object.assign(error, { code: 'ENOENT' });
+              throw error;
+            }
+            return [code, value];
+          }),
+        )),
     readPathsFile: async (/** @type {string} */ path) => {
       const value = options.pathFiles?.get(path);
       if (value === undefined) {
@@ -793,6 +897,35 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit rejects partial reviewed provenance fragment sets',
+    run: async () => {
+      const provenanceFiles = provenanceFixtureFiles();
+      const partial = await rejected(() =>
+        auditEs2015Taxonomy(
+          [],
+          auditDependencies({
+            readDecisionFragments: async () =>
+              new Map([
+                [
+                  'UA',
+                  /** @type {string} */ (
+                    provenanceFiles.get(
+                      `${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`,
+                    )
+                  ),
+                ],
+              ]),
+          }),
+        ),
+      );
+      assertSame(partial instanceof Es2015TaxonomyError, false);
+      assertSame(
+        partial.message,
+        'UB decision fragment is required by tools/test262/es2015-provenance-decisions',
+      );
+    },
+  },
+  {
     name: 'ES2015 audit uses a real pinned Git fixture for UTC, drift, check, and deterministic bytes',
     run: async () => {
       const fixture = await createRealAuditFixture();
@@ -902,17 +1035,57 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit reads reviewed provenance only from the injected repository root',
+    run: async () => {
+      const fixture = await createRealAuditFixture();
+      const fixturePath = fileURLToPath(fixture.root);
+      const missingManifest = new URL(ES2015_PROVENANCE_FILE, fixture.root);
+      try {
+        await rm(missingManifest);
+        const error = await rejected(() =>
+          auditEs2015Taxonomy([], fixtureAuditDependencies(fixture)),
+        );
+        assertSame(error instanceof Error, true);
+      } finally {
+        await rm(fixturePath, { recursive: true, force: true });
+      }
+    },
+  },
+  {
+    name: 'ES2015 audit check stays metadata-only even with promotion fixtures present',
+    run: async () => {
+      const baseline = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+      });
+      assertSame(await auditEs2015Taxonomy([], baseline), 0);
+      const stored = fixtureOutput(baseline, AUDIT_PATH);
+      const checkOnly = auditDependencies({
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        files: new Map([[AUDIT_PATH, stored]]),
+        runPromotion: async () => {
+          throw new Error('audit check must not execute Test262');
+        },
+      });
+
+      assertSame(await auditEs2015Taxonomy(['--check'], checkOnly), 0);
+      assertSame(fixtureOutput(checkOnly, AUDIT_PATH), stored);
+      assertSame(checkOnly.writes.length, 0);
+    },
+  },
+  {
     name: 'ES2015 audit writes execution only for the exact reviewed promotion ledger',
     run: async () => {
       /** @type {readonly string[] | undefined} */
       let executedPaths;
+      let runPromotionCalls = 0;
       const dependencies = auditDependencies({
         subset: AUDIT_PROMOTION_SUBSET,
         promotion: AUDIT_PROMOTION,
-        pathFiles: new Map([
-          ['promotion-ledger.txt', `${AUDIT_PROMOTION_PATH}\n`],
-        ]),
+        pathFiles: new Map([[EXACT_PATHS_FILE, `${AUDIT_PROMOTION_PATH}\n`]]),
         runPromotion: async ({ paths }) => {
+          runPromotionCalls += 1;
           executedPaths = paths;
           return AUDIT_RECORDS;
         },
@@ -920,11 +1093,12 @@ export default [
 
       assertSame(
         await auditEs2015Taxonomy(
-          ['--paths-file=promotion-ledger.txt', '--write-execution'],
+          [`--paths-file=${EXACT_PATHS_FILE}`, '--write-execution'],
           dependencies,
         ),
         0,
       );
+      assertSame(runPromotionCalls, 1);
       assertSame(
         JSON.stringify(executedPaths),
         JSON.stringify([AUDIT_PROMOTION_PATH]),
@@ -938,6 +1112,7 @@ export default [
       );
 
       assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      assertSame(runPromotionCalls, 1);
       const artifact = JSON.parse(fixtureOutput(dependencies, AUDIT_PATH));
       assertSame(
         JSON.stringify(artifact.statusTables.core),

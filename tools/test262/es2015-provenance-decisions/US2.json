@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "taxonomyBaseline": "54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7",
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "specification": {
+    "source": "https://262.ecma-international.org/6.0/",
+    "sourceSha256": "4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0"
+  },
+  "parent": {
+    "code": "T1",
+    "issue": 75
+  },
+  "code": "US2",
+  "decisions": []
+}
