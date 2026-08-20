@@ -59,6 +59,74 @@ export default [
     },
   },
   {
+    name: 'active execution Realm rejects registered fake Realms',
+    run() {
+      const agent = createAgent();
+      const fakeRealm = { agent };
+      let callbackRan = false;
+
+      agent.registerRealm(fakeRealm);
+
+      assertThrows(
+        () =>
+          agent.withActiveExecutionRealm(/** @type {any} */ (fakeRealm), () => {
+            callbackRan = true;
+          }),
+        TypeError,
+      );
+      assertSame(callbackRan, false);
+      assertSame(agent.activeExecutionRealm, null);
+    },
+  },
+  {
+    name: 'active execution Realm rejects reassigned Realm frames and blocks linking',
+    run() {
+      const sourceAgent = createAgent();
+      const sourceRealm = createRealm({ agent: sourceAgent });
+      const targetAgent = createAgent();
+      const targetRealm = createRealm({ agent: targetAgent });
+      let linkedCallbackRan = false;
+      let callbackRan = false;
+
+      sourceAgent.withActiveExecutionRealm(sourceRealm, () => {
+        const chain = sourceAgent.enterGeneratorHostChain();
+
+        try {
+          sourceAgent.linkGeneratorHostChain(targetAgent);
+          sourceRealm.agent = targetAgent;
+          assertThrows(
+            () =>
+              targetAgent.withLinkedActiveExecutionRealm(sourceAgent, () => {
+                linkedCallbackRan = true;
+              }),
+            TypeError,
+          );
+          assertSame(linkedCallbackRan, false);
+          assertSame(targetAgent.activeExecutionRealm, null);
+        } finally {
+          sourceRealm.agent = sourceAgent;
+          sourceAgent.exitGeneratorHostChain(chain);
+        }
+      });
+
+      sourceRealm.agent = targetAgent;
+      try {
+        assertThrows(
+          () =>
+            sourceAgent.withActiveExecutionRealm(sourceRealm, () => {
+              callbackRan = true;
+            }),
+          TypeError,
+        );
+      } finally {
+        sourceRealm.agent = sourceAgent;
+      }
+      assertSame(callbackRan, false);
+      assertSame(sourceAgent.activeExecutionRealm, null);
+      assertSame(targetRealm.agent, targetAgent);
+    },
+  },
+  {
     name: 'Realm-bearing jobs push their Realm while Realm-null jobs expose none',
     run() {
       const realm = createRealm();

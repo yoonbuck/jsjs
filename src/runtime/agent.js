@@ -1,6 +1,7 @@
 import { WELL_KNOWN_SYMBOL_NAMES, createSymbol, isSymbol } from './symbol.js';
 import { AgentJobQueue } from './jobs.js';
 import { GuestErrorSignal } from './completion.js';
+import { isRealm } from './realm.js';
 
 const NO_ACTIVE_EXECUTION_REALM = Symbol('no active execution Realm');
 
@@ -227,7 +228,7 @@ export class Agent {
    * @returns {T}
    */
   withActiveExecutionRealm(realm, callback) {
-    if (!this.ownsRealm(realm)) {
+    if (!isCurrentOwnedRealm(this, realm)) {
       throw new TypeError('Execution Realm must belong to this Agent');
     }
 
@@ -291,6 +292,12 @@ export class Agent {
       sourceAgent._executionRealmFrames[
         sourceAgent._executionRealmFrames.length - 1
       ] ?? NO_ACTIVE_EXECUTION_REALM;
+    if (
+      sourceFrame !== NO_ACTIVE_EXECUTION_REALM &&
+      !isCurrentOwnedRealm(sourceAgent, sourceFrame)
+    ) {
+      throw new TypeError('Execution Realm must belong to its source Agent');
+    }
     this._executionRealmFrames.push(sourceFrame);
 
     try {
@@ -670,6 +677,15 @@ export class Agent {
       guard.adoptGeneratorHostChain(chain);
     }
   }
+}
+
+/**
+ * @param {Agent} agent
+ * @param {unknown} realm
+ * @returns {boolean}
+ */
+function isCurrentOwnedRealm(agent, realm) {
+  return isRealm(realm) && realm.agent === agent && agent.ownsRealm(realm);
 }
 
 /**
