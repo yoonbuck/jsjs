@@ -193,17 +193,21 @@ export async function main(argv = [], dependencies = {}) {
   assertSubsetPin(subset, pin);
   const features = parseFeatureManifest(featuresText);
   const promotion = parsePromotion(promotionText, subset);
-  const h0PromotionText = await readOptionalFile(deps, ES2015_H0_PROMOTION_FILE);
-  const h0DispositionText = await readOptionalFile(
-    deps,
-    ES2015_H0_DISPOSITION_FILE,
-  );
-  const h0Promotion = parsePromotion(
-    h0PromotionText,
-    subset,
-    ES2015_H0_PROMOTION_GROUP,
-    ES2015_H0_PROMOTION_FILE,
-  );
+  const regeneratingH0Disposition = options.writeDisposition !== null;
+  const h0PromotionText = regeneratingH0Disposition
+    ? null
+    : await readOptionalFile(deps, ES2015_H0_PROMOTION_FILE);
+  const h0DispositionText = regeneratingH0Disposition
+    ? null
+    : await readOptionalFile(deps, ES2015_H0_DISPOSITION_FILE);
+  const h0Promotion = regeneratingH0Disposition
+    ? null
+    : parsePromotion(
+        h0PromotionText,
+        subset,
+        ES2015_H0_PROMOTION_GROUP,
+        ES2015_H0_PROMOTION_FILE,
+      );
   const h0Disposition =
     h0DispositionText === null
       ? null

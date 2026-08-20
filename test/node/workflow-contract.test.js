@@ -934,6 +934,25 @@ function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
+/** @param {readonly any[]} entries */
+function h0VariantEvidenceSha256(entries) {
+  const records = entries.flatMap((entry) =>
+    entry.evidence.map((/** @type {any} */ evidence) => ({
+      path: entry.path,
+      variant: evidence.variant,
+      status: evidence.status,
+      ...(evidence.status === 'failed'
+        ? {
+            reason: evidence.reason,
+            message: evidence.message,
+            signature: evidence.signature,
+          }
+        : {}),
+    })),
+  );
+  return sha256(`${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+}
+
 /**
  * A synthetic manifest with a probe that only completes on an engine that
  * really evaluates arithmetic and loops, so the probe machinery is exercised
@@ -1343,12 +1362,26 @@ export default [
       assertSame(disposition.h0RootCount, paths.rootCount);
       assertSame(disposition.h0VariantCount, paths.variantCount);
       assertSame(
-        disposition.passedRootCount + disposition.reassignedRootCount,
+        disposition.completePassedRootCount + disposition.reassignedRootCount,
         paths.rootCount,
       );
       assertSame(
-        disposition.passedVariantCount + disposition.reassignedVariantCount,
+        disposition.executionPassedVariantCount +
+          disposition.executionFailedVariantCount,
         paths.variantCount,
+      );
+      assertSame(
+        disposition.completePassedVariantCount +
+          disposition.reassignedVariantCount,
+        paths.variantCount,
+      );
+      assertSame(
+        disposition.allFailedRootCount + disposition.mixedRootCount,
+        disposition.reassignedRootCount,
+      );
+      assertSame(
+        disposition.allFailedVariantCount + disposition.mixedVariantCount,
+        disposition.reassignedVariantCount,
       );
       assertSame(promotion.h0LedgerSha256, paths.ledgerSha256);
       assertSame(promotion.h0RootCount, paths.rootCount);
@@ -1356,7 +1389,7 @@ export default [
       assertSame(promotion.dispositionSha256, sha256(dispositionText));
       assertSame(
         promotion.promotedRootCount,
-        disposition.passedRootCount,
+        disposition.completePassedRootCount,
         'only complete-root passed H0 dispositions are promoted',
       );
       assertSame(
@@ -1368,6 +1401,94 @@ export default [
       assertSame(deltas.promotionSha256, sha256(promotionText));
       assertSame(deltas.crossRealm.remainingRoots, 0);
       assertSame(deltas.crossRealm.remainingVariants, 0);
+      assertSame(
+        JSON.stringify(deltas.provenance),
+        JSON.stringify({
+          sourceTaxonomySha256: disposition.sourceTaxonomySha256,
+          executionEvidenceSha256: disposition.executionEvidenceSha256,
+          ownerMapSha256: disposition.ownerMapSha256,
+        }),
+      );
+      assertSame(deltas.promotionGroup, 'es2015/h0-cross-realm-passed');
+
+      const byPath = new Map(
+        disposition.dispositions.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      const h0Delta = deltas.deltas.find(
+        (/** @type {any} */ delta) => delta.owner.code === 'H0',
+      );
+      assertSame(JSON.stringify(h0Delta?.paths), JSON.stringify(paths.paths));
+      assertSame(h0Delta?.pathsSha256, paths.ledgerSha256);
+      assertSame(
+        h0Delta?.variantEvidenceSha256,
+        h0VariantEvidenceSha256(disposition.dispositions),
+      );
+
+      for (const delta of deltas.deltas.filter(
+        (/** @type {any} */ entry) => entry.direction === 'added',
+      )) {
+        const entries = delta.paths.map((/** @type {string} */ path) => {
+          const entry = byPath.get(path);
+          if (entry === undefined || entry.status !== 'reassigned') {
+            throw new Error(`owner delta has an unreviewed reassigned path: ${path}`);
+          }
+          assertSame(entry.primaryOwner.code, delta.owner.code);
+          return entry;
+        });
+        assertSame(
+          JSON.stringify(delta.paths),
+          JSON.stringify([...delta.paths].sort()),
+        );
+        assertSame(delta.roots, delta.paths.length);
+        assertSame(
+          delta.variants,
+          entries.reduce(
+            (/** @type {number} */ total, /** @type {any} */ entry) =>
+              total + entry.variants,
+            0,
+          ),
+        );
+        assertSame(
+          delta.pathsSha256,
+          sha256(`${delta.paths.join('\n')}\n`),
+        );
+        assertSame(
+          delta.variantEvidenceSha256,
+          h0VariantEvidenceSha256(entries),
+        );
+      }
+
+      const p1Path =
+        'test/language/global-code/script-decl-lex-var-declared-via-eval.js';
+      const p1Delta = deltas.deltas.find(
+        (/** @type {any} */ delta) => delta.owner.code === 'P1',
+      );
+      const p1Disposition = byPath.get(p1Path);
+      if (p1Disposition === undefined) {
+        throw new Error(`missing P1 disposition for ${p1Path}`);
+      }
+      assertSame(JSON.stringify(p1Delta?.paths), JSON.stringify([p1Path]));
+      assertSame(p1Delta?.roots, 1);
+      assertSame(p1Delta?.variants, 2);
+      assertSame(
+        p1Delta?.variantEvidenceSha256,
+        h0VariantEvidenceSha256([p1Disposition]),
+      );
+      assertSame(
+        JSON.stringify(
+          p1Disposition?.evidence.map((/** @type {any} */ entry) => [
+            entry.variant,
+            entry.status,
+          ]),
+        ),
+        JSON.stringify([
+          ['non-strict', 'failed'],
+          ['strict', 'passed'],
+        ]),
+      );
     },
   },
   {

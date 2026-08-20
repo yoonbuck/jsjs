@@ -8,9 +8,12 @@ same-Agent `$262.createRealm` and `$262.evalScript` support and by generating
 selector-zero disposition for the H0 ledger's exact 135 core roots / 267
 executable variants.
 
-Completion means every H0 root is either a complete-root pass or a reviewed
-reassignment to one existing roadmap blocker. It does not mean all 135 roots
-semantically pass.
+Completion means every H0 root is either a complete-root pass or one atomic
+reviewed reassignment to one existing roadmap blocker. A reassignment may be
+all-fail or mixed pass/fail only when every required variant is present exactly
+once, no variant is skipped, malformed, or unexplained, and every failed
+variant maps to that same reviewed primary owner. It does not mean all 135
+roots semantically pass.
 
 The definitive path ledger is issue #76 comment
 `5347037600`, `H0.paths.txt`, SHA-256
@@ -48,14 +51,20 @@ revision, the immutable H0 ledger, and moving-main taxonomy inputs:
   and allowed secondary evidence.
 - `tools/test262/es2015-h0-disposition.json`: generated exact root/variant
   outcomes. It records `version`, pin, source ledger/taxonomy/evidence/owner-map
-  hashes, root and variant totals, and code-unit-sorted root entries. Each root
-  records path, required variants, per-variant status and normalized failure
-  signature, exactly one `passed` or `reassigned` outcome, the primary existing
-  owner for reassigned roots, and secondary evidence.
+  hashes, explicit raw execution passed/failed variant totals, complete-pass
+  root/promoted-variant totals, full reassigned root/variant totals, and
+  generated all-fail/mixed root and variant totals. Code-unit-sorted root entries
+  record path, required variants, per-variant execution outcome and normalized
+  failure signature, and exactly one root disposition: `passed` or
+  `reassigned`. A reassigned root records one primary existing owner and
+  secondary evidence; mixed roots retain their passed variants as evidence but
+  never promote them independently.
 - `tools/test262/es2015-h0-owner-deltas.json`: generated deterministic
-  downstream path/count/hash deltas. It records `version`, disposition hash, and
-  code-unit-sorted owner entries with code, issue, blocker, added paths, ledger
-  SHA, root count, and variant count.
+  downstream path/count/hash deltas. It records H0/disposition/promotion
+  identities, taxonomy/evidence/owner-map provenance hashes, and
+  code-unit-sorted owner entries with full paths, path hashes, root/variant
+  counts, and deterministic per-owner variant-evidence hashes. The H0 removal
+  and every downstream addition are independently reproducible.
 - `tools/test262/es2015-h0-promotion.json`: versioned H0 pass-only promotion.
   It preserves immutable H0 source identity in `h0LedgerSha256`, `h0RootCount`,
   and `h0VariantCount`; records `dispositionSha256`; records promoted subset
@@ -148,9 +157,11 @@ the pinned Test262 SHA to produce complete root/variant execution evidence. The
 generator assigns exactly one root-level disposition:
 
 - `passed` only when the root's complete required variant set passed; or
-- `reassigned` only when every required variant has a concrete reviewed failure
-  signature and one named existing roadmap blocker is the next actual blocker
-  under taxonomy precedence.
+- `reassigned` only when every required variant is present exactly once, every
+  failure has a concrete reviewed signature, and every failed variant maps to
+  one named existing roadmap blocker under taxonomy precedence. This permits
+  all-fail and mixed pass/fail roots; passed variants in a mixed root remain
+  secondary execution evidence.
 
 Promotion contains only complete-root passes; partially passing roots are never
 promoted. The focused gate after Task 4 validates the immutable ledger hash,
@@ -162,9 +173,10 @@ unmapped evidence stays RED, fails closed, and leaves the H0 blocker unchanged.
 Reassignment records retain secondary prerequisite/failure evidence without
 replacing the single primary owner.
 
-The current observed host-support baseline is 40 roots / 79 variants passed and
-95 roots / 188 variants reassigned. Final counts are regenerated after
-moving-main reconciliation, not hard-coded. The reviewed owner map,
+The current observed host-support baseline has 79 raw passed variants and 188
+raw failed variants: 40 complete-pass roots / 78 promoted variants, 94 all-fail
+roots / 187 full variants, and 1 mixed root / 2 full variants. These are
+generated evidence assertions, not final post-rebase constants. The reviewed owner map,
 generator-owned disposition, pass-only promotion, owner-delta, taxonomy, and
 downstream owner-ledger updates make the H0 selector zero without manual blocker
 deletion, while preserving global taxonomy balance and the exact H0 root/variant

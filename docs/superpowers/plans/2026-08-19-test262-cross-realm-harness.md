@@ -12,7 +12,7 @@
 
 - Start from exact `origin/main` SHA `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`; the approved design commits are `e43426e`, `093a4b4`, and `a81688f`.
 - The definitive H0 ledger is issue #76 comment `5347037600`, `H0.paths.txt`, SHA-256 `3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950`, exactly 135 roots / 267 variants.
-- Exact H0 execution evidence must cover every root and every required variant once. A root receives exactly one generated disposition: `passed` only for complete-root pass evidence, or `reassigned` only for reviewed concrete failure signatures mapped to one existing roadmap owner under taxonomy precedence.
+- Exact H0 execution evidence must cover every root and every required variant exactly once. A root receives exactly one generated disposition: `passed` only for complete-root pass evidence, or `reassigned` only when all failed variants map to the same reviewed existing roadmap owner under taxonomy precedence. Reassignment permits all-fail and mixed pass/fail roots only with no skipped, malformed, missing, duplicate, or unexplained variant; a mixed root retains passed-variant evidence and moves atomically with its full root/variant count.
 - `$262` is Test262 embedding infrastructure only: never a normal guest global, public runtime export, `Realm` option, or adapter-specific semantic fork.
 - Install host bindings for every root Realm, including raw script and raw module roots, before harness includes, async setup, or module evaluation.
 - Raw roots still receive no strict prefix, `assert.js`, `sta.js`, declared includes, or source rewriting.
@@ -20,7 +20,7 @@
 - `$262.createRealm` creates a same-Agent child, recursively installs the same host bindings, and returns the child's `$262`; `$262.global` is the exact child global.
 - `$262.evalScript` accepts only primitive strings, performs no host `String` coercion, preserves persistent global declarations/completion values/thrown identity, and creates parse/type errors in its owning Realm.
 - Keep `detachArrayBuffer`, `gc`, `agent`, `AbstractModuleSource`, and later hooks absent. Keep existing `print`/`$DONE` behavior on its current runner path.
-- Do not widen `tools/test262/features.json` and do not infer promotion from a global feature tag. Partially passing roots are never promoted; missing, skipped, mixed, duplicate, unknown-owner, mismatched, or unexplained evidence fails closed.
+- Do not widen `tools/test262/features.json` and do not infer promotion from a global feature tag. Partially passing roots are never promoted; missing, skipped, duplicate, different-primary-owner, unknown-owner, mismatched, or unexplained evidence fails closed.
 - Keep Task 3 implementation commit `c52823113ec704b09ed9850f698d1d36bf479c48` unchanged. Do not implement downstream runtime semantics in this branch to make unrelated H0 failures pass.
 - Never run `npm run ci:contract`, `npm run test262:upstream`,
   `npm run test262:upstream:check`, or any wrapper that invokes broad upstream
@@ -65,14 +65,17 @@ code-unit-sorted arrays. The exact artifact paths are:
   and allowed secondary evidence.
 - `tools/test262/es2015-h0-disposition.json` — generated exact root/variant
   outcomes. Content: `version`, pin, source ledger/taxonomy/evidence/owner-map
-  hashes, root/variant totals, and code-unit-sorted root entries; each root has
-  path, required variants, per-variant status and normalized failure signature,
-  exactly one `passed` or `reassigned` outcome, primary existing owner for
-  reassigned roots, and secondary evidence.
+  hashes, raw execution passed/failed variant counts, complete-pass
+  root/promoted-variant counts, full reassigned root/variant counts, generated
+  all-fail/mixed counts, and code-unit-sorted root entries. Each root has path,
+  required variants, explicit per-variant execution outcomes and normalized
+  failure signatures, exactly one `passed` or `reassigned` root disposition,
+  primary existing owner for reassigned roots, and secondary evidence.
 - `tools/test262/es2015-h0-owner-deltas.json` — generated deterministic
-  downstream path/count/hash deltas. Content: `version`, disposition hash, and
-  code-unit-sorted owner entries with code/issue/blocker, added paths, ledger
-  SHA, root count, and variant count.
+  downstream path/count/hash deltas. Content: source/disposition/promotion
+  identities, taxonomy/evidence/owner-map provenance hashes, H0 removal, and
+  code-unit-sorted owner entries with full paths, path and per-owner
+  variant-evidence hashes, root count, and full variant count.
 - `tools/test262/es2015-h0-promotion.json` — versioned pass-only promotion.
   Content: immutable H0 source fields `h0LedgerSha256`, `h0RootCount`,
   `h0VariantCount`; `dispositionSha256`; promoted subset fields
@@ -594,13 +597,16 @@ git commit -m "Implement harness-only Test262 cross-Realm bindings" \
   every immutable H0 root once and every required variant once.
 - Produces: one generated disposition per root:
   - `passed` only when the complete required variant set passed; or
-  - `reassigned` only when every required variant has a concrete reviewed
-    failure signature and exactly one named existing roadmap blocker is the
-    next actual blocker under taxonomy precedence.
-- Preserves secondary prerequisite/failure evidence on reassignment records
-  without replacing the single primary owner.
+  - `reassigned` only when every required variant is present exactly once,
+    no variant is skipped, malformed, or unexplained, and every failed variant
+    has a concrete reviewed signature mapping to the same named existing
+    roadmap blocker under taxonomy precedence.
+- Preserves secondary prerequisite/failure evidence and passed-variant evidence
+  on reassignment records without replacing the single primary owner; a mixed
+  root moves once with its full root/variant count and never promotes separately.
 - Produces: deterministic `tools/test262/es2015-h0-owner-deltas.json` for
-  downstream owner issues and #70.
+  downstream owner issues and #70, with full paths, path hashes, provenance,
+  and deterministic per-owner variant-evidence hashes.
 - Produces: `tools/test262/es2015-h0-promotion.json` and group
   `es2015/h0-cross-realm-passed`, generated only from complete-root `passed`
   dispositions, with independent `h0LedgerSha256`/`h0RootCount`/
@@ -623,8 +629,10 @@ Add fixture evidence proving:
   owner-map hashes, and exact per-root variant sets;
 - duplicate roots, duplicate variants, missing roots, missing variants, variant
   mismatches, and foreign paths fail closed;
-- skipped variants, mixed pass/fail evidence, partial pass evidence, unknown
-  owners, unexplained signatures, and unrelated blocker movement fail closed;
+- skipped, missing, duplicate, malformed, foreign, unknown-owner,
+  different-primary-owner, unexplained-signature, and unrelated-blocker movement
+  evidence fails closed, while reviewed one-owner mixed pass/fail evidence is
+  retained and reassigned atomically;
 - a reviewed owner allowlist maps concrete failure signatures only to existing
   roadmap blockers; no new catch-all blocker is accepted;
 - each reassigned root has one primary next blocker under taxonomy precedence
@@ -636,8 +644,10 @@ Add fixture evidence proving:
 - only complete-root `passed` dispositions are eligible for promotion, with
   independent immutable H0 source identity, disposition identity, and promoted
   subset identity;
-- the observed pre-rebase evidence can express 40 roots / 79 variants passed and
-  95 roots / 188 variants reassigned without hard-coding those as final totals;
+- the observed pre-rebase evidence can express 79 raw passed variants / 188 raw
+  failed variants, 40 complete-pass roots / 78 promoted variants, 94 all-fail
+  roots / 187 full variants, and 1 mixed root / 2 full variants without
+  hard-coding those as final totals;
 - generated taxonomy records disposition and promotion SHA-256 values without
   replacing T0 provenance; and
 - whole-tree/core denominators remain balanced while selected/reassigned totals
@@ -670,8 +680,10 @@ dispositions.
 Implement the reviewed owner allowlist from concrete failure signatures to
 existing roadmap blockers in `tools/test262/es2015-h0-owner-map.json`. Unknown
 owners, unreviewed signatures, duplicate evidence, missing evidence, skipped
-evidence, mixed root outcomes, and partial-pass roots leave the H0 blocker
-unchanged. Reassignment records include secondary prerequisite/failure evidence,
+evidence, different primary owners within one root, and partial promotion leave
+the H0 blocker unchanged. All-fail and mixed roots may reassign only when every
+failed variant maps to the same primary owner. Reassignment records include
+secondary prerequisite/failure evidence and retained mixed-root pass evidence,
 but taxonomy precedence selects one primary owner.
 
 Use the schemas in **H0 Artifact Schemas** exactly: owner map records reviewed
@@ -691,10 +703,11 @@ TZ=UTC node tools/test262/es2015-audit.js \
   --write-disposition=tools/test262/es2015-h0-disposition.json
 ```
 
-Expected at the current observed baseline: 40 roots / 79 variants receive
-`passed`, and 95 roots / 188 variants receive reviewed `reassigned`
-dispositions. Treat these counts as evidence only; regenerate final counts after
-moving-main reconciliation.
+Expected at the current observed baseline: 79 raw variants pass and 188 fail;
+40 complete-pass roots contribute 78 promoted variants; 94 all-fail roots
+contribute 187 full reassigned variants; and 1 mixed root contributes 2 full
+reassigned variants. Treat these counts as evidence only; regenerate final
+counts after moving-main reconciliation.
 
 - [ ] **Step 5: Build the exact pass-only H0 promotion manifest**
 
@@ -864,11 +877,12 @@ records, zero skipped/missing/duplicate/foreign records, no missing `$262` or
 harness leakage, and every failure matched by reviewed disposition/owner
 evidence. The command must not require all variants to pass, and missing or
 unmapped evidence keeps it RED. The generator derives final counts after rebase,
-not from the observed 40/79 and 95/188 baseline. Complete-root passes become the only
-promotion entries; all other reviewed roots are reassigned to one existing
-primary roadmap owner while retaining secondary evidence. Missing, failed,
-skipped, duplicate, foreign, unknown-owner, or unexplained evidence writes
-neither a success record nor blocker removal.
+not from the observed raw 79/188, complete-pass 40/78, all-fail 94/187, and
+mixed 1/2 baseline. Complete-root passes become the only promotion entries;
+all-fail and reviewed one-owner mixed roots are reassigned atomically to one
+existing primary roadmap owner while retaining secondary evidence. Missing,
+skipped, duplicate, foreign, different-primary-owner, unknown-owner, or
+unexplained evidence writes neither a success record nor blocker removal.
 
 - [ ] **Step 3: Generate and verify the atomic selector-zero delta**
 

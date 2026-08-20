@@ -14,6 +14,7 @@ import { sortStrings } from '../../tools/test262/selection.js';
 import {
   assertEs2015H0ExecutionMatchesDisposition,
   parseEs2015H0Disposition,
+  parseEs2015H0OwnerMap,
 } from '../../tools/test262/es2015-promotion.js';
 import {
   assertPinnedCheckout,
@@ -22,6 +23,7 @@ import {
 
 const H0_ARTIFACT_FILE = 'tools/test262/es2015-h0-paths.json';
 const H0_DISPOSITION_FILE = 'tools/test262/es2015-h0-disposition.json';
+const H0_OWNER_MAP_FILE = 'tools/test262/es2015-h0-owner-map.json';
 const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
 const EXPECTED_REPOSITORY = 'https://github.com/tc39/test262.git';
 const EXPECTED_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
@@ -71,9 +73,16 @@ export default [
   {
     name: 'focused ES2015 cross-Realm upstream Test262 files are disposition-reviewed',
     run: async () => {
-      const { artifact, artifactText, disposition, taxonomyFeaturesByPath } =
+      const {
+        artifact,
+        artifactText,
+        disposition,
+        ownerMapText,
+        taxonomyFeaturesByPath,
+      } =
         await loadCrossRealmSelection();
       const pin = await readTest262Pin();
+      const ownerMap = parseEs2015H0OwnerMap(ownerMapText, pin);
 
       await assertPinnedCheckout(pin);
       assertSame(
@@ -86,6 +95,7 @@ export default [
         artifact.revision,
         `${H0_ARTIFACT_FILE} revision must match package.json`,
       );
+      assertSame(ownerMap.rules.length > 0, true);
 
       const host = createNodeTest262Host({ root: pin.checkoutPath });
       const supportedFeatures = featureNames(
@@ -121,6 +131,7 @@ export default [
         pathsManifestText: artifactText,
         disposition,
         records,
+        ownerMapText,
         pin,
       });
       const harnessLeakage = records.filter(
@@ -135,10 +146,22 @@ export default [
       assertSame(summary.skipped, 0);
       assertSame(dispositionSummary.total, EXPECTED_VARIANT_COUNT);
       assertSame(dispositionSummary.skipped, 0);
-      assertSame(dispositionSummary.passed, disposition.passedVariantCount);
-      assertSame(dispositionSummary.failed, disposition.reassignedVariantCount);
       assertSame(
-        disposition.passedVariantCount + disposition.reassignedVariantCount,
+        dispositionSummary.passed,
+        disposition.executionPassedVariantCount,
+      );
+      assertSame(
+        dispositionSummary.failed,
+        disposition.executionFailedVariantCount,
+      );
+      assertSame(
+        disposition.executionPassedVariantCount +
+          disposition.executionFailedVariantCount,
+        EXPECTED_VARIANT_COUNT,
+      );
+      assertSame(
+        disposition.completePassedVariantCount +
+          disposition.reassignedVariantCount,
         EXPECTED_VARIANT_COUNT,
       );
 
@@ -152,17 +175,19 @@ export default [
         );
       }
 
-      assertSame(summary.failed, disposition.reassignedVariantCount);
+      assertSame(summary.failed, disposition.executionFailedVariantCount);
     },
   },
 ];
 
 async function loadCrossRealmSelection() {
-  const [taxonomyText, artifactText, dispositionText] = await Promise.all([
-    readRepositoryFile(TAXONOMY_FILE),
-    readRepositoryFile(H0_ARTIFACT_FILE),
-    readRepositoryFile(H0_DISPOSITION_FILE),
-  ]);
+  const [taxonomyText, artifactText, dispositionText, ownerMapText] =
+    await Promise.all([
+      readRepositoryFile(TAXONOMY_FILE),
+      readRepositoryFile(H0_ARTIFACT_FILE),
+      readRepositoryFile(H0_DISPOSITION_FILE),
+      readRepositoryFile(H0_OWNER_MAP_FILE),
+    ]);
 
   const artifact = parseH0Artifact(artifactText);
   const disposition = parseEs2015H0Disposition(dispositionText);
@@ -179,12 +204,19 @@ async function loadCrossRealmSelection() {
   assertSame(disposition.h0RootCount, EXPECTED_ROOT_COUNT);
   assertSame(disposition.h0VariantCount, EXPECTED_VARIANT_COUNT);
   assertSame(disposition.sourceTaxonomySha256, artifact.sourceTaxonomySha256);
+  assertSame(disposition.ownerMapSha256, sha256(ownerMapText));
   assertSame(
-    disposition.passedRootCount + disposition.reassignedRootCount,
+    disposition.completePassedRootCount + disposition.reassignedRootCount,
     EXPECTED_ROOT_COUNT,
   );
   assertSame(
-    disposition.passedVariantCount + disposition.reassignedVariantCount,
+    disposition.executionPassedVariantCount +
+      disposition.executionFailedVariantCount,
+    EXPECTED_VARIANT_COUNT,
+  );
+  assertSame(
+    disposition.completePassedVariantCount +
+      disposition.reassignedVariantCount,
     EXPECTED_VARIANT_COUNT,
   );
   assertSame(
@@ -237,6 +269,7 @@ async function loadCrossRealmSelection() {
     artifact,
     artifactText,
     disposition,
+    ownerMapText,
     derivedPaths:
       selectedEntries === null ? null : Object.freeze(selectedEntries),
     taxonomyFeaturesByPath: new Map(

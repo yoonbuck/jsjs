@@ -329,9 +329,7 @@ const H0_AUDIT_RECORDS = Object.freeze([
     type: 'test',
     file: H0_AUDIT_REASSIGNED_PATH,
     variant: 'strict',
-    status: 'failed',
-    reason: 'unexpected-throw',
-    message: 'Object',
+    status: 'passed',
   },
   {
     type: 'test',
@@ -1292,8 +1290,16 @@ export default [
       const disposition = JSON.parse(dispositionText);
       assertSame(disposition.h0RootCount, 2);
       assertSame(disposition.h0VariantCount, 4);
-      assertSame(disposition.passedRootCount, 1);
+      assertSame(disposition.executionPassedVariantCount, 3);
+      assertSame(disposition.executionFailedVariantCount, 1);
+      assertSame(disposition.completePassedRootCount, 1);
+      assertSame(disposition.completePassedVariantCount, 2);
       assertSame(disposition.reassignedRootCount, 1);
+      assertSame(disposition.reassignedVariantCount, 2);
+      assertSame(disposition.allFailedRootCount, 0);
+      assertSame(disposition.allFailedVariantCount, 0);
+      assertSame(disposition.mixedRootCount, 1);
+      assertSame(disposition.mixedVariantCount, 2);
 
       assertSame(
         await auditEs2015Taxonomy(
@@ -1321,6 +1327,73 @@ export default [
       assertSame(promotion.entries[0].path, H0_AUDIT_PASSED_PATH);
       assertSame(ownerDeltas.crossRealm.removedRoots, 2);
       assertSame(ownerDeltas.crossRealm.remainingRoots, 0);
+      const reassignedDelta = ownerDeltas.deltas.find(
+        (/** @type {any} */ delta) => delta.owner.code === 'M2',
+      );
+      assertSame(
+        JSON.stringify(reassignedDelta?.paths),
+        JSON.stringify([H0_AUDIT_REASSIGNED_PATH]),
+      );
+      assertSame(reassignedDelta?.variants, 2);
+      assertSame(
+        typeof reassignedDelta?.variantEvidenceSha256 === 'string',
+        true,
+      );
+      assertSame(
+        JSON.stringify(ownerDeltas.provenance),
+        JSON.stringify({
+          sourceTaxonomySha256: sha256(H0_AUDIT_TAXONOMY),
+          executionEvidenceSha256: disposition.executionEvidenceSha256,
+          ownerMapSha256: disposition.ownerMapSha256,
+        }),
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit regenerates H0 disposition before reading a stale prior artifact',
+    run: async () => {
+      const roots = new Map([
+        ...AUDIT_ROOTS,
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const dependencies = auditDependencies({
+        roots,
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          ['tools/test262/es2015-h0-disposition.json', '{}'],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+        ]),
+        runPromotion: async () => H0_AUDIT_RECORDS,
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--owner-map=tools/test262/es2015-h0-owner-map.json',
+            '--write-disposition=tools/test262/es2015-h0-disposition.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      assertSame(
+        JSON.parse(
+          fixtureOutput(
+            dependencies,
+            'tools/test262/es2015-h0-disposition.json',
+          ),
+        ).executionPassedVariantCount,
+        3,
+      );
     },
   },
   {
