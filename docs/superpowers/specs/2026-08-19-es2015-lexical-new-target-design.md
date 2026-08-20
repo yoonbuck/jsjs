@@ -55,11 +55,13 @@ The capability pass stops rejecting:
 - valid code-point escapes in `TemplateElement.value.raw`.
 
 Acorn remains responsible for decoding values and rejecting malformed,
-surrogate, out-of-range, incomplete, escaped-reserved-word, and otherwise
-invalid lexical forms at parse phase. The engine does not add a second decoder.
-Focused tests audit decoded escaped identifiers against their exact
-IdentifierName and BindingIdentifier contexts rather than assuming every
-decoded identifier is valid.
+out-of-range, incomplete, escaped-reserved-word, and otherwise invalid lexical
+forms at parse phase. Valid surrogate code-point escapes remain valid in string
+and template values but invalid in identifier positions that do not admit that
+code point. The engine does not add a second decoder. Focused tests audit
+decoded escaped identifiers against their exact IdentifierName and
+BindingIdentifier contexts rather than assuming every decoded identifier is
+valid.
 
 `MetaProperty` becomes a supported expression with exact ESTree validation:
 
