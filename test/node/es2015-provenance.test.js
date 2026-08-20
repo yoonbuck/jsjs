@@ -56,6 +56,8 @@ const PROVENANCE_DECISIONS_DIRECTORY =
 const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
 const RANGE_BASE_SHA = 'a'.repeat(40);
 const RANGE_HEAD_SHA = 'b'.repeat(40);
+const ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA =
+  '8d75b48af2ee7ab04e7c5006980417227ec34568';
 const FOUNDATION_ALLOWED_PATHS = Object.freeze([
   '.github/workflows/ci.yml',
   '.prettierignore',
@@ -103,6 +105,46 @@ const DECISION_GENERATED_PATHS = Object.freeze([
   'docs/test262-report.jsonl',
   'tools/test262/es2015-audit-evidence.json',
   'tools/test262/es2015-taxonomy.json',
+]);
+const ISSUE_77_LEXICAL_MAINTENANCE_PATHS = Object.freeze([
+  'README.md',
+  'docs/architecture.md',
+  'docs/conformance.md',
+  'docs/limitations.md',
+  'docs/superpowers/plans/2026-08-19-es2015-lexical-new-target.md',
+  'docs/superpowers/specs/2026-08-19-es2015-lexical-new-target-design.md',
+  'docs/test262-report.jsonl',
+  'docs/testing.md',
+  'src/api.js',
+  'src/evaluator/dynamic-function.js',
+  'src/evaluator/eval.js',
+  'src/evaluator/expressions.js',
+  'src/evaluator/generator-expression-frames.js',
+  'src/evaluator/modules.js',
+  'src/parser.js',
+  'src/runtime/environment.js',
+  'src/runtime/function-object.js',
+  'test/arrow-functions.test.js',
+  'test/classes.test.js',
+  'test/dynamic-function.test.js',
+  'test/environments.test.js',
+  'test/eval.test.js',
+  'test/function-parameters.test.js',
+  'test/function-realm.test.js',
+  'test/functions.test.js',
+  'test/generator-function.test.js',
+  'test/module-loader.test.js',
+  'test/module-parser.test.js',
+  'test/node/es2015-provenance.test.js',
+  'test/node/upstream-select.test.js',
+  'test/parser.test.js',
+  'test/template-literals.test.js',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/es2015-provenance.json',
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/upstream-subset.json',
 ]);
 const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
@@ -1023,11 +1065,11 @@ function rangeMarker(profile) {
   return `<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:${profile} base-ledger-sha256:${APPROVED_PRODUCTION_FOUNDATION.baseLedger.pathSha256} -->`;
 }
 
-/** @param {string} profile */
-function rangeArguments(profile) {
+/** @param {string} profile @param {string} [base] */
+function rangeArguments(profile, base = RANGE_BASE_SHA) {
   return [
     '--check-range',
-    `--base=${RANGE_BASE_SHA}`,
+    `--base=${base}`,
     `--head=${RANGE_HEAD_SHA}`,
     `--profile=${profile}`,
     `--marker=${rangeMarker(profile)}`,
@@ -1038,11 +1080,13 @@ function rangeArguments(profile) {
  * @param {{
  *   changes: readonly { status: string, path: string, sourcePath?: string }[],
  *   baseHasFoundation?: boolean,
+ *   baseSha?: string,
  *   headFiles?: ReadonlyMap<string, string>,
  *   mergeBase?: string,
  * }} options
  */
 function rangeCheckDependencies(options) {
+  const baseSha = options.baseSha ?? RANGE_BASE_SHA;
   const dependencies = provenanceCheckDependencies();
   const headFiles = new Map(dependencies.files);
   for (const path of FOUNDATION_ALLOWED_PATHS) {
@@ -1062,13 +1106,12 @@ function rangeCheckDependencies(options) {
     ...dependencies,
     files: headFiles,
     resolveCommit: async (/** @type {string} */ revision) => revision,
-    mergeBase: async () => options.mergeBase ?? RANGE_BASE_SHA,
+    mergeBase: async () => options.mergeBase ?? baseSha,
     gitDiff: async () => rangeDiffText(options.changes),
     readGitFile: async (
       /** @type {string} */ revision,
       /** @type {string} */ path,
-    ) =>
-      (revision === RANGE_BASE_SHA ? baseFiles : headFiles).get(path) ?? null,
+    ) => (revision === baseSha ? baseFiles : headFiles).get(path) ?? null,
   };
 }
 
@@ -1104,8 +1147,15 @@ export default [
         json(productionManifest().rangeProfiles.map((profile) => profile.name)),
         json([
           'foundation',
+          'maintenance:issue77-lexical',
           ...ES2015_PROVENANCE_DECISION_CODES.map((code) => `decision:${code}`),
         ]),
+      );
+      assertSame(
+        productionManifest().rangeProfiles.find(
+          (profile) => profile.name === 'maintenance:issue77-lexical',
+        )?.baseCommit,
+        ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
       );
     },
   },
@@ -2999,6 +3049,24 @@ export default [
         ),
         0,
       );
+
+      assertSame(
+        await provenanceCheck(
+          rangeArguments(
+            'maintenance:issue77-lexical',
+            ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+          ),
+          rangeCheckDependencies({
+            baseSha: ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+            changes: ISSUE_77_LEXICAL_MAINTENANCE_PATHS.map((path) => ({
+              status: 'M',
+              path,
+            })),
+            baseHasFoundation: true,
+          }),
+        ),
+        0,
+      );
     },
   },
   {
@@ -3233,6 +3301,29 @@ export default [
           }),
           message:
             'decision:UL3 range requires an initialized provenance foundation in the base',
+        },
+        {
+          args: rangeArguments('maintenance:issue77-lexical'),
+          dependencies: rangeCheckDependencies({
+            changes: ISSUE_77_LEXICAL_MAINTENANCE_PATHS.map((path) => ({
+              status: 'M',
+              path,
+            })),
+          }),
+          message:
+            'maintenance:issue77-lexical range requires an initialized provenance foundation in the base',
+        },
+        {
+          args: rangeArguments('maintenance:issue77-lexical'),
+          dependencies: rangeCheckDependencies({
+            changes: ISSUE_77_LEXICAL_MAINTENANCE_PATHS.map((path) => ({
+              status: 'M',
+              path,
+            })),
+            baseHasFoundation: true,
+          }),
+          message:
+            'maintenance:issue77-lexical range requires base 8d75b48af2ee7ab04e7c5006980417227ec34568',
         },
         {
           args: [

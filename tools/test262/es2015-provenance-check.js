@@ -529,6 +529,21 @@ async function checkRange(deps, options) {
       `Unknown provenance range profile ${marker.profile}`,
     );
   }
+  if (profile.baseFoundation === 'present' && baseManifestText === null) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile.name} range requires an initialized provenance foundation in the base`,
+    );
+  }
+  if (profile.baseFoundation === 'absent' && baseManifestText !== null) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile.name} range requires a base without the initialized provenance foundation`,
+    );
+  }
+  if (profile.baseCommit !== null && base !== profile.baseCommit) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile.name} range requires base ${profile.baseCommit}`,
+    );
+  }
   const expectedMarker = provenanceRangeMarker(
     profile.name,
     manifest.baseLedger.pathSha256,
@@ -652,6 +667,7 @@ async function provenanceOwnedRange(deps, changes, base, head) {
   );
   const ownedPaths = new Set(gateOwnerPaths);
   for (const profile of manifest.rangeProfiles) {
+    if (profile.name.startsWith('maintenance:')) continue;
     for (const path of profile.allowedPaths) ownedPaths.add(path);
     for (const path of profile.allowedDeletions) ownedPaths.add(path);
   }

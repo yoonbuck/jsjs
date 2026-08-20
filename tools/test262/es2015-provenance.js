@@ -12,7 +12,7 @@ import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
  * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, paths: readonly string[] }} ProvenanceBaseLedger
  * @typedef {{ code: string, selector: string, scope: string, rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string, entries: readonly ProvenanceBatchEntry[] }} ProvenanceBatch
  * @typedef {{ blocker: string, issues: readonly number[] }} ProvenanceBlockerOwner
- * @typedef {{ name: string, baseFoundation: 'absent' | 'present', requiredPaths: readonly string[], allowedPaths: readonly string[], requiredDeletions: readonly string[], allowedDeletions: readonly string[], emptyDecisionFragments: readonly string[], decisionFragment: string | null, generatedPaths: readonly string[] }} ProvenanceRangeProfile
+ * @typedef {{ name: string, baseFoundation: 'absent' | 'present', baseCommit: string | null, requiredPaths: readonly string[], allowedPaths: readonly string[], requiredDeletions: readonly string[], allowedDeletions: readonly string[], emptyDecisionFragments: readonly string[], decisionFragment: string | null, generatedPaths: readonly string[] }} ProvenanceRangeProfile
  * @typedef {{ version: number, taxonomyBaseline: string, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, blockerOwners: readonly ProvenanceBlockerOwner[], rangeProfiles: readonly ProvenanceRangeProfile[], baseLedger: ProvenanceBaseLedger, batches: readonly ProvenanceBatch[] }} ProvenanceManifest
  * @typedef {{ repository: string, commit: string, note: string }} ReviewedDecisionHistoryEntry
  * @typedef {{ reviewer: string, reviewedAt: string, artifact: string }} ReviewedDecisionReview
@@ -141,10 +141,61 @@ const DECISION_GENERATED_PATHS = Object.freeze([
   'tools/test262/es2015-audit-evidence.json',
   'tools/test262/es2015-taxonomy.json',
 ]);
+const ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA =
+  '8d75b48af2ee7ab04e7c5006980417227ec34568';
+const ISSUE_77_LEXICAL_MAINTENANCE_PATHS = Object.freeze([
+  'README.md',
+  'docs/architecture.md',
+  'docs/conformance.md',
+  'docs/limitations.md',
+  'docs/superpowers/plans/2026-08-19-es2015-lexical-new-target.md',
+  'docs/superpowers/specs/2026-08-19-es2015-lexical-new-target-design.md',
+  'docs/test262-report.jsonl',
+  'docs/testing.md',
+  'src/api.js',
+  'src/evaluator/dynamic-function.js',
+  'src/evaluator/eval.js',
+  'src/evaluator/expressions.js',
+  'src/evaluator/generator-expression-frames.js',
+  'src/evaluator/modules.js',
+  'src/parser.js',
+  'src/runtime/environment.js',
+  'src/runtime/function-object.js',
+  'test/arrow-functions.test.js',
+  'test/classes.test.js',
+  'test/dynamic-function.test.js',
+  'test/environments.test.js',
+  'test/eval.test.js',
+  'test/function-parameters.test.js',
+  'test/function-realm.test.js',
+  'test/functions.test.js',
+  'test/generator-function.test.js',
+  'test/module-loader.test.js',
+  'test/module-parser.test.js',
+  'test/node/es2015-provenance.test.js',
+  'test/node/upstream-select.test.js',
+  'test/parser.test.js',
+  'test/template-literals.test.js',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+  ES2015_PROVENANCE_FILE,
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/upstream-subset.json',
+]);
+const ISSUE_77_LEXICAL_GENERATED_PATHS = Object.freeze([
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  'tools/test262/es2015-audit-evidence.json',
+  ES2015_PROVENANCE_FILE,
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/upstream-subset.json',
+]);
 const APPROVED_RANGE_PROFILES = Object.freeze([
   Object.freeze({
     name: 'foundation',
     baseFoundation: 'absent',
+    baseCommit: null,
     requiredPaths: FOUNDATION_ALLOWED_PATHS,
     allowedPaths: FOUNDATION_ALLOWED_PATHS,
     requiredDeletions: FOUNDATION_DELETIONS,
@@ -157,11 +208,24 @@ const APPROVED_RANGE_PROFILES = Object.freeze([
       ES2015_PROVENANCE_FILE,
     ]),
   }),
+  Object.freeze({
+    name: 'maintenance:issue77-lexical',
+    baseFoundation: 'present',
+    baseCommit: ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+    requiredPaths: ISSUE_77_LEXICAL_MAINTENANCE_PATHS,
+    allowedPaths: ISSUE_77_LEXICAL_MAINTENANCE_PATHS,
+    requiredDeletions: Object.freeze([]),
+    allowedDeletions: Object.freeze([]),
+    emptyDecisionFragments: Object.freeze([]),
+    decisionFragment: null,
+    generatedPaths: ISSUE_77_LEXICAL_GENERATED_PATHS,
+  }),
   ...ES2015_PROVENANCE_DECISION_CODES.map((code) => {
     const decisionFragment = `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
     return Object.freeze({
       name: `decision:${code}`,
       baseFoundation: 'present',
+      baseCommit: null,
       requiredPaths: Object.freeze([decisionFragment]),
       allowedPaths: Object.freeze(
         sortStrings([decisionFragment, ...DECISION_GENERATED_PATHS]),
@@ -253,6 +317,7 @@ const BLOCKER_OWNER_KEYS = Object.freeze(['blocker', 'issues']);
 const RANGE_PROFILE_KEYS = Object.freeze([
   'name',
   'baseFoundation',
+  'baseCommit',
   'requiredPaths',
   'allowedPaths',
   'requiredDeletions',
@@ -2035,6 +2100,12 @@ function normalizeRangeProfiles(value) {
         `${label}.baseFoundation must be absent or present`,
       );
     }
+    const baseCommit = nullableString(record.baseCommit, `${label}.baseCommit`);
+    if (baseCommit !== null && !/^[0-9a-f]{40}$/u.test(baseCommit)) {
+      throw new Es2015ProvenanceError(
+        `${label}.baseCommit must be null or a full commit SHA`,
+      );
+    }
     const requiredPaths = normalizeRepositoryPathList(
       record.requiredPaths,
       `${label}.requiredPaths`,
@@ -2102,6 +2173,7 @@ function normalizeRangeProfiles(value) {
     return Object.freeze({
       name: record.name,
       baseFoundation: record.baseFoundation,
+      baseCommit,
       requiredPaths,
       allowedPaths,
       requiredDeletions,
