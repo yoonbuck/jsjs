@@ -17,6 +17,14 @@
  * - **Immutable actions.** Every `uses:` names a full commit SHA, because a tag
  *   like `v4` is a moving pointer the action's owner can repoint at any time.
  *   The human-readable version follows in a comment so the pin stays reviewable.
+ * - **Event separation.** `pull_request_target` runs the workflow bytes and the
+ *   default checkout of the base branch with the base repository's token, so no
+ *   ordinary job — every one of which checks out, installs, and executes PR
+ *   content — may run in it. Each ordinary job is excluded from that event and
+ *   only the trusted provenance base guard runs in it. Because a skipped job
+ *   reports success, the display names are event-keyed too: a job skipped in the
+ *   wrong event reports a distinct `(inactive...)` name that no required check
+ *   context can match.
  *
  * The upstream Test262 pin is not duplicated here: `loadCiPipeline` reads it
  * from `package.json`, so the workflow checks out exactly the revision the local
@@ -45,6 +53,11 @@ import { COVERAGE_DOCUMENT_FILE } from '../test262/coverage.js';
  * @typedef {{
  *   id: string,
  *   name: string,
+ *   if?: string,
+ *   runsOn?: string,
+ *   timeoutMinutes?: number,
+ *   permissions?: Readonly<Record<string, string>>,
+ *   concurrency?: Readonly<{ group: string, cancelInProgress: boolean }>,
  *   needs: readonly string[],
  *   steps: readonly WorkflowStep[],
  * }} WorkflowJob
@@ -159,6 +172,122 @@ export const JSC_INSTALL_COMMAND =
 /** The executable supplied by `JSC_INSTALL_COMMAND` on Ubuntu Noble. */
 export const JSC_EXECUTABLE_CHECK = 'test -x /usr/bin/jsc';
 
+/** The runner every ordinary job uses. */
+export const DEFAULT_RUNNER = 'ubuntu-latest';
+
+/**
+ * The privileged event. It runs the base branch's workflow bytes with a token
+ * scoped to the base repository, so only the trusted provenance base guard may
+ * run in it — see the module comment's event-separation policy.
+ */
+export const PRIVILEGED_EVENT = 'pull_request_target';
+
+/** Excludes an ordinary job from the privileged event. */
+export const ORDINARY_EVENT_CONDITION = `github.event_name != '${PRIVILEGED_EVENT}'`;
+
+/** Restricts the guard to the privileged event. */
+export const GUARD_EVENT_CONDITION = `github.event_name == '${PRIVILEGED_EVENT}'`;
+
+/** The guard's job id, and the check-run context branch protection selects. */
+export const GUARD_JOB_ID = 'provenance-base-guard';
+export const GUARD_ACTIVE_NAME = 'Provenance base guard';
+
+/**
+ * The canonical target the guard is authoritative for. A PR retargeted at
+ * another base repository or branch fails these checks before the job reads any
+ * repository content, so a fork or stacked branch can never obtain a passing
+ * active guard for a range the guard did not actually validate.
+ */
+export const GUARD_CANONICAL_REPOSITORY = 'yoonbuck/jsjs';
+export const GUARD_CANONICAL_BASE_REF = 'main';
+
+/** Ubuntu Noble, pinned rather than `latest`, and a five-minute ceiling. */
+export const GUARD_RUNNER = 'ubuntu-24.04';
+export const GUARD_TIMEOUT_MINUTES = 5;
+
+/**
+ * The guard's own least-privilege grant. It reads repository content and pull
+ * request metadata and writes nothing; no step may widen this.
+ */
+export const GUARD_PERMISSIONS = Object.freeze({
+  contents: 'read',
+  'pull-requests': 'read',
+});
+
+/**
+ * A body edit or a new push must cancel the older guard, or a run started
+ * against stale range/marker data could finish last and look like the current
+ * result. The group is the fixed prefix plus the server-provided PR number.
+ */
+export const GUARD_CONCURRENCY = Object.freeze({
+  group: `${GUARD_JOB_ID}-\${{ github.event.pull_request.number }}`,
+  cancelInProgress: true,
+});
+
+/**
+ * Every guard identity value the server provides, mapped to the step that
+ * consumes it. Nothing is job-level: the untrusted PR body reaches only the
+ * checker, and no PR-controlled string ever reaches an action input, a path, or
+ * a command line.
+ */
+const GUARD_BASE_REPOSITORY_VALUE =
+  '${{ github.event.pull_request.base.repo.full_name }}';
+const GUARD_WORKFLOW_REPOSITORY_VALUE = '${{ github.repository }}';
+const GUARD_BASE_REF_VALUE = '${{ github.event.pull_request.base.ref }}';
+const GUARD_BASE_SHA_VALUE = '${{ github.event.pull_request.base.sha }}';
+const GUARD_HEAD_SHA_VALUE = '${{ github.event.pull_request.head.sha }}';
+const GUARD_PR_NUMBER_VALUE = '${{ github.event.pull_request.number }}';
+const GUARD_PR_BODY_VALUE = '${{ github.event.pull_request.body }}';
+
+/**
+ * The fixed canonical-target check, run before any checkout or fetch. It is a
+ * `printf`/`grep -Eq` pipeline rather than shell bracket syntax so the whole
+ * command stays a YAML plain scalar the renderer can emit byte-for-byte.
+ */
+export const GUARD_VALIDATE_COMMAND = [
+  `printf '%s' "$BASE_REPOSITORY" | grep -Eq '^${GUARD_CANONICAL_REPOSITORY}$'`,
+  `printf '%s' "$WORKFLOW_REPOSITORY" | grep -Eq '^${GUARD_CANONICAL_REPOSITORY}$'`,
+  `printf '%s' "$BASE_REF" | grep -Eq '^${GUARD_CANONICAL_BASE_REF}$'`,
+  `printf '%s' "$BASE_SHA" | grep -Eq '^[0-9a-f]{40}$'`,
+  `printf '%s' "$HEAD_SHA" | grep -Eq '^[0-9a-f]{40}$'`,
+  `printf '%s' "$PR_NUMBER" | grep -Eq '^[1-9][0-9]*$'`,
+].join(' && ');
+
+/**
+ * Proves the worktree holding the checker really is the server-declared base
+ * commit, not an action fallback or some other ref, before Node is installed or
+ * anything is fetched.
+ */
+export const GUARD_CHECKOUT_ATTEST_COMMAND =
+  'test "$(git rev-parse --verify \'HEAD^{commit}\')" = "$BASE_SHA"';
+
+/**
+ * The only fetch the guard performs, through the base checkout's own `origin`.
+ * An unadvertised object-id fetch (`git fetch origin "$HEAD_SHA"`) is not
+ * reliable for fork PRs, and adding the head repository as a remote would hand
+ * an attacker-controlled URL to the privileged job, so neither is permitted.
+ */
+export const GUARD_FETCH_COMMAND =
+  'git fetch --no-tags --no-recurse-submodules origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"';
+
+/**
+ * Requires the advertised ref and `FETCH_HEAD` to both resolve to the event's
+ * head commit, so the objects the checker inspects are exactly the range the
+ * server declared. The fetched head stays inert — never checked out, extracted,
+ * or executed.
+ */
+export const GUARD_FETCH_ATTEST_COMMAND = [
+  'test "$(git rev-parse --verify "refs/remotes/pull/${PR_NUMBER}/head^{commit}")" = "$HEAD_SHA"',
+  'test "$(git rev-parse --verify \'FETCH_HEAD^{commit}\')" = "$HEAD_SHA"',
+].join(' && ');
+
+/**
+ * The base checkout's own checker, with explicit event identities and the PR
+ * body read from the environment rather than spliced into the command line.
+ */
+export const GUARD_CHECKER_COMMAND =
+  'node tools/test262/es2015-provenance-check.js --check-range --base="$BASE_SHA" --head="$HEAD_SHA" --pr-body-env=PR_BODY';
+
 /**
  * Every action the workflow uses, pinned to an immutable commit SHA. The
  * `version` is the release tag that SHA belongs to, kept so a reader can tell at
@@ -250,6 +379,55 @@ function setupSteps() {
 }
 
 /**
+ * Builds the `${{ <condition> && '<active>' || '<inactive>' }}` display name a
+ * job reports. `job.name` supports the `github` context, and a job skipped by
+ * its own `if` still reports success, so a static name would let a skipped job
+ * satisfy a required check it never ran. Selecting the name from
+ * `github.event_name` — and nothing else — gives the skipped rendering a
+ * distinct `(inactive...)` name no required context can match.
+ *
+ * @param {string} condition
+ * @param {string} activeName
+ * @param {string} inactiveName
+ * @returns {string}
+ */
+function eventKeyedName(condition, activeName, inactiveName) {
+  return `\${{ ${condition} && '${activeName}' || '${inactiveName}' }}`;
+}
+
+/**
+ * @param {string} name
+ * @returns {string}
+ */
+function ordinaryJobName(name) {
+  return eventKeyedName(
+    ORDINARY_EVENT_CONDITION,
+    name,
+    `${name} (inactive on ${PRIVILEGED_EVENT})`,
+  );
+}
+
+/**
+ * An ordinary push/pull_request job: it keeps its exact name, steps, and
+ * dependencies on those events and is excluded from the privileged one.
+ *
+ * @param {string} id
+ * @param {string} name
+ * @param {readonly WorkflowStep[]} steps
+ * @param {readonly string[]} [needs]
+ * @returns {WorkflowJob}
+ */
+function ordinaryJob(id, name, steps, needs = []) {
+  return Object.freeze({
+    id,
+    name: ordinaryJobName(name),
+    if: ORDINARY_EVENT_CONDITION,
+    needs: Object.freeze([...needs]),
+    steps: Object.freeze([...steps]),
+  });
+}
+
+/**
  * @param {string} id
  * @param {string} name
  * @param {readonly WorkflowStep[]} ownSteps
@@ -257,11 +435,79 @@ function setupSteps() {
  * @returns {WorkflowJob}
  */
 function job(id, name, ownSteps, needs = []) {
+  return ordinaryJob(id, name, [...setupSteps(), ...ownSteps], needs);
+}
+
+/**
+ * The trusted provenance base guard: the only job that runs in the privileged
+ * event, and the only place the provenance range is checked by code the PR
+ * cannot edit.
+ *
+ * `pull_request_target` runs the base branch's workflow bytes, so this job's
+ * checker, its imports, and its command line all come from the base checkout.
+ * The PR head is fetched only as inert Git objects through the base checkout's
+ * own `origin`, and is never checked out, extracted, installed, or executed.
+ * Every server value reaches a step as a quoted environment variable, never as
+ * an action input or a command-line fragment, and the untrusted PR body reaches
+ * only the checker.
+ *
+ * @returns {WorkflowJob}
+ */
+function createProvenanceBaseGuardJob() {
   return Object.freeze({
-    id,
-    name,
-    needs: Object.freeze([...needs]),
-    steps: Object.freeze([...setupSteps(), ...ownSteps]),
+    id: GUARD_JOB_ID,
+    name: eventKeyedName(
+      GUARD_EVENT_CONDITION,
+      GUARD_ACTIVE_NAME,
+      `${GUARD_ACTIVE_NAME} (inactive)`,
+    ),
+    if: GUARD_EVENT_CONDITION,
+    runsOn: GUARD_RUNNER,
+    timeoutMinutes: GUARD_TIMEOUT_MINUTES,
+    permissions: GUARD_PERMISSIONS,
+    concurrency: GUARD_CONCURRENCY,
+    needs: Object.freeze([]),
+    steps: Object.freeze([
+      runStep('Validate the canonical guard target', GUARD_VALIDATE_COMMAND, {
+        BASE_REPOSITORY: GUARD_BASE_REPOSITORY_VALUE,
+        WORKFLOW_REPOSITORY: GUARD_WORKFLOW_REPOSITORY_VALUE,
+        BASE_REF: GUARD_BASE_REF_VALUE,
+        BASE_SHA: GUARD_BASE_SHA_VALUE,
+        HEAD_SHA: GUARD_HEAD_SHA_VALUE,
+        PR_NUMBER: GUARD_PR_NUMBER_VALUE,
+      }),
+      usesStep('Check out the event base commit', 'actions/checkout', {
+        ref: GUARD_BASE_SHA_VALUE,
+        'fetch-depth': '0',
+        'persist-credentials': 'false',
+        submodules: 'false',
+      }),
+      runStep(
+        'Attest the checked-out base commit',
+        GUARD_CHECKOUT_ATTEST_COMMAND,
+        { BASE_SHA: GUARD_BASE_SHA_VALUE },
+      ),
+      usesStep('Set up Node', 'actions/setup-node', {
+        'node-version': NODE_VERSION,
+      }),
+      runStep('Fetch the advertised pull request ref', GUARD_FETCH_COMMAND, {
+        PR_NUMBER: GUARD_PR_NUMBER_VALUE,
+      }),
+      runStep('Attest the fetched head commit', GUARD_FETCH_ATTEST_COMMAND, {
+        PR_NUMBER: GUARD_PR_NUMBER_VALUE,
+        HEAD_SHA: GUARD_HEAD_SHA_VALUE,
+      }),
+      runStep(
+        'Check the trusted-base provenance range',
+        GUARD_CHECKER_COMMAND,
+        {
+          BASE_SHA: GUARD_BASE_SHA_VALUE,
+          HEAD_SHA: GUARD_HEAD_SHA_VALUE,
+          PR_BODY: GUARD_PR_BODY_VALUE,
+          TZ: 'UTC',
+        },
+      ),
+    ]),
   });
 }
 
@@ -283,7 +529,8 @@ export function toGithubSlug(repository) {
 }
 
 /**
- * The twelve checks CI runs as distinct jobs.
+ * The twelve ordinary checks CI runs as distinct jobs, plus the trusted
+ * provenance base guard that runs only in the privileged event.
  *
  * `ci-drift` runs `ci:check`, which is what makes this module the source of
  * truth rather than a convention: a hand-edited workflow fails CI. `vendor`
@@ -304,6 +551,11 @@ export function toGithubSlug(repository) {
  * rewrites the two generated artifacts it owns, so the job compares the working
  * tree against the commit afterwards: a stale committed report fails CI the same
  * way a hand-edited workflow does.
+ *
+ * `test262-upstream`'s `Check provenance PR range` step stays exactly as it is,
+ * scoped to `pull_request`: it is defense in depth against an accidental
+ * omission, not a trust boundary, because in that event the checker it runs
+ * comes from the PR's own tree. The authoritative range check is the guard.
  *
  * @param {Test262Pin} test262
  * @returns {readonly WorkflowJob[]}
@@ -356,11 +608,10 @@ export function createCiJobs(test262) {
       [runStep('Run the local fixture suite', 'npm run test262:fixtures')],
       ['vendor'],
     ),
-    Object.freeze({
-      id: 'test262-es2015-release',
-      name: 'Pinned Test262 ES2015 focused suites',
-      needs: Object.freeze(['vendor']),
-      steps: Object.freeze([
+    ordinaryJob(
+      'test262-es2015-release',
+      'Pinned Test262 ES2015 focused suites',
+      [
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
         }),
@@ -382,19 +633,19 @@ export function createCiJobs(test262) {
             TZ: 'UTC',
           },
         ),
-      ]),
-    }),
+      ],
+      ['vendor'],
+    ),
     job(
       'benchmark-smoke',
       'Benchmark smoke',
       [runStep('Run benchmark correctness smoke', 'npm run benchmark:smoke')],
       ['vendor'],
     ),
-    Object.freeze({
-      id: 'test262-upstream',
-      name: 'Pinned Test262 subset',
-      needs: Object.freeze(['vendor']),
-      steps: Object.freeze([
+    ordinaryJob(
+      'test262-upstream',
+      'Pinned Test262 subset',
+      [
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
           'fetch-depth': '0',
@@ -468,8 +719,10 @@ export function createCiJobs(test262) {
           },
           `always() && hashFiles('${TEST262_REPORT_FILE}') != ''`,
         ),
-      ]),
-    }),
+      ],
+      ['vendor'],
+    ),
+    createProvenanceBaseGuardJob(),
   ]);
 }
 
@@ -498,6 +751,75 @@ export async function loadCiPipeline() {
 }
 
 /**
+ * The YAML characters that are plain-scalar indicators in first position. A
+ * value starting with one of them would need quoting, and quoting a shell
+ * command or a `${{ }}` expression is exactly where a hand edit silently
+ * changes what the runner executes.
+ */
+const PLAIN_SCALAR_INDICATORS = new Set([
+  '-',
+  '?',
+  ':',
+  ',',
+  '[',
+  ']',
+  '{',
+  '}',
+  '#',
+  '&',
+  '*',
+  '!',
+  '|',
+  '>',
+  "'",
+  '"',
+  '%',
+  '@',
+  '`',
+]);
+
+/**
+ * Rejects any value this renderer would emit unquoted that YAML would not read
+ * back byte-for-byte. The renderer writes job names, step names, and `run`
+ * commands as bare plain scalars, so "what the generator holds" and "what a
+ * parser gives the runner" have to be the same string — a stray colon-space,
+ * trailing colon, ` #`, line break, or leading indicator would silently retype
+ * or truncate the value instead of failing the build.
+ *
+ * @param {string} value
+ * @param {string} description
+ * @returns {string}
+ */
+function plainScalar(value, description) {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${description} must be a non-empty string`);
+  }
+
+  /** @type {readonly [boolean, string][]} */
+  const violations = [
+    [/[\r\n]/.test(value), 'must not contain a line break'],
+    [value !== value.trim(), 'must not have leading or trailing whitespace'],
+    [value.endsWith(':'), 'must not end with a colon'],
+    [value.includes(': '), 'must not contain a colon followed by a space'],
+    [value.includes(' #'), 'must not contain a space followed by #'],
+    [
+      PLAIN_SCALAR_INDICATORS.has(value[0]),
+      'must not begin with a YAML plain-scalar indicator',
+    ],
+  ];
+
+  for (const [violated, requirement] of violations) {
+    if (violated) {
+      throw new Error(
+        `${description} ${requirement}: ${JSON.stringify(value)}`,
+      );
+    }
+  }
+
+  return value;
+}
+
+/**
  * @param {readonly WorkflowJob[]} jobs
  * @returns {string}
  */
@@ -512,6 +834,11 @@ export function renderWorkflowYaml(jobs) {
     '    branches: [main]',
     '  pull_request:',
     '    types: [opened, synchronize, reopened, edited]',
+    // Filter-free on purpose: every pull request must report the guard check,
+    // including one whose range the checker neutrally permits, or a required
+    // context would stay pending forever on the PRs it does not match.
+    `  ${PRIVILEGED_EVENT}:`,
+    '    types: [opened, synchronize, reopened, edited]',
     '',
     '# Least privilege: no job in this workflow writes to the repository.',
     'permissions:',
@@ -522,8 +849,35 @@ export function renderWorkflowYaml(jobs) {
 
   jobs.forEach((workflowJob, index) => {
     lines.push(`  ${workflowJob.id}:`);
-    lines.push(`    name: ${workflowJob.name}`);
-    lines.push('    runs-on: ubuntu-latest');
+    lines.push(
+      `    name: ${plainScalar(workflowJob.name, `job ${workflowJob.id} name`)}`,
+    );
+
+    if (workflowJob.if !== undefined) {
+      lines.push(`    if: ${workflowJob.if}`);
+    }
+
+    lines.push(`    runs-on: ${workflowJob.runsOn ?? DEFAULT_RUNNER}`);
+
+    if (workflowJob.timeoutMinutes !== undefined) {
+      lines.push(`    timeout-minutes: ${workflowJob.timeoutMinutes}`);
+    }
+
+    if (workflowJob.permissions !== undefined) {
+      lines.push('    permissions:');
+
+      for (const [scope, level] of Object.entries(workflowJob.permissions)) {
+        lines.push(`      ${scope}: ${level}`);
+      }
+    }
+
+    if (workflowJob.concurrency !== undefined) {
+      lines.push('    concurrency:');
+      lines.push(`      group: ${workflowJob.concurrency.group}`);
+      lines.push(
+        `      cancel-in-progress: ${workflowJob.concurrency.cancelInProgress}`,
+      );
+    }
 
     if (workflowJob.needs.length > 0) {
       lines.push(`    needs: [${workflowJob.needs.join(', ')}]`);
@@ -532,7 +886,7 @@ export function renderWorkflowYaml(jobs) {
     lines.push('    steps:');
 
     for (const workflowStep of workflowJob.steps) {
-      lines.push(...renderStep(workflowStep));
+      lines.push(...renderStep(workflowJob.id, workflowStep));
     }
 
     if (index < jobs.length - 1) {
@@ -544,11 +898,16 @@ export function renderWorkflowYaml(jobs) {
 }
 
 /**
+ * @param {string} jobId
  * @param {WorkflowStep} workflowStep
  * @returns {string[]}
  */
-function renderStep(workflowStep) {
-  const lines = [`      - name: ${workflowStep.name}`];
+function renderStep(jobId, workflowStep) {
+  const stepName = plainScalar(
+    workflowStep.name,
+    `${jobId} step name "${workflowStep.name}"`,
+  );
+  const lines = [`      - name: ${stepName}`];
 
   if (workflowStep.if !== undefined) {
     lines.push(`        if: ${workflowStep.if}`);
@@ -559,7 +918,9 @@ function renderStep(workflowStep) {
   }
 
   if (workflowStep.run !== undefined) {
-    lines.push(`        run: ${workflowStep.run}`);
+    lines.push(
+      `        run: ${plainScalar(workflowStep.run, `${jobId} step "${stepName}" run`)}`,
+    );
   }
 
   if (workflowStep.with !== undefined) {
