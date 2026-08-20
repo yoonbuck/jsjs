@@ -13,6 +13,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { parse } from '../../vendor/acorn/acorn.mjs';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { checkVendoredDependencies } from '../../tools/vendor/sync.js';
@@ -32,6 +33,7 @@ import {
 } from '../../tools/test262/features.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
+const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
 const ES2015_AUDIT_EVIDENCE_FILE = 'tools/test262/es2015-audit-evidence.json';
 const ES2015_WHOLE_TREE_PARTITIONS = Object.freeze([
   'annex-b',
@@ -53,7 +55,14 @@ const TRACKED_SUPERPOWERS_GIT_LS_FILES_FIXTURE = [
   'README.md',
   '.superpowers/sdd/example/report.md',
   'test/node/repository-invariants.test.js',
-].join('\n');
+].join('\0') + '\0';
+const TRACKED_SUPERPOWERS_GIT_LS_FILES_UNUSUAL_PATH =
+  '.superpowers/sdd/example/spaced "quoted"\nreport.md';
+const TRACKED_SUPERPOWERS_GIT_LS_FILES_UNUSUAL_FIXTURE = [
+  'README.md',
+  TRACKED_SUPERPOWERS_GIT_LS_FILES_UNUSUAL_PATH,
+  'test/node/repository-invariants.test.js',
+].join('\0') + '\0';
 
 /** Matches `from '…'`, `import '…'`, and `import('…')` specifiers. */
 const SPECIFIER_PATTERN = /\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
@@ -252,11 +261,10 @@ async function readIgnoreFile() {
  * @param {string} output Raw `git ls-files` stdout.
  * @returns {string[]}
  */
-function trackedSuperpowersPathsFromGitLsFilesOutput(output) {
+export function trackedSuperpowersPathsFromGitLsFilesOutput(output) {
   return output
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('.superpowers/'));
+    .split('\0')
+    .filter((path) => path.length > 0 && path.startsWith('.superpowers/'));
 }
 
 /**
@@ -590,7 +598,7 @@ function markdownHeadingAnchors(source) {
 
 export default [
   {
-    name: 'trackedSuperpowersPathsFromGitLsFilesOutput finds tracked .superpowers paths in git output',
+    name: 'trackedSuperpowersPathsFromGitLsFilesOutput finds tracked .superpowers paths in NUL-delimited git output',
     run: async () => {
       assertSame(
         JSON.stringify(
@@ -604,10 +612,24 @@ export default [
     },
   },
   {
+    name: 'trackedSuperpowersPathsFromGitLsFilesOutput detects unusual tracked .superpowers paths from raw git -z output',
+    run: async () => {
+      assertSame(
+        JSON.stringify(
+          trackedSuperpowersPathsFromGitLsFilesOutput(
+            TRACKED_SUPERPOWERS_GIT_LS_FILES_UNUSUAL_FIXTURE,
+          ),
+        ),
+        JSON.stringify([TRACKED_SUPERPOWERS_GIT_LS_FILES_UNUSUAL_PATH]),
+        'NUL-delimited parsing must preserve unusual tracked .superpowers paths verbatim',
+      );
+    },
+  },
+  {
     name: 'git tracks no paths under .superpowers',
     run: async () => {
-      const result = spawnSync('git', ['ls-files', '--', '.superpowers'], {
-        cwd: REPOSITORY_ROOT,
+      const result = spawnSync('git', ['ls-files', '-z', '--', '.superpowers'], {
+        cwd: REPOSITORY_ROOT_PATH,
         encoding: 'utf8',
       });
 
