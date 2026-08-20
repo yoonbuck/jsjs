@@ -19,6 +19,9 @@ import {
 } from '../../tools/test262/es2015-audit.js';
 
 const FIXTURE_ROOT = new URL('../fixtures/es2015-taxonomy/', import.meta.url);
+const PHYSICAL_FIXTURE_PATHS = new Map([
+  ['test/language/malformed.js', 'test/language/malformed.js.txt'],
+]);
 const POLICY = JSON.stringify({
   version: 1,
   repository: 'https://github.com/tc39/test262.git',
@@ -55,7 +58,10 @@ const ANCHORS = JSON.stringify({
 
 /** @param {string} path */
 async function fixture(path) {
-  return readFile(new URL(path, FIXTURE_ROOT), 'utf8');
+  return readFile(
+    new URL(PHYSICAL_FIXTURE_PATHS.get(path) ?? path, FIXTURE_ROOT),
+    'utf8',
+  );
 }
 
 /** @param {unknown} value */

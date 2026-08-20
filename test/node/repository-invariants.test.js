@@ -40,6 +40,10 @@ const ES2015_WHOLE_TREE_PARTITIONS = Object.freeze([
   'malformed',
   'unknown-edition',
 ]);
+const ES2015_TAXONOMY_PHYSICAL_FIXTURES = Object.freeze({
+  'test/language/malformed.js':
+    'test/fixtures/es2015-taxonomy/test/language/malformed.js.txt',
+});
 const DOCUMENTATION_DEFERRED_SCRIPTS = new Set([
   'test262:es2015:audit',
   'test262:es2015:audit:check',
@@ -1544,6 +1548,35 @@ export default [
         missing.join('\n'),
         '',
         `package.json scripts missing from docs/testing.md: ${missing.join(', ')}`,
+      );
+    },
+  },
+  {
+    name: 'the ES2015 malformed fixture keeps its Test262 path while using a text physical fixture',
+    run: async () => {
+      const [logicalPath, physicalPath] = Object.entries(
+        ES2015_TAXONOMY_PHYSICAL_FIXTURES,
+      )[0];
+      const fixtureFiles = await listFiles(
+        'test/fixtures/es2015-taxonomy/',
+        (name) => name.endsWith('.js') || name.endsWith('.js.txt'),
+      );
+
+      assertSame(logicalPath, 'test/language/malformed.js');
+      assertSame(
+        physicalPath,
+        'test/fixtures/es2015-taxonomy/test/language/malformed.js.txt',
+      );
+      assertSame(fixtureFiles.includes(physicalPath), true);
+      assertSame(
+        fixtureFiles.includes(
+          'test/fixtures/es2015-taxonomy/test/language/malformed.js',
+        ),
+        false,
+      );
+      assertSame(
+        await readSource(physicalPath),
+        '/*---\ndescription: Missing terminator.\n',
       );
     },
   },
