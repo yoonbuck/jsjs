@@ -785,7 +785,7 @@ errors.
 The JSC runner has no suite selector. Run the entire portable registry:
 
 ```bash
-JSC=/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc
+JSC=/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc
 "$JSC" -m test/run-jsc.js
 ```
 
@@ -1016,7 +1016,7 @@ Run:
 ```bash
 npm run test:node
 npm run test:browser
-JSC=/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc
+JSC=/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc
 "$JSC" -m test/run-jsc.js
 ```
 
@@ -1039,24 +1039,58 @@ npm run benchmark:smoke
 
 Expected: every command exits zero. Do not run `test262:upstream` locally.
 
-- [ ] **Step 4: Run the safe CI contract**
+- [ ] **Step 4: Run only non-executing workflow contracts**
 
 Run:
 
 ```bash
-npm run ci:contract
+node test/run-node.js \
+  test/node/workflow-contract.test.js \
+  test/node/repository-invariants.test.js
 ```
 
-Expected: vendor, format, lint, typecheck, workflow, Node, fixture, and browser
-contract checks pass without broad Test262.
+Expected: deterministic workflow/script/manifest metadata and repository
+invariants pass. Do not run `npm run ci:contract`,
+`test/ci/full-contract.test.js`, `test/run-ci-contract.js`, or any command that
+directly or transitively invokes broad upstream Test262. Broad execution is
+prohibited locally even when a wrapper describes itself as a local contract.
 
-- [ ] **Step 5: Run a maximum-capability whole-branch review**
+- [ ] **Step 5: Reconcile moving `origin/main` before final review**
+
+Record the original issue/taxonomy baseline separately, fetch the live final PR
+base, and refuse to review or push a stale-base candidate:
+
+```bash
+ORIGINAL_ISSUE_BASE=54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7
+git fetch origin main
+LIVE_MAIN=$(git rev-parse origin/main)
+printf 'original_issue_base=%s\nlive_main=%s\n' \
+  "$ORIGINAL_ISSUE_BASE" "$LIVE_MAIN"
+if ! git merge-base --is-ancestor "$LIVE_MAIN" HEAD; then
+  git merge --no-edit origin/main
+fi
+FINAL_PR_BASE=$(git merge-base origin/main HEAD)
+test "$FINAL_PR_BASE" = "$(git rev-parse origin/main)"
+git status --short
+```
+
+If `origin/main` moved because #76, #79, or another child merged, resolve every
+conflict by preserving both the upstream change and #77 behavior. Reconstruct
+the P0 ledger from the original taxonomy baseline for provenance, but regenerate
+the final taxonomy against reconciled `origin/main`. Rerun Tasks 5 Step 4-5 and
+Task 6 Steps 1-4 after reconciliation. Do not reuse pre-reconciliation review or
+test evidence.
+
+- [ ] **Step 6: Run a maximum-capability whole-branch review**
 
 Give a fresh maximum-capability reviewer:
 
 - approved spec `a07f266`;
 - this implementation plan;
-- `git diff 54010d4..HEAD`;
+- original issue/taxonomy baseline
+  `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`;
+- final PR base `FINAL_PR_BASE`;
+- exact final range `git diff "$FINAL_PR_BASE"..HEAD`;
 - exact 83-root execution/reclassification evidence; and
 - outputs from Steps 1-4.
 
@@ -1065,14 +1099,15 @@ creation order, call/construct/super/bound/arrow/eval/generator/dynamic/cross-
 Realm paths, error phases, taxonomy ownership, and later-syntax exclusion.
 Never use Claude Opus 5.
 
-- [ ] **Step 6: Fix every confirmed finding and repeat gates**
+- [ ] **Step 7: Fix every confirmed finding and repeat gates**
 
 For each confirmed finding, add a RED regression test, reproduce it, make the
 minimal fix, and rerun the smallest relevant task gate. Then rerun Steps 1-4 and
-request a fresh whole-branch re-review. Continue until no confirmed findings
-remain.
+fetch `origin/main` again. If it moved, repeat Step 5 before requesting a fresh
+whole-branch re-review over the new exact range. Continue until no confirmed
+findings remain.
 
-- [ ] **Step 7: Commit review fixes if any**
+- [ ] **Step 8: Commit review fixes if any**
 
 ```bash
 git add \
@@ -1123,53 +1158,127 @@ Skip the commit if no files changed.
 - Produces: one squash-merged PR, exact-head CI/CodeQL evidence, closed #77,
   refreshed #70 counts/dependencies, and published newly unblocked issue state.
 
-- [ ] **Step 1: Record and push the exact reviewed head**
+- [ ] **Step 1: Recheck the final base and push the exact reviewed head**
 
 Run:
 
 ```bash
+ORIGINAL_ISSUE_BASE=54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7
+git fetch origin main
+test "$(git merge-base origin/main HEAD)" = "$(git rev-parse origin/main)"
 git status --short
+FINAL_PR_BASE=$(git merge-base origin/main HEAD)
 REVIEWED_HEAD=$(git rev-parse HEAD)
 git push --set-upstream origin HEAD
-printf '%s\n' "$REVIEWED_HEAD"
+printf 'original_issue_base=%s\nfinal_pr_base=%s\nreviewed_head=%s\n' \
+  "$ORIGINAL_ISSUE_BASE" "$FINAL_PR_BASE" "$REVIEWED_HEAD"
 ```
 
-Expected: worktree clean and the printed SHA matches the pushed branch head.
+Expected: worktree clean, `FINAL_PR_BASE` is current `origin/main`, and the
+printed SHA matches the pushed branch head. If `origin/main` moved after Task 6,
+stop: repeat Task 6 Step 5 onward, including all affected gates and review. Never
+push or merge a stale-base candidate.
 
-- [ ] **Step 2: Create one focused PR**
+- [ ] **Step 2: Recover or create exactly one focused PR**
 
-Create a PR titled `Complete ES2015 lexical grammar and new.target` whose body
-contains:
+Resolve the current branch and any existing open PR:
 
-- `Closes #77`;
-- baseline `54010d4`;
+```bash
+BRANCH=$(git branch --show-current)
+gh pr list --repo yoonbuck/jsjs --state open --head "$BRANCH" \
+  --json number,url,headRefOid > /tmp/jsjs-issue-77-prs.json
+test "$(jq length /tmp/jsjs-issue-77-prs.json)" -le 1
+PR=$(jq -r '.[0].number // empty' /tmp/jsjs-issue-77-prs.json)
+```
+
+If `PR` is empty, create one PR. If it exists, verify it belongs to this exact
+branch and update its title/body rather than creating a duplicate. In both
+cases, title it `Complete ES2015 lexical grammar and new.target`, and make the
+body contain:
+
+- `Tracks #77` without an auto-closing keyword, because #77 must remain open
+  until post-merge exact-main CodeQL is verified;
+- original issue/taxonomy baseline `54010d4`;
+- final PR base `FINAL_PR_BASE`;
 - reviewed head SHA;
 - exact 83/164 ledger and SHA-256;
 - passing/reassigned path counts;
 - explicit numeric-separator/later-syntax non-goal;
 - Node/Chromium/JSC, focused Test262, taxonomy, static, invariant, benchmark,
   and review evidence; and
-- statement that broad local Test262 was not run.
+- statement that broad local Test262 and every wrapper that transitively invokes
+  it were not run.
 
-- [ ] **Step 3: Verify exact-head CI and CodeQL**
+Use the app-native `create_pull_request` tool only when `PR` is empty. When an
+open PR already exists, use `update_pull_request` against that exact number so
+the operation is idempotent and guarded against concurrent edits.
 
-Run:
+Then require:
 
 ```bash
-gh pr checks --watch
-PR=$(gh pr view --json number --jq .number)
-HEAD=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
-test "$HEAD" = "$REVIEWED_HEAD"
-gh api \
-  -H 'Accept: application/vnd.github+json' \
-  "repos/yoonbuck/jsjs/commits/$HEAD/check-runs" \
-  --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv'
+PR=$(gh pr view --repo yoonbuck/jsjs --json number --jq .number)
+test "$(gh pr view "$PR" --repo yoonbuck/jsjs \
+  --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
 ```
 
-Expected: every required check, including CodeQL JavaScript/TypeScript and
-Actions analysis, concludes `success` on exactly `REVIEWED_HEAD`. If any check
-fails, add a RED regression where possible, fix, commit, push, update
-`REVIEWED_HEAD`, rerun Task 6, and repeat this step.
+Never merge or update lifecycle evidence for an existing PR whose head is stale.
+
+- [ ] **Step 3: Resolve and watch the exact standard CI run**
+
+Use the standard `ci.yml` pull-request run whose `headSha` is exactly the
+reviewed head. Wait at most five minutes for startup:
+
+```bash
+mkdir -p /tmp/jsjs-issue-77-lifecycle
+for ATTEMPT in $(seq 1 30); do
+  gh run list --repo yoonbuck/jsjs \
+    --commit "$REVIEWED_HEAD" \
+    --event pull_request \
+    --workflow ci.yml \
+    --limit 100 \
+    --json databaseId,headSha,event,name,status,conclusion,url \
+    > /tmp/jsjs-issue-77-lifecycle/ci-runs.json
+  CI_RUN=$(jq -r \
+    '[.[] | select(
+      .headSha == "'"$REVIEWED_HEAD"'"
+      and .event == "pull_request"
+      and .name == "CI"
+    )][0].databaseId // empty' \
+    /tmp/jsjs-issue-77-lifecycle/ci-runs.json)
+  if test -n "$CI_RUN"; then break; fi
+  sleep 10
+done
+test -n "$CI_RUN"
+```
+
+Start `gh run watch "$CI_RUN" --repo yoonbuck/jsjs --exit-status` with the bash
+tool in synchronous mode. If it outlives the initial wait, call `read_bash` on
+that same shell session with `delay: 600`; do not launch another watcher or poll
+a different run.
+
+After the watcher exits, verify exact identities and every expected job:
+
+```bash
+test "$(gh pr view "$PR" --repo yoonbuck/jsjs \
+  --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
+gh run view "$CI_RUN" --repo yoonbuck/jsjs \
+  --json headSha,event,name,status,conclusion,jobs \
+  > /tmp/jsjs-issue-77-lifecycle/ci-run.json
+test "$(jq -r .headSha /tmp/jsjs-issue-77-lifecycle/ci-run.json)" = \
+  "$REVIEWED_HEAD"
+test "$(jq -r .event /tmp/jsjs-issue-77-lifecycle/ci-run.json)" = pull_request
+test "$(jq -r .name /tmp/jsjs-issue-77-lifecycle/ci-run.json)" = CI
+test "$(jq -r .status /tmp/jsjs-issue-77-lifecycle/ci-run.json)" = completed
+test "$(jq -r .conclusion /tmp/jsjs-issue-77-lifecycle/ci-run.json)" = success
+jq -e 'all(.jobs[]; .status == "completed" and .conclusion == "success")' \
+  /tmp/jsjs-issue-77-lifecycle/ci-run.json
+gh pr checks "$PR" --repo yoonbuck/jsjs
+```
+
+CodeQL default setup does not supply PR-head authority; resolve its exact-main
+analyses separately after merge in Step 5. If standard CI fails or the PR head
+moves, add a RED regression where possible, fix, commit, reconcile live main,
+rerun Task 6, push a new reviewed head, and restart this exact-run protocol.
 
 - [ ] **Step 4: Squash merge and delete the branch**
 
@@ -1185,18 +1294,121 @@ git merge-base --is-ancestor "$MERGE_SHA" origin/main
 Expected: PR merged, remote feature branch deleted, and squash SHA is on
 `origin/main`.
 
-- [ ] **Step 5: Close #77 with exact evidence**
+- [ ] **Step 5: Verify exact-main CodeQL default setup**
 
-If the PR body did not auto-close it, run:
+CodeQL default setup analyzes `refs/heads/main` through `event: dynamic`.
+Before closing #77 or changing dependency state, resolve the exact CodeQL run
+with a bounded ten-minute startup wait:
+
+```bash
+for ATTEMPT in $(seq 1 60); do
+  gh run list --repo yoonbuck/jsjs \
+    --commit "$MERGE_SHA" \
+    --event dynamic \
+    --limit 100 \
+    --json databaseId,headSha,event,name,status,conclusion,url \
+    > /tmp/jsjs-issue-77-lifecycle/codeql-runs.json
+  CODEQL_RUN=$(jq -r \
+    '[.[] | select(
+      .headSha == "'"$MERGE_SHA"'"
+      and .event == "dynamic"
+      and (.name | test("CodeQL"; "i"))
+    )][0].databaseId // empty' \
+    /tmp/jsjs-issue-77-lifecycle/codeql-runs.json)
+  if test -n "$CODEQL_RUN"; then break; fi
+  sleep 10
+done
+test -n "$CODEQL_RUN"
+```
+
+Synchronously watch `CODEQL_RUN` with `gh run watch "$CODEQL_RUN" --repo
+yoonbuck/jsjs --exit-status`. If it outlives the bash tool's initial wait, call
+`read_bash` on that same shell session with `delay: 600`. Then require the run's
+`headSha`, event, status, and conclusion to equal `MERGE_SHA`, `dynamic`,
+`completed`, and `success`.
+
+After the run succeeds, wait up to ten minutes for both configured analysis
+categories at exactly `MERGE_SHA`:
+
+```bash
+for ATTEMPT in $(seq 1 60); do
+  gh api --paginate repos/yoonbuck/jsjs/code-scanning/analyses \
+    > /tmp/jsjs-issue-77-lifecycle/codeql-analyses.json
+  CODEQL_JS=$(jq -r \
+    '[.[] | select(
+      .commit_sha == "'"$MERGE_SHA"'"
+      and .ref == "refs/heads/main"
+      and .tool.name == "CodeQL"
+      and .category == "/language:javascript-typescript"
+    )][0].id // empty' \
+    /tmp/jsjs-issue-77-lifecycle/codeql-analyses.json)
+  CODEQL_ACTIONS=$(jq -r \
+    '[.[] | select(
+      .commit_sha == "'"$MERGE_SHA"'"
+      and .ref == "refs/heads/main"
+      and .tool.name == "CodeQL"
+      and .category == "/language:actions"
+    )][0].id // empty' \
+    /tmp/jsjs-issue-77-lifecycle/codeql-analyses.json)
+  if test -n "$CODEQL_JS" && test -n "$CODEQL_ACTIONS"; then break; fi
+  sleep 10
+done
+test -n "$CODEQL_JS"
+test -n "$CODEQL_ACTIONS"
+```
+
+Inspect both analyses, SARIF payloads, run logs, and alerts:
+
+```bash
+for ANALYSIS_ID in "$CODEQL_JS" "$CODEQL_ACTIONS"; do
+  gh api "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.json"
+  test "$(jq -r .commit_sha \
+    "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.json")" = "$MERGE_SHA"
+  test "$(jq -r .tool.name \
+    "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.json")" = CodeQL
+  test -z "$(jq -r '.error // empty' \
+    "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.json")"
+  test -z "$(jq -r '.warning // empty' \
+    "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.json")"
+  test "$(jq -r .results_count \
+    "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.json")" = 0
+  gh api -H 'Accept: application/sarif+json' \
+    "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.sarif"
+  jq -e '
+    [
+      .runs[].invocations[]?
+      | select(
+          .executionSuccessful != true
+          or ((.toolExecutionNotifications // []) | length > 0)
+        )
+    ] | length == 0
+  ' "/tmp/jsjs-issue-77-lifecycle/codeql-$ANALYSIS_ID.sarif"
+done
+gh api --paginate \
+  'repos/yoonbuck/jsjs/code-scanning/alerts?ref=refs/heads/main&state=open' \
+  > /tmp/jsjs-issue-77-lifecycle/codeql-open-alerts.json
+test "$(jq \
+  '[.[] | select(.most_recent_instance.commit_sha == "'"$MERGE_SHA"'")] | length' \
+  /tmp/jsjs-issue-77-lifecycle/codeql-open-alerts.json)" = 0
+```
+
+Inspect the exact CodeQL run log for extraction/parse diagnostics in repository
+source. Zero green job status alone is insufficient. Add a final PR comment
+recording original baseline, final PR base, reviewed head, standard CI run,
+CodeQL run and both analysis IDs, and squash SHA.
+
+- [ ] **Step 6: Close #77 with exact evidence**
+
+The PR intentionally did not auto-close #77. Close it only now:
 
 ```bash
 gh issue close 77 --repo yoonbuck/jsjs \
-  --comment "Completed by PR #$PR, squash merge $MERGE_SHA. The exact 83-root / 164-variant P0 selector is zero through focused passing evidence or reviewed downstream reassignment; whole-tree denominators remain unchanged. Exact-head CI and CodeQL passed on $REVIEWED_HEAD."
+  --comment "Completed by PR #$PR. Original issue baseline: $ORIGINAL_ISSUE_BASE. Final PR base: $FINAL_PR_BASE. Reviewed head: $REVIEWED_HEAD. Standard CI run: $CI_RUN. Squash merge: $MERGE_SHA. Exact-main CodeQL run/analyses: $CODEQL_RUN / $CODEQL_JS / $CODEQL_ACTIONS. The exact 83-root / 164-variant P0 selector is zero through focused passing evidence or reviewed downstream reassignment; whole-tree denominators remain unchanged."
 ```
 
-Otherwise add the same text as a final evidence comment.
-
-- [ ] **Step 6: Update #70 and publish dependency movement**
+- [ ] **Step 7: Update #70 and publish dependency movement**
 
 Read the merged taxonomy from `origin/main`, compute new core status/blocker
 counts, and update #70's P0 row and selected/audit/blocked totals without
@@ -1217,12 +1429,12 @@ blockers remain. Add one #70 comment summarizing the same dependency movement
 and exact counts. Do not claim an issue is unblocked without an empty live
 `blocked_by` result.
 
-- [ ] **Step 7: Send final evidence to the project coordinator**
+- [ ] **Step 8: Send final evidence to the project coordinator**
 
 Send:
 
 - PR URL/number;
-- reviewed head and squash SHA;
+- original issue baseline, final PR base, reviewed head, and squash SHA;
 - exact CI run and CodeQL analysis IDs;
 - final P0 passing/reassignment and taxonomy counts;
 - #77 closure comment URL;
