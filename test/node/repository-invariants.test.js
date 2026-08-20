@@ -10,6 +10,7 @@
  * that no runner registers.
  */
 
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { parse } from '../../vendor/acorn/acorn.mjs';
@@ -51,6 +52,11 @@ const DOCUMENTATION_DEFERRED_SCRIPTS = new Set([
   'test262:es2015:audit',
   'test262:es2015:audit:check',
 ]);
+const TRACKED_SUPERPOWERS_GIT_LS_FILES_FIXTURE = [
+  'README.md',
+  '.superpowers/sdd/example/report.md',
+  'test/node/repository-invariants.test.js',
+].join('\n');
 
 /** Matches `from '…'`, `import '…'`, and `import('…')` specifiers. */
 const SPECIFIER_PATTERN = /\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
@@ -245,6 +251,17 @@ async function readIgnoreFile() {
   } catch {
     return '';
   }
+}
+
+/**
+ * @param {string} output Raw `git ls-files` stdout.
+ * @returns {string[]}
+ */
+function trackedSuperpowersPathsFromGitLsFilesOutput(output) {
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('.superpowers/'));
 }
 
 /**
@@ -577,6 +594,42 @@ function markdownHeadingAnchors(source) {
 }
 
 export default [
+  {
+    name: 'trackedSuperpowersPathsFromGitLsFilesOutput finds tracked .superpowers paths in git output',
+    run: async () => {
+      assertSame(
+        JSON.stringify(
+          trackedSuperpowersPathsFromGitLsFilesOutput(
+            TRACKED_SUPERPOWERS_GIT_LS_FILES_FIXTURE,
+          ),
+        ),
+        JSON.stringify(['.superpowers/sdd/example/report.md']),
+        'the regression fixture must prove tracked .superpowers paths are rejected',
+      );
+    },
+  },
+  {
+    name: 'git tracks no paths under .superpowers',
+    run: async () => {
+      const result = spawnSync('git', ['ls-files', '--', '.superpowers'], {
+        cwd: REPOSITORY_ROOT,
+        encoding: 'utf8',
+      });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      assertSame(result.status, 0, result.stderr);
+      assertSame(
+        JSON.stringify(
+          trackedSuperpowersPathsFromGitLsFilesOutput(result.stdout),
+        ),
+        '[]',
+        'git must not report tracked paths under .superpowers/',
+      );
+    },
+  },
   {
     // The generated case data records the Unicode version it was built from.
     // If `package.json`'s pin moves without a regeneration (or the other way
