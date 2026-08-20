@@ -20,7 +20,13 @@
 - `$262.evalScript` accepts only primitive strings, performs no host `String` coercion, preserves persistent global declarations/completion values/thrown identity, and creates parse/type errors in its owning Realm.
 - Keep `detachArrayBuffer`, `gc`, `agent`, `AbstractModuleSource`, and later hooks absent. Keep existing `print`/`$DONE` behavior on its current runner path.
 - Do not widen `tools/test262/features.json` and do not infer promotion from a global feature tag.
-- Never run full or broad upstream Test262 locally. Broad pinned coverage runs only in exact-head CI.
+- Never run `npm run ci:contract`, `npm run test262:upstream`,
+  `npm run test262:upstream:check`, or any wrapper that invokes broad upstream
+  Test262 locally. The exact 135-path H0 corpus is the only local Test262
+  execution; broad pinned coverage runs only in exact-head CI.
+- Record the original issue baseline
+  `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` separately from the final PR
+  merge base after moving-main reconciliation.
 - Every task uses strict RED/GREEN TDD and ends with fresh specification-compliance and code-quality review/fix loops before commit.
 - Do not use Claude Opus 5 for any review or implementation agent.
 
@@ -480,16 +486,16 @@ Create `evalScript` with primitive-string validation. Catch only host
 errors. Convert a `{ type: 'throw', value }` completion to
 `new ThrowSignal(value)` and return normal completion values unchanged.
 
-- [ ] **Step 6: Run portable GREEN on all three hosts**
+- [ ] **Step 6: Run targeted portable GREEN**
 
 ```bash
 node test/run-node.js test/test262-host-bindings.test.js test/test262-runner.test.js test/module-test262.test.js
 npm run test:browser -- test/test262-host-bindings.test.js test/test262-runner.test.js test/module-test262.test.js
-PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" \
-  npm run test:jsc
 ```
 
-Expected: PASS with identical semantics.
+Expected: PASS. JSC has no focused-suite argument path, so defer its one full
+local execution to Task 6 instead of redundantly running the entire portable
+registry here.
 
 - [ ] **Step 7: Run the exact H0 corpus GREEN**
 
@@ -544,6 +550,10 @@ git commit -m "Implement harness-only Test262 cross-Realm bindings" \
 - Produces:
   `buildEs2015Promotion({ sourceTaxonomyText, ledgerText, pin, inventory })`
   for deterministic manifest generation.
+- Produces:
+  `assertExactPromotionDelta({ before, after, promotion, blocker })`, which
+  derives expected totals from `before`, requires exact promotion-path movement,
+  and rejects every unrelated classification change.
 
 - [ ] **Step 1: Write multiple-promotion RED tests**
 
@@ -558,6 +568,15 @@ Add fixture manifests proving:
 - authorization returns dependencies only for the exact manifest entry; and
 - generated taxonomy records a SHA-256 keyed by each promotion file rather
   than replacing T0 provenance.
+- missing, incomplete, failed, or skipped H0 execution evidence cannot remove
+  an H0 blocker or write selected-passing evidence;
+- only paths named by the immutable H0 manifest can lose
+  `test262-cross-realm-host`; and
+- successful complete evidence moves exactly all 135 manifest paths while
+  leaving unrelated classifications byte-equivalent.
+- whole-tree/core denominators remain balanced while selected/blocked totals
+  change by the promotion's derived root/variant counts rather than hard-coded
+  global totals.
 
 - [ ] **Step 2: Run RED**
 
@@ -622,7 +641,10 @@ duplicating their rules. Extend the audit CLI with
 `--write-promotion=tools/test262/es2015-h0-promotion.json`; require it together
 with `--paths-manifest=tools/test262/es2015-h0-paths.json`, write no execution
 evidence in this mode, and reject a destination not named by
-`ES2015_PROMOTION_SOURCES`.
+`ES2015_PROMOTION_SOURCES`. Add
+`--baseline-taxonomy=PATH` for final H0 generation and
+check mode; compare that reconciled pre-H0 artifact with generated output
+through `assertExactPromotionDelta` before writing.
 
 - [ ] **Step 4: Generate the exact H0 manifest from pre-H0 evidence**
 
@@ -638,17 +660,19 @@ TZ=UTC node tools/test262/es2015-audit.js \
 
 The output must contain:
 
-```json
-{
-  "version": 1,
-  "repository": "https://github.com/tc39/test262.git",
-  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
-  "sourceTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
-  "ledgerSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
-  "rootCount": 135,
-  "variantCount": 267,
-  "entries": []
-}
+```js
+const manifest = {
+  version: 1,
+  repository: 'https://github.com/tc39/test262.git',
+  revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
+  sourceTaxonomySha256:
+    'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+  ledgerSha256:
+    '3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950',
+  rootCount: 135,
+  variantCount: 267,
+  entries,
+};
 ```
 
 Validate live pinned metadata/include closure and independently recompute the
@@ -659,8 +683,11 @@ source-taxonomy digest before accepting the manifest.
 Update `upstream-select.js` to load both manifests and emit both exact groups.
 Update `upstream-run.js` to validate/authorize all promotion sources. Update
 `es2015-audit.js` so focused execution identifies the target promotion file,
-keeps T0 evidence, removes H0 blocker entries only after all 267 variants pass,
-and records per-file promotion hashes in the taxonomy artifact.
+keeps T0 evidence, and generates the H0 evidence/blocker reclassification
+atomically only after all 267 exact variants pass. The generator, not a manual
+JSON edit, removes only manifest-named H0 blocker entries and records per-file
+promotion hashes in the taxonomy artifact. Missing, failed, skipped, duplicate,
+or foreign evidence must leave the prior evidence file unchanged.
 
 Use an explicit option:
 
@@ -717,81 +744,120 @@ git commit -m "Add exact H0 Test262 promotion provenance" \
 - Produces: selected/passing H0 roots with zero core
   `test262-cross-realm-host` blockers and balanced taxonomy totals.
 
-- [ ] **Step 1: Materialize the exact ledger outside the repository**
+- [ ] **Step 1: Reconcile moving `origin/main` before final evidence**
+
+Record the issue baseline and the final PR base separately, preserve the current
+main taxonomy before rebasing, and review all parallel movement:
 
 ```bash
-test "$(jq '.paths | length' tools/test262/es2015-h0-paths.json)" = 135
-jq -r '.paths[]' tools/test262/es2015-h0-paths.json | shasum -a 256
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+ORIGINAL_ISSUE_BASE=54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7
+git fetch origin main
+FINAL_PR_BASE=$(git rev-parse origin/main)
+printf '%s\n' "$ORIGINAL_ISSUE_BASE" > "$ARTIFACTS/h0-original-issue-base.txt"
+printf '%s\n' "$FINAL_PR_BASE" > "$ARTIFACTS/h0-final-pr-base.txt"
+git show "$ORIGINAL_ISSUE_BASE:tools/test262/es2015-taxonomy.json" \
+  > "$ARTIFACTS/h0-original-baseline-taxonomy.json"
+git show "$FINAL_PR_BASE:tools/test262/es2015-taxonomy.json" \
+  > "$ARTIFACTS/h0-final-base-taxonomy.json"
+git rebase origin/main
+test "$(git merge-base HEAD origin/main)" = "$FINAL_PR_BASE"
 ```
 
-Expected: `135` and
-`3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950`.
+Compare original-baseline and final-base classifications by path. Every
+non-H0 movement must correspond to a reviewed parallel-main merge such as
+#75/#77/#79; unexplained movement is a hard stop. Require the immutable H0
+artifact still has exactly 135 roots / 267 variants and the same ledger hash,
+and derive the final-base core `test262-cross-realm-host` selector. Require that
+selector's code-unit-sorted path set and 267-variant sum equal the immutable H0
+artifact exactly: no removed H0 path and no concurrent extra path with the same
+blocker. If the sets differ, stop for explicit roadmap review rather than
+silently shrinking or expanding H0. This dynamic equality proof is what makes
+the later global H0-zero assertion valid.
 
-- [ ] **Step 2: Regenerate exact selection and focused execution evidence**
+- [ ] **Step 2: Regenerate H0 provenance from the reconciled final base**
+
+Regenerate `es2015-h0-promotion.json` so its source taxonomy hash names
+`h0-final-base-taxonomy.json`, then regenerate exact selection and execute only
+the immutable 135-path corpus:
 
 ```bash
+TZ=UTC node tools/test262/es2015-audit.js \
+  --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json" \
+  --paths-manifest=tools/test262/es2015-h0-paths.json \
+  --write-promotion=tools/test262/es2015-h0-promotion.json
 TZ=UTC npm run test262:select
 TZ=UTC node tools/test262/es2015-audit.js \
+  --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json" \
   --promotion-file=tools/test262/es2015-h0-promotion.json \
   --paths-manifest=tools/test262/es2015-h0-paths.json \
   --write-execution
 ```
 
-Expected: all 267 exact variants pass; the command aborts without writing
-success-shaped evidence if one fails/skips.
+Expected: all 267 variants pass. The reviewed generator atomically writes
+passing evidence and removes only the exact 135 manifest-named blockers.
+Missing, failed, skipped, duplicate, or foreign evidence writes neither a
+success record nor blocker removal.
 
-- [ ] **Step 3: Remove only resolved H0 blockers and regenerate taxonomy/report**
-
-Delete the exact 135 H0 keys from `blockers` only after Step 2 succeeds, then:
+- [ ] **Step 3: Generate and verify the exact reclassification delta**
 
 ```bash
 TZ=UTC npm run test262:es2015:sync-promoted-report
-TZ=UTC npm run test262:es2015:audit
-TZ=UTC npm run test262:es2015:audit:check
+TZ=UTC node tools/test262/es2015-audit.js \
+  --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json"
+TZ=UTC node tools/test262/es2015-audit.js \
+  --check \
+  --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json"
 TZ=UTC npm run test262:select:check
 ```
 
-Assert with `jq`:
+`assertExactPromotionDelta` must prove:
 
-```bash
-jq '[.classifications[] | select(.partition == "core" and .blocker == "test262-cross-realm-host")] | {roots:length, variants:(map(.variants) | add // 0)}' tools/test262/es2015-taxonomy.json
-```
+- the post-H0 selector is zero roots / zero variants;
+- exactly the immutable 135 paths / 267 variants moved from the H0 blocker to
+  selected-and-passing;
+- expected selected/blocked totals equal the reconciled final-base totals plus
+  or minus the exact 135/267 delta, without hard-coded global totals;
+- whole-tree, core, Annex B, unknown, and harness denominators balance; and
+- every non-H0 classification is byte-equivalent to the reconciled final base.
 
-Expected: `{"roots":0,"variants":0}`. Also assert selected-and-passing core is
-exactly 19,738 roots / 37,572 variants, blocked core is exactly 4,510 roots /
-8,848 variants, total core remains 24,250 / 46,424, and no other blocker count
-changes except paths genuinely reclassified by this exact promotion.
+Any additional movement is a hard stop unless a new `origin/main` fetch proves
+it is a reviewed rebase consequence, in which case repeat Steps 1-3.
 
-- [ ] **Step 4: Update direct documentation**
+- [ ] **Step 4: Update direct documentation from generated totals**
 
-Document the focused command, harness-only boundary, exact H0 ledger/hash, and
-new selected/taxonomy totals. State that `$262` remains absent from public
-runtime APIs and normal Realm globals, and that B0 owns detachment.
+Document the original issue baseline, final PR base, focused command,
+harness-only boundary, exact H0 ledger/hash, and generator-derived final totals.
+State that `$262` remains absent from public runtime APIs and normal Realm
+globals, and that B0 owns detachment.
 
-- [ ] **Step 5: Run drift and focused gates**
+- [ ] **Step 5: Run focused drift gates only**
 
 ```bash
 TZ=UTC npm run test262:cross-realm
-TZ=UTC npm run test262:es2015:audit:check
+TZ=UTC node tools/test262/es2015-audit.js \
+  --check \
+  --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json"
 TZ=UTC npm run test262:select:check
-npm run test262:fixtures
 npm run ci:check
 ```
 
-Expected: PASS. Do not run `npm run test262:upstream` or
-`npm run test262:upstream:check` locally.
+Expected: PASS. Do not invoke `ci:contract`, `test262:upstream`,
+`test262:upstream:check`, `test/run-ci-contract.js`, or any wrapper that runs
+broad upstream Test262.
 
 - [ ] **Step 6: Run fresh evidence reviews**
 
 Use fresh maximum-effort non-Claude-Opus-5 reviewers for specification and
-quality. Require exact arithmetic, ledger/source hashes, T0 preservation,
-selected evidence completeness, generated report consistency, and zero
-unintended blocker movement. Fix and rerun Steps 3-5.
+quality. Require original/final base separation, exact arithmetic,
+ledger/source hashes, T0 preservation, generated blocker removal, selected
+evidence completeness, generated report consistency, and zero unintended path
+movement. Fix and rerun Steps 1-5 if main moved; otherwise rerun Steps 2-5.
 
-- [ ] **Step 7: Commit deterministic evidence**
+- [ ] **Step 7: Commit reconciled deterministic evidence**
 
 ```bash
-git add tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
+git add tools/test262/es2015-h0-promotion.json tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
 git commit -m "Promote exact cross-Realm Test262 roots" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
@@ -808,7 +874,7 @@ git commit -m "Promote exact cross-Realm Test262 roots" \
 
 - Produces: a review-ready exact head with no known local regression.
 
-- [ ] **Step 1: Run targeted portable suites on Node, Chromium, and JSC**
+- [ ] **Step 1: Run targeted portable suites**
 
 ```bash
 node test/run-node.js \
@@ -821,8 +887,6 @@ npm run test:browser -- \
   test/test262-runner.test.js \
   test/test262-async.test.js \
   test/module-test262.test.js
-PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" \
-  npm run test:jsc
 ```
 
 - [ ] **Step 2: Run repository static and invariant gates**
@@ -833,12 +897,19 @@ npm run lint
 npm run format
 npm run vendor:check
 npm run ci:check
-npm run ci:contract
+node test/run-node.js \
+  test/node/workflow-contract.test.js \
+  test/node/repository-invariants.test.js
 TZ=UTC npm run test262:es2015:audit:check
 TZ=UTC npm run test262:select:check
 ```
 
-- [ ] **Step 3: Run portable regression and benchmark smoke**
+The direct Node suites inspect workflow structure and repository boundaries
+without invoking command wrappers. Do not run `ci:contract`,
+`test/run-ci-contract.js`, `test262:upstream`, `test262:upstream:check`, or a
+wrapper that reaches them.
+
+- [ ] **Step 3: Run the one final full portable gate and benchmark smoke**
 
 ```bash
 npm run test:node
@@ -848,16 +919,32 @@ npm run benchmark:smoke
 TZ=UTC npm run test262:cross-realm
 ```
 
-Do not run broad upstream Test262.
+These are the only full local Node/Chromium/JSC runs. The exact H0 command is the
+only local Test262 execution; broad upstream Test262 remains exact-head CI only.
 
-- [ ] **Step 4: Request final maximum review**
+- [ ] **Step 4: Recheck moving main and review the exact merge-base range**
+
+```bash
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+FINAL_PR_BASE=$(cat "$ARTIFACTS/h0-final-pr-base.txt")
+git fetch origin main
+test "$(git rev-parse origin/main)" = "$FINAL_PR_BASE"
+git --no-pager diff --stat "$FINAL_PR_BASE"...HEAD
+git --no-pager diff --name-status "$FINAL_PR_BASE"...HEAD
+```
+
+If `origin/main` moved, return to Task 5 Step 1, rebase, regenerate all evidence,
+and rerun affected targeted/static/final portable gates. Do not review or push a
+stale merge-base range.
+
+- [ ] **Step 5: Request final maximum review**
 
 Run a fresh maximum-effort code review with a non-Claude-Opus-5 model over the
-entire branch diff against `origin/main`. Then run a separate security review
+entire branch diff across `"$FINAL_PR_BASE"...HEAD`. Then run a separate security review
 only if the reviewer or diff identifies an exploitable host-boundary concern.
 Fix all valid high-confidence findings and repeat Steps 1-3.
 
-- [ ] **Step 5: Commit gate fixes if needed**
+- [ ] **Step 6: Commit gate fixes if needed**
 
 ```bash
 git add -u
@@ -870,7 +957,7 @@ Skip this commit when no files changed.
 
 ---
 
-### Task 7: Push, Review Exact-Head CI/CodeQL, Merge, and Publish Closure
+### Task 7: Push, Verify Reviewed-Head CI/CodeQL, Merge, and Publish Closure
 
 **Files:**
 
@@ -879,90 +966,361 @@ Skip this commit when no files changed.
 
 **Interfaces:**
 
-- Produces: one focused PR, squash merge, deleted branch, closed #76, updated
-  roadmap/downstream dependency counts, and exact evidence links.
+- Produces: one recoverable focused PR, exact reviewed-head CI/CodeQL evidence,
+  squash merge, deleted branch, mandatory exact-main CodeQL evidence, closed
+  #76, updated roadmap/downstream dependency counts, and exact evidence links.
 
 - [ ] **Step 1: Verify final branch identity and push**
 
 ```bash
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+ORIGINAL_ISSUE_BASE=$(cat "$ARTIFACTS/h0-original-issue-base.txt")
+FINAL_PR_BASE=$(cat "$ARTIFACTS/h0-final-pr-base.txt")
+git fetch origin main
+test "$(git rev-parse origin/main)" = "$FINAL_PR_BASE"
 git status --short
-git rev-parse HEAD
-git --no-pager log --oneline origin/main..HEAD
+REVIEWED_HEAD=$(git rev-parse HEAD)
+printf '%s\n' "$REVIEWED_HEAD" > "$ARTIFACTS/h0-reviewed-head.txt"
+git --no-pager log --oneline "$FINAL_PR_BASE"..HEAD
+git --no-pager diff --stat "$FINAL_PR_BASE"...HEAD
 git push -u origin HEAD
 ```
 
-Expected: clean worktree and only #76 commits.
+Expected: clean worktree, only #76 commits, and a final merge-base range that
+matches the range reviewed in Task 6. If main moved, return to Task 5.
 
-- [ ] **Step 2: Open one focused PR**
+- [ ] **Step 2: Recover or create exactly one focused PR**
 
-Create a PR titled `Implement portable harness-only Test262 cross-Realm support`.
-Include:
+Use marker `<!-- issue-76-h0 -->`. Query open PRs for the exact pushed head
+branch:
 
-- `Fixes #76`;
-- exact base/head SHAs;
+```bash
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
+HEAD_BRANCH=$(git branch --show-current)
+gh pr list --repo yoonbuck/jsjs --state open --head "$HEAD_BRANCH" \
+  --json number,title,body,baseRefName,headRefName,headRefOid,url \
+  > "$ARTIFACTS/h0-open-prs.json"
+test "$(jq length "$ARTIFACTS/h0-open-prs.json")" -le 1
+```
+
+If none exists, create one PR through the app-native pull-request tool. If one
+exists, require the marker, title
+`Implement portable harness-only Test262 cross-Realm support`, base `main`,
+exact head branch, and `headRefOid === REVIEWED_HEAD`; use the app-native PR
+update tool rather than creating a second PR. More than one match is a hard
+stop. Never overwrite an unrelated existing PR. After create/update, rerun the
+query above and require exactly one validated PR so the following steps recover
+idempotently after interruption.
+
+The PR body uses `Tracks #76`, not `Fixes #76`, and distinguishes:
+
+- original issue baseline `ORIGINAL_ISSUE_BASE`;
+- reconciled final merge base `FINAL_PR_BASE`;
+- reviewed PR head `REVIEWED_HEAD`;
 - H0 ledger hash and 135/267 result;
 - host-interface/non-goal summary;
-- Node/Chromium/JSC/focused UTC/taxonomy/static/benchmark evidence; and
+- Node/Chromium/JSC/focused UTC/taxonomy/static/benchmark evidence;
+- pending/final exact CI run ID, PR-head CodeQL analysis IDs/categories, and
+  squash SHA; and
 - explicit statement that broad Test262 was not run locally and is delegated to
   exact-head CI.
 
-- [ ] **Step 3: Read exact-head CI synchronously**
+- [ ] **Step 3: Resolve exact `ci.yml` pull-request CI by reviewed head**
 
-Record the PR head SHA, then inspect required runs with 10-minute synchronous
-reads:
+Resolve `PR_NUMBER` from the validated marker/head. Wait at most ten minutes
+for exactly one standard `CI` run with workflow `ci.yml`, event
+`pull_request`, and `headSha === REVIEWED_HEAD`:
 
 ```bash
-PR_NUMBER=$(gh pr view --repo yoonbuck/jsjs --json number --jq .number)
-EXACT_HEAD_SHA=$(git rev-parse HEAD)
-gh pr checks "$PR_NUMBER" --repo yoonbuck/jsjs --watch --interval 10
-gh run list --repo yoonbuck/jsjs --commit "$EXACT_HEAD_SHA" --limit 20
-CI_RUN_ID=$(gh run list --repo yoonbuck/jsjs --commit "$EXACT_HEAD_SHA" --json databaseId,workflowName --jq '.[] | select(.workflowName == "CI") | .databaseId' | head -n 1)
-gh run watch "$CI_RUN_ID" --repo yoonbuck/jsjs --interval 10 --exit-status
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
+PR_NUMBER=$(jq -r '.[0].number' "$ARTIFACTS/h0-open-prs.json")
+for ATTEMPT in $(seq 1 60); do
+  gh run list --repo yoonbuck/jsjs \
+    --commit "$REVIEWED_HEAD" \
+    --event pull_request \
+    --workflow ci.yml \
+    --limit 100 \
+    --json databaseId,headSha,event,name,status,conclusion,url,createdAt \
+    > "$ARTIFACTS/h0-reviewed-head-ci-runs.json"
+  CI_CANDIDATES=$(jq \
+    '[.[] | select(.headSha == "'"$REVIEWED_HEAD"'" and .event == "pull_request" and .name == "CI")] | unique_by(.databaseId) | length' \
+    "$ARTIFACTS/h0-reviewed-head-ci-runs.json")
+  test "$CI_CANDIDATES" -le 1
+  H0_CI_RUN=$(jq -r \
+    '[.[] | select(.headSha == "'"$REVIEWED_HEAD"'" and .event == "pull_request" and .name == "CI")] | unique_by(.databaseId) | .[0].databaseId // empty' \
+    "$ARTIFACTS/h0-reviewed-head-ci-runs.json")
+  if test -n "$H0_CI_RUN"; then break; fi
+  sleep 10
+done
+test -n "$H0_CI_RUN"
+```
+
+Start exactly one synchronous
+`gh run watch "$H0_CI_RUN" --repo yoonbuck/jsjs --exit-status` process with a
+600-second initial wait. If it remains active, read that same shell session
+with 600-second `read_bash` calls; never start a second watcher.
+
+After completion:
+
+```bash
+test "$(gh pr view "$PR_NUMBER" --repo yoonbuck/jsjs \
+  --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
+gh run view "$H0_CI_RUN" --repo yoonbuck/jsjs \
+  --json headSha,event,name,status,conclusion,jobs \
+  > "$ARTIFACTS/h0-reviewed-head-ci-final.json"
+test "$(jq -r .headSha "$ARTIFACTS/h0-reviewed-head-ci-final.json")" = \
+  "$REVIEWED_HEAD"
+test "$(jq -r .event "$ARTIFACTS/h0-reviewed-head-ci-final.json")" = \
+  "pull_request"
+test "$(jq -r .name "$ARTIFACTS/h0-reviewed-head-ci-final.json")" = "CI"
+test "$(jq -r .conclusion "$ARTIFACTS/h0-reviewed-head-ci-final.json")" = \
+  "success"
+test "$(jq '[.jobs[] | select(.conclusion != "success" and .conclusion != "skipped")] | length' \
+  "$ARTIFACTS/h0-reviewed-head-ci-final.json")" = "0"
+gh pr checks "$PR_NUMBER" --repo yoonbuck/jsjs
 ```
 
 Confirm CI includes Node, Chromium, JSC, focused H0, broad pinned Test262,
 taxonomy drift, invariants, and benchmark smoke. If a branch-caused failure
 appears, use systematic debugging, add RED coverage, fix, rerun local targeted
-gates, push, and restart exact-head evidence collection.
+gates, push, assign the new head as `REVIEWED_HEAD`, and restart exact-head
+evidence collection.
 
-- [ ] **Step 4: Run/read exact-head CodeQL**
+- [ ] **Step 4: Require exact PR/head/category CodeQL analyses**
 
-Inspect GitHub's configured default CodeQL setup first. The preceding T0 merge
-produced both exact-head and exact-main CodeQL runs through repository setup, so
-do not add a duplicate workflow:
+Wait at most ten minutes for both configured CodeQL categories whose
+`commit_sha` is exactly `REVIEWED_HEAD` and whose `ref` is this PR:
 
 ```bash
-gh api repos/yoonbuck/jsjs/code-scanning/default-setup
-gh workflow list --repo yoonbuck/jsjs
-gh run list --repo yoonbuck/jsjs --commit "$EXACT_HEAD_SHA" --limit 20
-CODEQL_RUN_ID=$(gh run list --repo yoonbuck/jsjs --commit "$EXACT_HEAD_SHA" --json databaseId,workflowName --jq '.[] | select(.workflowName == "CodeQL") | .databaseId' | head -n 1)
-test -n "$CODEQL_RUN_ID"
-gh run watch "$CODEQL_RUN_ID" --repo yoonbuck/jsjs --interval 10 --exit-status
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
+PR_NUMBER=$(jq -r '.[0].number' "$ARTIFACTS/h0-open-prs.json")
+PR_REF="refs/pull/$PR_NUMBER/head"
+for ATTEMPT in $(seq 1 60); do
+  gh api --paginate repos/yoonbuck/jsjs/code-scanning/analyses \
+    > "$ARTIFACTS/h0-pr-codeql-analyses.json"
+  H0_PR_CODEQL_JS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$REVIEWED_HEAD"'" and .ref == "'"$PR_REF"'" and .tool.name == "CodeQL" and .category == "/language:javascript-typescript")] | max_by(.created_at).id // empty' \
+    "$ARTIFACTS/h0-pr-codeql-analyses.json")
+  H0_PR_CODEQL_ACTIONS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$REVIEWED_HEAD"'" and .ref == "'"$PR_REF"'" and .tool.name == "CodeQL" and .category == "/language:actions")] | max_by(.created_at).id // empty' \
+    "$ARTIFACTS/h0-pr-codeql-analyses.json")
+  if test -n "$H0_PR_CODEQL_JS" && \
+     test -n "$H0_PR_CODEQL_ACTIONS"; then break; fi
+  sleep 10
+done
+test -n "$H0_PR_CODEQL_JS"
+test -n "$H0_PR_CODEQL_ACTIONS"
+for ANALYSIS_ID in "$H0_PR_CODEQL_JS" "$H0_PR_CODEQL_ACTIONS"; do
+  gh api "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.json"
+  test "$(jq -r .commit_sha \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.json")" = "$REVIEWED_HEAD"
+  test "$(jq -r .ref \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.json")" = "$PR_REF"
+  test "$(jq -r .tool.name \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.json")" = "CodeQL"
+  test "$(jq -r .results_count \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.json")" = "0"
+  test -z "$(jq -r '.error // empty' \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.json")"
+  test -z "$(jq -r '.warning // empty' \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.json")"
+  gh api -H 'Accept: application/sarif+json' \
+    "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.sarif"
+  test "$(jq '[.runs[].results[]?] | length' \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.sarif")" = "0"
+  test "$(jq '[.runs[].invocations[]?.toolExecutionNotifications[]? | select(.level == "error" or .level == "warning")] | length' \
+    "$ARTIFACTS/h0-pr-codeql-$ANALYSIS_ID.sarif")" = "0"
+done
+gh run list --repo yoonbuck/jsjs \
+  --commit "$REVIEWED_HEAD" \
+  --event dynamic \
+  --limit 100 \
+  --json databaseId,headSha,event,name,status,conclusion \
+  > "$ARTIFACTS/h0-pr-codeql-runs.json"
+test "$(jq '[.[] | select(.headSha == "'"$REVIEWED_HEAD"'" and .event == "dynamic" and .name == "PR #'"$PR_NUMBER"'")] | unique_by(.databaseId) | length' \
+  "$ARTIFACTS/h0-pr-codeql-runs.json")" = "1"
+H0_PR_CODEQL_RUN=$(jq -r \
+  '[.[] | select(.headSha == "'"$REVIEWED_HEAD"'" and .event == "dynamic" and .name == "PR #'"$PR_NUMBER"'")] | unique_by(.databaseId) | .[0].databaseId' \
+  "$ARTIFACTS/h0-pr-codeql-runs.json")
+test "$(jq -r \
+  '.[] | select(.databaseId == '"$H0_PR_CODEQL_RUN"') | .conclusion' \
+  "$ARTIFACTS/h0-pr-codeql-runs.json")" = "success"
+gh run view "$H0_PR_CODEQL_RUN" --repo yoonbuck/jsjs --log \
+  > "$ARTIFACTS/h0-pr-codeql-run.log"
+printf '%s\n' "$H0_PR_CODEQL_JS" > "$ARTIFACTS/h0-pr-codeql-js-id.txt"
+printf '%s\n' "$H0_PR_CODEQL_ACTIONS" \
+  > "$ARTIFACTS/h0-pr-codeql-actions-id.txt"
+printf '%s\n' "$H0_PR_CODEQL_RUN" > "$ARTIFACTS/h0-pr-codeql-run-id.txt"
+test "$(jq -r .category \
+  "$ARTIFACTS/h0-pr-codeql-$H0_PR_CODEQL_JS.json")" = \
+  "/language:javascript-typescript"
+test "$(jq -r .category \
+  "$ARTIFACTS/h0-pr-codeql-$H0_PR_CODEQL_ACTIONS.json")" = \
+  "/language:actions"
 ```
 
-Do not merge until the successful CodeQL run's head SHA equals the PR head SHA.
-If default setup is disabled or produces no PR-head run, stop and repair the
-repository's configured CodeQL setup rather than weakening this gate.
+Inspect the saved log and SARIF for zero extraction or parse diagnostics in
+repository source. Fail closed on any diagnostic, absent category, absent exact
+run, or identity mismatch.
 
-- [ ] **Step 5: Resolve review threads and squash merge**
+- [ ] **Step 5: Update the PR evidence, recheck main, and squash merge**
 
 Address every valid review thread in code, rerun affected gates, push, and
-refresh exact-head CI/CodeQL. When clean:
+refresh exact-head CI/CodeQL. Update the existing PR body with `H0_CI_RUN`, both
+PR CodeQL analysis IDs/categories, and the unchanged reviewed head through the
+app-native PR update tool.
+
+Immediately before merge:
 
 ```bash
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
+FINAL_PR_BASE=$(cat "$ARTIFACTS/h0-final-pr-base.txt")
+PR_NUMBER=$(jq -r '.[0].number' "$ARTIFACTS/h0-open-prs.json")
+test "$(gh pr view "$PR_NUMBER" --repo yoonbuck/jsjs \
+  --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
+git fetch origin main
+test "$(git rev-parse origin/main)" = "$FINAL_PR_BASE"
 gh pr merge "$PR_NUMBER" --repo yoonbuck/jsjs --squash --delete-branch
 ```
 
-- [ ] **Step 6: Verify exact-main evidence**
+If main moved, do not merge; return to Task 5 reconciliation and repeat final
+review, CI, and PR CodeQL.
+
+- [ ] **Step 6: Verify the squash and mandatory exact-main CodeQL**
 
 ```bash
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
+PR_NUMBER=$(jq -r '.[0].number' "$ARTIFACTS/h0-open-prs.json")
 git fetch origin main
-git rev-parse origin/main
-gh run list --repo yoonbuck/jsjs --branch main --limit 20
+PR_JSON=$(gh pr view "$PR_NUMBER" --repo yoonbuck/jsjs \
+  --json state,mergedAt,mergeCommit,headRefOid,url)
+test "$(printf '%s' "$PR_JSON" | jq -r .state)" = "MERGED"
+test "$(printf '%s' "$PR_JSON" | jq -r .headRefOid)" = "$REVIEWED_HEAD"
+SQUASH_SHA=$(printf '%s' "$PR_JSON" | jq -r .mergeCommit.oid)
+test -n "$SQUASH_SHA"
+printf '%s\n' "$SQUASH_SHA" > "$ARTIFACTS/h0-squash-sha.txt"
+git merge-base --is-ancestor "$SQUASH_SHA" origin/main
 ```
 
-Confirm the squash commit is on main. Read post-merge CodeQL for that exact main
-SHA if repository policy/setup emits it.
+Wait at most ten minutes for both default-setup analyses with
+`commit_sha == SQUASH_SHA`, `ref == refs/heads/main`, `tool.name == CodeQL`,
+and categories `/language:javascript-typescript` and `/language:actions`.
+Require both; absence is a hard failure.
+
+```bash
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+SQUASH_SHA=$(cat "$ARTIFACTS/h0-squash-sha.txt")
+for ATTEMPT in $(seq 1 60); do
+  gh api --paginate repos/yoonbuck/jsjs/code-scanning/analyses \
+    > "$ARTIFACTS/h0-main-codeql-analyses.json"
+  H0_MAIN_CODEQL_JS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$SQUASH_SHA"'" and .ref == "refs/heads/main" and .tool.name == "CodeQL" and .category == "/language:javascript-typescript")] | max_by(.created_at).id // empty' \
+    "$ARTIFACTS/h0-main-codeql-analyses.json")
+  H0_MAIN_CODEQL_ACTIONS=$(jq -r \
+    '[.[] | select(.commit_sha == "'"$SQUASH_SHA"'" and .ref == "refs/heads/main" and .tool.name == "CodeQL" and .category == "/language:actions")] | max_by(.created_at).id // empty' \
+    "$ARTIFACTS/h0-main-codeql-analyses.json")
+  if test -n "$H0_MAIN_CODEQL_JS" && \
+     test -n "$H0_MAIN_CODEQL_ACTIONS"; then break; fi
+  sleep 10
+done
+test -n "$H0_MAIN_CODEQL_JS"
+test -n "$H0_MAIN_CODEQL_ACTIONS"
+for ANALYSIS_ID in "$H0_MAIN_CODEQL_JS" "$H0_MAIN_CODEQL_ACTIONS"; do
+  gh api "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.json"
+  test "$(jq -r .commit_sha \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.json")" = "$SQUASH_SHA"
+  test "$(jq -r .ref \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.json")" = "refs/heads/main"
+  test "$(jq -r .tool.name \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.json")" = "CodeQL"
+  test "$(jq -r .results_count \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.json")" = "0"
+  test -z "$(jq -r '.error // empty' \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.json")"
+  test -z "$(jq -r '.warning // empty' \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.json")"
+  gh api -H 'Accept: application/sarif+json' \
+    "repos/yoonbuck/jsjs/code-scanning/analyses/$ANALYSIS_ID" \
+    > "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.sarif"
+  test "$(jq '[.runs[].results[]?] | length' \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.sarif")" = "0"
+  test "$(jq '[.runs[].invocations[]?.toolExecutionNotifications[]? | select(.level == "error" or .level == "warning")] | length' \
+    "$ARTIFACTS/h0-main-codeql-$ANALYSIS_ID.sarif")" = "0"
+done
+gh run list --repo yoonbuck/jsjs \
+  --commit "$SQUASH_SHA" \
+  --event dynamic \
+  --limit 100 \
+  --json databaseId,headSha,event,name,status,conclusion \
+  > "$ARTIFACTS/h0-main-codeql-runs.json"
+test "$(jq '[.[] | select(.headSha == "'"$SQUASH_SHA"'" and .event == "dynamic" and .name == "Push on main")] | unique_by(.databaseId) | length' \
+  "$ARTIFACTS/h0-main-codeql-runs.json")" = "1"
+H0_MAIN_CODEQL_RUN=$(jq -r \
+  '[.[] | select(.headSha == "'"$SQUASH_SHA"'" and .event == "dynamic" and .name == "Push on main")] | unique_by(.databaseId) | .[0].databaseId' \
+  "$ARTIFACTS/h0-main-codeql-runs.json")
+test "$(jq -r \
+  '.[] | select(.databaseId == '"$H0_MAIN_CODEQL_RUN"') | .conclusion' \
+  "$ARTIFACTS/h0-main-codeql-runs.json")" = "success"
+gh run view "$H0_MAIN_CODEQL_RUN" --repo yoonbuck/jsjs --log \
+  > "$ARTIFACTS/h0-main-codeql-run.log"
+gh api --paginate \
+  'repos/yoonbuck/jsjs/code-scanning/alerts?ref=refs/heads/main&state=open' \
+  > "$ARTIFACTS/h0-main-codeql-open-alerts.json"
+test "$(jq \
+  '[.[] | select(.most_recent_instance.commit_sha == "'"$SQUASH_SHA"'")] | length' \
+  "$ARTIFACTS/h0-main-codeql-open-alerts.json")" = "0"
+test "$(jq -r .category \
+  "$ARTIFACTS/h0-main-codeql-$H0_MAIN_CODEQL_JS.json")" = \
+  "/language:javascript-typescript"
+test "$(jq -r .category \
+  "$ARTIFACTS/h0-main-codeql-$H0_MAIN_CODEQL_ACTIONS.json")" = \
+  "/language:actions"
+printf '%s\n' "$H0_MAIN_CODEQL_JS" \
+  > "$ARTIFACTS/h0-main-codeql-js-id.txt"
+printf '%s\n' "$H0_MAIN_CODEQL_ACTIONS" \
+  > "$ARTIFACTS/h0-main-codeql-actions-id.txt"
+printf '%s\n' "$H0_MAIN_CODEQL_RUN" \
+  > "$ARTIFACTS/h0-main-codeql-run-id.txt"
+```
+
+Inspect the exact-main log and SARIF for zero extraction or parse diagnostics.
+API unavailability is a hard failure, not a fallback.
+
+Verify the merged taxonomy/report bytes equal the reviewed head, the H0 selector
+is still zero, and `assertExactPromotionDelta` still proves exactly 135/267
+movement against `h0-final-base-taxonomy.json`.
+
+```bash
+ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
+REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
+SQUASH_SHA=$(cat "$ARTIFACTS/h0-squash-sha.txt")
+for PATH_IN_REPO in \
+  tools/test262/es2015-h0-promotion.json \
+  tools/test262/es2015-audit-evidence.json \
+  tools/test262/es2015-taxonomy.json \
+  tools/test262/upstream-subset.json \
+  docs/test262-report.jsonl \
+  docs/conformance.md
+do
+  git show "$REVIEWED_HEAD:$PATH_IN_REPO" \
+    > "$ARTIFACTS/h0-reviewed-$(basename "$PATH_IN_REPO")"
+  git show "$SQUASH_SHA:$PATH_IN_REPO" \
+    > "$ARTIFACTS/h0-merged-$(basename "$PATH_IN_REPO")"
+  cmp "$ARTIFACTS/h0-reviewed-$(basename "$PATH_IN_REPO")" \
+    "$ARTIFACTS/h0-merged-$(basename "$PATH_IN_REPO")"
+done
+jq -e \
+  '[.classifications[] | select(.partition == "core" and .blocker == "test262-cross-realm-host")] | length == 0' \
+  "$ARTIFACTS/h0-merged-es2015-taxonomy.json"
+```
 
 - [ ] **Step 7: Close/update roadmap evidence**
 
@@ -970,15 +1328,20 @@ Publish on #76:
 
 - squash SHA;
 - reviewed PR head SHA;
-- exact CI and CodeQL run IDs/URLs;
+- exact `ci.yml` pull-request run ID/URL;
+- exact PR CodeQL analysis IDs/categories and workflow run;
+- exact-main dynamic CodeQL analysis IDs/categories, run, SARIF/log hashes, and
+  zero open alerts;
 - exact ledger hash and 135/267 passing/reclassification result;
+- original issue baseline, final PR base, reviewed head, and squash SHA;
 - post-merge taxonomy SHA-256 and balanced totals;
 - `$262` non-leakage and B0/non-goal statements.
 
-Close #76 if `Fixes #76` did not do so automatically. Update #70 selected/core
-counts and H0 status. Update downstream issue counts/dependencies only from the
-post-merge taxonomy, explicitly naming newly unblocked issues. Preserve closed
-#74 as resolved dependency history.
+Only now close #76 explicitly. Update #70 selected/core counts and H0 status.
+Update downstream issue counts/dependencies only from the post-merge taxonomy,
+explicitly naming newly unblocked issues. Preserve closed #74 as resolved
+dependency history. Update the merged PR body one final time with the squash
+SHA and exact-main CodeQL evidence.
 
 - [ ] **Step 8: Report completion to the project coordinator**
 
