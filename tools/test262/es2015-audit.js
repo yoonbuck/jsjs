@@ -3,7 +3,15 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load as parseYaml } from 'js-yaml';
@@ -160,7 +168,7 @@ export class Es2015AuditError extends Error {
 export async function main(argv = [], dependencies = {}) {
   const defaultDependencies = createAuditDependencies();
   const deps = { ...defaultDependencies, ...dependencies };
-  const options = parseOptions(argv, deps.repositoryRootUrl);
+  const options = await parseOptions(argv, deps.repositoryRootUrl);
   assertUtc(deps.environment);
 
   const pin = await deps.readPin();
@@ -640,7 +648,7 @@ async function writeRepositoryFilesAtomically(files) {
  * @param {readonly string[]} argv
  * @param {URL} repositoryRootUrl
  */
-function parseOptions(argv, repositoryRootUrl) {
+async function parseOptions(argv, repositoryRootUrl) {
   let check = false;
   /** @type {string | null} */
   let pathsFile = null;
@@ -818,7 +826,7 @@ function parseOptions(argv, repositoryRootUrl) {
         'H0 disposition generation must run separately from promotion generation',
       );
     }
-    writeDisposition = normalizeOutputTarget(
+    writeDisposition = await normalizeOutputTarget(
       writeDisposition,
       repositoryRootUrl,
     );
@@ -829,13 +837,19 @@ function parseOptions(argv, repositoryRootUrl) {
         'H0 promotion generation must write promotion and owner deltas together',
       );
     }
-    writePromotion = normalizeOutputTarget(writePromotion, repositoryRootUrl);
-    writeOwnerDeltas = normalizeOutputTarget(
+    writePromotion = await normalizeOutputTarget(
+      writePromotion,
+      repositoryRootUrl,
+    );
+    writeOwnerDeltas = await normalizeOutputTarget(
       writeOwnerDeltas,
       repositoryRootUrl,
     );
     if (promotionFile !== null) {
-      promotionFile = normalizeOutputTarget(promotionFile, repositoryRootUrl);
+      promotionFile = await normalizeOutputTarget(
+        promotionFile,
+        repositoryRootUrl,
+      );
     }
     if (writePromotion === writeOwnerDeltas) {
       throw new Es2015AuditError(
@@ -887,7 +901,7 @@ function parseSinglePathOption(argument, prefix, current) {
  * @param {string} outputPath
  * @param {URL} repositoryRootUrl
  */
-function normalizeOutputTarget(outputPath, repositoryRootUrl) {
+async function normalizeOutputTarget(outputPath, repositoryRootUrl) {
   let target;
   try {
     target = new URL(outputPath, repositoryRootUrl);
@@ -903,9 +917,10 @@ function normalizeOutputTarget(outputPath, repositoryRootUrl) {
     );
   }
   try {
-    const root = path.resolve(fileURLToPath(repositoryRootUrl));
+    const root = await realpath(fileURLToPath(repositoryRootUrl));
     const candidate = path.resolve(fileURLToPath(target));
-    const relative = path.relative(root, candidate);
+    const physicalCandidate = await resolvePhysicalOutputTarget(candidate);
+    const relative = path.relative(root, physicalCandidate);
     if (relative === '') {
       throw new Es2015AuditError(
         `output path ${outputPath} must name a file within the repository root`,
@@ -920,7 +935,7 @@ function normalizeOutputTarget(outputPath, repositoryRootUrl) {
         `output path ${outputPath} is outside the repository root`,
       );
     }
-    return candidate;
+    return physicalCandidate;
   } catch (error) {
     if (error instanceof Es2015AuditError) {
       throw error;
@@ -928,6 +943,49 @@ function normalizeOutputTarget(outputPath, repositoryRootUrl) {
     throw new Es2015AuditError(
       `output path ${outputPath} is not a valid file path`,
     );
+  }
+}
+
+/**
+ * Resolves an existing target directly. For a new target, it resolves the
+ * nearest existing ancestor and attaches only the still-missing components.
+ *
+ * @param {string} candidate
+ */
+async function resolvePhysicalOutputTarget(candidate) {
+  /** @type {string[]} */
+  const missingComponents = [];
+  let current = candidate;
+  while (true) {
+    try {
+      return path.join(await realpath(current), ...missingComponents);
+    } catch (error) {
+      if (/** @type {any} */ (error)?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        throw new Es2015AuditError(
+          `output path ${candidate} has a dangling symbolic link`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof Es2015AuditError) {
+        throw error;
+      }
+      if (/** @type {any} */ (error)?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new Es2015AuditError(
+        `output path ${candidate} has no existing physical ancestor`,
+      );
+    }
+    missingComponents.unshift(path.basename(current));
+    current = parent;
   }
 }
 
@@ -1571,7 +1629,7 @@ function assertSelectedAuditEvidence(records, selectedPaths, promoted) {
 /**
  * @param {{
  *   deps: AuditDependencies,
- *   options: ReturnType<typeof parseOptions>,
+ *   options: Awaited<ReturnType<typeof parseOptions>>,
  *   pin: { repository: string, revision: string },
  *   features: ReturnType<typeof parseFeatureManifest>,
  *   inventory: readonly any[],
@@ -1650,7 +1708,7 @@ async function writeH0Disposition(context) {
 /**
  * @param {{
  *   deps: AuditDependencies,
- *   options: ReturnType<typeof parseOptions>,
+ *   options: Awaited<ReturnType<typeof parseOptions>>,
  *   pin: { repository: string, revision: string },
  *   inventory: readonly any[],
  * }} context

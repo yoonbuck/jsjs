@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
@@ -2588,6 +2588,89 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit preserves physically contained H0 output targets',
+    run: async () => {
+      const fixture = await createRealAuditFixture();
+      try {
+        const h0Fixture = await configureH0OutputFixture(fixture);
+        const rootPath = fileURLToPath(h0Fixture.root).replace(/[\\/]$/u, '');
+        const physicalOutputDirectory = path.join(
+          rootPath,
+          'tools/test262/physical-output',
+        );
+        const aliasedOutputDirectory = path.join(
+          rootPath,
+          'tools/test262/physical-alias',
+        );
+        await mkdir(physicalOutputDirectory, { recursive: true });
+        await symlink(physicalOutputDirectory, aliasedOutputDirectory, 'dir');
+        const dispositionTarget = path.join(
+          aliasedOutputDirectory,
+          'h0-disposition.json',
+        );
+        const physicalDispositionTarget = path.join(
+          physicalOutputDirectory,
+          'h0-disposition.json',
+        );
+        const promotionTarget = path.join(
+          aliasedOutputDirectory,
+          'h0-promotion.json',
+        );
+        const physicalPromotionTarget = path.join(
+          physicalOutputDirectory,
+          'h0-promotion.json',
+        );
+        const ownerDeltasTarget = path.join(
+          aliasedOutputDirectory,
+          'h0-owner-deltas.json',
+        );
+        const physicalOwnerDeltasTarget = path.join(
+          physicalOutputDirectory,
+          'h0-owner-deltas.json',
+        );
+        await writeFile(
+          physicalPromotionTarget,
+          'replace this in-repository target\n',
+          'utf8',
+        );
+        const dependencies = {
+          ...fixtureAuditDependencies(h0Fixture),
+          runPromotion: async () => H0_AUDIT_RECORDS,
+        };
+
+        assertSame(
+          await auditEs2015Taxonomy(
+            [
+              '--paths-manifest=tools/test262/es2015-h0-paths.json',
+              '--owner-map=tools/test262/es2015-h0-owner-map.json',
+              `--write-disposition=${pathToFileURL(dispositionTarget).href}`,
+            ],
+            dependencies,
+          ),
+          0,
+        );
+        assertSame(fs.existsSync(physicalDispositionTarget), true);
+
+        assertSame(
+          await auditEs2015Taxonomy(
+            [
+              '--paths-manifest=tools/test262/es2015-h0-paths.json',
+              `--disposition=${pathToFileURL(physicalDispositionTarget).href}`,
+              `--write-promotion=${pathToFileURL(promotionTarget).href}`,
+              `--write-owner-deltas=${pathToFileURL(ownerDeltasTarget).href}`,
+            ],
+            dependencies,
+          ),
+          0,
+        );
+        assertSame(fs.existsSync(physicalPromotionTarget), true);
+        assertSame(fs.existsSync(physicalOwnerDeltasTarget), true);
+      } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+      }
+    },
+  },
+  {
     name: 'ES2015 audit rejects every H0 output escape before writing',
     run: async () => {
       const fixture = await createRealAuditFixture();
@@ -2766,6 +2849,212 @@ export default [
           await rm(siblingDirectory, { recursive: true, force: true });
         }
         await rm(fixture.root, { recursive: true, force: true });
+      }
+    },
+  },
+  {
+    name: 'ES2015 audit rejects physical symlink H0 output escapes before writing',
+    run: async () => {
+      const fixture = await createRealAuditFixture();
+      /** @type {string | null} */
+      let externalDirectory = null;
+      try {
+        const h0Fixture = await configureH0OutputFixture(fixture);
+        const rootPath = fileURLToPath(h0Fixture.root).replace(/[\\/]$/u, '');
+        const outputDirectory = path.join(rootPath, 'tools/test262');
+        externalDirectory = path.join(
+          path.dirname(rootPath),
+          `es2015-audit-symlink-external-${randomUUID()}`,
+        );
+        await mkdir(externalDirectory);
+        const escapedDirectory = path.join(
+          outputDirectory,
+          'symlink-directory-escape',
+        );
+        await symlink(externalDirectory, escapedDirectory, 'dir');
+        await mkdir(new URL('tools/test262/aliases/', h0Fixture.root), {
+          recursive: true,
+        });
+        const dependencies = {
+          ...fixtureAuditDependencies(h0Fixture),
+          runPromotion: async () => H0_AUDIT_RECORDS,
+        };
+        const dispositionOptions = [
+          '--paths-manifest=tools/test262/es2015-h0-paths.json',
+          '--owner-map=tools/test262/es2015-h0-owner-map.json',
+        ];
+        const promotionOptions = [
+          '--paths-manifest=tools/test262/es2015-h0-paths.json',
+          '--disposition=tools/test262/aliases/h0-disposition.json',
+        ];
+
+        assertSame(
+          await auditEs2015Taxonomy(
+            [
+              ...dispositionOptions,
+              '--write-disposition=tools/test262/aliases/h0-disposition.json',
+            ],
+            dependencies,
+          ),
+          0,
+        );
+
+        /**
+         * @param {string} option
+         * @param {string} target
+         */
+        function outputArguments(option, target) {
+          if (option === '--write-disposition') {
+            return [...dispositionOptions, `${option}=${target}`];
+          }
+          if (option === '--write-promotion') {
+            return [
+              ...promotionOptions,
+              `${option}=${target}`,
+              '--write-owner-deltas=tools/test262/aliases/h0-owner-deltas.json',
+            ];
+          }
+          return [
+            ...promotionOptions,
+            '--write-promotion=tools/test262/aliases/h0-promotion.json',
+            `${option}=${target}`,
+          ];
+        }
+
+        /** @type {Array<{
+         *   scenario: string,
+         *   option: string,
+         *   externalPath: string,
+         *   expectedText: string | null,
+         *   expectedError: string,
+         *   error: Error | null,
+         *   exists: boolean,
+         *   actualText: string | null,
+         * }>} */
+        const attempts = [];
+        const outputOptions = [
+          '--write-disposition',
+          '--write-promotion',
+          '--write-owner-deltas',
+        ];
+        for (const option of outputOptions) {
+          const optionName = option.slice('--write-'.length);
+          const directoryEscapePath = path.join(
+            externalDirectory,
+            `${optionName}-directory-output.json`,
+          );
+          const externalTargetPath = path.join(
+            externalDirectory,
+            `${optionName}-existing-output.json`,
+          );
+          const externalTargetText = `${optionName} external output\n`;
+          const outputSymlink = path.join(
+            outputDirectory,
+            `${optionName}-output-symlink.json`,
+          );
+          const danglingExternalTargetPath = path.join(
+            externalDirectory,
+            `${optionName}-dangling-output.json`,
+          );
+          const danglingOutputSymlink = path.join(
+            outputDirectory,
+            `${optionName}-dangling-output-symlink.json`,
+          );
+          await writeFile(externalTargetPath, externalTargetText, 'utf8');
+          await symlink(externalTargetPath, outputSymlink, 'file');
+          await symlink(
+            danglingExternalTargetPath,
+            danglingOutputSymlink,
+            'file',
+          );
+
+          for (const target of [
+            {
+              scenario: 'symlink directory',
+              value: pathToFileURL(
+                path.join(
+                  escapedDirectory,
+                  `${optionName}-directory-output.json`,
+                ),
+              ).href,
+              externalPath: directoryEscapePath,
+              expectedText: null,
+              expectedError: 'outside the repository root',
+            },
+            {
+              scenario: 'existing external output symlink',
+              value: pathToFileURL(outputSymlink).href,
+              externalPath: externalTargetPath,
+              expectedText: externalTargetText,
+              expectedError: 'outside the repository root',
+            },
+            {
+              scenario: 'dangling external output symlink',
+              value: pathToFileURL(danglingOutputSymlink).href,
+              externalPath: danglingExternalTargetPath,
+              expectedText: null,
+              expectedError: 'dangling symbolic link',
+            },
+          ]) {
+            /** @type {Error | null} */
+            let error = null;
+            try {
+              await auditEs2015Taxonomy(
+                outputArguments(option, target.value),
+                dependencies,
+              );
+            } catch (caught) {
+              error =
+                caught instanceof Error ? caught : new Error(String(caught));
+            }
+            const exists = fs.existsSync(target.externalPath);
+            attempts.push({
+              scenario: target.scenario,
+              option,
+              externalPath: target.externalPath,
+              expectedText: target.expectedText,
+              expectedError: target.expectedError,
+              error,
+              exists,
+              actualText: exists
+                ? await readFile(target.externalPath, 'utf8')
+                : null,
+            });
+          }
+        }
+
+        const violations = attempts.flatMap((attempt) => {
+          /** @type {string[]} */
+          const failures = [];
+          if (
+            !(attempt.error instanceof Es2015AuditError) ||
+            !attempt.error.message.includes(attempt.expectedError)
+          ) {
+            failures.push(
+              `${attempt.option} accepted ${attempt.scenario} before physical containment`,
+            );
+          }
+          if (
+            attempt.expectedText === null
+              ? attempt.exists
+              : !attempt.exists || attempt.actualText !== attempt.expectedText
+          ) {
+            failures.push(
+              `${attempt.option} created or mutated ${attempt.externalPath}`,
+            );
+          }
+          return failures;
+        });
+        if (violations.length > 0) {
+          throw new Error(violations.join('; '));
+        }
+      } finally {
+        if (externalDirectory !== null) {
+          await rm(externalDirectory, { recursive: true, force: true });
+          assertSame(fs.existsSync(externalDirectory), false);
+        }
+        await rm(fixture.root, { recursive: true, force: true });
+        assertSame(fs.existsSync(fixture.root), false);
       }
     },
   },
