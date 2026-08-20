@@ -56,8 +56,7 @@ const PROVENANCE_DECISIONS_DIRECTORY =
 const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
 const RANGE_BASE_SHA = 'a'.repeat(40);
 const RANGE_HEAD_SHA = 'b'.repeat(40);
-const FOUNDATION_BOOTSTRAP_COMMIT =
-  '8d75b48af2ee7ab04e7c5006980417227ec34568';
+const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
 const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
   'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
 const FOUNDATION_ALLOWED_PATHS = Object.freeze([
@@ -1111,21 +1110,21 @@ function rangeMarker(profile) {
 }
 
 function maintenanceRangeMarker() {
- return rangeMarker('foundation-maintenance');
+  return rangeMarker('foundation-maintenance');
 }
 
 function foundationBootstrapManifestText() {
- const manifest = JSON.parse(approvedProvenanceManifestText());
- manifest.rangeProfiles = manifest.rangeProfiles.filter(
-   (/** @type {{ name: string }} */ profile) =>
-     profile.name !== 'foundation-maintenance',
- );
- const text = `${JSON.stringify(manifest, null, 2)}\n`;
- assertSame(
-   createHash('sha256').update(text).digest('hex'),
-   FOUNDATION_BOOTSTRAP_MANIFEST_SHA256,
- );
- return text;
+  const manifest = JSON.parse(approvedProvenanceManifestText());
+  manifest.rangeProfiles = manifest.rangeProfiles.filter(
+    (/** @type {{ name: string }} */ profile) =>
+      profile.name !== 'foundation-maintenance',
+  );
+  const text = `${JSON.stringify(manifest, null, 2)}\n`;
+  assertSame(
+    createHash('sha256').update(text).digest('hex'),
+    FOUNDATION_BOOTSTRAP_MANIFEST_SHA256,
+  );
+  return text;
 }
 
 /**
@@ -1133,13 +1132,13 @@ function foundationBootstrapManifestText() {
  * @param {{ baseSha?: string, headSha?: string, marker?: string }} options
  */
 function rangeArguments(profile, options = {}) {
- return [
-   '--check-range',
-   `--base=${options.baseSha ?? RANGE_BASE_SHA}`,
-   `--head=${options.headSha ?? RANGE_HEAD_SHA}`,
-   `--profile=${profile}`,
-   `--marker=${options.marker ?? rangeMarker(profile)}`,
- ];
+  return [
+    '--check-range',
+    `--base=${options.baseSha ?? RANGE_BASE_SHA}`,
+    `--head=${options.headSha ?? RANGE_HEAD_SHA}`,
+    `--profile=${profile}`,
+    `--marker=${options.marker ?? rangeMarker(profile)}`,
+  ];
 }
 
 /**
@@ -1155,31 +1154,31 @@ function rangeArguments(profile, options = {}) {
  * }} options
  */
 function rangeCheckDependencies(options) {
- const dependencies = provenanceCheckDependencies();
- const baseSha = options.baseSha ?? RANGE_BASE_SHA;
- const headSha = options.headSha ?? RANGE_HEAD_SHA;
- const headFiles = new Map(dependencies.files);
- for (const path of FOUNDATION_ALLOWED_PATHS) {
-   if (!headFiles.has(path)) headFiles.set(path, `fixture ${path}\n`);
- }
- if (options.headManifestText !== undefined) {
-   headFiles.set(ES2015_PROVENANCE_FILE, options.headManifestText);
- }
- for (const [path, text] of options.headFiles ?? []) {
-   headFiles.set(path, text);
- }
- const baseFiles = new Map();
- const baseManifestText =
-   options.baseManifestText === undefined
-     ? options.baseHasFoundation === true
-       ? approvedProvenanceManifestText()
-       : null
-     : options.baseManifestText;
- if (baseManifestText !== null) {
-   baseFiles.set(ES2015_PROVENANCE_FILE, baseManifestText);
- }
- for (const path of FOUNDATION_DELETIONS) {
-   baseFiles.set(path, `removed fixture ${path}\n`);
+  const dependencies = provenanceCheckDependencies();
+  const baseSha = options.baseSha ?? RANGE_BASE_SHA;
+  const headSha = options.headSha ?? RANGE_HEAD_SHA;
+  const headFiles = new Map(dependencies.files);
+  for (const path of FOUNDATION_ALLOWED_PATHS) {
+    if (!headFiles.has(path)) headFiles.set(path, `fixture ${path}\n`);
+  }
+  if (options.headManifestText !== undefined) {
+    headFiles.set(ES2015_PROVENANCE_FILE, options.headManifestText);
+  }
+  for (const [path, text] of options.headFiles ?? []) {
+    headFiles.set(path, text);
+  }
+  const baseFiles = new Map();
+  const baseManifestText =
+    options.baseManifestText === undefined
+      ? options.baseHasFoundation === true
+        ? approvedProvenanceManifestText()
+        : null
+      : options.baseManifestText;
+  if (baseManifestText !== null) {
+    baseFiles.set(ES2015_PROVENANCE_FILE, baseManifestText);
+  }
+  for (const path of FOUNDATION_DELETIONS) {
+    baseFiles.set(path, `removed fixture ${path}\n`);
   }
   return {
     ...dependencies,
@@ -1199,10 +1198,7 @@ function rangeCheckDependencies(options) {
       }
       return options.mergeBase ?? baseSha;
     },
-    gitDiff: async (
-      /** @type {string} */ base,
-      /** @type {string} */ head,
-    ) => {
+    gitDiff: async (/** @type {string} */ base, /** @type {string} */ head) => {
       if (base !== baseSha || head !== headSha) {
         throw new Error(`unexpected fixture range ${base}..${head}`);
       }
@@ -3262,15 +3258,19 @@ export default [
         },
       ]) {
         assertSame(
-          (await rejected(() =>
-            provenanceCheck(scenario.args, scenario.dependencies),
-          )).message,
+          (
+            await rejected(() =>
+              provenanceCheck(scenario.args, scenario.dependencies),
+            )
+          ).message,
           scenario.message,
         );
       }
 
       /** @type {{ rangeProfiles: { name: string, allowedPaths: string[] }[] }} */
-      const broadenedHeadManifest = JSON.parse(approvedProvenanceManifestText());
+      const broadenedHeadManifest = JSON.parse(
+        approvedProvenanceManifestText(),
+      );
       const maintenanceProfile = broadenedHeadManifest.rangeProfiles.find(
         (profile) => profile.name === 'foundation-maintenance',
       );
@@ -3337,9 +3337,7 @@ export default [
               rangeCheckDependencies({
                 changes: [maintenanceChange],
                 baseManifestText: approvedProvenanceManifestText(),
-                headFiles: new Map([
-                  [nonEmptyFragmentPath, nonEmptyFragment],
-                ]),
+                headFiles: new Map([[nonEmptyFragmentPath, nonEmptyFragment]]),
               }),
             ),
           )

@@ -27,8 +27,7 @@ const PROVENANCE_RANGE_GATE_OWNER_PATHS = Object.freeze([
   'tools/test262/es2015-provenance.js',
   ES2015_PROVENANCE_FILE,
 ]);
-const FOUNDATION_BOOTSTRAP_COMMIT =
-  '8d75b48af2ee7ab04e7c5006980417227ec34568';
+const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
 const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
   'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
 const FOUNDATION_MAINTENANCE_PROFILE = 'foundation-maintenance';
@@ -665,10 +664,7 @@ function maintenanceRangeAuthority(base, baseManifestText) {
     'foundation-maintenance base',
   );
   return {
-    profile: rangeProfileForManifest(
-      manifest,
-      FOUNDATION_MAINTENANCE_PROFILE,
-    ),
+    profile: rangeProfileForManifest(manifest, FOUNDATION_MAINTENANCE_PROFILE),
     baseLedgerSha256: manifest.baseLedger.pathSha256,
   };
 }
@@ -704,8 +700,9 @@ function sha256(text) {
  */
 function rangeProfileForManifest(manifest, name) {
   const profile = manifest.rangeProfiles.find(
-    (/** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */ entry) =>
-      entry.name === name,
+    (
+      /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */ entry,
+    ) => entry.name === name,
   );
   if (profile === undefined) {
     throw new Es2015ProvenanceCheckError(
@@ -827,14 +824,8 @@ async function provenanceOwnedRange(deps, changes, base, head) {
       (/** @type {{ name: string }} */ profile) =>
         profile.name === 'foundation',
     );
-    addRangeProfileOwnership(
-      ownedPaths,
-      bootstrapFoundationProfile,
-    );
-    addRangeProfileOwnership(
-      ownedPaths,
-      FOUNDATION_BOOTSTRAP_RANGE_PROFILE,
-    );
+    addRangeProfileOwnership(ownedPaths, bootstrapFoundationProfile);
+    addRangeProfileOwnership(ownedPaths, FOUNDATION_BOOTSTRAP_RANGE_PROFILE);
     return changedPaths.some((path) => ownedPaths.has(path));
   }
   const manifestText =

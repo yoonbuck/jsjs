@@ -35,10 +35,12 @@
 ### Task 1: Deterministic Issue-Body Contract
 
 **Files:**
+
 - Modify: `test/node/es2015-provenance.test.js:2584-2921`
 - Modify: `tools/test262/es2015-provenance.js:360-495,1150-1218`
 
 **Interfaces:**
+
 - Consumes: `renderProvenanceIssueBody(manifest, code, issueMap?)`.
 - Produces: every initial/final body contains the exact full edition-evidence prohibition and no doubled period.
 
@@ -113,11 +115,13 @@ git commit -m "Fix provenance issue body contract" \
 ### Task 2: Immutable Maintenance Profile
 
 **Files:**
+
 - Modify: `test/node/es2015-provenance.test.js:1-106,1075-1110`
 - Modify: `tools/test262/es2015-provenance.js:99-176,960-1018,2012-2124`
 - Modify: `tools/test262/es2015-provenance.json:101-538`
 
 **Interfaces:**
+
 - Consumes: `APPROVED_RANGE_PROFILES`, `parseEs2015ProvenanceManifest()`, and `buildProvenanceFoundation()`.
 - Produces: one exact `foundation-maintenance` profile between foundation and decisions while preserving every existing profile object.
 
@@ -214,10 +218,12 @@ git commit -m "Define foundation maintenance profile" \
 ### Task 3: Trusted-Base Range Authorization
 
 **Files:**
+
 - Modify: `test/node/es2015-provenance.test.js:941-1073,2949-3441`
 - Modify: `tools/test262/es2015-provenance-check.js:18-28,464-830`
 
 **Interfaces:**
+
 - Consumes: explicit base/head SHAs, canonical base/head manifests, parsed marker, and the immutable maintenance profile.
 - Produces: bootstrap authorization from exact U0 identity and persistent authorization from the base-tree maintenance profile.
 
@@ -273,8 +279,7 @@ profile and reads unknown-profile policy from HEAD.
 Add constants:
 
 ```js
-const FOUNDATION_BOOTSTRAP_COMMIT =
-  '8d75b48af2ee7ab04e7c5006980417227ec34568';
+const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
 const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
   'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
 const FOUNDATION_MAINTENANCE_PROFILE = 'foundation-maintenance';
@@ -316,6 +321,7 @@ git commit -m "Authorize maintenance from provenance base" \
 ### Task 4: Documentation and Generated Contract
 
 **Files:**
+
 - Modify: `docs/conformance.md:631-706`
 - Modify: `docs/testing.md:304-339`
 - Modify: `docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md:202-232`
@@ -324,6 +330,7 @@ git commit -m "Authorize maintenance from provenance base" \
 - Test: `test/node/workflow-contract.test.js`
 
 **Interfaces:**
+
 - Consumes: implemented marker/profile behavior.
 - Produces: directly related operational documentation and unchanged workflow derivation.
 
@@ -372,10 +379,12 @@ git commit -m "Document provenance maintenance contract" \
 ### Task 5: Verification, Reviews, and Merge
 
 **Files:**
+
 - Inspect: every changed file in `git diff origin/main...HEAD`
 - No broad local Test262 or runtime changes.
 
 **Interfaces:**
+
 - Consumes: complete implementation.
 - Produces: reviewed head, merged squash, exact-main security evidence, and parent report.
 
