@@ -25,13 +25,14 @@ export class Reference {
    * @param {object | undefined | null} base
    * @param {string | symbol} referencedName
    * @param {boolean} [strict=false]
-   * @param {unknown} [thisValue=undefined]
+   * @param {unknown} [thisValue]
    */
-  constructor(base, referencedName, strict = false, thisValue = undefined) {
+  constructor(base, referencedName, strict = false, thisValue) {
     this.base = base;
     this.referencedName = referencedName;
     this.strict = Boolean(strict);
-    this.thisValue = thisValue;
+    this.thisValue =
+      arguments.length < 4 && isPropertyReferenceBase(base) ? base : thisValue;
   }
 }
 

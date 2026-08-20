@@ -1,7 +1,11 @@
-import { assertSame } from './harness/assert.js';
+import { assertSame, assertThrows } from './harness/assert.js';
+import { createAgent } from '../src/runtime/agent.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
-import { EngineObject } from '../src/runtime/object.js';
+import {
+  EngineObject,
+  currentObjectOperationRealm,
+} from '../src/runtime/object.js';
 import { GuestErrorSignal, ThrowSignal } from '../src/runtime/completion.js';
 import {
   createIterResultObject,
@@ -141,6 +145,154 @@ const tests = [
         ),
         'string',
       );
+    },
+  },
+  {
+    name: 'iterator Gets scope their caller Realm across Agents and preserve receivers',
+    run() {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const targetRealm = createRealm({ agent: createAgent() });
+      const accessorRealm = createRealm({ agent: createAgent() });
+      /** @type {string[]} */
+      const observedGets = [];
+      /**
+       * @param {string} name
+       * @param {EngineObject} receiver
+       * @param {unknown} value
+       */
+      const createGetter = (name, receiver, value) =>
+        accessorRealm.createNativeFunction({
+          name: `get ${name}`,
+          length: 0,
+          call(thisValue, _args, _functionObject, caller) {
+            observedGets.push(name);
+            assertSame(thisValue, receiver);
+            assertSame(caller, callerRealm);
+            assertSame(
+              callerRealm.agent.synchronousCallChainRoot(),
+              accessorRealm.agent.synchronousCallChainRoot(),
+            );
+            return value;
+          },
+        });
+      const methodTarget = new EngineObject(
+        targetRealm.intrinsics.objectPrototype,
+      );
+      const method = accessorRealm.createNativeFunction({
+        name: 'method',
+        length: 0,
+        call() {
+          return undefined;
+        },
+      });
+      methodTarget.defineOwnProperty('method', {
+        get: createGetter('method', methodTarget, method),
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(getMethod(callerRealm, methodTarget, 'method'), method);
+
+      const iterator = new EngineObject(targetRealm.intrinsics.objectPrototype);
+      const next = accessorRealm.createNativeFunction({
+        name: 'next',
+        length: 0,
+        call() {
+          return new EngineObject(targetRealm.intrinsics.objectPrototype);
+        },
+      });
+      iterator.defineOwnProperty('next', {
+        get: createGetter('next', iterator, next),
+        enumerable: true,
+        configurable: true,
+      });
+      const iteratorMethod = targetRealm.createNativeFunction({
+        name: '[Symbol.iterator]',
+        length: 0,
+        call() {
+          return iterator;
+        },
+      });
+      const record = getIterator(callerRealm, iterator, iteratorMethod);
+
+      assertSame(record.nextMethod, next);
+
+      const result = new EngineObject(targetRealm.intrinsics.objectPrototype);
+      result.defineOwnProperty('done', {
+        get: createGetter('done', result, false),
+        enumerable: true,
+        configurable: true,
+      });
+      result.defineOwnProperty('value', {
+        get: createGetter('value', result, 'value'),
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(iteratorComplete(result, callerRealm), false);
+      assertSame(iteratorValue(result, callerRealm), 'value');
+
+      const closable = new EngineObject(targetRealm.intrinsics.objectPrototype);
+      const closeResult = new EngineObject(
+        targetRealm.intrinsics.objectPrototype,
+      );
+      const closeMethod = accessorRealm.createNativeFunction({
+        name: 'return',
+        length: 0,
+        call() {
+          return closeResult;
+        },
+      });
+      closable.defineOwnProperty('return', {
+        get: createGetter('return', closable, closeMethod),
+        enumerable: true,
+        configurable: true,
+      });
+
+      iteratorClose(
+        callerRealm,
+        { iterator: closable, nextMethod: undefined, done: false },
+        false,
+      );
+      assertSame(observedGets.join(','), 'method,next,done,value,return');
+
+      const abruptResult = new EngineObject(
+        targetRealm.intrinsics.objectPrototype,
+      );
+      /** @type {import('../src/runtime/realm.js').Realm | null} */
+      let abruptCaller = null;
+      const abruptGetter = accessorRealm.createNativeFunction({
+        name: 'get value',
+        length: 0,
+        call(thisValue, _args, _functionObject, caller) {
+          abruptCaller = caller ?? null;
+          assertSame(thisValue, abruptResult);
+          assertSame(caller, callerRealm);
+          assertSame(
+            callerRealm.agent.synchronousCallChainRoot(),
+            accessorRealm.agent.synchronousCallChainRoot(),
+          );
+          throw new GuestErrorSignal(
+            'TypeError',
+            'abrupt iterator value getter',
+          );
+        },
+      });
+      abruptResult.defineOwnProperty('value', {
+        get: abruptGetter,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertThrows(() => iteratorValue(abruptResult, callerRealm), ThrowSignal);
+      assertSame(abruptCaller, callerRealm);
+      assertSame(currentObjectOperationRealm(), undefined);
+      assertSame(callerRealm.agent.activeExecutionRealm, null);
+      assertSame(targetRealm.agent.activeExecutionRealm, null);
+      assertSame(accessorRealm.agent.activeExecutionRealm, null);
+      assertSame(callerRealm.agent.synchronousCallChainRoot(), null);
+      assertSame(targetRealm.agent.synchronousCallChainRoot(), null);
+      assertSame(accessorRealm.agent.synchronousCallChainRoot(), null);
     },
   },
   {

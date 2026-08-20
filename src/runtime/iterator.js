@@ -23,7 +23,7 @@
  * are wrapped.
  */
 
-import { EngineObject } from './object.js';
+import { EngineObject, getWithObjectOperationRealm } from './object.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
 import { toBoolean, toObject } from './conversion.js';
@@ -59,7 +59,7 @@ export function getMethod(realm, value, key) {
     value instanceof EngineObject ? value : toObject(realm, value);
 
   linkGeneratorHostChainToAgent(realm.agent, receiver.agent);
-  const func = receiver.get(key, value);
+  const func = getWithObjectOperationRealm(realm, receiver, key, value);
   linkGeneratorHostChainToValue(realm.agent, func);
 
   if (func === undefined || func === null) {
@@ -154,7 +154,12 @@ export function getIterator(realm, obj, method) {
   }
 
   linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
-  const nextMethod = iterator.get('next', iterator);
+  const nextMethod = getWithObjectOperationRealm(
+    realm,
+    iterator,
+    'next',
+    iterator,
+  );
 
   linkGeneratorHostChainToValue(realm.agent, nextMethod);
   return {
@@ -229,11 +234,11 @@ export function iteratorNext(record, sent) {
  * ECMA-262 §7.4.3 `IteratorComplete ( iterResult )`.
  *
  * @param {EngineObject} result
- * @param {Realm} [_realm]
+ * @param {Realm} [realm]
  * @returns {boolean}
  */
-export function iteratorComplete(result, _realm) {
-  return toBoolean(result.get('done', result));
+export function iteratorComplete(result, realm) {
+  return toBoolean(getWithObjectOperationRealm(realm, result, 'done', result));
 }
 
 /**
@@ -244,7 +249,7 @@ export function iteratorComplete(result, _realm) {
  * @returns {unknown}
  */
 export function iteratorValue(result, realm) {
-  const value = result.get('value', result);
+  const value = getWithObjectOperationRealm(realm, result, 'value', result);
 
   if (realm !== undefined) {
     linkGeneratorHostChainToValue(realm.agent, value);

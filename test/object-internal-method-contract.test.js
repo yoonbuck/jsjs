@@ -8,6 +8,7 @@ import { linkModuleGraph } from '../src/runtime/module-linker.js';
 import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import {
   EngineObject,
+  currentObjectOperationRealm,
   enterObjectOperationRealm,
   exitObjectOperationRealm,
 } from '../src/runtime/object.js';
@@ -17,6 +18,7 @@ import { ThrowSignal, GuestErrorSignal } from '../src/runtime/completion.js';
 import {
   Reference,
   UnresolvableReference,
+  getValue,
   putValue,
 } from '../src/runtime/reference.js';
 import { GeneratorObject } from '../src/runtime/generator-object.js';
@@ -142,6 +144,47 @@ export default [
     },
   },
   {
+    name: 'Reference defaults an omitted object receiver without replacing explicit undefined',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('receiver', {
+        get() {
+          return this;
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      prototype.defineOwnProperty('inherited', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const object = new EngineObject(prototype);
+
+      assertSame(getValue(new Reference(object, 'receiver')), object);
+      assertSame(putValue(new Reference(object, 'inherited'), 2), 2);
+      assertSame(object.get('inherited'), 2);
+
+      const explicitUndefined = new EngineObject(prototype);
+      assertSame(
+        getValue(
+          new Reference(explicitUndefined, 'receiver', false, undefined),
+        ),
+        undefined,
+      );
+      assertSame(
+        putValue(
+          new Reference(explicitUndefined, 'inherited', false, undefined),
+          3,
+        ),
+        3,
+      );
+      assertSame(explicitUndefined.getOwnProperty('inherited'), undefined);
+      assertSame(prototype.get('inherited'), 1);
+    },
+  },
+  {
     name: 'an active target Realm outranks an outer object operation Realm',
     run() {
       const operationRealm = createRealm();
@@ -174,6 +217,101 @@ export default [
       });
 
       assertSame(observedCallerRealm, targetRealm);
+    },
+  },
+  {
+    name: 'OrdinaryToPrimitive scopes conversion-method Gets to its caller Realm',
+    run() {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const valueRealm = createRealm({ agent: createAgent() });
+      const accessorRealm = createRealm({ agent: createAgent() });
+      const value = new EngineObject(valueRealm.intrinsics.objectPrototype);
+      /** @type {string[]} */
+      const observedNames = [];
+      const toString = accessorRealm.createNativeFunction({
+        name: 'toString',
+        length: 0,
+        call() {
+          return 'string result';
+        },
+      });
+      const valueOf = accessorRealm.createNativeFunction({
+        name: 'valueOf',
+        length: 0,
+        call() {
+          return 7;
+        },
+      });
+      /**
+       * @param {string} name
+       * @param {unknown} method
+       */
+      const createGetter = (name, method) =>
+        accessorRealm.createNativeFunction({
+          name: `get ${name}`,
+          length: 0,
+          call(_thisValue, _args, _functionObject, caller) {
+            observedNames.push(name);
+            assertSame(caller, callerRealm);
+            assertSame(
+              callerRealm.agent.synchronousCallChainRoot(),
+              accessorRealm.agent.synchronousCallChainRoot(),
+            );
+            return method;
+          },
+        });
+
+      value.defineOwnProperty('toString', {
+        get: createGetter('toString', toString),
+        enumerable: true,
+        configurable: true,
+      });
+      value.defineOwnProperty('valueOf', {
+        get: createGetter('valueOf', valueOf),
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(value.defaultValue('string', callerRealm), 'string result');
+      assertSame(value.defaultValue('number', callerRealm), 7);
+      assertSame(observedNames.join(','), 'toString,valueOf');
+
+      const abruptValue = new EngineObject(
+        valueRealm.intrinsics.objectPrototype,
+      );
+      /** @type {import('../src/runtime/realm.js').Realm | null} */
+      let abruptCaller = null;
+      const abruptGetter = accessorRealm.createNativeFunction({
+        name: 'get valueOf',
+        length: 0,
+        call(_thisValue, _args, _functionObject, caller) {
+          abruptCaller = caller ?? null;
+          assertSame(caller, callerRealm);
+          assertSame(
+            callerRealm.agent.synchronousCallChainRoot(),
+            accessorRealm.agent.synchronousCallChainRoot(),
+          );
+          throw new GuestErrorSignal('TypeError', 'abrupt conversion getter');
+        },
+      });
+      abruptValue.defineOwnProperty('valueOf', {
+        get: abruptGetter,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertThrows(
+        () => abruptValue.defaultValue('number', callerRealm),
+        ThrowSignal,
+      );
+      assertSame(abruptCaller, callerRealm);
+      assertSame(currentObjectOperationRealm(), undefined);
+      assertSame(callerRealm.agent.activeExecutionRealm, null);
+      assertSame(valueRealm.agent.activeExecutionRealm, null);
+      assertSame(accessorRealm.agent.activeExecutionRealm, null);
+      assertSame(callerRealm.agent.synchronousCallChainRoot(), null);
+      assertSame(valueRealm.agent.synchronousCallChainRoot(), null);
+      assertSame(accessorRealm.agent.synchronousCallChainRoot(), null);
     },
   },
   {

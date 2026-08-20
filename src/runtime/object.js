@@ -39,6 +39,26 @@ export function currentObjectOperationRealm() {
 }
 
 /**
+ * Performs one public Get while exposing its supplied caller Realm to an
+ * accessor reached by that operation.
+ *
+ * @param {import('./realm.js').Realm | undefined} realm
+ * @param {EngineObject} object
+ * @param {PropertyKey} name
+ * @param {unknown} receiver
+ * @returns {unknown}
+ */
+export function getWithObjectOperationRealm(realm, object, name, receiver) {
+  enterObjectOperationRealm(realm);
+
+  try {
+    return object.get(name, receiver);
+  } finally {
+    exitObjectOperationRealm(realm);
+  }
+}
+
+/**
  * @typedef {import('./descriptors.js').CompletePropertyDescriptor} CompletePropertyDescriptor
  * @typedef {import('./descriptors.js').PropertyDescriptorRecord} PropertyDescriptorRecord
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -517,7 +537,7 @@ export class EngineObject {
       hint === 'string' ? ['toString', 'valueOf'] : ['valueOf', 'toString'];
 
     for (const name of methodNames) {
-      const method = this.get(name, this);
+      const method = getWithObjectOperationRealm(callerRealm, this, name, this);
 
       if (typeof method !== 'function' && !isCallable(method)) {
         continue;
@@ -977,13 +997,17 @@ function callObjectAccessor(target, accessor, receiver, args) {
       : null;
   const targetRealm = target.agent?.activeExecutionRealm;
   const operationRealm = currentObjectOperationRealm();
+  const callerRealm =
+    receiverRealm ?? targetRealm ?? operationRealm ?? undefined;
+  const guard = callerRealm?.stackGuard;
 
-  return callAccessor(
-    accessor,
-    receiver,
-    args,
-    receiverRealm ?? targetRealm ?? operationRealm ?? undefined,
-  );
+  guard?.enter();
+
+  try {
+    return callAccessor(accessor, receiver, args, callerRealm);
+  } finally {
+    guard?.exit();
+  }
 }
 
 /**
