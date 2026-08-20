@@ -22,8 +22,8 @@ constructor.
 
 The parser's capability gate admits only those forms, so grammar and evaluation
 move together. `parseScript` still rejects async functions/generators and
-`await`, dynamic `import()`, `new.target`, object rest/spread, later class fields/private names/static
-blocks/decorators, binary/octal literals, and `\u{…}` code-point escapes. The
+`await`, dynamic `import()`, `new.target`, object rest/spread, and later class
+fields/private names/static blocks/decorators. The
 ES2015 RegExp flags `u` and `y` are rejected by ES5.1 flag validation. A
 top-level rejection is a host `SyntaxError`; source parsed through `eval`,
 dynamic `Function`, or dynamic `%GeneratorFunction%` receives a catchable guest

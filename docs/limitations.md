@@ -620,8 +620,6 @@ these neighboring forms, and the runtime omits the listed later APIs:
 - object rest and object spread;
 - later class forms: public/private fields, private methods, static blocks, and
   decorators;
-- binary (`0b`) and octal (`0o`) numeric literals;
-- Unicode code-point escapes (`\u{…}`) in strings and identifiers; and
 - post-ES2015 iterator/generator helpers such as `Iterator.from` and helper
   methods including `map`, `filter`, and `take`.
 

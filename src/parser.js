@@ -501,11 +501,8 @@ export function parseEval(source, strict = false, context = {}) {
  * inherits strictness with no directive of its own. The early-error pass folds
  * the program's own `"use strict"` directive in on top of it.
  *
- * `source` is the exact text the parser consumed, threaded through so the
- * unsupported-ES2015 pass can compare an `Identifier`'s raw source span
- * (`source.slice(node.start, node.end)`) against its interpreted `name` to
- * detect an ES2015 code-point escape (`\u{...}`), the way `checkUnreserved`
- * once compared the two.
+ * `source` is the exact text the parser consumed, threaded through the parse
+ * pipeline so early-error validation can stay source-aware where needed.
  *
  * @param {unknown} program
  * @param {string} source
@@ -4565,25 +4562,18 @@ function statementPositionFunctionError(context, node) {
  * Rejects an ES2015 construct the parser now accepts (because it runs at
  * `ecmaVersion: 6`) but the evaluator does not yet implement, as a parse-time
  * early error. See `UNSUPPORTED_ES2015_NODE_MESSAGES` for the rationale and the
- * full node-type table; this function adds the three cases that turn on a flag
- * rather than a distinct `node.type`:
+ * full node-type table; this function adds the two flag-based cases that still
+ * need engine-side gating rather than a distinct `node.type`:
  *
  * - a `Property` whose shape is not one of the object-literal forms this
  *   milestone evaluates;
  * - a `FunctionDeclaration` / `FunctionExpression` that is a `generator`
- *   (`function* g(){}`) or `async`;
- * - a numeric `Literal` written in the ES2015 binary (`0b`) or octal (`0o`)
- *   forms, and any string `Literal` or `Identifier` carrying an ES2015
- *   code-point escape (`\u{...}`).
+ *   (`function* g(){}`) or `async`.
  *
- * The code-point escape is detected on `Literal.raw` for a string literal
- * (Acorn's verbatim source text of the literal) and, for an `Identifier`, on
- * the raw source span `source.slice(node.start, node.end)` — the interpreted
- * `name` no longer contains the backslash sequence, so the source is the only
- * place the escape survives, exactly as the former `checkUnreserved` plugin
- * compared the span to the name. A custom `parse` hook can hand us a node whose
- * `start`/`end` do not index `source`; the `typeof` guards below make that a
- * no-op rather than a spurious rejection.
+ * Acorn remains authoritative for ES2015 lexical forms such as binary/octal
+ * numeric literals and valid Unicode code-point escapes; once Acorn accepts and
+ * decodes those forms, the engine preserves the returned ESTree node values,
+ * raw text, and source spans without an extra decoder or parser-version bump.
  *
  * @param {any} node
  * @param {any} parent
@@ -7566,45 +7556,6 @@ function checkUnsupportedEs2015Node(
     throw unsupportedEs2015Error(typeMessage, node);
   }
 
-  if (node.type === 'Literal' && typeof node.raw === 'string') {
-    if (/^0[bBoO]/.test(node.raw)) {
-      throw unsupportedEs2015Error(
-        'binary and octal numeric literals are not supported',
-        node,
-      );
-    }
-
-    if (typeof node.value === 'string' && hasCodePointEscape(node.raw)) {
-      throw unsupportedEs2015Error(
-        'unicode code-point escapes (`\\u{...}`) are not supported',
-        node,
-      );
-    }
-  }
-
-  if (
-    identifierSourceMatches &&
-    node.type === 'Identifier' &&
-    typeof node.start === 'number' &&
-    typeof node.end === 'number' &&
-    hasCodePointEscape(source.slice(node.start, node.end))
-  ) {
-    throw unsupportedEs2015Error(
-      'unicode code-point escapes (`\\u{...}`) are not supported',
-      node,
-    );
-  }
-
-  if (
-    node.type === 'TemplateElement' &&
-    typeof node.value?.raw === 'string' &&
-    hasCodePointEscape(node.value.raw)
-  ) {
-    throw unsupportedEs2015Error(
-      'unicode code-point escapes (`\\u{...}`) are not supported',
-      node,
-    );
-  }
 }
 
 /**
@@ -7662,43 +7613,6 @@ function isValidSuperMemberProperty(property, computed) {
     !RECOGNIZED_AST_NODE_TYPES.has(property.type) ||
     isSupportedExpressionNode(property)
   );
-}
-
-/**
- * Whether `text` contains an ES2015 code-point escape `\u{...}` — a `u{`
- * introduced by an *odd*-length run of backslashes, so the final backslash is
- * an escape introducer rather than an escaped backslash.
- *
- * The naive `text.includes('\\u{')` misreads a string literal like `"\\u{"`,
- * whose source is an escaped backslash (`\\`) followed by the literal
- * characters `u{`: its raw text still contains the three characters `\u{`, but
- * the `u` is not escaped and there is no code-point escape. The upstream
- * `RegExp/unicode_restricted_identity_escape_u` tests, whose pattern strings
- * spell exactly that, are what force this distinction. Counting the preceding
- * backslashes is the same parity test a lexer applies to decide whether a
- * backslash starts an escape sequence.
- *
- * @param {string} text
- * @returns {boolean}
- */
-function hasCodePointEscape(text) {
-  for (
-    let index = text.indexOf('u{');
-    index !== -1;
-    index = text.indexOf('u{', index + 1)
-  ) {
-    let backslashes = 0;
-
-    for (let scan = index - 1; scan >= 0 && text[scan] === '\\'; scan -= 1) {
-      backslashes += 1;
-    }
-
-    if (backslashes % 2 === 1) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /**

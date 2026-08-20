@@ -182,8 +182,8 @@ ordinary synchronous evaluation is bounded by an engine-owned budget of 500
 engine frames, raising a catchable guest `RangeError` before the host stack
 fails. Generator suspension itself retains only heap-resident frames. The
 engine still rejects async functions/generators and `await`, dynamic `import()`,
-`new.target`, object rest/spread, later class forms, binary/octal literals, and
-Unicode code-point escapes, and it omits later iterator/generator helpers. The
+`new.target`, object rest/spread, later class forms, and it omits later
+iterator/generator helpers. The
 full
 tables, spec citations, observable examples, and backing code references are in
 [docs/limitations.md](docs/limitations.md).

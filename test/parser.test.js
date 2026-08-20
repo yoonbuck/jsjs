@@ -1296,10 +1296,11 @@ const tests = [
       assertSame(result.body.length, 3);
       assertSame(result.body[1].expression.name, 'foo');
       assertSame(result.body[2].expression.value, 0);
-      assertThrows(
-        () => parseScript('var \\u{66}oo = 1;', { program }),
-        SyntaxError,
-      );
+      const appended = parseScript('var \\u{66}oo = 1;', { program });
+      const declaration = appended.body[appended.body.length - 1];
+
+      assertSame(declaration.type, 'VariableDeclaration');
+      assertSame(declaration.declarations[0].id.name, 'foo');
     },
   },
   {
@@ -3039,19 +3040,71 @@ const tests = [
         'var object = { async method() {} };',
         'var object = { ...source };',
         'function withMeta() { return new.target; }',
-        '0b101;',
-        '0B101;',
-        '0o17;',
-        '0O17;',
-        'var s = "\\u{41}";',
-        'var \\u{63}at = 1;',
-        'tag`\\u{41}`;',
       ];
 
       for (const source of rejected) {
         assertThrows(() => parseScript(source), SyntaxError);
         assertThrows(() => parseEval(source), SyntaxError);
       }
+    },
+  },
+  {
+    name: 'ES2015 binary and octal literals retain exact values, raw text, and locations',
+    run() {
+      const program = parseScript('0b101; 0B101; 0o17; 0O17;');
+      const literals = program.body.map((statement) => statement.expression);
+
+      assertSame(
+        JSON.stringify(
+          literals.map(({ value, raw, start, end }) => [value, raw, start, end]),
+        ),
+        JSON.stringify([
+          [5, '0b101', 0, 5],
+          [5, '0B101', 7, 12],
+          [15, '0o17', 14, 18],
+          [15, '0O17', 20, 24],
+        ]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 Unicode code-point escapes preserve decoded values and identifier contexts',
+    run() {
+      const program = parseScript(
+        '"\\u{0}\\u{10ffff}"; var \\u{41}\\u{30} = 1; ({ \\u{69}f: 2 });',
+      );
+
+      assertSame(program.body[0].expression.value, '\0\uDBFF\uDFFF');
+      assertSame(program.body[1].declarations[0].id.name, 'A0');
+      assertSame(program.body[2].expression.properties[0].key.name, 'if');
+    },
+  },
+  {
+    name: 'ES2015 lexical grammar accepts surrogate value escapes but rejects invalid identifier positions and later syntax',
+    run() {
+      for (const source of [
+        '1_0;',
+        '0b1_0;',
+        '0o1_0;',
+        '"\\u{110000}";',
+        '"\\u{";',
+        'var \\u{30}x = 1;',
+        'var \\u{d800} = 1;',
+        'var \\u{63}lass = 1;',
+      ]) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+
+      assertThrows(() => parseScript('"use strict"; 010;'), SyntaxError);
+
+      const stringLiteral = parseScript('"\\u{d800}";').body[0].expression;
+      const templateCooked = parseScript('`\\u{d800}`;').body[0].expression
+        .quasis[0].value.cooked;
+
+      assertSame(stringLiteral.value.length, 1);
+      assertSame(stringLiteral.value.charCodeAt(0), 0xd800);
+      assertSame(templateCooked.length, 1);
+      assertSame(templateCooked.charCodeAt(0), 0xd800);
     },
   },
   {
