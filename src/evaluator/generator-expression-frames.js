@@ -7,6 +7,7 @@ import {
 } from '../runtime/reference.js';
 import {
   getIdentifierReference,
+  getNewTarget,
   getSuperBase,
   getThisBinding,
 } from '../runtime/environment.js';
@@ -113,6 +114,10 @@ import {
  *   context: EvaluationContext,
  *   resultMode: ExpressionResultMode,
  * }} SyncExpressionFrame
+ * @typedef {{
+ *   kind: 'meta-property',
+ *   context: EvaluationContext,
+ * }} MetaPropertyFrame
  * @typedef {{
  *   kind: 'sync-named-expression',
  *   node: any,
@@ -364,7 +369,7 @@ import {
  * @typedef {PatternLeafFrame | PatternDefaultFrame | PatternRestFrame
  *   | ObjectPatternFrame | ObjectPatternPropertyFrame | ArrayPatternFrame}
  *   GeneratorPatternFrame
- * @typedef {SyncExpressionFrame | SyncNamedExpressionFrame
+ * @typedef {SyncExpressionFrame | MetaPropertyFrame | SyncNamedExpressionFrame
  *   | YieldFrame | YieldDelegateFrame | BinaryFrame | LogicalFrame
  *   | ConditionalFrame | SequenceFrame | MemberFrame | AssignmentFrame
  *   | UnaryFrame | UpdateFrame | CallFrame | NewFrame | ArrayLiteralFrame
@@ -408,6 +413,10 @@ export function createGeneratorExpressionFrame(
   context,
   resultMode = 'value',
 ) {
+  if (node?.type === 'MetaProperty') {
+    return { kind: 'meta-property', context };
+  }
+
   if (!generatorContainsYield(node, context)) {
     return { kind: 'sync-expression', node, context, resultMode };
   }
@@ -730,6 +739,8 @@ export function dispatchGeneratorExpressionFrame(execution, frame) {
   switch (frame.kind) {
     case 'sync-expression':
       return dispatchSyncExpression(execution, frame);
+    case 'meta-property':
+      return dispatchMetaProperty(execution, frame);
     case 'sync-named-expression':
       return dispatchSyncNamedExpression(execution, frame);
     case 'yield':
@@ -795,6 +806,20 @@ function dispatchSyncExpression(execution, frame) {
       frame.resultMode === 'reference'
         ? evaluateExpression(frame.node, frame.context)
         : evaluateExpressionValue(frame.node, frame.context),
+    ),
+  };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {MetaPropertyFrame} frame
+ * @returns {GeneratorFrameAction}
+ */
+function dispatchMetaProperty(execution, frame) {
+  return {
+    type: 'pop',
+    result: captureGeneratorOperation(execution.realm, () =>
+      getNewTarget(frame.context.functionEnvironment),
     ),
   };
 }

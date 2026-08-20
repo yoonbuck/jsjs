@@ -443,7 +443,7 @@ syntax tags: `arrow-function`, `class`, `computed-property-names`,
 `rest-parameters`, `spread-syntax`, and `template`. The manifest's
 `spread-syntax` and `template` backing tests are documented metadata exceptions:
 the pinned tree has no standalone spread tag, and its only template-tagged test
-also requires unsupported `new.target`.
+also uses `new.target`.
 
 ### Focused ES2015 Promise Test262 suite
 

@@ -107,6 +107,8 @@ export function performEval(x, callerContext) {
       superAllowed: callerContext.functionEnvironment?.homeObject !== undefined,
       superCallAllowed:
         callerContext.functionEnvironment?.activeConstructor !== undefined,
+      newTargetAllowed:
+        callerContext.functionEnvironment?.newTargetStatus === 'present',
     });
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -139,6 +141,7 @@ export function performEval(x, callerContext) {
     createFunctionExecutionEnvironment({
       thisStatus: 'initialized',
       thisValue: callerContext.thisValue,
+      newTargetStatus: 'absent',
     });
 
   // The variable environment is always a declarative or global environment

@@ -22,11 +22,13 @@ Source enters through `evaluateScript(realm, source)`, which:
    generator declarations/expressions/object/class methods, and `yield`/`yield*`
    inside their bodies. Acorn supplies redeclaration early errors; the engine
    validates each supported AST shape before evaluation. It still rejects
-   async functions/generators and `await`, dynamic `import()`, `new.target`, object
-   rest/spread, class fields/private names/static blocks/decorators, binary/octal
-   literals, and `\u{…}` escapes. A top-level rejection is a host `SyntaxError`;
-   `eval`, dynamic `Function`, and dynamic `%GeneratorFunction%` convert it into
-   a catchable guest `SyntaxError`.
+   async functions/generators and `await`, dynamic `import()`, object
+   rest/spread, and class fields/private names/static blocks/decorators. It
+   accepts ES2015 binary/octal literals, valid Unicode code-point
+   escapes, and exact `new.target` in function code; top-level, module, and
+   indirect-eval `new.target` parses remain host `SyntaxError`s. A top-level
+   rejection is a host `SyntaxError`; `eval`, dynamic `Function`, and dynamic
+   `%GeneratorFunction%` convert it into a catchable guest `SyntaxError`.
 2. **Hoists** via `src/evaluator/declarations.js` —
    `globalDeclarationInstantiation` (ES2015 §15.1.8) walks the AST, using the
    spec's static-semantics name walks in `src/evaluator/static-semantics.js` to

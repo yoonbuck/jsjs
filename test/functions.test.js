@@ -2,6 +2,7 @@ import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { EngineFunction } from '../src/runtime/function-object.js';
 
 /**
  * @param {string} source
@@ -479,6 +480,92 @@ const tests = [
         run('function P(a, b) { this.sum = a + b; } new P(1, 2).sum;'),
         3,
       );
+    },
+  },
+  {
+    name: 'ordinary functions expose active new target for calls construction and alternate targets',
+    run() {
+      assertSame(run('(function F(){ return new.target; })();'), undefined);
+      assertSame(
+        run(
+          'var F = function F(){ this.same = new.target === F; }; new F().same;',
+        ),
+        true,
+      );
+      assertSame(
+        run(`
+          var holder = {
+            F: function F() {
+              this.same = new.target === holder.F;
+              this.member = new.target.name;
+              this.template = \`\${new.target === holder.F}\`;
+            }
+          };
+          function tag() { return new.target; }
+          function substitution() { return tag\`\${new.target}\`; }
+          var instance = new holder.F();
+          [
+            instance.same,
+            instance.member,
+            instance.template,
+            tag\`plain\` === undefined,
+            substitution() === undefined
+          ].join(':');
+        `),
+        'true:F:true:true:true',
+      );
+
+      const realm = createRealm();
+      const target = evaluateScript(
+        realm,
+        '(function Target(){ this.seen = new.target; })',
+      ).value;
+      const alternate = evaluateScript(realm, '(function Alternate(){})').value;
+      const result = /** @type {any} */ (target).constructFunction(
+        [],
+        alternate,
+        realm,
+      );
+      assertSame(result.get('seen'), alternate);
+    },
+  },
+  {
+    name: 'ordinary construction passes the requested new target to the invocation record',
+    run() {
+      const realm = createRealm();
+      const alternate = new EngineFunction({
+        realm,
+        formalParameters: [],
+        parameterNames: [],
+        expectedArgumentCount: 0,
+        simpleParameterList: true,
+        scope: realm.globalEnvironment,
+        strict: false,
+        execute() {
+          return { type: 'normal', value: undefined };
+        },
+      });
+      const target = new EngineFunction({
+        realm,
+        formalParameters: [],
+        parameterNames: [],
+        expectedArgumentCount: 0,
+        simpleParameterList: true,
+        scope: realm.globalEnvironment,
+        strict: false,
+        execute(_functionObject, thisValue, _args, functionEnvironment) {
+          /** @type {EngineObject} */ (thisValue).defineOwnProperty('seen', {
+            value: functionEnvironment.newTarget,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          return { type: 'normal', value: undefined };
+        },
+      });
+
+      const result = target.constructFunction([], alternate, realm);
+      assertSame(result.get('seen'), alternate);
     },
   },
   {

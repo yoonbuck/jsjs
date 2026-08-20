@@ -318,6 +318,47 @@ const tests = [
       assertNormal(run('var shared = 7; new Function("return shared;")();'), 7);
     },
   },
+  {
+    name: 'dynamic Function call has undefined new.target and construction records the constructor target',
+    run() {
+      assertNormal(
+        run(`
+          var F = Function('return new.target;');
+          var called = F();
+          var constructed = new F();
+          var Recorder = Function('this.target = new.target;');
+          var recorded = new Recorder();
+          [
+            called === undefined,
+            constructed === F,
+            constructed instanceof F,
+            recorded instanceof Recorder,
+            recorded.target === Recorder
+          ].join(':');
+        `),
+        'true:true:false:true:true',
+      );
+    },
+  },
+  {
+    name: 'a dynamic function evaluates new.target against its own global function environment',
+    run() {
+      assertNormal(
+        run(`
+          var marker = 'global';
+          function outer() {
+            var marker = 'local';
+            var F = Function(
+              'return marker + ":" + (new.target === undefined);'
+            );
+            return F();
+          }
+          outer();
+        `),
+        'global:true',
+      );
+    },
+  },
 
   // ---------------------------------------------------------------------------
   // 15.3.2.1 steps 9-10: strictness comes only from the body directive.
@@ -656,6 +697,53 @@ const tests = [
 
       const result = runIn(realmB, 'new Function("return marker;")();');
       assertNormal(result, 'A');
+    },
+  },
+  {
+    name: 'cross-realm dynamic Function parse failures use the constructor owner Realm SyntaxError',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+
+      realmB.globalObject.defineOwnProperty('Function', {
+        value: realmA.intrinsics.functionConstructor,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const completion = runIn(realmB, 'Function("return }");');
+      assertGuestThrow(completion, 'SyntaxError', realmA);
+      assertSame(
+        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+          realmB.intrinsics.syntaxErrorPrototype,
+        false,
+      );
+    },
+  },
+  {
+    name: 'cross-realm dynamic Function runtime errors use the created function Realm',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+
+      realmB.globalObject.defineOwnProperty('Function', {
+        value: realmA.intrinsics.functionConstructor,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const completion = runIn(
+        realmB,
+        'var foreignFunction = Function("missingBinding;"); foreignFunction();',
+      );
+      assertGuestThrow(completion, 'ReferenceError', realmA);
+      assertSame(
+        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+          realmB.intrinsics.referenceErrorPrototype,
+        false,
+      );
     },
   },
 ];

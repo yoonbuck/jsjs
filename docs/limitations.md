@@ -608,20 +608,20 @@ host `SyntaxError`.
 
 The engine now accepts the issue #25 ES2015 syntax surface: arrows, classes and
 derived construction, computed object/class method names, destructuring,
-default/rest parameters, iterable array/call/construction spread, and template
-literals. It also accepts synchronous generator declarations, expressions,
-object/class methods, `yield`, and `yield*`. The capability gate still rejects
-these neighboring forms, and the runtime omits the listed later APIs:
+default/rest parameters, iterable array/call/construction spread, template
+literals, binary/octal literals, valid Unicode code-point escapes, and exact
+`new.target` in function code. Top-level, module, and indirect-eval
+`new.target` parses still fail. It also accepts synchronous generator
+declarations, expressions, object/class methods, `yield`, and `yield*`. The
+capability gate still rejects these neighboring forms, and the runtime omits
+the listed later APIs:
 
 - async functions and `await`, including async generators and async iteration;
 - dynamic `import()`, `import.meta`, top-level `await`, and import
   assertions/attributes;
-- `new.target`, including inside arrows;
 - object rest and object spread;
 - later class forms: public/private fields, private methods, static blocks, and
   decorators;
-- binary (`0b`) and octal (`0o`) numeric literals;
-- Unicode code-point escapes (`\u{…}`) in strings and identifiers; and
 - post-ES2015 iterator/generator helpers such as `Iterator.from` and helper
   methods including `map`, `filter`, and `take`.
 

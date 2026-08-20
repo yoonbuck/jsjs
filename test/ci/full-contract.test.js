@@ -203,10 +203,6 @@ const REQUIRED_UNSUPPORTED_SELECTION_CLASSIFICATIONS = Object.freeze([
     category: 'post-es5-builtin',
   }),
   Object.freeze({
-    path: 'test/staging/sm/class/newTargetEval.js',
-    category: 'post-es5-syntax',
-  }),
-  Object.freeze({
     path: 'test/staging/sm/object/hasOwn.js',
     category: 'post-es5-builtin',
   }),

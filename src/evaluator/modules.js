@@ -698,6 +698,7 @@ function moduleContext(record, environment) {
     functionEnvironment: createFunctionExecutionEnvironment({
       thisStatus: 'initialized',
       thisValue: undefined,
+      newTargetStatus: 'absent',
     }),
   };
 }

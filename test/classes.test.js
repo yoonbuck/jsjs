@@ -526,6 +526,72 @@ const tests = [
     },
   },
   {
+    name: 'base derived bound and alternate class construction expose the active new target',
+    run() {
+      assertSame(
+        run(`
+          class Base {
+            constructor(a = new.target) {
+              this.base = a;
+            }
+          }
+          class Derived extends Base {
+            constructor(a = new.target) {
+              super();
+              this.derived = a;
+            }
+          }
+          var BoundBase = Base.bind(null);
+          BoundBase.prototype = Base.prototype;
+          class BoundDerived extends BoundBase {}
+          var base = new Base();
+          var derived = new Derived();
+          var bound = new BoundBase();
+          var boundDerived = new BoundDerived();
+          [
+            base.base === Base,
+            derived.base === Derived,
+            derived.derived === Derived,
+            bound.base === Base,
+            boundDerived.base === BoundDerived
+          ].join(':');
+        `),
+        'true:true:true:true:true',
+      );
+
+      const realm = createRealm();
+      const Derived = evaluateScript(
+        realm,
+        `
+          class Base {
+            constructor(a = new.target) {
+              this.base = a;
+            }
+          }
+          class Derived extends Base {
+            constructor(a = new.target) {
+              super();
+              this.derived = a;
+            }
+          }
+          Derived;
+        `,
+      ).value;
+      const Alternate = evaluateScript(
+        realm,
+        'class Alternate {} Alternate;',
+      ).value;
+      const result = /** @type {any} */ (Derived).constructFunction(
+        [],
+        Alternate,
+        realm,
+      );
+
+      assertSame(result.get('base'), Alternate);
+      assertSame(result.get('derived'), Alternate);
+    },
+  },
+  {
     name: 'bound super construction preserves an explicit base-constructor object return',
     run() {
       assertSame(

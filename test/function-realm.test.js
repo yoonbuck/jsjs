@@ -78,6 +78,38 @@ export default [
     },
   },
   {
+    name: 'GetFunctionRealm pins dynamic Function and GeneratorFunction objects to the constructor Realm',
+    run: () => {
+      const realmA = createRealm();
+      const realmB = createRealm();
+
+      realmB.globalObject.defineOwnProperty('Function', {
+        value: realmA.intrinsics.functionConstructor,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      realmB.globalObject.defineOwnProperty('ForeignGeneratorFunction', {
+        value: realmA.intrinsics.generatorFunctionConstructor,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const dynamicFunction = evaluateScript(
+        realmB,
+        'Function("return 1;")',
+      ).value;
+      const dynamicGenerator = evaluateScript(
+        realmB,
+        'ForeignGeneratorFunction("yield 1;")',
+      ).value;
+
+      assertSame(getFunctionRealm(callable(dynamicFunction)).value, realmA);
+      assertSame(getFunctionRealm(callable(dynamicGenerator)).value, realmA);
+    },
+  },
+  {
     name: 'GetFunctionRealm follows long bound chains without a host stack overflow',
     run: () => {
       const realm = createRealm();

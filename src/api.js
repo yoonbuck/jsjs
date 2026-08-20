@@ -66,6 +66,7 @@ export function evaluateScript(realm, source, parserOptions = {}) {
     functionEnvironment: createFunctionExecutionEnvironment({
       thisStatus: 'initialized',
       thisValue: realm.globalEnvironment.getThisBinding(),
+      newTargetStatus: 'absent',
     }),
   };
 

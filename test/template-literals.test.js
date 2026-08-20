@@ -91,6 +91,29 @@ const tests = [
     },
   },
   {
+    name: 'untagged templates preserve raw and cooked ES2015 code-point escapes',
+    run() {
+      const quasi = parseScript('`\\u{0}\\u{10ffff}`;').body[0].expression
+        .quasis[0].value;
+
+      assertSame(quasi.raw, '\\u{0}\\u{10ffff}');
+      assertSame(quasi.cooked, '\0\uDBFF\uDFFF');
+    },
+  },
+  {
+    name: 'tagged templates preserve raw code-point escapes while cooking U+0000 and U+10FFFF',
+    run() {
+      assertSame(
+        run(
+          'function tag(strings) { ' +
+            'return strings[0].length === 3 && strings[0].charCodeAt(0) === 0 && strings[0].charCodeAt(1) === 0xdbff && strings[0].charCodeAt(2) === 0xdfff && strings.raw[0] === "\\\\u{0}\\\\u{10ffff}"; ' +
+            '} tag`\\u{0}\\u{10ffff}`;',
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'a tagged template parse site reuses identity while distinct sites do not',
     run() {
       assertSame(

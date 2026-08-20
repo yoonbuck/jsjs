@@ -59,6 +59,8 @@ const RANGE_HEAD_SHA = 'b'.repeat(40);
 const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
 const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
   'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
+const ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA =
+  '99c439f2efd287479f40d8d0e6ac2dd9aab81e10';
 const FOUNDATION_ALLOWED_PATHS = Object.freeze([
   '.github/workflows/ci.yml',
   '.prettierignore',
@@ -106,6 +108,57 @@ const DECISION_GENERATED_PATHS = Object.freeze([
   'docs/test262-report.jsonl',
   'tools/test262/es2015-audit-evidence.json',
   'tools/test262/es2015-taxonomy.json',
+]);
+const ISSUE_77_LEXICAL_MAINTENANCE_PATHS = Object.freeze([
+  'README.md',
+  'docs/architecture.md',
+  'docs/conformance.md',
+  'docs/limitations.md',
+  'docs/superpowers/plans/2026-08-19-es2015-lexical-new-target.md',
+  'docs/superpowers/specs/2026-08-19-es2015-lexical-new-target-design.md',
+  'docs/test262-report.jsonl',
+  'docs/testing.md',
+  'src/api.js',
+  'src/evaluator/dynamic-function.js',
+  'src/evaluator/eval.js',
+  'src/evaluator/expressions.js',
+  'src/evaluator/generator-expression-frames.js',
+  'src/evaluator/modules.js',
+  'src/parser.js',
+  'src/runtime/environment.js',
+  'src/runtime/function-object.js',
+  'test/arrow-functions.test.js',
+  'test/ci/es2015-syntax-test262.test.js',
+  'test/ci/full-contract.test.js',
+  'test/classes.test.js',
+  'test/dynamic-function.test.js',
+  'test/environments.test.js',
+  'test/eval.test.js',
+  'test/function-parameters.test.js',
+  'test/function-realm.test.js',
+  'test/functions.test.js',
+  'test/generator-function.test.js',
+  'test/module-loader.test.js',
+  'test/module-parser.test.js',
+  'test/node/es2015-provenance.test.js',
+  'test/node/upstream-select.test.js',
+  'test/parser.test.js',
+  'test/template-literals.test.js',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/es2015-provenance.json',
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/es5-selection.json',
+  'tools/test262/upstream-subset.json',
+]);
+const ISSUE_77_LEXICAL_GENERATED_PATHS = Object.freeze([
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-provenance.json',
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/upstream-subset.json',
 ]);
 const EMPTY_DECISION_FRAGMENTS = Object.freeze(
   ES2015_PROVENANCE_DECISION_CODES.map(
@@ -168,6 +221,17 @@ const CAPTURED_FOUNDATION_MAINTENANCE_RANGE_PROFILE = Object.freeze({
     '.github/workflows/ci.yml',
     ES2015_PROVENANCE_FILE,
   ]),
+});
+const CAPTURED_ISSUE_77_LEXICAL_MAINTENANCE_RANGE_PROFILE = Object.freeze({
+  name: 'maintenance:issue77-lexical',
+  baseFoundation: 'present',
+  requiredPaths: ISSUE_77_LEXICAL_MAINTENANCE_PATHS,
+  allowedPaths: ISSUE_77_LEXICAL_MAINTENANCE_PATHS,
+  requiredDeletions: Object.freeze([]),
+  allowedDeletions: Object.freeze([]),
+  emptyDecisionFragments: Object.freeze([]),
+  decisionFragment: null,
+  generatedPaths: ISSUE_77_LEXICAL_GENERATED_PATHS,
 });
 /** @param {string} code */
 function capturedDecisionRangeProfile(code) {
@@ -1117,7 +1181,8 @@ function foundationBootstrapManifestText() {
   const manifest = JSON.parse(approvedProvenanceManifestText());
   manifest.rangeProfiles = manifest.rangeProfiles.filter(
     (/** @type {{ name: string }} */ profile) =>
-      profile.name !== 'foundation-maintenance',
+      profile.name !== 'foundation-maintenance' &&
+      profile.name !== 'maintenance:issue77-lexical',
   );
   const text = `${JSON.stringify(manifest, null, 2)}\n`;
   assertSame(
@@ -1250,6 +1315,9 @@ export default [
       const maintenanceProfile = manifest.rangeProfiles.find(
         (profile) => profile.name === 'foundation-maintenance',
       );
+      const issue77MaintenanceProfile = manifest.rangeProfiles.find(
+        (profile) => profile.name === 'maintenance:issue77-lexical',
+      );
       const decisionProfiles = manifest.rangeProfiles.filter((profile) =>
         profile.name.startsWith('decision:'),
       );
@@ -1258,12 +1326,17 @@ export default [
         json([
           'foundation',
           'foundation-maintenance',
+          'maintenance:issue77-lexical',
           ...ES2015_PROVENANCE_DECISION_CODES.map((code) => `decision:${code}`),
         ]),
       );
       assertSame(
         json(maintenanceProfile),
         json(CAPTURED_FOUNDATION_MAINTENANCE_RANGE_PROFILE),
+      );
+      assertSame(
+        json(issue77MaintenanceProfile),
+        json(CAPTURED_ISSUE_77_LEXICAL_MAINTENANCE_RANGE_PROFILE),
       );
       assertSame(
         json(foundationProfile),
@@ -3218,6 +3291,22 @@ export default [
         ),
         0,
       );
+      assertSame(
+        await provenanceCheck(
+          rangeArguments('maintenance:issue77-lexical', {
+            baseSha: ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+          }),
+          rangeCheckDependencies({
+            baseSha: ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+            changes: ISSUE_77_LEXICAL_MAINTENANCE_PATHS.map((path) => ({
+              status: 'M',
+              path,
+            })),
+            baseManifestText: approvedProvenanceManifestText(),
+          }),
+        ),
+        0,
+      );
     },
   },
   {
@@ -3659,6 +3748,32 @@ export default [
           }),
           message:
             'decision:UL3 range requires an initialized provenance foundation in the base',
+        },
+        {
+          args: rangeArguments('maintenance:issue77-lexical', {
+            baseSha: ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+          }),
+          dependencies: rangeCheckDependencies({
+            baseSha: ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+            changes: ISSUE_77_LEXICAL_MAINTENANCE_PATHS.map((path) => ({
+              status: 'M',
+              path,
+            })),
+          }),
+          message:
+            'maintenance:issue77-lexical range requires an initialized provenance foundation in the base',
+        },
+        {
+          args: rangeArguments('maintenance:issue77-lexical'),
+          dependencies: rangeCheckDependencies({
+            changes: ISSUE_77_LEXICAL_MAINTENANCE_PATHS.map((path) => ({
+              status: 'M',
+              path,
+            })),
+            baseManifestText: approvedProvenanceManifestText(),
+          }),
+          message:
+            'maintenance:issue77-lexical range requires base 99c439f2efd287479f40d8d0e6ac2dd9aab81e10',
         },
         {
           args: [

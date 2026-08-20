@@ -36,10 +36,10 @@ const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 
 const KNOWN_GOOD_PATH_COUNT = 12434;
 
-const GENERATED_PATH_COUNT = 14107;
+const GENERATED_PATH_COUNT = 14129;
 const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 
-const ISSUE_25_EXPANSION_PATH_COUNT = 1662;
+const ISSUE_25_EXPANSION_PATH_COUNT = 1684;
 
 const ISSUE_25_EXPANSION_FEATURES = Object.freeze([
   'arrow-function',

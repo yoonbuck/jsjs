@@ -13,17 +13,21 @@ limited Annex B statement-position forms remain unsupported (see
 It also implements issue #25's ES2015 syntax surface: arrow functions; classes,
 inheritance, `super`, and computed method names; computed object names;
 destructuring declarations, assignments, and parameters; default and rest
-parameters; iterable spread in arrays, calls, and construction; and template
+parameters; iterable spread in arrays, calls, and construction; template
 literals including tagged-template cooked/raw objects and realm-local
-parse-site caching. The Layer-2 surface adds synchronous generator
+parse-site caching; binary/octal literals; valid Unicode code-point escapes; and
+exact `new.target` in function code, with top-level, module, and indirect-eval
+forms still rejected. The Layer-2 surface adds synchronous generator
 declarations, expressions, object/class methods, `yield`/`yield*`, generator
 iteration methods, and the non-global dynamic `%GeneratorFunction%`
 constructor.
 
 The parser's capability gate admits only those forms, so grammar and evaluation
 move together. `parseScript` still rejects async functions/generators and
-`await`, dynamic `import()`, `new.target`, object rest/spread, later class fields/private names/static
-blocks/decorators, binary/octal literals, and `\u{…}` code-point escapes. The
+`await`, dynamic `import()`, object rest/spread, and later class
+fields/private names/static blocks/decorators. It accepts binary/octal literals,
+valid Unicode code-point escapes, and exact `new.target` in function code; the
+top-level, module, and indirect-eval forms remain parse errors. The
 ES2015 RegExp flags `u` and `y` are rejected by ES5.1 flag validation. A
 top-level rejection is a host `SyntaxError`; source parsed through `eval`,
 dynamic `Function`, or dynamic `%GeneratorFunction%` receives a catchable guest
@@ -351,10 +355,9 @@ A file is a candidate only if it survives every filter:
   `destructuring-binding`, `rest-parameters`, `spread-syntax`, and `template`.
   Feature areas scope tagged selection to the relevant syntax directories; the
   broad `test/language` claim remains limited to the earlier lexical and
-  iteration tags. The pin has no standalone `spread-syntax` tag and its only
-  `template` tag also needs unsupported `new.target`, so their semantic backing
-  tests are documented exact metadata exceptions rather than claims for those
-  neighboring features.
+  iteration tags. The pin has no standalone `spread-syntax` tag and its only `template` tag
+  also uses `new.target`, so their semantic backing tests are documented exact
+  metadata exceptions rather than claims for those neighboring features.
 
 - **Engine grammar filter.** Every remaining file and harness include is parsed
   with the engine's own `parseScript`. A file that fails the parser's supported
@@ -376,13 +379,13 @@ keeps them honest, and nowhere else.
 The large excluded remainder is not a list of things this engine gets wrong. The
 upstream suite tracks the _current_ specification, and most of it tests language
 and library features introduced after ES5.1, or ES5.1 behaviour that later
-editions deliberately changed. The 609 classified exclusions break down as:
+editions deliberately changed. The 608 classified exclusions break down as:
 
 | Category             | Count | What it means                                                                                |
 | -------------------- | ----- | -------------------------------------------------------------------------------------------- |
 | `post-es5-semantics` | 332   | ES5.1 and a later edition genuinely disagree, and this engine implements ES5.1.              |
 | `post-es5-builtin`   | 221   | A built-in or member ES5.1 does not define.                                                  |
-| `post-es5-syntax`    | 21    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
+| `post-es5-syntax`    | 20    | Syntax outside the supported grammar that the structural parse filter cannot identify alone. |
 | `host-dependent`     | 33    | The result depends on a host facility or environment.                                        |
 | `engine-deviation`   | 2     | This engine knowingly differs from ES5.1; each entry names a limitation heading.             |
 
@@ -430,8 +433,8 @@ exercised end to end. `tests` normally names upstream tests that carry the tag;
 the full contract permits only two exact pinned metadata exceptions:
 `spread-syntax` is backed by a `Symbol.iterator` spread test because the pin has
 no spread tag, and `template` is backed by an untagged cache test because the
-only template-tagged file also requires `new.target`. Every backing test still
-runs successfully, so neither exception claims its missing neighboring feature.
+only template-tagged file also uses `new.target`. Every backing test still runs
+successfully, so neither exception claims its missing neighboring feature.
 
 The manifest claims `const`, `for-of`, `let`, Symbol and its well-known tags,
 plus `arrow-function`, `class`, `computed-property-names`,
@@ -602,8 +605,8 @@ remaining unsupported class-field and Unicode/legacy-escape forms.
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 20,430   | 20,430    | 20,430 | 38.133% |
-| (file, variant) | 102,912     | 38,813   | 38,813    | 38,813 | 37.715% |
+| Files           | 53,575      | 20,452   | 20,452    | 20,452 | 38.175% |
+| (file, variant) | 102,912     | 38,855   | 38,855    | 38,855 | 37.756% |
 
 0 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
@@ -711,11 +714,18 @@ The qualified core ES2015 evidence is:
 
 | Core status              | Roots      | Variants   |
 | ------------------------ | ---------- | ---------- |
-| Selected passing         | 19,603     | 37,305     |
-| Audit-passing unselected | 0          | 0          |
-| Blocked                  | 4,645      | 9,115      |
+| Selected passing         | 19,625     | 37,347     |
+| Audit-passing unselected | 60         | 120        |
+| Blocked                  | 4,563      | 8,953      |
 | Intentional deviation    | 2          | 4          |
 | **Core total**           | **24,250** | **46,424** |
+
+Issue #77's exact 83-root lexical grammar and `new.target` ledger now has no
+core `lexical-grammar-and-new-target` blockers: 22 roots entered selected
+passing evidence, 60 roots remain audit-passing unselected, and the
+Function.prototype.toString Unicode root moved by exact-path review to
+`remaining-standard-library-additions` because it depends on exact source
+preservation. The separate Annex B escape root remains in the Annex B partition.
 
 Annex B remains separate:
 

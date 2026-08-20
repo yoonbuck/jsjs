@@ -185,6 +185,29 @@ const tests = [
     },
   },
   {
+    name: 'arrows retain the enclosing new target record while nested ordinary functions reset it',
+    run() {
+      assertSame(
+        run(`
+          function Outer() {
+            this.arrow = () => new.target;
+            this.defaultArrow = (value = new.target) => value;
+            this.nested = function () {
+              return new.target;
+            };
+          }
+          var instance = new Outer();
+          [
+            instance.arrow() === Outer,
+            instance.defaultArrow() === Outer,
+            instance.nested() === undefined
+          ].join(':');
+        `),
+        'true:true:true',
+      );
+    },
+  },
+  {
     name: 'arrows resolve super lexically through enclosing methods and accessors',
     run() {
       assertSame(

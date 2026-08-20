@@ -69,7 +69,7 @@ const DURABLE_LEDGER_SHA256 =
 const PRE_PROMOTION_TAXONOMY_SHA256 =
   'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
 const PRE_PROMOTION_GROUPS_SHA256 =
-  '0bda05c5dbc79a868ddedf574cdc598a52a57dc38ef374e6e909db088e164d0a';
+  '064be556b3e98debaca2287097c2ab431283906df57a82dd5c6aba01227440f8';
 
 /** @param {string} text */
 function sha256(text) {

@@ -80,6 +80,7 @@ export function createDynamicFunction(realm, args, kind = 'normal') {
     functionEnvironment: createFunctionExecutionEnvironment({
       thisStatus: 'initialized',
       thisValue: realm.globalObject,
+      newTargetStatus: 'absent',
     }),
   };
 

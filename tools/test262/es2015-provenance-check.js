@@ -31,6 +31,8 @@ const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
 const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
   'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
 const FOUNDATION_MAINTENANCE_PROFILE = 'foundation-maintenance';
+const ISSUE_77_MAINTENANCE_PROFILE = 'maintenance:issue77-lexical';
+const ISSUE_77_MAINTENANCE_BASE = '99c439f2efd287479f40d8d0e6ac2dd9aab81e10';
 const FOUNDATION_BOOTSTRAP_BASE_LEDGER_SHA256 =
   '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc';
 const FOUNDATION_BOOTSTRAP_RANGE_PROFILE = Object.freeze({
@@ -612,6 +614,23 @@ async function checkRange(deps, options) {
     }
     await validateRangeContent(deps, head, headManifest, authority.profile);
     return;
+  } else if (marker.profile === ISSUE_77_MAINTENANCE_PROFILE) {
+    if (baseManifestText === null) {
+      throw new Es2015ProvenanceCheckError(
+        `${ISSUE_77_MAINTENANCE_PROFILE} range requires an initialized provenance foundation in the base`,
+      );
+    }
+    if (base !== ISSUE_77_MAINTENANCE_BASE) {
+      throw new Es2015ProvenanceCheckError(
+        `${ISSUE_77_MAINTENANCE_PROFILE} range requires base ${ISSUE_77_MAINTENANCE_BASE}`,
+      );
+    }
+    manifest = await readRangeManifest(
+      deps,
+      head,
+      `${ISSUE_77_MAINTENANCE_PROFILE} head`,
+    );
+    profile = rangeProfileForManifest(manifest, marker.profile);
   } else {
     throw new Es2015ProvenanceCheckError(
       `Unknown provenance range profile ${marker.profile}`,
@@ -838,6 +857,7 @@ async function provenanceOwnedRange(deps, changes, base, head) {
       : 'provenance ownership base',
   );
   for (const profile of manifest.rangeProfiles) {
+    if (profile.name === ISSUE_77_MAINTENANCE_PROFILE) continue;
     addRangeProfileOwnership(ownedPaths, profile);
   }
   return changedPaths.some((path) => ownedPaths.has(path));

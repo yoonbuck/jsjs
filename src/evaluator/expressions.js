@@ -8,6 +8,7 @@ import {
 import {
   getIdentifierBindingValue,
   getIdentifierReference,
+  getNewTarget,
   getSuperBase,
   getThisBinding,
   newDeclarativeEnvironment,
@@ -122,6 +123,7 @@ export const EXPRESSION_TYPES = new Set([
   'Literal',
   'Identifier',
   'ThisExpression',
+  'MetaProperty',
   'UnaryExpression',
   'BinaryExpression',
   'LogicalExpression',
@@ -171,6 +173,8 @@ export function evaluateExpression(node, context) {
         return getIdentifierReference(context.env, node.name, context.strict);
       case 'ThisExpression':
         return getContextThisBinding(context);
+      case 'MetaProperty':
+        return getNewTarget(context.functionEnvironment);
       case 'UnaryExpression':
         return evaluateUnaryExpression(node, context);
       case 'BinaryExpression':
