@@ -314,8 +314,6 @@ export function typeOf(value) {
       return 'string';
     case 'symbol':
       return 'symbol';
-    case 'function':
-      return 'function';
     default:
       return isCallable(value) ? 'function' : 'object';
   }

@@ -37,6 +37,7 @@ import {
   ES2015_PROVENANCE_FILE,
   PROVENANCE_RANGE_GATE_OWNER_PATHS,
 } from '../../tools/test262/es2015-provenance.js';
+import { checkObjectContractSources } from '../../tools/invariants/object-contract.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
@@ -1198,6 +1199,118 @@ function markdownHeadingAnchors(source) {
 }
 
 export default [
+  {
+    name: 'callable capability registrations and host accessor dispatch stay sanctioned',
+    run: async () => {
+      const sources = await readJavaScript('src/');
+
+      assertSame(sources.size > 0, true, 'engine sources were found');
+      assertSame(checkObjectContractSources(sources).join('\n'), '');
+    },
+  },
+  {
+    name: 'object contract invariant rejects unapproved capability registrations',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/runtime/rogue.js',
+            [
+              "import { registerCallable } from './capabilities.js';",
+              'registerCallable({});',
+            ].join('\n'),
+          ],
+          [
+            'src/runtime/function-object.js',
+            [
+              "import { registerCallable, registerConstructor } from './capabilities.js';",
+              'registerConstructor(this);',
+              'registerCallable(this);',
+              'registerCallable(other);',
+            ].join('\n'),
+          ],
+          [
+            'src/runtime/rogue-member.js',
+            [
+              'const capabilities = {};',
+              'capabilities.registerConstructor(this);',
+            ].join('\n'),
+          ],
+          [
+            'src/runtime/rogue-alias.js',
+            [
+              'const capabilities = {};',
+              'const grant = capabilities.registerCallable;',
+              'grant({});',
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        [
+          'src/runtime/function-object.js:4: registerCallable(other) is not an allowlisted registration call',
+          'src/runtime/rogue-alias.js:3: registerCallable({}) is not an allowlisted registration call',
+          'src/runtime/rogue-member.js:2: registerConstructor(this) is not an allowlisted registration call',
+          'src/runtime/rogue.js:1: registerCallable import is not allowlisted',
+          'src/runtime/rogue.js:2: registerCallable({}) is not an allowlisted registration call',
+        ].join('\n'),
+      );
+    },
+  },
+  {
+    name: 'object contract invariant rejects semantic capability probes',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/runtime/rogue.js',
+            [
+              'if (value._isConstructor) {}',
+              "if (typeof value.callFunction === 'function') {}",
+              "if (typeof value.constructFunction === 'function') {}",
+              "if ('callFunction' in value) {}",
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        [
+          'src/runtime/rogue.js:1: semantic _isConstructor read is forbidden',
+          'src/runtime/rogue.js:2: callFunction capability duck typing is forbidden',
+          'src/runtime/rogue.js:3: constructFunction capability duck typing is forbidden',
+          'src/runtime/rogue.js:4: callFunction capability duck typing is forbidden',
+        ].join('\n'),
+      );
+    },
+  },
+  {
+    name: 'object contract invariant reserves raw host accessor calls for callAccessor',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/runtime/rogue.js',
+            [
+              'export function invoke(callback) {',
+              "  if (typeof callback === 'function') {",
+              '    return callback.call(undefined);',
+              '  }',
+              '}',
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        'src/runtime/rogue.js:3: raw host callback callback.call() is only allowed in src/runtime/object.js#callAccessor',
+      );
+    },
+  },
   {
     name: 'trackedSuperpowersPathsFromGitLsFilesOutput finds tracked .superpowers paths in NUL-delimited git output',
     run: async () => {

@@ -9,6 +9,7 @@ import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { ThrowSignal, GuestErrorSignal } from '../src/runtime/completion.js';
 import { GeneratorObject } from '../src/runtime/generator-object.js';
+import { typeOf } from '../src/runtime/operators.js';
 import {
   callCallable,
   constructCallable,
@@ -41,6 +42,46 @@ async function linkedModule(realm, source) {
 }
 
 export default [
+  {
+    name: 'raw engine accessors remain non-callable after descriptor reflection',
+    run() {
+      const realm = createRealm();
+      const rawAccessor = () => 'host-only';
+
+      realm.globalObject.defineOwnProperty('engineAccessor', {
+        get: rawAccessor,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const reflected = evaluateScript(
+        realm,
+        'Object.getOwnPropertyDescriptor(this, "engineAccessor").get;',
+      ).value;
+
+      assertSame(reflected, rawAccessor);
+      assertSame(isCallable(reflected), false);
+      assertSame(typeOf(reflected), 'object');
+      assertThrows(
+        () => callCallable(reflected, undefined, []),
+        GuestErrorSignal,
+      );
+      assertSame(
+        evaluateScript(
+          realm,
+          'typeof Object.getOwnPropertyDescriptor(this, "engineAccessor").get;',
+        ).value,
+        'object',
+      );
+      assertSame(
+        evaluateScript(
+          realm,
+          'var getter = Object.getOwnPropertyDescriptor(this, "engineAccessor").get; var error; try { getter(); } catch (caught) { error = caught.name; } error;',
+        ).value,
+        'TypeError',
+      );
+    },
+  },
   {
     name: 'Table 6 capabilities reject spoofed methods, tags, and constructor flags',
     run() {
