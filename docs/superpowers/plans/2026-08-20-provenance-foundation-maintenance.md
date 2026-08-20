@@ -527,104 +527,116 @@ allowlist. No implementation task may add a path.
 
 ### Future Task G1: RED workflow security contract
 
+**Status:** complete. Implemented under coordinator authorization; every item
+below is done.
+
 **Files:**
 
 - Modify: `test/node/workflow-contract.test.js`
 
-- [ ] Add a parsed-YAML assertion for a filter-free `pull_request_target`
-  trigger with exactly `opened`, `synchronize`, `reopened`, and `edited`.
-- [ ] Add an expected `provenance-base-guard` job with the active check-run name
-  `Provenance base guard`, condition
-  `github.event_name == 'pull_request_target'`, and permissions exactly
-  `contents: read` plus `pull-requests: read`.
-- [ ] Require explicit `ubuntu-24.04`, a five-minute timeout, and no `needs`.
-- [ ] Require guard concurrency keyed by the server-provided PR number with
-  a fixed `provenance-base-guard-` prefix and `cancel-in-progress: true`, so
-  edited or synchronized stale runs cannot finish after their replacement.
-- [ ] Require fixed single-line validation commands for exact base repository,
-  workflow repository, `main` base ref, full base/head SHAs, numeric nonzero PR
-  number, and checked-out `HEAD` equality with event base SHA.
-- [ ] Require an explicit base-SHA checkout, `fetch-depth: 0`,
-  `persist-credentials: false`, `submodules: false`, pinned
-  checkout/setup-node actions, Node 20 without cache, no npm, a fixed quoted
-  inert fetch of the base repository's advertised
-  `refs/pull/<number>/head`, exact fetched-ref and `FETCH_HEAD` equality with
-  the event head SHA, and the base checker command with event base/head/body
-  plus fixed `TZ: UTC`. The PR number is available only to validation/fetch
-  steps, not the checker.
-- [ ] Require per-step rather than job-level environments: identity variables
-  only where consumed, `PR_BODY` and fixed `TZ: UTC` only on the checker step.
-- [ ] Add fork-shaped event cases that prove a different head repository never
-  becomes a remote or URL input.
-- [ ] Execute the exact generated command constants against deterministic
-  temporary Git repositories and require failure for a retargeted base branch,
-  mismatched base repository, checkout `HEAD`/event base mismatch, nonnumeric or
-  zero PR number, and fetched/event head SHA mismatch.
-- [ ] Create those fixtures with `mkdtemp` under the OS temporary directory,
-  isolate `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`, and set fixture-local
-  identity inline. Initialize fixtures with an explicit `main` branch so the
-  suite remains offline and independent of host Git defaults.
-- [ ] Reject `allow-unsafe-pr-checkout`, a HEAD checkout, secrets, write
-  permissions, caches, artifacts, reusable workflows, unpinned actions,
-  command-line PR body interpolation, and any event expression in `run`.
-- [ ] Require every existing job to have
-  `github.event_name != 'pull_request_target'`.
-- [ ] Require event-distinct inactive display names so no skipped job can
-  satisfy either the guard requirement or an ordinary CI requirement.
-- [ ] Assert `github.event_name` is the only dynamic input to job display names
-  and that no context containing `(inactive` is eligible as the required guard.
-- [ ] Preserve the exact ordinary-event names, commands, steps, needs, pins,
-  and environments of all existing jobs.
-- [ ] Add and test a byte-preserving generator assertion that every job `name`,
-  step `name`, and step `run` is YAML plain-scalar-safe: no line break,
-  leading/trailing whitespace, trailing colon, colon-space, space-`#`, or
-  reserved leading indicator. Keep every guard command single-line with a safe
-  leading word and colon-free diagnostics.
-- [ ] Explicitly amend the current exact job table, per-job npm-command
-  assumption, inherited-permission assertion, and exact checker-event error
-  expectation for the custom guard.
-- [ ] Require the existing ordinary-PR `Check provenance PR range` step to
-  remain verbatim and defense-in-depth only.
-- [ ] Run only the focused workflow-contract test and confirm RED for the absent
-  trigger/job/model.
+- [x] Add a parsed-YAML assertion for a filter-free `pull_request_target`
+      trigger with exactly `opened`, `synchronize`, `reopened`, and `edited`.
+- [x] Add an expected `provenance-base-guard` job with the active check-run name
+      `Provenance base guard`, condition
+      `github.event_name == 'pull_request_target'`, and permissions exactly
+      `contents: read` plus `pull-requests: read`.
+- [x] Require explicit `ubuntu-24.04`, a five-minute timeout, and no `needs`.
+- [x] Require guard concurrency keyed by the server-provided PR number with
+      a fixed `provenance-base-guard-` prefix and `cancel-in-progress: true`, so
+      edited or synchronized stale runs cannot finish after their replacement.
+- [x] Require fixed single-line validation commands for exact base repository,
+      workflow repository, `main` base ref, full base/head SHAs, numeric nonzero PR
+      number, and checked-out `HEAD` equality with event base SHA.
+- [x] Require an explicit base-SHA checkout, `fetch-depth: 0`,
+      `persist-credentials: false`, `submodules: false`, pinned
+      checkout/setup-node actions, Node 20 without cache, no npm, a fixed quoted
+      inert fetch of the base repository's advertised
+      `refs/pull/<number>/head`, exact fetched-ref and `FETCH_HEAD` equality with
+      the event head SHA, and the base checker command with event base/head/body
+      plus fixed `TZ: UTC`. The PR number is available only to validation/fetch
+      steps, not the checker.
+- [x] Require per-step rather than job-level environments: identity variables
+      only where consumed, `PR_BODY` and fixed `TZ: UTC` only on the checker step.
+- [x] Add fork-shaped event cases that prove a different head repository never
+      becomes a remote or URL input.
+- [x] Execute the exact generated command constants against deterministic
+      temporary Git repositories and require failure for a retargeted base branch,
+      mismatched base repository, checkout `HEAD`/event base mismatch, nonnumeric or
+      zero PR number, and fetched/event head SHA mismatch.
+- [x] Create those fixtures with `mkdtemp` under the OS temporary directory,
+      isolate `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`, and set fixture-local
+      identity inline. Initialize fixtures with an explicit `main` branch so the
+      suite remains offline and independent of host Git defaults.
+- [x] Reject `allow-unsafe-pr-checkout`, a HEAD checkout, secrets, write
+      permissions, caches, artifacts, reusable workflows, unpinned actions,
+      command-line PR body interpolation, and any event expression in `run`.
+- [x] Require every existing job to have
+      `github.event_name != 'pull_request_target'`.
+- [x] Require event-distinct inactive display names so no skipped job can
+      satisfy either the guard requirement or an ordinary CI requirement.
+- [x] Assert `github.event_name` is the only dynamic input to job display names
+      and that no context containing `(inactive` is eligible as the required guard.
+- [x] Preserve the exact ordinary-event names, commands, steps, needs, pins,
+      and environments of all existing jobs.
+- [x] Add and test a byte-preserving generator assertion that every job `name`,
+      step `name`, and step `run` is YAML plain-scalar-safe: no line break,
+      leading/trailing whitespace, trailing colon, colon-space, space-`#`, or
+      reserved leading indicator. Keep every guard command single-line with a safe
+      leading word and colon-free diagnostics.
+- [x] Explicitly amend the current exact job table, per-job npm-command
+      assumption, inherited-permission assertion, and exact checker-event error
+      expectation for the custom guard.
+- [x] Require the existing ordinary-PR `Check provenance PR range` step to
+      remain verbatim and defense-in-depth only.
+- [x] Run only the focused workflow-contract test and confirm RED for the absent
+      trigger/job/model.
 
 ### Future Task G2: RED checker event contract
+
+**Status:** complete. Implemented under coordinator authorization; every item
+below is done.
 
 **Files:**
 
 - Modify: `test/node/es2015-provenance.test.js`
 
-- [ ] Add one accepted body-derived range check for `GITHUB_EVENT_NAME` equal to
-  `pull_request_target`, retaining the existing accepted `pull_request` case.
-- [ ] Add rejection cases for `push`, empty, and arbitrary event names.
-- [ ] Retain exact failures for non-full base/head SHAs, mismatched resolution,
-  equal commits, and non-ancestor base.
-- [ ] Retain neutral unmarked success and provenance-owned unmarked,
-  duplicate-marker, malformed-marker, and wrong-profile failures.
-- [ ] Assert the current BASE `foundation-maintenance` authority and manifest
-  remain unchanged.
-- [ ] Add `tools/test262/selection.js` ownership coverage: an unmarked
-  selection-dependency change must fail rather than pass as neutral, and no
-  profile may newly allow the path.
-- [ ] Run only the focused provenance test and confirm RED for the target event.
+- [x] Add one accepted body-derived range check for `GITHUB_EVENT_NAME` equal to
+      `pull_request_target`, retaining the existing accepted `pull_request` case.
+- [x] Add rejection cases for `push`, empty, and arbitrary event names.
+- [x] Retain exact failures for non-full base/head SHAs, mismatched resolution,
+      equal commits, and non-ancestor base.
+- [x] Retain neutral unmarked success and provenance-owned unmarked,
+      duplicate-marker, malformed-marker, and wrong-profile failures.
+- [x] Assert the current BASE `foundation-maintenance` authority and manifest
+      remain unchanged.
+- [x] Add `tools/test262/selection.js` ownership coverage: an unmarked
+      selection-dependency change must fail rather than pass as neutral, and no
+      profile may newly allow the path.
+- [x] Run only the focused provenance test and confirm RED for the target event.
 
 ### Future Task G3: Minimal checker extension
+
+**Status:** complete. Implemented under coordinator authorization; every item
+below is done.
 
 **Files:**
 
 - Modify: `tools/test262/es2015-provenance-check.js`
 - Test: `test/node/es2015-provenance.test.js`
 
-- [ ] Change the `--pr-body-env` event guard from one accepted event to the exact
-  set `pull_request`, `pull_request_target`.
-- [ ] Add `tools/test262/selection.js` to
-  `PROVENANCE_RANGE_GATE_OWNER_PATHS`; do not add it to any range profile.
-- [ ] Do not otherwise alter CLI shape, marker grammar, ownership, profile
-  resolution, Git commands, range validation, manifest parsing, or content
-  validation.
-- [ ] Run the focused provenance test and confirm GREEN.
+- [x] Change the `--pr-body-env` event guard from one accepted event to the exact
+      set `pull_request`, `pull_request_target`.
+- [x] Add `tools/test262/selection.js` to
+      `PROVENANCE_RANGE_GATE_OWNER_PATHS`; do not add it to any range profile.
+- [x] Do not otherwise alter CLI shape, marker grammar, ownership, profile
+      resolution, Git commands, range validation, manifest parsing, or content
+      validation.
+- [x] Run the focused provenance test and confirm GREEN.
 
 ### Future Task G4: Generated event-separated workflow
+
+**Status:** complete. Implemented under coordinator authorization; every item
+below is done.
 
 **Files:**
 
@@ -632,50 +644,54 @@ allowlist. No implementation task may add a path.
 - Generate: `.github/workflows/ci.yml`
 - Test: `test/node/workflow-contract.test.js`
 
-- [ ] Extend the structured job model only for job `if`, guard concurrency, job
-  permissions, runner, timeout, event-distinct display names, and a custom guard
-  setup.
-- [ ] Add the filter-free `pull_request_target` trigger.
-- [ ] Add `provenance-base-guard` with no `needs`.
-- [ ] Give the guard a PR-number concurrency group with stale-run
-  cancellation.
-- [ ] Use separate single-line `run` steps only; do not add multiline
-  block-scalar support. Parse the generated YAML and require every new `run`,
-  `with`, and `env` value to round-trip exactly.
-- [ ] Use only per-step environments. Expose canonical identity values to the
-  validation steps that consume them; expose `PR_BODY` and fixed `TZ: UTC` only
-  to the checker step.
-- [ ] Before checkout, pass event identities through `env` and require base repo
-  and `github.repository` equal `yoonbuck/jsjs`, base ref equals `main`, both
-  SHAs are lowercase full SHAs, and PR number matches `^[1-9][0-9]*$`.
-- [ ] Check out only `${{ github.event.pull_request.base.sha }}` with full
-  history and non-persisted credentials.
-- [ ] Require checked-out `HEAD^{commit}` to equal the event base SHA before
-  setup or fetch.
-- [ ] Set up Node 20 through the current immutable pin without npm caching or
-  dependency installation.
-- [ ] Pass `${{ github.event.pull_request.number }}` through `env`, validate it
-  against `^[1-9][0-9]*$`, and fetch only the base checkout's advertised
-  `+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head` from the
-  fixed `origin`.
-- [ ] Require both the fetched remote-tracking ref and `FETCH_HEAD` to resolve
-  exactly to `${{ github.event.pull_request.head.sha }}` before invoking the
-  checker.
-- [ ] Never raw-fetch the head SHA, add/fetch the attacker fork remote, or use a
-  remote URL derived from HEAD event data.
-- [ ] Keep fetched HEAD objects inert without checkout, extraction, submodules,
-  or execution.
-- [ ] Run only the checked-out base checker/module using explicit event
-  base/head and the full PR body from an environment variable, with fixed
-  `TZ=UTC`.
-- [ ] Add explicit privileged-event exclusions and distinct inactive names to
-  every ordinary job while preserving ordinary behavior.
-- [ ] Retain the ordinary `test262-upstream` provenance step verbatim with its
-  `pull_request`-only condition.
-- [ ] Generate `ci.yml`, inspect the exact diff, run the focused workflow
-  contract, and confirm GREEN.
+- [x] Extend the structured job model only for job `if`, guard concurrency, job
+      permissions, runner, timeout, event-distinct display names, and a custom guard
+      setup.
+- [x] Add the filter-free `pull_request_target` trigger.
+- [x] Add `provenance-base-guard` with no `needs`.
+- [x] Give the guard a PR-number concurrency group with stale-run
+      cancellation.
+- [x] Use separate single-line `run` steps only; do not add multiline
+      block-scalar support. Parse the generated YAML and require every new `run`,
+      `with`, and `env` value to round-trip exactly.
+- [x] Use only per-step environments. Expose canonical identity values to the
+      validation steps that consume them; expose `PR_BODY` and fixed `TZ: UTC` only
+      to the checker step.
+- [x] Before checkout, pass event identities through `env` and require base repo
+      and `github.repository` equal `yoonbuck/jsjs`, base ref equals `main`, both
+      SHAs are lowercase full SHAs, and PR number matches `^[1-9][0-9]*$`.
+- [x] Check out only `${{ github.event.pull_request.base.sha }}` with full
+      history and non-persisted credentials.
+- [x] Require checked-out `HEAD^{commit}` to equal the event base SHA before
+      setup or fetch.
+- [x] Set up Node 20 through the current immutable pin without npm caching or
+      dependency installation.
+- [x] Pass `${{ github.event.pull_request.number }}` through `env`, validate it
+      against `^[1-9][0-9]*$`, and fetch only the base checkout's advertised
+      `+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head` from the
+      fixed `origin`.
+- [x] Require both the fetched remote-tracking ref and `FETCH_HEAD` to resolve
+      exactly to `${{ github.event.pull_request.head.sha }}` before invoking the
+      checker.
+- [x] Never raw-fetch the head SHA, add/fetch the attacker fork remote, or use a
+      remote URL derived from HEAD event data.
+- [x] Keep fetched HEAD objects inert without checkout, extraction, submodules,
+      or execution.
+- [x] Run only the checked-out base checker/module using explicit event
+      base/head and the full PR body from an environment variable, with fixed
+      `TZ=UTC`.
+- [x] Add explicit privileged-event exclusions and distinct inactive names to
+      every ordinary job while preserving ordinary behavior.
+- [x] Retain the ordinary `test262-upstream` provenance step verbatim with its
+      `pull_request`-only condition.
+- [x] Generate `ci.yml`, inspect the exact diff, run the focused workflow
+      contract, and confirm GREEN.
 
 ### Future Task G5: Focused validation and live BASE evidence
+
+**Status:** in progress. Directly related documentation/status updates (this
+commit) are the only implementation-adjacent change authorized within this
+task; G1-G4 architecture is unchanged.
 
 **Files:**
 
@@ -683,52 +699,54 @@ allowlist. No implementation task may add a path.
 
 - [ ] Run the focused provenance and workflow-contract Node suites together.
 - [ ] Run generated workflow drift, typecheck, lint, format, and
-  `git diff --check`.
+      `git diff --check`.
 - [ ] Verify the canonical provenance manifest SHA-256 remains
-  `f65f9a499acb92a933fedc5ee9197cc6a4c51ce30b5180cc741b23a93c9dfe92`
-  and semantic/generated taxonomy outputs have no diff.
+      `f65f9a499acb92a933fedc5ee9197cc6a4c51ce30b5180cc741b23a93c9dfe92`
+      and semantic/generated taxonomy outputs have no diff.
 - [ ] Materialize outside the repository worktree an isolated temporary
-  checkout of exact BASE
-  `1925873700c180fc38e7e020fc4b631c1866b082`, fetch the reviewed implementation
-  HEAD as inert objects, and invoke that BASE
-  `tools/test262/es2015-provenance-check.js` with the actual base/head and exact
-  PR body through a named environment variable under `TZ=UTC` and
-  `GITHUB_EVENT_NAME=pull_request`. Do not run the implementation branch's
-  checker as substitute evidence.
+      checkout of exact BASE
+      `1925873700c180fc38e7e020fc4b631c1866b082`, fetch the reviewed implementation
+      HEAD as inert objects, and invoke that BASE
+      `tools/test262/es2015-provenance-check.js` with the actual base/head and exact
+      PR body through a named environment variable under `TZ=UTC` and
+      `GITHUB_EVENT_NAME=pull_request`. Do not run the implementation branch's
+      checker as substitute evidence.
 - [ ] Remove the temporary checkout after recording the successful command and
-  identities.
+      identities.
 - [ ] Do not run broad Test262, audit write mode, browser, JavaScriptCore, or
-  `ci:contract`.
+      `ci:contract`.
 
 ### Future Task G6: Independent review and bootstrap release
+
+**Status:** pending. Not started; blocked on Future Task G5 evidence.
 
 **Files:**
 
 - Review the complete guard implementation diff and generated YAML.
 
 - [ ] Obtain an independent GitHub Actions security review for workflow source,
-  permissions, checkout/fetch behavior, shell injection, HEAD non-execution,
-  job/check naming, skipped-job conclusions, and required-check semantics.
+      permissions, checkout/fetch behavior, shell injection, HEAD non-execution,
+      job/check naming, skipped-job conclusions, and required-check semantics.
 - [ ] Obtain an independent provenance-spec review for exact BASE authority,
-  foundation-maintenance allowlist, marker behavior, neutral ranges, and no
-  schema/taxonomy changes.
+      foundation-maintenance allowlist, marker behavior, neutral ranges, and no
+      schema/taxonomy changes.
 - [ ] Fix every Critical or Important finding, rerun focused checks, and obtain
-  scoped re-review of each fix.
+      scoped re-review of each fix.
 - [ ] Use the exact marker in the guard PR body.
 - [ ] Require ordinary PR CI, independent review, manual live BASE-checker
-  evidence, and clean pull-request CodeQL. Explicitly record that the new guard
-  cannot protect its own creation because BASE lacks the trigger.
+      evidence, and clean pull-request CodeQL. Explicitly record that the new guard
+      cannot protect its own creation because BASE lacks the trigger.
 - [ ] After squash merge, verify exact main bytes and require clean exact-main
-  CodeQL before declaring the guard authoritative.
+      CodeQL before declaring the guard authoritative.
 - [ ] On the first post-merge PR, prove the check run named
-  `Provenance base guard` is attached to the current PR head, not merely the
-  default-branch SHA; prove dynamic names evaluate distinctly even for skipped
-  jobs; and prove the run is sourced from the guard-bearing default branch.
-  Only then configure that exact GitHub Actions context as required; no skipped
-  inactive context is acceptable. If any proof fails, stop without adding write
-  permissions, configuring a required context, or starting schema v3.
+      `Provenance base guard` is attached to the current PR head, not merely the
+      default-branch SHA; prove dynamic names evaluate distinctly even for skipped
+      jobs; and prove the run is sourced from the guard-bearing default branch.
+      Only then configure that exact GitHub Actions context as required; no skipped
+      inactive context is acceptable. If any proof fails, stop without adding write
+      permissions, configuring a required context, or starting schema v3.
 - [ ] Re-author the schema-v3 corrective PR from the guarded main commit and
-  require a fresh trusted-base guard run on its unchanged reviewed head.
+      require a fresh trusted-base guard run on its unchanged reviewed head.
 
 ### Current stop gate
 
@@ -741,3 +759,12 @@ This amendment's design phase ends after:
 
 Do not begin Future Task G1 or any workflow/checker/test change before explicit
 coordinator approval.
+
+### Post-authorization status
+
+The coordinator authorized implementation on 2026-08-20 after the design
+review above completed. Future Tasks G1-G4 are complete, matching the
+checklists above; no architecture, exact value, trust boundary, or future
+post-merge requirement changed from the reviewed design. Future Task G5
+(focused validation and live BASE evidence) is in progress; Future Task G6
+(independent review and bootstrap release) remains pending.

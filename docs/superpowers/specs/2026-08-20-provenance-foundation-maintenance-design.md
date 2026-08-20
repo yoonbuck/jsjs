@@ -164,6 +164,18 @@ not remove, repair, use, or broaden that profile and does not change any
 semantic or generated taxonomy output. The later schema-v3 correction owns
 that work only after this guard is authoritative.
 
+**Implementation status:** the coordinator authorized implementation of this
+design on 2026-08-20 after this design's self-review and an independent
+Actions security/spec review cleared all Critical and Important findings. The
+paired implementation plan's Future Tasks G1-G4 (RED workflow security
+contract, RED checker event contract, minimal checker extension, and the
+generated event-separated workflow) are complete against this exact trusted
+base, exact manifest SHA-256, exact profile, and exact marker above; no
+architecture, exact value, trust boundary, or future post-merge requirement in
+this design changed during that implementation. Future Task G5 (focused
+validation and live BASE evidence) is in progress; Future Task G6
+(independent review and bootstrap release) remains pending.
+
 ### Alternatives considered
 
 1. **Recommended: one dedicated `pull_request_target` job in generated
@@ -288,6 +300,7 @@ The dedicated job has no dependencies on other jobs, runs on explicit
    These checks make the guard authoritative only for PRs targeting canonical
    protected main. Retargeting to any other base repository or branch fails
    before repository content is read.
+
 2. Use the repository's existing full-SHA pin for `actions/checkout`, with
    `ref` set explicitly to `github.event.pull_request.base.sha`,
    `fetch-depth: 0`, `persist-credentials: false`, and `submodules: false`.
@@ -342,16 +355,16 @@ range without one authoritative marker fails closed.
 The workflow maps values through per-step `env`, never job-level `env`, and only
 to the steps that consume them:
 
-| Environment variable | Trusted value | Step consumers |
-| --- | --- | --- |
-| `BASE_REPOSITORY` | `${{ github.event.pull_request.base.repo.full_name }}` | canonical-target validation only |
-| `WORKFLOW_REPOSITORY` | `${{ github.repository }}` | canonical-target validation only |
-| `BASE_REF` | `${{ github.event.pull_request.base.ref }}` | canonical-target validation only |
-| `BASE_SHA` | `${{ github.event.pull_request.base.sha }}` | canonical-target validation, checkout-HEAD attestation, checker |
-| `HEAD_SHA` | `${{ github.event.pull_request.head.sha }}` | canonical-target validation, fetched-HEAD attestation, checker |
-| `PR_NUMBER` | `${{ github.event.pull_request.number }}` | canonical-target validation, advertised-ref fetch, fetched-HEAD attestation |
-| `PR_BODY` | `${{ github.event.pull_request.body }}` | checker only |
-| `TZ` | fixed literal `UTC` | checker only |
+| Environment variable  | Trusted value                                          | Step consumers                                                              |
+| --------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `BASE_REPOSITORY`     | `${{ github.event.pull_request.base.repo.full_name }}` | canonical-target validation only                                            |
+| `WORKFLOW_REPOSITORY` | `${{ github.repository }}`                             | canonical-target validation only                                            |
+| `BASE_REF`            | `${{ github.event.pull_request.base.ref }}`            | canonical-target validation only                                            |
+| `BASE_SHA`            | `${{ github.event.pull_request.base.sha }}`            | canonical-target validation, checkout-HEAD attestation, checker             |
+| `HEAD_SHA`            | `${{ github.event.pull_request.head.sha }}`            | canonical-target validation, fetched-HEAD attestation, checker              |
+| `PR_NUMBER`           | `${{ github.event.pull_request.number }}`              | canonical-target validation, advertised-ref fetch, fetched-HEAD attestation |
+| `PR_BODY`             | `${{ github.event.pull_request.body }}`                | checker only                                                                |
+| `TZ`                  | fixed literal `UTC`                                    | checker only                                                                |
 
 No head repository, branch name, clone URL, or other PR-controlled string is
 mapped into an action input or shell command. In particular, the untrusted PR
