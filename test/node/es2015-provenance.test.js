@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import {
@@ -29,6 +29,20 @@ import {
   summarizeEs2015Classification,
 } from '../../tools/test262/es2015-taxonomy.js';
 
+/**
+ * @typedef {ReturnType<typeof buildProvenanceFoundation>} ProvenanceManifest
+ * @typedef {ProvenanceManifest['batches'][number]} ProvenanceBatch
+ * @typedef {ProvenanceBatch['entries'][number]} ProvenanceBatchEntry
+ * @typedef {{ path: string, variants: number, partition: string, finalClass: string, features: readonly string[], flags: readonly string[], includes: readonly string[] }} ClassificationRecord
+ * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }} ApprovedBatchSummary
+ * @typedef {readonly { type: 'test', file: string, variant: 'non-strict' | 'strict', status: 'passed' }[]} ExecutionRecords
+ */
+
+const readFileSyncText =
+  /** @type {(path: URL, encoding: string) => string} */ (
+    /** @type {any} */ (fs).readFileSync
+  );
+
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
 const SPECIFICATION_SOURCE = 'https://262.ecma-international.org/6.0/';
@@ -37,12 +51,13 @@ const SPECIFICATION_SHA256 =
 const TAXONOMY_PATH = 'tools/test262/es2015-taxonomy.json';
 const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
 const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
-const PRODUCTION_TAXONOMY_TEXT = fs.readFileSync(
+const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
 );
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
+/** @type {Readonly<{ baseLedger: { rootCount: number, variantCount: number, pathSha256: string }, batches: Record<string, ApprovedBatchSummary> }>} */
 const APPROVED_PRODUCTION_FOUNDATION = Object.freeze({
   baseLedger: Object.freeze({
     rootCount: 2312,
@@ -167,10 +182,12 @@ function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
+/** @param {readonly ProvenanceBatchEntry[]} entries */
 function entryLedgerText(entries) {
   return `${entries.map((entry) => json([entry.path, entry.variants, entry.priorClass])).join('\n')}\n`;
 }
 
+/** @param {readonly ProvenanceBatchEntry[]} entries */
 function entryLedgerSha256(entries) {
   return sha256(entryLedgerText(entries));
 }
@@ -180,6 +197,7 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+/** @returns {readonly ClassificationRecord[]} */
 function foundationClassifications() {
   return [
     {
@@ -212,44 +230,37 @@ function foundationClassifications() {
   ];
 }
 
-function decisionClassifications() {
-  return [
-    {
-      path: 'test/language/example.js',
-      variants: 2,
-      partition: 'unknown-edition',
-      finalClass: 'unknown-edition',
-      features: [],
-      flags: [],
-      includes: [],
-    },
-  ];
-}
-
+/** @type {readonly ClassificationRecord[] | undefined} */
 let cachedProductionClassifications;
 
+/** @returns {readonly ClassificationRecord[]} */
 function productionClassifications() {
   if (cachedProductionClassifications !== undefined) {
     return cachedProductionClassifications;
   }
   const taxonomy = JSON.parse(
-    fs.readFileSync(
+    readFileSyncText(
       new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
       'utf8',
     ),
   );
-  cachedProductionClassifications = taxonomy.classifications.map((record) => ({
-    path: record.path,
-    variants: record.variants,
-    partition: record.partition,
-    finalClass: record.status,
-    features: record.features,
-    flags: record.flags,
-    includes: record.includes,
-  }));
-  return cachedProductionClassifications;
+  cachedProductionClassifications = taxonomy.classifications.map(
+    (/** @type {any} */ record) => ({
+      path: record.path,
+      variants: record.variants,
+      partition: record.partition,
+      finalClass: record.status,
+      features: record.features,
+      flags: record.flags,
+      includes: record.includes,
+    }),
+  );
+  return /** @type {readonly ClassificationRecord[]} */ (
+    cachedProductionClassifications
+  );
 }
 
+/** @returns {ProvenanceManifest} */
 function productionManifest() {
   return buildProvenanceFoundation(productionClassifications());
 }
@@ -261,12 +272,14 @@ function approvedProvenanceManifestText() {
 function driftedTaxonomyText() {
   const taxonomy = JSON.parse(PRODUCTION_TAXONOMY_TEXT);
   const targetPath = productionManifest().baseLedger.paths[0];
-  const record = taxonomy.classifications.find((entry) => entry.path === targetPath);
+  const record = taxonomy.classifications.find(
+    (/** @type {any} */ entry) => entry.path === targetPath,
+  );
   record.variants += 1;
   return `${JSON.stringify(taxonomy, null, 2)}\n`;
 }
 
-/** @param {ReturnType<typeof productionManifest>} manifest @param {string} code */
+/** @param {ProvenanceManifest} manifest @param {string} code */
 function emptyDecisionFragmentText(manifest, code) {
   return `${JSON.stringify(
     {
@@ -283,6 +296,7 @@ function emptyDecisionFragmentText(manifest, code) {
   )}\n`;
 }
 
+/** @param {ProvenanceBatch} batch */
 function refreshBatchLedger(batch) {
   batch.rootCount = batch.entries.length;
   batch.variantCount = batch.entries.reduce((sum, entry) => sum + entry.variants, 0);
@@ -290,6 +304,7 @@ function refreshBatchLedger(batch) {
   batch.entryLedgerSha256 = entryLedgerSha256(batch.entries);
 }
 
+/** @param {ProvenanceManifest} manifest */
 function findNonUl3BatchEntry(manifest) {
   for (const batch of manifest.batches) {
     if (batch.code === 'UL3') continue;
@@ -304,6 +319,7 @@ function findNonUl3BatchEntry(manifest) {
   throw new Error('expected a non-UL3 production batch entry');
 }
 
+/** @param {ProvenanceManifest} manifest */
 function findVariantRedistributionPair(manifest) {
   for (const batch of manifest.batches) {
     if (batch.code === 'UL3') continue;
@@ -326,8 +342,13 @@ function tamperedPriorClassManifest() {
   const classifications = clone(productionClassifications());
   const manifest = clone(productionManifest());
   const target = findNonUl3BatchEntry(manifest);
-  const batch = manifest.batches.find((entry) => entry.code === target.code);
-  const entry = batch?.entries.find((candidate) => candidate.path === target.path);
+  const batch = manifest.batches.find(
+    (/** @type {ProvenanceBatch} */ entry) => entry.code === target.code,
+  );
+  const entry = batch?.entries.find(
+    (/** @type {ProvenanceBatchEntry} */ candidate) =>
+      candidate.path === target.path,
+  );
   if (entry === undefined) {
     throw new Error('expected a production manifest entry to mutate priorClass');
   }
@@ -336,7 +357,10 @@ function tamperedPriorClassManifest() {
     throw new Error('expected a production manifest batch to mutate priorClass');
   }
   refreshBatchLedger(batch);
-  const classification = classifications.find((record) => record.path === target.path);
+  const classification = classifications.find(
+    (/** @type {ClassificationRecord} */ record) =>
+      record.path === target.path,
+  );
   if (classification === undefined) {
     throw new Error('expected a production classification to mutate priorClass');
   }
@@ -353,9 +377,17 @@ function redistributedVariantsManifest() {
   const classifications = clone(productionClassifications());
   const manifest = clone(productionManifest());
   const target = findVariantRedistributionPair(manifest);
-  const batch = manifest.batches.find((entry) => entry.code === target.code);
-  const source = batch?.entries.find((entry) => entry.path === target.sourcePath);
-  const destination = batch?.entries.find((entry) => entry.path === target.targetPath);
+  const batch = manifest.batches.find(
+    (/** @type {ProvenanceBatch} */ entry) => entry.code === target.code,
+  );
+  const source = batch?.entries.find(
+    (/** @type {ProvenanceBatchEntry} */ entry) =>
+      entry.path === target.sourcePath,
+  );
+  const destination = batch?.entries.find(
+    (/** @type {ProvenanceBatchEntry} */ entry) =>
+      entry.path === target.targetPath,
+  );
   if (source === undefined || destination === undefined) {
     throw new Error('expected production manifest entries to redistribute variants');
   }
@@ -366,10 +398,12 @@ function redistributedVariantsManifest() {
   }
   refreshBatchLedger(batch);
   const sourceClassification = classifications.find(
-    (record) => record.path === target.sourcePath,
+    (/** @type {ClassificationRecord} */ record) =>
+      record.path === target.sourcePath,
   );
   const destinationClassification = classifications.find(
-    (record) => record.path === target.targetPath,
+    (/** @type {ClassificationRecord} */ record) =>
+      record.path === target.targetPath,
   );
   if (sourceClassification === undefined || destinationClassification === undefined) {
     throw new Error('expected production classifications to redistribute variants');
@@ -512,7 +546,7 @@ function classificationAnchors() {
 
 /** @param {string} path */
 function passedExecution(path) {
-  return [
+  return /** @type {ExecutionRecords} */ ([
     {
       type: 'test',
       file: path,
@@ -525,7 +559,15 @@ function passedExecution(path) {
       variant: 'strict',
       status: 'passed',
     },
-  ];
+  ]);
+}
+
+/** @param {string} path @returns {ReadonlyMap<string, ExecutionRecords>} */
+function singleExecutionResult(path) {
+  /** @type {Map<string, ExecutionRecords>} */
+  const results = new Map();
+  results.set(path, passedExecution(path));
+  return results;
 }
 
 /** @param {string} code */
@@ -637,15 +679,20 @@ async function rejected(action) {
  */
 function provenanceCheckDependencies(options = {}) {
   const manifest = productionManifest();
+  /** @type {Map<string, string>} */
   const files = new Map([
     [TAXONOMY_PATH, PRODUCTION_TAXONOMY_TEXT],
     [ES2015_PROVENANCE_FILE, approvedProvenanceManifestText()],
-    ...ES2015_PROVENANCE_DECISION_CODES.map((code) => [
+  ]);
+  for (const code of ES2015_PROVENANCE_DECISION_CODES) {
+    files.set(
       `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
       emptyDecisionFragmentText(manifest, code),
-    ]),
-    ...(options.files ?? []),
-  ]);
+    );
+  }
+  for (const [path, text] of options.files?.entries() ?? []) {
+    files.set(path, text);
+  }
   /** @type {string[]} */
   const writes = [];
   /** @type {string[]} */
@@ -661,7 +708,7 @@ function provenanceCheckDependencies(options = {}) {
 
   return {
     environment: { TZ: options.timezone ?? 'UTC' },
-    readFile: async (path) => {
+    readFile: async (/** @type {string} */ path) => {
       const value = files.get(path);
       if (value === undefined) {
         const error = new Error(`missing fixture file ${path}`);
@@ -670,7 +717,7 @@ function provenanceCheckDependencies(options = {}) {
       }
       return value;
     },
-    readdir: async (path) => {
+    readdir: async (/** @type {string} */ path) => {
       if (path !== PROVENANCE_DECISIONS_DIRECTORY) {
         const error = new Error(`missing fixture directory ${path}`);
         Object.assign(error, { code: 'ENOENT' });
@@ -678,12 +725,15 @@ function provenanceCheckDependencies(options = {}) {
       }
       return decisionDirectoryEntries;
     },
-    writeFile: async (path, text) => {
+    writeFile: async (
+      /** @type {string} */ path,
+      /** @type {string} */ text,
+    ) => {
       writes.push(path);
       files.set(path, text);
     },
-    stdout: (text) => stdout.push(text),
-    stderr: (text) => stderr.push(text),
+    stdout: (/** @type {string} */ text) => stdout.push(text),
+    stderr: (/** @type {string} */ text) => stderr.push(text),
     files,
     writes,
     outputs: { stdout, stderr },
@@ -983,7 +1033,7 @@ export default [
   {
     name: 'ES2015 provenance pins immutable production entry ledgers without host filesystem reads',
     run: () => {
-      const moduleSource = fs.readFileSync(
+      const moduleSource = readFileSyncText(
         new URL('../../tools/test262/es2015-provenance.js', import.meta.url),
         'utf8',
       );
@@ -1003,7 +1053,9 @@ export default [
       );
 
       for (const code of ES2015_PROVENANCE_DECISION_CODES) {
-        const batch = manifest.batches.find((entry) => entry.code === code);
+        const batch = manifest.batches.find(
+          (/** @type {ProvenanceBatch} */ entry) => entry.code === code,
+        );
         const expected = APPROVED_PRODUCTION_FOUNDATION.batches[code];
         if (batch === undefined || expected === undefined) {
           throw new Error(`missing approved production batch ${code}`);
@@ -1032,7 +1084,7 @@ export default [
       }
 
       const alteredClassifications = classifications.filter(
-        (record) =>
+        (/** @type {ClassificationRecord} */ record) =>
           record.path !==
           'test/annexB/built-ins/RegExp/RegExp-invalid-control-escape-character-class-range.js',
       );
@@ -1401,9 +1453,9 @@ export default [
         ],
       });
       const selected = new Set(['test/language/reviewed-core.js']);
-      const selectedResults = new Map([
-        ['test/language/reviewed-core.js', passedExecution('test/language/reviewed-core.js')],
-      ]);
+      const selectedResults = singleExecutionResult(
+        'test/language/reviewed-core.js',
+      );
       const withoutReviewed = classifyEs2015Inventory({
         policy: classificationPolicy(),
         anchors: classificationAnchors(),
@@ -1480,8 +1532,8 @@ export default [
         anchors: classificationAnchors(),
         inventory,
         selected: new Set([corePath]),
-        selectedResults: new Map([[corePath, passedExecution(corePath)]]),
-        auditResults: new Map([[annexPath, passedExecution(annexPath)]]),
+        selectedResults: singleExecutionResult(corePath),
+        auditResults: singleExecutionResult(annexPath),
         reviewedProvenance: reviewed,
       });
       const byPath = new Map(classifications.map((record) => [record.path, record]));
@@ -1651,7 +1703,7 @@ export default [
                 },
               ],
             }),
-            auditResults: new Map([[statusPath, passedExecution(statusPath)]]),
+            auditResults: singleExecutionResult(statusPath),
             reviewedProvenance: reviewedProvenanceStub({
               code: 'US1',
               path: statusPath,
@@ -1688,7 +1740,7 @@ export default [
                 },
               ],
             }),
-            auditResults: new Map([[priorClassPath, passedExecution(priorClassPath)]]),
+            auditResults: singleExecutionResult(priorClassPath),
             reviewedProvenance: reviewedProvenanceStub({
               code: 'US2',
               path: priorClassPath,
@@ -1873,7 +1925,7 @@ export default [
     run: async () => {
       const dependencies = provenanceCheckDependencies({
         files: new Map(
-          [[TAXONOMY_PATH, fs.readFileSync(new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url), 'utf8')]],
+          [[TAXONOMY_PATH, readFileSyncText(new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url), 'utf8')]],
         ),
         decisionDirectoryEntries: [],
       });

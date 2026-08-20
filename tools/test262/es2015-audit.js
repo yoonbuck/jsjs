@@ -340,12 +340,15 @@ export function createAuditDependencies(options = {}) {
   const readDecisionFragments = async () =>
     new Map(
       await Promise.all(
-        ES2015_PROVENANCE_DECISION_CODES.map(async (code) => [
-          code,
-          await readRepositoryFile(
-            `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
-          ),
-        ]),
+        ES2015_PROVENANCE_DECISION_CODES.map(
+          async (code) =>
+            /** @type {[string, string]} */ ([
+              code,
+              await readRepositoryFile(
+                `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+              ),
+            ]),
+        ),
       ),
     );
   return {

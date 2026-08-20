@@ -77,7 +77,9 @@ export async function main(argv = [], dependencies = {}) {
         return 0;
       case 'render-ledger': {
         const manifest = await loadReviewedManifest(deps);
-        deps.stdout(renderBatchLedger(manifest, mode.code));
+        deps.stdout(
+          renderBatchLedger(manifest, /** @type {string} */ (mode.code)),
+        );
         return 0;
       }
       case 'render-issue': {
@@ -89,7 +91,13 @@ export async function main(argv = [], dependencies = {}) {
                 await readRequiredFile(deps, options.issueMapPath),
                 options.issueMapPath,
               );
-        deps.stdout(renderProvenanceIssueBody(manifest, mode.code, issueMap));
+        deps.stdout(
+          renderProvenanceIssueBody(
+            manifest,
+            /** @type {string} */ (mode.code),
+            issueMap,
+          ),
+        );
         return 0;
       }
       default:
@@ -111,9 +119,11 @@ export function createProvenanceCheckDependencies(options = {}) {
   const repositoryRootUrl = options.repositoryRootUrl ?? REPOSITORY_ROOT_URL;
   return {
     environment: options.environment ?? process.env,
-    readFile: (path) => readFile(resolvePath(path, repositoryRootUrl), 'utf8'),
-    readdir: (path) => readdir(resolvePath(path, repositoryRootUrl)),
-    writeFile: (path, text) =>
+    readFile: (/** @type {string} */ path) =>
+      readFile(resolvePath(path, repositoryRootUrl), 'utf8'),
+    readdir: (/** @type {string} */ path) =>
+      readdir(resolvePath(path, repositoryRootUrl)),
+    writeFile: (/** @type {string} */ path, /** @type {string} */ text) =>
       writeFile(resolvePath(path, repositoryRootUrl), text, 'utf8'),
     stdout: options.stdout ?? ((text) => process.stdout.write(text)),
     stderr: options.stderr ?? ((text) => process.stderr.write(text)),
@@ -258,7 +268,13 @@ async function initializeFoundation(deps) {
   const { manifestText, fragmentTexts } = await preflightInitialization(deps);
   await deps.writeFile(ES2015_PROVENANCE_FILE, manifestText);
   for (const code of ES2015_PROVENANCE_DECISION_CODES) {
-    await deps.writeFile(decisionFragmentPath(code), fragmentTexts.get(code));
+    const text = fragmentTexts.get(code);
+    if (text === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `Missing generated fragment text for ${code}`,
+      );
+    }
+    await deps.writeFile(decisionFragmentPath(code), text);
   }
 }
 
@@ -344,7 +360,10 @@ async function expectedFoundation(deps) {
   const fragments = new Map(
     ES2015_PROVENANCE_DECISION_CODES.map((code) => [
       code,
-      parseEs2015DecisionFragment(fragmentTexts.get(code), code),
+      parseEs2015DecisionFragment(
+        /** @type {string} */ (fragmentTexts.get(code)),
+        code,
+      ),
     ]),
   );
   validateDecisionFragments(manifest, fragments, { allowPendingReview: false });
@@ -452,7 +471,7 @@ function decisionFragmentPath(code) {
   return `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
 }
 
-/** @param {string} text */
+/** @param {string} text @returns {readonly { path: string, variants: number, partition: string, finalClass: string }[]} */
 function taxonomyClassifications(text) {
   const taxonomy = parseJson(text, TAXONOMY_FILE);
   if (!Array.isArray(taxonomy.classifications)) {
@@ -479,9 +498,9 @@ function taxonomyClassifications(text) {
     }
     return {
       path: candidate.path,
-      variants: candidate.variants,
+      variants: /** @type {number} */ (candidate.variants),
       partition: candidate.partition,
-      finalClass: candidate.status,
+      finalClass: /** @type {string} */ (candidate.status),
     };
   });
 }

@@ -8,6 +8,25 @@ import {
   sortStrings,
 } from './selection.js';
 
+/**
+ * @typedef {{ source: string, sourceSha256: string }} IdentitySpecification
+ * @typedef {{ code: string, issue: number }} ProvenanceParent
+ * @typedef {{ path: string, variants: number, priorClass: string }} ProvenanceBatchEntry
+ * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, paths: readonly string[] }} ProvenanceBaseLedger
+ * @typedef {{ code: string, selector: string, scope: string, rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string, entries: readonly ProvenanceBatchEntry[] }} ProvenanceBatch
+ * @typedef {{ version: number, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, baseLedger: ProvenanceBaseLedger, batches: readonly ProvenanceBatch[] }} ProvenanceManifest
+ * @typedef {{ repository: string, commit: string, note: string }} ReviewedDecisionHistoryEntry
+ * @typedef {{ reviewer: string, reviewedAt: string, artifact: string }} ReviewedDecisionReview
+ * @typedef {{ blocker: string | null, issue: number | null }} ReviewedDecisionDestination
+ * @typedef {{ es5id: string | null, es6id: string | null, esid: string | null, features: readonly string[], includeFeatures: readonly string[], includes: readonly string[], flags: readonly string[] }} ReviewedDecisionMetadata
+ * @typedef {{ path: string, variants: number, priorClass: string, finalPartition: string, finalStatus: string, evidenceKind: string, specification: { source: string, sourceSha256: string, clause: string | null, anchor: string | null }, metadata: ReviewedDecisionMetadata, history: readonly ReviewedDecisionHistoryEntry[], rationale: string, review: ReviewedDecisionReview, destination: ReviewedDecisionDestination, artifactSha256: string | null }} ReviewedDecision
+ * @typedef {{ version: number, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, code: string, decisions: readonly ReviewedDecision[] }} ProvenanceDecisionFragment
+ * @typedef {{ path: string, variants: number, partition: string, finalClass: string }} ClassificationRecord
+ * @typedef {{ title: string, scope: string, dependencies: readonly string[], aggregateCodes: readonly string[], extra?: string }} IssueDefinition
+ * @typedef {{ code: string, selector: string, scope: string }} BatchDefinition
+ * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }} ApprovedBatchLedger
+ */
+
 export const ES2015_PROVENANCE_VERSION = 1;
 export const ES2015_PROVENANCE_FILE = 'tools/test262/es2015-provenance.json';
 export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
@@ -126,7 +145,6 @@ const DESTINATION_KEYS = Object.freeze(['blocker', 'issue']);
 const DECISION_KEYS_WITHOUT_HASH = Object.freeze(
   DECISION_KEYS.filter((key) => key !== 'artifactSha256'),
 );
-const AGGREGATE_CODES = Object.freeze(['U0', 'UL', 'US']);
 const ALL_RENDER_CODES = Object.freeze([
   'U0',
   'UA',
@@ -213,6 +231,7 @@ const STAGING_US7_TOPICS = new Set(['regress', 'extensions', 'misc', 'types']);
 const SPECIAL_US6_PATH =
   'test/staging/built-ins/Array/prototype/flatMap/callback-with-side-effects.js';
 
+/** @type {Readonly<Record<string, IssueDefinition>>} */
 const ISSUE_DEFINITIONS = Object.freeze({
   U0: Object.freeze({
     title: 'Provenance tooling foundation',
@@ -333,6 +352,7 @@ const ISSUE_DEFINITIONS = Object.freeze({
   }),
 });
 
+/** @type {readonly BatchDefinition[]} */
 const BATCH_DEFINITIONS = Object.freeze(
   ES2015_PROVENANCE_DECISION_CODES.map((code) =>
     Object.freeze({
@@ -342,14 +362,12 @@ const BATCH_DEFINITIONS = Object.freeze(
     }),
   ),
 );
-const BATCH_DEFINITION_MAP = new Map(
-  BATCH_DEFINITIONS.map((definition) => [definition.code, definition]),
-);
 const APPROVED_BASE_LEDGER = Object.freeze({
   rootCount: 2312,
   variantCount: 4054,
   pathSha256: '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc',
 });
+/** @type {Readonly<Record<string, ApprovedBatchLedger>>} */
 const APPROVED_BATCH_LEDGERS = Object.freeze({
   UA: Object.freeze({
     rootCount: 314,
@@ -462,12 +480,8 @@ export function parseEs2015DecisionFragment(text, expectedCode) {
 }
 
 /**
- * @param {readonly {
- *   path: string,
- *   variants: number,
- *   partition: string,
- *   finalClass: string,
- * }[]} classifications
+ * @param {readonly ClassificationRecord[]} classifications
+ * @returns {ProvenanceManifest}
  */
 export function buildProvenanceFoundation(classifications) {
   if (!Array.isArray(classifications)) {
@@ -484,6 +498,7 @@ export function buildProvenanceFoundation(classifications) {
     .map((record) => normalizeClassificationRecord(record));
   const baseEntries = sortStrings(unknownRecords.map((record) => record.path));
   assertUnique(baseEntries, 'ES2015 provenance base ledger paths');
+  /** @type {Map<string, ProvenanceBatchEntry[]>} */
   const batchEntries = new Map(
     ES2015_PROVENANCE_DECISION_CODES.map((code) => [code, []]),
   );
@@ -540,7 +555,7 @@ export function buildProvenanceFoundation(classifications) {
   });
 }
 
-/** @param {unknown} manifest @param {readonly object[]} classifications */
+/** @param {unknown} manifest @param {readonly ClassificationRecord[]} [classifications] */
 export function validateProvenanceFoundation(manifest, classifications) {
   const normalizedManifest = normalizeManifestRecord(
     object(manifest, ES2015_PROVENANCE_FILE),
@@ -557,7 +572,7 @@ export function validateProvenanceFoundation(manifest, classifications) {
   validateImmutableApprovedFoundation(normalizedManifest);
 }
 
-/** @param {{ baseLedger: { paths: readonly string[], rootCount: number, variantCount: number, pathSha256: string }, batches: readonly { code: string, selector: string, scope: string, entries: readonly { path: string, variants: number, priorClass: string }[], rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }[] }} manifest */
+/** @param {ProvenanceManifest} manifest */
 function validateManifestStructure(manifest) {
   const actualBasePaths = [...manifest.baseLedger.paths];
   if (!isSorted(actualBasePaths)) {
@@ -657,7 +672,7 @@ function validateManifestStructure(manifest) {
   }
 }
 
-/** @param {{ baseLedger: { paths: readonly string[], rootCount: number, variantCount: number, pathSha256: string }, batches: readonly { code: string, selector: string, scope: string, entries: readonly { path: string, variants: number, priorClass: string }[], rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }[] }} manifest @param {{ baseLedger: { paths: readonly string[], rootCount: number, variantCount: number, pathSha256: string }, batches: readonly { code: string, selector: string, scope: string, entries: readonly { path: string, variants: number, priorClass: string }[], rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }[] }} expected @param {string} ledgerLabel */
+/** @param {ProvenanceManifest} manifest @param {ProvenanceManifest} expected @param {string} ledgerLabel */
 function validateManifestAgainstExpected(manifest, expected, ledgerLabel) {
   const actualBasePaths = manifest.baseLedger.paths;
   const expectedBasePaths = expected.baseLedger.paths;
@@ -752,7 +767,7 @@ function validateManifestAgainstExpected(manifest, expected, ledgerLabel) {
   }
 }
 
-/** @param {{ baseLedger: { rootCount: number, variantCount: number, pathSha256: string }, batches: readonly { code: string, rootCount: number, variantCount: number, pathSha256: string }[] }} manifest */
+/** @param {ProvenanceManifest} manifest */
 function validateImmutableApprovedFoundation(manifest) {
   if (manifest.baseLedger.rootCount !== APPROVED_BASE_LEDGER.rootCount) {
     throw new Es2015ProvenanceError(
@@ -803,7 +818,7 @@ function validateImmutableApprovedFoundation(manifest) {
  * @param {unknown} manifest
  * @param {unknown} fragments
  * @param {{ allowPendingReview?: boolean, requireCompleteCodes?: readonly string[] }} [options]
- * @returns {ReadonlyMap<string, object>}
+ * @returns {ReadonlyMap<string, ReviewedDecision>}
  */
 export function validateDecisionFragments(manifest, fragments, options = {}) {
   const normalizedManifest = normalizeManifestRecord(
@@ -817,12 +832,17 @@ export function validateDecisionFragments(manifest, fragments, options = {}) {
   const allowPendingReview = options.allowPendingReview === true;
   const requireCompleteCodes = normalizeRequiredCodes(options.requireCompleteCodes);
   const fragmentMap = normalizeFragments(fragments);
+  /** @type {Map<string, ReviewedDecision>} */
   const decisions = new Map();
 
   for (const [code, value] of fragmentMap) {
-    const fragment = normalizeDecisionFragmentRecord(value, code, {
-      exactLists: true,
-    });
+    const fragment = normalizeDecisionFragmentRecord(
+      object(value, `${code} decision fragment`),
+      code,
+      {
+        exactLists: true,
+      },
+    );
     const batch = batchByCode(normalizedManifest, code);
     const expectedPaths = new Set(batch.entries.map((entry) => entry.path));
     const fragmentPaths = new Set();
@@ -1041,6 +1061,7 @@ function requireExactKeys(record, expectedKeys, message) {
 /**
  * @param {Record<string, any>} record
  * @param {{ exactLists: boolean, exactTopLevelMessage: string }} options
+ * @returns {ProvenanceManifest}
  */
 function normalizeManifestRecord(record, options) {
   requireExactKeys(record, MANIFEST_KEYS, options.exactTopLevelMessage);
@@ -1100,6 +1121,7 @@ function normalizeManifestRecord(record, options) {
  * @param {Record<string, any>} record
  * @param {string} expectedCode
  * @param {{ exactLists: boolean }} options
+ * @returns {ProvenanceDecisionFragment}
  */
 function normalizeDecisionFragmentRecord(record, expectedCode, options) {
   requireExactKeys(
@@ -1170,6 +1192,7 @@ function normalizeDecisionFragmentRecord(record, expectedCode, options) {
 /**
  * @param {Record<string, any>} record
  * @param {{ code: string, exactLists: boolean, allowPendingReview: boolean, requireArtifactSha256: boolean, skipSemanticValidation?: boolean }} options
+ * @returns {ReviewedDecision}
  */
 function normalizeDecisionRecord(record, options) {
   const pathLabel = `${options.code} decision`;
@@ -1267,12 +1290,12 @@ function normalizeDecisionRecord(record, options) {
   return {
     ...normalized,
     artifactSha256: options.requireArtifactSha256
-      ? normalized.artifactSha256
+      ? /** @type {string} */ (normalized.artifactSha256)
       : expectedHash,
   };
 }
 
-/** @param {Record<string, any>} record @param {boolean} exactLists */
+/** @param {Record<string, any>} record @param {boolean} exactLists @returns {ProvenanceBaseLedger} */
 function normalizeBaseLedger(record, exactLists) {
   requireExactKeys(
     record,
@@ -1301,7 +1324,7 @@ function normalizeBaseLedger(record, exactLists) {
   };
 }
 
-/** @param {Record<string, any>} record @param {boolean} exactLists */
+/** @param {Record<string, any>} record @param {boolean} exactLists @returns {ProvenanceBatch} */
 function normalizeBatchRecord(record, exactLists) {
   requireExactKeys(
     record,
@@ -1363,7 +1386,7 @@ function normalizeBatchRecord(record, exactLists) {
   };
 }
 
-/** @param {Record<string, any>} record */
+/** @param {Record<string, any>} record @returns {ProvenanceBatchEntry} */
 function normalizeBatchEntry(record) {
   requireExactKeys(
     record,
@@ -1388,7 +1411,7 @@ function normalizeBatchEntry(record) {
   };
 }
 
-/** @param {Record<string, any>} record @param {string} keysMessage @param {string} pinsMessage */
+/** @param {Record<string, any>} record @param {string} keysMessage @param {string} pinsMessage @returns {IdentitySpecification} */
 function normalizeIdentitySpecification(record, keysMessage, pinsMessage) {
   requireExactKeys(record, SPECIFICATION_KEYS, keysMessage);
   if (
@@ -1403,7 +1426,7 @@ function normalizeIdentitySpecification(record, keysMessage, pinsMessage) {
   };
 }
 
-/** @param {Record<string, any>} record @param {string} keysMessage @param {string} parentMessage */
+/** @param {Record<string, any>} record @param {string} keysMessage @param {string} parentMessage @returns {ProvenanceParent} */
 function normalizeParent(record, keysMessage, parentMessage) {
   requireExactKeys(record, PARENT_KEYS, keysMessage);
   if (record.code !== PARENT_CODE || record.issue !== PARENT_ISSUE) {
@@ -1415,7 +1438,7 @@ function normalizeParent(record, keysMessage, parentMessage) {
   };
 }
 
-/** @param {Record<string, any>} record @param {string} evidenceKind @param {string} label */
+/** @param {Record<string, any>} record @param {string} evidenceKind @param {string} label @returns {{ source: string, sourceSha256: string, clause: string | null, anchor: string | null }} */
 function normalizeDecisionSpecification(record, evidenceKind, label) {
   requireExactKeys(
     record,
@@ -1459,7 +1482,7 @@ function normalizeDecisionSpecification(record, evidenceKind, label) {
   };
 }
 
-/** @param {Record<string, any>} record @param {boolean} exactLists @param {string} label */
+/** @param {Record<string, any>} record @param {boolean} exactLists @param {string} label @returns {ReviewedDecisionMetadata} */
 function normalizeDecisionMetadata(record, exactLists, label) {
   requireExactKeys(
     record,
@@ -1493,7 +1516,7 @@ function normalizeDecisionMetadata(record, exactLists, label) {
   };
 }
 
-/** @param {unknown} value @param {string} label */
+/** @param {unknown} value @param {string} label @returns {readonly ReviewedDecisionHistoryEntry[]} */
 function normalizeHistory(value, label) {
   if (!Array.isArray(value)) {
     throw new Es2015ProvenanceError(`${label} history must be an array`);
@@ -1530,7 +1553,7 @@ function normalizeHistory(value, label) {
   );
 }
 
-/** @param {Record<string, any>} record @param {boolean} allowPendingReview @param {string} label @param {boolean} skipSemanticValidation */
+/** @param {Record<string, any>} record @param {boolean} allowPendingReview @param {string} label @param {boolean} skipSemanticValidation @returns {ReviewedDecisionReview} */
 function normalizeReview(record, allowPendingReview, label, skipSemanticValidation) {
   requireExactKeys(record, REVIEW_KEYS, `${label} review must contain exact keys`);
   const pending =
@@ -1589,7 +1612,7 @@ function normalizeReview(record, allowPendingReview, label, skipSemanticValidati
   };
 }
 
-/** @param {Record<string, any>} record @param {string} finalStatus @param {string} label @param {boolean} skipSemanticValidation */
+/** @param {Record<string, any>} record @param {string} finalStatus @param {string} label @param {boolean} skipSemanticValidation @returns {ReviewedDecisionDestination} */
 function normalizeDestination(record, finalStatus, label, skipSemanticValidation) {
   requireExactKeys(
     record,
@@ -1685,7 +1708,7 @@ function normalizeEvidenceKind(value, label) {
   return value;
 }
 
-/** @param {unknown} value @param {string} label @param {boolean} exactLists */
+/** @param {unknown} value @param {string} label @param {boolean} exactLists @returns {readonly string[]} */
 function normalizeStringList(value, label, exactLists) {
   if (
     !Array.isArray(value) ||
@@ -1700,7 +1723,7 @@ function normalizeStringList(value, label, exactLists) {
   return Object.freeze(list);
 }
 
-/** @param {unknown} value @param {string} label @param {boolean} exactLists */
+/** @param {unknown} value @param {string} label @param {boolean} exactLists @returns {readonly string[]} */
 function normalizePathList(value, label, exactLists) {
   if (!Array.isArray(value)) {
     throw new Es2015ProvenanceError(`${label} must be a path array`);
@@ -1715,7 +1738,7 @@ function normalizePathList(value, label, exactLists) {
   return Object.freeze(paths);
 }
 
-/** @param {unknown} value @param {string} label */
+/** @param {unknown} value @param {string} label @returns {string | null} */
 function nullableString(value, label) {
   if (value === null) return null;
   if (typeof value !== 'string') {
@@ -1724,7 +1747,7 @@ function nullableString(value, label) {
   return value;
 }
 
-/** @param {unknown} value @param {string} label */
+/** @param {unknown} value @param {string} label @returns {string | null} */
 function nullableEvidenceString(value, label) {
   if (value === null) return null;
   if (typeof value !== 'string') {
@@ -1733,24 +1756,24 @@ function nullableEvidenceString(value, label) {
   return value.trim() === '' ? null : value;
 }
 
-/** @param {unknown} value @param {string} label */
+/** @param {unknown} value @param {string} label @returns {number | null} */
 function nullableInteger(value, label) {
   if (value === null) return null;
-  if (!Number.isInteger(value) || value <= 0) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
     throw new Es2015ProvenanceError(`${label} must be a positive integer or null`);
   }
-  return value;
+  return /** @type {number} */ (value);
 }
 
-/** @param {unknown} value @param {string} label */
+/** @param {unknown} value @param {string} label @returns {number} */
 function nonNegativeInteger(value, label) {
-  if (!Number.isInteger(value) || value < 0) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     throw new Es2015ProvenanceError(`${label} must be a non-negative integer`);
   }
-  return value;
+  return /** @type {number} */ (value);
 }
 
-/** @param {unknown} value @param {string} label */
+/** @param {unknown} value @param {string} label @returns {string} */
 function sha256Hex(value, label) {
   if (typeof value !== 'string' || !isHex64(value)) {
     throw new Es2015ProvenanceError(`${label} must be a SHA-256 hex string`);
@@ -1839,7 +1862,7 @@ function assertDecisionCode(code) {
   }
 }
 
-/** @param {unknown} value */
+/** @param {unknown} value @returns {Map<string, unknown>} */
 function normalizeFragments(value) {
   if (value instanceof Map) {
     return new Map(value);
@@ -2014,7 +2037,7 @@ function sortEntries(entries) {
   );
 }
 
-/** @param {{ batches: readonly { code: string }[] }} manifest @param {string} code */
+/** @param {ProvenanceManifest} manifest @param {string} code @returns {ProvenanceBatch} */
 function batchByCode(manifest, code) {
   const batch = manifest.batches.find((entry) => entry.code === code);
   if (batch === undefined) {
@@ -2023,7 +2046,7 @@ function batchByCode(manifest, code) {
   return batch;
 }
 
-/** @param {unknown} manifest @param {string} code */
+/** @param {ProvenanceManifest} manifest @param {string} code */
 function renderLedgerSummary(manifest, code) {
   if (code === 'U0') {
     return { rootCount: 0, variantCount: 0, pathSha256: EMPTY_LEDGER_SHA256 };
@@ -2032,10 +2055,11 @@ function renderLedgerSummary(manifest, code) {
   if (definition === undefined) {
     throw new Es2015ProvenanceError(`${code} is not a known provenance issue code`);
   }
+  /** @type {string[]} */
   const paths = [];
   let variants = 0;
   for (const batchCode of definition.aggregateCodes) {
-    const batch = batchByCode(object(manifest, 'manifest'), batchCode);
+    const batch = batchByCode(manifest, batchCode);
     for (const entry of batch.entries) {
       paths.push(entry.path);
       variants += entry.variants;
@@ -2049,7 +2073,7 @@ function renderLedgerSummary(manifest, code) {
   };
 }
 
-/** @param {Record<string, any>} decision @param {boolean} includeArtifactSha256 */
+/** @param {ReviewedDecision} decision @param {boolean} includeArtifactSha256 */
 function canonicalDecisionRecord(decision, includeArtifactSha256) {
   const record = {
     path: decision.path,
