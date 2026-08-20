@@ -478,11 +478,11 @@ entirely for the unknown-edition provenance work.
 
 Issue #76 preserved original issue base
 `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` separately from final PR base
-`8d75b48af2ee7ab04e7c5006980417227ec34568`. The tracked compact final-base
+`99c439f2efd287479f40d8d0e6ac2dd9aab81e10`. The tracked compact final-base
 identity,
 [`tools/test262/es2015-h0-baseline.json`](../tools/test262/es2015-h0-baseline.json),
 has SHA-256
-`97960b2f41a46cf11962288c5be75c69ff835863cba2ac6900f3e494cc85669e`.
+`01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec`.
 It records the final-base taxonomy SHA-256
 `e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953`,
 the immutable H0 135-root / 267-variant ledger SHA-256

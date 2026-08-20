@@ -868,7 +868,7 @@ selector-zero assertion valid.
 
 Render and commit `tools/test262/es2015-h0-baseline.json` from that final-base
 snapshot. Its exact-key parser must bind final base
-`8d75b48af2ee7ab04e7c5006980417227ec34568`, the full taxonomy SHA-256,
+`99c439f2efd287479f40d8d0e6ac2dd9aab81e10`, the full taxonomy SHA-256,
 the immutable H0 ledger/counts, canonical H0 and non-H0 classification hashes,
 the balanced partition/status summary, and the Test262 pin. Never make the
 default check depend on the saved session snapshot.

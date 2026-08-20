@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "finalBaseCommit": "8d75b48af2ee7ab04e7c5006980417227ec34568",
+  "finalBaseCommit": "99c439f2efd287479f40d8d0e6ac2dd9aab81e10",
   "repository": "https://github.com/tc39/test262.git",
   "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
   "finalBaseTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",

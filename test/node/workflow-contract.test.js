@@ -1370,11 +1370,11 @@ export default [
       assertSame(ownerMap.revision, paths.revision);
       assertSame(
         sha256(baselineText),
-        '97960b2f41a46cf11962288c5be75c69ff835863cba2ac6900f3e494cc85669e',
+        '01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec',
       );
       assertSame(
         baseline.finalBaseCommit,
-        '8d75b48af2ee7ab04e7c5006980417227ec34568',
+        '99c439f2efd287479f40d8d0e6ac2dd9aab81e10',
       );
       assertSame(baseline.repository, paths.repository);
       assertSame(baseline.revision, paths.revision);
