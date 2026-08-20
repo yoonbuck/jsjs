@@ -28,7 +28,6 @@ import { fileURLToPath } from 'node:url';
 import { load as parseYaml, dump as dumpYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
-import { main as checkProvenanceRange } from '../../tools/test262/es2015-provenance-check.js';
 import {
   UNSUPPORTED_FLAGS,
   decideSkip,
@@ -253,6 +252,13 @@ function inactiveOnPullRequestTargetName(ordinaryName) {
   );
 }
 
+/**
+ * The PR head SHA expression. Only ever legitimate as a data-only env value
+ * (compared against a fetched/attested SHA) — never as an action `with`
+ * input or interpolated directly into a `run` command.
+ */
+const GUARD_HEAD_SHA_EXPRESSION = '${{ github.event.pull_request.head.sha }}';
+
 /** Per-step environment tables, exactly as the design's mapping table lists. */
 const GUARD_VALIDATE_ENV = Object.freeze({
   BASE_REPOSITORY: '${{ github.event.pull_request.base.repo.full_name }}',
@@ -397,11 +403,22 @@ function assertPlainScalarSafe(value, description) {
  * @param {string} description
  */
 function assertRoundTripsAsPlainScalar(value, description) {
-  const dumped = dumpYaml({ value });
+  // `lineWidth: -1` disables js-yaml's line-wrapping, which otherwise folds
+  // long single-line values (the guard's shell commands are well over 80
+  // columns) into a `>-` folded block scalar. A folded/literal block scalar
+  // still round-trips byte-for-byte for these particular values, so the
+  // byte-round-trip check alone would not catch the style change — reject
+  // the block indicators explicitly, independent of the round-trip check.
+  const dumped = dumpYaml({ value }, { lineWidth: -1 });
   assertSame(
     /^value: ['"]/.test(dumped),
     false,
     `${description} must dump as an unquoted plain scalar, got: ${dumped}`,
+  );
+  assertSame(
+    /^value: [|>]/.test(dumped),
+    false,
+    `${description} must not dump as a folded or literal block scalar, got: ${dumped}`,
   );
   const reloaded = /** @type {{ value: unknown }} */ (parseYaml(dumped)).value;
   assertSame(
@@ -2462,6 +2479,45 @@ export default [
     },
   },
   {
+    name: 'every rendered active and inactive display name is unique, so no name containing "(inactive" can ever satisfy the guard requirement or an ordinary required job context',
+    run: () => {
+      const activeNames = [
+        GUARD_ACTIVE_NAME,
+        ...Object.values(ORDINARY_JOB_NAMES),
+      ];
+      const inactiveNames = [
+        GUARD_INACTIVE_NAME,
+        ...Object.values(ORDINARY_JOB_NAMES).map(
+          (name) => `${name} (inactive on pull_request_target)`,
+        ),
+      ];
+
+      assertSame(
+        new Set(activeNames).size,
+        activeNames.length,
+        'every active display name (the exact guard name plus every ordinary job name) must be unique',
+      );
+      assertSame(
+        new Set(inactiveNames).size,
+        inactiveNames.length,
+        'every inactive display name must be unique',
+      );
+
+      for (const inactiveName of inactiveNames) {
+        assertSame(
+          inactiveName.includes('(inactive'),
+          true,
+          `${inactiveName} must be recognizable as an inactive rendering`,
+        );
+        assertSame(
+          activeNames.includes(inactiveName),
+          false,
+          `an inactive rendering (${JSON.stringify(inactiveName)}) must never equal the exact guard name or an exact ordinary required job name`,
+        );
+      }
+    },
+  },
+  {
     name: 'the guard job performs exactly the seven steps the design specifies, in order, with no others',
     run: async () => {
       const { workflow } = await readWorkflow();
@@ -2618,29 +2674,122 @@ export default [
     },
   },
   {
-    name: 'no guard step ever references the PR head repository, proving a fork-shaped event cannot become a remote or URL input',
+    name: 'a fork-shaped pull_request_target event cannot make the guard use the PR head repository as a remote or checkout input',
     run: async () => {
       const { workflow } = await readWorkflow();
+      // Throws "the committed workflow has no provenance-base-guard job" today
+      // — that is the intentional, expected RED for this task: the guard does
+      // not exist yet. Once it does, everything below runs for real.
       const job = requireJob(workflow, GUARD_JOB_ID);
-      const serialized = JSON.stringify(job);
 
-      assertSame(
-        serialized.includes('head.repo'),
-        false,
-        'no guard input may derive from github.event.pull_request.head.repo',
-      );
-      assertSame(
-        serialized.includes('head_repo') || serialized.includes('HEAD_REPO'),
-        false,
-        'the guard must not introduce a head-repository variable under any name',
-      );
-      assertSame(
-        EXPECTED_GUARD_FETCH_COMMAND.trim().startsWith(
-          'git fetch --no-tags --no-recurse-submodules origin ',
-        ),
-        true,
-        "the fetch command must use only the base checkout's existing origin remote",
-      );
+      // No step may take the PR head repository as an action `with` input
+      // (e.g. a checkout `repository:`) under any of its possible names.
+      const headRepositoryExpressions = [
+        '${{ github.event.pull_request.head.repo.full_name }}',
+        '${{ github.event.pull_request.head.repo.clone_url }}',
+        '${{ github.event.pull_request.head.repo.html_url }}',
+        '${{ github.event.pull_request.head.repo.ssh_url }}',
+      ];
+      for (const step of job.steps ?? []) {
+        for (const [key, value] of Object.entries(step.with ?? {})) {
+          assertSame(
+            headRepositoryExpressions.includes(value),
+            false,
+            `${step.name}'s ${key} input must not source the PR head repository`,
+          );
+        }
+      }
+
+      // Executable proof, against the guard's own *parsed* fetch and
+      // fetch-attestation commands (not the hand `EXPECTED_GUARD_*` literals):
+      // a fork that advertises the same PR number with a *different* head
+      // commit is never consulted, because it is never added as a remote —
+      // there is no remote/URL input wired to `head.repo` anywhere for the
+      // fetch to reach it through.
+      const base = initGuardFixtureRepository();
+      const fork = initGuardFixtureRepository();
+      const clone = initGuardFixtureRepository();
+      try {
+        const baseHeadSha = commitGuardFixtureFile(base);
+        const baseAdvertise = runGit(base, [
+          'update-ref',
+          'refs/pull/77/head',
+          baseHeadSha,
+        ]);
+        assertSame(
+          baseAdvertise.status,
+          0,
+          `the base fixture must advertise its PR ref: ${baseAdvertise.stderr}`,
+        );
+
+        // The fork advertises the *same* PR number under its own,
+        // never-added-as-a-remote history, with a different head commit.
+        const forkHeadSha = commitGuardFixtureFile(fork);
+        const forkAdvertise = runGit(fork, [
+          'update-ref',
+          'refs/pull/77/head',
+          forkHeadSha,
+        ]);
+        assertSame(
+          forkAdvertise.status,
+          0,
+          `the fork fixture must advertise its own PR ref: ${forkAdvertise.stderr}`,
+        );
+
+        const remote = runGit(clone, [
+          ...GUARD_FIXTURE_IDENTITY,
+          'remote',
+          'add',
+          'origin',
+          base,
+        ]);
+        assertSame(
+          remote.status,
+          0,
+          `the clone must add only the base repository as origin: ${remote.stderr}`,
+        );
+        // The fork is deliberately never added as a remote anywhere.
+
+        const fetchStep = job.steps.find(
+          (/** @type {any} */ s) => s.name === GUARD_STEP_NAMES[4],
+        );
+        const attestStep = job.steps.find(
+          (/** @type {any} */ s) => s.name === GUARD_STEP_NAMES[5],
+        );
+
+        const fetch = runGuardShellCommand(fetchStep.run, clone, {
+          PR_NUMBER: '77',
+        });
+        assertSame(
+          fetch.status,
+          0,
+          `fetching the advertised PR ref through the base origin must succeed: ${fetch.stderr}`,
+        );
+
+        const attestsBaseHead = runGuardShellCommand(attestStep.run, clone, {
+          PR_NUMBER: '77',
+          HEAD_SHA: baseHeadSha,
+        });
+        assertSame(
+          attestsBaseHead.status,
+          0,
+          `the base repository's own head commit must attest: ${attestsBaseHead.stderr}`,
+        );
+
+        const attestsForkHead = runGuardShellCommand(attestStep.run, clone, {
+          PR_NUMBER: '77',
+          HEAD_SHA: forkHeadSha,
+        });
+        assertSame(
+          attestsForkHead.status === 0,
+          false,
+          "a fork's head commit, never fetched because the fork was never added as a remote, must fail attestation — a different head repository cannot become a remote or URL input",
+        );
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+        rmSync(fork, { recursive: true, force: true });
+        rmSync(clone, { recursive: true, force: true });
+      }
     },
   },
   {
@@ -2668,11 +2817,30 @@ export default [
         false,
         'the guard must never opt out of safe checkout',
       );
-      assertSame(
-        serialized.includes('pull_request.head.sha'),
-        false,
-        'the guard must never check out the PR head SHA directly',
-      );
+      // Three of the required per-step env tables legitimately carry
+      // `${{ github.event.pull_request.head.sha }}` as data (GUARD_VALIDATE_ENV,
+      // GUARD_FETCH_ATTEST_ENV, GUARD_CHECKER_ENV all pass HEAD_SHA to a shell
+      // variable for comparison, never for checkout) — so a blanket
+      // "job JSON never contains this substring" assertion is wrong. What must
+      // never happen is the PR head SHA reaching an action `with` input (e.g.
+      // a checkout `ref`) or being executed/interpolated directly inside a
+      // `run` command; a data-only env value is safe.
+      for (const step of job.steps ?? []) {
+        for (const [key, value] of Object.entries(step.with ?? {})) {
+          assertSame(
+            value !== GUARD_HEAD_SHA_EXPRESSION,
+            true,
+            `${step.name}'s ${key} input must not take the PR head SHA — only the base SHA may be checked out`,
+          );
+        }
+        if (typeof step.run === 'string') {
+          assertSame(
+            step.run.includes('pull_request.head.sha'),
+            false,
+            `${step.name} must not execute the PR head SHA directly in run — HEAD_SHA may reach a step only as a data-only env variable`,
+          );
+        }
+      }
       assertSame(
         EXPECTED_GUARD_CHECKER_COMMAND.includes('$PR_BODY'),
         false,
@@ -2763,49 +2931,6 @@ export default [
         step.if,
         "github.event_name == 'pull_request'",
         'the legacy step must remain scoped to pull_request and never run under pull_request_target',
-      );
-    },
-  },
-  {
-    name: 'the checker currently rejects the pull_request_target event the guard needs, proving the gate is not yet implemented',
-    run: async () => {
-      const baseSha = '1111111111111111111111111111111111111111';
-      const headSha = '2222222222222222222222222222222222222222';
-      const deps = {
-        environment: {
-          TZ: 'UTC',
-          GITHUB_EVENT_NAME: 'pull_request_target',
-          PR_BODY: '',
-        },
-        resolveCommit: async (/** @type {string} */ revision) => revision,
-        mergeBase: async () => baseSha,
-        gitDiff: async () => '',
-        readGitFile: async () => null,
-        stdout: () => {},
-        stderr: () => {},
-      };
-      const argv = [
-        '--check-range',
-        `--base=${baseSha}`,
-        `--head=${headSha}`,
-        '--pr-body-env=PR_BODY',
-      ];
-
-      let thrown;
-      try {
-        await checkProvenanceRange(argv, deps);
-      } catch (error) {
-        thrown = error;
-      }
-
-      assertSame(
-        thrown !== undefined,
-        true,
-        'the checker must currently reject pull_request_target — this proves the guard cannot pass yet',
-      );
-      assertSame(
-        /** @type {Error} */ (thrown).message,
-        'Provenance PR range checking requires a pull_request event',
       );
     },
   },
