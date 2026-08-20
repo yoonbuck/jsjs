@@ -23,6 +23,10 @@ import {
   ES2015_PROVENANCE_FILE,
   buildProvenanceFoundation,
 } from '../../tools/test262/es2015-provenance.js';
+import {
+  ES2015_H0_BASELINE_FILE,
+  buildEs2015H0Baseline,
+} from '../../tools/test262/es2015-promotion.js';
 
 const FIXTURE_ROOT = new URL('../fixtures/es2015-taxonomy/', import.meta.url);
 const PHYSICAL_FIXTURE_PATHS = new Map([
@@ -280,7 +284,7 @@ const H0_AUDIT_TAXONOMY = `${JSON.stringify({
       features: ['cross-realm'],
       flags: [],
       includes: [],
-      provenance: ['feature:cross-realm'],
+      provenance: ['es6id'],
     },
   ],
 })}\n`;
@@ -293,6 +297,18 @@ const H0_AUDIT_PATHS_MANIFEST = JSON.stringify({
   rootCount: 2,
   variantCount: 4,
   paths: H0_AUDIT_PATHS,
+});
+const H0_AUDIT_SUBSET = JSON.stringify({
+  version: 1,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  groups: [
+    {
+      name: 'es2015/h0-cross-realm-passed',
+      summary: 'The exact complete-pass H0 fixture root.',
+      paths: [H0_AUDIT_PASSED_PATH],
+    },
+  ],
 });
 const H0_AUDIT_OWNER_MAP = JSON.stringify({
   version: 1,
@@ -344,6 +360,18 @@ const H0_AUDIT_RECORDS = Object.freeze([
     status: 'passed',
   },
 ]);
+
+function h0AuditBaselineIdentityText() {
+  return `${JSON.stringify(
+    buildEs2015H0Baseline({
+      finalBaseCommit: '1111111111111111111111111111111111111111',
+      taxonomyText: H0_AUDIT_TAXONOMY,
+      pathsManifestText: H0_AUDIT_PATHS_MANIFEST,
+    }),
+    null,
+    2,
+  )}\n`;
+}
 const AUDIT_COVERAGE_DOCUMENT = [
   '# Fixture coverage',
   '',
@@ -907,14 +935,31 @@ export default [
           [
             '--paths-manifest=paths.json',
             '--disposition=disposition.json',
-            '--write-promotion=artifacts.json',
-            '--write-owner-deltas=artifacts.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/./es2015-h0-promotion.json',
           ],
           auditDependencies(),
         ),
       );
       assertSame(
         aliasedH0Outputs.message.includes('must use distinct output paths'),
+        true,
+      );
+      const parentAliasedH0Outputs = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--paths-manifest=paths.json',
+            '--disposition=disposition.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/temporary/../es2015-h0-promotion.json',
+          ],
+          auditDependencies(),
+        ),
+      );
+      assertSame(
+        parentAliasedH0Outputs.message.includes(
+          'must use distinct output paths',
+        ),
         true,
       );
       const mixedFocusedModes = await rejected(() =>
@@ -938,7 +983,15 @@ export default [
       const stale = auditDependencies({
         files: new Map([[AUDIT_PATH, 'stale\n']]),
       });
-      assertSame(await auditEs2015Taxonomy(['--check'], stale), 1);
+      const missingDefaultH0 = await rejected(() =>
+        auditEs2015Taxonomy(['--check'], stale),
+      );
+      assertSame(
+        missingDefaultH0.message.includes(
+          '--check requires H0 disposition and promotion artifacts',
+        ),
+        true,
+      );
       assertSame(stale.files.get(AUDIT_PATH), 'stale\n');
       assertSame(stale.writes.length, 0);
     },
@@ -1119,7 +1172,7 @@ export default [
     },
   },
   {
-    name: 'ES2015 audit uses a real pinned Git fixture for UTC, drift, check, and deterministic bytes',
+    name: 'ES2015 audit uses a real pinned Git fixture for UTC, drift, and deterministic bytes',
     run: async () => {
       const fixture = await createRealAuditFixture();
       const fixturePath = fileURLToPath(fixture.root);
@@ -1159,12 +1212,20 @@ export default [
         assertSame(nonUtc instanceof Es2015AuditError, true);
         assertSame(nonUtc.message.includes('UTC'), true);
 
-        assertSame(await auditEs2015Taxonomy(['--check'], utcDependencies), 1);
+        const missingDefaultH0 = await rejected(() =>
+          auditEs2015Taxonomy(['--check'], utcDependencies),
+        );
+        assertSame(
+          missingDefaultH0.message.includes(
+            '--check requires H0 disposition and promotion artifacts',
+          ),
+          true,
+        );
         assertSame(
           await readFile(new URL(AUDIT_PATH, fixture.root), 'utf8'),
           'stale\n',
         );
-        assertSame(errors.join('').includes('is stale'), true);
+        assertSame(errors.length, 0);
 
         assertSame(await auditEs2015Taxonomy([], utcDependencies), 0);
         const first = await readFile(new URL(AUDIT_PATH, fixture.root), 'utf8');
@@ -1245,7 +1306,7 @@ export default [
     },
   },
   {
-    name: 'ES2015 audit check stays metadata-only even with promotion fixtures present',
+    name: 'ES2015 audit check requires H0 proof even with promotion fixtures present',
     run: async () => {
       const baseline = auditDependencies({
         subset: AUDIT_PROMOTION_SUBSET,
@@ -1262,7 +1323,15 @@ export default [
         },
       });
 
-      assertSame(await auditEs2015Taxonomy(['--check'], checkOnly), 0);
+      const missingDefaultH0 = await rejected(() =>
+        auditEs2015Taxonomy(['--check'], checkOnly),
+      );
+      assertSame(
+        missingDefaultH0.message.includes(
+          '--check requires H0 disposition and promotion artifacts',
+        ),
+        true,
+      );
       assertSame(fixtureOutput(checkOnly, AUDIT_PATH), stored);
       assertSame(checkOnly.writes.length, 0);
     },
@@ -1446,6 +1515,136 @@ export default [
           ownerMapSha256: disposition.ownerMapSha256,
         }),
       );
+    },
+  },
+  {
+    name: 'ES2015 audit default check enforces the compact H0 baseline delta proof',
+    run: async () => {
+      const roots = new Map([
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const dependencies = auditDependencies({
+        roots,
+        subset: H0_AUDIT_SUBSET,
+        auditEvidence: auditEvidence({ auditRecords: [] }),
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          [ES2015_H0_BASELINE_FILE, h0AuditBaselineIdentityText()],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+          ['final-base-taxonomy.json', H0_AUDIT_TAXONOMY],
+          ['docs/test262-report.jsonl', ''],
+        ]),
+        runPromotion: async () => H0_AUDIT_RECORDS,
+      });
+      const dispositionOptions = [
+        '--baseline-taxonomy=final-base-taxonomy.json',
+        '--paths-manifest=tools/test262/es2015-h0-paths.json',
+        '--owner-map=tools/test262/es2015-h0-owner-map.json',
+        '--write-disposition=tools/test262/es2015-h0-disposition.json',
+      ];
+      const promotionOptions = [
+        '--baseline-taxonomy=final-base-taxonomy.json',
+        '--paths-manifest=tools/test262/es2015-h0-paths.json',
+        '--disposition=tools/test262/es2015-h0-disposition.json',
+        '--promotion-file=tools/test262/es2015-h0-promotion.json',
+        '--write-promotion=tools/test262/es2015-h0-promotion.json',
+        '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+      ];
+
+      assertSame(
+        await auditEs2015Taxonomy(dispositionOptions, dependencies),
+        0,
+      );
+      assertSame(await auditEs2015Taxonomy(promotionOptions, dependencies), 0);
+      assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      dependencies.runPromotion = async () => {
+        throw new Error('default audit check must not re-execute H0 evidence');
+      };
+      assertSame(await auditEs2015Taxonomy(['--check'], dependencies), 0);
+      const stalePathsManifest = JSON.parse(H0_AUDIT_PATHS_MANIFEST);
+      stalePathsManifest.sourceTaxonomySha256 = '0'.repeat(64);
+      dependencies.files.set(
+        'tools/test262/es2015-h0-paths.json',
+        `${JSON.stringify(stalePathsManifest, null, 2)}\n`,
+      );
+      const stalePathsIdentity = await rejected(() =>
+        auditEs2015Taxonomy(['--check'], dependencies),
+      );
+      assertSame(
+        stalePathsIdentity.message.includes(
+          'H0 paths do not match the final-base taxonomy',
+        ),
+        true,
+      );
+      dependencies.files.set(
+        'tools/test262/es2015-h0-paths.json',
+        H0_AUDIT_PATHS_MANIFEST,
+      );
+      dependencies.files.set('final-base-taxonomy.json', H0_AUDIT_TAXONOMY);
+      assertSame(
+        await auditEs2015Taxonomy(
+          ['--check', '--baseline-taxonomy=final-base-taxonomy.json'],
+          dependencies,
+        ),
+        0,
+      );
+      dependencies.files.set(
+        'final-base-taxonomy.json',
+        `${H0_AUDIT_TAXONOMY}\n`,
+      );
+      const mismatchedFullBaseline = await rejected(() =>
+        auditEs2015Taxonomy(
+          ['--check', '--baseline-taxonomy=final-base-taxonomy.json'],
+          dependencies,
+        ),
+      );
+      assertSame(
+        mismatchedFullBaseline.message.includes(
+          'final-base taxonomy hash does not match',
+        ),
+        true,
+      );
+      dependencies.files.set('final-base-taxonomy.json', H0_AUDIT_TAXONOMY);
+
+      const tamperedDeltas = JSON.parse(
+        fixtureOutput(
+          dependencies,
+          'tools/test262/es2015-h0-owner-deltas.json',
+        ),
+      );
+      tamperedDeltas.crossRealm.remainingRoots = 1;
+      dependencies.files.set(
+        'tools/test262/es2015-h0-owner-deltas.json',
+        `${JSON.stringify(tamperedDeltas, null, 2)}\n`,
+      );
+      const staleDelta = await rejected(() =>
+        auditEs2015Taxonomy(['--check'], dependencies),
+      );
+      assertSame(staleDelta.message.includes('stale or tampered'), true);
+
+      tamperedDeltas.crossRealm.remainingRoots = 0;
+      dependencies.files.set(
+        'tools/test262/es2015-h0-owner-deltas.json',
+        `${JSON.stringify(tamperedDeltas, null, 2)}\n`,
+      );
+      const tamperedBaseline = JSON.parse(h0AuditBaselineIdentityText());
+      tamperedBaseline.h0ClassificationSha256 = '0'.repeat(64);
+      dependencies.files.set(
+        ES2015_H0_BASELINE_FILE,
+        `${JSON.stringify(tamperedBaseline, null, 2)}\n`,
+      );
+      const invalidBaseline = await rejected(() =>
+        auditEs2015Taxonomy(['--check'], dependencies),
+      );
+      assertSame(invalidBaseline.message.includes('H0 classification'), true);
     },
   },
   {

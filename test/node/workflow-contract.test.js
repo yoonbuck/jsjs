@@ -64,6 +64,7 @@ import {
   resolveSupportedFeatures,
   runFeatureProbe,
 } from '../../tools/test262/features.js';
+import { parseEs2015H0Baseline } from '../../tools/test262/es2015-promotion.js';
 import {
   UPSTREAM_SUBSET_FILE,
   Test262UpstreamSubsetError,
@@ -950,7 +951,9 @@ function h0VariantEvidenceSha256(entries) {
         : {}),
     })),
   );
-  return sha256(`${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+  return sha256(
+    `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+  );
 }
 
 /**
@@ -1336,27 +1339,92 @@ export default [
     },
   },
   {
-    name: 'the H0 disposition workflow artifacts keep separate source, disposition, and promotion identities',
+    name: 'the H0 workflow artifacts bind final-base, disposition, and promotion identities',
     run: async () => {
-      const [pathsText, ownerMapText, dispositionText, promotionText, deltasText] =
-        await Promise.all([
-          readRepositoryFile('tools/test262/es2015-h0-paths.json'),
-          readRepositoryFile('tools/test262/es2015-h0-owner-map.json'),
-          readRepositoryFile('tools/test262/es2015-h0-disposition.json'),
-          readRepositoryFile('tools/test262/es2015-h0-promotion.json'),
-          readRepositoryFile('tools/test262/es2015-h0-owner-deltas.json'),
-        ]);
+      const [
+        pathsText,
+        ownerMapText,
+        dispositionText,
+        promotionText,
+        deltasText,
+        baselineText,
+      ] = await Promise.all([
+        readRepositoryFile('tools/test262/es2015-h0-paths.json'),
+        readRepositoryFile('tools/test262/es2015-h0-owner-map.json'),
+        readRepositoryFile('tools/test262/es2015-h0-disposition.json'),
+        readRepositoryFile('tools/test262/es2015-h0-promotion.json'),
+        readRepositoryFile('tools/test262/es2015-h0-owner-deltas.json'),
+        readRepositoryFile('tools/test262/es2015-h0-baseline.json'),
+      ]);
       const paths = JSON.parse(pathsText);
       const ownerMap = JSON.parse(ownerMapText);
       const disposition = JSON.parse(dispositionText);
       const promotion = JSON.parse(promotionText);
       const deltas = JSON.parse(deltasText);
+      const baseline = parseEs2015H0Baseline(baselineText);
 
       assertSame(paths.rootCount, 135);
       assertSame(paths.variantCount, 267);
       assertSame(paths.ledgerSha256, sha256(`${paths.paths.join('\n')}\n`));
       assertSame(ownerMap.repository, paths.repository);
       assertSame(ownerMap.revision, paths.revision);
+      assertSame(
+        sha256(baselineText),
+        '97960b2f41a46cf11962288c5be75c69ff835863cba2ac6900f3e494cc85669e',
+      );
+      assertSame(
+        baseline.finalBaseCommit,
+        '8d75b48af2ee7ab04e7c5006980417227ec34568',
+      );
+      assertSame(baseline.repository, paths.repository);
+      assertSame(baseline.revision, paths.revision);
+      assertSame(
+        baseline.finalBaseTaxonomySha256,
+        disposition.sourceTaxonomySha256,
+      );
+      assertSame(baseline.h0LedgerSha256, paths.ledgerSha256);
+      assertSame(baseline.h0RootCount, paths.rootCount);
+      assertSame(baseline.h0VariantCount, paths.variantCount);
+      assertSame(
+        baseline.h0ClassificationSha256,
+        '7d77ab62f96de66b8533628cee09fe49f3d39342e6109f5420a7969141472634',
+      );
+      assertSame(
+        baseline.nonH0ClassificationSha256,
+        'e600971b3b8efa7bb5a02f9bd782364f9873c29b6dcd03f58eda7c52b27f624d',
+      );
+      assertSame(
+        baseline.partitionStatusSummarySha256,
+        '0b05f6513c4fe8754d24fd6e53897905bbf97b6469bb20c5a89361035bf3f21d',
+      );
+      assertSame(baseline.partitionStatusSummary.roots, 53575);
+      assertSame(baseline.partitionStatusSummary.variants, 102912);
+      assertSame(
+        baseline.partitionStatusSummary.partitions.reduce(
+          (total, partition) => total + partition.roots,
+          0,
+        ),
+        baseline.partitionStatusSummary.roots,
+      );
+      assertSame(
+        baseline.partitionStatusSummary.statuses.reduce(
+          (total, status) => total + status.variants,
+          0,
+        ),
+        baseline.partitionStatusSummary.variants,
+      );
+      assertSame(
+        JSON.stringify(
+          baseline.partitionStatusSummary.statuses.map(
+            (status) => `${status.status}\u0000${status.blocker ?? ''}`,
+          ),
+        ),
+        JSON.stringify(
+          [...baseline.partitionStatusSummary.statuses]
+            .map((status) => `${status.status}\u0000${status.blocker ?? ''}`)
+            .sort(),
+        ),
+      );
       assertSame(disposition.ownerMapSha256, sha256(ownerMapText));
       assertSame(disposition.h0LedgerSha256, paths.ledgerSha256);
       assertSame(disposition.h0RootCount, paths.rootCount);
@@ -1433,7 +1501,9 @@ export default [
         const entries = delta.paths.map((/** @type {string} */ path) => {
           const entry = byPath.get(path);
           if (entry === undefined || entry.status !== 'reassigned') {
-            throw new Error(`owner delta has an unreviewed reassigned path: ${path}`);
+            throw new Error(
+              `owner delta has an unreviewed reassigned path: ${path}`,
+            );
           }
           assertSame(entry.primaryOwner.code, delta.owner.code);
           return entry;
@@ -1451,10 +1521,7 @@ export default [
             0,
           ),
         );
-        assertSame(
-          delta.pathsSha256,
-          sha256(`${delta.paths.join('\n')}\n`),
-        );
+        assertSame(delta.pathsSha256, sha256(`${delta.paths.join('\n')}\n`));
         assertSame(
           delta.variantEvidenceSha256,
           h0VariantEvidenceSha256(entries),

@@ -42,6 +42,8 @@
 - Create `test/ci/es2015-cross-realm-test262.test.js`: exact 135-root / 267-variant focused pinned Test262 gate.
 - Create `tools/test262/es2015-h0-paths.json`: immutable H0 ledger for focused
   execution after taxonomy reclassification.
+- Create `tools/test262/es2015-h0-baseline.json`: compact final-base taxonomy
+  identity for reproducible default H0 delta proof without session artifacts.
 - Modify `package.json`, `tools/ci/pipeline.js`, and generated `.github/workflows/ci.yml`: add the focused H0 job to the ES2015 release gate without broad local execution.
 - Modify `tools/test262/es2015-promotion.js`, `tools/test262/upstream-select.js`, `tools/test262/upstream-run.js`, and `tools/test262/es2015-audit.js`: support generated H0 dispositions, pass-only promotion manifests, exact selection, and reviewed reassignment.
 - Create `tools/test262/es2015-h0-owner-map.json`: reviewed mapping/allowlist from normalized H0 failure signatures to existing roadmap owners only.
@@ -83,6 +85,12 @@ code-unit-sorted arrays. The exact artifact paths are:
   code-unit-sorted complete-root entries whose disposition is `passed`. This H0
   schema is distinct from the existing v1 promotion schema; preserve T0's v1
   manifest byte-for-byte.
+- `tools/test262/es2015-h0-baseline.json` — compact final-base reconciliation
+  identity. Content: final base commit, pinned Test262 repository/revision,
+  full final-base taxonomy SHA-256, immutable H0 ledger/counts, canonical H0 and
+  non-H0 classification hashes, and a canonical balanced partition/status
+  summary. Default audit checks consume this artifact; an explicit full baseline
+  snapshot must validate against it before generation or checking proceeds.
 
 ---
 
@@ -792,6 +800,7 @@ git commit -m "Add exact H0 Test262 dispositions" \
 
 **Files:**
 
+- Create: `tools/test262/es2015-h0-baseline.json`
 - Modify: `tools/test262/es2015-h0-owner-map.json`
 - Modify: `tools/test262/es2015-h0-disposition.json`
 - Modify: `tools/test262/es2015-h0-owner-deltas.json`
@@ -799,6 +808,11 @@ git commit -m "Add exact H0 Test262 dispositions" \
 - Modify: `tools/test262/upstream-subset.json`
 - Modify: `tools/test262/es2015-audit-evidence.json`
 - Modify: `tools/test262/es2015-taxonomy.json`
+- Modify: `tools/test262/es2015-promotion.js`
+- Modify: `tools/test262/es2015-audit.js`
+- Modify: `test/node/es2015-taxonomy.test.js`
+- Modify: `test/node/upstream-select.test.js`
+- Modify: `test/node/workflow-contract.test.js`
 - Modify: generated downstream owner ledgers/count deltas
 - Modify: `docs/test262-report.jsonl`
 - Modify: generated coverage block in `docs/conformance.md`
@@ -807,9 +821,9 @@ git commit -m "Add exact H0 Test262 dispositions" \
 
 **Interfaces:**
 
-- Consumes: exact H0 path manifest, complete H0 execution evidence, generated H0
-  dispositions, reviewed owner mapping, owner deltas, and pass-only promotion
-  manifest.
+- Consumes: exact H0 path manifest, compact final-base identity, complete H0
+  execution evidence, generated H0 dispositions, reviewed owner mapping, owner
+  deltas, and pass-only promotion manifest.
 - Produces: zero core `test262-cross-realm-host` selectors by promoting only
   complete-root passes and reassigning the remaining roots to existing roadmap
   owners.
@@ -817,6 +831,9 @@ git commit -m "Add exact H0 Test262 dispositions" \
   downstream owner-ledger updates from one generator transaction.
 - Produces: regenerated `tools/test262/es2015-h0-owner-deltas.json` for #70 and
   every affected downstream issue from the final disposition hash.
+- Produces: a default `audit --check` proof that derives the final-base H0
+  identity from the tracked compact artifact and rejects a stale, tampered, or
+  aliased output transaction without consulting session-local paths.
 
 - [ ] **Step 1: Reconcile moving `origin/main` before final evidence**
 
@@ -848,6 +865,13 @@ exactly: no removed H0 path and no concurrent extra path with the same blocker.
 If the sets differ, stop for explicit roadmap review rather than silently
 shrinking or expanding H0. This dynamic equality proof is what makes the later
 selector-zero assertion valid.
+
+Render and commit `tools/test262/es2015-h0-baseline.json` from that final-base
+snapshot. Its exact-key parser must bind final base
+`8d75b48af2ee7ab04e7c5006980417227ec34568`, the full taxonomy SHA-256,
+the immutable H0 ledger/counts, canonical H0 and non-H0 classification hashes,
+the balanced partition/status summary, and the Test262 pin. Never make the
+default check depend on the saved session snapshot.
 
 - [ ] **Step 2: Regenerate final disposition and pass-only promotion**
 
@@ -888,6 +912,7 @@ unexplained evidence writes neither a success record nor blocker removal.
 
 ```bash
 TZ=UTC npm run test262:es2015:sync-promoted-report
+TZ=UTC npm run test262:es2015:audit:check
 TZ=UTC node tools/test262/es2015-audit.js \
   --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json"
 TZ=UTC node tools/test262/es2015-audit.js \
@@ -912,19 +937,22 @@ TZ=UTC npm run test262:select:check
   totals plus or minus generated root/variant deltas, without hard-coded global
   totals;
 - exact path/hash equality holds for H0 ledger, owner map, disposition, owner
-  deltas, promotion, evidence, taxonomy, report, and downstream owner ledgers;
+  deltas, promotion, compact final-base identity, evidence, taxonomy, report,
+  and downstream owner ledgers;
 - whole-tree, core, Annex B, unknown, and harness denominators balance; and
-- every non-H0 classification is byte-equivalent to the reconciled final base,
-  except reviewed concurrent-main movement already accounted for in Step 1.
+- canonical non-H0 classification identity and the reversible canonical H0
+  identity equal the reconciled final base, except reviewed concurrent-main
+  movement already accounted for in Step 1.
 
 Any additional movement is a hard stop unless a new `origin/main` fetch proves
 it is a reviewed rebase consequence, in which case repeat Steps 1-3.
 
 - [ ] **Step 4: Update direct documentation from generated totals**
 
-Document the original issue baseline, final PR base, focused command,
-harness-only boundary, exact H0 ledger/hash, owner-map/disposition/owner-delta/
-promotion hashes, generated passed/reassigned counts, and selector-zero result. State that `$262` remains absent from public runtime
+Document the original issue baseline, final PR base, tracked compact baseline
+identity/hash, focused command, default audit proof, harness-only boundary,
+exact H0 ledger/hash, owner-map/disposition/owner-delta/promotion hashes,
+generated passed/reassigned counts, and selector-zero result. State that `$262` remains absent from public runtime
 APIs and normal Realm globals, that B0 owns detachment, and that #76 completed
 host support rather than making all 135 roots semantically pass.
 
@@ -956,7 +984,7 @@ path movement. Fix and rerun Steps
 - [ ] **Step 7: Commit reconciled deterministic evidence**
 
 ```bash
-git add tools/test262/es2015-h0-owner-map.json tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-owner-deltas.json tools/test262/es2015-h0-promotion.json tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
+git add tools/test262/es2015-h0-baseline.json tools/test262/es2015-h0-owner-map.json tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-owner-deltas.json tools/test262/es2015-h0-promotion.json tools/test262/es2015-promotion.js tools/test262/es2015-audit.js tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json test/node/es2015-taxonomy.test.js test/node/upstream-select.test.js test/node/workflow-contract.test.js docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
 git commit -m "Reclassify exact cross-Realm Test262 roots" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
@@ -1393,16 +1421,17 @@ printf '%s\n' "$H0_MAIN_CODEQL_RUN" \
 Inspect the exact-main log and SARIF for zero extraction or parse diagnostics.
 API unavailability is a hard failure, not a fallback.
 
-Verify the merged taxonomy/report/disposition/promotion bytes equal the reviewed
-head, the H0 selector is still zero, and `assertExactH0DispositionDelta` still
-proves the exact 135-root / 267-variant passed-or-reassigned union against
-`h0-final-base-taxonomy.json`.
+Verify the merged taxonomy/report/disposition/promotion/compact-baseline bytes
+equal the reviewed head, the H0 selector is still zero, and the default
+`audit --check` still proves the exact 135-root / 267-variant
+passed-or-reassigned union without `h0-final-base-taxonomy.json`.
 
 ```bash
 ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
 REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
 SQUASH_SHA=$(cat "$ARTIFACTS/h0-squash-sha.txt")
 for PATH_IN_REPO in \
+  tools/test262/es2015-h0-baseline.json \
   tools/test262/es2015-h0-owner-map.json \
   tools/test262/es2015-h0-disposition.json \
   tools/test262/es2015-h0-owner-deltas.json \
@@ -1438,7 +1467,7 @@ Publish on #76:
 - exact ledger hash, generated passed/reassigned counts, and selector-zero result;
 - original issue baseline, final PR base, reviewed head, and squash SHA;
 - post-merge taxonomy/owner-map/disposition/owner-deltas/promotion SHA-256
-  values and balanced totals;
+  values, compact baseline SHA-256, and balanced totals;
 - deterministic added path/hash/count deltas from
   `tools/test262/es2015-h0-owner-deltas.json` for every affected downstream
   owner issue and #70; and
@@ -1456,5 +1485,5 @@ Do not describe the outcome as 135 semantic passes.
 - [ ] **Step 8: Report completion to the project coordinator**
 
 Send the coordinator one concise message with PR URL, squash SHA, exact CI and
-CodeQL runs, taxonomy/owner-map/disposition/owner-deltas/promotion/ledger hashes, generated
+CodeQL runs, taxonomy/compact-baseline/owner-map/disposition/owner-deltas/promotion/ledger hashes, generated
 passed/reassigned counts, updated issue URLs, and newly unblocked roadmap nodes.

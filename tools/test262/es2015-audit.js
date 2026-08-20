@@ -27,11 +27,13 @@ import {
 } from './es2015-provenance.js';
 import {
   assertExactH0DispositionDelta,
+  assertEs2015H0BaselineMatchesTaxonomy,
   buildEs2015H0Disposition,
   buildEs2015H0OwnerDeltas,
   buildEs2015Promotion,
   ES2015_PROMOTION_FILE,
   ES2015_H0_DISPOSITION_FILE,
+  ES2015_H0_BASELINE_FILE,
   ES2015_H0_OWNER_DELTAS_FILE,
   ES2015_H0_OWNER_MAP_FILE,
   ES2015_H0_PROMOTION_FILE,
@@ -76,6 +78,7 @@ export const ES2015_AUDIT_EVIDENCE_VERSION = 1;
 export const ES2015_AUDIT_VERSION = 3;
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+const OUTPUT_TARGET_ROOT_URL = new URL('file:///es2015-audit-output/');
 const SUBSET_FILE = 'tools/test262/upstream-subset.json';
 const FEATURES_FILE = 'tools/test262/features.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
@@ -418,25 +421,32 @@ export async function main(argv = [], dependencies = {}) {
   validateArtifact(artifact);
   const output = `${JSON.stringify(artifact, null, 2)}\n`;
 
-  if (options.baselineTaxonomy !== null) {
+  if (options.check || options.baselineTaxonomy !== null) {
     if (h0DispositionText === null || h0PromotionText === null) {
       throw new Es2015AuditError(
-        '--baseline-taxonomy requires H0 disposition and promotion artifacts',
+        `${options.baselineTaxonomy === null ? '--check' : '--baseline-taxonomy'} requires H0 disposition and promotion artifacts`,
       );
     }
     const [
+      baselineIdentityText,
       baselineTaxonomyText,
       pathsManifestText,
       ownerMapText,
       ownerDeltasText,
     ] = await Promise.all([
-      deps.readFile(options.baselineTaxonomy),
+      deps.readFile(ES2015_H0_BASELINE_FILE),
+      options.baselineTaxonomy === null
+        ? Promise.resolve(null)
+        : deps.readFile(options.baselineTaxonomy),
       deps.readFile(ES2015_H0_PATHS_FILE),
       deps.readFile(ES2015_H0_OWNER_MAP_FILE),
       deps.readFile(ES2015_H0_OWNER_DELTAS_FILE),
     ]);
     assertExactH0DispositionDelta({
-      before: baselineTaxonomyText,
+      ...(baselineTaxonomyText === null
+        ? {}
+        : { before: baselineTaxonomyText }),
+      baseline: baselineIdentityText,
       after: output,
       disposition: h0DispositionText,
       promotion: h0PromotionText,
@@ -560,19 +570,22 @@ export function createAuditDependencies(options = {}) {
  * @param {readonly { path: string, text: string }[]} files
  */
 async function writeRepositoryFilesAtomically(repositoryRootUrl, files) {
-  if (new Set(files.map((file) => file.path)).size !== files.length) {
+  const targets = files.map((file) => ({
+    ...file,
+    target: new URL(file.path, repositoryRootUrl),
+  }));
+  if (new Set(targets.map((file) => file.target.href)).size !== files.length) {
     throw new Es2015AuditError(
       'Atomic artifact generation requires distinct output paths',
     );
   }
   const transaction = randomUUID();
   const staged = await Promise.all(
-    files.map(async (file) => {
-      const target = new URL(file.path, repositoryRootUrl);
+    targets.map(async (file) => {
       /** @type {string | null} */
       let original = null;
       try {
-        original = await readFile(target, 'utf8');
+        original = await readFile(file.target, 'utf8');
       } catch (error) {
         if (/** @type {any} */ (error)?.code !== 'ENOENT') {
           throw error;
@@ -580,11 +593,10 @@ async function writeRepositoryFilesAtomically(repositoryRootUrl, files) {
       }
       return {
         ...file,
-        target,
         original,
         temporary: new URL(
-          `${file.path}.${transaction}.tmp`,
-          repositoryRootUrl,
+          `${file.target.pathname}.${transaction}.tmp`,
+          file.target,
         ),
       };
     }),
@@ -805,12 +817,15 @@ function parseOptions(argv) {
     }
   }
   if (writePromotion !== null || writeOwnerDeltas !== null) {
-    if ((writePromotion === null) !== (writeOwnerDeltas === null)) {
+    if (writePromotion === null || writeOwnerDeltas === null) {
       throw new Es2015AuditError(
         'H0 promotion generation must write promotion and owner deltas together',
       );
     }
-    if (writePromotion === writeOwnerDeltas) {
+    if (
+      canonicalOutputTarget(writePromotion) ===
+      canonicalOutputTarget(writeOwnerDeltas)
+    ) {
       throw new Es2015AuditError(
         'H0 promotion generation must use distinct output paths',
       );
@@ -823,7 +838,8 @@ function parseOptions(argv) {
     if (
       promotionFile !== null &&
       writePromotion !== null &&
-      promotionFile !== writePromotion
+      canonicalOutputTarget(promotionFile) !==
+        canonicalOutputTarget(writePromotion)
     ) {
       throw new Es2015AuditError(
         'The --promotion-file and --write-promotion paths must match',
@@ -858,6 +874,11 @@ function parseSinglePathOption(argument, prefix, current) {
     );
   }
   return argument.slice(prefix.length);
+}
+
+/** @param {string} path */
+function canonicalOutputTarget(path) {
+  return new URL(path, OUTPUT_TARGET_ROOT_URL).href;
 }
 
 /**
@@ -1521,6 +1542,14 @@ async function writeH0Disposition(context) {
       deps.readFile(options.ownerMap),
       deps.readFile(options.baselineTaxonomy ?? ES2015_TAXONOMY_ARTIFACT),
     ]);
+  if (options.baselineTaxonomy !== null) {
+    assertEs2015H0BaselineMatchesTaxonomy({
+      baselineText: await deps.readFile(ES2015_H0_BASELINE_FILE),
+      taxonomyText: baselineTaxonomyText,
+      pathsManifestText,
+      pin,
+    });
+  }
   const pathsManifest = JSON.parse(pathsManifestText);
   const paths = sortedPathsManifestPaths(pathsManifest, options.pathsManifest);
   const taxonomyFeatures = taxonomyFeaturesByPath(baselineTaxonomyText);
@@ -1597,6 +1626,14 @@ async function writeH0PromotionAndDeltas(context) {
     deps.readFile(options.baselineTaxonomy ?? ES2015_TAXONOMY_ARTIFACT),
     deps.readFile(ES2015_H0_OWNER_MAP_FILE),
   ]);
+  if (options.baselineTaxonomy !== null) {
+    assertEs2015H0BaselineMatchesTaxonomy({
+      baselineText: await deps.readFile(ES2015_H0_BASELINE_FILE),
+      taxonomyText: baselineTaxonomyText,
+      pathsManifestText,
+      pin,
+    });
+  }
   const pathsManifest = JSON.parse(pathsManifestText);
   const paths = sortedPathsManifestPaths(pathsManifest, options.pathsManifest);
   const h0Inventory = inventory.filter((root) => paths.includes(root.path));

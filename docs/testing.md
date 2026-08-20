@@ -52,7 +52,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `TZ=UTC npm run test262:es2015:provenance:ledger -- --render-ledger=UA`        | Render the exact code-unit-sorted ledger for one atomic provenance batch code (`UA`, `UB`, `UL1`-`UL4`, `US1`-`US7`)                                                                                                            |
 | `TZ=UTC npm run test262:cross-realm`                                           | Execute only the immutable H0 cross-Realm harness corpus; complete roots promote and all remaining roots retain reviewed reassignment evidence                                                                                  |
 | `TZ=UTC npm run test262:es2015:audit`                                          | Rebuild the deterministic ES2015 taxonomy from the exact pinned checkout                                                                                                                                                        |
-| `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in ES2015 taxonomy and exact promotion provenance without writing                                                                                                                                            |
+| `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in taxonomy and promotion provenance without writing, including the compact final-base H0 delta, non-H0, denominator, and owner-delta proof                                                                  |
 | `TZ=UTC npm run test262:es2015:sync-promoted-report`                           | Rebuild report and coverage bytes from committed pre-promotion records plus immutable exact promotion evidence; never executes the broad subset                                                                                 |
 | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | **CI-only:** broad pinned upstream subset; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                                              |
 | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | **CI-only:** broad pinned run in check mode; fails if either generated artifact is stale                                                                                                                                        |
@@ -478,12 +478,16 @@ entirely for the unknown-edition provenance work.
 
 Issue #76 preserved original issue base
 `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` separately from final PR base
-`8d75b48af2ee7ab04e7c5006980417227ec34568`. The final-base source taxonomy
-artifact, `h0-final-base-taxonomy.json`, has SHA-256
-`e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953`.
-Its core `test262-cross-realm-host` selector exactly matched the immutable H0
-ledger: 135 roots, 267 variants, SHA-256
-`3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950`.
+`8d75b48af2ee7ab04e7c5006980417227ec34568`. The tracked compact final-base
+identity,
+[`tools/test262/es2015-h0-baseline.json`](../tools/test262/es2015-h0-baseline.json),
+has SHA-256
+`97960b2f41a46cf11962288c5be75c69ff835863cba2ac6900f3e494cc85669e`.
+It records the final-base taxonomy SHA-256
+`e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953`,
+the immutable H0 135-root / 267-variant ledger SHA-256
+`3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950`,
+and canonical final-base H0, non-H0, and balanced partition/status identities.
 
 Run only the focused corpus when refreshing this evidence:
 
@@ -503,6 +507,14 @@ immutable 135-root / 267-variant ledger. The pass-only promotion has 40 roots,
 After generation, the core `test262-cross-realm-host` selector is zero roots
 and zero variants.
 
+`TZ=UTC npm run test262:es2015:audit:check` loads that committed identity
+automatically; it never needs a session-local `git show` snapshot. It proves
+the selector-zero H0 disposition delta, canonical non-H0 preservation, H0
+selector and denominator identities, and generated owner deltas. An explicit
+`--baseline-taxonomy=<final-base-taxonomy.json>` remains available for
+generation or review, but its full snapshot must match the committed compact
+identity before use.
+
 The reviewed artifact SHA-256 identities are owner map
 `d50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b`,
 disposition
@@ -511,6 +523,12 @@ owner deltas
 `ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b`,
 and promotion
 `a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c`.
+The compact identity's canonical H0 classification SHA-256 is
+`7d77ab62f96de66b8533628cee09fe49f3d39342e6109f5420a7969141472634`,
+its non-H0 classification SHA-256 is
+`e600971b3b8efa7bb5a02f9bd782364f9873c29b6dcd03f58eda7c52b27f624d`,
+and its partition/status summary SHA-256 is
+`0b05f6513c4fe8754d24fd6e53897905bbf97b6469bb20c5a89361035bf3f21d`.
 This is Test262-harness-only host support: `$262` remains absent from public
 runtime APIs and normal Realm globals. B0 owns detachment; #76 removes the
 host blocker without claiming that all 135 roots semantically pass.
