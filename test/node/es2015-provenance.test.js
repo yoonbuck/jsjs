@@ -56,6 +56,9 @@ const PROVENANCE_DECISIONS_DIRECTORY =
 const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
 const RANGE_BASE_SHA = 'a'.repeat(40);
 const RANGE_HEAD_SHA = 'b'.repeat(40);
+const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
+const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
+  'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
 const FOUNDATION_ALLOWED_PATHS = Object.freeze([
   '.github/workflows/ci.yml',
   '.prettierignore',
@@ -104,6 +107,89 @@ const DECISION_GENERATED_PATHS = Object.freeze([
   'tools/test262/es2015-audit-evidence.json',
   'tools/test262/es2015-taxonomy.json',
 ]);
+const EMPTY_DECISION_FRAGMENTS = Object.freeze(
+  ES2015_PROVENANCE_DECISION_CODES.map(
+    (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+  ),
+);
+const FOUNDATION_MAINTENANCE_ALLOWED_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  'docs/conformance.md',
+  'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md',
+  'docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md',
+  'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+  'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md',
+  'docs/testing.md',
+  'test/node/es2015-provenance.test.js',
+  'test/node/workflow-contract.test.js',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance-decisions/UA.json',
+  'tools/test262/es2015-provenance-decisions/UB.json',
+  'tools/test262/es2015-provenance-decisions/UL1.json',
+  'tools/test262/es2015-provenance-decisions/UL2.json',
+  'tools/test262/es2015-provenance-decisions/UL3.json',
+  'tools/test262/es2015-provenance-decisions/UL4.json',
+  'tools/test262/es2015-provenance-decisions/US1.json',
+  'tools/test262/es2015-provenance-decisions/US2.json',
+  'tools/test262/es2015-provenance-decisions/US3.json',
+  'tools/test262/es2015-provenance-decisions/US4.json',
+  'tools/test262/es2015-provenance-decisions/US5.json',
+  'tools/test262/es2015-provenance-decisions/US6.json',
+  'tools/test262/es2015-provenance-decisions/US7.json',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/es2015-provenance.json',
+]);
+const CAPTURED_FOUNDATION_RANGE_PROFILE = Object.freeze({
+  name: 'foundation',
+  baseFoundation: 'absent',
+  requiredPaths: FOUNDATION_ALLOWED_PATHS,
+  allowedPaths: FOUNDATION_ALLOWED_PATHS,
+  requiredDeletions: FOUNDATION_DELETIONS,
+  allowedDeletions: FOUNDATION_DELETIONS,
+  emptyDecisionFragments: EMPTY_DECISION_FRAGMENTS,
+  decisionFragment: null,
+  generatedPaths: Object.freeze([
+    '.github/workflows/ci.yml',
+    ...EMPTY_DECISION_FRAGMENTS,
+    ES2015_PROVENANCE_FILE,
+  ]),
+});
+const CAPTURED_FOUNDATION_MAINTENANCE_RANGE_PROFILE = Object.freeze({
+  name: 'foundation-maintenance',
+  baseFoundation: 'present',
+  requiredPaths: Object.freeze([]),
+  allowedPaths: FOUNDATION_MAINTENANCE_ALLOWED_PATHS,
+  requiredDeletions: Object.freeze([]),
+  allowedDeletions: Object.freeze([]),
+  emptyDecisionFragments: EMPTY_DECISION_FRAGMENTS,
+  decisionFragment: null,
+  generatedPaths: Object.freeze([
+    '.github/workflows/ci.yml',
+    ES2015_PROVENANCE_FILE,
+  ]),
+});
+/** @param {string} code */
+function capturedDecisionRangeProfile(code) {
+  const decisionFragment = `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
+  return Object.freeze({
+    name: `decision:${code}`,
+    baseFoundation: 'present',
+    requiredPaths: Object.freeze([decisionFragment]),
+    allowedPaths: Object.freeze([
+      'docs/conformance.md',
+      'docs/test262-report.jsonl',
+      'tools/test262/es2015-audit-evidence.json',
+      decisionFragment,
+      'tools/test262/es2015-taxonomy.json',
+    ]),
+    requiredDeletions: Object.freeze([]),
+    allowedDeletions: Object.freeze([]),
+    emptyDecisionFragments: Object.freeze([]),
+    decisionFragment,
+    generatedPaths: DECISION_GENERATED_PATHS,
+  });
+}
 const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
@@ -1023,14 +1109,35 @@ function rangeMarker(profile) {
   return `<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:${profile} base-ledger-sha256:${APPROVED_PRODUCTION_FOUNDATION.baseLedger.pathSha256} -->`;
 }
 
-/** @param {string} profile */
-function rangeArguments(profile) {
+function maintenanceRangeMarker() {
+  return rangeMarker('foundation-maintenance');
+}
+
+function foundationBootstrapManifestText() {
+  const manifest = JSON.parse(approvedProvenanceManifestText());
+  manifest.rangeProfiles = manifest.rangeProfiles.filter(
+    (/** @type {{ name: string }} */ profile) =>
+      profile.name !== 'foundation-maintenance',
+  );
+  const text = `${JSON.stringify(manifest, null, 2)}\n`;
+  assertSame(
+    createHash('sha256').update(text).digest('hex'),
+    FOUNDATION_BOOTSTRAP_MANIFEST_SHA256,
+  );
+  return text;
+}
+
+/**
+ * @param {string} profile
+ * @param {{ baseSha?: string, headSha?: string, marker?: string }} options
+ */
+function rangeArguments(profile, options = {}) {
   return [
     '--check-range',
-    `--base=${RANGE_BASE_SHA}`,
-    `--head=${RANGE_HEAD_SHA}`,
+    `--base=${options.baseSha ?? RANGE_BASE_SHA}`,
+    `--head=${options.headSha ?? RANGE_HEAD_SHA}`,
     `--profile=${profile}`,
-    `--marker=${rangeMarker(profile)}`,
+    `--marker=${options.marker ?? rangeMarker(profile)}`,
   ];
 }
 
@@ -1038,22 +1145,37 @@ function rangeArguments(profile) {
  * @param {{
  *   changes: readonly { status: string, path: string, sourcePath?: string }[],
  *   baseHasFoundation?: boolean,
+ *   baseManifestText?: string | null,
+ *   baseSha?: string,
+ *   headManifestText?: string,
+ *   headSha?: string,
  *   headFiles?: ReadonlyMap<string, string>,
  *   mergeBase?: string,
  * }} options
  */
 function rangeCheckDependencies(options) {
   const dependencies = provenanceCheckDependencies();
+  const baseSha = options.baseSha ?? RANGE_BASE_SHA;
+  const headSha = options.headSha ?? RANGE_HEAD_SHA;
   const headFiles = new Map(dependencies.files);
   for (const path of FOUNDATION_ALLOWED_PATHS) {
     if (!headFiles.has(path)) headFiles.set(path, `fixture ${path}\n`);
+  }
+  if (options.headManifestText !== undefined) {
+    headFiles.set(ES2015_PROVENANCE_FILE, options.headManifestText);
   }
   for (const [path, text] of options.headFiles ?? []) {
     headFiles.set(path, text);
   }
   const baseFiles = new Map();
-  if (options.baseHasFoundation === true) {
-    baseFiles.set(ES2015_PROVENANCE_FILE, approvedProvenanceManifestText());
+  const baseManifestText =
+    options.baseManifestText === undefined
+      ? options.baseHasFoundation === true
+        ? approvedProvenanceManifestText()
+        : null
+      : options.baseManifestText;
+  if (baseManifestText !== null) {
+    baseFiles.set(ES2015_PROVENANCE_FILE, baseManifestText);
   }
   for (const path of FOUNDATION_DELETIONS) {
     baseFiles.set(path, `removed fixture ${path}\n`);
@@ -1061,14 +1183,35 @@ function rangeCheckDependencies(options) {
   return {
     ...dependencies,
     files: headFiles,
-    resolveCommit: async (/** @type {string} */ revision) => revision,
-    mergeBase: async () => options.mergeBase ?? RANGE_BASE_SHA,
-    gitDiff: async () => rangeDiffText(options.changes),
+    resolveCommit: async (/** @type {string} */ revision) => {
+      if (revision !== baseSha && revision !== headSha) {
+        throw new Error(`unexpected fixture commit ${revision}`);
+      }
+      return revision;
+    },
+    mergeBase: async (
+      /** @type {string} */ base,
+      /** @type {string} */ head,
+    ) => {
+      if (base !== baseSha || head !== headSha) {
+        throw new Error(`unexpected fixture range ${base}..${head}`);
+      }
+      return options.mergeBase ?? baseSha;
+    },
+    gitDiff: async (/** @type {string} */ base, /** @type {string} */ head) => {
+      if (base !== baseSha || head !== headSha) {
+        throw new Error(`unexpected fixture range ${base}..${head}`);
+      }
+      return rangeDiffText(options.changes);
+    },
     readGitFile: async (
       /** @type {string} */ revision,
       /** @type {string} */ path,
-    ) =>
-      (revision === RANGE_BASE_SHA ? baseFiles : headFiles).get(path) ?? null,
+    ) => {
+      if (revision === baseSha) return baseFiles.get(path) ?? null;
+      if (revision === headSha) return headFiles.get(path) ?? null;
+      throw new Error(`unexpected fixture commit ${revision}`);
+    },
   };
 }
 
@@ -1100,12 +1243,39 @@ export default [
         ]),
       );
       assertSame(productionManifest().taxonomyBaseline, TAXONOMY_BASELINE);
+      const manifest = productionManifest();
+      const foundationProfile = manifest.rangeProfiles.find(
+        (profile) => profile.name === 'foundation',
+      );
+      const maintenanceProfile = manifest.rangeProfiles.find(
+        (profile) => profile.name === 'foundation-maintenance',
+      );
+      const decisionProfiles = manifest.rangeProfiles.filter((profile) =>
+        profile.name.startsWith('decision:'),
+      );
       assertSame(
-        json(productionManifest().rangeProfiles.map((profile) => profile.name)),
+        json(manifest.rangeProfiles.map((profile) => profile.name)),
         json([
           'foundation',
+          'foundation-maintenance',
           ...ES2015_PROVENANCE_DECISION_CODES.map((code) => `decision:${code}`),
         ]),
+      );
+      assertSame(
+        json(maintenanceProfile),
+        json(CAPTURED_FOUNDATION_MAINTENANCE_RANGE_PROFILE),
+      );
+      assertSame(
+        json(foundationProfile),
+        json(CAPTURED_FOUNDATION_RANGE_PROFILE),
+      );
+      assertSame(
+        json(decisionProfiles),
+        json(
+          ES2015_PROVENANCE_DECISION_CODES.map((code) =>
+            capturedDecisionRangeProfile(code),
+          ),
+        ),
       );
     },
   },
@@ -2775,6 +2945,8 @@ export default [
     name: 'ES2015 provenance renders deterministic issue bodies with exact dependency markers',
     run: () => {
       const manifest = productionManifest();
+      const EDITION_EVIDENCE_PROHIBITION =
+        'History, age, path/directory, and source/text similarity may prioritize review but can never decide edition.';
       const uaLedger = renderBatchLedger(manifest, 'UA');
       const uaBody = renderProvenanceIssueBody(
         manifest,
@@ -2851,7 +3023,9 @@ export default [
         true,
       );
       assertSame(
-        uaBody.includes('History alone never establishes edition evidence.'),
+        uaBody.includes(
+          'History, age, path/directory, and source/text similarity may prioritize review but can never decide edition.',
+        ),
         true,
       );
       assertSame(
@@ -2879,6 +3053,15 @@ export default [
         uaBody.includes('Require exact-head CodeQL before merge.'),
         true,
       );
+      for (const code of Object.keys(WRAPPED_ISSUE_MAP.issues)) {
+        for (const body of [
+          renderProvenanceIssueBody(manifest, code),
+          renderProvenanceIssueBody(manifest, code, WRAPPED_ISSUE_MAP),
+        ]) {
+          assertSame(body.includes(EDITION_EVIDENCE_PROHIBITION), true, code);
+          assertSame(body.includes('..'), false, code);
+        }
+      }
       assertSame(uaBody.includes('Dependencies: U0 (#100).'), true);
       assertSame(uaBody.includes('Native parent: T1 (#75).'), true);
       assertSame(u0Body.includes('zero classification decisions'), true);
@@ -2998,6 +3181,249 @@ export default [
           }),
         ),
         0,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance range policy accepts maintenance from the U0 bootstrap and an initialized base',
+    run: async () => {
+      const bootstrapBaseManifest = foundationBootstrapManifestText();
+      const maintenanceChange = {
+        status: 'M',
+        path: 'tools/test262/es2015-provenance-check.js',
+      };
+      assertSame(
+        await provenanceCheck(
+          rangeArguments('foundation-maintenance', {
+            baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+            marker: maintenanceRangeMarker(),
+          }),
+          rangeCheckDependencies({
+            changes: [maintenanceChange],
+            baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+            baseManifestText: bootstrapBaseManifest,
+          }),
+        ),
+        0,
+      );
+      assertSame(
+        await provenanceCheck(
+          rangeArguments('foundation-maintenance', {
+            marker: maintenanceRangeMarker(),
+          }),
+          rangeCheckDependencies({
+            changes: [maintenanceChange],
+            baseManifestText: approvedProvenanceManifestText(),
+          }),
+        ),
+        0,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance maintenance ranges select authorization from the trusted base before reading head policy',
+    run: async () => {
+      const bootstrapBaseManifest = foundationBootstrapManifestText();
+      const maintenanceChange = {
+        status: 'M',
+        path: 'tools/test262/es2015-provenance-check.js',
+      };
+      const wrongBootstrapCommit = 'c'.repeat(40);
+      for (const scenario of [
+        {
+          args: rangeArguments('foundation-maintenance', {
+            baseSha: wrongBootstrapCommit,
+            marker: maintenanceRangeMarker(),
+          }),
+          dependencies: rangeCheckDependencies({
+            changes: [maintenanceChange],
+            baseSha: wrongBootstrapCommit,
+            baseManifestText: bootstrapBaseManifest,
+          }),
+          message:
+            'foundation-maintenance range requires the exact U0 bootstrap base and manifest',
+        },
+        {
+          args: rangeArguments('foundation-maintenance', {
+            baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+            marker: maintenanceRangeMarker(),
+          }),
+          dependencies: rangeCheckDependencies({
+            changes: [maintenanceChange],
+            baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+            baseManifestText: `${bootstrapBaseManifest} `,
+          }),
+          message:
+            'foundation-maintenance range requires the exact U0 bootstrap base and manifest',
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(scenario.args, scenario.dependencies),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+
+      /** @type {{ rangeProfiles: { name: string, allowedPaths: string[] }[] }} */
+      const broadenedHeadManifest = JSON.parse(
+        approvedProvenanceManifestText(),
+      );
+      const maintenanceProfile = broadenedHeadManifest.rangeProfiles.find(
+        (profile) => profile.name === 'foundation-maintenance',
+      );
+      if (maintenanceProfile === undefined) {
+        throw new Error('missing foundation-maintenance fixture profile');
+      }
+      maintenanceProfile.allowedPaths.push('src/runtime/forbidden.js');
+      maintenanceProfile.allowedPaths.sort();
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              rangeArguments('foundation-maintenance', {
+                marker: maintenanceRangeMarker(),
+              }),
+              rangeCheckDependencies({
+                changes: [{ status: 'M', path: 'src/runtime/forbidden.js' }],
+                baseManifestText: approvedProvenanceManifestText(),
+                headManifestText: json(broadenedHeadManifest),
+              }),
+            ),
+          )
+        ).message,
+        'foundation-maintenance range forbids changed path src/runtime/forbidden.js',
+      );
+
+      for (const path of [
+        'src/runtime/forbidden.js',
+        'tools/test262/features.json',
+        'tools/test262/upstream-subset.json',
+        'tools/test262/es2015-taxonomy.json',
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                rangeArguments('foundation-maintenance', {
+                  marker: maintenanceRangeMarker(),
+                }),
+                rangeCheckDependencies({
+                  changes: [{ status: 'M', path }],
+                  baseManifestText: approvedProvenanceManifestText(),
+                }),
+              ),
+            )
+          ).message,
+          `foundation-maintenance range forbids changed path ${path}`,
+        );
+      }
+
+      const nonEmptyFragmentPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`;
+      const nonEmptyFragment = `${JSON.stringify(
+        productionDecisionFragmentValue(),
+        null,
+        2,
+      )}\n`;
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              rangeArguments('foundation-maintenance', {
+                marker: maintenanceRangeMarker(),
+              }),
+              rangeCheckDependencies({
+                changes: [maintenanceChange],
+                baseManifestText: approvedProvenanceManifestText(),
+                headFiles: new Map([[nonEmptyFragmentPath, nonEmptyFragment]]),
+              }),
+            ),
+          )
+        ).message,
+        `foundation-maintenance range requires an exact empty decision fragment at ${nonEmptyFragmentPath}`,
+      );
+
+      for (const scenario of [
+        {
+          change: {
+            status: 'R100',
+            sourcePath: 'docs/old.md',
+            path: maintenanceChange.path,
+          },
+          message:
+            'foundation-maintenance range forbids rename docs/old.md -> tools/test262/es2015-provenance-check.js',
+        },
+        {
+          change: {
+            status: 'C100',
+            sourcePath: 'docs/source.md',
+            path: maintenanceChange.path,
+          },
+          message:
+            'foundation-maintenance range forbids copy docs/source.md -> tools/test262/es2015-provenance-check.js',
+        },
+        {
+          change: { status: 'D', path: maintenanceChange.path },
+          message:
+            'foundation-maintenance range forbids deleted path tools/test262/es2015-provenance-check.js',
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                rangeArguments('foundation-maintenance', {
+                  marker: maintenanceRangeMarker(),
+                }),
+                rangeCheckDependencies({
+                  changes: [scenario.change],
+                  baseManifestText: approvedProvenanceManifestText(),
+                }),
+              ),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              rangeArguments('unknown', {
+                marker: rangeMarker('unknown'),
+              }),
+              rangeCheckDependencies({
+                changes: [maintenanceChange],
+                baseManifestText: approvedProvenanceManifestText(),
+                headManifestText: '{not valid JSON',
+              }),
+            ),
+          )
+        ).message,
+        'Unknown provenance range profile unknown',
+      );
+
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              rangeArguments('foundation'),
+              rangeCheckDependencies({
+                changes: [
+                  ...FOUNDATION_ALLOWED_PATHS.map((path) => ({
+                    status: 'M',
+                    path,
+                  })),
+                ],
+                baseManifestText: approvedProvenanceManifestText(),
+              }),
+            ),
+          )
+        ).message,
+        'foundation range requires a base without the initialized provenance foundation',
       );
     },
   },
@@ -3277,6 +3703,37 @@ export default [
     },
   },
   {
+    name: 'ES2015 provenance CI range mode requires a marker for exact-U0 foundation-owned paths',
+    run: async () => {
+      const dependencies = rangeCheckDependencies({
+        changes: [{ status: 'M', path: 'package.json' }],
+        baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+        baseManifestText: foundationBootstrapManifestText(),
+      });
+      dependencies.environment = {
+        TZ: 'UTC',
+        GITHUB_EVENT_NAME: 'pull_request',
+        PROVENANCE_PR_BODY: 'No marker',
+      };
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              [
+                '--check-range',
+                `--base=${FOUNDATION_BOOTSTRAP_COMMIT}`,
+                `--head=${RANGE_HEAD_SHA}`,
+                '--pr-body-env=PROVENANCE_PR_BODY',
+              ],
+              dependencies,
+            ),
+          )
+        ).message,
+        'A provenance-owned PR range requires one authoritative provenance marker',
+      );
+    },
+  },
+  {
     name: 'ES2015 provenance CI range mode derives one trusted profile marker from the PR body',
     run: async () => {
       const foundationChanges = [
@@ -3296,6 +3753,46 @@ export default [
         PROVENANCE_PR_BODY: `U0\n\n${rangeMarker('foundation')}\n`,
       };
       assertSame(await provenanceCheck(ciArgs, valid), 0);
+
+      const maintenanceOnlyPath =
+        'docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md';
+      for (const { baseSha, baseManifestText } of [
+        {
+          baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+          baseManifestText: foundationBootstrapManifestText(),
+        },
+        {
+          baseSha: RANGE_BASE_SHA,
+          baseManifestText: approvedProvenanceManifestText(),
+        },
+      ]) {
+        const unmarkedMaintenance = rangeCheckDependencies({
+          changes: [{ status: 'M', path: maintenanceOnlyPath }],
+          baseSha,
+          baseManifestText,
+        });
+        unmarkedMaintenance.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: 'No marker',
+        };
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                [
+                  '--check-range',
+                  `--base=${baseSha}`,
+                  `--head=${RANGE_HEAD_SHA}`,
+                  '--pr-body-env=PROVENANCE_PR_BODY',
+                ],
+                unmarkedMaintenance,
+              ),
+            )
+          ).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+        );
+      }
 
       const duplicate = rangeCheckDependencies({
         changes: foundationChanges,

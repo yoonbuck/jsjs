@@ -304,39 +304,81 @@ decision retains its immutable prior variant count.
 ### Provenance PR range gate
 
 The generated workflow runs the same range CLI used for local final review.
-Every provenance PR body contains exactly one marker; U0 uses:
+Every provenance PR body contains exactly one authoritative marker; U0 uses:
 
 ```text
 <!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:foundation base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->
 ```
 
-Decision PRs use `profile:decision:<CODE>`. For a live U0 review:
+Bootstrap and persistent maintenance use:
+
+```text
+<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:foundation-maintenance base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->
+```
+
+Decision PRs use `profile:decision:<CODE>`. Every rendered U* issue body also
+contains the exact sentence `History, age, path/directory, and source/text
+similarity may prioritize review but can never decide edition.` For a live
+post-bootstrap maintenance review:
 
 ```sh
 BASE=$(git rev-parse origin/main)
 HEAD=$(git rev-parse HEAD)
-MARKER='<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:foundation base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->'
+MARKER='<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:foundation-maintenance base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->'
 TZ=UTC node tools/test262/es2015-provenance-check.js \
   --check-range --base="$BASE" --head="$HEAD" \
-  --profile=foundation --marker="$MARKER"
+  --profile=foundation-maintenance --marker="$MARKER"
 ```
 
 The `foundation` profile requires the exact U0 files, empty fragments, and
 approved cleanup deletions, and requires a base without the initialized
-foundation. `decision:<CODE>` requires the foundation in base and permits only
-that non-empty source fragment plus the explicitly listed generated taxonomy,
-audit-evidence, report, and conformance outputs. Both reject empty ranges,
-renames/copies, unapproved deletes, `src/**`, feature/selection changes, and
-foreign fragments/tooling. Future foundation maintenance needs a separate
-reviewed profile.
-The workflow includes the `pull_request.edited` activity so changing or
-removing the durable marker reruns the gate.
+foundation. `foundation-maintenance` requires a provenance foundation in base;
+its first reviewed range bootstraps only from squash
+`8d75b48af2ee7ab04e7c5006980417227ec34568` with canonical U0 manifest SHA-256
+`ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04`, and every
+later maintenance range is authorized from the trusted base-tree
+`foundation-maintenance` profile before head policy is read. Its exact
+allowlist is the canonical manifest path set in
+`tools/test262/es2015-provenance.json` profile `foundation-maintenance`:
+`.github/workflows/ci.yml`, `docs/conformance.md`,
+`docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md`,
+`docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md`,
+`docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md`,
+`docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md`,
+`docs/testing.md`, `test/node/es2015-provenance.test.js`,
+`test/node/workflow-contract.test.js`, `tools/ci/pipeline.js`,
+`tools/test262/es2015-provenance-check.js`,
+`tools/test262/es2015-provenance-decisions/UA.json`,
+`tools/test262/es2015-provenance-decisions/UB.json`,
+`tools/test262/es2015-provenance-decisions/UL1.json`,
+`tools/test262/es2015-provenance-decisions/UL2.json`,
+`tools/test262/es2015-provenance-decisions/UL3.json`,
+`tools/test262/es2015-provenance-decisions/UL4.json`,
+`tools/test262/es2015-provenance-decisions/US1.json`,
+`tools/test262/es2015-provenance-decisions/US2.json`,
+`tools/test262/es2015-provenance-decisions/US3.json`,
+`tools/test262/es2015-provenance-decisions/US4.json`,
+`tools/test262/es2015-provenance-decisions/US5.json`,
+`tools/test262/es2015-provenance-decisions/US6.json`,
+`tools/test262/es2015-provenance-decisions/US7.json`,
+`tools/test262/es2015-provenance.js`, and
+`tools/test262/es2015-provenance.json`. Descriptive category labels do not
+authorize any additional path. `decision:<CODE>`
+requires the foundation in base and permits only that non-empty source fragment
+plus the explicitly listed generated taxonomy, audit-evidence, report, and
+conformance outputs. All profiles reject empty ranges, renames/copies,
+unapproved deletes, `src/**`, feature/selection changes,
+`tools/test262/upstream-subset.json`, foreign fragments/tooling, fake or
+duplicate markers, and maintenance head-profile drift. The workflow command
+itself is unchanged and includes the `pull_request.edited` activity so changing
+or removing the durable marker reruns the gate with actual event base/head/body
+values.
 
 Local Test262 work for this provenance foundation is targeted-only. For this
 work, do **not** run `TZ=UTC npm run test262:es2015:audit`,
 `--write-execution`, `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`,
-or `npm run ci:contract` locally. Commands that execute broad upstream Test262
-run only in exact-head CI.
+`npm run ci:contract`, browser suites, or JavaScriptCore locally. Commands that
+execute broad upstream Test262 run only in exact-head CI.
 
 ### Deterministic ES2015 taxonomy and exact promotion
 

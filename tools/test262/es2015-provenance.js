@@ -135,6 +135,24 @@ const EMPTY_DECISION_FRAGMENTS = Object.freeze(
     (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
   ),
 );
+const FOUNDATION_MAINTENANCE_ALLOWED_PATHS = Object.freeze(
+  sortStrings([
+    '.github/workflows/ci.yml',
+    'docs/conformance.md',
+    'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md',
+    'docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md',
+    'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+    'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md',
+    'docs/testing.md',
+    'test/node/es2015-provenance.test.js',
+    'test/node/workflow-contract.test.js',
+    'tools/ci/pipeline.js',
+    'tools/test262/es2015-provenance-check.js',
+    ...EMPTY_DECISION_FRAGMENTS,
+    'tools/test262/es2015-provenance.js',
+    ES2015_PROVENANCE_FILE,
+  ]),
+);
 const DECISION_GENERATED_PATHS = Object.freeze([
   'docs/conformance.md',
   'docs/test262-report.jsonl',
@@ -156,6 +174,19 @@ const APPROVED_RANGE_PROFILES = Object.freeze([
       ...EMPTY_DECISION_FRAGMENTS,
       ES2015_PROVENANCE_FILE,
     ]),
+  }),
+  Object.freeze({
+    name: 'foundation-maintenance',
+    baseFoundation: 'present',
+    requiredPaths: Object.freeze([]),
+    allowedPaths: FOUNDATION_MAINTENANCE_ALLOWED_PATHS,
+    requiredDeletions: Object.freeze([]),
+    allowedDeletions: Object.freeze([]),
+    emptyDecisionFragments: EMPTY_DECISION_FRAGMENTS,
+    decisionFragment: null,
+    generatedPaths: Object.freeze(
+      sortStrings(['.github/workflows/ci.yml', ES2015_PROVENANCE_FILE]),
+    ),
   }),
   ...ES2015_PROVENANCE_DECISION_CODES.map((code) => {
     const decisionFragment = `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
@@ -361,7 +392,7 @@ const SPECIAL_US6_PATH =
 const ISSUE_DEFINITIONS = Object.freeze({
   U0: Object.freeze({
     title: 'Provenance tooling foundation',
-    scope: 'Pure provenance tooling, rendering, and validation only.',
+    scope: 'Pure provenance tooling, rendering, and validation only',
     parentCode: 'T1',
     dependencies: Object.freeze([]),
     aggregateCodes: Object.freeze([]),
@@ -1193,7 +1224,7 @@ export function renderProvenanceIssueBody(manifest, code, issueMap) {
     `Scope: ${definition.scope}.`,
     'Non-goals: guest runtime behavior, tools/test262/features.json, and broad selection changes.',
     'Evidence method: reviewed Sixth Edition or later-spec proof only.',
-    'History alone never establishes edition evidence.',
+    'History, age, path/directory, and source/text similarity may prioritize review but can never decide edition.',
     dependencies.length === 0
       ? 'Dependencies: none.'
       : `Dependencies: ${dependencies.join(', ')}.`,

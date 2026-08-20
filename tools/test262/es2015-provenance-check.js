@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
@@ -26,6 +27,67 @@ const PROVENANCE_RANGE_GATE_OWNER_PATHS = Object.freeze([
   'tools/test262/es2015-provenance.js',
   ES2015_PROVENANCE_FILE,
 ]);
+const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
+const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
+  'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
+const FOUNDATION_MAINTENANCE_PROFILE = 'foundation-maintenance';
+const FOUNDATION_BOOTSTRAP_BASE_LEDGER_SHA256 =
+  '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc';
+const FOUNDATION_BOOTSTRAP_RANGE_PROFILE = Object.freeze({
+  name: FOUNDATION_MAINTENANCE_PROFILE,
+  baseFoundation: 'present',
+  requiredPaths: Object.freeze([]),
+  allowedPaths: Object.freeze([
+    '.github/workflows/ci.yml',
+    'docs/conformance.md',
+    'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md',
+    'docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md',
+    'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+    'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md',
+    'docs/testing.md',
+    'test/node/es2015-provenance.test.js',
+    'test/node/workflow-contract.test.js',
+    'tools/ci/pipeline.js',
+    'tools/test262/es2015-provenance-check.js',
+    'tools/test262/es2015-provenance-decisions/UA.json',
+    'tools/test262/es2015-provenance-decisions/UB.json',
+    'tools/test262/es2015-provenance-decisions/UL1.json',
+    'tools/test262/es2015-provenance-decisions/UL2.json',
+    'tools/test262/es2015-provenance-decisions/UL3.json',
+    'tools/test262/es2015-provenance-decisions/UL4.json',
+    'tools/test262/es2015-provenance-decisions/US1.json',
+    'tools/test262/es2015-provenance-decisions/US2.json',
+    'tools/test262/es2015-provenance-decisions/US3.json',
+    'tools/test262/es2015-provenance-decisions/US4.json',
+    'tools/test262/es2015-provenance-decisions/US5.json',
+    'tools/test262/es2015-provenance-decisions/US6.json',
+    'tools/test262/es2015-provenance-decisions/US7.json',
+    'tools/test262/es2015-provenance.js',
+    'tools/test262/es2015-provenance.json',
+  ]),
+  requiredDeletions: Object.freeze([]),
+  allowedDeletions: Object.freeze([]),
+  emptyDecisionFragments: Object.freeze([
+    'tools/test262/es2015-provenance-decisions/UA.json',
+    'tools/test262/es2015-provenance-decisions/UB.json',
+    'tools/test262/es2015-provenance-decisions/UL1.json',
+    'tools/test262/es2015-provenance-decisions/UL2.json',
+    'tools/test262/es2015-provenance-decisions/UL3.json',
+    'tools/test262/es2015-provenance-decisions/UL4.json',
+    'tools/test262/es2015-provenance-decisions/US1.json',
+    'tools/test262/es2015-provenance-decisions/US2.json',
+    'tools/test262/es2015-provenance-decisions/US3.json',
+    'tools/test262/es2015-provenance-decisions/US4.json',
+    'tools/test262/es2015-provenance-decisions/US5.json',
+    'tools/test262/es2015-provenance-decisions/US6.json',
+    'tools/test262/es2015-provenance-decisions/US7.json',
+  ]),
+  decisionFragment: null,
+  generatedPaths: Object.freeze([
+    '.github/workflows/ci.yml',
+    'tools/test262/es2015-provenance.json',
+  ]),
+});
 const PRIMARY_OPTION_LABEL =
   'Exactly one of --initialize, --check, --check-range, --render-ledger=CODE, or --render-issue=CODE is required';
 const ISSUE_RENDER_CODES = Object.freeze([
@@ -494,6 +556,8 @@ async function checkRange(deps, options) {
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
   /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>} */
   let manifest;
+  /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */
+  let profile;
   if (marker.profile === 'foundation') {
     if (baseManifestText !== null) {
       throw new Es2015ProvenanceCheckError(
@@ -501,6 +565,7 @@ async function checkRange(deps, options) {
       );
     }
     manifest = await readRangeManifest(deps, head, 'foundation head');
+    profile = rangeProfileForManifest(manifest, marker.profile);
   } else if (marker.profile.startsWith('decision:')) {
     if (baseManifestText === null) {
       throw new Es2015ProvenanceCheckError(
@@ -517,18 +582,42 @@ async function checkRange(deps, options) {
         `${marker.profile} range forbids provenance manifest drift`,
       );
     }
-  } else {
-    manifest = await readRangeManifest(deps, head, marker.profile);
-  }
+    profile = rangeProfileForManifest(manifest, marker.profile);
+  } else if (marker.profile === FOUNDATION_MAINTENANCE_PROFILE) {
+    const authority = maintenanceRangeAuthority(base, baseManifestText);
+    const expectedMarker = provenanceRangeMarker(
+      authority.profile.name,
+      authority.baseLedgerSha256,
+    );
+    if (marker.text !== expectedMarker) {
+      throw new Es2015ProvenanceCheckError(
+        `Provenance PR marker does not match ${authority.profile.name} policy`,
+      );
+    }
+    validateRangeChanges(authority.profile, changes);
 
-  const profile = manifest.rangeProfiles.find(
-    (/** @type {any} */ entry) => entry.name === marker.profile,
-  );
-  if (profile === undefined) {
+    const headManifest = await readRangeManifest(
+      deps,
+      head,
+      'foundation-maintenance head',
+    );
+    const headProfile = rangeProfileForManifest(
+      headManifest,
+      FOUNDATION_MAINTENANCE_PROFILE,
+    );
+    if (JSON.stringify(headProfile) !== JSON.stringify(authority.profile)) {
+      throw new Es2015ProvenanceCheckError(
+        'foundation-maintenance range head profile must match the trusted base profile',
+      );
+    }
+    await validateRangeContent(deps, head, headManifest, authority.profile);
+    return;
+  } else {
     throw new Es2015ProvenanceCheckError(
       `Unknown provenance range profile ${marker.profile}`,
     );
   }
+
   const expectedMarker = provenanceRangeMarker(
     profile.name,
     manifest.baseLedger.pathSha256,
@@ -540,6 +629,87 @@ async function checkRange(deps, options) {
   }
   validateRangeChanges(profile, changes);
   await validateRangeContent(deps, head, manifest, profile);
+}
+
+/**
+ * @param {string} base
+ * @param {string | null} baseManifestText
+ * @returns {{
+ *   profile: ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number],
+ *   baseLedgerSha256: string,
+ * }}
+ */
+function maintenanceRangeAuthority(base, baseManifestText) {
+  if (baseManifestText === null) {
+    throw new Es2015ProvenanceCheckError(
+      'foundation-maintenance range requires a provenance foundation manifest in the base',
+    );
+  }
+  if (!hasMaintenanceProfile(baseManifestText)) {
+    if (
+      base === FOUNDATION_BOOTSTRAP_COMMIT &&
+      sha256(baseManifestText) === FOUNDATION_BOOTSTRAP_MANIFEST_SHA256
+    ) {
+      return {
+        profile: FOUNDATION_BOOTSTRAP_RANGE_PROFILE,
+        baseLedgerSha256: FOUNDATION_BOOTSTRAP_BASE_LEDGER_SHA256,
+      };
+    }
+    throw new Es2015ProvenanceCheckError(
+      'foundation-maintenance range requires the exact U0 bootstrap base and manifest',
+    );
+  }
+  const manifest = parseRangeManifest(
+    baseManifestText,
+    'foundation-maintenance base',
+  );
+  return {
+    profile: rangeProfileForManifest(manifest, FOUNDATION_MAINTENANCE_PROFILE),
+    baseLedgerSha256: manifest.baseLedger.pathSha256,
+  };
+}
+
+/** @param {string} text */
+function hasMaintenanceProfile(text) {
+  try {
+    const value = JSON.parse(text);
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      Array.isArray(value.rangeProfiles) &&
+      value.rangeProfiles.some(
+        (/** @type {{ name?: unknown }} */ profile) =>
+          typeof profile === 'object' &&
+          profile !== null &&
+          profile.name === FOUNDATION_MAINTENANCE_PROFILE,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** @param {string} text */
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} manifest
+ * @param {string} name
+ */
+function rangeProfileForManifest(manifest, name) {
+  const profile = manifest.rangeProfiles.find(
+    (
+      /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */ entry,
+    ) => entry.name === name,
+  );
+  if (profile === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `Unknown provenance range profile ${name}`,
+    );
+  }
+  return profile;
 }
 
 /** @param {string | null} value @param {string} option */
@@ -641,6 +811,23 @@ async function provenanceOwnedRange(deps, changes, base, head) {
   if (changedPaths.some((path) => gateOwnerPaths.has(path))) return true;
 
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
+  const ownedPaths = new Set(gateOwnerPaths);
+  if (
+    base === FOUNDATION_BOOTSTRAP_COMMIT &&
+    baseManifestText !== null &&
+    sha256(baseManifestText) === FOUNDATION_BOOTSTRAP_MANIFEST_SHA256
+  ) {
+    /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */
+    const bootstrapFoundationProfile = JSON.parse(
+      baseManifestText,
+    ).rangeProfiles.find(
+      (/** @type {{ name: string }} */ profile) =>
+        profile.name === 'foundation',
+    );
+    addRangeProfileOwnership(ownedPaths, bootstrapFoundationProfile);
+    addRangeProfileOwnership(ownedPaths, FOUNDATION_BOOTSTRAP_RANGE_PROFILE);
+    return changedPaths.some((path) => ownedPaths.has(path));
+  }
   const manifestText =
     baseManifestText ?? (await deps.readGitFile(head, ES2015_PROVENANCE_FILE));
   if (manifestText === null) return false;
@@ -650,12 +837,19 @@ async function provenanceOwnedRange(deps, changes, base, head) {
       ? 'provenance ownership head'
       : 'provenance ownership base',
   );
-  const ownedPaths = new Set(gateOwnerPaths);
   for (const profile of manifest.rangeProfiles) {
-    for (const path of profile.allowedPaths) ownedPaths.add(path);
-    for (const path of profile.allowedDeletions) ownedPaths.add(path);
+    addRangeProfileOwnership(ownedPaths, profile);
   }
   return changedPaths.some((path) => ownedPaths.has(path));
+}
+
+/**
+ * @param {Set<string>} ownedPaths
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} profile
+ */
+function addRangeProfileOwnership(ownedPaths, profile) {
+  for (const path of profile.allowedPaths) ownedPaths.add(path);
+  for (const path of profile.allowedDeletions) ownedPaths.add(path);
 }
 
 /** @param {string} text */
