@@ -12,6 +12,7 @@
 
 - Start from the approved design tip `b9b357141cfe8edee9370aacb10b415a574c705d`, whose only commits after `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` are `a4807d49c17abf1cb0d593dda8d6cf14b7d736c9` and `b9b357141cfe8edee9370aacb10b415a574c705d`; they are approved **design** commits, not implementation commits.
 - Reconcile against the live `origin/main` before production work. At plan approval time it is exactly `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`; preserve the approved design history. Stop and obtain reapproval before merging or rebasing if a moving-main change creates a semantic conflict or expands #79’s scope.
+- Repeat moving-main reconciliation immediately before the maximum-capability final review and immediately before push. Never review or publish a candidate whose recorded final merge base differs from live `origin/main`.
 - Implement exactly ECMA-262 Sixth Edition (June 2015) §6.1.7.2 Table 5 and Table 6. The pinned specification source is `https://262.ecma-international.org/6.0/`, SHA-256 `4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0`.
 - Do not add Reflect methods, Proxy construction/traps/revocation/invariants, collections, binary data, typed arrays, later exotic objects, or later Symbol protocols. `Reflect.ownKeys` may migrate to `ownPropertyKeys()` but remains a #80 surface.
 - Internal-method signatures never accept `strict`, `throwOnError`, `callerRealm`, or a Realm argument. Boolean methods return only semantic success or failure. The evaluator, native built-in, declaration, integrity, and reference wrappers own strictness and Realm-correct errors.
@@ -30,10 +31,12 @@
   ```
 
 - Local Test262 execution is limited to that exact M0 ledger under `TZ=UTC`; never run `npm run test262:upstream` or `npm run test262:upstream:check` locally.
+- The M0 command's npm script and transitive import/call graph are repository-invariant tested: they may reach only the exact-ledger runner and shared adapters, never a broad upstream wrapper, release wrapper, or unbounded selection command.
 - The baseline at `b9b3571` passed its focused suites after `npm install`. Its Node smoke reference values are object-properties cold `75.376833/72.539625/71.431458 ms`, object-properties steady `69.453958/69.748500/69.725584 ms`, arrays cold `112.012834/110.957875/107.292708 ms`, and arrays steady `117.396292/106.878875/106.739667 ms`. These are correctness/noise context, not performance thresholds.
 - Each implementation task is RED–GREEN–review–commit: one fresh specification reviewer, then a different fresh quality reviewer, with a fix/retest/re-review loop for every confirmed finding. Use a GPT-5.6-family model or Claude Opus 4.8-or-lower; never use Claude Opus 5.
 - Every implementation and fix commit includes `Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>`.
 - Keep #79 one reviewable PR. Check this before production and again after the caller inventory. If either checkpoint discovers an independent subsystem or scope expansion, stop and propose converting #79 to a grouping issue instead of adding that work.
+- Persist both one-PR decisions with reviewer identity, reviewed SHA, inventory/diff summary, decision, and evidence path. A grouping decision stops all further production work and forbids opening a PR that claims atomic #79 completion.
 
 ---
 
@@ -195,18 +198,23 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 - [ ] **Step 2: Fetch and classify the live-main delta**
 
   ```bash
+  mkdir -p .superpowers/issue-79/reconciliation
   git fetch origin main --quiet
   LIVE_MAIN=$(git rev-parse origin/main)
-  printf '%s\n' "$LIVE_MAIN"
-  git --no-pager log --oneline "$BASE_MAIN..$LIVE_MAIN"
-  git diff --name-status "$BASE_MAIN..$LIVE_MAIN"
+  {
+    printf 'originalBase=%s\n' "$BASE_MAIN"
+    printf 'designTip=%s\n' "$DESIGN_TIP"
+    printf 'liveMain=%s\n' "$LIVE_MAIN"
+    git --no-pager log --format='%H %s' "$BASE_MAIN..$LIVE_MAIN"
+    git diff --name-status "$BASE_MAIN..$LIVE_MAIN"
+  } | tee .superpowers/issue-79/reconciliation/task0-main.txt
   ```
 
   Expected at plan approval: `LIVE_MAIN` is `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`.
 
 - [ ] **Step 3: Apply the moving-main stop rule before reconciling**
 
-  If `LIVE_MAIN` differs from `BASE_MAIN`, inspect every changed file for a changed object protocol, Realm/error rule, evaluator/module semantic rule, Test262 taxonomy ownership rule, or required scope addition. If any exists, stop without merging/rebasing, post the exact SHA and conflict/scope analysis to #79, and obtain written design reapproval. If none exists, preserve the design commits with:
+  If `LIVE_MAIN` differs from `BASE_MAIN`, inspect every changed file for object protocol, Realm/error, evaluator/module, taxonomy ownership, and scope effects. Stop without merging/rebasing and obtain written design reapproval only when the delta creates a semantic conflict or truly expands #79's approved scope. Otherwise preserve both changes and the design commits with:
 
   ```bash
   git merge --no-ff "$LIVE_MAIN" \
@@ -217,79 +225,98 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: no conflict markers, the two approved design commits remain in history, and the PR diff remains limited to #79’s contract/migration work.
 
-- [ ] **Step 4: Install the recorded baseline and run the focused baseline suites**
+- [ ] **Step 4: Obtain exclusive timing approval and verify an idle machine**
 
-  Materialize a clean detached baseline worktree:
+  Send the project coordinator the planned baseline host/workload capture and wait for confirmation that no sibling Test262, build, or benchmark run owns the machine. Then inspect processes without terminating anything:
 
   ```bash
-  git worktree add --detach .superpowers/issue-79-baseline "$DESIGN_TIP"
+  ps -axo pid=,ppid=,etime=,command= |
+    grep -E '[t]ools/test262|[b]enchmark/(cli|run-|spawn-jsc)|[p]laywright|[n]ode test/run-|[j]sc -m test/run-jsc|[n]pm run (test|typecheck|lint|format|benchmark)|[t]sc -p' \
+    > .superpowers/issue-79/baseline-contention.txt || true
+  test ! -s .superpowers/issue-79/baseline-contention.txt
   ```
 
-  In that worktree, run:
+  Use `send_session_message` for the coordination record and save the coordinator response in `.superpowers/issue-79/baseline-idle-approval.md`. If the process file is non-empty or approval is absent, defer the capture; do not reinterpret a contended run as evidence.
+
+- [ ] **Step 5: Run the cleanup-guarded baseline suites and all-host capture**
+
+  Use one shell whose `trap` removes the detached worktree on success, failure, interruption, or any scope stop. Copy validated artifacts out before cleanup:
 
   ```bash
+  BASELINE_WORKTREE=.superpowers/issue-79-baseline
+  BASELINE_SOURCE=$(git rev-parse HEAD)
+  cleanup_baseline() {
+    git worktree remove --force "$BASELINE_WORKTREE" >/dev/null 2>&1 || true
+  }
+  trap cleanup_baseline EXIT INT TERM
+  cleanup_baseline
+  git worktree add --detach "$BASELINE_WORKTREE" "$BASELINE_SOURCE"
+
   (
-  cd .superpowers/issue-79-baseline
-  npm install && for suite in \
-    test/objects.test.js \
-    test/abstract-operations.test.js \
-    test/object-builtins.test.js \
-    test/object-hot-path-integration.test.js \
-    test/primitive-wrappers.test.js \
-    test/array-index.test.js \
-    test/functions.test.js \
-    test/in-instanceof.test.js \
-    test/json-stringify.test.js \
-    test/module-namespace.test.js \
-    test/module-evaluation.test.js \
-    test/realms.test.js \
-    test/jobs.test.js \
-    test/evaluator-statements.test.js \
-    test/generator-control-flow.test.js \
-    test/generator-runtime.test.js \
-    test/iterators.test.js \
-    test/stack-overflow.test.js \
-    test/node/repository-invariants.test.js
-  do
-    node test/run-node.js "$suite" || exit 1
-  done
+    cd "$BASELINE_WORKTREE"
+    npm install
+    for suite in \
+      test/objects.test.js \
+      test/abstract-operations.test.js \
+      test/object-builtins.test.js \
+      test/object-hot-path-integration.test.js \
+      test/primitive-wrappers.test.js \
+      test/array-index.test.js \
+      test/functions.test.js \
+      test/in-instanceof.test.js \
+      test/json-stringify.test.js \
+      test/module-namespace.test.js \
+      test/module-evaluation.test.js \
+      test/realms.test.js \
+      test/jobs.test.js \
+      test/evaluator-statements.test.js \
+      test/generator-control-flow.test.js \
+      test/generator-runtime.test.js \
+      test/iterators.test.js \
+      test/stack-overflow.test.js \
+      test/node/repository-invariants.test.js
+    do
+      node test/run-node.js "$suite" || exit 1
+    done
+    mkdir -p .benchmark-results
+    {
+      printf 'sourceSha=%s\n' "$(git rev-parse HEAD)"
+      printf 'node=%s\n' "$(node --version)"
+      printf 'chromium=%s\n' "$(node -e 'import("playwright").then(async ({chromium}) => { const b=await chromium.launch({headless:true}); console.log(b.version()); await b.close(); })')"
+      printf 'jsc=%s\n' "$(PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" jsc --version 2>&1 || command -v jsc)"
+    } > .benchmark-results/issue-79-baseline-environment.txt
+    node benchmark/cli.js run \
+      --host=all \
+      --workload=object-properties \
+      --workload=arrays \
+      --output=.benchmark-results/issue-79/baseline-1
   )
-  ```
 
-  Expected: PASS for every named suite at `b9b357141cfe8edee9370aacb10b415a574c705d`, matching the approved baseline.
-
-- [ ] **Step 5: Capture the pre-change all-host object/array benchmark evidence**
-
-  Record the supplied Node smoke values in `.superpowers/issue-79/baseline-notes.txt`, then capture the same two workloads on all hosts from the detached `DESIGN_TIP` worktree:
-
-  ```bash
   mkdir -p .superpowers/issue-79
   cat > .superpowers/issue-79/baseline-notes.txt <<'EOF'
-  b9b357141cfe8edee9370aacb10b415a574c705d Node smoke reference
+  Original b9b357141cfe8edee9370aacb10b415a574c705d Node smoke reference
   object-properties cold: 75.376833/72.539625/71.431458 ms
   object-properties steady: 69.453958/69.748500/69.725584 ms
   arrays cold: 112.012834/110.957875/107.292708 ms
   arrays steady: 117.396292/106.878875/106.739667 ms
   Values are correctness/noise context, not thresholds.
   EOF
-  (
-  cd .superpowers/issue-79-baseline
-  node benchmark/cli.js run \
-    --host=all \
-    --workload=object-properties \
-    --workload=arrays \
-    --output=.benchmark-results/issue-79/baseline-1
-  )
   mkdir -p .benchmark-results/issue-79
-  cp -R .superpowers/issue-79-baseline/.benchmark-results/issue-79/baseline-1 \
+  cp -R "$BASELINE_WORKTREE/.benchmark-results/issue-79/baseline-1" \
     .benchmark-results/issue-79/baseline-1
+  cp "$BASELINE_WORKTREE/.benchmark-results/issue-79-baseline-environment.txt" \
+    .superpowers/issue-79/baseline-environment.txt
+  cleanup_baseline
+  trap - EXIT INT TERM
   ```
 
-  Expected: one validated `node.json`, `chromium.json`, and `jsc.json` capture set. Do not interpret a single capture as a regression threshold.
+  Expected: every named suite passes at the exact reconciled pre-implementation source; one validated Node/Chromium/JSC capture set and environment record are preserved; the detached worktree no longer exists. The supplied original smoke values remain separately identified. A single pair remains descriptive only.
 
 - [ ] **Step 6: Make the first one-PR reviewability decision before production code**
 
-  Review the Stable Contract, exact file map, non-goals, baseline, and the planned eight implementation deliveries. Continue only if one reviewer can explain the change as one contract migration with current exotics and no independent feature. If this test fails, stop, comment on #79 with the concrete split boundary, and propose changing #79 to a grouping issue before creating production changes.
+  Review the Stable Contract, exact file map, non-goals, baseline, and the planned eight implementation deliveries. Persist `.superpowers/issue-79/scope-task0.json` with exact keys `reviewedSha`, `reviewer`, `reviewedAt`, `inventorySummary`, `diffSummary`, `decision`, and `evidencePath`. Continue only when `decision` is `atomic` and the named reviewer explains the change as one contract migration with current exotics and no independent feature.
+
+  If `decision` is `grouping`, stop before production changes, comment on #79 with the concrete split boundary and evidence path, propose changing #79 to a grouping issue, and do not create or update a PR claiming atomic completion.
 
 ### Task 1: Establish the Agent-Scoped Active Execution-Realm Stack
 
@@ -1190,7 +1217,9 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
 - [ ] **Step 2: Make the second one-PR reviewability decision after the inventory**
 
-  Review the inventory with the coordinator. Continue only if each row is mechanical migration to the stable contract or a current-exotic adaptation. If a row requires Reflect surface, Proxy semantics, collection/data-block work, a new exotic object, or an unrelated evaluator redesign, stop, post the row list to #79, and propose converting #79 to a grouping issue before implementing it.
+  Review the inventory with the coordinator. Persist `.superpowers/issue-79/scope-task6.json` with exact keys `reviewedSha`, `reviewer`, `reviewedAt`, `inventoryPath`, `inventorySha256`, `inventorySummary`, `diffSummary`, `decision`, and `evidencePath`. Continue only when `decision` is `atomic` and each row is mechanical migration to the stable contract or a current-exotic adaptation.
+
+  If any row requires Reflect surface, Proxy semantics, collection/data-block work, a new exotic object, or an unrelated evaluator redesign, record `decision: "grouping"`, stop before further production changes, post the row list and evidence path to #79, propose converting #79 to a grouping issue, and do not create or update a PR claiming atomic completion.
 
 - [ ] **Step 3: Add current-exotic and caller-migration RED tests**
 
@@ -1531,9 +1560,9 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 **Interfaces:**
 
 - Consumes: exact issue-comment ledger `https://github.com/yoonbuck/jsjs/issues/79#issuecomment-5347038655`, the pinned Test262 checkout, taxonomy artifact, M0 runtime evidence, and benchmark captures.
-- Produces: `parseM0Ledger(text)`, `verifyM0Ledger(text, taxonomy, dispositions)`, and `runM0Focused(options)` from `tools/test262/es2015-m0.js`.
+- Produces: `parseM0Ledger(text)`, `verifyM0Ledger(text, taxonomy, dispositions)`, `compareM0Taxonomies(original, reconciledPre, post, dispositions, concurrentExplanations)`, and `runM0Focused(options)` from `tools/test262/es2015-m0.js`.
 - Produces: exact-path execution records, `summarizeM0Dispositions(entries)`, and `parseM0Dispositions(text, execution)` for a reviewer-approved disposition of every non-passing root; passing paths may be promoted only when every executable variant passes.
-- Produces: distinct `reflect-metaobject` and `proxy-metaobject` taxonomy blockers. The one-time taxonomy migration moves existing direct Reflect and Proxy roots from the former combined blocker without changing their path sets, then assigns M0 consumer roots to those or an existing later-owner blocker.
+- Produces: `reflect-metaobject` and `proxy-metaobject` blocker identifiers only for exact M0 consumer roots reassigned to #80/#81. Existing direct Reflect/Proxy roots retain their current classification so the #79 taxonomy delta remains exactly the immutable 240-root ledger.
 
 - [ ] **Step 1: Add exact-ledger RED tests**
 
@@ -1581,7 +1610,29 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   The file is code-unit sorted, newline terminated, contains only `test/.../*.js` roots, and is the sole local execution input for M0.
 
-- [ ] **Step 4: Implement focused M0 execution and disposition validation**
+- [ ] **Step 4: Snapshot original-base and reconciled pre-M0 taxonomy**
+
+  Record the source identities and extract immutable snapshots before changing taxonomy:
+
+  ```bash
+  ORIGINAL_BASE=54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7
+  git fetch origin main --quiet
+  RECONCILED_MAIN=$(git merge-base origin/main HEAD)
+  test "$RECONCILED_MAIN" = "$(git rev-parse origin/main)"
+  mkdir -p .superpowers/issue-79/taxonomy
+  git show "$ORIGINAL_BASE:tools/test262/es2015-taxonomy.json" \
+    > .superpowers/issue-79/taxonomy/original-base.json
+  git show "$RECONCILED_MAIN:tools/test262/es2015-taxonomy.json" \
+    > .superpowers/issue-79/taxonomy/reconciled-pre-m0.json
+  printf '%s\n' "$ORIGINAL_BASE" \
+    > .superpowers/issue-79/taxonomy/original-base.sha
+  printf '%s\n' "$RECONCILED_MAIN" \
+    > .superpowers/issue-79/taxonomy/reconciled-main.sha
+  ```
+
+  The original-to-reconciled delta belongs to concurrent main work, not #79. Generate `.superpowers/issue-79/taxonomy/concurrent-main-paths.json` with every changed classification path and its before/after records. Generate `concurrent-main-explanations.json` as an object whose keys exactly equal those paths and whose values are non-empty reviewed explanations; use `{}` when no concurrent path changed.
+
+- [ ] **Step 5: Implement focused M0 execution and disposition validation**
 
   Implement a Node-only tool that reads only the exact ledger, requires `TZ=UTC`, verifies the package pin and taxonomy selector, runs only these roots through the existing shared Test262 runner, and writes one record per executable variant. It must reject an output path outside the repository and must not call the broad upstream runner. With `--dispositions=<path>`, its JSON output has exact keys `version`, `ledger`, `records`, and `dispositions`; `ledger` is `{ roots: 240, variants: 459, sha256: M0.sha256 }`, and `dispositions` is the validated exact 240-entry disposition list.
 
@@ -1687,6 +1738,54 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
     }, {});
   }
 
+  export function compareM0Taxonomies(
+    original,
+    reconciledPre,
+    post,
+    dispositions,
+    concurrentExplanations,
+  ) {
+    const originalByPath = new Map(
+      original.classifications.map((entry) => [entry.path, entry]),
+    );
+    const preByPath = new Map(
+      reconciledPre.classifications.map((entry) => [entry.path, entry]),
+    );
+    const postByPath = new Map(
+      post.classifications.map((entry) => [entry.path, entry]),
+    );
+    const changed = (left, right) =>
+      [...new Set([...left.keys(), ...right.keys()])]
+        .filter(
+          (path) =>
+            JSON.stringify(left.get(path)) !== JSON.stringify(right.get(path)),
+        )
+        .sort();
+    const concurrentMainPaths = changed(originalByPath, preByPath);
+    const issue79Paths = changed(preByPath, postByPath);
+    const dispositionPaths = dispositions.map(({ path }) => path).sort();
+    if (
+      issue79Paths.length !== M0.roots ||
+      issue79Paths.join('\n') !== dispositionPaths.join('\n')
+    ) {
+      throw new Error('Post-M0 taxonomy changed outside the exact M0 ledger');
+    }
+    const explainedPaths = Object.keys(concurrentExplanations).sort();
+    if (
+      explainedPaths.join('\n') !== concurrentMainPaths.join('\n') ||
+      explainedPaths.some(
+        (path) =>
+          typeof concurrentExplanations[path] !== 'string' ||
+          concurrentExplanations[path] === '',
+      )
+    ) {
+      throw new Error(
+        'Concurrent-main taxonomy changes lack exact explanations',
+      );
+    }
+    return { concurrentMainPaths, issue79Paths };
+  }
+
   export function parseM0Dispositions(text, execution) {
     const document = JSON.parse(text);
     const variantsByPath = new Map();
@@ -1723,9 +1822,9 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   }
   ```
 
-  Add `"test262:es2015:m0": "node tools/test262/es2015-m0.js"` to `package.json`.
+  Add `"test262:es2015:m0": "node tools/test262/es2015-m0.js"` to `package.json`. Extend `test/node/repository-invariants.test.js` to parse this npm script and its transitive imports/calls, proving that it can invoke only `es2015-m0.js`, the exact ledger reader, and shared adapters; fail if it reaches `upstream-run.js`, `test262:upstream`, `test262:upstream:check`, `test262:es2015-release`, or an unbounded selector.
 
-- [ ] **Step 5: Run only the exact M0 focused corpus under UTC**
+- [ ] **Step 6: Run only the exact M0 focused corpus under UTC**
 
   Run:
 
@@ -1737,11 +1836,11 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: exactly 240 roots, 459 variants, and the reviewed ledger SHA. The command records pass/fail/skip evidence for these paths only; it does not claim that Reflect or Proxy works and it does not execute any broad upstream subset.
 
-- [ ] **Step 6: Reclassify every exact M0 root**
+- [ ] **Step 7: Reclassify every exact M0 root**
 
   Create `tools/test262/es2015-m0-dispositions.json` with exact keys `version`, `ledgerSha256`, and `entries`. Each entry has exact keys `path`, `variants`, `outcome`, `owner`, and `reason`; every ledger path appears once, `owner` is one of `passed`, `80`, `81`, `82`, `83`, `87`, `91`, `93`, `95`, or `96`, and its `variants` equals the pinned inventory. For each root/variant that passes, set `outcome` to `passed` and promote only that exact root through the immutable promotion mechanism after all of its variants pass. For every root that does not pass, set `outcome` to `reassigned`, identify #80 for Reflect-dependent behavior, #81 for Proxy-dependent behavior, or the reviewed later semantic owner (#82, #83, #87, #91, #93, #95, or #96), and write its concrete reason. Do not leave any M0 root with `blocker === "proxy-and-reflect-metaobject"`.
 
-  Split the former combined taxonomy blocker deterministically: existing direct `test/built-ins/Reflect/` roots become `reflect-metaobject`; existing direct `test/built-ins/Proxy/` roots become `proxy-metaobject`; M0 roots assigned to #80/#81 use the same respective identifiers; later-owner dispositions use `M0_BLOCKER_BY_OWNER`. Update #80/#81 selectors and ledgers to those identifiers. This taxonomy migration changes ownership names and exact ledgers, not implementation status, and must preserve the complete core denominator.
+  Reclassify only exact M0 roots. M0 roots assigned to #80 use `reflect-metaobject`; M0 roots assigned to #81 use `proxy-metaobject`; later-owner dispositions use `M0_BLOCKER_BY_OWNER`. Existing direct `test/built-ins/Reflect/` and `test/built-ins/Proxy/` classifications do not change in this PR. Update #80/#81 readable ownership queries and ledgers to union their unchanged direct roots with the newly assigned M0 consumer roots. This changes ownership for exact M0 paths only, not implementation status, and preserves the dynamically derived complete core denominator.
 
   Regenerate only classification/evidence artifacts:
 
@@ -1750,9 +1849,27 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   TZ=UTC npm run test262:es2015:audit:check
   ```
 
-  Expected: the exact former combined M0 selector has zero roots and zero variants; no core classification retains `proxy-and-reflect-metaobject`; distinct Reflect/Proxy and later-owner totals balance to the same complete core denominator; no result claims a Reflect or Proxy feature is complete.
+  Expected: the exact M0 selector has zero roots and zero variants; every taxonomy record outside the immutable M0 ledger byte-matches reconciled pre-M0 except separately explained concurrent-main paths; Reflect/Proxy and later-owner totals balance to the same dynamically derived core denominator; no result claims a Reflect or Proxy feature is complete.
 
-- [ ] **Step 7: Add and run documentation/ledger GREEN checks**
+- [ ] **Step 8: Prove the exact dynamic taxonomy delta**
+
+  Copy the generated post-M0 taxonomy and run `compareM0Taxonomies`:
+
+  ```bash
+  cp tools/test262/es2015-taxonomy.json \
+    .superpowers/issue-79/taxonomy/post-m0.json
+  TZ=UTC node tools/test262/es2015-m0.js \
+    --compare-original=.superpowers/issue-79/taxonomy/original-base.json \
+    --compare-pre=.superpowers/issue-79/taxonomy/reconciled-pre-m0.json \
+    --compare-post=.superpowers/issue-79/taxonomy/post-m0.json \
+    --dispositions=tools/test262/es2015-m0-dispositions.json \
+    --concurrent-explanations=.superpowers/issue-79/taxonomy/concurrent-main-explanations.json \
+    --output=.superpowers/issue-79/taxonomy/m0-delta.json
+  ```
+
+  Expected: `issue79Paths` is exactly the immutable 240-root ledger and totals 459 variants. `concurrentMainPaths` is separately derived from `ORIGINAL_BASE..RECONCILED_MAIN`, and every such path has an explanation. No global root/variant count is hard-coded from `54010d4`; all final status and issue totals derive from reconciled pre/post artifacts.
+
+- [ ] **Step 9: Add and run documentation/ledger GREEN checks**
 
   Run:
 
@@ -1765,15 +1882,27 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: PASS. The ledger, source taxonomy, exact execution evidence, disposition totals, promotion authorization, and documentation remain deterministic.
 
-- [ ] **Step 8: Document the stable boundary and non-goals**
+- [ ] **Step 10: Document the stable boundary and non-goals**
 
   In `docs/architecture.md`, document the twelve Table 5 methods, Table 6 brands, ordinary-helper/raw-slot ownership, active execution-Realm stack, public Enumerate iterator protocol, and current-exotic override rules. In `docs/testing.md`, document the exact M0 command, UTC requirement, ledger hash, and local broad-Test262 prohibition. In `docs/conformance.md` and `docs/limitations.md`, state that #79 supplies a contract foundation only; Reflect and Proxy remain unimplemented and owned by #80/#81.
 
-- [ ] **Step 9: Capture matching all-host post-change benchmarks**
+- [ ] **Step 11: Obtain exclusive timing approval and capture matching post-change benchmarks**
 
-  From the clean candidate head, use the same hosts/workloads/settings as Task 0:
+  Coordinate with the project coordinator again and repeat the Task 0 process inspection. Save approval and process output as `.superpowers/issue-79/candidate-idle-approval.md` and `candidate-contention.txt`. If either gate fails, defer instead of capturing.
+
+  From the clean candidate head, record exact source SHA and host/tool versions, then use the same hosts/workloads/settings as Task 0:
 
   ```bash
+  ps -axo pid=,ppid=,etime=,command= |
+    grep -E '[t]ools/test262|[b]enchmark/(cli|run-|spawn-jsc)|[p]laywright|[n]ode test/run-|[j]sc -m test/run-jsc|[n]pm run (test|typecheck|lint|format|benchmark)|[t]sc -p' \
+    > .superpowers/issue-79/candidate-contention.txt || true
+  test ! -s .superpowers/issue-79/candidate-contention.txt
+  {
+    printf 'sourceSha=%s\n' "$(git rev-parse HEAD)"
+    printf 'node=%s\n' "$(node --version)"
+    printf 'chromium=%s\n' "$(node -e 'import("playwright").then(async ({chromium}) => { const b=await chromium.launch({headless:true}); console.log(b.version()); await b.close(); })')"
+    printf 'jsc=%s\n' "$(PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PATH" jsc --version 2>&1 || command -v jsc)"
+  } > .superpowers/issue-79/candidate-environment.txt
   node benchmark/cli.js run \
     --host=all \
     --workload=object-properties \
@@ -1784,9 +1913,9 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: validated Node, Chromium, and JSC captures plus a passing Node correctness smoke. Compare measurements as evidence, not a threshold.
 
-- [ ] **Step 10: Run the repository comparator only when a credible difference appears**
+- [ ] **Step 12: Run the repository comparator only when a credible difference appears**
 
-  If the identical before/after capture shows a credible regression, collect six counterbalanced baseline/candidate pairs across Node, Chromium, and JSC under `.benchmark-results/issue-79/`, create the schema-1 manifest with only `object-properties` and `arrays` targets, and run:
+  If the identical before/after capture shows a credible regression, collect six counterbalanced baseline/candidate pairs across Node, Chromium, and JSC under `.benchmark-results/issue-79/`. Before every individual baseline or candidate capture, repeat coordinator approval and the exclusive process inspection; defer that capture under contention and record its exact source SHA plus host/tool versions. Create the schema-1 manifest with only `object-properties` and `arrays` targets, and run:
 
   ```bash
   node benchmark/cli.js compare \
@@ -1796,13 +1925,7 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Profile only if the comparator reports a `regression` verdict; use `profile:node` or `profile:browser` for the offending host/workload/mode, fix the verified hot path, and repeat the matching capture/comparator. Do not invent a percentage threshold from the supplied baseline values.
 
-  After the final comparison/profile decision, remove the detached baseline worktree; its validated capture already exists in the candidate worktree's ignored evidence root:
-
-  ```bash
-  git worktree remove .superpowers/issue-79-baseline
-  ```
-
-- [ ] **Step 11: Run final cross-host and repository verification**
+- [ ] **Step 13: Run final cross-host and repository verification**
 
   Run:
 
@@ -1828,23 +1951,23 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: PASS on Node, Chromium, and JSC; only exact focused M0 Test262 work runs locally; all type/lint/format/generated/invariant gates pass.
 
-- [ ] **Step 12: Request a fresh specification review for evidence/documentation/performance**
+- [ ] **Step 14: Request a fresh specification review for evidence/documentation/performance**
 
   Require a fresh reviewer to verify the exact ledger/hash/counts, UTC-only focused execution, valid disposition ownership, zero M0 selector, no Reflect/Proxy claim, documentation accuracy, and benchmark interpretation.
 
-- [ ] **Step 13: Fix and re-review every confirmed evidence specification finding**
+- [ ] **Step 15: Fix and re-review every confirmed evidence specification finding**
 
   Add a RED test or deterministic ledger check for each confirmed finding, rerun the Task 8 GREEN commands, and obtain fresh specification approval.
 
-- [ ] **Step 14: Request a different fresh quality review for evidence/documentation/performance**
+- [ ] **Step 16: Request a different fresh quality review for evidence/documentation/performance**
 
   Require inspection of generated-artifact integrity, pin enforcement, no broad local execution, cross-host capture identity, comparator protocol, and documentation links. Do not use Claude Opus 5.
 
-- [ ] **Step 15: Fix and re-review every confirmed evidence quality finding**
+- [ ] **Step 17: Fix and re-review every confirmed evidence quality finding**
 
   Add focused coverage, rerun the Task 8 GREEN commands, and obtain fresh quality approval.
 
-- [ ] **Step 16: Commit validation, evidence, and documentation**
+- [ ] **Step 18: Commit validation, evidence, and documentation**
 
   ```bash
   git add tools/test262/es2015-m0.js tools/test262/es2015-m0-paths.txt \
@@ -1871,12 +1994,34 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
 - Consumes: reviewed commits from Tasks 1–8 and all named GREEN evidence.
 - Produces: a maximum-capability architecture/correctness/performance review with no unresolved confirmed finding and a final one-PR scope decision.
+- Produces: `.superpowers/issue-79/reconciliation/pre-review.json` containing the live main SHA, prior main SHA, reconciliation decision, changed paths, rerun evidence, final merge base, and candidate head.
 
-- [ ] **Step 1: Freeze the review candidate**
+- [ ] **Step 1: Reconcile moving main immediately before final review**
+
+  ```bash
+  git fetch origin main --quiet
+  PRIOR_MAIN=$(cat .superpowers/issue-79/taxonomy/reconciled-main.sha)
+  LIVE_MAIN=$(git rev-parse origin/main)
+  git --no-pager log --format='%H %s' "$PRIOR_MAIN..$LIVE_MAIN" \
+    > .superpowers/issue-79/reconciliation/pre-review-commits.txt
+  git diff --name-status "$PRIOR_MAIN..$LIVE_MAIN" \
+    > .superpowers/issue-79/reconciliation/pre-review-paths.txt
+  ```
+
+  If `LIVE_MAIN` moved, inspect every changed path against the approved contract. Stop for written design reapproval only when the main change creates a semantic conflict or expands #79's scope. Otherwise merge `LIVE_MAIN` preserving both histories, rerun the affected task suites, repeat Task 8 Steps 4–18 against the new reconciled main, repeat the exclusive-idle performance capture when a hot path changed, and commit the reconciliation/evidence updates with the required trailer. Concurrent taxonomy changes belong in `concurrent-main-paths.json`; the #79 post-M0 delta must still be exactly the immutable 240-root ledger.
+
+  Persist `.superpowers/issue-79/reconciliation/pre-review.json` with `priorMain`, `liveMain`, `decision`, `changedPaths`, `rerunEvidence`, `finalMergeBase`, and `candidateHead`. Require:
+
+  ```bash
+  FINAL_MERGE_BASE=$(git merge-base origin/main HEAD)
+  test "$FINAL_MERGE_BASE" = "$(git rev-parse origin/main)"
+  ```
+
+- [ ] **Step 2: Freeze the review candidate**
 
   ```bash
   git status --short
-  REVIEW_BASE=$(git merge-base origin/main HEAD)
+  REVIEW_BASE="$FINAL_MERGE_BASE"
   git diff --check "$REVIEW_BASE...HEAD"
   git diff --stat "$REVIEW_BASE...HEAD"
   git diff --name-only "$REVIEW_BASE...HEAD"
@@ -1884,23 +2029,23 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: a clean worktree and only #79 contract, migration, tests, evidence, and directly related documentation paths.
 
-- [ ] **Step 2: Request a maximum-capability architecture/correctness/performance review**
+- [ ] **Step 3: Request a maximum-capability architecture/correctness/performance review**
 
   Give one fresh maximum-capability reviewer the approved design, this complete plan, the exact range `"$REVIEW_BASE...HEAD"`, all RED/GREEN logs, the M0 disposition, and benchmark captures. Require review of Table 5/6 shape, wrappers/error Realm ownership, active Realm chains, Enumerate public protocol, current exotics, all caller migration, hostile tests, raw-slot/class-name/callability invariants, 50,000-link safety, Test262 ownership, and performance. Use GPT-5.6 Terra/Sol/Luna or Claude Opus 4.8-or-lower; never Claude Opus 5.
 
-- [ ] **Step 3: Fix every confirmed whole-branch finding**
+- [ ] **Step 4: Fix every confirmed whole-branch finding**
 
   For each confirmed behavior issue, add a failing focused test before the fix. For each confirmed documentation/evidence issue, add the deterministic validation that would have caught it. Rerun the affected task GREEN command and all Task 8 verification commands.
 
-- [ ] **Step 4: Obtain a fresh maximum-capability re-review**
+- [ ] **Step 5: Obtain a fresh maximum-capability re-review**
 
   Re-submit the updated exact range and evidence. Repeat Steps 3–4 until the reviewer reports no confirmed architecture, correctness, or performance finding.
 
-- [ ] **Step 5: Reconfirm one-PR reviewability**
+- [ ] **Step 6: Reconfirm one-PR reviewability**
 
   Verify the final diff still implements only the approved Table 5/6 contract, ordinary/current-exotic migration, callers, invariants, tests, and evidence. If an independent subsystem is present, stop before opening a PR and propose #79 become a grouping issue.
 
-- [ ] **Step 6: Commit review fixes, if any**
+- [ ] **Step 7: Commit review fixes, if any**
 
   ```bash
   git add -A
@@ -1908,7 +2053,7 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
     -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
   ```
 
-  Run this command only when review fixes changed tracked files; otherwise do not create an empty commit.
+  Run this command only when review fixes changed tracked files; otherwise do not create an empty commit. After the final approved commit (or no-op), update `pre-review.json.candidateHead` to `git rev-parse HEAD`, add the final reviewer identity/decision/evidence path, and verify its `finalMergeBase` still equals live `origin/main`.
 
 ### Task 10: Publish, Verify, Merge, Reclassify, and Close Issue #79
 
@@ -1921,8 +2066,27 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
 - Consumes: clean reviewed branch head, Task 8 validation, Task 9 approval, and live `origin/main`.
 - Produces: one exact-head reviewed PR, squash merge, post-merge exact-main CodeQL evidence, deterministic M0 reclassification, closed #79, and updated roadmap graph/count evidence.
+- Produces: `.superpowers/issue-79/lifecycle-identities.json` with distinct `originalBase`, `baselineSource`, `finalMergeBase`, `reviewedHead`, `prNumber`, `ciRun`, `prCodeqlJavascript`, `prCodeqlActions`, `mergeSha`, `mainCodeqlJavascript`, and `mainCodeqlActions`.
 
-- [ ] **Step 1: Push the reviewed branch and open the single PR**
+- [ ] **Step 1: Reconcile moving main immediately before push**
+
+  Fetch `origin/main` and compare it to Task 9's `finalMergeBase`. If it moved, do not push the reviewed candidate. Apply Task 9 Step 1: inspect scope, merge compatible main changes, regenerate dynamic pre/post M0 taxonomy/docs, rerun affected focused/cross-host/invariant/performance gates, and repeat the complete maximum-capability review on the new exact merge-base range. Stop for design reapproval only if scope expands.
+
+  Persist `.superpowers/issue-79/reconciliation/pre-push.json` and require:
+
+  ```bash
+  git fetch origin main --quiet
+  FINAL_MERGE_BASE=$(git merge-base origin/main HEAD)
+  test "$FINAL_MERGE_BASE" = "$(git rev-parse origin/main)"
+  REVIEWED_HEAD=$(git rev-parse HEAD)
+  test "$(jq -r .candidateHead .superpowers/issue-79/reconciliation/pre-review.json)" = \
+    "$REVIEWED_HEAD"
+  git status --short
+  ```
+
+  If reconciliation changed `HEAD`, return to Task 9 before continuing. Never push or review stale-base evidence.
+
+- [ ] **Step 2: Push the reviewed branch and create or recover the single PR app-natively**
 
   Write the PR body before pushing:
 
@@ -1936,44 +2100,57 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   ## Evidence
 
+  - Original roadmap base: `ORIGINAL_BASE`.
+  - Performance baseline source: `BASELINE_SOURCE`.
+  - Final reconciled merge base: `FINAL_MERGE_BASE`.
   - M0 ledger: 240 roots / 459 variants / `4ef97681d7e5208a3ec04e2f4281908877f5f61dd42ee20c0f282ac4dc205309`.
   - Reviewed source head: `REVIEWED_HEAD`.
-  - Node, Chromium, JSC, exact UTC M0 Test262, typecheck, lint, format, generated checks, invariant checks, and benchmark smoke passed.
+  - Standard CI run: `CI_RUN_PENDING`.
+  - PR CodeQL JavaScript/Actions analyses: `PR_CODEQL_PENDING`.
+  - Squash merge and exact-main CodeQL: pending.
+  - Node, Chromium, JSC, exact UTC M0 Test262, typecheck, lint, format, generated checks, invariant checks, and benchmark smoke passed locally.
 
   ## Non-goals
 
   This PR does not implement Reflect methods, Proxy traps/revocation/invariants, collections, binary data, typed arrays, or later Symbol protocols.
 
-  Closes #79
+  Tracks #79
   EOF
   ```
 
-  Replace the literal `REVIEWED_HEAD` with `git rev-parse HEAD` before opening the PR.
+  Replace the literal identity placeholders before creating or updating the PR:
 
   ```bash
+  ORIGINAL_BASE=54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7
+  BASELINE_SOURCE=$(sed -n 's/^sourceSha=//p' \
+    .superpowers/issue-79/baseline-environment.txt)
   REVIEWED_HEAD=$(git rev-parse HEAD)
-  python3 - <<'PY'
-  from pathlib import Path
-  path = Path('.superpowers/issue-79/pr-body.md')
-  path.write_text(path.read_text().replace('REVIEWED_HEAD', __import__('subprocess').check_output(
-      ['git', 'rev-parse', 'HEAD'], text=True).strip()) + '\n')
-  PY
+  FINAL_MERGE_BASE=$(git merge-base origin/main HEAD)
+  perl -0pi -e 's/ORIGINAL_BASE/'"$ORIGINAL_BASE"'/g;
+    s/BASELINE_SOURCE/'"$BASELINE_SOURCE"'/g;
+    s/FINAL_MERGE_BASE/'"$FINAL_MERGE_BASE"'/g;
+    s/REVIEWED_HEAD/'"$REVIEWED_HEAD"'/g' \
+    .superpowers/issue-79/pr-body.md
+  git push --set-upstream origin yoonbuck-formalize-object-internal-methods
   ```
 
-  Then push and create the PR:
+  Inspect for an existing open PR on the branch:
 
   ```bash
-  git push --set-upstream origin yoonbuck-formalize-object-internal-methods
-  gh pr create --repo yoonbuck/jsjs \
-    --base main \
+  EXISTING_PR_JSON=$(gh pr list --repo yoonbuck/jsjs \
     --head yoonbuck-formalize-object-internal-methods \
-    --title "Formalize the ES2015 object internal-method contract" \
-    --body-file .superpowers/issue-79/pr-body.md
+    --state all --json number,state,mergedAt,headRefOid,url \
+    --jq 'sort_by(.number) | reverse | .[0] // {}')
+  EXISTING_PR=$(jq -r '.number // empty' <<<"$EXISTING_PR_JSON")
+  EXISTING_STATE=$(jq -r '.state // empty' <<<"$EXISTING_PR_JSON")
+  EXISTING_MERGED=$(jq -r '.mergedAt // empty' <<<"$EXISTING_PR_JSON")
   ```
 
-  The PR body names `Closes #79`, the approved design commits as design-only history, the exact Table 5/6 boundary, M0 hash/count, all local validation, benchmark interpretation, non-goals, and the one-PR scope decision.
+  If no prior PR exists, call app-native `create_pull_request` with title `Formalize the ES2015 object internal-method contract` and the exact body. If the latest PR is open, read its live title/body and call app-native `update_pull_request` with `repo_full_name: "yoonbuck/jsjs"`, that PR number, and the exact title/body; use the returned `base_sha` for any retry so a concurrent edit is not overwritten. If it is closed but unmerged, create a new app-native PR and record the superseded number. If it is already merged, do not create another PR: recover its merge/head identities and resume at the first incomplete post-merge security/evidence step. Do not use `gh pr create`, `gh pr edit`, GraphQL mutation, or auto-close wording.
 
-- [ ] **Step 2: Prove pushed-head equality**
+  The operation is idempotent: for an unmerged lifecycle, inspect the live PR, require exactly one open PR on the branch, and persist its number; for an already-merged lifecycle, require zero open PRs and persist the merged number. The body names `Tracks #79`, the design commits as design-only history, all distinct lifecycle identities, exact Table 5/6 boundary, M0 hash/count, validation, benchmark interpretation, non-goals, and scope decisions.
+
+- [ ] **Step 3: Prove pushed-head equality**
 
   ```bash
   PR=$(gh pr view --repo yoonbuck/jsjs --json number --jq .number)
@@ -1983,26 +2160,53 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: the PR head exactly equals `REVIEWED_HEAD`.
 
-- [ ] **Step 3: Find and synchronously watch exact-head CI**
+- [ ] **Step 4: Find and synchronously watch exact `ci.yml` reviewed-head CI**
 
   ```bash
   for attempt in $(seq 1 60); do
-    CI_RUN=$(gh run list --repo yoonbuck/jsjs --commit "$REVIEWED_HEAD" \
-      --limit 100 --json databaseId,headSha,event,name,status,conclusion \
-      --jq '[.[] | select(.headSha == "'"$REVIEWED_HEAD"'" and .name == "CI")][0].databaseId // empty')
+    CI_RUN=$(gh run list --repo yoonbuck/jsjs \
+      --workflow ci.yml --event pull_request --commit "$REVIEWED_HEAD" \
+      --limit 100 --json databaseId,headSha,event,workflowName,status,conclusion \
+      --jq '[.[] | select(.headSha == "'"$REVIEWED_HEAD"'" and .event == "pull_request")][0].databaseId // empty')
     if test -n "$CI_RUN"; then break; fi
     sleep 10
   done
   test -n "$CI_RUN"
-  gh run watch "$CI_RUN" --repo yoonbuck/jsjs --exit-status
-  test "$(gh run view "$CI_RUN" --repo yoonbuck/jsjs \
-    --json headSha --jq .headSha)" = "$REVIEWED_HEAD"
-  gh pr checks "$PR" --repo yoonbuck/jsjs
   ```
 
-  Expected: every required CI job succeeds on exactly `REVIEWED_HEAD`.
+  Start exactly one synchronous Bash tool call with command `gh run watch "$CI_RUN" --repo yoonbuck/jsjs --exit-status`, `initial_wait: 600`, and `mode: "sync"`. If it remains active, call `read_bash` with that returned shell ID and `delay: 600`; repeat same-shell reads only, never start a second watcher. After completion:
 
-- [ ] **Step 4: Find, synchronously watch, and inspect exact-head CodeQL**
+  ```bash
+  test "$(gh run view "$CI_RUN" --repo yoonbuck/jsjs \
+    --json headSha --jq .headSha)" = "$REVIEWED_HEAD"
+  test "$(gh pr view "$PR" --repo yoonbuck/jsjs \
+    --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
+  gh run view "$CI_RUN" --repo yoonbuck/jsjs --json jobs \
+    > .superpowers/issue-79/ci-jobs.json
+  test "$(jq '[.jobs[] | select(.status != "completed" or .conclusion != "success")] | length' \
+    .superpowers/issue-79/ci-jobs.json)" = "0"
+  node --input-type=module - <<'NODE'
+  import { readFileSync, writeFileSync } from 'node:fs';
+  import yaml from 'js-yaml';
+  const workflow = yaml.load(readFileSync('.github/workflows/ci.yml', 'utf8'));
+  const names = Object.values(workflow.jobs)
+    .map((job) => job.name)
+    .sort();
+  writeFileSync(
+    '.superpowers/issue-79/ci-expected-jobs.json',
+    `${JSON.stringify(names, null, 2)}\n`,
+  );
+  NODE
+  jq '[.jobs[].name] | sort' .superpowers/issue-79/ci-jobs.json \
+    > .superpowers/issue-79/ci-actual-jobs.json
+  diff -u .superpowers/issue-79/ci-expected-jobs.json \
+    .superpowers/issue-79/ci-actual-jobs.json
+  gh pr checks "$PR" --repo yoonbuck/jsjs --required
+  ```
+
+  Expected: bounded startup finds only the `ci.yml` pull-request run for `REVIEWED_HEAD`; every expected job is terminal/successful; the live PR head remains unchanged.
+
+- [ ] **Step 5: Find, synchronously watch, and inspect exact-head CodeQL**
 
   Default setup creates a dynamic CodeQL run named for the PR (for example the prior exact-head run `32320206235`, named `PR #101`). Require that run and both analysis categories for `REVIEWED_HEAD`:
 
@@ -2016,9 +2220,22 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
     sleep 10
   done
   test -n "$CODEQL_RUN"
-  gh run watch "$CODEQL_RUN" --repo yoonbuck/jsjs --exit-status
+  ```
+
+  Start exactly one synchronous Bash tool call with command `gh run watch "$CODEQL_RUN" --repo yoonbuck/jsjs --exit-status`, `initial_wait: 600`, and `mode: "sync"`. If it remains active, call `read_bash` on that returned shell ID with `delay: 600`; repeat same-shell reads only, never start a second watcher. Then continue:
+
+  ```bash
   test "$(gh run view "$CODEQL_RUN" --repo yoonbuck/jsjs \
     --json headSha --jq .headSha)" = "$REVIEWED_HEAD"
+  gh run view "$CODEQL_RUN" --repo yoonbuck/jsjs --log \
+    > .superpowers/issue-79/pr-codeql-run.log
+  gh run view "$CODEQL_RUN" --repo yoonbuck/jsjs --json jobs \
+    > .superpowers/issue-79/pr-codeql-jobs.json
+  test "$(jq '[.jobs[] | select(.status != "completed" or .conclusion != "success")] | length' \
+    .superpowers/issue-79/pr-codeql-jobs.json)" = "0"
+  test "$(jq -r '[.jobs[].name] | sort | join(\"\\n\")' \
+    .superpowers/issue-79/pr-codeql-jobs.json)" = \
+    "$(printf '%s\n' 'Analyze (actions)' 'Analyze (javascript-typescript)')"
 
   gh api --paginate repos/yoonbuck/jsjs/code-scanning/analyses \
     > .superpowers/issue-79/pr-head-codeql-analyses.json
@@ -2035,15 +2252,17 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
       > ".superpowers/issue-79/pr-codeql-$analysis.json"
     test "$(jq -r .commit_sha ".superpowers/issue-79/pr-codeql-$analysis.json")" = "$REVIEWED_HEAD"
     test "$(jq -r .results_count ".superpowers/issue-79/pr-codeql-$analysis.json")" = "0"
+    test "$(jq -r '.error // ""' ".superpowers/issue-79/pr-codeql-$analysis.json")" = ""
+    test "$(jq -r '.warning // ""' ".superpowers/issue-79/pr-codeql-$analysis.json")" = ""
     gh api -H 'Accept: application/sarif+json' \
       "repos/yoonbuck/jsjs/code-scanning/analyses/$analysis" \
       > ".superpowers/issue-79/pr-codeql-$analysis.sarif"
   done
   ```
 
-  Inspect both analysis JSON/SARIF artifacts and the exact run logs for extraction or parse diagnostics, not merely a green conclusion. Any result, warning, error, or unexpected extraction diagnostic blocks merge and enters the RED/fix/review loop.
+  Inspect both analysis JSON/SARIF artifacts and the exact run log for extraction or parse diagnostics, not merely a green conclusion. Any result, warning, error, or unexpected extraction diagnostic blocks merge and enters the RED/fix/review loop.
 
-- [ ] **Step 5: Resolve every review thread before merge**
+- [ ] **Step 6: Resolve every review thread before merge**
 
   Fetch reviews and threads, respond to each confirmed finding with the exact fix and test evidence, then resolve it:
 
@@ -2061,11 +2280,47 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
     }' -F owner=yoonbuck -F repo=jsjs -F number="$PR"
   ```
 
-  For every code change, repeat the relevant task RED/GREEN/reviewer loop, push, set `REVIEWED_HEAD=$(git rev-parse HEAD)`, re-prove PR-head equality, and repeat exact-head CI and CodeQL inspection. Do not merge with evidence for a stale SHA.
+  For every code change, repeat the relevant task RED/GREEN/reviewer loop, repeat Task 10 Step 1 before the follow-up push, set `REVIEWED_HEAD=$(git rev-parse HEAD)`, re-prove PR-head equality, and repeat exact-head CI and CodeQL inspection. Do not push or merge with stale-base or stale-head evidence.
 
-- [ ] **Step 6: Squash merge and delete the branch**
+- [ ] **Step 7: Update the PR with exact pre-merge lifecycle identities**
+
+  Replace `CI_RUN_PENDING` and `PR_CODEQL_PENDING` in the live PR body with the exact `CI_RUN`, `CODEQL_RUN`, `CODEQL_JS`, and `CODEQL_ACTIONS` identities. Read the current body and call app-native `update_pull_request` with its concurrency `base_sha`; do not use raw GitHub mutation commands. Preserve `Tracks #79`.
+
+  Persist the known identities with null post-merge fields:
 
   ```bash
+  jq -n \
+    --arg originalBase "$ORIGINAL_BASE" \
+    --arg baselineSource "$BASELINE_SOURCE" \
+    --arg finalMergeBase "$FINAL_MERGE_BASE" \
+    --arg reviewedHead "$REVIEWED_HEAD" \
+    --argjson prNumber "$PR" \
+    --argjson ciRun "$CI_RUN" \
+    --argjson prCodeqlJavascript "$CODEQL_JS" \
+    --argjson prCodeqlActions "$CODEQL_ACTIONS" \
+    '{
+      originalBase: $originalBase,
+      baselineSource: $baselineSource,
+      finalMergeBase: $finalMergeBase,
+      reviewedHead: $reviewedHead,
+      prNumber: $prNumber,
+      ciRun: $ciRun,
+      prCodeqlJavascript: $prCodeqlJavascript,
+      prCodeqlActions: $prCodeqlActions,
+      mergeSha: null,
+      mainCodeqlJavascript: null,
+      mainCodeqlActions: null
+    }' > .superpowers/issue-79/lifecycle-identities.json
+  test "$(gh pr view "$PR" --repo yoonbuck/jsjs \
+    --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
+  ```
+
+- [ ] **Step 8: Squash merge and delete the branch**
+
+  ```bash
+  git fetch origin main --quiet
+  test "$(git merge-base origin/main "$REVIEWED_HEAD")" = \
+    "$(git rev-parse origin/main)"
   test "$(gh pr view "$PR" --repo yoonbuck/jsjs \
     --json headRefOid --jq .headRefOid)" = "$REVIEWED_HEAD"
   gh pr merge "$PR" --repo yoonbuck/jsjs --squash --delete-branch
@@ -2078,7 +2333,17 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Expected: a squash merge on `main`, deleted remote branch, and a merge SHA distinct from the reviewed source head.
 
-- [ ] **Step 7: Wait synchronously for exact-main CodeQL**
+  Update only the merge identity:
+
+  ```bash
+  jq --arg mergeSha "$MERGE_SHA" '.mergeSha = $mergeSha' \
+    .superpowers/issue-79/lifecycle-identities.json \
+    > .superpowers/issue-79/lifecycle-identities.tmp
+  mv .superpowers/issue-79/lifecycle-identities.tmp \
+    .superpowers/issue-79/lifecycle-identities.json
+  ```
+
+- [ ] **Step 9: Wait synchronously for exact-main CodeQL**
 
   ```bash
   for attempt in $(seq 1 60); do
@@ -2098,15 +2363,30 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   CODEQL_RUN=$(gh run list --repo yoonbuck/jsjs --commit "$MERGE_SHA" \
     --event dynamic --limit 100 \
     --json databaseId,headSha,event,name,status,conclusion \
-    --jq '[.[] | select(.headSha == "'"$MERGE_SHA"'" and (.name | test("CodeQL"; "i")))][0].databaseId // empty')
+    --jq '[.[] | select(.headSha == "'"$MERGE_SHA"'" and .event == "dynamic" and .name == "Push on main")][0].databaseId // empty')
   test -n "$CODEQL_RUN"
-  gh run watch "$CODEQL_RUN" --repo yoonbuck/jsjs --exit-status
+  ```
+
+  Start exactly one synchronous Bash tool call with command `gh run watch "$CODEQL_RUN" --repo yoonbuck/jsjs --exit-status`, `initial_wait: 600`, and `mode: "sync"`. If it remains active, call `read_bash` with the same returned shell ID and `delay: 600`; repeat same-shell reads only. Then:
+
+  ```bash
+  gh run view "$CODEQL_RUN" --repo yoonbuck/jsjs --log \
+    > .superpowers/issue-79/main-codeql-run.log
+  gh run view "$CODEQL_RUN" --repo yoonbuck/jsjs --json jobs \
+    > .superpowers/issue-79/main-codeql-jobs.json
+  test "$(jq '[.jobs[] | select(.status != "completed" or .conclusion != "success")] | length' \
+    .superpowers/issue-79/main-codeql-jobs.json)" = "0"
+  test "$(jq -r '[.jobs[].name] | sort | join(\"\\n\")' \
+    .superpowers/issue-79/main-codeql-jobs.json)" = \
+    "$(printf '%s\n' 'Analyze (actions)' 'Analyze (javascript-typescript)')"
   for analysis in "$CODEQL_JS" "$CODEQL_ACTIONS"; do
     gh api "repos/yoonbuck/jsjs/code-scanning/analyses/$analysis" \
       > ".superpowers/issue-79/codeql-$analysis.json"
     test "$(jq -r .commit_sha ".superpowers/issue-79/codeql-$analysis.json")" = "$MERGE_SHA"
     test "$(jq -r .tool.name ".superpowers/issue-79/codeql-$analysis.json")" = "CodeQL"
     test "$(jq -r .results_count ".superpowers/issue-79/codeql-$analysis.json")" = "0"
+    test "$(jq -r '.error // ""' ".superpowers/issue-79/codeql-$analysis.json")" = ""
+    test "$(jq -r '.warning // ""' ".superpowers/issue-79/codeql-$analysis.json")" = ""
     gh api -H 'Accept: application/sarif+json' \
       "repos/yoonbuck/jsjs/code-scanning/analyses/$analysis" \
       > ".superpowers/issue-79/codeql-$analysis.sarif"
@@ -2115,7 +2395,20 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   Inspect both JSON documents and SARIF files for extraction/parse diagnostics and actionable results. If a CodeQL result exists, fix it in a new reviewed PR and repeat this exact-main gate on that new merge SHA.
 
-- [ ] **Step 8: Re-run exact UTC reclassification from merged main**
+  Update only the exact-main analysis identities:
+
+  ```bash
+  jq --argjson javascript "$CODEQL_JS" --argjson actions "$CODEQL_ACTIONS" \
+    '.mainCodeqlJavascript = $javascript | .mainCodeqlActions = $actions' \
+    .superpowers/issue-79/lifecycle-identities.json \
+    > .superpowers/issue-79/lifecycle-identities.tmp
+  mv .superpowers/issue-79/lifecycle-identities.tmp \
+    .superpowers/issue-79/lifecycle-identities.json
+  ```
+
+  Do not mutate issue dependencies or close #79 until this file has all non-null identities.
+
+- [ ] **Step 10: Re-run exact UTC reclassification from merged main**
 
   ```bash
   git worktree add --detach .superpowers/issue-79-post-merge "$MERGE_SHA"
@@ -2131,12 +2424,21 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   )
   cp .superpowers/issue-79-post-merge/.superpowers/issue-79/m0-post-merge.json \
     .superpowers/issue-79/m0-post-merge.json
+  cp .superpowers/issue-79-post-merge/tools/test262/es2015-taxonomy.json \
+    .superpowers/issue-79/taxonomy/post-merge.json
   git worktree remove .superpowers/issue-79-post-merge
+  TZ=UTC node tools/test262/es2015-m0.js \
+    --compare-original=.superpowers/issue-79/taxonomy/original-base.json \
+    --compare-pre=.superpowers/issue-79/taxonomy/reconciled-pre-m0.json \
+    --compare-post=.superpowers/issue-79/taxonomy/post-merge.json \
+    --dispositions=tools/test262/es2015-m0-dispositions.json \
+    --concurrent-explanations=.superpowers/issue-79/taxonomy/concurrent-main-explanations.json \
+    --output=.superpowers/issue-79/taxonomy/m0-post-merge-delta.json
   ```
 
-  Expected: M0’s exact selector remains zero on `MERGE_SHA`; promotions represent only passed exact paths; all non-passing paths have a reviewed next owner; no Reflect/Proxy feature claim appears.
+  Expected: M0’s exact selector remains zero on `MERGE_SHA`; the reconciled-pre-to-post merge delta is exactly the 240 immutable ledger paths / 459 variants; original-base-to-reconciled changes are separately enumerated concurrent-main paths; promotions represent only passed exact paths; all non-passing paths have a reviewed next owner; no Reflect/Proxy feature claim appears.
 
-- [ ] **Step 9: Update the graph and counts with exact merged evidence**
+- [ ] **Step 11: Update the graph and counts with exact merged evidence**
 
   Snapshot every live issue and generate the owner totals before editing:
 
@@ -2148,13 +2450,41 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   done
   node --input-type=module - <<'NODE'
   import { readFileSync, writeFileSync } from 'node:fs';
-  import { summarizeM0Dispositions } from './tools/test262/es2015-m0.js';
+  import {
+    compareM0Taxonomies,
+    summarizeM0Dispositions,
+  } from './tools/test262/es2015-m0.js';
 
   const result = JSON.parse(
     readFileSync('.superpowers/issue-79/m0-post-merge.json', 'utf8'),
   );
+  const original = JSON.parse(
+    readFileSync('.superpowers/issue-79/taxonomy/original-base.json', 'utf8'),
+  );
+  const reconciledPre = JSON.parse(
+    readFileSync(
+      '.superpowers/issue-79/taxonomy/reconciled-pre-m0.json',
+      'utf8',
+    ),
+  );
+  const post = JSON.parse(
+    readFileSync('.superpowers/issue-79/taxonomy/post-merge.json', 'utf8'),
+  );
+  const concurrentExplanations = JSON.parse(
+    readFileSync(
+      '.superpowers/issue-79/taxonomy/concurrent-main-explanations.json',
+      'utf8',
+    ),
+  );
   const entries = result.dispositions;
   const summary = summarizeM0Dispositions(entries);
+  const taxonomyDelta = compareM0Taxonomies(
+    original,
+    reconciledPre,
+    post,
+    entries,
+    concurrentExplanations,
+  );
   const total = entries.reduce(
     (current, entry) => ({
       roots: current.roots + 1,
@@ -2165,21 +2495,63 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   if (total.roots !== 240 || total.variants !== 459) {
     throw new Error('M0 dispositions do not preserve the reviewed denominator');
   }
+  const postCore = post.classifications.filter(
+    (entry) => entry.partition === 'core',
+  );
+  const coreTotals = postCore.reduce(
+    (current, entry) => ({
+      roots: current.roots + 1,
+      variants: current.variants + entry.variants,
+    }),
+    { roots: 0, variants: 0 },
+  );
+  const statusTotals = {};
+  const blockerTotals = {};
+  for (const entry of postCore) {
+    const status = statusTotals[entry.status] ?? { roots: 0, variants: 0 };
+    status.roots += 1;
+    status.variants += entry.variants;
+    statusTotals[entry.status] = status;
+    if (entry.blocker !== null) {
+      const blocker = blockerTotals[entry.blocker] ?? {
+        roots: 0,
+        variants: 0,
+      };
+      blocker.roots += 1;
+      blocker.variants += entry.variants;
+      blockerTotals[entry.blocker] = blocker;
+    }
+  }
   writeFileSync(
     '.superpowers/issue-79/m0-roadmap-delta.json',
-    `${JSON.stringify({ total, summary }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        finalMergeBase: readFileSync(
+          '.superpowers/issue-79/taxonomy/reconciled-main.sha',
+          'utf8',
+        ).trim(),
+        total,
+        summary,
+        taxonomyDelta,
+        coreTotals,
+        statusTotals,
+        blockerTotals,
+      },
+      null,
+      2,
+    )}\n`,
   );
   NODE
   ```
 
-  Snapshot and update #70, #80, #81, #82, #83, #87, #91, #93, #95, #96, #98, and #100 from the post-merge taxonomy/disposition, preserving the complete core denominator `24,250/46,424`. The updates must:
+  Snapshot and update #70, #80, #81, #82, #83, #87, #91, #93, #95, #96, #98, and #100 from `m0-roadmap-delta.json`. Derive every final count and the complete core denominator from the reconciled post-merge taxonomy; do not copy the original `54010d4` totals after parallel merges. The updates must:
 
   - remove #79’s `240/459` M0 attribution and show its exact resulting zero selector;
   - add each reclassified root/variant only to its reviewed new owner, recomputing every affected issue’s root/variant count and ledger SHA;
   - keep #80/#81 as future owners without claiming their Reflect/Proxy functionality;
   - remove #79 from native dependency/blocked-by relationships only after the merge and exact-main CodeQL gates;
   - update #98’s Table 5/6 rows with the merged PR, review evidence, and exact M0 disposition;
-  - update #100’s dependency graph/count narrative without changing its complete-core denominator; and
+  - update #100’s dependency graph/count narrative using the dynamically derived post-merge complete-core denominator; and
   - report that #80 and #82 are newly unblocked by #79 only, without claiming either feature is implemented. Report that #83, #87, #91, #93, #95, #96, and #100 retain their other listed blockers.
 
   Read each live issue immediately before patching it; if its body changed concurrently, stop and reconcile the new body rather than overwriting it.
@@ -2197,18 +2569,22 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   done
   ```
 
-- [ ] **Step 10: Publish final evidence and close #79**
+- [ ] **Step 12: Publish final evidence and close #79**
 
-  Post the PR URL, `REVIEWED_HEAD`, `MERGE_SHA`, exact CI run, CodeQL analysis IDs, M0 ledger hash/count, post-merge selector result, validation summary, issue graph deltas, and newly-unblocked-node report on #79 and #70. Verify `Closes #79` closed it; if it remains open, close it explicitly:
+  Read the merged PR's current body and call app-native `update_pull_request` with its concurrency `base_sha` to replace pending lifecycle fields with the exact values from `lifecycle-identities.json`. Preserve `Tracks #79`; do not add an auto-close keyword after merge.
+
+  Post the PR URL, original roadmap base, performance baseline source, final merge base, `REVIEWED_HEAD`, `MERGE_SHA`, exact CI run, PR CodeQL analysis IDs, main CodeQL analysis IDs, M0 ledger hash/count, post-merge selector result, validation summary, issue graph deltas, and newly-unblocked-node report on #79 and #70. Only after exact-main CodeQL, post-merge reclassification, and graph mutation all pass, close #79 explicitly:
 
   ```bash
+  test "$(jq -r '[.originalBase,.baselineSource,.finalMergeBase,.reviewedHead,.ciRun,.prCodeqlJavascript,.prCodeqlActions,.mergeSha,.mainCodeqlJavascript,.mainCodeqlActions] | all(. != null and . != \"\")' \
+    .superpowers/issue-79/lifecycle-identities.json)" = "true"
   if test "$(gh issue view 79 --repo yoonbuck/jsjs --json state --jq .state)" != "CLOSED"; then
     gh issue close 79 --repo yoonbuck/jsjs \
-      --comment "Merged in $MERGE_SHA after exact-head CI, exact-main CodeQL, and UTC M0 reclassification."
+      --comment "Merged in $MERGE_SHA after exact reviewed-head ci.yml, PR CodeQL, exact-main CodeQL, UTC M0 reclassification, and roadmap graph update."
   fi
   test "$(gh issue view 79 --repo yoonbuck/jsjs --json state --jq .state)" = "CLOSED"
   ```
 
 ## One-PR Scope Conclusion
 
-This remains one PR only while the work is the approved ES2015 Table 5/6 contract, ordinary helper encapsulation, active-Realm plumbing, current-exotic and semantic caller migration, Enumerate, invariants, exact M0 evidence, validation, and directly related documentation. It does not include Reflect, Proxy, or any independent runtime subsystem. The Task 0 and Task 6 checkpoints are mandatory stop points: if either disproves that boundary, halt implementation and propose converting #79 to a grouping issue.
+This remains one PR only while the work is the approved ES2015 Table 5/6 contract, ordinary helper encapsulation, active-Realm plumbing, current-exotic and semantic caller migration, Enumerate, invariants, exact M0 evidence, validation, and directly related documentation. It does not include Reflect, Proxy, or any independent runtime subsystem. The persisted Task 0 and Task 6 checkpoints are mandatory stop points: if either disproves that boundary, halt implementation and propose converting #79 to a grouping issue without creating an atomic-completion PR. Task 9 and Task 10 reconcile moving main before final review and every push, so review, CI, CodeQL, taxonomy, and graph evidence always refer to the exact final merge-base range.
