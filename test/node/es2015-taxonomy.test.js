@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import {
   Es2015TaxonomyError,
@@ -602,6 +602,65 @@ async function configureInjectedPromotionFixture(fixture) {
     'tools/test262/es2015-promotion.json',
     promotion,
   );
+}
+
+/**
+ * @param {{
+ *   root: URL,
+ *   checkout: URL,
+ *   pin: { repository: string, revision: string, checkoutPath: string },
+ * }} fixture
+ */
+async function configureH0OutputFixture(fixture) {
+  await writeFixtureFile(
+    fixture.checkout,
+    H0_AUDIT_REASSIGNED_PATH,
+    '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+  );
+  await writeFixtureFile(
+    fixture.checkout,
+    H0_AUDIT_PASSED_PATH,
+    '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+  );
+  const checkoutPath = fileURLToPath(fixture.checkout);
+  runGit(checkoutPath, ['add', H0_AUDIT_REASSIGNED_PATH, H0_AUDIT_PASSED_PATH]);
+  runGit(checkoutPath, ['commit', '--quiet', '-m', 'H0 output fixture']);
+  const pin = {
+    ...fixture.pin,
+    revision: runGit(checkoutPath, ['rev-parse', 'HEAD']),
+  };
+
+  await writeFixtureFile(
+    fixture.root,
+    'package.json',
+    JSON.stringify({ type: 'module', test262: pin }),
+  );
+  for (const fixturePath of [
+    'tools/test262/es2015-policy.json',
+    'tools/test262/upstream-subset.json',
+    AUDIT_EVIDENCE_PATH,
+  ]) {
+    await writeFixtureFile(
+      fixture.root,
+      fixturePath,
+      (await readFile(new URL(fixturePath, fixture.root), 'utf8'))
+        .split(fixture.pin.revision)
+        .join(pin.revision),
+    );
+  }
+  await writeFixtureFile(
+    fixture.root,
+    'tools/test262/es2015-h0-paths.json',
+    H0_AUDIT_PATHS_MANIFEST,
+  );
+  await writeFixtureFile(
+    fixture.root,
+    'tools/test262/es2015-h0-owner-map.json',
+    H0_AUDIT_OWNER_MAP,
+  );
+  await writeFixtureFile(fixture.root, AUDIT_PATH, H0_AUDIT_TAXONOMY);
+
+  return { ...fixture, pin };
 }
 
 /** @param {(cwd: URL) => Promise<void>} action */
@@ -2452,6 +2511,260 @@ export default [
           assertSame(fs.existsSync(AUDIT_EVIDENCE_PATH), false);
         });
       } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+      }
+    },
+  },
+  {
+    name: 'ES2015 audit preserves in-repository normalized H0 output targets',
+    run: async () => {
+      const fixture = await createRealAuditFixture();
+      try {
+        const h0Fixture = await configureH0OutputFixture(fixture);
+        await mkdir(new URL('tools/test262/aliases/nested/', h0Fixture.root), {
+          recursive: true,
+        });
+        const dependencies = {
+          ...fixtureAuditDependencies(h0Fixture),
+          runPromotion: async () => H0_AUDIT_RECORDS,
+        };
+
+        assertSame(
+          await auditEs2015Taxonomy(
+            [
+              '--paths-manifest=tools/test262/es2015-h0-paths.json',
+              '--owner-map=tools/test262/es2015-h0-owner-map.json',
+              '--write-disposition=tools/test262/aliases/./h0-disposition.json',
+            ],
+            dependencies,
+          ),
+          0,
+        );
+        assertSame(
+          fs.existsSync(
+            new URL(
+              'tools/test262/aliases/h0-disposition.json',
+              h0Fixture.root,
+            ),
+          ),
+          true,
+        );
+
+        assertSame(
+          await auditEs2015Taxonomy(
+            [
+              '--paths-manifest=tools/test262/es2015-h0-paths.json',
+              '--disposition=tools/test262/aliases/h0-disposition.json',
+              `--write-promotion=${
+                new URL(
+                  'tools/test262/aliases/h0-promotion%2Ejson',
+                  h0Fixture.root,
+                ).href
+              }`,
+              '--write-owner-deltas=tools/test262/aliases/nested/../h0-owner-deltas.json',
+            ],
+            dependencies,
+          ),
+          0,
+        );
+        assertSame(
+          fs.existsSync(
+            new URL('tools/test262/aliases/h0-promotion.json', h0Fixture.root),
+          ),
+          true,
+        );
+        assertSame(
+          fs.existsSync(
+            new URL(
+              'tools/test262/aliases/h0-owner-deltas.json',
+              h0Fixture.root,
+            ),
+          ),
+          true,
+        );
+      } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+      }
+    },
+  },
+  {
+    name: 'ES2015 audit rejects every H0 output escape before writing',
+    run: async () => {
+      const fixture = await createRealAuditFixture();
+      /** @type {string[]} */
+      const externalArtifacts = [];
+      /** @type {string | null} */
+      let siblingDirectory = null;
+      try {
+        const h0Fixture = await configureH0OutputFixture(fixture);
+        await mkdir(new URL('tools/test262/aliases/', h0Fixture.root), {
+          recursive: true,
+        });
+        const dependencies = {
+          ...fixtureAuditDependencies(h0Fixture),
+          runPromotion: async () => H0_AUDIT_RECORDS,
+        };
+        const rootPath = fileURLToPath(h0Fixture.root).replace(/[\\/]$/u, '');
+        const parentPath = path.dirname(rootPath);
+        const escapeId = randomUUID();
+        siblingDirectory = path.join(
+          parentPath,
+          `${path.basename(rootPath)}-sibling-${escapeId}`,
+        );
+        await mkdir(siblingDirectory);
+        const parentEscapePath = path.join(
+          parentPath,
+          `es2015-audit-parent-escape-${escapeId}.json`,
+        );
+        const nestedEscapePath = path.join(
+          path.dirname(parentPath),
+          `es2015-audit-nested-escape-${escapeId}.json`,
+        );
+        const siblingEscapePath = path.join(
+          siblingDirectory,
+          `es2015-audit-sibling-escape-${escapeId}.json`,
+        );
+        const absoluteEscapePath = path.join(
+          parentPath,
+          `es2015-audit-absolute-escape-${escapeId}.json`,
+        );
+        const fileUrlEscapePath = path.join(
+          parentPath,
+          `es2015-audit-file-url-escape-${escapeId}.json`,
+        );
+        externalArtifacts.push(
+          parentEscapePath,
+          nestedEscapePath,
+          siblingEscapePath,
+          absoluteEscapePath,
+          fileUrlEscapePath,
+        );
+        const escapedTargets = [
+          {
+            label: '../ traversal',
+            value: `../${path.basename(parentEscapePath)}`,
+            artifact: parentEscapePath,
+          },
+          {
+            label: 'nested ../../ traversal',
+            value: `../../${path.basename(nestedEscapePath)}`,
+            artifact: nestedEscapePath,
+          },
+          {
+            label: 'sibling-prefix absolute path',
+            value: siblingEscapePath,
+            artifact: siblingEscapePath,
+          },
+          {
+            label: 'external absolute path',
+            value: absoluteEscapePath,
+            artifact: absoluteEscapePath,
+          },
+          {
+            label: 'external absolute file URL',
+            value: pathToFileURL(fileUrlEscapePath).href,
+            artifact: fileUrlEscapePath,
+          },
+          {
+            label: 'repository root',
+            value: h0Fixture.root.href,
+            artifact: null,
+          },
+        ];
+        const dispositionOptions = [
+          '--paths-manifest=tools/test262/es2015-h0-paths.json',
+          '--owner-map=tools/test262/es2015-h0-owner-map.json',
+        ];
+        const promotionOptions = [
+          '--paths-manifest=tools/test262/es2015-h0-paths.json',
+          '--disposition=tools/test262/aliases/h0-disposition.json',
+        ];
+
+        assertSame(
+          await auditEs2015Taxonomy(
+            [
+              ...dispositionOptions,
+              '--write-disposition=tools/test262/aliases/h0-disposition.json',
+            ],
+            dependencies,
+          ),
+          0,
+        );
+
+        /** @type {{ label: string, option: string, error: Error | null, wrote: boolean }[]} */
+        const attempts = [];
+        for (const target of escapedTargets) {
+          const outputOptions = [
+            {
+              option: '--write-disposition',
+              args: [
+                ...dispositionOptions,
+                `--write-disposition=${target.value}`,
+              ],
+            },
+            {
+              option: '--write-promotion',
+              args: [
+                ...promotionOptions,
+                `--write-promotion=${target.value}`,
+                '--write-owner-deltas=tools/test262/aliases/h0-owner-deltas.json',
+              ],
+            },
+            {
+              option: '--write-owner-deltas',
+              args: [
+                ...promotionOptions,
+                '--write-promotion=tools/test262/aliases/h0-promotion.json',
+                `--write-owner-deltas=${target.value}`,
+              ],
+            },
+          ];
+          for (const output of outputOptions) {
+            /** @type {Error | null} */
+            let error = null;
+            try {
+              await auditEs2015Taxonomy(output.args, dependencies);
+            } catch (caught) {
+              error =
+                caught instanceof Error ? caught : new Error(String(caught));
+            }
+            attempts.push({
+              label: target.label,
+              option: output.option,
+              error,
+              wrote: target.artifact !== null && fs.existsSync(target.artifact),
+            });
+          }
+        }
+
+        for (const attempt of attempts) {
+          if (
+            !(attempt.error instanceof Es2015AuditError) ||
+            !attempt.error.message.includes(
+              attempt.label === 'repository root'
+                ? 'must name a file within the repository root'
+                : 'outside the repository root',
+            )
+          ) {
+            throw new Error(
+              `${attempt.option} accepted ${attempt.label}${
+                attempt.wrote ? ' and wrote outside the repository' : ''
+              } before canonical containment`,
+            );
+          }
+          assertSame(attempt.wrote, false);
+        }
+      } finally {
+        await Promise.all(
+          externalArtifacts.map((artifact) =>
+            rm(artifact, {
+              force: true,
+            }),
+          ),
+        );
+        if (siblingDirectory !== null) {
+          await rm(siblingDirectory, { recursive: true, force: true });
+        }
         await rm(fixture.root, { recursive: true, force: true });
       }
     },

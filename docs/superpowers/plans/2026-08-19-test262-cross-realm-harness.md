@@ -727,7 +727,8 @@ disposition identity, and promoted subset identity:
 TZ=UTC node tools/test262/es2015-audit.js \
   --paths-manifest=tools/test262/es2015-h0-paths.json \
   --disposition=tools/test262/es2015-h0-disposition.json \
-  --write-promotion=tools/test262/es2015-h0-promotion.json
+  --write-promotion=tools/test262/es2015-h0-promotion.json \
+  --write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json
 ```
 
 The promotion manifest must not contain reassigned or partially passing roots.

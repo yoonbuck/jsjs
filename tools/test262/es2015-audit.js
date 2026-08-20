@@ -903,8 +903,28 @@ function normalizeOutputTarget(outputPath, repositoryRootUrl) {
     );
   }
   try {
-    return path.resolve(fileURLToPath(target));
-  } catch {
+    const root = path.resolve(fileURLToPath(repositoryRootUrl));
+    const candidate = path.resolve(fileURLToPath(target));
+    const relative = path.relative(root, candidate);
+    if (relative === '') {
+      throw new Es2015AuditError(
+        `output path ${outputPath} must name a file within the repository root`,
+      );
+    }
+    if (
+      path.isAbsolute(relative) ||
+      relative === '..' ||
+      relative.startsWith(`..${path.sep}`)
+    ) {
+      throw new Es2015AuditError(
+        `output path ${outputPath} is outside the repository root`,
+      );
+    }
+    return candidate;
+  } catch (error) {
+    if (error instanceof Es2015AuditError) {
+      throw error;
+    }
     throw new Es2015AuditError(
       `output path ${outputPath} is not a valid file path`,
     );

@@ -60,8 +60,11 @@ declare module 'node:path' {
   const path: {
     delimiter: string;
     sep: string;
+    basename(path: string): string;
+    dirname(path: string): string;
     isAbsolute(path: string): boolean;
     join(...paths: string[]): string;
+    relative(from: string, to: string): string;
     resolve(...paths: string[]): string;
   };
   export default path;
