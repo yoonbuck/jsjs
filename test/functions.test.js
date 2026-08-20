@@ -3,6 +3,7 @@ import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { EngineFunction } from '../src/runtime/function-object.js';
+import { callCallable } from '../src/runtime/capabilities.js';
 
 /**
  * @param {string} source
@@ -462,7 +463,7 @@ const tests = [
       evaluateScript(realm, 'function f() { return this; }');
 
       const f = /** @type {any} */ (realm.globalObject.get('f'));
-      const result = f.callFunction(5, []);
+      const result = /** @type {any} */ (callCallable(f, 5, []));
       assertSame(result instanceof EngineObject, true);
       assertSame(result.getClassName(), 'Number');
       assertSame(result.primitiveValue, 5);

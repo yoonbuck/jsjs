@@ -1,6 +1,8 @@
 /**
  * @typedef {string | symbol} PropertyKey
  *
+ * @typedef {import('./capabilities.js').CallableLike} CallableLike
+ *
  * @typedef {{
  *   value?: unknown,
  *   writable?: boolean,
@@ -14,53 +16,11 @@
  *   enumerable: boolean,
  *   configurable: boolean,
  * }} CompletePropertyDescriptor
- *
- * @typedef {{
- *   callFunction: (
- *     thisValue: unknown,
- *     args: readonly unknown[],
- *     callerRealm?: import('./realm.js').Realm,
- *   ) => unknown,
- *   getFunctionRealm: () => import('./function-realm.js').JobCompletion,
- * }} CallableLike
  */
 
-/**
- * Implements ECMA-262 9.11 `IsCallable` for engine values: an engine
- * object is callable when it implements the engine's call protocol.
- *
- * It lives in this module because `descriptors.js` imports nothing, so
- * every layer that needs the predicate — property access, `typeof`, and
- * accessor validation below — can share one definition without creating an
- * import cycle with the object model or the function specialization that
- * defines callable objects.
- *
- * @param {unknown} value
- * @returns {value is CallableLike}
- */
-export function isCallable(value) {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    typeof (/** @type {any} */ (value).callFunction) === 'function'
-  );
-}
+import { isCallable, isConstructor } from './capabilities.js';
 
-/**
- * @param {unknown} value
- * @returns {value is CallableLike & {
- *   constructFunction: (
- *     args?: readonly unknown[],
- *     newTarget?: unknown,
- *     callerRealm?: import('./realm.js').Realm,
- *   ) => unknown,
- * }}
- */
-export function isConstructor(value) {
-  return (
-    isCallable(value) && /** @type {any} */ (value)._isConstructor === true
-  );
-}
+export { isCallable, isConstructor };
 
 /**
  * @param {PropertyDescriptorRecord | CompletePropertyDescriptor | undefined} descriptor

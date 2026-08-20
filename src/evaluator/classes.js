@@ -1,5 +1,5 @@
 import { EngineObject } from '../runtime/object.js';
-import { isConstructor } from '../runtime/descriptors.js';
+import { isConstructor } from '../runtime/capabilities.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { newDeclarativeEnvironment } from '../runtime/environment.js';
 import { createFunctionObject } from './declarations.js';

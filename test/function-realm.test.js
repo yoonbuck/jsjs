@@ -3,6 +3,11 @@ import {
   createAbruptRealmCallable,
   getFunctionRealm,
 } from '../src/runtime/function-realm.js';
+import {
+  callCallable,
+  isCallable,
+  isConstructor,
+} from '../src/runtime/capabilities.js';
 import { createGuestError } from '../src/builtins/errors.js';
 import { assertSame } from './harness/assert.js';
 
@@ -70,7 +75,7 @@ export default [
         );
 
       callerRealm.agent.withActiveExecutionRealm(callerRealm, () => {
-        assertSame(foreign.callFunction(undefined, [], callerRealm), 1);
+        assertSame(callCallable(foreign, undefined, [], callerRealm), 1);
         assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
       });
 
@@ -158,7 +163,7 @@ export default [
       let bound = target;
 
       for (let index = 0; index < 30000; index += 1) {
-        bound = callable(bind.callFunction(bound, [null]));
+        bound = callable(callCallable(bind, bound, [null]));
       }
 
       assertSame(getFunctionRealm(bound).value, realm);
@@ -169,7 +174,10 @@ export default [
     run: () => {
       const realm = createRealm();
       const thrown = createGuestError(realm, 'TypeError', 'revoked');
-      const lookup = getFunctionRealm(createAbruptRealmCallable(realm, thrown));
+      const abrupt = createAbruptRealmCallable(realm, thrown);
+      const lookup = getFunctionRealm(abrupt);
+      assertSame(isCallable(abrupt), true);
+      assertSame(isConstructor(abrupt), false);
       assertSame(lookup.type, 'throw');
       assertSame(lookup.value, thrown);
     },

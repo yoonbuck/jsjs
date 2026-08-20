@@ -1,5 +1,11 @@
 import { EngineObject } from './object.js';
-import { isAccessorDescriptor, isConstructor } from './descriptors.js';
+import { isAccessorDescriptor } from './descriptors.js';
+import {
+  constructCallable,
+  isConstructor,
+  registerCallable,
+  registerConstructor,
+} from './capabilities.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
 import { toObject } from './conversion.js';
 import {
@@ -139,6 +145,12 @@ export class EngineFunction extends EngineObject {
     this.constructorKind = constructorKind;
     /** @type {boolean} */
     this.defaultDerivedConstructor = defaultDerivedConstructor;
+
+    if (constructible) {
+      registerConstructor(this);
+    } else {
+      registerCallable(this);
+    }
 
     if (methodHomeObject !== undefined && functionKind !== 'arrow') {
       this.methodHomeObject = methodHomeObject;
@@ -282,7 +294,7 @@ export class EngineFunction extends EngineObject {
    * @returns {EngineObject}
    */
   constructFunction(args = [], newTarget = this, callerRealm) {
-    if (!this._isConstructor) {
+    if (!isConstructor(this)) {
       throw new GuestErrorSignal('TypeError', 'Function is not a constructor');
     }
 
@@ -658,7 +670,8 @@ export function constructSuper(args, functionEnvironment) {
     );
   }
 
-  const value = superConstructor.constructFunction(
+  const value = constructCallable(
+    superConstructor,
     args,
     functionEnvironment.newTarget,
     functionEnvironment.activeConstructor?.realm,

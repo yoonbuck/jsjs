@@ -1,4 +1,9 @@
-import { isCallable, isConstructor } from '../runtime/descriptors.js';
+import {
+  isCallable,
+  isConstructor,
+  registerCallable,
+  registerConstructor,
+} from '../runtime/capabilities.js';
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
 import { EngineObject } from '../runtime/object.js';
 import { GeneratorObject } from '../runtime/generator-object.js';
@@ -69,6 +74,13 @@ export class NativeFunction extends EngineObject {
     this._retargetConstructionResult = retargetConstructionResult;
     /** @type {NativeFunctionOptions['callPreflight']} */
     this._callPreflight = callPreflight;
+
+    if (construct !== undefined) {
+      registerConstructor(this);
+    } else {
+      registerCallable(this);
+    }
+
     this.defineOwnProperty('length', {
       value: length,
       writable: false,

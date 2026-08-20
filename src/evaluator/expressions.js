@@ -15,7 +15,12 @@ import {
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
-import { isCallable, isConstructor } from '../runtime/descriptors.js';
+import {
+  callCallable,
+  constructCallable,
+  isCallable,
+  isConstructor,
+} from '../runtime/capabilities.js';
 import {
   checkObjectCoercible,
   toBoolean,
@@ -772,9 +777,7 @@ function evaluateCallExpression(node, context) {
     return performEval(args[0], context);
   }
 
-  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
-    callee
-  ).callFunction(thisValue, args, context.realm);
+  return callCallable(callee, thisValue, args, context.realm);
 }
 
 /**
@@ -907,9 +910,7 @@ function evaluateTaggedTemplateExpression(node, context) {
     );
   }
 
-  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
-    tag
-  ).callFunction(thisValue, args, context.realm);
+  return callCallable(tag, thisValue, args, context.realm);
 }
 
 /**
@@ -949,11 +950,7 @@ function evaluateNewExpression(node, context) {
     );
   }
 
-  return /** @type {any} */ (callee).constructFunction(
-    args,
-    callee,
-    context.realm,
-  );
+  return constructCallable(callee, args, callee, context.realm);
 }
 
 /**

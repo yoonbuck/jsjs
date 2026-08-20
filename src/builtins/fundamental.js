@@ -2,6 +2,7 @@ import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
 import { EnginePrimitiveObject } from '../runtime/primitive-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
+import { registerCallable } from '../runtime/capabilities.js';
 
 /**
  * @typedef {{
@@ -74,6 +75,7 @@ export class IntrinsicFunctionPrototype extends EngineObject {
     /** @type {import('../runtime/realm.js').Realm | undefined} */
     this.realm = undefined;
     this._isConstructor = false;
+    registerCallable(this);
     this.defineOwnProperty('length', {
       value: 0,
       writable: false,

@@ -5,7 +5,7 @@ import {
   toInt32,
   toUint32,
 } from './conversion.js';
-import { isCallable } from './descriptors.js';
+import { isCallable } from './capabilities.js';
 
 /**
  * @param {unknown} left

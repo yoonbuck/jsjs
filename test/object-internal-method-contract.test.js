@@ -7,8 +7,15 @@ import { loadModuleGraph } from '../src/runtime/module-loader.js';
 import { linkModuleGraph } from '../src/runtime/module-linker.js';
 import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import { EngineObject } from '../src/runtime/object.js';
-import { ThrowSignal } from '../src/runtime/completion.js';
+import { ThrowSignal, GuestErrorSignal } from '../src/runtime/completion.js';
 import { GeneratorObject } from '../src/runtime/generator-object.js';
+import {
+  callCallable,
+  constructCallable,
+  isCallable,
+  isConstructor,
+} from '../src/runtime/capabilities.js';
+import { createAbruptRealmCallable } from '../src/runtime/function-realm.js';
 
 /**
  * @param {import('../src/runtime/realm.js').Realm} realm
@@ -34,6 +41,56 @@ async function linkedModule(realm, source) {
 }
 
 export default [
+  {
+    name: 'Table 6 capabilities reject spoofed methods, tags, and constructor flags',
+    run() {
+      const realm = createRealm();
+      const impostor = new EngineObject();
+      const guest = evaluateScript(realm, '(function normal() {})').value;
+      const native = realm.createNativeFunction({
+        name: 'Native',
+        length: 0,
+        call() {
+          return undefined;
+        },
+        construct() {
+          return new EngineObject(realm.intrinsics.objectPrototype);
+        },
+      });
+      const arrow = evaluateScript(realm, '(() => undefined)').value;
+      const generator = evaluateScript(realm, '(function* values() {})').value;
+      const abrupt = createAbruptRealmCallable(realm, undefined);
+
+      /** @type {any} */ (impostor).callFunction = () => 'spoofed call';
+      /** @type {any} */ (impostor).constructFunction = () =>
+        new EngineObject();
+      /** @type {any} */ (impostor)._isConstructor = true;
+      /** @type {any} */ (impostor).getClassName = () => 'Function';
+
+      assertSame(isCallable(impostor), false);
+      assertSame(isConstructor(impostor), false);
+      assertThrows(
+        () => callCallable(impostor, undefined, []),
+        GuestErrorSignal,
+      );
+      assertThrows(
+        () => constructCallable(impostor, [], impostor),
+        GuestErrorSignal,
+      );
+
+      for (const [value, callable, constructor] of [
+        [guest, true, true],
+        [native, true, true],
+        [arrow, true, false],
+        [generator, true, false],
+        [realm.intrinsics.functionPrototype, true, false],
+        [abrupt, true, false],
+      ]) {
+        assertSame(isCallable(value), callable);
+        assertSame(isConstructor(value), constructor);
+      }
+    },
+  },
   {
     name: 'active execution Realm nests and restores in finally paths',
     run() {
