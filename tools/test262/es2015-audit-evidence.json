@@ -18253,13 +18253,13 @@
       "type": "test",
       "file": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-new.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-new.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -65803,13 +65803,13 @@
       "type": "test",
       "file": "test/language/eval-code/direct/new.target-fn.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/eval-code/direct/new.target-fn.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -67783,25 +67783,25 @@
       "type": "test",
       "file": "test/language/expressions/arrow-function/lexical-new.target-closure-returned.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/arrow-function/lexical-new.target-closure-returned.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/arrow-function/lexical-new.target.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/arrow-function/lexical-new.target.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -69145,13 +69145,13 @@
       "type": "test",
       "file": "test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/assignment/dstr/ident-name-prop-name-literal-extends-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -70537,49 +70537,49 @@
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-binary.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-binary.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-octal.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-octal.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-string-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-string-default-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-string-unicode-escape.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-inst/literal-string-unicode-escape.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -70609,49 +70609,49 @@
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-numeric-binary.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-numeric-binary.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-numeric-octal.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-numeric-octal.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-string-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-string-default-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-string-unicode-escape.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static/literal-string-unicode-escape.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -77425,25 +77425,25 @@
       "type": "test",
       "file": "test/language/expressions/class/ident-name-method-def-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/ident-name-method-def-default-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/ident-name-method-def-extends-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/class/ident-name-method-def-extends-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -82675,25 +82675,25 @@
       "type": "test",
       "file": "test/language/expressions/greater-than-or-equal/S11.8.4_A4.12_T1.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/greater-than-or-equal/S11.8.4_A4.12_T1.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/greater-than/S11.8.2_A4.12_T1.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/greater-than/S11.8.2_A4.12_T1.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -82771,25 +82771,25 @@
       "type": "test",
       "file": "test/language/expressions/less-than-or-equal/S11.8.3_A4.12_T1.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/less-than-or-equal/S11.8.3_A4.12_T1.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/less-than/S11.8.1_A4.12_T1.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/less-than/S11.8.1_A4.12_T1.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -82867,13 +82867,13 @@
       "type": "test",
       "file": "test/language/expressions/new.target/asi.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/asi.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -82903,61 +82903,61 @@
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-call.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-call.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-fpapply.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-fpapply.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-fpcall.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-fpcall.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-member.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-member.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-new.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-new.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -82987,37 +82987,37 @@
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-super-call.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-super-call.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-super-property.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-super-property.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-tagged-template.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/new.target/value-via-tagged-template.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -83461,13 +83461,13 @@
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-numeric-binary.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-numeric-binary.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -83521,13 +83521,13 @@
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-numeric-octal.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-numeric-octal.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -83557,13 +83557,13 @@
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-string-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-string-default-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -83653,13 +83653,13 @@
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-string-unicode-escape.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/object/accessor-name-literal-string-unicode-escape.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -90547,13 +90547,13 @@
       "type": "test",
       "file": "test/language/expressions/template-literal/tv-utf16-escape-sequence.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/expressions/template-literal/tv-utf16-escape-sequence.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -91777,361 +91777,361 @@
       "type": "test",
       "file": "test/language/identifiers/part-digits-via-escape-hex.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-digits-via-escape-hex.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-10.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-10.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-11.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-11.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-12.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-12.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-13.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-13.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-14.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-14.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-15.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-15.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-16.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-16.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-17.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-17.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-5.2.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-5.2.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-6.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-6.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-6.1.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-6.1.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-7.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-7.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-8.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-8.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-9.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/part-unicode-9.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-10.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-10.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-11.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-11.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-12.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-12.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-13.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-13.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-14.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-14.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-15.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-15.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-15.1.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-15.1.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-16.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-16.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-17.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-17.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-5.2.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-5.2.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-6.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-6.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-6.1.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-6.1.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-7.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-7.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-8.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-8.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-9.0.0-escaped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/start-unicode-9.0.0-escaped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -92521,13 +92521,13 @@
       "type": "test",
       "file": "test/language/identifiers/val-dollar-sign-via-escape-hex.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/val-dollar-sign-via-escape-hex.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -93325,13 +93325,13 @@
       "type": "test",
       "file": "test/language/identifiers/val-underscore-via-escape-hex.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/val-underscore-via-escape-hex.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -93481,49 +93481,49 @@
       "type": "test",
       "file": "test/language/identifiers/vals-eng-alpha-lower-via-escape-hex.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/vals-eng-alpha-lower-via-escape-hex.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/vals-eng-alpha-upper-via-escape-hex.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/vals-eng-alpha-upper-via-escape-hex.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/vals-rus-alpha-lower-via-escape-hex.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/vals-rus-alpha-lower-via-escape-hex.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/vals-rus-alpha-upper-via-escape-hex.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/identifiers/vals-rus-alpha-upper-via-escape-hex.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -94201,13 +94201,13 @@
       "type": "test",
       "file": "test/language/literals/numeric/binary.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/literals/numeric/binary.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -94273,13 +94273,13 @@
       "type": "test",
       "file": "test/language/literals/numeric/octal.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/literals/numeric/octal.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -97837,49 +97837,49 @@
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-numeric-binary.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-numeric-binary.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-numeric-octal.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-numeric-octal.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-string-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-string-default-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-string-unicode-escape.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-inst/literal-string-unicode-escape.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -97897,49 +97897,49 @@
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-numeric-binary.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-numeric-binary.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-numeric-octal.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-numeric-octal.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-string-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-string-default-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-string-unicode-escape.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static/literal-string-unicode-escape.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -105373,25 +105373,25 @@
       "type": "test",
       "file": "test/language/statements/class/ident-name-method-def-default-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/ident-name-method-def-default-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/ident-name-method-def-extends-escaped-ext.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/class/ident-name-method-def-extends-escaped-ext.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -132888,7 +132888,6 @@
     "test/built-ins/Function/prototype/bind/get-fn-realm.js": "test262-cross-realm-host",
     "test/built-ins/Function/prototype/bind/instance-construct-newtarget-boundtarget-bound.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Function/prototype/bind/instance-construct-newtarget-boundtarget.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-new.js": "lexical-grammar-and-new-target",
     "test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-reflect.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Function/prototype/bind/instance-length-default-value.js": "remaining-standard-library-additions",
     "test/built-ins/Function/prototype/bind/instance-length-exceeds-int32.js": "remaining-standard-library-additions",
@@ -132937,7 +132936,7 @@
     "test/built-ins/Function/prototype/toString/setter-class-statement.js": "remaining-standard-library-additions",
     "test/built-ins/Function/prototype/toString/setter-object.js": "remaining-standard-library-additions",
     "test/built-ins/Function/prototype/toString/symbol-named-builtins.js": "remaining-standard-library-additions",
-    "test/built-ins/Function/prototype/toString/unicode.js": "lexical-grammar-and-new-target",
+    "test/built-ins/Function/prototype/toString/unicode.js": "remaining-standard-library-additions",
     "test/built-ins/GeneratorFunction/is-a-constructor.js": "proxy-and-reflect-metaobject",
     "test/built-ins/GeneratorFunction/proto-from-ctor-realm-prototype.js": "test262-cross-realm-host",
     "test/built-ins/GeneratorFunction/proto-from-ctor-realm.js": "test262-cross-realm-host",
@@ -135877,7 +135876,6 @@
     "test/language/eval-code/direct/arrow-fn-body-cntns-arguments-var-bind-arrow-func-declare-arguments-assign.js": "remaining-language-runtime-semantics",
     "test/language/eval-code/direct/arrow-fn-no-pre-existing-arguments-bindings-are-present-arrow-func-declare-arguments-assign-incl-def-param-arrow-arguments.js": "remaining-language-runtime-semantics",
     "test/language/eval-code/direct/arrow-fn-no-pre-existing-arguments-bindings-are-present-arrow-func-declare-arguments-assign.js": "remaining-language-runtime-semantics",
-    "test/language/eval-code/direct/new.target-fn.js": "lexical-grammar-and-new-target",
     "test/language/eval-code/direct/non-definable-function-with-function.js": "remaining-language-runtime-semantics",
     "test/language/eval-code/indirect/non-definable-function-with-function.js": "remaining-language-runtime-semantics",
     "test/language/eval-code/indirect/realm.js": "test262-cross-realm-host",
@@ -135888,8 +135886,6 @@
     "test/language/expressions/arrow-function/dstr/ary-ptrn-rest-ary-rest.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/arrow-function/dstr/ary-ptrn-rest-obj-id.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/arrow-function/dstr/ary-ptrn-rest-obj-prop-id.js": "early-errors-and-declaration-instantiation",
-    "test/language/expressions/arrow-function/lexical-new.target-closure-returned.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/arrow-function/lexical-new.target.js": "lexical-grammar-and-new-target",
     "test/language/expressions/arrow-function/params-trailing-comma-multiple.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/arrow-function/params-trailing-comma-single.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/arrow-function/scope-param-rest-elem-var-close.js": "early-errors-and-declaration-instantiation",
@@ -135899,8 +135895,6 @@
     "test/language/expressions/assignment/destructuring/default-expr-throws-iterator-return-is-not-callable.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/assignment/destructuring/keyed-destructuring-property-reference-target-evaluation-order-with-bindings.js": "proxy-and-reflect-metaobject",
     "test/language/expressions/assignment/destructuring/target-assign-throws-iterator-return-is-not-callable.js": "early-errors-and-declaration-instantiation",
-    "test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/assignment/dstr/ident-name-prop-name-literal-extends-escaped-ext.js": "lexical-grammar-and-new-target",
     "test/language/expressions/assignment/fn-name-lhs-cover.js": "remaining-language-runtime-semantics",
     "test/language/expressions/assignment/target-member-computed-reference-null.js": "remaining-language-runtime-semantics",
     "test/language/expressions/assignment/target-member-computed-reference-undefined.js": "remaining-language-runtime-semantics",
@@ -135916,14 +135910,6 @@
     "test/language/expressions/call/tco-non-eval-function.js": "proper-tail-calls",
     "test/language/expressions/call/tco-non-eval-global.js": "proper-tail-calls",
     "test/language/expressions/call/tco-non-eval-with.js": "proper-tail-calls",
-    "test/language/expressions/class/accessor-name-inst/literal-numeric-binary.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/accessor-name-inst/literal-numeric-octal.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/accessor-name-inst/literal-string-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/accessor-name-inst/literal-string-unicode-escape.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/accessor-name-static/literal-numeric-binary.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/accessor-name-static/literal-numeric-octal.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/accessor-name-static/literal-string-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/accessor-name-static/literal-string-unicode-escape.js": "lexical-grammar-and-new-target",
     "test/language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-async-arrow-function-expression.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-expression-coalesce.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/class/cpn-class-expr-accessors-computed-property-name-from-integer-separators.js": "early-errors-and-declaration-instantiation",
@@ -135985,8 +135971,6 @@
     "test/language/expressions/class/gen-method/params-trailing-comma-multiple.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/class/gen-method/params-trailing-comma-single.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/class/heritage-async-arrow-function.js": "early-errors-and-declaration-instantiation",
-    "test/language/expressions/class/ident-name-method-def-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/class/ident-name-method-def-extends-escaped-ext.js": "lexical-grammar-and-new-target",
     "test/language/expressions/class/method-static/dflt-params-trailing-comma.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/class/method-static/params-trailing-comma-multiple.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/class/method-static/params-trailing-comma-single.js": "early-errors-and-declaration-instantiation",
@@ -136071,31 +136055,14 @@
     "test/language/expressions/generators/params-trailing-comma-single.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/generators/scope-param-rest-elem-var-close.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/generators/scope-param-rest-elem-var-open.js": "early-errors-and-declaration-instantiation",
-    "test/language/expressions/greater-than-or-equal/S11.8.4_A4.12_T1.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/greater-than/S11.8.2_A4.12_T1.js": "lexical-grammar-and-new-target",
     "test/language/expressions/instanceof/symbol-hasinstance-get-err.js": "symbol-protocol-dispatch",
     "test/language/expressions/instanceof/symbol-hasinstance-invocation.js": "symbol-protocol-dispatch",
     "test/language/expressions/instanceof/symbol-hasinstance-to-boolean.js": "symbol-protocol-dispatch",
-    "test/language/expressions/less-than-or-equal/S11.8.3_A4.12_T1.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/less-than/S11.8.1_A4.12_T1.js": "lexical-grammar-and-new-target",
     "test/language/expressions/logical-and/tco-right.js": "proper-tail-calls",
     "test/language/expressions/logical-or/tco-right.js": "proper-tail-calls",
-    "test/language/expressions/new.target/asi.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/new.target/value-via-call.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/new.target/value-via-fpapply.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/new.target/value-via-fpcall.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/new.target/value-via-member.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/new.target/value-via-new.js": "lexical-grammar-and-new-target",
     "test/language/expressions/new.target/value-via-reflect-apply.js": "proxy-and-reflect-metaobject",
     "test/language/expressions/new.target/value-via-reflect-construct.js": "proxy-and-reflect-metaobject",
-    "test/language/expressions/new.target/value-via-super-call.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/new.target/value-via-super-property.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/new.target/value-via-tagged-template.js": "lexical-grammar-and-new-target",
     "test/language/expressions/new/non-ctor-err-realm.js": "test262-cross-realm-host",
-    "test/language/expressions/object/accessor-name-literal-numeric-binary.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/object/accessor-name-literal-numeric-octal.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/object/accessor-name-literal-string-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/expressions/object/accessor-name-literal-string-unicode-escape.js": "lexical-grammar-and-new-target",
     "test/language/expressions/object/cpn-obj-lit-computed-property-name-from-async-arrow-function-expression.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/object/cpn-obj-lit-computed-property-name-from-expression-coalesce.js": "early-errors-and-declaration-instantiation",
     "test/language/expressions/object/cpn-obj-lit-computed-property-name-from-integer-separators.js": "early-errors-and-declaration-instantiation",
@@ -136150,7 +136117,6 @@
     "test/language/expressions/tagged-template/tco-call.js": "proper-tail-calls",
     "test/language/expressions/tagged-template/tco-member.js": "proper-tail-calls",
     "test/language/expressions/tco-pos.js": "proper-tail-calls",
-    "test/language/expressions/template-literal/tv-utf16-escape-sequence.js": "lexical-grammar-and-new-target",
     "test/language/expressions/typeof/proxy.js": "proxy-and-reflect-metaobject",
     "test/language/global-code/script-decl-func-dups.js": "test262-cross-realm-host",
     "test/language/global-code/script-decl-func-err-non-configurable.js": "remaining-language-runtime-semantics",
@@ -136165,44 +136131,6 @@
     "test/language/global-code/script-decl-var-collision.js": "test262-cross-realm-host",
     "test/language/global-code/script-decl-var-err.js": "remaining-language-runtime-semantics",
     "test/language/global-code/script-decl-var.js": "test262-cross-realm-host",
-    "test/language/identifiers/part-digits-via-escape-hex.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-10.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-11.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-12.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-13.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-14.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-15.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-16.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-17.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-5.2.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-6.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-6.1.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-7.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-8.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/part-unicode-9.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-10.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-11.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-12.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-13.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-14.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-15.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-15.1.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-16.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-17.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-5.2.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-6.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-6.1.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-7.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-8.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/start-unicode-9.0.0-escaped.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/val-dollar-sign-via-escape-hex.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/val-underscore-via-escape-hex.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/vals-eng-alpha-lower-via-escape-hex.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/vals-eng-alpha-upper-via-escape-hex.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/vals-rus-alpha-lower-via-escape-hex.js": "lexical-grammar-and-new-target",
-    "test/language/identifiers/vals-rus-alpha-upper-via-escape-hex.js": "lexical-grammar-and-new-target",
-    "test/language/literals/numeric/binary.js": "lexical-grammar-and-new-target",
-    "test/language/literals/numeric/octal.js": "lexical-grammar-and-new-target",
     "test/language/literals/regexp/u-astral-char-class-invert.js": "regexp-unicode-and-sticky",
     "test/language/literals/regexp/u-astral.js": "regexp-unicode-and-sticky",
     "test/language/literals/regexp/u-case-mapping.js": "regexp-unicode-and-sticky",
@@ -136230,14 +136158,6 @@
     "test/language/statementList/eval-class-regexp-literal.js": "remaining-language-runtime-semantics",
     "test/language/statements/block/tco-stmt-list.js": "proper-tail-calls",
     "test/language/statements/block/tco-stmt.js": "proper-tail-calls",
-    "test/language/statements/class/accessor-name-inst/literal-numeric-binary.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/accessor-name-inst/literal-numeric-octal.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/accessor-name-inst/literal-string-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/accessor-name-inst/literal-string-unicode-escape.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/accessor-name-static/literal-numeric-binary.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/accessor-name-static/literal-numeric-octal.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/accessor-name-static/literal-string-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/accessor-name-static/literal-string-unicode-escape.js": "lexical-grammar-and-new-target",
     "test/language/statements/class/cpn-class-decl-accessors-computed-property-name-from-async-arrow-function-expression.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/class/cpn-class-decl-accessors-computed-property-name-from-expression-coalesce.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/class/cpn-class-decl-accessors-computed-property-name-from-integer-separators.js": "early-errors-and-declaration-instantiation",
@@ -136298,8 +136218,6 @@
     "test/language/statements/class/gen-method/dflt-params-trailing-comma.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/class/gen-method/params-trailing-comma-multiple.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/class/gen-method/params-trailing-comma-single.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/class/ident-name-method-def-default-escaped-ext.js": "lexical-grammar-and-new-target",
-    "test/language/statements/class/ident-name-method-def-extends-escaped-ext.js": "lexical-grammar-and-new-target",
     "test/language/statements/class/method-static/dflt-params-trailing-comma.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/class/method-static/params-trailing-comma-multiple.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/class/method-static/params-trailing-comma-single.js": "early-errors-and-declaration-instantiation",

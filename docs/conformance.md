@@ -633,10 +633,17 @@ The qualified core ES2015 evidence is:
 | Core status              | Roots      | Variants   |
 | ------------------------ | ---------- | ---------- |
 | Selected passing         | 19,603     | 37,305     |
-| Audit-passing unselected | 0          | 0          |
-| Blocked                  | 4,645      | 9,115      |
+| Audit-passing unselected | 82         | 162        |
+| Blocked                  | 4,563      | 8,953      |
 | Intentional deviation    | 2          | 4          |
 | **Core total**           | **24,250** | **46,424** |
+
+Issue #77's exact 83-root lexical grammar and `new.target` ledger now has no
+core `lexical-grammar-and-new-target` blockers: 82 roots passed focused
+execution, while the Function.prototype.toString Unicode root moved by
+exact-path review to `remaining-standard-library-additions` because it depends
+on exact source preservation. The separate Annex B escape root remains in the
+Annex B partition.
 
 Annex B remains separate:
 
