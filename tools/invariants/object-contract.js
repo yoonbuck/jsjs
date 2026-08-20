@@ -413,48 +413,32 @@ function checkRawHostAccessorCalls(file, program, violations) {
     const functionIdentity = rawHostFunctionIdentity(node, parent, parents);
     const callbacks = rawHostCallbackParameters(node);
 
-    walkFunctionBody(node, (candidate) => {
-      if (candidate.type === 'VariableDeclarator') {
-        addRawHostCallbackAlias(candidate.id, candidate.init, callbacks);
-      } else if (candidate.type === 'AssignmentExpression') {
-        addRawHostCallbackAlias(candidate.left, candidate.right, callbacks);
-      }
-    });
+    if (callbacks.size === 0) {
+      return;
+    }
 
-    walkFunctionBody(node, (candidate) => {
-      if (candidate.type !== 'CallExpression') {
-        return;
-      }
+    const scope = createRawHostCallbackScope(null);
 
-      const invocation = rawHostInvocation(candidate, callbacks);
+    for (const parameter of node.params) {
+      declareRawHostCallbackPattern(scope, parameter, null, true);
+    }
 
-      if (invocation === null) {
-        return;
-      }
+    for (const parameter of callbacks) {
+      scope.bindings.set(parameter, {
+        functionIdentity,
+        parameter,
+      });
+    }
 
-      const parameter = rawHostInvocationParameter(candidate, callbacks);
-
-      if (
-        parameter === null ||
-        isRawHostAccessorInvocation(
-          file,
-          functionIdentity,
-          parameter,
-          invocation,
-          allowed,
-        ) ||
-        isInternalContinuation(file, functionIdentity, parameter, invocation)
-      ) {
-        return;
-      }
-
-      addViolation(
-        violations,
-        file,
-        candidate,
-        `raw host callback ${invocation} is only allowed in ${allowed.file}#${allowed.functionName}`,
-      );
-    });
+    predeclareRawHostCallbackVars(node.body, scope);
+    walkRawHostCallbackParameterInitializers(
+      node.params,
+      scope,
+      file,
+      allowed,
+      violations,
+    );
+    walkRawHostCallbackNode(node.body, scope, file, allowed, violations);
   });
 }
 
@@ -601,31 +585,32 @@ function registrationKey(name, argument) {
 
 /**
  * @param {any} node
- * @param {Set<string>} callbacks
- * @returns {string | null}
+ * @param {any} scope
+ * @returns {{ binding: any, invocation: string } | null}
  */
-function rawHostInvocation(node, callbacks) {
-  const parameter = rawHostInvocationParameter(node, callbacks);
-
-  if (parameter === null) {
-    return null;
-  }
-
+function rawHostInvocation(node, scope) {
   const callee = unwrapChain(node.callee);
 
   if (callee.type === 'Identifier') {
-    return `${parameter}()`;
+    const binding = rawHostCallbackBinding(scope, callee.name);
+
+    return binding === null
+      ? null
+      : { binding, invocation: `${callee.name}()` };
   }
 
   if (
     callee.type === 'MemberExpression' &&
-    callee.object.type === 'Identifier' &&
-    callee.object.name === parameter
+    callee.object.type === 'Identifier'
   ) {
+    const binding = rawHostCallbackBinding(scope, callee.object.name);
     const method = staticMemberName(callee);
 
-    if (method === 'call' || method === 'apply') {
-      return `${parameter}.${method}()`;
+    if (binding !== null && (method === 'call' || method === 'apply')) {
+      return {
+        binding,
+        invocation: `${callee.object.name}.${method}()`,
+      };
     }
   }
 
@@ -633,30 +618,109 @@ function rawHostInvocation(node, callbacks) {
 }
 
 /**
- * @param {any} node
- * @param {Set<string>} callbacks
- * @returns {string | null}
+ * @param {any} scope
+ * @param {string} name
+ * @returns {any | null}
  */
-function rawHostInvocationParameter(node, callbacks) {
-  const callee = unwrapChain(node.callee);
+function rawHostCallbackBinding(scope, name) {
+  const bindingScope = rawHostCallbackBindingScope(scope, name);
+  return bindingScope === null ? null : bindingScope.bindings.get(name);
+}
 
-  if (callee.type === 'Identifier' && callbacks.has(callee.name)) {
-    return callee.name;
-  }
+/**
+ * @param {any} scope
+ * @param {string} name
+ * @returns {any | null}
+ */
+function rawHostCallbackBindingScope(scope, name) {
+  let current = scope;
 
-  if (
-    callee.type === 'MemberExpression' &&
-    callee.object.type === 'Identifier' &&
-    callbacks.has(callee.object.name)
-  ) {
-    const method = staticMemberName(callee);
-
-    if (method === 'call' || method === 'apply') {
-      return callee.object.name;
+  while (current !== null) {
+    if (current.bindings.has(name)) {
+      return current;
     }
+    current = current.parent;
   }
 
   return null;
+}
+
+/**
+ * @param {any} parent
+ * @param {any | null} [functionScope]
+ * @returns {any}
+ */
+function createRawHostCallbackScope(parent, functionScope = null) {
+  const scope = {
+    parent,
+    functionScope: /** @type {any} */ (null),
+    bindings: /** @type {Map<string, any>} */ (new Map()),
+  };
+  scope.functionScope = functionScope ?? scope;
+  return scope;
+}
+
+/**
+ * @param {any} scope
+ * @param {any} pattern
+ * @param {any | null} binding
+ * @param {boolean} [replace=false]
+ */
+function declareRawHostCallbackPattern(
+  scope,
+  pattern,
+  binding,
+  replace = false,
+) {
+  for (const name of rawHostPatternNames(pattern)) {
+    if (replace || !scope.bindings.has(name)) {
+      scope.bindings.set(name, binding);
+    }
+  }
+}
+
+/**
+ * @param {any} pattern
+ * @returns {string[]}
+ */
+function rawHostPatternNames(pattern) {
+  const value = pattern?.type === 'AssignmentPattern' ? pattern.left : pattern;
+
+  if (value?.type === 'Identifier') {
+    return [value.name];
+  }
+
+  if (value?.type === 'RestElement') {
+    return rawHostPatternNames(value.argument);
+  }
+
+  if (value?.type === 'ObjectPattern') {
+    /** @type {string[]} */
+    const names = [];
+
+    for (const property of /** @type {any[]} */ (value.properties)) {
+      if (property.type === 'Property') {
+        names.push(...rawHostPatternNames(property.value));
+      } else if (property.type === 'RestElement') {
+        names.push(...rawHostPatternNames(property.argument));
+      }
+    }
+
+    return names;
+  }
+
+  if (value?.type === 'ArrayPattern') {
+    /** @type {string[]} */
+    const names = [];
+
+    for (const element of /** @type {any[]} */ (value.elements)) {
+      names.push(...rawHostPatternNames(element));
+    }
+
+    return names;
+  }
+
+  return [];
 }
 
 /**
@@ -679,20 +743,486 @@ function rawHostCallbackParameters(node) {
 }
 
 /**
- * @param {any} target
- * @param {any} source
- * @param {Set<string>} callbacks
+ * @param {any} node
+ * @param {any} functionScope
  */
-function addRawHostCallbackAlias(target, source, callbacks) {
-  const sourceValue = source == null ? null : unwrapChain(source);
+function predeclareRawHostCallbackVars(node, functionScope) {
+  /** @param {any} candidate */
+  const visit = (candidate) => {
+    if (!isNode(candidate) || isFunctionNode(candidate)) {
+      return;
+    }
+
+    const value = /** @type {any} */ (candidate);
+
+    if (value.type === 'VariableDeclaration' && value.kind === 'var') {
+      for (const declaration of value.declarations) {
+        declareRawHostCallbackPattern(functionScope, declaration.id, null);
+      }
+    }
+
+    for (const child of nodeChildren(value)) {
+      visit(child);
+    }
+  };
+
+  visit(node);
+}
+
+/**
+ * @param {any[]} statements
+ * @param {any} scope
+ */
+function predeclareRawHostCallbackBlockBindings(statements, scope) {
+  for (const statement of statements) {
+    if (statement.type === 'VariableDeclaration' && statement.kind !== 'var') {
+      for (const declaration of statement.declarations) {
+        declareRawHostCallbackPattern(scope, declaration.id, null);
+      }
+    } else if (
+      (statement.type === 'FunctionDeclaration' ||
+        statement.type === 'ClassDeclaration') &&
+      statement.id?.type === 'Identifier'
+    ) {
+      scope.bindings.set(statement.id.name, null);
+    }
+  }
+}
+
+/**
+ * @param {any[]} parameters
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkRawHostCallbackParameterInitializers(
+  parameters,
+  scope,
+  file,
+  allowed,
+  violations,
+) {
+  for (const parameter of parameters) {
+    walkRawHostCallbackPatternInitializers(
+      parameter,
+      scope,
+      file,
+      allowed,
+      violations,
+    );
+  }
+}
+
+/**
+ * @param {any} pattern
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkRawHostCallbackPatternInitializers(
+  pattern,
+  scope,
+  file,
+  allowed,
+  violations,
+) {
+  if (pattern?.type === 'AssignmentPattern') {
+    walkRawHostCallbackNode(pattern.right, scope, file, allowed, violations);
+    propagateRawHostCallbackBinding(
+      scope,
+      pattern.left,
+      rawHostCallbackExpressionBinding(pattern.right, scope),
+    );
+    walkRawHostCallbackPatternInitializers(
+      pattern.left,
+      scope,
+      file,
+      allowed,
+      violations,
+    );
+    return;
+  }
+
+  if (pattern?.type === 'RestElement') {
+    walkRawHostCallbackPatternInitializers(
+      pattern.argument,
+      scope,
+      file,
+      allowed,
+      violations,
+    );
+    return;
+  }
+
+  if (pattern?.type === 'ObjectPattern') {
+    for (const property of pattern.properties) {
+      if (property.type === 'Property') {
+        walkRawHostCallbackPatternInitializers(
+          property.value,
+          scope,
+          file,
+          allowed,
+          violations,
+        );
+      } else if (property.type === 'RestElement') {
+        walkRawHostCallbackPatternInitializers(
+          property.argument,
+          scope,
+          file,
+          allowed,
+          violations,
+        );
+      }
+    }
+  } else if (pattern?.type === 'ArrayPattern') {
+    for (const element of pattern.elements) {
+      walkRawHostCallbackPatternInitializers(
+        element,
+        scope,
+        file,
+        allowed,
+        violations,
+      );
+    }
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkRawHostCallbackNode(node, scope, file, allowed, violations) {
+  if (!isNode(node)) {
+    return;
+  }
+
+  const candidate = /** @type {any} */ (node);
+
+  if (isFunctionNode(candidate)) {
+    walkCapturedRawHostCallbackFunction(
+      candidate,
+      scope,
+      file,
+      allowed,
+      violations,
+    );
+    return;
+  }
+
+  if (candidate.type === 'BlockStatement') {
+    walkRawHostCallbackBlock(candidate, scope, file, allowed, violations);
+    return;
+  }
+
+  if (candidate.type === 'CatchClause') {
+    const catchScope = createRawHostCallbackScope(scope, scope.functionScope);
+    declareRawHostCallbackPattern(catchScope, candidate.param, null, true);
+    walkRawHostCallbackNode(
+      candidate.body,
+      catchScope,
+      file,
+      allowed,
+      violations,
+    );
+    return;
+  }
 
   if (
-    target.type === 'Identifier' &&
-    sourceValue?.type === 'Identifier' &&
-    callbacks.has(sourceValue.name)
+    candidate.type === 'ClassExpression' &&
+    candidate.id?.type === 'Identifier'
   ) {
-    callbacks.add(target.name);
+    if (candidate.superClass !== null) {
+      walkRawHostCallbackNode(
+        candidate.superClass,
+        scope,
+        file,
+        allowed,
+        violations,
+      );
+    }
+
+    const classScope = createRawHostCallbackScope(scope, scope.functionScope);
+    classScope.bindings.set(candidate.id.name, null);
+    walkRawHostCallbackNode(
+      candidate.body,
+      classScope,
+      file,
+      allowed,
+      violations,
+    );
+    return;
   }
+
+  if (candidate.type === 'VariableDeclaration') {
+    walkRawHostCallbackVariableDeclaration(
+      candidate,
+      scope,
+      file,
+      allowed,
+      violations,
+    );
+    return;
+  }
+
+  if (candidate.type === 'AssignmentExpression') {
+    walkRawHostCallbackAssignment(candidate, scope, file, allowed, violations);
+    return;
+  }
+
+  if (
+    candidate.type === 'ForStatement' ||
+    candidate.type === 'ForInStatement' ||
+    candidate.type === 'ForOfStatement'
+  ) {
+    walkRawHostCallbackLoop(candidate, scope, file, allowed, violations);
+    return;
+  }
+
+  if (candidate.type === 'CallExpression') {
+    reportRawHostCallbackInvocation(
+      candidate,
+      scope,
+      file,
+      allowed,
+      violations,
+    );
+  }
+
+  for (const child of nodeChildren(candidate)) {
+    walkRawHostCallbackNode(child, scope, file, allowed, violations);
+  }
+}
+
+/**
+ * @param {any} block
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkRawHostCallbackBlock(block, scope, file, allowed, violations) {
+  const blockScope = createRawHostCallbackScope(scope, scope.functionScope);
+  predeclareRawHostCallbackBlockBindings(block.body, blockScope);
+
+  for (const statement of block.body) {
+    walkRawHostCallbackNode(statement, blockScope, file, allowed, violations);
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {any} parentScope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkCapturedRawHostCallbackFunction(
+  node,
+  parentScope,
+  file,
+  allowed,
+  violations,
+) {
+  const functionScope = createRawHostCallbackScope(parentScope);
+
+  if (node.id?.type === 'Identifier') {
+    functionScope.bindings.set(node.id.name, null);
+  }
+
+  for (const parameter of node.params) {
+    declareRawHostCallbackPattern(functionScope, parameter, null, true);
+  }
+
+  predeclareRawHostCallbackVars(node.body, functionScope);
+  walkRawHostCallbackParameterInitializers(
+    node.params,
+    functionScope,
+    file,
+    allowed,
+    violations,
+  );
+  walkRawHostCallbackNode(node.body, functionScope, file, allowed, violations);
+}
+
+/**
+ * @param {any} declaration
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkRawHostCallbackVariableDeclaration(
+  declaration,
+  scope,
+  file,
+  allowed,
+  violations,
+) {
+  const declarationScope =
+    declaration.kind === 'var' ? scope.functionScope : scope;
+
+  for (const declarator of declaration.declarations) {
+    if (declarator.init !== null) {
+      walkRawHostCallbackNode(
+        declarator.init,
+        scope,
+        file,
+        allowed,
+        violations,
+      );
+    }
+
+    const binding = rawHostCallbackExpressionBinding(declarator.init, scope);
+
+    if (declaration.kind === 'var') {
+      propagateRawHostCallbackBinding(declarationScope, declarator.id, binding);
+    } else {
+      declareRawHostCallbackPattern(
+        declarationScope,
+        declarator.id,
+        binding,
+        true,
+      );
+    }
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkRawHostCallbackAssignment(node, scope, file, allowed, violations) {
+  walkRawHostCallbackNode(node.right, scope, file, allowed, violations);
+
+  if (node.left.type !== 'Identifier') {
+    walkRawHostCallbackNode(node.left, scope, file, allowed, violations);
+    return;
+  }
+
+  const bindingScope = rawHostCallbackBindingScope(scope, node.left.name);
+
+  const binding = rawHostCallbackExpressionBinding(node.right, scope);
+
+  if (binding === null) {
+    return;
+  }
+
+  const targetScope = bindingScope ?? scope.functionScope;
+
+  if (
+    !targetScope.bindings.has(node.left.name) ||
+    targetScope.bindings.get(node.left.name) === null
+  ) {
+    targetScope.bindings.set(node.left.name, binding);
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function walkRawHostCallbackLoop(node, scope, file, allowed, violations) {
+  const declaration = node.type === 'ForStatement' ? node.init : node.left;
+  const loopScope =
+    declaration?.type === 'VariableDeclaration' && declaration.kind !== 'var'
+      ? createRawHostCallbackScope(scope, scope.functionScope)
+      : scope;
+
+  if (loopScope !== scope) {
+    for (const declarator of declaration.declarations) {
+      declareRawHostCallbackPattern(loopScope, declarator.id, null, true);
+    }
+  }
+
+  for (const child of nodeChildren(node)) {
+    walkRawHostCallbackNode(child, loopScope, file, allowed, violations);
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {any} scope
+ * @returns {any | null}
+ */
+function rawHostCallbackExpressionBinding(node, scope) {
+  const expression = node === null ? null : unwrapChain(node);
+  return expression?.type === 'Identifier'
+    ? rawHostCallbackBinding(scope, expression.name)
+    : null;
+}
+
+/**
+ * Reassignment cannot erase raw-callback provenance: a branch-sensitive scan
+ * could otherwise hide a later invocation behind a conditional write.
+ *
+ * @param {any} scope
+ * @param {any} pattern
+ * @param {any | null} binding
+ */
+function propagateRawHostCallbackBinding(scope, pattern, binding) {
+  if (binding === null) {
+    return;
+  }
+
+  for (const name of rawHostPatternNames(pattern)) {
+    if (scope.bindings.get(name) === null) {
+      scope.bindings.set(name, binding);
+    }
+  }
+}
+
+/**
+ * @param {any} node
+ * @param {any} scope
+ * @param {string} file
+ * @param {any} allowed
+ * @param {{ file: string, line: number, message: string }[]} violations
+ */
+function reportRawHostCallbackInvocation(
+  node,
+  scope,
+  file,
+  allowed,
+  violations,
+) {
+  const invocation = rawHostInvocation(node, scope);
+
+  if (
+    invocation === null ||
+    isRawHostAccessorInvocation(
+      file,
+      invocation.binding.functionIdentity,
+      invocation.binding.parameter,
+      invocation.invocation,
+      allowed,
+    ) ||
+    isInternalContinuation(
+      file,
+      invocation.binding.functionIdentity,
+      invocation.binding.parameter,
+      invocation.invocation,
+    )
+  ) {
+    return;
+  }
+
+  addViolation(
+    violations,
+    file,
+    node,
+    `raw host callback ${invocation.invocation} is only allowed in ${allowed.file}#${allowed.functionName}`,
+  );
 }
 
 /**
@@ -923,31 +1453,6 @@ function isTopLevelDeclaration(node, parents) {
   }
 
   return parent?.type === 'Program';
-}
-
-/**
- * @param {any} functionNode
- * @param {(node: any) => void} visit
- */
-function walkFunctionBody(functionNode, visit) {
-  /** @type {(node: any, root: boolean) => void} */
-  const visitNode = (node, root) => {
-    if (!isNode(node)) {
-      return;
-    }
-
-    if (!root && isFunctionNode(node)) {
-      return;
-    }
-
-    visit(node);
-
-    for (const child of nodeChildren(node)) {
-      visitNode(child, false);
-    }
-  };
-
-  visitNode(functionNode.body, true);
 }
 
 /**

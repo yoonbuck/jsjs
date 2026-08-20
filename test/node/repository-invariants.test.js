@@ -1321,6 +1321,7 @@ export default [
             [
               'const { _isConstructor } = value;',
               'const { callFunction } = value;',
+              'const { constructFunction } = value;',
             ].join('\n'),
           ],
         ]),
@@ -1331,6 +1332,7 @@ export default [
         [
           'src/runtime/rogue.js:1: semantic _isConstructor read is forbidden',
           'src/runtime/rogue.js:2: semantic callFunction capability read is forbidden',
+          'src/runtime/rogue.js:3: semantic constructFunction capability read is forbidden',
         ].join('\n'),
       );
     },
@@ -1412,6 +1414,65 @@ export default [
           'src/runtime/rogue-direct.js:2: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
           'src/runtime/rogue-negative-guard.js:5: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
         ].join('\n'),
+      );
+    },
+  },
+  {
+    name: 'object contract invariant detects captured raw callback invocations',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/runtime/rogue-captured.js',
+            [
+              'export function invoke(callback) {',
+              '  return () => callback();',
+              '}',
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        'src/runtime/rogue-captured.js:2: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
+      );
+    },
+  },
+  {
+    name: 'object contract invariant does not inherit Date continuations through shadowing',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/builtins/date.js',
+            [
+              'function installDateSetters() {',
+              '  const set = (name, length, callback) => {',
+              '    return (callback) => callback();',
+              '  };',
+              '}',
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        'src/builtins/date.js:3: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
+      );
+    },
+  },
+  {
+    name: 'object contract invariant exercises the Date captured continuation allowance',
+    run: async () => {
+      const dateSource = await readSource('src/builtins/date.js');
+
+      assertSame(
+        checkObjectContractSources(
+          new Map([['src/builtins/date.js', dateSource]]),
+        ).join('\n'),
+        '',
       );
     },
   },
