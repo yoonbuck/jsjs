@@ -78,6 +78,26 @@ custom arrow does not have it. Direct eval inherits both capability and current
 value from its caller; indirect eval remains script context. A direct eval in a
 top-level arrow is invalid because that arrow has no enclosing function code.
 
+The `FunctionExecutionEnvironment` carrying function-code capability and the
+exact invocation's `newTarget` exists before ordinary, method, class-constructor,
+or generator FunctionDeclarationInstantiation evaluates parameter defaults,
+destructuring defaults, or computed parameter initializers. Ordinary, method,
+and generator calls expose `undefined`; construction exposes the actual new
+target. Arrow parameter defaults lexically resolve the retained enclosing
+function environment record rather than a copied value. A direct eval invoked
+from any parameter initializer inherits that same record. Focused tests cover
+each of these initialization paths.
+
+A function's syntactic capability begins at its parameter list and body, not at
+expressions that create the function. Computed object and class method names,
+class heritage, and every other definition-time expression are evaluated in the
+surrounding execution context and do not gain the method or constructor body's
+capability. They may contain `new.target` only when that surrounding context is
+already function code. The method or constructor body itself, including its
+parameter initializers, permits `new.target`. Source AST and custom/reused AST
+tests pin both acceptance and rejection for computed method names and class
+heritage.
+
 This is not enforced by a generic walk flag alone. Tests pin exact acceptance
 and rejection for:
 
@@ -96,7 +116,8 @@ positions, and cycles produce a normalized parse-phase `SyntaxError`.
 `FunctionExecutionEnvironment` remains the single execution-context carrier.
 It records both:
 
-- whether the current lexical function environment provides `new.target`; and
+- `newTargetStatus: "absent" | "present"`, where `present` means this record is
+  function code even when its value is `undefined`; and
 - the active `newTarget` value, which is `undefined` for ordinary calls and the
   actual constructor argument for construction.
 
@@ -115,12 +136,21 @@ that same environment. Generator functions remain non-constructible, while
 
 Arrows retain the enclosing `FunctionExecutionEnvironment` record itself rather
 than copying a value snapshot. Direct eval reuses the caller record. Dynamic
-`Function` construction uses the ordinary constructor path. Bound construction
-preserves its target correction (`new bound()` exposes the bound target) and
-propagates an explicit alternate new target. Base and derived `super`
-construction preserve the active value. Cross-Realm calls link the exact value
-through the existing Agent boundary and materialize failures in the owning
-Realm.
+`Function("return new.target")` creates valid function code in the dynamic
+constructor's Realm and global environment. The returned function yields
+`undefined` when called and the actual new target when constructed; errors
+remain owned by that Realm. The existing dynamic generator constructor receives
+equivalent P0 coverage: its function code permits `new.target`, which evaluates
+to `undefined` on normal generator invocation because generator functions are
+non-constructible. Bound construction preserves its target correction
+(`new bound()` exposes the bound target) and propagates an explicit alternate
+new target. Base and derived `super` construction preserve the active value.
+Cross-Realm calls link the exact value through the existing Agent boundary and
+materialize failures in the owning Realm.
+
+Strict direct eval may create a fresh lexical declaration environment, but it
+retains the caller's `FunctionExecutionEnvironment`; neither strictness nor the
+fresh lexical environment may discard `newTargetStatus` or its current value.
 
 The synchronous evaluator and resumable generator evaluator both dispatch
 `MetaProperty`. Evaluation reads the nearest authorized function environment's
@@ -147,18 +177,28 @@ Implementation is strict RED-first:
 2. Prove exact binary/octal spellings and values, valid and invalid Unicode
    code-point escapes in all owned lexical positions, and explicit rejection
    of numeric separators.
+   The lexical matrix includes uppercase and lowercase prefixes, boundary code
+   points, identifier-start versus identifier-continue positions, escaped
+   reserved words, strict legacy octal preservation, string and template
+   raw/cooked identity, out-of-range/surrogate/incomplete escapes, and
+   source-location parity.
 3. Prove `new.target` for ordinary call, `new`, Reflect-style alternate new
    targets through available engine APIs, bound construction, base and derived
    classes and `super`, methods, generators, arrows nested in function code and
    at top level, returned closures, direct versus indirect eval, dynamic
-   functions, member use, tagged-template use, and template substitutions.
+   functions and generators, member use, tagged-template use, and template
+   substitutions. Include ordinary, method, generator, arrow, destructuring,
+   and nested parameter defaults.
 4. Prove cross-Realm value propagation and Realm-owned errors.
 5. Prove parse-phase failures and exact source/reusable/hostile-custom AST
-   parity for malformed shapes, child edges, cycles, and wrong contexts.
+   parity for malformed shapes, child edges, cycles, wrong contexts, computed
+   method names, class heritage, parameter initializers, and bodies.
 6. Run only the exact 83-root focused Test262 ledger under `TZ=UTC`.
 7. Regenerate and check the taxonomy, requiring the core P0 selector to reach
-   zero without changing whole-tree edition denominators. Reclassify remaining
-   failures to their existing semantic owners.
+   zero without changing whole-tree edition denominators. Newly parseable roots
+   may either pass or move through reviewed exact-path reassignment to an
+   existing downstream semantic owner. Selector zero must not come from broad
+   feature enabling or from expanding P0.
 
 Portable suites run in Node, Chromium, and JavaScriptCore. The branch also runs
 the repository static, invariant, benchmark-smoke, taxonomy-drift, typecheck,
