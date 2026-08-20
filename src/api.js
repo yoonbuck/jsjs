@@ -7,7 +7,6 @@ import { EMPTY, ThrowSignal, GuestErrorSignal } from './runtime/completion.js';
 import { globalDeclarationInstantiation } from './evaluator/declarations.js';
 import { evaluateStatementList } from './evaluator/statements.js';
 import { hasUseStrictDirective } from './evaluator/directive.js';
-import { createFunctionExecutionEnvironment } from './runtime/environment.js';
 
 export {
   parseModule,
@@ -56,52 +55,50 @@ export {
  * @returns {{ type: 'normal' | 'throw', value: unknown }}
  */
 export function evaluateScript(realm, source, parserOptions = {}) {
-  const program = parseScript(source, parserOptions);
-  const context = {
-    realm,
-    env: realm.globalEnvironment,
-    variableEnv: realm.globalEnvironment,
-    strict: hasUseStrictDirective(program.body),
-    thisValue: realm.globalEnvironment.getThisBinding(),
-    functionEnvironment: createFunctionExecutionEnvironment({
-      thisStatus: 'initialized',
+  return realm.agent.withActiveExecutionRealm(realm, () => {
+    const program = parseScript(source, parserOptions);
+    const context = {
+      realm,
+      env: realm.globalEnvironment,
+      variableEnv: realm.globalEnvironment,
+      strict: hasUseStrictDirective(program.body),
       thisValue: realm.globalEnvironment.getThisBinding(),
       newTargetStatus: 'absent',
-    }),
-  };
+    };
 
-  /** @type {{ type: string, value: unknown }} */
-  let completion;
+    /** @type {{ type: string, value: unknown }} */
+    let completion;
 
-  try {
-    // Global declaration instantiation runs inside the guest-error boundary:
-    // ES5.1 10.5 can raise a guest TypeError (e.g. declaring a `var` on a
-    // non-extensible global, or a function that collides with a
-    // non-configurable global property), which must surface as a `throw`
-    // completion rather than escaping as a host exception.
-    globalDeclarationInstantiation(program, context);
-    completion = evaluateStatementList(program.body, context);
-  } catch (error) {
-    if (error instanceof ThrowSignal) {
-      return { type: 'throw', value: error.value };
+    try {
+      // Global declaration instantiation runs inside the guest-error boundary:
+      // ES5.1 10.5 can raise a guest TypeError (e.g. declaring a `var` on a
+      // non-extensible global, or a function that collides with a
+      // non-configurable global property), which must surface as a `throw`
+      // completion rather than escaping as a host exception.
+      globalDeclarationInstantiation(program, context);
+      completion = evaluateStatementList(program.body, context);
+    } catch (error) {
+      if (error instanceof ThrowSignal) {
+        return { type: 'throw', value: error.value };
+      }
+
+      if (error instanceof GuestErrorSignal) {
+        // A guest-visible error was thrown at the top level of the script
+        // (not inside a called function — those are caught by callFunction).
+        // Convert the signal into a proper guest error object now that the
+        // realm is in scope.
+        return {
+          type: 'throw',
+          value: realm.createGuestError(error.typeName, error.guestMessage),
+        };
+      }
+
+      throw error;
     }
 
-    if (error instanceof GuestErrorSignal) {
-      // A guest-visible error was thrown at the top level of the script
-      // (not inside a called function — those are caught by callFunction).
-      // Convert the signal into a proper guest error object now that the
-      // realm is in scope.
-      return {
-        type: 'throw',
-        value: realm.createGuestError(error.typeName, error.guestMessage),
-      };
-    }
-
-    throw error;
-  }
-
-  return {
-    type: /** @type {'normal' | 'throw'} */ (completion.type),
-    value: completion.value === EMPTY ? undefined : completion.value,
-  };
+    return {
+      type: /** @type {'normal' | 'throw'} */ (completion.type),
+      value: completion.value === EMPTY ? undefined : completion.value,
+    };
+  });
 }

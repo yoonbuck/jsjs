@@ -468,6 +468,28 @@ export default [
     },
   },
   {
+    name: 'Realm-null jobs establish an active-Realm barrier',
+    run: () => {
+      const realm = createRealm();
+      /** @type {import('../src/runtime/realm.js').Realm | null | undefined} */
+      let observed = undefined;
+      realm.agent.enqueueJob(
+        createJob(null, 'active-Realm-barrier', () => {
+          observed = realm.agent.activeExecutionRealm;
+          return createNormalCompletion(undefined);
+        }),
+      );
+
+      realm.agent.withActiveExecutionRealm(realm, () => {
+        realm.agent.runJobs();
+        assertSame(realm.agent.activeExecutionRealm, realm);
+      });
+
+      assertSame(observed, null);
+      assertSame(realm.agent.activeExecutionRealm, null);
+    },
+  },
+  {
     name: 'abrupt jobs are reported and later jobs still run',
     run: () => {
       /** @type {unknown[]} */

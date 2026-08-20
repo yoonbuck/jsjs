@@ -43,8 +43,23 @@ export default [
     name: 'modules are strict, module scoped, live, and evaluate once',
     async run() {
       const realm = createRealm();
+      /** @type {(import('../src/runtime/realm.js').Realm | null)[]} */
+      const observed = [];
+      const observe = realm.createNativeFunction({
+        name: 'observe',
+        length: 0,
+        call() {
+          observed.push(realm.agent.activeExecutionRealm);
+        },
+      });
+      realm.globalObject.defineOwnProperty('observe', {
+        value: observe,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       const sources = {
-        root: 'import { bump, value } from "a"; bump(); export { value }; export const top = this;',
+        root: 'import { bump, value } from "a"; bump(); observe(); export { value }; export const top = this;',
         a: 'export let value = 0; export function bump() { value += 1; }',
       };
       const loader = loaderFor(sources, realm);
@@ -59,6 +74,8 @@ export default [
       assertSame(root.environment.getBindingValue('value', true), 1);
       assertSame(root.environment.getBindingValue('top', true), undefined);
       assertSame(realm.globalObject.hasProperty('value'), false);
+      assertSame(observed[0], realm);
+      assertSame(realm.agent.activeExecutionRealm, null);
     },
   },
   {

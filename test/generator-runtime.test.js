@@ -376,10 +376,28 @@ const tests = [
     run() {
       const generatorRealm = createRealm();
       const methodRealm = createRealm();
+      /** @type {(import('../src/runtime/realm.js').Realm | null)[]} */
+      const observed = [];
+      const observe = generatorRealm.createNativeFunction({
+        name: 'observe',
+        length: 0,
+        call() {
+          observed.push(generatorRealm.agent.activeExecutionRealm);
+          observed.push(methodRealm.agent.activeExecutionRealm);
+          return 1;
+        },
+      });
+
+      generatorRealm.globalObject.defineOwnProperty('observe', {
+        value: observe,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       evalValue(
         generatorRealm,
         `
-          function* values() { yield 1; return 2; }
+          function* values() { yield observe(); return 2; }
           function* catches() {
             try { yield 3; } catch (error) { return error; }
           }
@@ -431,6 +449,10 @@ const tests = [
         yielded.getPrototype(),
         generatorRealm.intrinsics.objectPrototype,
       );
+      assertSame(observed[0], generatorRealm);
+      assertSame(observed[1], methodRealm);
+      assertSame(generatorRealm.agent.activeExecutionRealm, null);
+      assertSame(methodRealm.agent.activeExecutionRealm, null);
       assertSame(
         throwYield.getPrototype(),
         generatorRealm.intrinsics.objectPrototype,

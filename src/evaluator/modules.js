@@ -144,7 +144,9 @@ export function moduleDeclarationInstantiation(record) {
  * @returns {SourceTextModuleRecord}
  */
 export function evaluateModuleGraph(rootRecord) {
-  return evaluateModule(rootRecord);
+  return rootRecord.realm.agent.withActiveExecutionRealm(rootRecord.realm, () =>
+    evaluateModule(rootRecord),
+  );
 }
 
 /**

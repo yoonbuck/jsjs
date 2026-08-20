@@ -273,6 +273,31 @@ export function linkValueToGeneratorHostChain(callerRealm, value) {
 }
 
 /**
+ * Temporarily exposes a caller Realm on a target Agent that already participates
+ * in the caller's synchronous or generator host chain.
+ *
+ * @template T
+ * @param {import('./realm.js').Realm | undefined} callerRealm
+ * @param {import('./agent.js').Agent} targetAgent
+ * @param {() => T} callback
+ * @returns {T}
+ */
+export function withLinkedActiveExecutionRealm(
+  callerRealm,
+  targetAgent,
+  callback,
+) {
+  if (callerRealm === undefined || callerRealm.agent === targetAgent) {
+    return callback();
+  }
+
+  return targetAgent.withLinkedActiveExecutionRealm(
+    callerRealm.agent,
+    callback,
+  );
+}
+
+/**
  * Implements ECMA-262 8.7.2 `PutValue`. An unresolvable reference is *not*
  * an error in non-strict code: the assignment creates (or updates) a
  * property on the global object of the realm the reference came from, with

@@ -2,6 +2,7 @@ import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
 import { EngineObject } from '../runtime/object.js';
 import { GeneratorObject } from '../runtime/generator-object.js';
+import { withLinkedActiveExecutionRealm } from '../runtime/reference.js';
 import { toBoolean, toUint32 } from '../runtime/conversion.js';
 
 /**
@@ -98,11 +99,13 @@ export class NativeFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = [], callerRealm) {
-    runNativeCallPreflight(
-      this.realm,
-      this._callPreflight,
-      thisValue,
-      this._nativeName,
+    this.realm.agent.withActiveExecutionRealm(this.realm, () =>
+      runNativeCallPreflight(
+        this.realm,
+        this._callPreflight,
+        thisValue,
+        this._nativeName,
+      ),
     );
 
     const guard = this.realm.stackGuard;
@@ -113,29 +116,33 @@ export class NativeFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(methodAgent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, methodAgent, () =>
+        methodAgent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(methodAgent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      linkCallResult(activeRealm, thisValue);
-      for (const argument of args) {
-        linkCallResult(activeRealm, argument);
-      }
+          linkCallResult(activeRealm, thisValue);
+          for (const argument of args) {
+            linkCallResult(activeRealm, argument);
+          }
 
-      // Built-ins enter the realm's stack budget exactly like guest functions
-      // do, so a recursion that threads through `[].map`, a getter, or a
-      // coercion is measured by the host frames it really spends.
-      guard.enter();
+          // Built-ins enter the realm's stack budget exactly like guest functions
+          // do, so a recursion that threads through `[].map`, a getter, or a
+          // coercion is measured by the host frames it really spends.
+          guard.enter();
 
-      try {
-        const result = runNativeBody(this.realm, () =>
-          this._call(thisValue, args, this, callerRealm),
-        );
+          try {
+            const result = runNativeBody(this.realm, () =>
+              this._call(thisValue, args, this, callerRealm),
+            );
 
-        linkCallResult(callerRealm ?? this.realm, result);
-        return result;
-      } finally {
-        guard.exit();
-      }
+            linkCallResult(callerRealm ?? this.realm, result);
+            return result;
+          } finally {
+            guard.exit();
+          }
+        }),
+      );
     } finally {
       methodAgent.exitSynchronousCallChain(callChain);
     }
@@ -162,50 +169,54 @@ export class NativeFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(methodAgent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, methodAgent, () =>
+        methodAgent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(methodAgent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      for (const argument of args) {
-        linkCallResult(activeRealm, argument);
-      }
-      linkCallResult(activeRealm, newTarget);
+          for (const argument of args) {
+            linkCallResult(activeRealm, argument);
+          }
+          linkCallResult(activeRealm, newTarget);
 
-      const construct = this._construct;
+          const construct = this._construct;
 
-      if (construct === undefined) {
-        throw new ThrowSignal(
-          this.realm.createGuestError(
-            'TypeError',
-            `${this._nativeName || 'Function'} is not a constructor`,
-          ),
-        );
-      }
+          if (construct === undefined) {
+            throw new ThrowSignal(
+              this.realm.createGuestError(
+                'TypeError',
+                `${this._nativeName || 'Function'} is not a constructor`,
+              ),
+            );
+          }
 
-      const guard = this.realm.stackGuard;
+          const guard = this.realm.stackGuard;
 
-      guard.enter();
+          guard.enter();
 
-      /** @type {unknown} */
-      let result;
+          /** @type {unknown} */
+          let result;
 
-      try {
-        result = runNativeBody(this.realm, () =>
-          construct(args, this, newTarget, callerRealm),
-        );
-      } finally {
-        guard.exit();
-      }
+          try {
+            result = runNativeBody(this.realm, () =>
+              construct(args, this, newTarget, callerRealm),
+            );
+          } finally {
+            guard.exit();
+          }
 
-      if (!(result instanceof EngineObject)) {
-        throw new TypeError('Native constructor must return an object');
-      }
+          if (!(result instanceof EngineObject)) {
+            throw new TypeError('Native constructor must return an object');
+          }
 
-      if (this._retargetConstructionResult) {
-        setNativeConstructionPrototype(result, this, newTarget);
-      }
+          if (this._retargetConstructionResult) {
+            setNativeConstructionPrototype(result, this, newTarget);
+          }
 
-      linkCallResult(activeRealm, result);
-      return result;
+          linkCallResult(activeRealm, result);
+          return result;
+        }),
+      );
     } finally {
       methodAgent.exitSynchronousCallChain(callChain);
     }

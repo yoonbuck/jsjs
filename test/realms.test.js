@@ -96,6 +96,32 @@ const tests = [
     },
   },
   {
+    name: 'evaluateScript exposes its Realm only during guest execution',
+    run() {
+      const realm = createRealm();
+      /** @type {import('../src/runtime/realm.js').Realm | null} */
+      let observed = null;
+      const observe = realm.createNativeFunction({
+        name: 'observe',
+        length: 0,
+        call() {
+          observed = realm.agent.activeExecutionRealm;
+        },
+      });
+
+      realm.globalObject.defineOwnProperty('observe', {
+        value: observe,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(evaluateScript(realm, 'observe();').type, 'normal');
+      assertSame(observed, realm);
+      assertSame(realm.agent.activeExecutionRealm, null);
+    },
+  },
+  {
     name: 'evaluateScript supports the with statement through the public API',
     run() {
       const realm = createRealm();

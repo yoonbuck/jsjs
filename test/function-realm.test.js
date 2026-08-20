@@ -1,4 +1,4 @@
-import { createRealm, evaluateScript } from '../src/index.js';
+import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import {
   createAbruptRealmCallable,
   getFunctionRealm,
@@ -38,6 +38,44 @@ export default [
         getFunctionRealm(callable(realm.intrinsics.functionPrototype)).value,
         realm,
       );
+    },
+  },
+  {
+    name: 'cross-Agent guest calls restore both active execution Realms',
+    run: () => {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const functionRealm = createRealm({ agent: createAgent() });
+      const observe = functionRealm.createNativeFunction({
+        name: 'observe',
+        length: 0,
+        call() {
+          assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
+          assertSame(functionRealm.agent.activeExecutionRealm, functionRealm);
+          return 1;
+        },
+      });
+
+      functionRealm.globalObject.defineOwnProperty('observe', {
+        value: observe,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const foreign =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          evaluateScript(
+            functionRealm,
+            '(function foreign() { return observe(); })',
+          ).value
+        );
+
+      callerRealm.agent.withActiveExecutionRealm(callerRealm, () => {
+        assertSame(foreign.callFunction(undefined, [], callerRealm), 1);
+        assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
+      });
+
+      assertSame(callerRealm.agent.activeExecutionRealm, null);
+      assertSame(functionRealm.agent.activeExecutionRealm, null);
     },
   },
   {

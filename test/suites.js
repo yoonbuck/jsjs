@@ -102,6 +102,7 @@ import generatorStack from './generator-stack.test.js';
 import generatorControlFlow from './generator-control-flow.test.js';
 import generatorDelegation from './generator-delegation.test.js';
 import asyncRuntimeModulesIntegration from './async-runtime-modules-integration.test.js';
+import objectInternalMethodContract from './object-internal-method-contract.test.js';
 
 /**
  * @typedef {import('./harness/runner.js').TestCase} TestCase
@@ -420,5 +421,9 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/async-runtime-modules-integration.test.js',
     tests: asyncRuntimeModulesIntegration,
+  }),
+  Object.freeze({
+    file: 'test/object-internal-method-contract.test.js',
+    tests: objectInternalMethodContract,
   }),
 ]);

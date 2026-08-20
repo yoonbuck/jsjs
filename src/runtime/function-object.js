@@ -6,7 +6,10 @@ import {
   bindThisValue,
   createFunctionExecutionEnvironment,
 } from './environment.js';
-import { linkValueToGeneratorHostChain } from './reference.js';
+import {
+  linkValueToGeneratorHostChain,
+  withLinkedActiveExecutionRealm,
+} from './reference.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -222,12 +225,14 @@ export class EngineFunction extends EngineObject {
    */
   callFunction(thisValue, args = [], callerRealm) {
     if (this.functionKind === 'classConstructor') {
-      throw new ThrowSignal(
-        this.realm.createGuestError(
-          'TypeError',
-          "Class constructor cannot be invoked without 'new'",
-        ),
-      );
+      return this.realm.agent.withActiveExecutionRealm(this.realm, () => {
+        throw new ThrowSignal(
+          this.realm.createGuestError(
+            'TypeError',
+            "Class constructor cannot be invoked without 'new'",
+          ),
+        );
+      });
     }
 
     const callChain = this.realm.agent.enterSynchronousCallChain(
@@ -236,18 +241,22 @@ export class EngineFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, this.realm.agent, () =>
+        this.realm.agent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      linkValueToGeneratorHostChain(activeRealm, thisValue);
-      for (const argument of args) {
-        linkValueToGeneratorHostChain(activeRealm, argument);
-      }
+          linkValueToGeneratorHostChain(activeRealm, thisValue);
+          for (const argument of args) {
+            linkValueToGeneratorHostChain(activeRealm, argument);
+          }
 
-      return this.executeInvocation(
-        args,
-        this.functionExecutionEnvironment(thisValue, undefined),
-        activeRealm,
+          return this.executeInvocation(
+            args,
+            this.functionExecutionEnvironment(thisValue, undefined),
+            activeRealm,
+          );
+        }),
       );
     } finally {
       this.realm.agent.exitSynchronousCallChain(callChain);
@@ -283,43 +292,47 @@ export class EngineFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, this.realm.agent, () =>
+        this.realm.agent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      for (const argument of args) {
-        linkValueToGeneratorHostChain(activeRealm, argument);
-      }
-      linkValueToGeneratorHostChain(activeRealm, newTarget);
+          for (const argument of args) {
+            linkValueToGeneratorHostChain(activeRealm, argument);
+          }
+          linkValueToGeneratorHostChain(activeRealm, newTarget);
 
-      if (this.functionKind === 'classConstructor') {
-        return /** @type {EngineObject} */ (
-          linkValueToGeneratorHostChain(
+          if (this.functionKind === 'classConstructor') {
+            return /** @type {EngineObject} */ (
+              linkValueToGeneratorHostChain(
+                activeRealm,
+                this.constructClass(args, newTarget),
+              )
+            );
+          }
+
+          const instance = ordinaryCreateFromConstructor(
+            newTarget,
+            this.realm.intrinsics.objectPrototype,
+            this.realm.agent,
+          );
+          const functionEnvironment = this.functionExecutionEnvironment(
+            instance,
+            newTarget,
+          );
+          const result = this.executeInvocation(
+            args,
+            functionEnvironment,
             activeRealm,
-            this.constructClass(args, newTarget),
-          )
-        );
-      }
+          );
 
-      const instance = ordinaryCreateFromConstructor(
-        newTarget,
-        this.realm.intrinsics.objectPrototype,
-        this.realm.agent,
-      );
-      const functionEnvironment = this.functionExecutionEnvironment(
-        instance,
-        newTarget,
-      );
-      const result = this.executeInvocation(
-        args,
-        functionEnvironment,
-        activeRealm,
-      );
-
-      return /** @type {EngineObject} */ (
-        linkValueToGeneratorHostChain(
-          activeRealm,
-          result instanceof EngineObject ? result : instance,
-        )
+          return /** @type {EngineObject} */ (
+            linkValueToGeneratorHostChain(
+              activeRealm,
+              result instanceof EngineObject ? result : instance,
+            )
+          );
+        }),
       );
     } finally {
       this.realm.agent.exitSynchronousCallChain(callChain);
