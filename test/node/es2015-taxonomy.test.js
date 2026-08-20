@@ -166,7 +166,8 @@ function auditEvidence(options = {}) {
 
 const AUDIT_EVIDENCE = auditEvidence();
 const EXACT_PATHS_FILE = '/absolute/exact.paths.txt';
-const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
+const PROVENANCE_DECISIONS_DIRECTORY =
+  'tools/test262/es2015-provenance-decisions';
 /** @type {ReturnType<typeof buildProvenanceFoundation> | undefined} */
 let cachedApprovedProvenanceManifest;
 
@@ -580,7 +581,9 @@ function auditDependencies(options = {}) {
       (async () => {
         const value = files.get(ES2015_PROVENANCE_FILE);
         if (value === undefined) {
-          const error = new Error(`missing fixture file ${ES2015_PROVENANCE_FILE}`);
+          const error = new Error(
+            `missing fixture file ${ES2015_PROVENANCE_FILE}`,
+          );
           Object.assign(error, { code: 'ENOENT' });
           throw error;
         }
@@ -1124,7 +1127,9 @@ export default [
       const mismatch = auditDependencies({
         subset: AUDIT_PROMOTION_SUBSET,
         promotion: AUDIT_PROMOTION,
-        pathFiles: new Map([['wrong-ledger.txt', 'test/language/selected.js\n']]),
+        pathFiles: new Map([
+          ['wrong-ledger.txt', 'test/language/selected.js\n'],
+        ]),
         runPromotion: async () => AUDIT_RECORDS,
       });
       const error = await rejected(() =>

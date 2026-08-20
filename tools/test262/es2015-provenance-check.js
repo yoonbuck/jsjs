@@ -16,7 +16,8 @@ import {
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
-const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
+const PROVENANCE_DECISIONS_DIRECTORY =
+  'tools/test262/es2015-provenance-decisions';
 const PRIMARY_OPTION_LABEL =
   'Exactly one of --initialize, --check, --render-ledger=CODE, or --render-issue=CODE is required';
 const ISSUE_RENDER_CODES = Object.freeze([
@@ -64,7 +65,10 @@ export class Es2015ProvenanceCheckError extends Error {
 export async function main(argv = [], dependencies = {}) {
   try {
     const options = scanOptions(argv);
-    const deps = { ...createProvenanceCheckDependencies(dependencies), ...dependencies };
+    const deps = {
+      ...createProvenanceCheckDependencies(dependencies),
+      ...dependencies,
+    };
     assertUtc(deps.environment);
     const mode = resolvePrimaryMode(options);
 
@@ -170,7 +174,9 @@ function scanOptions(argv) {
       }
       const code = argument.slice('--render-ledger='.length);
       if (code === '') {
-        throw new Es2015ProvenanceCheckError('--render-ledger=CODE requires a code');
+        throw new Es2015ProvenanceCheckError(
+          '--render-ledger=CODE requires a code',
+        );
       }
       assertDecisionCode(code);
       renderLedgerCode = code;
@@ -184,10 +190,14 @@ function scanOptions(argv) {
       }
       const code = argument.slice('--render-issue='.length);
       if (code === '') {
-        throw new Es2015ProvenanceCheckError('--render-issue=CODE requires a code');
+        throw new Es2015ProvenanceCheckError(
+          '--render-issue=CODE requires a code',
+        );
       }
       if (!ISSUE_RENDER_CODES.includes(code)) {
-        throw new Es2015ProvenanceCheckError(`${code} is not a known provenance issue code`);
+        throw new Es2015ProvenanceCheckError(
+          `${code} is not a known provenance issue code`,
+        );
       }
       renderIssueCode = code;
       continue;
@@ -214,7 +224,9 @@ function scanOptions(argv) {
       }
       const path = argument.slice('--issue-map='.length);
       if (path === '') {
-        throw new Es2015ProvenanceCheckError('--issue-map=PATH requires a path');
+        throw new Es2015ProvenanceCheckError(
+          '--issue-map=PATH requires a path',
+        );
       }
       issueMapPath = path;
       continue;
@@ -288,10 +300,15 @@ async function preflightInitialization(deps) {
 
 /** @param {ProvenanceCheckDependencies} deps @param {string | null} completeCode */
 async function checkFoundation(deps, completeCode) {
-  const classifications = taxonomyClassifications(await readRequiredFile(deps, TAXONOMY_FILE));
+  const classifications = taxonomyClassifications(
+    await readRequiredFile(deps, TAXONOMY_FILE),
+  );
   const expectedManifest = buildProvenanceFoundation(classifications);
   const expectedManifestText = renderJson(expectedManifest);
-  const actualManifestText = await readRequiredFile(deps, ES2015_PROVENANCE_FILE);
+  const actualManifestText = await readRequiredFile(
+    deps,
+    ES2015_PROVENANCE_FILE,
+  );
   if (actualManifestText !== expectedManifestText) {
     throw new Es2015ProvenanceCheckError(
       `${ES2015_PROVENANCE_FILE} does not match generated provenance bytes`,
@@ -323,7 +340,9 @@ async function checkFoundation(deps, completeCode) {
 
 /** @param {ProvenanceCheckDependencies} deps */
 async function loadReviewedManifest(deps) {
-  const classifications = taxonomyClassifications(await readRequiredFile(deps, TAXONOMY_FILE));
+  const classifications = taxonomyClassifications(
+    await readRequiredFile(deps, TAXONOMY_FILE),
+  );
   const expectedManifest = buildProvenanceFoundation(classifications);
   const expectedText = renderJson(expectedManifest);
   const actualText = await readRequiredFile(deps, ES2015_PROVENANCE_FILE);
@@ -339,7 +358,9 @@ async function loadReviewedManifest(deps) {
 
 /** @param {ProvenanceCheckDependencies} deps */
 async function expectedFoundation(deps) {
-  const classifications = taxonomyClassifications(await readRequiredFile(deps, TAXONOMY_FILE));
+  const classifications = taxonomyClassifications(
+    await readRequiredFile(deps, TAXONOMY_FILE),
+  );
   const manifestText = renderJson(buildProvenanceFoundation(classifications));
   const manifest = parseEs2015ProvenanceManifest(manifestText);
   validateProvenanceFoundation(manifest, classifications);
@@ -480,7 +501,11 @@ function taxonomyClassifications(text) {
     );
   }
   return taxonomy.classifications.map((record) => {
-    if (typeof record !== 'object' || record === null || Array.isArray(record)) {
+    if (
+      typeof record !== 'object' ||
+      record === null ||
+      Array.isArray(record)
+    ) {
       throw new Es2015ProvenanceCheckError(
         `${TAXONOMY_FILE} classifications must be objects`,
       );

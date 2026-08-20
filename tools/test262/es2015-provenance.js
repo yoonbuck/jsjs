@@ -3,10 +3,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import {
-  isTest262FixtureDependencyPath,
-  sortStrings,
-} from './selection.js';
+import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
 
 /**
  * @typedef {{ source: string, sourceSha256: string }} IdentitySpecification
@@ -365,87 +362,114 @@ const BATCH_DEFINITIONS = Object.freeze(
 const APPROVED_BASE_LEDGER = Object.freeze({
   rootCount: 2312,
   variantCount: 4054,
-  pathSha256: '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc',
+  pathSha256:
+    '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc',
 });
 /** @type {Readonly<Record<string, ApprovedBatchLedger>>} */
 const APPROVED_BATCH_LEDGERS = Object.freeze({
   UA: Object.freeze({
     rootCount: 314,
     variantCount: 323,
-    pathSha256: 'd29150e412486095bac0103f5d7e913917269870a9769cd8343a5cc9638af98e',
-    entryLedgerSha256: 'a6664c97c45fd047a4d136b62f2121b630fa742c6e21594111457e367d88cc09',
+    pathSha256:
+      'd29150e412486095bac0103f5d7e913917269870a9769cd8343a5cc9638af98e',
+    entryLedgerSha256:
+      'a6664c97c45fd047a4d136b62f2121b630fa742c6e21594111457e367d88cc09',
   }),
   UB: Object.freeze({
     rootCount: 32,
     variantCount: 64,
-    pathSha256: '4e21b1884213e2831ffe58fb5c5128f17d417168aeabeac3c3817f8f6350623a',
-    entryLedgerSha256: '99441828b25381a9ce86cbad7bdaaeb612100d2425990f0689f08bf6f7059a1a',
+    pathSha256:
+      '4e21b1884213e2831ffe58fb5c5128f17d417168aeabeac3c3817f8f6350623a',
+    entryLedgerSha256:
+      '99441828b25381a9ce86cbad7bdaaeb612100d2425990f0689f08bf6f7059a1a',
   }),
   UL1: Object.freeze({
     rootCount: 434,
     variantCount: 835,
-    pathSha256: '1bad4b5aed5f665cfcd270a57c90553b1fe4a1dabb1334fa950527b1113b937a',
-    entryLedgerSha256: 'f5044351e9319bacd6d07fdbb4f6eb995f87ab7a2c307893fbd173fcacf9b1f5',
+    pathSha256:
+      '1bad4b5aed5f665cfcd270a57c90553b1fe4a1dabb1334fa950527b1113b937a',
+    entryLedgerSha256:
+      'f5044351e9319bacd6d07fdbb4f6eb995f87ab7a2c307893fbd173fcacf9b1f5',
   }),
   UL2: Object.freeze({
     rootCount: 182,
     variantCount: 364,
-    pathSha256: 'b5e8412e46d0bb2d976de247d312269b9ac34fa9cda77d15a2aa11c1eb0abb45',
-    entryLedgerSha256: '2516f31b492778b05737a34c24aead5520ba0804b824c4fb0af54b49fca75640',
+    pathSha256:
+      'b5e8412e46d0bb2d976de247d312269b9ac34fa9cda77d15a2aa11c1eb0abb45',
+    entryLedgerSha256:
+      '2516f31b492778b05737a34c24aead5520ba0804b824c4fb0af54b49fca75640',
   }),
   UL3: Object.freeze({
     rootCount: 109,
     variantCount: 212,
-    pathSha256: 'af158f399b1827dd2012030fbec2fdbbb28f184c011a310550928eb718dca406',
-    entryLedgerSha256: '4b4543298d376734ef7a58ce6eb2a84ed1b0997a588e509ec25a36705378c6e8',
+    pathSha256:
+      'af158f399b1827dd2012030fbec2fdbbb28f184c011a310550928eb718dca406',
+    entryLedgerSha256:
+      '4b4543298d376734ef7a58ce6eb2a84ed1b0997a588e509ec25a36705378c6e8',
   }),
   UL4: Object.freeze({
     rootCount: 48,
     variantCount: 48,
-    pathSha256: '9316f73cad2c6608ad14d6e837e5383100bb2ebd0a4feb2ba9f198ee35e5d3ac',
-    entryLedgerSha256: '4ecb3fa2541b0ba3932c61bd5b92d3a137561202036b6009bfbdf2f25a997b58',
+    pathSha256:
+      '9316f73cad2c6608ad14d6e837e5383100bb2ebd0a4feb2ba9f198ee35e5d3ac',
+    entryLedgerSha256:
+      '4ecb3fa2541b0ba3932c61bd5b92d3a137561202036b6009bfbdf2f25a997b58',
   }),
   US1: Object.freeze({
     rootCount: 210,
     variantCount: 406,
-    pathSha256: '63ff657590ebb5aa167c19975344817789a9a67b820ce0092f990376afa873f7',
-    entryLedgerSha256: 'f1ef59740d3a9cbae631e0c65cd7d4aa24bd6619129d76179ca7d32e795b184f',
+    pathSha256:
+      '63ff657590ebb5aa167c19975344817789a9a67b820ce0092f990376afa873f7',
+    entryLedgerSha256:
+      'f1ef59740d3a9cbae631e0c65cd7d4aa24bd6619129d76179ca7d32e795b184f',
   }),
   US2: Object.freeze({
     rootCount: 176,
     variantCount: 352,
-    pathSha256: '3b3db618ae579287c0cbe5a77124c883c3129395bf83fe7523dc1f32e3fe7d15',
-    entryLedgerSha256: '5acbdcb3fdaf4e9fc95a157aac51e20041cc38b47de8717d655eb9b32e5cbfdb',
+    pathSha256:
+      '3b3db618ae579287c0cbe5a77124c883c3129395bf83fe7523dc1f32e3fe7d15',
+    entryLedgerSha256:
+      '5acbdcb3fdaf4e9fc95a157aac51e20041cc38b47de8717d655eb9b32e5cbfdb',
   }),
   US3: Object.freeze({
     rootCount: 99,
     variantCount: 190,
-    pathSha256: '42d21ddbd59de80f8c14b1508c3502c8c0bc023061ff24c16160f1bfaec7daa1',
-    entryLedgerSha256: '06922dfb4dc6fa2d2e07e7bcbf8364fcd8fc943921820a15c057b17e55fb8528',
+    pathSha256:
+      '42d21ddbd59de80f8c14b1508c3502c8c0bc023061ff24c16160f1bfaec7daa1',
+    entryLedgerSha256:
+      '06922dfb4dc6fa2d2e07e7bcbf8364fcd8fc943921820a15c057b17e55fb8528',
   }),
   US4: Object.freeze({
     rootCount: 176,
     variantCount: 318,
-    pathSha256: '19bc8b322158aa59af8d0b5efd38cf58885be50fdb6394b56cc94a2b94754c0b',
-    entryLedgerSha256: 'e548e96a5d68e6117c454d0117831f81445d0eec93f7b873ea82a6d7673a7d66',
+    pathSha256:
+      '19bc8b322158aa59af8d0b5efd38cf58885be50fdb6394b56cc94a2b94754c0b',
+    entryLedgerSha256:
+      'e548e96a5d68e6117c454d0117831f81445d0eec93f7b873ea82a6d7673a7d66',
   }),
   US5: Object.freeze({
     rootCount: 306,
     variantCount: 540,
-    pathSha256: 'fdc5ed38ef91366ee6bd9f8aa8d49917b5d9bbc2746cfd62a50f22a22cd03df5',
-    entryLedgerSha256: '87d0388e420d5ffdde58c81705b19daca1d3488e3de4330b1cc8e9ad63bd36f0',
+    pathSha256:
+      'fdc5ed38ef91366ee6bd9f8aa8d49917b5d9bbc2746cfd62a50f22a22cd03df5',
+    entryLedgerSha256:
+      '87d0388e420d5ffdde58c81705b19daca1d3488e3de4330b1cc8e9ad63bd36f0',
   }),
   US6: Object.freeze({
     rootCount: 48,
     variantCount: 89,
-    pathSha256: '90dfecd04460d739d4a7242b6ff14c4ef83abcf3e73d7893b392138372ce1cf1',
-    entryLedgerSha256: 'c7c524d8b8cd8f0094f631be7d16abcc7f946db86546aaf6339d9cd9853d6a16',
+    pathSha256:
+      '90dfecd04460d739d4a7242b6ff14c4ef83abcf3e73d7893b392138372ce1cf1',
+    entryLedgerSha256:
+      'c7c524d8b8cd8f0094f631be7d16abcc7f946db86546aaf6339d9cd9853d6a16',
   }),
   US7: Object.freeze({
     rootCount: 178,
     variantCount: 313,
-    pathSha256: '1e2cda5adef593ae134f0ab0e759091f57522821460c904c7f44c4217c891e28',
-    entryLedgerSha256: '6fa9daa7322394f0f96b754ef6674ccb80b916cd4209c2308f7591eaf46f7e23',
+    pathSha256:
+      '1e2cda5adef593ae134f0ab0e759091f57522821460c904c7f44c4217c891e28',
+    entryLedgerSha256:
+      '6fa9daa7322394f0f96b754ef6674ccb80b916cd4209c2308f7591eaf46f7e23',
   }),
 });
 
@@ -547,7 +571,10 @@ export function buildProvenanceFoundation(classifications) {
     },
     baseLedger: {
       rootCount: baseEntries.length,
-      variantCount: unknownRecords.reduce((sum, entry) => sum + entry.variants, 0),
+      variantCount: unknownRecords.reduce(
+        (sum, entry) => sum + entry.variants,
+        0,
+      ),
       pathSha256: hashPaths(baseEntries),
       paths: baseEntries,
     },
@@ -567,7 +594,11 @@ export function validateProvenanceFoundation(manifest, classifications) {
   validateManifestStructure(normalizedManifest);
   if (classifications !== undefined) {
     const expected = buildProvenanceFoundation(classifications);
-    validateManifestAgainstExpected(normalizedManifest, expected, 'reviewed ledger');
+    validateManifestAgainstExpected(
+      normalizedManifest,
+      expected,
+      'reviewed ledger',
+    );
   }
   validateImmutableApprovedFoundation(normalizedManifest);
 }
@@ -580,7 +611,10 @@ function validateManifestStructure(manifest) {
       `${ES2015_PROVENANCE_FILE} base ledger must remain code-unit sorted`,
     );
   }
-  assertUniqueBasePaths(actualBasePaths, `${ES2015_PROVENANCE_FILE} base ledger`);
+  assertUniqueBasePaths(
+    actualBasePaths,
+    `${ES2015_PROVENANCE_FILE} base ledger`,
+  );
   if (manifest.baseLedger.rootCount !== actualBasePaths.length) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} base ledger root count does not match its reviewed bytes`,
@@ -645,7 +679,8 @@ function validateManifestStructure(manifest) {
       );
     }
     if (
-      actual.variantCount !== actual.entries.reduce((sum, entry) => sum + entry.variants, 0)
+      actual.variantCount !==
+      actual.entries.reduce((sum, entry) => sum + entry.variants, 0)
     ) {
       throw new Es2015ProvenanceError(
         `${actual.code} variant count does not match its reviewed ledger`,
@@ -685,7 +720,9 @@ function validateManifestAgainstExpected(manifest, expected, ledgerLabel) {
   }
   for (const path of actualBasePaths) {
     if (!expectedBaseSet.has(path)) {
-      throw new Es2015ProvenanceError(`Base ledger has unexpected path ${path}`);
+      throw new Es2015ProvenanceError(
+        `Base ledger has unexpected path ${path}`,
+      );
     }
   }
   for (const definition of BATCH_DEFINITIONS) {
@@ -693,7 +730,9 @@ function validateManifestAgainstExpected(manifest, expected, ledgerLabel) {
     const expectedBatch = batchByCode(expected, definition.code);
     const actualPaths = actual.entries.map((entry) => entry.path);
     const actualPathSet = new Set(actualPaths);
-    const expectedPathSet = new Set(expectedBatch.entries.map((entry) => entry.path));
+    const expectedPathSet = new Set(
+      expectedBatch.entries.map((entry) => entry.path),
+    );
     for (const path of expectedPathSet) {
       if (!actualPathSet.has(path)) {
         throw new Es2015ProvenanceError(
@@ -830,7 +869,9 @@ export function validateDecisionFragments(manifest, fragments, options = {}) {
   );
   validateProvenanceFoundation(normalizedManifest);
   const allowPendingReview = options.allowPendingReview === true;
-  const requireCompleteCodes = normalizeRequiredCodes(options.requireCompleteCodes);
+  const requireCompleteCodes = normalizeRequiredCodes(
+    options.requireCompleteCodes,
+  );
   const fragmentMap = normalizeFragments(fragments);
   /** @type {Map<string, ReviewedDecision>} */
   const decisions = new Map();
@@ -866,7 +907,9 @@ export function validateDecisionFragments(manifest, fragments, options = {}) {
         );
       }
       fragmentPaths.add(decision.path);
-      const expectedEntry = batch.entries.find((entry) => entry.path === decision.path);
+      const expectedEntry = batch.entries.find(
+        (entry) => entry.path === decision.path,
+      );
       if (expectedEntry === undefined) {
         throw new Es2015ProvenanceError(
           `${code} decision for ${decision.path} is not in the ${code} ledger`,
@@ -885,7 +928,10 @@ export function validateDecisionFragments(manifest, fragments, options = {}) {
       decisions.set(decision.path, deepFreeze(decision));
     }
 
-    if (requireCompleteCodes.has(code) && fragmentPaths.size !== expectedPaths.size) {
+    if (
+      requireCompleteCodes.has(code) &&
+      fragmentPaths.size !== expectedPaths.size
+    ) {
       throw new Es2015ProvenanceError(
         `${code} must contain reviewed decisions for every ledger path`,
       );
@@ -920,7 +966,9 @@ export function canonicalDecisionSha256(decision) {
 /** @param {unknown} manifest @param {string} code */
 export function renderBatchLedger(manifest, code) {
   if (!ES2015_PROVENANCE_DECISION_CODES.includes(code)) {
-    throw new Es2015ProvenanceError(`${code} is not a known provenance ledger code`);
+    throw new Es2015ProvenanceError(
+      `${code} is not a known provenance ledger code`,
+    );
   }
   const normalizedManifest = normalizeManifestRecord(
     object(manifest, ES2015_PROVENANCE_FILE),
@@ -938,7 +986,9 @@ export function renderBatchLedger(manifest, code) {
 export function renderProvenanceIssueBody(manifest, code, issueMap) {
   const definition = ISSUE_DEFINITIONS[code];
   if (definition === undefined) {
-    throw new Es2015ProvenanceError(`${code} is not a known provenance issue code`);
+    throw new Es2015ProvenanceError(
+      `${code} is not a known provenance issue code`,
+    );
   }
   const normalizedManifest = normalizeManifestRecord(
     object(manifest, ES2015_PROVENANCE_FILE),
@@ -951,13 +1001,17 @@ export function renderProvenanceIssueBody(manifest, code, issueMap) {
   const issues = normalizeIssueMap(issueMap);
   const ledger = renderLedgerSummary(normalizedManifest, code);
   const dependencies = definition.dependencies.map((dependencyCode) =>
-    issues === null ? dependencyCode : renderIssueReference(dependencyCode, issues),
+    issues === null
+      ? dependencyCode
+      : renderIssueReference(dependencyCode, issues),
   );
   const lines = [
     `<!-- test262-provenance T1 / #75 | code:${code} | base-ledger-sha256:${normalizedManifest.baseLedger.pathSha256} -->`,
     `# ${code} — ${definition.title}`,
     '',
-    ...(issues === null ? [] : [`Issue: ${renderIssueReference(code, issues)}.`]),
+    ...(issues === null
+      ? []
+      : [`Issue: ${renderIssueReference(code, issues)}.`]),
     `Parent: T1 / #75.`,
     `Base ledger: ${normalizedManifest.baseLedger.rootCount} roots / ${normalizedManifest.baseLedger.variantCount} variants / SHA-256 ${normalizedManifest.baseLedger.pathSha256}.`,
     `Batch ledger: ${ledger.rootCount} roots / ${ledger.variantCount} variants / SHA-256 ${ledger.pathSha256}.`,
@@ -1015,7 +1069,9 @@ function selectorForCode(code) {
     case 'US7':
       return 'test/staging/sm/{regress,extensions,misc,types}/**';
     default:
-      throw new Es2015ProvenanceError(`${code} is not an approved ES2015 provenance decision code`);
+      throw new Es2015ProvenanceError(
+        `${code} is not an approved ES2015 provenance decision code`,
+      );
   }
 }
 
@@ -1052,7 +1108,9 @@ function requireExactKeys(record, expectedKeys, message) {
   if (
     keys.length !== expectedKeys.length ||
     keys.some((key) => !expectedKeys.includes(key)) ||
-    expectedKeys.some((key) => !Object.prototype.hasOwnProperty.call(record, key))
+    expectedKeys.some(
+      (key) => !Object.prototype.hasOwnProperty.call(record, key),
+    )
   ) {
     throw new Es2015ProvenanceError(message);
   }
@@ -1101,7 +1159,9 @@ function normalizeManifestRecord(record, options) {
     ),
   );
   const codes = batches.map((batch) => batch.code);
-  if (codes.join('\u0000') !== ES2015_PROVENANCE_DECISION_CODES.join('\u0000')) {
+  if (
+    codes.join('\u0000') !== ES2015_PROVENANCE_DECISION_CODES.join('\u0000')
+  ) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} batch codes must be approved U* decision codes`,
     );
@@ -1140,7 +1200,10 @@ function normalizeDecisionFragmentRecord(record, expectedCode, options) {
     `${expectedCode} decision fragment must retain the reviewed Test262 repository and revision`,
   );
   const specification = normalizeIdentitySpecification(
-    object(record.specification, `${expectedCode} decision fragment specification`),
+    object(
+      record.specification,
+      `${expectedCode} decision fragment specification`,
+    ),
     `${expectedCode} decision fragment specification must contain exact keys`,
     `${expectedCode} decision fragment must retain the reviewed Sixth Edition source identity`,
   );
@@ -1160,16 +1223,13 @@ function normalizeDecisionFragmentRecord(record, expectedCode, options) {
     );
   }
   const decisions = record.decisions.map((decision) =>
-    normalizeDecisionRecord(
-      object(decision, `${expectedCode} decision`),
-      {
-        code: expectedCode,
-        exactLists: options.exactLists,
-        allowPendingReview: true,
-        requireArtifactSha256: true,
-        skipSemanticValidation: false,
-      },
-    ),
+    normalizeDecisionRecord(object(decision, `${expectedCode} decision`), {
+      code: expectedCode,
+      exactLists: options.exactLists,
+      allowPendingReview: true,
+      requireArtifactSha256: true,
+      skipSemanticValidation: false,
+    }),
   );
   const paths = decisions.map((decision) => decision.path);
   if (options.exactLists) {
@@ -1198,7 +1258,9 @@ function normalizeDecisionRecord(record, options) {
   const pathLabel = `${options.code} decision`;
   const path = typeof record.path === 'string' ? record.path : undefined;
   const decisionLabel =
-    typeof path === 'string' ? `${options.code} decision for ${path}` : pathLabel;
+    typeof path === 'string'
+      ? `${options.code} decision for ${path}`
+      : pathLabel;
   requireExactKeys(
     record,
     options.requireArtifactSha256 ? DECISION_KEYS : DECISION_KEYS_WITHOUT_HASH,
@@ -1215,12 +1277,18 @@ function normalizeDecisionRecord(record, options) {
       `${decisionLabel} must retain a prior class`,
     );
   }
-  const finalPartition = normalizePartition(record.finalPartition, decisionLabel);
+  const finalPartition = normalizePartition(
+    record.finalPartition,
+    decisionLabel,
+  );
   const finalStatus = normalizeStatus(record.finalStatus, decisionLabel);
   if (!options.skipSemanticValidation) {
     validatePartitionStatusPair(finalPartition, finalStatus, decisionLabel);
   }
-  const evidenceKind = normalizeEvidenceKind(record.evidenceKind, decisionLabel);
+  const evidenceKind = normalizeEvidenceKind(
+    record.evidenceKind,
+    decisionLabel,
+  );
   const specification = normalizeDecisionSpecification(
     object(record.specification, `${decisionLabel} specification`),
     evidenceKind,
@@ -1249,7 +1317,8 @@ function normalizeDecisionRecord(record, options) {
   );
   if (
     options.requireArtifactSha256 &&
-    (typeof record.artifactSha256 !== 'string' || !isHex64(record.artifactSha256))
+    (typeof record.artifactSha256 !== 'string' ||
+      !isHex64(record.artifactSha256))
   ) {
     throw new Es2015ProvenanceError(
       `${decisionLabel} artifactSha256 must be a SHA-256 hex string`,
@@ -1271,7 +1340,10 @@ function normalizeDecisionRecord(record, options) {
     artifactSha256:
       typeof record.artifactSha256 === 'string' ? record.artifactSha256 : null,
   };
-  if (!options.skipSemanticValidation && normalized.evidenceKind === 'history-only') {
+  if (
+    !options.skipSemanticValidation &&
+    normalized.evidenceKind === 'history-only'
+  ) {
     throw new Es2015ProvenanceError(
       `${decisionLabel} cannot rely on history alone`,
     );
@@ -1445,8 +1517,14 @@ function normalizeDecisionSpecification(record, evidenceKind, label) {
     DECISION_SPECIFICATION_KEYS,
     `${label} specification must contain exact keys`,
   );
-  const clause = nullableEvidenceString(record.clause, `${label} specification.clause`);
-  const anchor = nullableEvidenceString(record.anchor, `${label} specification.anchor`);
+  const clause = nullableEvidenceString(
+    record.clause,
+    `${label} specification.clause`,
+  );
+  const anchor = nullableEvidenceString(
+    record.anchor,
+    `${label} specification.anchor`,
+  );
   if (
     evidenceKind.startsWith('sixth-edition') &&
     (record.source !== SPECIFICATION_SOURCE ||
@@ -1467,7 +1545,9 @@ function normalizeDecisionSpecification(record, evidenceKind, label) {
     );
   }
   if (typeof record.source !== 'string' || record.source.trim() === '') {
-    throw new Es2015ProvenanceError(`${label} specification.source must be a string`);
+    throw new Es2015ProvenanceError(
+      `${label} specification.source must be a string`,
+    );
   }
   if (!isHex64(record.sourceSha256)) {
     throw new Es2015ProvenanceError(
@@ -1534,7 +1614,10 @@ function normalizeHistory(value, label) {
           `${label} history[${index}] must retain the reviewed Test262 repository`,
         );
       }
-      if (typeof record.commit !== 'string' || !/^[0-9a-f]{40}$/.test(record.commit)) {
+      if (
+        typeof record.commit !== 'string' ||
+        !/^[0-9a-f]{40}$/.test(record.commit)
+      ) {
         throw new Es2015ProvenanceError(
           `${label} history[${index}] commit must be a full hex SHA`,
         );
@@ -1554,8 +1637,17 @@ function normalizeHistory(value, label) {
 }
 
 /** @param {Record<string, any>} record @param {boolean} allowPendingReview @param {string} label @param {boolean} skipSemanticValidation @returns {ReviewedDecisionReview} */
-function normalizeReview(record, allowPendingReview, label, skipSemanticValidation) {
-  requireExactKeys(record, REVIEW_KEYS, `${label} review must contain exact keys`);
+function normalizeReview(
+  record,
+  allowPendingReview,
+  label,
+  skipSemanticValidation,
+) {
+  requireExactKeys(
+    record,
+    REVIEW_KEYS,
+    `${label} review must contain exact keys`,
+  );
   const pending =
     record.reviewer === 'pending' &&
     record.reviewedAt === 'pending' &&
@@ -1578,7 +1670,9 @@ function normalizeReview(record, allowPendingReview, label, skipSemanticValidati
     };
   }
   if (typeof record.reviewer !== 'string' || record.reviewer.trim() === '') {
-    throw new Es2015ProvenanceError(`${label} review.reviewer must be a string`);
+    throw new Es2015ProvenanceError(
+      `${label} review.reviewer must be a string`,
+    );
   }
   if (skipSemanticValidation) {
     if (
@@ -1595,12 +1689,18 @@ function normalizeReview(record, allowPendingReview, label, skipSemanticValidati
       artifact: record.artifact,
     };
   }
-  if (typeof record.reviewedAt !== 'string' || !RFC3339_UTC.test(record.reviewedAt)) {
+  if (
+    typeof record.reviewedAt !== 'string' ||
+    !RFC3339_UTC.test(record.reviewedAt)
+  ) {
     throw new Es2015ProvenanceError(
       `${label} review.reviewedAt must be a UTC RFC3339 timestamp`,
     );
   }
-  if (typeof record.artifact !== 'string' || !REVIEW_URL.test(record.artifact)) {
+  if (
+    typeof record.artifact !== 'string' ||
+    !REVIEW_URL.test(record.artifact)
+  ) {
     throw new Es2015ProvenanceError(
       `${label} review.artifact must be a reviewed GitHub jsjs URL`,
     );
@@ -1613,13 +1713,21 @@ function normalizeReview(record, allowPendingReview, label, skipSemanticValidati
 }
 
 /** @param {Record<string, any>} record @param {string} finalStatus @param {string} label @param {boolean} skipSemanticValidation @returns {ReviewedDecisionDestination} */
-function normalizeDestination(record, finalStatus, label, skipSemanticValidation) {
+function normalizeDestination(
+  record,
+  finalStatus,
+  label,
+  skipSemanticValidation,
+) {
   requireExactKeys(
     record,
     DESTINATION_KEYS,
     `${label} destination must contain exact keys`,
   );
-  const blocker = nullableString(record.blocker, `${label} destination.blocker`);
+  const blocker = nullableString(
+    record.blocker,
+    `${label} destination.blocker`,
+  );
   const issue = nullableInteger(record.issue, `${label} destination.issue`);
   if (skipSemanticValidation) {
     return { blocker, issue };
@@ -1760,7 +1868,9 @@ function nullableEvidenceString(value, label) {
 function nullableInteger(value, label) {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
-    throw new Es2015ProvenanceError(`${label} must be a positive integer or null`);
+    throw new Es2015ProvenanceError(
+      `${label} must be a positive integer or null`,
+    );
   }
   return /** @type {number} */ (value);
 }
@@ -1789,7 +1899,9 @@ function assertRootPath(path, label) {
     !path.endsWith('.js') ||
     isTest262FixtureDependencyPath(path)
   ) {
-    throw new Es2015ProvenanceError(`${label} must be a non-fixture test/*.js path`);
+    throw new Es2015ProvenanceError(
+      `${label} must be a non-fixture test/*.js path`,
+    );
   }
 }
 
@@ -1870,14 +1982,18 @@ function normalizeFragments(value) {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     return new Map(Object.entries(value));
   }
-  throw new Es2015ProvenanceError('Provenance decision fragments must be a map or object');
+  throw new Es2015ProvenanceError(
+    'Provenance decision fragments must be a map or object',
+  );
 }
 
 /** @param {string} code @param {ReadonlyMap<string, number>} issueMap */
 function renderIssueReference(code, issueMap) {
   const issueNumber = issueMap.get(code);
   if (issueNumber === undefined) {
-    throw new Es2015ProvenanceError(`Issue map is missing required code ${code}`);
+    throw new Es2015ProvenanceError(
+      `Issue map is missing required code ${code}`,
+    );
   }
   return `${code} (#${issueNumber})`;
 }
@@ -1892,7 +2008,9 @@ function normalizeIssueMap(value) {
   }
   for (const code of Object.keys(value)) {
     if (!ALL_RENDER_CODE_SET.has(code)) {
-      throw new Es2015ProvenanceError(`Issue map contains unapproved code ${code}`);
+      throw new Es2015ProvenanceError(
+        `Issue map contains unapproved code ${code}`,
+      );
     }
   }
   const map = new Map();
@@ -1900,7 +2018,9 @@ function normalizeIssueMap(value) {
   for (const code of ALL_RENDER_CODES) {
     const entry = /** @type {Record<string, any>} */ (value)[code];
     if (entry === undefined) {
-      throw new Es2015ProvenanceError(`Issue map is missing required code ${code}`);
+      throw new Es2015ProvenanceError(
+        `Issue map is missing required code ${code}`,
+      );
     }
     let issueNumber;
     if (Number.isInteger(entry) && entry > 0) {
@@ -1943,7 +2063,9 @@ function normalizeRequiredCodes(value) {
   const codes = new Set();
   for (const code of value) {
     if (typeof code !== 'string') {
-      throw new Es2015ProvenanceError('requireCompleteCodes must contain strings');
+      throw new Es2015ProvenanceError(
+        'requireCompleteCodes must contain strings',
+      );
     }
     assertDecisionCode(code);
     codes.add(code);
@@ -2041,7 +2163,9 @@ function sortEntries(entries) {
 function batchByCode(manifest, code) {
   const batch = manifest.batches.find((entry) => entry.code === code);
   if (batch === undefined) {
-    throw new Es2015ProvenanceError(`${code} is not a known provenance ledger code`);
+    throw new Es2015ProvenanceError(
+      `${code} is not a known provenance ledger code`,
+    );
   }
   return batch;
 }
@@ -2053,7 +2177,9 @@ function renderLedgerSummary(manifest, code) {
   }
   const definition = ISSUE_DEFINITIONS[code];
   if (definition === undefined) {
-    throw new Es2015ProvenanceError(`${code} is not a known provenance issue code`);
+    throw new Es2015ProvenanceError(
+      `${code} is not a known provenance issue code`,
+    );
   }
   /** @type {string[]} */
   const paths = [];
