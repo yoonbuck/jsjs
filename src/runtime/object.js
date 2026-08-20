@@ -57,14 +57,17 @@ export function ordinarySetPrototypeOf(target, value) {
     return false;
   }
 
-  for (
-    let current = /** @type {EngineObject | null} */ (value);
-    current !== null;
-    current = current.getPrototypeOf()
-  ) {
+  let current = /** @type {EngineObject | null} */ (value);
+  while (current !== null) {
     if (current === target) {
       return false;
     }
+
+    if (current.getPrototypeOf !== EngineObject.prototype.getPrototypeOf) {
+      break;
+    }
+
+    current = ordinaryGetPrototypeOf(current);
   }
 
   target._prototype = value;
@@ -787,6 +790,8 @@ export function setIntegrityLevel(object, level) {
     throw new TypeError(`Unsupported integrity level ${level}`);
   }
 
+  preventExtensionsOrThrow(object);
+
   for (const name of object.ownPropertyKeys()) {
     const descriptor = object.getOwnProperty(name);
     defineOwnPropertyOrThrow(
@@ -798,7 +803,6 @@ export function setIntegrityLevel(object, level) {
     );
   }
 
-  preventExtensionsOrThrow(object);
   return object;
 }
 

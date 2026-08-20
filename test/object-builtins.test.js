@@ -43,6 +43,24 @@ class RefusingDefineObject extends EngineObject {
 
 class RefusingPreventExtensionsObject extends EngineObject {
   /**
+   * @param {EngineObject} prototype
+   */
+  constructor(prototype) {
+    super(prototype);
+    this.defineOwnPropertyCalls = 0;
+  }
+
+  /**
+   * @param {import('../src/runtime/descriptors.js').PropertyKey} name
+   * @param {import('../src/runtime/descriptors.js').PropertyDescriptorRecord} descriptor
+   * @returns {boolean}
+   */
+  defineOwnProperty(name, descriptor) {
+    this.defineOwnPropertyCalls += 1;
+    return super.defineOwnProperty(name, descriptor);
+  }
+
+  /**
    * @returns {boolean}
    */
   preventExtensions() {
@@ -480,6 +498,43 @@ const tests = [
           ).value,
           'TypeError',
         );
+      }
+    },
+  },
+  {
+    name: 'Object seal and freeze reject preventExtensions before descriptor mutation',
+    run() {
+      const realm = createRealm();
+
+      for (const method of ['seal', 'freeze']) {
+        const target = new RefusingPreventExtensionsObject(
+          realm.intrinsics.objectPrototype,
+        );
+        EngineObject.prototype.defineOwnProperty.call(target, 'existing', {
+          value: 1,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        defineGlobal(realm, 'target', target);
+
+        assertSame(
+          evaluateScript(
+            realm,
+            `var name; try { Object.${method}(target); } ` +
+              'catch (error) { name = error.name; } name;',
+          ).value,
+          'TypeError',
+        );
+        const descriptor = target.getOwnProperty('existing');
+
+        if (descriptor === undefined) {
+          throw new Error('Expected the original descriptor to remain');
+        }
+
+        assertSame(descriptor.configurable, true);
+        assertSame(descriptor.writable, true);
+        assertSame(target.defineOwnPropertyCalls, 0);
       }
     },
   },

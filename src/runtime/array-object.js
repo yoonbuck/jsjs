@@ -83,9 +83,10 @@ export class EngineArray extends EngineObject {
       return ordinaryDefineOwnProperty(this, 'length', descriptor);
     }
 
-    const newLength = toUint32(descriptor.value);
+    const callerRealm = this.agent?.activeExecutionRealm ?? undefined;
+    const newLength = toUint32(descriptor.value, callerRealm);
 
-    if (newLength !== toNumber(descriptor.value)) {
+    if (newLength !== toNumber(descriptor.value, callerRealm)) {
       throw new GuestErrorSignal('RangeError', 'Invalid array length');
     }
 

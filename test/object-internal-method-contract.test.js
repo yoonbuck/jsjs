@@ -7,6 +7,7 @@ import { loadModuleGraph } from '../src/runtime/module-loader.js';
 import { linkModuleGraph } from '../src/runtime/module-linker.js';
 import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { EngineArray } from '../src/runtime/array-object.js';
 import * as objectOperations from '../src/runtime/object.js';
 import { ThrowSignal, GuestErrorSignal } from '../src/runtime/completion.js';
 import { GeneratorObject } from '../src/runtime/generator-object.js';
@@ -87,6 +88,176 @@ export default [
       descriptor.value = 2;
 
       assertSame(object.get('value'), 1);
+    },
+  },
+  {
+    name: 'OrdinarySetPrototypeOf stops before exotic prototype methods',
+    run() {
+      const cycleTarget = new EngineObject();
+      const ordinaryPrototype = new EngineObject(cycleTarget);
+
+      assertSame(cycleTarget.setPrototypeOf(ordinaryPrototype), false);
+      assertSame(cycleTarget.getPrototypeOf(), null);
+
+      const recordingTarget = new EngineObject();
+      const recordingPrototype = new EngineObject();
+      let recordingCalls = 0;
+      recordingPrototype.getPrototypeOf = () => {
+        recordingCalls += 1;
+        return null;
+      };
+
+      assertSame(recordingTarget.setPrototypeOf(recordingPrototype), true);
+      assertSame(recordingCalls, 0);
+
+      const throwingTarget = new EngineObject();
+      const throwingPrototype = new EngineObject();
+      throwingPrototype.getPrototypeOf = () => {
+        throw new Error('OrdinarySetPrototypeOf must not call exotic methods');
+      };
+
+      assertSame(throwingTarget.setPrototypeOf(throwingPrototype), true);
+
+      const selfReturningTarget = new EngineObject();
+      const selfReturningPrototype = new EngineObject();
+      let selfReturningCalls = 0;
+      selfReturningPrototype.getPrototypeOf = () => {
+        selfReturningCalls += 1;
+        if (selfReturningCalls > 1) {
+          throw new Error(
+            'OrdinarySetPrototypeOf followed an exotic self-returning prototype',
+          );
+        }
+        return selfReturningPrototype;
+      };
+
+      assertSame(
+        selfReturningTarget.setPrototypeOf(selfReturningPrototype),
+        true,
+      );
+      assertSame(selfReturningCalls, 0);
+    },
+  },
+  {
+    name: 'ArraySetLength uses its active Realm for same-Agent coercions and abrupts',
+    run() {
+      const agent = createAgent();
+      const callerRealm = createRealm({ agent });
+      const operationRealm = createRealm({ agent });
+      const valueRealm = createRealm({ agent });
+      const array = new EngineArray(operationRealm.intrinsics.arrayPrototype);
+      const value = new EngineObject(valueRealm.intrinsics.objectPrototype);
+      const valueOf = valueRealm.createNativeFunction({
+        name: 'valueOf',
+        length: 0,
+        call(_thisValue, _args, _functionObject, coercionCallerRealm) {
+          assertSame(coercionCallerRealm, operationRealm);
+          return 1.5;
+        },
+      });
+      const descriptor = new EngineObject(
+        operationRealm.intrinsics.objectPrototype,
+      );
+      descriptor.defineOwnProperty('value', {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      value.defineOwnProperty('valueOf', {
+        value: valueOf,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const defineProperty =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            operationRealm.globalObject.get('Object')
+          ).get('defineProperty')
+        );
+
+      callerRealm.agent.withActiveExecutionRealm(callerRealm, () => {
+        const error = assertThrows(
+          () =>
+            callCallable(
+              defineProperty,
+              undefined,
+              [array, 'length', descriptor],
+              callerRealm,
+            ),
+          ThrowSignal,
+        );
+
+        assertSame(
+          /** @type {EngineObject} */ (
+            /** @type {ThrowSignal} */ (error).value
+          ).getPrototype(),
+          operationRealm.intrinsics.rangeErrorPrototype,
+        );
+        assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
+      });
+      assertSame(callerRealm.agent.activeExecutionRealm, null);
+    },
+  },
+  {
+    name: 'ArraySetLength links cross-Agent coercion callers',
+    run() {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const operationRealm = createRealm({ agent: createAgent() });
+      const valueRealm = createRealm({ agent: createAgent() });
+      const array = new EngineArray(operationRealm.intrinsics.arrayPrototype);
+      const value = new EngineObject(valueRealm.intrinsics.objectPrototype);
+      const valueOf = valueRealm.createNativeFunction({
+        name: 'valueOf',
+        length: 0,
+        call(_thisValue, _args, _functionObject, coercionCallerRealm) {
+          assertSame(coercionCallerRealm, operationRealm);
+          assertSame(
+            valueRealm.agent.synchronousCallChainRoot(),
+            operationRealm.agent.synchronousCallChainRoot(),
+          );
+          return 1;
+        },
+      });
+      const descriptor = new EngineObject(
+        operationRealm.intrinsics.objectPrototype,
+      );
+      descriptor.defineOwnProperty('value', {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      value.defineOwnProperty('valueOf', {
+        value: valueOf,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const defineProperty =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          /** @type {EngineObject} */ (
+            operationRealm.globalObject.get('Object')
+          ).get('defineProperty')
+        );
+
+      callerRealm.agent.withActiveExecutionRealm(callerRealm, () => {
+        assertSame(
+          callCallable(
+            defineProperty,
+            undefined,
+            [array, 'length', descriptor],
+            callerRealm,
+          ),
+          array,
+        );
+        assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
+      });
+      assertSame(callerRealm.agent.activeExecutionRealm, null);
+      assertSame(operationRealm.agent.activeExecutionRealm, null);
+      assertSame(valueRealm.agent.activeExecutionRealm, null);
+      assertSame(array.get('length'), 1);
     },
   },
   {
