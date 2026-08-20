@@ -361,7 +361,7 @@ const SPECIAL_US6_PATH =
 const ISSUE_DEFINITIONS = Object.freeze({
   U0: Object.freeze({
     title: 'Provenance tooling foundation',
-    scope: 'Pure provenance tooling, rendering, and validation only.',
+    scope: 'Pure provenance tooling, rendering, and validation only',
     parentCode: 'T1',
     dependencies: Object.freeze([]),
     aggregateCodes: Object.freeze([]),
@@ -1193,7 +1193,7 @@ export function renderProvenanceIssueBody(manifest, code, issueMap) {
     `Scope: ${definition.scope}.`,
     'Non-goals: guest runtime behavior, tools/test262/features.json, and broad selection changes.',
     'Evidence method: reviewed Sixth Edition or later-spec proof only.',
-    'History alone never establishes edition evidence.',
+    'History, age, path/directory, and source/text similarity may prioritize review but can never decide edition.',
     dependencies.length === 0
       ? 'Dependencies: none.'
       : `Dependencies: ${dependencies.join(', ')}.`,

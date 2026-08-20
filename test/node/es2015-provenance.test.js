@@ -2775,6 +2775,8 @@ export default [
     name: 'ES2015 provenance renders deterministic issue bodies with exact dependency markers',
     run: () => {
       const manifest = productionManifest();
+      const EDITION_EVIDENCE_PROHIBITION =
+        'History, age, path/directory, and source/text similarity may prioritize review but can never decide edition.';
       const uaLedger = renderBatchLedger(manifest, 'UA');
       const uaBody = renderProvenanceIssueBody(
         manifest,
@@ -2851,7 +2853,9 @@ export default [
         true,
       );
       assertSame(
-        uaBody.includes('History alone never establishes edition evidence.'),
+        uaBody.includes(
+          'History, age, path/directory, and source/text similarity may prioritize review but can never decide edition.',
+        ),
         true,
       );
       assertSame(
@@ -2879,6 +2883,15 @@ export default [
         uaBody.includes('Require exact-head CodeQL before merge.'),
         true,
       );
+      for (const code of Object.keys(WRAPPED_ISSUE_MAP.issues)) {
+        for (const body of [
+          renderProvenanceIssueBody(manifest, code),
+          renderProvenanceIssueBody(manifest, code, WRAPPED_ISSUE_MAP),
+        ]) {
+          assertSame(body.includes(EDITION_EVIDENCE_PROHIBITION), true, code);
+          assertSame(body.includes('..'), false, code);
+        }
+      }
       assertSame(uaBody.includes('Dependencies: U0 (#100).'), true);
       assertSame(uaBody.includes('Native parent: T1 (#75).'), true);
       assertSame(u0Body.includes('zero classification decisions'), true);
