@@ -117,7 +117,8 @@ const EXECUTION_STATUSES = new Set(['passed', 'failed', 'skipped']);
  *   environment: Record<string, string | undefined>,
  *   readPin: () => Promise<any>,
  *   readFile: (path: string) => Promise<string>,
- *   writeFile: (path: string, text: string) => Promise<void>,
+ *   writeRepositoryFile: (path: string, text: string) => Promise<void>,
+ *   writePhysicalFile: (path: string, text: string) => Promise<void>,
  *   writeFilesAtomically: (files: readonly { path: string, text: string }[]) => Promise<void>,
  *   assertPinnedCheckout: (pin: any) => Promise<void>,
  *   listRoots: () => Promise<readonly string[]>,
@@ -477,10 +478,7 @@ export async function main(argv = [], dependencies = {}) {
   }
 
   if (current !== output) {
-    await deps.writeFile(
-      normalizeOutputTarget(ES2015_TAXONOMY_ARTIFACT, deps.repositoryRootUrl),
-      output,
-    );
+    await deps.writeRepositoryFile(ES2015_TAXONOMY_ARTIFACT, output);
   }
   return 0;
 }
@@ -526,7 +524,9 @@ export function createAuditDependencies(options = {}) {
     readFile: /** @type {(path: string) => Promise<string>} */ (
       readRepositoryFile
     ),
-    writeFile: (path, text) => writeFile(path, text, 'utf8'),
+    writeRepositoryFile: (path, text) =>
+      writeFile(new URL(path, repositoryRootUrl), text, 'utf8'),
+    writePhysicalFile: (path, text) => writeFile(path, text, 'utf8'),
     writeFilesAtomically: (files) => writeRepositoryFilesAtomically(files),
     assertPinnedCheckout: (pin) => assertPinnedCheckout(pin, repositoryRootUrl),
     listRoots: async () => {
@@ -1354,7 +1354,7 @@ async function synchronizePromotedReportArtifacts(options) {
       stale.push(path);
       continue;
     }
-    await deps.writeFile(path, contents);
+    await deps.writeRepositoryFile(path, contents);
   }
   return stale;
 }
@@ -1621,7 +1621,7 @@ async function writeH0Disposition(context) {
     pin,
     inventory: h0Inventory,
   });
-  await deps.writeFile(
+  await deps.writePhysicalFile(
     options.writeDisposition,
     `${JSON.stringify(disposition, null, 2)}\n`,
   );
@@ -1847,7 +1847,7 @@ async function writePromotionExecution(options) {
     null,
     2,
   )}\n`;
-  await deps.writeFile(ES2015_AUDIT_EVIDENCE_FILE, output);
+  await deps.writeRepositoryFile(ES2015_AUDIT_EVIDENCE_FILE, output);
 }
 
 /**

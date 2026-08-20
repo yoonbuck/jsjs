@@ -552,6 +552,77 @@ async function createRealAuditFixture() {
 }
 
 /**
+ * @param {{
+ *   root: URL,
+ *   checkout: URL,
+ *   pin: { repository: string, revision: string, checkoutPath: string },
+ * }} fixture
+ */
+async function configureInjectedPromotionFixture(fixture) {
+  const promotion = JSON.stringify({
+    version: 1,
+    repository: AUDIT_PIN.repository,
+    revision: AUDIT_PIN.revision,
+    sourceTaxonomySha256: sha256('injected repository taxonomy\n'),
+    ledgerSha256: sha256(`${REAL_AUDIT_UNSELECTED}\n`),
+    rootCount: 1,
+    variantCount: 2,
+    entries: [
+      {
+        path: REAL_AUDIT_UNSELECTED,
+        variants: 2,
+        features: ['Map'],
+        includeFeatures: [],
+      },
+    ],
+  });
+  await writeFixtureFile(
+    fixture.root,
+    'tools/test262/upstream-subset.json',
+    JSON.stringify({
+      version: 1,
+      repository: fixture.pin.repository,
+      revision: fixture.pin.revision,
+      groups: [
+        {
+          name: 'es2015/audit-passing-promotion',
+          summary: 'An injected promotion fixture root.',
+          paths: [REAL_AUDIT_UNSELECTED],
+        },
+        {
+          name: 'fixture',
+          summary: 'A selected real Test262 fixture root.',
+          paths: [REAL_AUDIT_SELECTED],
+        },
+      ],
+    }),
+  );
+  await writeFixtureFile(
+    fixture.root,
+    'tools/test262/es2015-promotion.json',
+    promotion,
+  );
+}
+
+/** @param {(cwd: URL) => Promise<void>} action */
+async function withIsolatedCwd(action) {
+  const nodeProcess =
+    /** @type {{ cwd: () => string, chdir: (path: string) => void }} */ (
+      /** @type {any} */ (process)
+    );
+  const originalCwd = nodeProcess.cwd();
+  const cwd = new URL(`.es2015-audit-cwd-${randomUUID()}/`, import.meta.url);
+  await mkdir(cwd);
+  nodeProcess.chdir(fileURLToPath(cwd));
+  try {
+    await action(cwd);
+  } finally {
+    nodeProcess.chdir(originalCwd);
+    await rm(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
  * The production taxonomy policy deliberately accepts only the checked-in
  * Test262 revision. The integration fixture still writes and validates its
  * own Git pin, while this adapter presents the reviewed metadata identity to
@@ -690,7 +761,14 @@ function auditDependencies(options = {}) {
       }
       return value;
     },
-    writeFile: async (
+    writeRepositoryFile: async (
+      /** @type {string} */ path,
+      /** @type {string} */ value,
+    ) => {
+      writes.push(path);
+      files.set(path, value);
+    },
+    writePhysicalFile: async (
       /** @type {string} */ path,
       /** @type {string} */ value,
     ) => {
@@ -2300,6 +2378,82 @@ export default [
         fixtureOutput(dependencies, 'docs/conformance.md'),
         conformance,
       );
+    },
+  },
+  {
+    name: 'ES2015 audit synchronizes promoted reports inside an injected repository root',
+    run: async () => {
+      const fixture = await createRealAuditFixture();
+      try {
+        await configureInjectedPromotionFixture(fixture);
+        await writeFixtureFile(
+          fixture.root,
+          'docs/conformance.md',
+          AUDIT_COVERAGE_DOCUMENT,
+        );
+
+        await withIsolatedCwd(async () => {
+          await mkdir('docs', { recursive: true });
+          assertSame(
+            await auditEs2015Taxonomy(
+              ['--sync-promoted-report'],
+              fixtureAuditDependencies(fixture),
+            ),
+            0,
+          );
+          assertSame(
+            (
+              await readFile(
+                new URL('docs/test262-report.jsonl', fixture.root),
+                'utf8',
+              )
+            ).includes(REAL_AUDIT_UNSELECTED),
+            true,
+          );
+          assertSame(fs.existsSync('docs/test262-report.jsonl'), false);
+          assertSame(fs.existsSync('docs/conformance.md'), false);
+        });
+      } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+      }
+    },
+  },
+  {
+    name: 'ES2015 audit writes execution evidence inside an injected repository root',
+    run: async () => {
+      const fixture = await createRealAuditFixture();
+      try {
+        await configureInjectedPromotionFixture(fixture);
+        const dependencies = {
+          ...fixtureAuditDependencies(fixture),
+          readPathsFile: async () => `${REAL_AUDIT_UNSELECTED}\n`,
+          runPromotion: async () =>
+            AUDIT_RECORDS.map((record) => ({
+              ...record,
+              file: REAL_AUDIT_UNSELECTED,
+            })),
+        };
+
+        await withIsolatedCwd(async () => {
+          await mkdir('tools/test262', { recursive: true });
+          assertSame(
+            await auditEs2015Taxonomy(
+              [`--paths-file=${EXACT_PATHS_FILE}`, '--write-execution'],
+              dependencies,
+            ),
+            0,
+          );
+          assertSame(
+            (
+              await readFile(new URL(AUDIT_EVIDENCE_PATH, fixture.root), 'utf8')
+            ).includes('\n  "version": 1'),
+            true,
+          );
+          assertSame(fs.existsSync(AUDIT_EVIDENCE_PATH), false);
+        });
+      } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+      }
     },
   },
   {
