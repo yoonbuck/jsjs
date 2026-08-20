@@ -22,18 +22,26 @@ embedding infrastructure:
 - it is not exported from the public runtime API;
 - it is installed only through the injected Test262 engine bridge.
 
-ArrayBuffer detachment remains B0. Garbage collection and later Agent hooks are
-excluded.
+ArrayBuffer detachment remains B0. `AbstractModuleSource`, garbage collection,
+and later Agent hooks are excluded. Existing asynchronous `print`/`$DONE`
+bridging remains on the runner's current path and is not duplicated inside
+`$262`.
 
 ## Architecture
 
-Extend `Test262Engine` with an optional `installHost(realm)` hook. `runVariant`
-creates the variant Realm, invokes the hook when supplied, then follows the
-existing module, asynchronous, or synchronous execution path. Optionality
-preserves focused engine doubles that intentionally expose only the hooks their
-test needs; the production jsjs bridge always supplies it. This keeps the
-shared runner host-neutral and prevents Node, Chromium, and JavaScriptCore
-adapters from developing semantic forks.
+Extend `Test262Engine` with a required `installHostBindings(realm)` hook.
+`runVariant` creates the variant Realm, invokes the hook exactly once, then
+follows the existing module, asynchronous, or synchronous execution path. The
+runner fails fast when an injected engine omits the hook; every focused engine
+double must state its host-binding behavior explicitly. This keeps the shared
+runner host-neutral and prevents Node, Chromium, and JavaScriptCore adapters
+from developing semantic forks.
+
+Installation occurs before `assert.js`, `sta.js`, declared includes, async
+setup, or module evaluation. A module root uses this prepared Realm throughout
+loading, linking, and evaluation. `_FIXTURE` dependencies do not receive
+independent Realm modification; they execute in the root module graph's
+prepared Realm.
 
 `createJsjsTest262Engine` implements the hook with a private recursive
 installer. For each Realm it creates an ordinary `EngineObject` whose prototype
@@ -47,20 +55,32 @@ is that Realm's `%Object.prototype%`. The object owns:
 
 The Realm global's `$262` property is writable, configurable, and
 non-enumerable, matching the pinned Test262 embedding contract. The host object
-retains ordinary-object branding (`[object Object]`), and its functions retain
-ordinary Realm-owned function branding and descriptors.
+retains ordinary-object branding (`[object Object]`) by inheriting from its
+Realm's `%Object.prototype%`. Its `global`, `createRealm`, and `evalScript`
+properties are ordinary writable, enumerable, configurable data properties.
+Its native functions inherit from that Realm's `%Function.prototype%` and have
+the standard non-writable, non-enumerable, configurable `name` and `length`
+properties.
 
 `$262.createRealm()` creates a child Realm with the owner's Agent, recursively
 installs the host interface, and returns the child's `$262` object. The child
 therefore has distinct globals and intrinsics while sharing well-known symbols
 and the global symbol registry with its parent.
 
-`$262.evalScript(source)` evaluates global script in its owning Realm. Normal
-completion returns the script completion value. A guest throw completion is
-re-thrown unchanged through `ThrowSignal`. A parser `SyntaxError` becomes a
-`GuestErrorSignal` at the native-function boundary, so the resulting guest
-`SyntaxError` belongs to the `evalScript` function's Realm. Unexpected host
-allocation, compiler, or engine failures remain host failures.
+`$262.evalScript(source)` accepts only a primitive string, as stated by the
+pinned host contract; it never delegates to host `String`. A missing argument,
+a Symbol, or any other non-string value throws a `TypeError` owned by the
+function's Realm before parsing or evaluation. The exact H0 ledger passes only
+primitive string literals, so this validation introduces no unsupported
+coercion dependency.
+
+For a valid string, `evalScript` evaluates global script in its owning Realm.
+Normal completion returns the script completion value. A guest throw
+completion is re-thrown unchanged through `ThrowSignal`, preserving thrown
+value identity. A parser `SyntaxError` becomes a `GuestErrorSignal` at the
+native-function boundary, so the resulting guest `SyntaxError` belongs to the
+`evalScript` function's Realm. Unexpected host allocation, compiler, or engine
+failures remain host failures.
 
 ## Alternatives Rejected
 
@@ -75,12 +95,16 @@ Strict RED-first portable probes cover:
 
 - global `$262` descriptors and exact ordinary-object/function branding;
 - absence from normal Realms and presence in raw Test262 variants;
+- fail-fast behavior when an injected engine omits `installHostBindings`;
+- installation ordering before harness includes, async setup, and module
+  evaluation, with no second module Realm;
 - same-Agent symbol identity with distinct globals and intrinsics;
 - recursive host availability in child Realms;
 - persistent global declarations and completion values through `evalScript`;
+- rejection of missing, Symbol, object, and other non-string arguments without
+  host coercion;
 - parent- and child-Realm ownership of parser and runtime errors; and
-- runner hook ordering before harness includes, modules, asynchronous tests,
-  and ordinary scripts.
+- thrown-value identity across `evalScript`.
 
 After the focused probes pass, run the exact H0 ledger under `TZ=UTC` against
 the pinned Test262 SHA. The post-change taxonomy must reclassify all 135 roots /
