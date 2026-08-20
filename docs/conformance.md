@@ -13,17 +13,21 @@ limited Annex B statement-position forms remain unsupported (see
 It also implements issue #25's ES2015 syntax surface: arrow functions; classes,
 inheritance, `super`, and computed method names; computed object names;
 destructuring declarations, assignments, and parameters; default and rest
-parameters; iterable spread in arrays, calls, and construction; and template
+parameters; iterable spread in arrays, calls, and construction; template
 literals including tagged-template cooked/raw objects and realm-local
-parse-site caching. The Layer-2 surface adds synchronous generator
+parse-site caching; binary/octal literals; valid Unicode code-point escapes; and
+exact `new.target` in function code, with top-level, module, and indirect-eval
+forms still rejected. The Layer-2 surface adds synchronous generator
 declarations, expressions, object/class methods, `yield`/`yield*`, generator
 iteration methods, and the non-global dynamic `%GeneratorFunction%`
 constructor.
 
 The parser's capability gate admits only those forms, so grammar and evaluation
 move together. `parseScript` still rejects async functions/generators and
-`await`, dynamic `import()`, `new.target`, object rest/spread, and later class
-fields/private names/static blocks/decorators. The
+`await`, dynamic `import()`, object rest/spread, and later class
+fields/private names/static blocks/decorators. It accepts binary/octal literals,
+valid Unicode code-point escapes, and exact `new.target` in function code; the
+top-level, module, and indirect-eval forms remain parse errors. The
 ES2015 RegExp flags `u` and `y` are rejected by ES5.1 flag validation. A
 top-level rejection is a host `SyntaxError`; source parsed through `eval`,
 dynamic `Function`, or dynamic `%GeneratorFunction%` receives a catchable guest
@@ -351,10 +355,9 @@ A file is a candidate only if it survives every filter:
   `destructuring-binding`, `rest-parameters`, `spread-syntax`, and `template`.
   Feature areas scope tagged selection to the relevant syntax directories; the
   broad `test/language` claim remains limited to the earlier lexical and
-  iteration tags. The pin has no standalone `spread-syntax` tag and its only
-  `template` tag also needs unsupported `new.target`, so their semantic backing
-  tests are documented exact metadata exceptions rather than claims for those
-  neighboring features.
+  iteration tags. The pin has no standalone `spread-syntax` tag and its only `template` tag
+  also uses `new.target`, so their semantic backing tests are documented exact
+  metadata exceptions rather than claims for those neighboring features.
 
 - **Engine grammar filter.** Every remaining file and harness include is parsed
   with the engine's own `parseScript`. A file that fails the parser's supported
@@ -430,8 +433,8 @@ exercised end to end. `tests` normally names upstream tests that carry the tag;
 the full contract permits only two exact pinned metadata exceptions:
 `spread-syntax` is backed by a `Symbol.iterator` spread test because the pin has
 no spread tag, and `template` is backed by an untagged cache test because the
-only template-tagged file also requires `new.target`. Every backing test still
-runs successfully, so neither exception claims its missing neighboring feature.
+only template-tagged file also uses `new.target`. Every backing test still runs
+successfully, so neither exception claims its missing neighboring feature.
 
 The manifest claims `const`, `for-of`, `let`, Symbol and its well-known tags,
 plus `arrow-function`, `class`, `computed-property-names`,
