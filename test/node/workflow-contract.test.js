@@ -20,11 +20,18 @@
  */
 
 import { spawnSync } from 'node:child_process';
+// @ts-expect-error node:fs's sync fixture helpers (mkdtemp/rm/writeFile) are
+// not declared in this repo's Node shim (types/host.d.ts only covers the
+// async fs/promises surface plus existsSync/constants).
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+// @ts-expect-error node:os has no ambient declaration in this repo's Node
+// shim, same as node:inspector in benchmark/profile/run-node.js.
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import nodePath from 'node:path';
 import { fileURLToPath } from 'node:url';
+// @ts-expect-error js-yaml's dumper (`dump`) is not declared in this repo's
+// Node shim, which only covers `load`.
 import { load as parseYaml, dump as dumpYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
@@ -72,6 +79,8 @@ import {
   ASYNC_RUNTIME_RELEASE_MANIFEST_FILE,
 } from '../../tools/test262/async-runtime-release-manifest.js';
 import * as ciPipeline from '../../tools/ci/pipeline.js';
+
+const { join } = nodePath;
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const NON_UTC_UPSTREAM_DIAGNOSTIC_ENV = Object.freeze({ TZ: 'Etc/GMT+1' });
@@ -409,6 +418,7 @@ function assertRoundTripsAsPlainScalar(value, description) {
   // still round-trips byte-for-byte for these particular values, so the
   // byte-round-trip check alone would not catch the style change — reject
   // the block indicators explicitly, independent of the round-trip check.
+  /** @type {string} */
   const dumped = dumpYaml({ value }, { lineWidth: -1 });
   assertSame(
     /^value: ['"]/.test(dumped),
@@ -450,7 +460,10 @@ function assertNameExpressionOnlyDependsOnEventName(expression, description) {
   }
 }
 
-/** Isolates fixture Git repositories from the host's real Git configuration. */
+/**
+ * Isolates fixture Git repositories from the host's real Git configuration.
+ * @param {Record<string, string>} extra
+ */
 function isolatedGitEnv(extra) {
   return Object.freeze({
     .../** @type {Record<string, string | undefined>} */ (process.env),
@@ -479,7 +492,7 @@ const GUARD_FIXTURE_IDENTITY = Object.freeze([
  * @param {Record<string, string> | undefined} [extra]
  */
 function runGit(cwd, args, extra) {
-  return spawnSync('git', args, {
+  return spawnSync('git', [...args], {
     cwd,
     env: isolatedGitEnv(extra ?? {}),
     encoding: 'utf8',
