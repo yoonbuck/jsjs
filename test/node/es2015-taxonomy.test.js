@@ -181,6 +181,7 @@ function emptyDecisionFragmentText(manifest, code) {
   return `${JSON.stringify(
     {
       version: manifest.version,
+      taxonomyBaseline: manifest.taxonomyBaseline,
       repository: manifest.repository,
       revision: manifest.revision,
       specification: manifest.specification,

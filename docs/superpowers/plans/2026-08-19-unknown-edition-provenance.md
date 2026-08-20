@@ -16,6 +16,9 @@ taxonomy integration without making a classification decision. After U0
 merges, native issues are created idempotently from the checked-in graph.
 Disjoint atomic batches then update only their source fragment before rebasing
 onto sequential current main and regenerating shared taxonomy artifacts.
+The manifest also pins one `foundation` and thirteen `decision:<CODE>` exact
+range profiles. CI derives the profile from one authoritative PR-body marker
+and invokes the same explicit-base/head range CLI used by local final review.
 
 **Tech Stack:** Node.js 20 ES modules, existing jsjs test harness, JSON
 manifests, SHA-256 canonicalization, generated GitHub Actions workflow, GitHub
@@ -61,6 +64,19 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
   exact-main default-setup CodeQL analyses pass.
 - The U0 PR includes the approved #75 design and plan and remains
   tooling/data/docs only; post-U0 decisions use separate PRs.
+- Normal provenance checks, complete-code checks, and rendering validate the
+  immutable checked-in manifest independently of the moving taxonomy.
+  `--initialize` is the only mode that derives it from taxonomy baseline
+  `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`.
+- Every U* PR has exactly one
+  `<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:... base-ledger-sha256:... -->`
+  marker. CI supplies actual event base/head/body values and derives the
+  profile inside the range CLI; a branch cannot invent another profile.
+- `foundation` allows only the exact U0 paths/content policies and reviewed
+  cleanup deletions when the base lacks the foundation. Each
+  `decision:<CODE>` requires the initialized foundation and allows only its
+  exact non-empty fragment plus manifest-listed deterministic outputs.
+  Foundation maintenance is a separate future reviewed profile/PR.
 - After U0, the #75 grouping session is controller-only. It creates/wires
   issues, verifies ledgers and graph state, coordinates child sessions, and
   publishes closure evidence; it never implements an atomic decision fragment.
@@ -81,8 +97,9 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
   boundary for initialization, checks, ledger rendering, issue rendering, and
   final decision integration.
 - Create `tools/test262/es2015-provenance.json`: generated immutable source
-  pins, base ledger identity, exact per-batch path/variant manifests, and graph
-  definitions.
+  pins, distinct jsjs taxonomy baseline, base ledger identity, exact per-batch
+  path/variant manifests, immutable blocker owners, graph definitions, and the
+  exact range-policy profiles.
 - Create `tools/test262/es2015-provenance-decisions/UA.json`,
   `UB.json`, `UL1.json`, `UL2.json`, `UL3.json`, `UL4.json`, `US1.json`,
   `US2.json`, `US3.json`, `US4.json`, `US5.json`, `US6.json`, and `US7.json`:
@@ -604,6 +621,7 @@ git commit -m "Integrate reviewed provenance with ES2015 taxonomy" \
   - `node tools/test262/es2015-provenance-check.js --check --complete=UA`
   - `node tools/test262/es2015-provenance-check.js --render-ledger=UA`
   - `node tools/test262/es2015-provenance-check.js --render-issue=UA --issue-map=/Users/jordan/.copilot/session-state/a53ed448-8385-41f7-baa6-9a61ebd71c83/files/es2015-provenance-created-issues.json`
+  - `node tools/test262/es2015-provenance-check.js --check-range --base=<FULL_SHA> --head=<FULL_SHA> --profile=foundation --marker='<EXACT_MARKER>'`
 
 - [ ] **Step 1: Write CLI option and drift tests**
 
@@ -762,7 +780,11 @@ runStep(
 ),
 ```
 
-Place it immediately before the existing ES2015 taxonomy/audit check. Regenerate:
+Add the PR-only exact range step immediately before this provenance check. It
+uses `github.event.pull_request.base.sha`, `.head.sha`, and `.body`, derives the
+unique marker profile inside the same CLI, and fetches enough history for
+`BASE...HEAD`. Keep the provenance check immediately before the existing
+ES2015 taxonomy/audit check. Regenerate:
 
 ```bash
 npm run ci:generate
@@ -876,6 +898,14 @@ this task.
 ```bash
 git --no-pager diff --stat "$FINAL_MERGE_BASE"...HEAD
 git --no-pager diff --name-only "$FINAL_MERGE_BASE"...HEAD
+REVIEWED_HEAD=$(git rev-parse HEAD)
+U0_MARKER='<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:foundation base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->'
+TZ=UTC node tools/test262/es2015-provenance-check.js \
+  --check-range \
+  --base="$FINAL_MERGE_BASE" \
+  --head="$REVIEWED_HEAD" \
+  --profile=foundation \
+  --marker="$U0_MARKER"
 test -z "$(git diff --name-only "$FINAL_MERGE_BASE"...HEAD -- src/)"
 git diff --exit-code "$FINAL_MERGE_BASE"...HEAD -- \
   tools/test262/features.json \
@@ -901,7 +931,10 @@ git diff --check
 Expected: the final range includes the approved #75 design and plan plus U0
 tooling/data/docs; no `src/`, feature, selection, or classification-decision
 changes; unknown remains exactly 2,312 / 4,054. The metadata-only audit check
-must not execute Test262.
+must not execute Test262. Record the full base/head SHAs, exact marker/profile,
+NUL-safe name-status result, and successful range/content validation as Task 6
+evidence. The manual diff lines are readable evidence, not a second policy
+implementation.
 
 - [ ] **Step 3: Recover or create exactly one draft U0 PR**
 
@@ -1158,6 +1191,14 @@ Write canonical JSON:
 Populate discovered nodes on resume; leave uncreated codes absent rather than
 using sentinel numbers.
 
+Final rendering accepts only the complete wrapped map above with exact outer
+keys and exact U0/UA/UB/UL/UL1-UL4/US/US1-US7 issue keys. Each final entry is
+`{number,id,nodeId,state}`; numbers, REST ids, and node ids are unique, parent
+#75 is not reused, and the parent/base hash must match. Authoritative body
+markers contain exactly
+`parent:T1 parent-issue:75 code:<CODE> base-ledger-sha256:<hash>`. Native
+parents are #75 for U0/UA/UB/UL/US, UL for UL1-UL4, and US for US1-US7.
+
 ---
 
 ### Task 8: Create, Wire, and Verify the Remaining U* Issues
@@ -1371,6 +1412,14 @@ Edition or later normative identity, reviewed semantic rationale, and
 corroborating history where useful. UA must distinguish Sixth Edition Annex B
 from later web-compat semantics. US6 must prove later status from exact
 normative sources, not its topic name.
+
+Before classification, compare every record's `es5id`, `es6id`, `esid`, sorted
+features, flags, includes, and transitive include features to the exact pinned
+inventory. Blocked destinations use only manifest-pinned blocker/owner pairs.
+Review timestamps are real canonical UTC RFC3339 calendar values. Reviewed
+`harness-validation` and `malformed` destinations retain structural
+precedence; malformed current metadata accounts for zero executable variants
+while the record retains the immutable prior variant count.
 
 - [ ] **Step 4: Prepare draft fragments without claiming review**
 

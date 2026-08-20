@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "version": 2,
+  "taxonomyBaseline": "54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7",
   "repository": "https://github.com/tc39/test262.git",
   "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
   "specification": {
@@ -10,6 +11,528 @@
     "code": "T1",
     "issue": 75
   },
+  "blockerOwners": [
+    {
+      "blocker": "annex-b-web-compatibility",
+      "issues": [
+        99
+      ]
+    },
+    {
+      "blocker": "binary-data-and-typed-arrays",
+      "issues": [
+        87,
+        88,
+        89,
+        90
+      ]
+    },
+    {
+      "blocker": "early-errors-and-declaration-instantiation",
+      "issues": [
+        78
+      ]
+    },
+    {
+      "blocker": "keyed-collections",
+      "issues": [
+        83,
+        84,
+        85,
+        86
+      ]
+    },
+    {
+      "blocker": "lexical-grammar-and-new-target",
+      "issues": [
+        77
+      ]
+    },
+    {
+      "blocker": "proper-tail-calls",
+      "issues": [
+        97
+      ]
+    },
+    {
+      "blocker": "proxy-and-reflect-metaobject",
+      "issues": [
+        79,
+        80,
+        81
+      ]
+    },
+    {
+      "blocker": "regexp-unicode-and-sticky",
+      "issues": [
+        91,
+        92
+      ]
+    },
+    {
+      "blocker": "remaining-language-runtime-semantics",
+      "issues": [
+        96
+      ]
+    },
+    {
+      "blocker": "remaining-standard-library-additions",
+      "issues": [
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "blocker": "symbol-protocol-dispatch",
+      "issues": [
+        82,
+        92
+      ]
+    },
+    {
+      "blocker": "test262-cross-realm-host",
+      "issues": [
+        76
+      ]
+    }
+  ],
+  "rangeProfiles": [
+    {
+      "name": "foundation",
+      "baseFoundation": "absent",
+      "requiredPaths": [
+        ".github/workflows/ci.yml",
+        ".prettierignore",
+        "docs/conformance.md",
+        "docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md",
+        "docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md",
+        "docs/testing.md",
+        "package.json",
+        "test/node/es2015-provenance.test.js",
+        "test/node/es2015-taxonomy.test.js",
+        "test/node/repository-invariants.test.js",
+        "test/node/workflow-contract.test.js",
+        "test/run-node.js",
+        "tools/ci/pipeline.js",
+        "tools/test262/es2015-audit.js",
+        "tools/test262/es2015-provenance-check.js",
+        "tools/test262/es2015-provenance-decisions/UA.json",
+        "tools/test262/es2015-provenance-decisions/UB.json",
+        "tools/test262/es2015-provenance-decisions/UL1.json",
+        "tools/test262/es2015-provenance-decisions/UL2.json",
+        "tools/test262/es2015-provenance-decisions/UL3.json",
+        "tools/test262/es2015-provenance-decisions/UL4.json",
+        "tools/test262/es2015-provenance-decisions/US1.json",
+        "tools/test262/es2015-provenance-decisions/US2.json",
+        "tools/test262/es2015-provenance-decisions/US3.json",
+        "tools/test262/es2015-provenance-decisions/US4.json",
+        "tools/test262/es2015-provenance-decisions/US5.json",
+        "tools/test262/es2015-provenance-decisions/US6.json",
+        "tools/test262/es2015-provenance-decisions/US7.json",
+        "tools/test262/es2015-provenance.js",
+        "tools/test262/es2015-provenance.json",
+        "tools/test262/es2015-taxonomy.js"
+      ],
+      "allowedPaths": [
+        ".github/workflows/ci.yml",
+        ".prettierignore",
+        "docs/conformance.md",
+        "docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md",
+        "docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md",
+        "docs/testing.md",
+        "package.json",
+        "test/node/es2015-provenance.test.js",
+        "test/node/es2015-taxonomy.test.js",
+        "test/node/repository-invariants.test.js",
+        "test/node/workflow-contract.test.js",
+        "test/run-node.js",
+        "tools/ci/pipeline.js",
+        "tools/test262/es2015-audit.js",
+        "tools/test262/es2015-provenance-check.js",
+        "tools/test262/es2015-provenance-decisions/UA.json",
+        "tools/test262/es2015-provenance-decisions/UB.json",
+        "tools/test262/es2015-provenance-decisions/UL1.json",
+        "tools/test262/es2015-provenance-decisions/UL2.json",
+        "tools/test262/es2015-provenance-decisions/UL3.json",
+        "tools/test262/es2015-provenance-decisions/UL4.json",
+        "tools/test262/es2015-provenance-decisions/US1.json",
+        "tools/test262/es2015-provenance-decisions/US2.json",
+        "tools/test262/es2015-provenance-decisions/US3.json",
+        "tools/test262/es2015-provenance-decisions/US4.json",
+        "tools/test262/es2015-provenance-decisions/US5.json",
+        "tools/test262/es2015-provenance-decisions/US6.json",
+        "tools/test262/es2015-provenance-decisions/US7.json",
+        "tools/test262/es2015-provenance.js",
+        "tools/test262/es2015-provenance.json",
+        "tools/test262/es2015-taxonomy.js"
+      ],
+      "requiredDeletions": [
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-boundary-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-quality-fix-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/generator-preflight-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/origin-main-blocker-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/pr-gate-runtime-fix-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/recovery-release-gate-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/whole-milestone-review-fix-report.md"
+      ],
+      "allowedDeletions": [
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-boundary-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-quality-fix-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/generator-preflight-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/origin-main-blocker-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/pr-gate-runtime-fix-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/recovery-release-gate-report.md",
+        ".superpowers/sdd/2026-08-15-async-runtime-modules-release/whole-milestone-review-fix-report.md"
+      ],
+      "emptyDecisionFragments": [
+        "tools/test262/es2015-provenance-decisions/UA.json",
+        "tools/test262/es2015-provenance-decisions/UB.json",
+        "tools/test262/es2015-provenance-decisions/UL1.json",
+        "tools/test262/es2015-provenance-decisions/UL2.json",
+        "tools/test262/es2015-provenance-decisions/UL3.json",
+        "tools/test262/es2015-provenance-decisions/UL4.json",
+        "tools/test262/es2015-provenance-decisions/US1.json",
+        "tools/test262/es2015-provenance-decisions/US2.json",
+        "tools/test262/es2015-provenance-decisions/US3.json",
+        "tools/test262/es2015-provenance-decisions/US4.json",
+        "tools/test262/es2015-provenance-decisions/US5.json",
+        "tools/test262/es2015-provenance-decisions/US6.json",
+        "tools/test262/es2015-provenance-decisions/US7.json"
+      ],
+      "decisionFragment": null,
+      "generatedPaths": [
+        ".github/workflows/ci.yml",
+        "tools/test262/es2015-provenance-decisions/UA.json",
+        "tools/test262/es2015-provenance-decisions/UB.json",
+        "tools/test262/es2015-provenance-decisions/UL1.json",
+        "tools/test262/es2015-provenance-decisions/UL2.json",
+        "tools/test262/es2015-provenance-decisions/UL3.json",
+        "tools/test262/es2015-provenance-decisions/UL4.json",
+        "tools/test262/es2015-provenance-decisions/US1.json",
+        "tools/test262/es2015-provenance-decisions/US2.json",
+        "tools/test262/es2015-provenance-decisions/US3.json",
+        "tools/test262/es2015-provenance-decisions/US4.json",
+        "tools/test262/es2015-provenance-decisions/US5.json",
+        "tools/test262/es2015-provenance-decisions/US6.json",
+        "tools/test262/es2015-provenance-decisions/US7.json",
+        "tools/test262/es2015-provenance.json"
+      ]
+    },
+    {
+      "name": "decision:UA",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/UA.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/UA.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/UA.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:UB",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/UB.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/UB.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/UB.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:UL1",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/UL1.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/UL1.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/UL1.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:UL2",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/UL2.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/UL2.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/UL2.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:UL3",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/UL3.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/UL3.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/UL3.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:UL4",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/UL4.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/UL4.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/UL4.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:US1",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/US1.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/US1.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/US1.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:US2",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/US2.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/US2.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/US2.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:US3",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/US3.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/US3.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/US3.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:US4",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/US4.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/US4.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/US4.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:US5",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/US5.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/US5.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/US5.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:US6",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/US6.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/US6.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/US6.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    },
+    {
+      "name": "decision:US7",
+      "baseFoundation": "present",
+      "requiredPaths": [
+        "tools/test262/es2015-provenance-decisions/US7.json"
+      ],
+      "allowedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-provenance-decisions/US7.json",
+        "tools/test262/es2015-taxonomy.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [],
+      "decisionFragment": "tools/test262/es2015-provenance-decisions/US7.json",
+      "generatedPaths": [
+        "docs/conformance.md",
+        "docs/test262-report.jsonl",
+        "tools/test262/es2015-audit-evidence.json",
+        "tools/test262/es2015-taxonomy.json"
+      ]
+    }
+  ],
   "baseLedger": {
     "rootCount": 2312,
     "variantCount": 4054,

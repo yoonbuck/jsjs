@@ -6,6 +6,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 # Least privilege: no job in this workflow writes to the repository.
 permissions:
@@ -240,6 +241,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: 'false'
+          fetch-depth: '0'
       - name: Check out the pinned Test262 tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -254,6 +256,14 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Check provenance PR range
+        if: github.event_name == 'pull_request'
+        run: node tools/test262/es2015-provenance-check.js --check-range --base="$ES2015_PROVENANCE_BASE_SHA" --head="$ES2015_PROVENANCE_HEAD_SHA" --pr-body-env=ES2015_PROVENANCE_PR_BODY
+        env:
+          ES2015_PROVENANCE_BASE_SHA: '${{ github.event.pull_request.base.sha }}'
+          ES2015_PROVENANCE_HEAD_SHA: '${{ github.event.pull_request.head.sha }}'
+          ES2015_PROVENANCE_PR_BODY: '${{ github.event.pull_request.body }}'
+          TZ: 'UTC'
       - name: Check unknown-edition provenance
         run: npm run test262:es2015:provenance:check
         env:

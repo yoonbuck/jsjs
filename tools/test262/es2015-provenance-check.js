@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
@@ -19,7 +20,7 @@ const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
 const PRIMARY_OPTION_LABEL =
-  'Exactly one of --initialize, --check, --render-ledger=CODE, or --render-issue=CODE is required';
+  'Exactly one of --initialize, --check, --check-range, --render-ledger=CODE, or --render-issue=CODE is required';
 const ISSUE_RENDER_CODES = Object.freeze([
   'U0',
   'UA',
@@ -53,6 +54,10 @@ export class Es2015ProvenanceCheckError extends Error {
  *   readFile: (path: string) => Promise<string>,
  *   readdir: (path: string) => Promise<readonly string[]>,
  *   writeFile: (path: string, text: string) => Promise<void>,
+ *   resolveCommit: (revision: string) => Promise<string>,
+ *   mergeBase: (base: string, head: string) => Promise<string>,
+ *   gitDiff: (base: string, head: string) => Promise<string>,
+ *   readGitFile: (revision: string, path: string) => Promise<string | null>,
  *   stdout: (text: string) => void,
  *   stderr: (text: string) => void,
  * }} ProvenanceCheckDependencies
@@ -77,7 +82,14 @@ export async function main(argv = [], dependencies = {}) {
         await initializeFoundation(deps);
         return 0;
       case 'check':
-        await checkFoundation(deps, options.completeCode);
+        await checkFoundation(
+          deps,
+          options.completeCode,
+          options.allowPendingReview,
+        );
+        return 0;
+      case 'check-range':
+        await checkRange(deps, options);
         return 0;
       case 'render-ledger': {
         const manifest = await loadReviewedManifest(deps);
@@ -121,6 +133,21 @@ export async function main(argv = [], dependencies = {}) {
 /** @param {{ repositoryRootUrl?: URL, environment?: Record<string, string | undefined>, stdout?: (text: string) => void, stderr?: (text: string) => void }} [options] */
 export function createProvenanceCheckDependencies(options = {}) {
   const repositoryRootUrl = options.repositoryRootUrl ?? REPOSITORY_ROOT_URL;
+  const repositoryRootPath = fileURLToPath(repositoryRootUrl);
+  const runGit = async (/** @type {readonly string[]} */ args) => {
+    return /** @type {string} */ (
+      execFileSync(
+        'git',
+        [...args],
+        /** @type {any} */ ({
+          cwd: repositoryRootPath,
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024 * 1024,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }),
+      )
+    );
+  };
   return {
     environment: options.environment ?? process.env,
     readFile: (/** @type {string} */ path) =>
@@ -129,6 +156,30 @@ export function createProvenanceCheckDependencies(options = {}) {
       readdir(resolvePath(path, repositoryRootUrl)),
     writeFile: (/** @type {string} */ path, /** @type {string} */ text) =>
       writeFile(resolvePath(path, repositoryRootUrl), text, 'utf8'),
+    resolveCommit: async (/** @type {string} */ revision) =>
+      (await runGit(['rev-parse', '--verify', `${revision}^{commit}`])).trim(),
+    mergeBase: async (/** @type {string} */ base, /** @type {string} */ head) =>
+      (await runGit(['merge-base', base, head])).trim(),
+    gitDiff: (/** @type {string} */ base, /** @type {string} */ head) =>
+      runGit([
+        'diff',
+        '--name-status',
+        '-z',
+        '--find-renames',
+        '--find-copies',
+        `${base}...${head}`,
+      ]),
+    readGitFile: async (
+      /** @type {string} */ revision,
+      /** @type {string} */ path,
+    ) => {
+      try {
+        return await runGit(['show', `${revision}:${path}`]);
+      } catch (error) {
+        if (/** @type {any} */ (error)?.status === 128) return null;
+        throw error;
+      }
+    },
     stdout: options.stdout ?? ((text) => process.stdout.write(text)),
     stderr: options.stderr ?? ((text) => process.stderr.write(text)),
   };
@@ -138,6 +189,8 @@ export function createProvenanceCheckDependencies(options = {}) {
 function scanOptions(argv) {
   let initialize = false;
   let check = false;
+  let checkRange = false;
+  let allowPendingReview = false;
   /** @type {string | null} */
   let renderLedgerCode = null;
   /** @type {string | null} */
@@ -146,6 +199,16 @@ function scanOptions(argv) {
   let completeCode = null;
   /** @type {string | null} */
   let issueMapPath = null;
+  /** @type {string | null} */
+  let baseSha = null;
+  /** @type {string | null} */
+  let headSha = null;
+  /** @type {string | null} */
+  let rangeProfile = null;
+  /** @type {string | null} */
+  let rangeMarker = null;
+  /** @type {string | null} */
+  let prBodyEnvironment = null;
 
   for (const argument of argv) {
     if (argument === '--initialize') {
@@ -164,6 +227,24 @@ function scanOptions(argv) {
         );
       }
       check = true;
+      continue;
+    }
+    if (argument === '--check-range') {
+      if (checkRange) {
+        throw new Es2015ProvenanceCheckError(
+          'The --check-range option must not be repeated',
+        );
+      }
+      checkRange = true;
+      continue;
+    }
+    if (argument === '--allow-pending-review') {
+      if (allowPendingReview) {
+        throw new Es2015ProvenanceCheckError(
+          'The --allow-pending-review option must not be repeated',
+        );
+      }
+      allowPendingReview = true;
       continue;
     }
     if (argument.startsWith('--render-ledger=')) {
@@ -231,29 +312,127 @@ function scanOptions(argv) {
       issueMapPath = path;
       continue;
     }
+    if (argument.startsWith('--base=')) {
+      if (baseSha !== null) {
+        throw new Es2015ProvenanceCheckError(
+          'The --base=SHA option must not be repeated',
+        );
+      }
+      baseSha = argument.slice('--base='.length);
+      continue;
+    }
+    if (argument.startsWith('--head=')) {
+      if (headSha !== null) {
+        throw new Es2015ProvenanceCheckError(
+          'The --head=SHA option must not be repeated',
+        );
+      }
+      headSha = argument.slice('--head='.length);
+      continue;
+    }
+    if (argument.startsWith('--profile=')) {
+      if (rangeProfile !== null) {
+        throw new Es2015ProvenanceCheckError(
+          'The --profile=PROFILE option must not be repeated',
+        );
+      }
+      rangeProfile = argument.slice('--profile='.length);
+      continue;
+    }
+    if (argument.startsWith('--marker=')) {
+      if (rangeMarker !== null) {
+        throw new Es2015ProvenanceCheckError(
+          'The --marker=MARKER option must not be repeated',
+        );
+      }
+      rangeMarker = argument.slice('--marker='.length);
+      continue;
+    }
+    if (argument.startsWith('--pr-body-env=')) {
+      if (prBodyEnvironment !== null) {
+        throw new Es2015ProvenanceCheckError(
+          'The --pr-body-env=NAME option must not be repeated',
+        );
+      }
+      prBodyEnvironment = argument.slice('--pr-body-env='.length);
+      continue;
+    }
     throw new Es2015ProvenanceCheckError(`Unknown option ${argument}`);
   }
 
   return {
     initialize,
     check,
+    checkRange,
     renderLedgerCode,
     renderIssueCode,
     completeCode,
     issueMapPath,
+    allowPendingReview,
+    baseSha,
+    headSha,
+    rangeProfile,
+    rangeMarker,
+    prBodyEnvironment,
   };
 }
 
-/** @param {{ initialize: boolean, check: boolean, renderLedgerCode: string | null, renderIssueCode: string | null, completeCode: string | null, issueMapPath: string | null }} options */
+/** @param {{ initialize: boolean, check: boolean, checkRange: boolean, renderLedgerCode: string | null, renderIssueCode: string | null, completeCode: string | null, issueMapPath: string | null, allowPendingReview: boolean, baseSha: string | null, headSha: string | null, rangeProfile: string | null, rangeMarker: string | null, prBodyEnvironment: string | null }} options */
 function resolvePrimaryMode(options) {
+  if (
+    options.allowPendingReview &&
+    (!options.check || options.completeCode === null)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      '--allow-pending-review requires --check --complete=CODE',
+    );
+  }
   const primaryModes = [
     options.initialize,
     options.check,
+    options.checkRange,
     options.renderLedgerCode !== null,
     options.renderIssueCode !== null,
   ].filter(Boolean).length;
   if (primaryModes !== 1) {
     throw new Es2015ProvenanceCheckError(PRIMARY_OPTION_LABEL);
+  }
+  const hasRangeOption =
+    options.baseSha !== null ||
+    options.headSha !== null ||
+    options.rangeProfile !== null ||
+    options.rangeMarker !== null ||
+    options.prBodyEnvironment !== null;
+  if (!options.checkRange && hasRangeOption) {
+    throw new Es2015ProvenanceCheckError('Range options require --check-range');
+  }
+  if (options.checkRange) {
+    if (
+      options.completeCode !== null ||
+      options.issueMapPath !== null ||
+      options.allowPendingReview
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        '--check-range cannot be combined with decision or rendering options',
+      );
+    }
+    if (options.baseSha === null || options.headSha === null) {
+      throw new Es2015ProvenanceCheckError(
+        '--check-range requires --base=SHA and --head=SHA',
+      );
+    }
+    if (options.prBodyEnvironment === null) {
+      if (options.rangeProfile === null || options.rangeMarker === null) {
+        throw new Es2015ProvenanceCheckError(
+          'Local --check-range requires --profile=PROFILE and --marker=MARKER',
+        );
+      }
+    } else if (options.rangeProfile !== null || options.rangeMarker !== null) {
+      throw new Es2015ProvenanceCheckError(
+        '--pr-body-env=NAME cannot be combined with --profile or --marker',
+      );
+    }
+    return { kind: 'check-range' };
   }
   if (options.completeCode !== null && !options.check) {
     throw new Es2015ProvenanceCheckError('--complete=CODE requires --check');
@@ -275,6 +454,347 @@ function resolvePrimaryMode(options) {
   return { kind: 'render-issue', code: options.renderIssueCode };
 }
 
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {{ baseSha: string | null, headSha: string | null, rangeProfile: string | null, rangeMarker: string | null, prBodyEnvironment: string | null }} options
+ */
+async function checkRange(deps, options) {
+  const base = explicitCommitSha(options.baseSha, '--base');
+  const head = explicitCommitSha(options.headSha, '--head');
+  if (base === head) {
+    throw new Es2015ProvenanceCheckError(
+      'Provenance range base and head must be different commits',
+    );
+  }
+  const [resolvedBase, resolvedHead] = await Promise.all([
+    deps.resolveCommit(base),
+    deps.resolveCommit(head),
+  ]);
+  if (resolvedBase !== base || resolvedHead !== head) {
+    throw new Es2015ProvenanceCheckError(
+      'Provenance range commits must resolve to the explicit base and head SHAs',
+    );
+  }
+  if ((await deps.mergeBase(base, head)) !== base) {
+    throw new Es2015ProvenanceCheckError(
+      'Provenance range base must be an ancestor of head',
+    );
+  }
+  const changes = parseRangeChanges(await deps.gitDiff(base, head));
+  const marker = markerForRange(deps, options, changes);
+  if (marker === null) return;
+
+  const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
+  /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>} */
+  let manifest;
+  if (marker.profile === 'foundation') {
+    if (baseManifestText !== null) {
+      throw new Es2015ProvenanceCheckError(
+        'foundation range requires a base without the initialized provenance foundation',
+      );
+    }
+    manifest = await readRangeManifest(deps, head, 'foundation head');
+  } else if (marker.profile.startsWith('decision:')) {
+    if (baseManifestText === null) {
+      throw new Es2015ProvenanceCheckError(
+        `${marker.profile} range requires an initialized provenance foundation in the base`,
+      );
+    }
+    manifest = parseRangeManifest(baseManifestText, `${marker.profile} base`);
+    const headManifestText = await deps.readGitFile(
+      head,
+      ES2015_PROVENANCE_FILE,
+    );
+    if (headManifestText !== baseManifestText) {
+      throw new Es2015ProvenanceCheckError(
+        `${marker.profile} range forbids provenance manifest drift`,
+      );
+    }
+  } else {
+    manifest = await readRangeManifest(deps, head, marker.profile);
+  }
+
+  const profile = manifest.rangeProfiles.find(
+    (/** @type {any} */ entry) => entry.name === marker.profile,
+  );
+  if (profile === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `Unknown provenance range profile ${marker.profile}`,
+    );
+  }
+  const expectedMarker = provenanceRangeMarker(
+    profile.name,
+    manifest.baseLedger.pathSha256,
+  );
+  if (marker.text !== expectedMarker) {
+    throw new Es2015ProvenanceCheckError(
+      `Provenance PR marker does not match ${profile.name} policy`,
+    );
+  }
+  validateRangeChanges(profile, changes);
+  await validateRangeContent(deps, head, manifest, profile);
+}
+
+/** @param {string | null} value @param {string} option */
+function explicitCommitSha(value, option) {
+  if (typeof value !== 'string' || !/^[0-9a-f]{40}$/u.test(value)) {
+    throw new Es2015ProvenanceCheckError(
+      `${option} must be an explicit full commit SHA`,
+    );
+  }
+  return value;
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {{ rangeProfile: string | null, rangeMarker: string | null, prBodyEnvironment: string | null }} options
+ * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ */
+function markerForRange(deps, options, changes) {
+  if (options.prBodyEnvironment === null) {
+    const parsed = parseProvenanceRangeMarker(
+      /** @type {string} */ (options.rangeMarker),
+    );
+    if (parsed.profile !== options.rangeProfile) {
+      throw new Es2015ProvenanceCheckError(
+        `Provenance PR marker does not match ${options.rangeProfile} policy`,
+      );
+    }
+    return parsed;
+  }
+  if (!/^[A-Z][A-Z0-9_]*$/u.test(options.prBodyEnvironment)) {
+    throw new Es2015ProvenanceCheckError(
+      '--pr-body-env must name a trusted environment variable',
+    );
+  }
+  if (deps.environment.GITHUB_EVENT_NAME !== 'pull_request') {
+    throw new Es2015ProvenanceCheckError(
+      'Provenance PR range checking requires a pull_request event',
+    );
+  }
+  const body = deps.environment[options.prBodyEnvironment];
+  if (typeof body !== 'string') {
+    throw new Es2015ProvenanceCheckError(
+      `Provenance PR body environment ${options.prBodyEnvironment} is missing`,
+    );
+  }
+  const markerLines = body
+    .split(/\r?\n/u)
+    .filter((line) => line.includes('es2015-provenance-pr'));
+  if (markerLines.length === 0) {
+    if (changes.some((change) => provenanceOwnedRangePath(change.path))) {
+      throw new Es2015ProvenanceCheckError(
+        'A provenance-owned PR range requires one authoritative provenance marker',
+      );
+    }
+    return null;
+  }
+  if (markerLines.length !== 1) {
+    throw new Es2015ProvenanceCheckError(
+      'PR body must contain exactly one authoritative provenance marker',
+    );
+  }
+  return parseProvenanceRangeMarker(markerLines[0]);
+}
+
+/** @param {string} text */
+function parseProvenanceRangeMarker(text) {
+  const match =
+    /^<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:([A-Za-z0-9:-]+) base-ledger-sha256:([0-9a-f]{64}) -->$/u.exec(
+      text,
+    );
+  if (match === null) {
+    throw new Es2015ProvenanceCheckError(
+      'Provenance PR marker is not authoritative',
+    );
+  }
+  return { text, profile: match[1], baseLedgerSha256: match[2] };
+}
+
+/** @param {string} profile @param {string} baseLedgerSha256 */
+function provenanceRangeMarker(profile, baseLedgerSha256) {
+  return `<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:${profile} base-ledger-sha256:${baseLedgerSha256} -->`;
+}
+
+/** @param {string} path */
+function provenanceOwnedRangePath(path) {
+  return (
+    path.startsWith('tools/test262/es2015-provenance') ||
+    path ===
+      'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md' ||
+    path === 'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md'
+  );
+}
+
+/** @param {string} text */
+function parseRangeChanges(text) {
+  if (text === '') return [];
+  if (!text.endsWith('\0')) {
+    throw new Es2015ProvenanceCheckError(
+      'git diff --name-status output must be NUL-delimited',
+    );
+  }
+  const fields = text.slice(0, -1).split('\0');
+  const changes = [];
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++];
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const sourcePath = fields[index++];
+      const path = fields[index++];
+      if (sourcePath === undefined || path === undefined) {
+        throw new Es2015ProvenanceCheckError(
+          'git diff --name-status output is incomplete',
+        );
+      }
+      changes.push({ status, sourcePath, path });
+      continue;
+    }
+    const path = fields[index++];
+    if (path === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        'git diff --name-status output is incomplete',
+      );
+    }
+    changes.push({ status, sourcePath: null, path });
+  }
+  return changes;
+}
+
+/**
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} profile
+ * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ */
+function validateRangeChanges(profile, changes) {
+  if (changes.length === 0) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile.name} range must not be empty`,
+    );
+  }
+  const allowedPaths = new Set(profile.allowedPaths);
+  const allowedDeletions = new Set(profile.allowedDeletions);
+  const changed = new Set();
+  const deleted = new Set();
+  for (const change of changes) {
+    if (change.status.startsWith('R')) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range forbids rename ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (change.status.startsWith('C')) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range forbids copy ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (!['A', 'M', 'D'].includes(change.status)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range has unknown git status ${change.status}`,
+      );
+    }
+    if (changed.has(change.path) || deleted.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range repeats changed path ${change.path}`,
+      );
+    }
+    if (change.status === 'D') {
+      if (!allowedDeletions.has(change.path)) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile.name} range forbids deleted path ${change.path}`,
+        );
+      }
+      deleted.add(change.path);
+      continue;
+    }
+    if (!allowedPaths.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range forbids changed path ${change.path}`,
+      );
+    }
+    changed.add(change.path);
+  }
+  for (const path of profile.requiredPaths) {
+    if (!changed.has(path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range is missing required changed path ${path}`,
+      );
+    }
+  }
+  for (const path of profile.requiredDeletions) {
+    if (!deleted.has(path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range is missing required deletion ${path}`,
+      );
+    }
+  }
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {string} head
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} manifest
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} profile
+ */
+async function validateRangeContent(deps, head, manifest, profile) {
+  for (const path of profile.emptyDecisionFragments) {
+    const code = path.slice(path.lastIndexOf('/') + 1, -'.json'.length);
+    const text = await readRequiredGitFile(deps, head, path);
+    const fragment = parseEs2015DecisionFragment(text, code);
+    if (fragment.decisions.length !== 0 || text !== renderJson(fragment)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range requires an exact empty decision fragment at ${path}`,
+      );
+    }
+  }
+  if (profile.decisionFragment !== null) {
+    const code = profile.name.slice('decision:'.length);
+    const text = await readRequiredGitFile(
+      deps,
+      head,
+      profile.decisionFragment,
+    );
+    const fragment = parseEs2015DecisionFragment(text, code);
+    if (text !== renderJson(fragment) || fragment.decisions.length === 0) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile.name} range requires one canonical non-empty source fragment`,
+      );
+    }
+    validateDecisionFragments(manifest, new Map([[code, fragment]]), {
+      allowPendingReview: true,
+    });
+  }
+}
+
+/** @param {ProvenanceCheckDependencies} deps @param {string} revision @param {string} path */
+async function readRequiredGitFile(deps, revision, path) {
+  const text = await deps.readGitFile(revision, path);
+  if (text === null) {
+    throw new Es2015ProvenanceCheckError(
+      `${path} is missing from provenance range head ${revision}`,
+    );
+  }
+  return text;
+}
+
+/** @param {ProvenanceCheckDependencies} deps @param {string} revision @param {string} label */
+async function readRangeManifest(deps, revision, label) {
+  const text = await readRequiredGitFile(
+    deps,
+    revision,
+    ES2015_PROVENANCE_FILE,
+  );
+  return parseRangeManifest(text, label);
+}
+
+/** @param {string} text @param {string} label */
+function parseRangeManifest(text, label) {
+  const manifest = parseEs2015ProvenanceManifest(text);
+  if (text !== renderJson(manifest)) {
+    throw new Es2015ProvenanceCheckError(
+      `${label} provenance manifest is not canonical`,
+    );
+  }
+  validateProvenanceFoundation(manifest);
+  return manifest;
+}
 /** @param {ProvenanceCheckDependencies} deps */
 async function initializeFoundation(deps) {
   const { manifestText, fragmentTexts } = await preflightInitialization(deps);
@@ -298,24 +818,20 @@ async function preflightInitialization(deps) {
   return foundation;
 }
 
-/** @param {ProvenanceCheckDependencies} deps @param {string | null} completeCode */
-async function checkFoundation(deps, completeCode) {
-  const classifications = taxonomyClassifications(
-    await readRequiredFile(deps, TAXONOMY_FILE),
-  );
-  const expectedManifest = buildProvenanceFoundation(classifications);
-  const expectedManifestText = renderJson(expectedManifest);
+/** @param {ProvenanceCheckDependencies} deps @param {string | null} completeCode @param {boolean} allowPendingReview */
+async function checkFoundation(deps, completeCode, allowPendingReview) {
   const actualManifestText = await readRequiredFile(
     deps,
     ES2015_PROVENANCE_FILE,
   );
-  if (actualManifestText !== expectedManifestText) {
+  const manifest = parseEs2015ProvenanceManifest(actualManifestText);
+  const canonicalManifestText = renderJson(manifest);
+  if (actualManifestText !== canonicalManifestText) {
     throw new Es2015ProvenanceCheckError(
       `${ES2015_PROVENANCE_FILE} does not match generated provenance bytes`,
     );
   }
-  const manifest = parseEs2015ProvenanceManifest(actualManifestText);
-  validateProvenanceFoundation(manifest, classifications);
+  validateProvenanceFoundation(manifest);
 
   await verifyDecisionDirectory(deps);
   const fragments = new Map();
@@ -333,26 +849,22 @@ async function checkFoundation(deps, completeCode) {
   }
 
   validateDecisionFragments(manifest, fragments, {
-    allowPendingReview: false,
+    allowPendingReview,
     ...(completeCode === null ? {} : { requireCompleteCodes: [completeCode] }),
   });
 }
 
 /** @param {ProvenanceCheckDependencies} deps */
 async function loadReviewedManifest(deps) {
-  const classifications = taxonomyClassifications(
-    await readRequiredFile(deps, TAXONOMY_FILE),
-  );
-  const expectedManifest = buildProvenanceFoundation(classifications);
-  const expectedText = renderJson(expectedManifest);
   const actualText = await readRequiredFile(deps, ES2015_PROVENANCE_FILE);
-  if (actualText !== expectedText) {
+  const manifest = parseEs2015ProvenanceManifest(actualText);
+  const canonicalText = renderJson(manifest);
+  if (actualText !== canonicalText) {
     throw new Es2015ProvenanceCheckError(
       `${ES2015_PROVENANCE_FILE} does not match generated provenance bytes`,
     );
   }
-  const manifest = parseEs2015ProvenanceManifest(actualText);
-  validateProvenanceFoundation(manifest, classifications);
+  validateProvenanceFoundation(manifest);
   return manifest;
 }
 
@@ -369,6 +881,7 @@ async function expectedFoundation(deps) {
       code,
       renderJson({
         version: ES2015_PROVENANCE_VERSION,
+        taxonomyBaseline: manifest.taxonomyBaseline,
         repository: manifest.repository,
         revision: manifest.revision,
         specification: manifest.specification,
@@ -428,8 +941,8 @@ async function assertInitializableFragments(deps) {
     if (current === null) {
       continue;
     }
-    const parsed = parseEs2015DecisionFragment(current, code);
-    if (parsed.decisions.length > 0) {
+    const parsed = parseJson(current, path);
+    if (!Array.isArray(parsed.decisions) || parsed.decisions.length > 0) {
       throw new Es2015ProvenanceCheckError(
         `${path} must not overwrite non-empty reviewed decisions`,
       );

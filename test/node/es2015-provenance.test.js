@@ -16,6 +16,7 @@ import {
   validateProvenanceFoundation,
 } from '../../tools/test262/es2015-provenance.js';
 import {
+  createProvenanceCheckDependencies,
   Es2015ProvenanceCheckError,
   main as provenanceCheck,
 } from '../../tools/test262/es2015-provenance-check.js';
@@ -45,6 +46,7 @@ const readFileSyncText =
 
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
+const TAXONOMY_BASELINE = '54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7';
 const SPECIFICATION_SOURCE = 'https://262.ecma-international.org/6.0/';
 const SPECIFICATION_SHA256 =
   '4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0';
@@ -52,6 +54,56 @@ const TAXONOMY_PATH = 'tools/test262/es2015-taxonomy.json';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
 const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
+const RANGE_BASE_SHA = 'a'.repeat(40);
+const RANGE_HEAD_SHA = 'b'.repeat(40);
+const FOUNDATION_ALLOWED_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  '.prettierignore',
+  'docs/conformance.md',
+  'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md',
+  'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+  'docs/testing.md',
+  'package.json',
+  'test/node/es2015-provenance.test.js',
+  'test/node/es2015-taxonomy.test.js',
+  'test/node/repository-invariants.test.js',
+  'test/node/workflow-contract.test.js',
+  'test/run-node.js',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-audit.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance-decisions/UA.json',
+  'tools/test262/es2015-provenance-decisions/UB.json',
+  'tools/test262/es2015-provenance-decisions/UL1.json',
+  'tools/test262/es2015-provenance-decisions/UL2.json',
+  'tools/test262/es2015-provenance-decisions/UL3.json',
+  'tools/test262/es2015-provenance-decisions/UL4.json',
+  'tools/test262/es2015-provenance-decisions/US1.json',
+  'tools/test262/es2015-provenance-decisions/US2.json',
+  'tools/test262/es2015-provenance-decisions/US3.json',
+  'tools/test262/es2015-provenance-decisions/US4.json',
+  'tools/test262/es2015-provenance-decisions/US5.json',
+  'tools/test262/es2015-provenance-decisions/US6.json',
+  'tools/test262/es2015-provenance-decisions/US7.json',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/es2015-provenance.json',
+  'tools/test262/es2015-taxonomy.js',
+]);
+const FOUNDATION_DELETIONS = Object.freeze([
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-boundary-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-quality-fix-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/generator-preflight-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/origin-main-blocker-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/pr-gate-runtime-fix-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/recovery-release-gate-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/whole-milestone-review-fix-report.md',
+]);
+const DECISION_GENERATED_PATHS = Object.freeze([
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-taxonomy.json',
+]);
 const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
@@ -183,7 +235,7 @@ const CLASSIFICATION_POLICY = JSON.stringify({
   },
   es2015Features: ['let'],
   laterFeatures: ['async-functions'],
-  neutralFeatures: [],
+  neutralFeatures: ['neutral-feature'],
   laterFlags: ['CanBlockIsFalse', 'CanBlockIsTrue'],
   pathRules: [
     {
@@ -307,17 +359,68 @@ function driftedTaxonomyText() {
   return `${JSON.stringify(taxonomy, null, 2)}\n`;
 }
 
+function reclassifiedTaxonomyText() {
+  const taxonomy = JSON.parse(PRODUCTION_TAXONOMY_TEXT);
+  const targetPath = productionManifest().baseLedger.paths[0];
+  const record = taxonomy.classifications.find(
+    (/** @type {any} */ entry) => entry.path === targetPath,
+  );
+  record.partition = 'core';
+  record.status = 'audit-passing-unselected';
+  return `${JSON.stringify(taxonomy, null, 2)}\n`;
+}
+
 /** @param {ProvenanceManifest} manifest @param {string} code */
 function emptyDecisionFragmentText(manifest, code) {
   return `${JSON.stringify(
     {
       version: manifest.version,
+      taxonomyBaseline: manifest.taxonomyBaseline,
       repository: manifest.repository,
       revision: manifest.revision,
       specification: manifest.specification,
       parent: manifest.parent,
       code,
       decisions: [],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/** @param {ProvenanceManifest} manifest @param {string} code */
+function completePendingDecisionFragmentText(manifest, code) {
+  const batch = manifest.batches.find((entry) => entry.code === code);
+  if (batch === undefined) {
+    throw new Error(`expected production manifest batch ${code}`);
+  }
+  const decisions = batch.entries.map((entry) => {
+    const decision = {
+      ...decisionWithoutHash(),
+      path: entry.path,
+      variants: entry.variants,
+      priorClass: entry.priorClass,
+      review: {
+        reviewer: 'pending',
+        reviewedAt: 'pending',
+        artifact: 'pending',
+      },
+    };
+    return {
+      ...decision,
+      artifactSha256: canonicalDecisionSha256(decision),
+    };
+  });
+  return `${JSON.stringify(
+    {
+      version: manifest.version,
+      taxonomyBaseline: manifest.taxonomyBaseline,
+      repository: manifest.repository,
+      revision: manifest.revision,
+      specification: manifest.specification,
+      parent: manifest.parent,
+      code,
+      decisions,
     },
     null,
     2,
@@ -525,6 +628,7 @@ function validDecision() {
 function validDecisionFragmentValue() {
   return {
     version: ES2015_PROVENANCE_VERSION,
+    taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
     specification: {
@@ -586,6 +690,39 @@ const COMPLETE_ISSUE_MAP = Object.freeze({
   US6: 114,
   US7: 115,
 });
+const WRAPPED_ISSUE_MAP = Object.freeze({
+  version: 1,
+  parent: 75,
+  baseLedgerSha256:
+    '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc',
+  issues: Object.freeze(
+    Object.fromEntries(
+      Object.entries(COMPLETE_ISSUE_MAP).map(([code, number], index) => [
+        code,
+        Object.freeze({
+          number,
+          id: 1000 + index,
+          nodeId: `I_fixture_${code}`,
+          state: code === 'U0' ? 'closed' : 'open',
+        }),
+      ]),
+    ),
+  ),
+});
+const REVIEWED_BLOCKER_OWNERS = Object.freeze({
+  'annex-b-web-compatibility': Object.freeze([99]),
+  'binary-data-and-typed-arrays': Object.freeze([87, 88, 89, 90]),
+  'early-errors-and-declaration-instantiation': Object.freeze([78]),
+  'keyed-collections': Object.freeze([83, 84, 85, 86]),
+  'lexical-grammar-and-new-target': Object.freeze([77]),
+  'proper-tail-calls': Object.freeze([97]),
+  'proxy-and-reflect-metaobject': Object.freeze([79, 80, 81]),
+  'regexp-unicode-and-sticky': Object.freeze([91, 92]),
+  'remaining-language-runtime-semantics': Object.freeze([96]),
+  'remaining-standard-library-additions': Object.freeze([92, 93, 94, 95]),
+  'symbol-protocol-dispatch': Object.freeze([82, 92]),
+  'test262-cross-realm-host': Object.freeze([76]),
+});
 
 function classificationPolicy() {
   return parseEs2015Policy(CLASSIFICATION_POLICY);
@@ -640,6 +777,15 @@ function reviewedDecisionWithoutHash(options) {
     path: options.path,
     finalPartition: options.finalPartition,
     finalStatus: options.finalStatus,
+    metadata: {
+      es5id: null,
+      es6id: null,
+      esid: null,
+      features: [],
+      includeFeatures: [],
+      includes: [],
+      flags: [],
+    },
     destination: options.finalStatus.startsWith('blocked:')
       ? {
           blocker: options.finalStatus.slice('blocked:'.length),
@@ -671,6 +817,14 @@ function reviewedProvenanceMap(decisions) {
       parseEs2015DecisionFragment(json(value), code),
     ]),
   );
+  assertSame(
+    json(
+      productionManifest().rangeProfiles.find(
+        (profile) => profile.name === 'decision:UA',
+      )?.generatedPaths,
+    ),
+    json(DECISION_GENERATED_PATHS),
+  );
   const validated = validateDecisionFragments(productionManifest(), parsed, {
     allowPendingReview: false,
   });
@@ -685,7 +839,23 @@ function reviewedProvenanceMap(decisions) {
   );
 }
 
-/** @param {{ code: string, path: string, finalPartition: string, finalStatus: string }} spec */
+/**
+ * @param {{
+ *   code: string,
+ *   path: string,
+ *   finalPartition: string,
+ *   finalStatus: string,
+ *   metadata?: {
+ *     es5id: string | null,
+ *     es6id: string | null,
+ *     esid: string | null,
+ *     features: readonly string[],
+ *     includeFeatures: readonly string[],
+ *     includes: readonly string[],
+ *     flags: readonly string[],
+ *   },
+ * }} spec
+ */
 function reviewedProvenanceStub(spec) {
   const batch = productionManifest().batches.find(
     (entry) => entry.code === spec.code,
@@ -703,9 +873,11 @@ function reviewedProvenanceStub(spec) {
       Object.freeze({
         code: spec.code,
         path: spec.path,
+        variants: ledgerEntry.variants,
         priorClass: ledgerEntry.priorClass,
         finalPartition: spec.finalPartition,
         finalStatus: spec.finalStatus,
+        metadata: spec.metadata ?? decision.metadata,
         artifactSha256: canonicalDecisionSha256(decision),
       }),
     ],
@@ -745,6 +917,7 @@ function provenanceCheckDependencies(options = {}) {
       emptyDecisionFragmentText(manifest, code),
     );
   }
+
   for (const [path, text] of options.files?.entries() ?? []) {
     files.set(path, text);
   }
@@ -762,7 +935,9 @@ function provenanceCheckDependencies(options = {}) {
       .sort();
 
   return {
-    environment: { TZ: options.timezone ?? 'UTC' },
+    environment: /** @type {Record<string, string | undefined>} */ ({
+      TZ: options.timezone ?? 'UTC',
+    }),
     readFile: async (/** @type {string} */ path) => {
       const value = files.get(path);
       if (value === undefined) {
@@ -795,11 +970,79 @@ function provenanceCheckDependencies(options = {}) {
   };
 }
 
+/** @param {readonly { status: string, path: string, sourcePath?: string }[]} changes */
+function rangeDiffText(changes) {
+  const fields = [];
+  for (const change of changes) {
+    fields.push(change.status);
+    if (change.status.startsWith('R') || change.status.startsWith('C')) {
+      fields.push(change.sourcePath ?? 'source.js', change.path);
+    } else {
+      fields.push(change.path);
+    }
+  }
+  return fields.length === 0 ? '' : `${fields.join('\0')}\0`;
+}
+
+/** @param {string} profile */
+function rangeMarker(profile) {
+  return `<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:${profile} base-ledger-sha256:${APPROVED_PRODUCTION_FOUNDATION.baseLedger.pathSha256} -->`;
+}
+
+/** @param {string} profile */
+function rangeArguments(profile) {
+  return [
+    '--check-range',
+    `--base=${RANGE_BASE_SHA}`,
+    `--head=${RANGE_HEAD_SHA}`,
+    `--profile=${profile}`,
+    `--marker=${rangeMarker(profile)}`,
+  ];
+}
+
+/**
+ * @param {{
+ *   changes: readonly { status: string, path: string, sourcePath?: string }[],
+ *   baseHasFoundation?: boolean,
+ *   headFiles?: ReadonlyMap<string, string>,
+ *   mergeBase?: string,
+ * }} options
+ */
+function rangeCheckDependencies(options) {
+  const dependencies = provenanceCheckDependencies();
+  const headFiles = new Map(dependencies.files);
+  for (const path of FOUNDATION_ALLOWED_PATHS) {
+    if (!headFiles.has(path)) headFiles.set(path, `fixture ${path}\n`);
+  }
+  for (const [path, text] of options.headFiles ?? []) {
+    headFiles.set(path, text);
+  }
+  const baseFiles = new Map();
+  if (options.baseHasFoundation === true) {
+    baseFiles.set(ES2015_PROVENANCE_FILE, approvedProvenanceManifestText());
+  }
+  for (const path of FOUNDATION_DELETIONS) {
+    baseFiles.set(path, `removed fixture ${path}\n`);
+  }
+  return {
+    ...dependencies,
+    files: headFiles,
+    resolveCommit: async (/** @type {string} */ revision) => revision,
+    mergeBase: async () => options.mergeBase ?? RANGE_BASE_SHA,
+    gitDiff: async () => rangeDiffText(options.changes),
+    readGitFile: async (
+      /** @type {string} */ revision,
+      /** @type {string} */ path,
+    ) =>
+      (revision === RANGE_BASE_SHA ? baseFiles : headFiles).get(path) ?? null,
+  };
+}
+
 export default [
   {
     name: 'ES2015 provenance exports the approved contract constants',
     run: () => {
-      assertSame(ES2015_PROVENANCE_VERSION, 1);
+      assertSame(ES2015_PROVENANCE_VERSION, 2);
       assertSame(
         ES2015_PROVENANCE_FILE,
         'tools/test262/es2015-provenance.json',
@@ -820,6 +1063,14 @@ export default [
           'US5',
           'US6',
           'US7',
+        ]),
+      );
+      assertSame(productionManifest().taxonomyBaseline, TAXONOMY_BASELINE);
+      assertSame(
+        json(productionManifest().rangeProfiles.map((profile) => profile.name)),
+        json([
+          'foundation',
+          ...ES2015_PROVENANCE_DECISION_CODES.map((code) => `decision:${code}`),
         ]),
       );
     },
@@ -846,13 +1097,23 @@ export default [
 
       const validManifest = validManifestValue();
       const badVersion = clone(validManifest);
-      badVersion.version = 2;
+      badVersion.version = 3;
       assertSame(
         assertThrows(
           () => parseEs2015ProvenanceManifest(json(badVersion)),
           Es2015ProvenanceError,
         ).message,
         `${ES2015_PROVENANCE_FILE} must declare version ${ES2015_PROVENANCE_VERSION}`,
+      );
+
+      const badTaxonomyBaseline = clone(validManifest);
+      badTaxonomyBaseline.taxonomyBaseline = '0'.repeat(40);
+      assertSame(
+        assertThrows(
+          () => parseEs2015ProvenanceManifest(json(badTaxonomyBaseline)),
+          Es2015ProvenanceError,
+        ).message,
+        `${ES2015_PROVENANCE_FILE} must retain the reviewed jsjs taxonomy baseline`,
       );
 
       const badRepository = clone(validManifest);
@@ -1176,6 +1437,80 @@ export default [
     },
   },
   {
+    name: 'ES2015 provenance pins reviewed blocker-to-roadmap-owner pairs',
+    run: () => {
+      const manifest = productionManifest();
+      assertSame(
+        json(
+          Object.fromEntries(
+            manifest.blockerOwners.map((entry) => [
+              entry.blocker,
+              entry.issues,
+            ]),
+          ),
+        ),
+        json(REVIEWED_BLOCKER_OWNERS),
+      );
+
+      for (const [blocker, issues] of Object.entries(REVIEWED_BLOCKER_OWNERS)) {
+        for (const issue of issues) {
+          const fragmentValue = clone(productionDecisionFragmentValue());
+          fragmentValue.decisions[0].finalStatus = `blocked:${blocker}`;
+          fragmentValue.decisions[0].destination = { blocker, issue };
+          refreshFragmentHash(fragmentValue);
+          validateDecisionFragments(
+            manifest,
+            {
+              UL3: parseEs2015DecisionFragment(json(fragmentValue), 'UL3'),
+            },
+            { allowPendingReview: false },
+          );
+        }
+
+        const wrongIssue = issues.includes(76) ? 77 : 76;
+        const wrongPair = clone(productionDecisionFragmentValue());
+        wrongPair.decisions[0].finalStatus = `blocked:${blocker}`;
+        wrongPair.decisions[0].destination = {
+          blocker,
+          issue: wrongIssue,
+        };
+        refreshFragmentHash(wrongPair);
+        assertSame(
+          assertThrows(
+            () =>
+              validateDecisionFragments(
+                manifest,
+                {
+                  UL3: parseEs2015DecisionFragment(json(wrongPair), 'UL3'),
+                },
+                { allowPendingReview: false },
+              ),
+            Es2015ProvenanceError,
+          ).message,
+          `UL3 decision for ${PRODUCTION_UL3_PATH} blocker ${blocker} is not owned by issue #${wrongIssue}`,
+        );
+      }
+
+      const trackingIssue = clone(productionDecisionFragmentValue());
+      trackingIssue.decisions[0].destination.issue = 98;
+      refreshFragmentHash(trackingIssue);
+      assertSame(
+        assertThrows(
+          () =>
+            validateDecisionFragments(
+              manifest,
+              {
+                UL3: parseEs2015DecisionFragment(json(trackingIssue), 'UL3'),
+              },
+              { allowPendingReview: false },
+            ),
+          Es2015ProvenanceError,
+        ).message,
+        `UL3 decision for ${PRODUCTION_UL3_PATH} blocker remaining-language-runtime-semantics is not owned by issue #98`,
+      );
+    },
+  },
+  {
     name: 'ES2015 provenance canonicalizes and validates reviewed decision fragments',
     run: () => {
       const manifest = productionManifest();
@@ -1244,8 +1579,41 @@ export default [
             ),
           Es2015ProvenanceError,
         ).message,
-        `UL3 decision for ${PRODUCTION_UL3_PATH} review.reviewedAt must be a UTC RFC3339 timestamp`,
+        `UL3 decision for ${PRODUCTION_UL3_PATH} review.reviewedAt must be a canonical UTC RFC3339 timestamp`,
       );
+
+      for (const reviewedAt of [
+        '0000-01-01T00:00:00Z',
+        '2026-02-30T00:00:00Z',
+        '2026-13-01T00:00:00Z',
+        '2026-08-19T24:00:00Z',
+        '2026-08-19T23:60:00Z',
+        '2026-08-19T23:59:60Z',
+        '2026-08-19T00:00:00.000Z',
+        '2026-08-19t00:00:00z',
+      ]) {
+        const invalidReviewTime = clone(productionDecisionFragmentValue());
+        invalidReviewTime.decisions[0].review.reviewedAt = reviewedAt;
+        refreshFragmentHash(invalidReviewTime);
+        assertSame(
+          assertThrows(
+            () =>
+              validateDecisionFragments(
+                manifest,
+                {
+                  UL3: parseEs2015DecisionFragment(
+                    json(invalidReviewTime),
+                    'UL3',
+                  ),
+                },
+                { allowPendingReview: false },
+              ),
+            Es2015ProvenanceError,
+          ).message,
+          `UL3 decision for ${PRODUCTION_UL3_PATH} review.reviewedAt must be a canonical UTC RFC3339 timestamp`,
+          reviewedAt,
+        );
+      }
 
       const malformedReviewUrl = clone(productionDecisionFragmentValue());
       malformedReviewUrl.decisions[0].review.artifact =
@@ -1361,7 +1729,11 @@ export default [
       );
 
       const strictPendingReviewer = clone(productionDecisionFragmentValue());
-      strictPendingReviewer.decisions[0].review.reviewer = 'pending';
+      strictPendingReviewer.decisions[0].review = {
+        reviewer: 'pending',
+        reviewedAt: 'pending',
+        artifact: 'pending',
+      };
       refreshFragmentHash(strictPendingReviewer);
       assertSame(
         assertThrows(
@@ -1379,6 +1751,17 @@ export default [
           Es2015ProvenanceError,
         ).message,
         `UL3 decision for ${PRODUCTION_UL3_PATH} review.reviewer must not be pending in strict validation`,
+      );
+
+      const partialPendingReview = clone(productionDecisionFragmentValue());
+      partialPendingReview.decisions[0].review.reviewer = 'pending';
+      refreshFragmentHash(partialPendingReview);
+      assertSame(
+        assertThrows(
+          () => parseEs2015DecisionFragment(json(partialPendingReview), 'UL3'),
+          Es2015ProvenanceError,
+        ).message,
+        `UL3 decision for ${PRODUCTION_UL3_PATH} pending review fields must all be pending`,
       );
 
       const pendingDraft = clone(productionDecisionFragmentValue());
@@ -1728,6 +2111,254 @@ export default [
     },
   },
   {
+    name: 'ES2015 reviewed provenance metadata must close over the exact pinned inventory',
+    run: () => {
+      const path = productionBatchPath('US7');
+      const exactMetadata = {
+        es5id: null,
+        es6id: null,
+        esid: null,
+        features: ['neutral-feature'],
+        includeFeatures: ['neutral-feature'],
+        includes: ['helper.js'],
+        flags: ['onlyStrict'],
+      };
+      const inventory = buildEs2015Inventory({
+        roots: [
+          {
+            path,
+            metadata: {
+              description: 'Metadata closure fixture.',
+              es5id: null,
+              es6id: null,
+              esid: null,
+              features: ['neutral-feature'],
+              includes: ['helper.js'],
+              flags: ['onlyStrict'],
+            },
+          },
+        ],
+        includeDefinitions: {
+          'helper.js': { features: ['neutral-feature'] },
+        },
+      });
+      const exactReviewed = reviewedProvenanceStub({
+        code: 'US7',
+        path,
+        finalPartition: 'later-or-non-es2015',
+        finalStatus: 'later-or-non-es2015',
+        metadata: exactMetadata,
+      });
+      const exact = classifyEs2015Inventory({
+        policy: classificationPolicy(),
+        anchors: classificationAnchors(),
+        inventory,
+        reviewedProvenance: exactReviewed,
+      });
+      assertSame(exact[0].partition, 'later-or-non-es2015');
+
+      /** @type {readonly [string, any][]} */
+      const mismatches = [
+        ['es5id', '15.1'],
+        ['es6id', '12.1'],
+        ['esid', 'sec-fixture'],
+        ['features', []],
+        ['flags', []],
+        ['includes', []],
+        ['includeFeatures', []],
+      ];
+      for (const [field, value] of mismatches) {
+        const metadata = /** @type {any} */ ({
+          ...exactMetadata,
+          [field]: value,
+        });
+        const error = assertThrows(
+          () =>
+            classifyEs2015Inventory({
+              policy: classificationPolicy(),
+              anchors: classificationAnchors(),
+              inventory,
+              reviewedProvenance: reviewedProvenanceStub({
+                code: 'US7',
+                path,
+                finalPartition: 'later-or-non-es2015',
+                finalStatus: 'later-or-non-es2015',
+                metadata,
+              }),
+            }),
+          Es2015TaxonomyError,
+        );
+        assertSame(
+          error.message,
+          `ES2015 reviewed provenance for ${path} metadata.${field} does not match the pinned inventory`,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 provenance retains structural harness and malformed destinations with exact accounting',
+    run: () => {
+      const metadata = {
+        es5id: null,
+        es6id: null,
+        esid: null,
+        features: [],
+        includeFeatures: [],
+        includes: [],
+        flags: [],
+      };
+      const harnessPath = 'test/harness/reviewed-harness.js';
+      const malformedPath = 'test/language/reviewed-malformed.js';
+      const harnessDecision = Object.freeze({
+        code: 'UA',
+        path: harnessPath,
+        variants: 2,
+        priorClass: 'unknown-edition',
+        finalPartition: 'harness-validation',
+        finalStatus: 'harness-validation',
+        metadata,
+        artifactSha256: '1'.repeat(64),
+      });
+      const malformedDecision = Object.freeze({
+        code: 'UL3',
+        path: malformedPath,
+        variants: 2,
+        priorClass: 'unknown-edition',
+        finalPartition: 'malformed',
+        finalStatus: 'malformed',
+        metadata,
+        artifactSha256: '2'.repeat(64),
+      });
+      /** @type {Map<string, any>} */
+      const structuralReviewed = new Map();
+      structuralReviewed.set(harnessPath, harnessDecision);
+      structuralReviewed.set(malformedPath, malformedDecision);
+      const inventory = buildEs2015Inventory({
+        roots: [
+          {
+            path: harnessPath,
+            metadata: {
+              description: 'Harness validation fixture.',
+              es5id: null,
+              es6id: null,
+              esid: null,
+              features: [],
+              includes: [],
+              flags: [],
+            },
+          },
+          {
+            path: malformedPath,
+            metadataError: 'invalid frontmatter',
+          },
+        ],
+      });
+      const classifications = classifyEs2015Inventory({
+        policy: classificationPolicy(),
+        anchors: classificationAnchors(),
+        inventory,
+        reviewedProvenance: structuralReviewed,
+      });
+      const byPath = new Map(
+        classifications.map((record) => [record.path, record]),
+      );
+      assertSame(
+        json({
+          harness: {
+            partition: byPath.get(harnessPath)?.partition,
+            status: byPath.get(harnessPath)?.status,
+            variants: byPath.get(harnessPath)?.variants,
+            provenance: byPath.get(harnessPath)?.provenance,
+          },
+          malformed: {
+            partition: byPath.get(malformedPath)?.partition,
+            status: byPath.get(malformedPath)?.status,
+            variants: byPath.get(malformedPath)?.variants,
+            provenance: byPath.get(malformedPath)?.provenance,
+            immutablePriorVariants: malformedDecision.variants,
+          },
+        }),
+        json({
+          harness: {
+            partition: 'harness-validation',
+            status: 'harness-validation',
+            variants: 2,
+            provenance: ['harness', `review:UA:${'1'.repeat(64)}`],
+          },
+          malformed: {
+            partition: 'malformed',
+            status: 'malformed',
+            variants: 0,
+            provenance: [
+              'metadata-error:invalid frontmatter',
+              `review:UL3:${'2'.repeat(64)}`,
+            ],
+            immutablePriorVariants: 2,
+          },
+        }),
+      );
+      const summary = summarizeEs2015Classification(classifications);
+      assertSame(summary.roots, 2);
+      assertSame(summary.variants, 2);
+      assertSame(
+        summary.partitions.find((entry) => entry.name === 'malformed')
+          ?.variants,
+        0,
+      );
+
+      const wrongStructuralDestination = new Map([
+        [
+          harnessPath,
+          {
+            ...harnessDecision,
+            finalPartition: 'core',
+            finalStatus: 'audit-passing-unselected',
+          },
+        ],
+      ]);
+      assertSame(
+        assertThrows(
+          () =>
+            classifyEs2015Inventory({
+              policy: classificationPolicy(),
+              anchors: classificationAnchors(),
+              inventory: [inventory[0]],
+              reviewedProvenance: wrongStructuralDestination,
+            }),
+          Es2015TaxonomyError,
+        ).message,
+        `ES2015 reviewed provenance for ${harnessPath} must retain structural destination harness-validation`,
+      );
+
+      const malformedFragment = clone(productionDecisionFragmentValue());
+      malformedFragment.decisions[0].finalPartition = 'malformed';
+      malformedFragment.decisions[0].finalStatus = 'malformed';
+      malformedFragment.decisions[0].destination = {
+        blocker: null,
+        issue: null,
+      };
+      malformedFragment.decisions[0].variants = 0;
+      refreshFragmentHash(malformedFragment);
+      assertSame(
+        assertThrows(
+          () =>
+            validateDecisionFragments(
+              productionManifest(),
+              {
+                UL3: parseEs2015DecisionFragment(
+                  json(malformedFragment),
+                  'UL3',
+                ),
+              },
+              { allowPendingReview: false },
+            ),
+          Es2015ProvenanceError,
+        ).message,
+        `UL3 decision for ${PRODUCTION_UL3_PATH} must retain the reviewed variant count`,
+      );
+    },
+  },
+  {
     name: 'ES2015 taxonomy rejects conflicting reviewed provenance evidence',
     run: () => {
       const policy = classificationPolicy();
@@ -1800,6 +2431,18 @@ export default [
                 path: scenario.path,
                 finalPartition: 'core',
                 finalStatus: 'audit-passing-unselected',
+                metadata: {
+                  es5id: scenario.metadata.es5id,
+                  es6id: scenario.metadata.es6id,
+                  esid: scenario.metadata.esid,
+                  features: scenario.metadata.features,
+                  includeFeatures:
+                    scenario.label === 'include evidence'
+                      ? ['async-functions']
+                      : [],
+                  includes: scenario.metadata.includes,
+                  flags: scenario.metadata.flags,
+                },
               }),
             }),
           Es2015TaxonomyError,
@@ -1839,6 +2482,15 @@ export default [
               path: statusPath,
               finalPartition: 'core',
               finalStatus: 'selected-passing',
+              metadata: {
+                es5id: null,
+                es6id: null,
+                esid: null,
+                features: [],
+                includeFeatures: [],
+                includes: [],
+                flags: [],
+              },
             }),
           }),
         Es2015TaxonomyError,
@@ -1876,6 +2528,15 @@ export default [
               path: priorClassPath,
               finalPartition: 'core',
               finalStatus: 'audit-passing-unselected',
+              metadata: {
+                es5id: null,
+                es6id: '13.2',
+                esid: null,
+                features: [],
+                includeFeatures: [],
+                includes: [],
+                flags: [],
+              },
             }),
           }),
         Es2015TaxonomyError,
@@ -1883,6 +2544,167 @@ export default [
       assertSame(
         priorClassMismatch.message,
         `ES2015 reviewed provenance for ${priorClassPath} expected prior class unknown-edition, got audit-passing-unselected`,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance accepts only the authoritative wrapped issue map and native parents',
+    run: () => {
+      const manifest = productionManifest();
+      const baseHash = manifest.baseLedger.pathSha256;
+      const directCodes = new Set(['U0', 'UA', 'UB', 'UL', 'US']);
+      const atomicCodes = new Set(['U0', ...ES2015_PROVENANCE_DECISION_CODES]);
+
+      for (const code of Object.keys(WRAPPED_ISSUE_MAP.issues)) {
+        const body = renderProvenanceIssueBody(
+          manifest,
+          code,
+          WRAPPED_ISSUE_MAP,
+        );
+        assertSame(
+          body.startsWith(
+            `<!-- es2015-provenance-issue parent:T1 parent-issue:75 code:${code} base-ledger-sha256:${baseHash} -->\n`,
+          ),
+          true,
+          `${code} authoritative marker`,
+        );
+        assertSame(
+          body.includes(`jsjs taxonomy baseline: ${TAXONOMY_BASELINE}.`),
+          true,
+          `${code} taxonomy baseline`,
+        );
+        const expectedParent = directCodes.has(code)
+          ? 'Native parent: T1 (#75).'
+          : code.startsWith('UL')
+            ? 'Native parent: UL (#103).'
+            : 'Native parent: US (#108).';
+        assertSame(
+          body.includes(expectedParent),
+          true,
+          `${code} native parent`,
+        );
+        assertSame(
+          body.includes(
+            'After merge, rerun reclassification under TZ=UTC and update affected downstream issue ledgers before closing.',
+          ),
+          true,
+          `${code} post-merge gate`,
+        );
+        if (atomicCodes.has(code)) {
+          assertSame(
+            body.includes(
+              'Changes are limited to taxonomy/provenance tooling, data, and documentation; guest semantic fixes are prohibited.',
+            ),
+            true,
+            `${code} atomic scope`,
+          );
+        } else {
+          assertSame(
+            body.includes('This grouping node owns no commit'),
+            true,
+            `${code} grouping ownership`,
+          );
+        }
+      }
+
+      const invalidMaps = [
+        {
+          value: { ...WRAPPED_ISSUE_MAP, parent: 74 },
+          message: 'Issue map must retain parent issue #75',
+        },
+        {
+          value: { ...WRAPPED_ISSUE_MAP, baseLedgerSha256: '0'.repeat(64) },
+          message: 'Issue map must retain the immutable base ledger SHA-256',
+        },
+        {
+          value: { ...WRAPPED_ISSUE_MAP, extra: true },
+          message: 'Issue map must contain exact keys',
+        },
+        {
+          value: {
+            ...WRAPPED_ISSUE_MAP,
+            issues: {
+              ...WRAPPED_ISSUE_MAP.issues,
+              UX: WRAPPED_ISSUE_MAP.issues.UA,
+            },
+          },
+          message: 'Issue map issues must contain exact U* codes',
+        },
+        {
+          value: {
+            ...WRAPPED_ISSUE_MAP,
+            issues: {
+              ...WRAPPED_ISSUE_MAP.issues,
+              UA: { ...WRAPPED_ISSUE_MAP.issues.UA, extra: true },
+            },
+          },
+          message: 'Issue map entry UA must contain exact keys',
+        },
+        {
+          value: {
+            ...WRAPPED_ISSUE_MAP,
+            issues: {
+              ...WRAPPED_ISSUE_MAP.issues,
+              UA: {
+                ...WRAPPED_ISSUE_MAP.issues.UA,
+                number: WRAPPED_ISSUE_MAP.issues.UB.number,
+              },
+            },
+          },
+          message: 'Issue map reuses issue #102 for UA and UB',
+        },
+        {
+          value: {
+            ...WRAPPED_ISSUE_MAP,
+            issues: {
+              ...WRAPPED_ISSUE_MAP.issues,
+              UA: {
+                ...WRAPPED_ISSUE_MAP.issues.UA,
+                id: WRAPPED_ISSUE_MAP.issues.UB.id,
+              },
+            },
+          },
+          message: 'Issue map reuses REST id 1002 for UA and UB',
+        },
+        {
+          value: {
+            ...WRAPPED_ISSUE_MAP,
+            issues: {
+              ...WRAPPED_ISSUE_MAP.issues,
+              UA: {
+                ...WRAPPED_ISSUE_MAP.issues.UA,
+                nodeId: WRAPPED_ISSUE_MAP.issues.UB.nodeId,
+              },
+            },
+          },
+          message: 'Issue map reuses node id I_fixture_UB for UA and UB',
+        },
+        {
+          value: {
+            ...WRAPPED_ISSUE_MAP,
+            issues: {
+              ...WRAPPED_ISSUE_MAP.issues,
+              UA: { ...WRAPPED_ISSUE_MAP.issues.UA, state: 'pending' },
+            },
+          },
+          message: 'Issue map entry UA state must be open or closed',
+        },
+      ];
+      for (const scenario of invalidMaps) {
+        assertSame(
+          assertThrows(
+            () => renderProvenanceIssueBody(manifest, 'UA', scenario.value),
+            Es2015ProvenanceError,
+          ).message,
+          scenario.message,
+        );
+      }
+      assertSame(
+        assertThrows(
+          () => renderProvenanceIssueBody(manifest, 'UA', COMPLETE_ISSUE_MAP),
+          Es2015ProvenanceError,
+        ).message,
+        'Issue map must contain exact keys',
       );
     },
   },
@@ -1910,9 +2732,9 @@ export default [
         true,
       );
       assertSame(initialUlBody.includes('Dependencies: UL1 (#'), false);
-      assertSame(initialUaBody.includes('Parent: T1 / #75.'), true);
-      assertSame(initialU0Body.includes('Parent: T1 / #75.'), true);
-      assertSame(initialUlBody.includes('Parent: T1 / #75.'), true);
+      assertSame(initialUaBody.includes('Native parent: T1 (#75).'), true);
+      assertSame(initialU0Body.includes('Native parent: T1 (#75).'), true);
+      assertSame(initialUlBody.includes('Native parent: T1 (#75).'), true);
     },
   },
   {
@@ -1923,22 +2745,22 @@ export default [
       const uaBody = renderProvenanceIssueBody(
         manifest,
         'UA',
-        COMPLETE_ISSUE_MAP,
+        WRAPPED_ISSUE_MAP,
       );
       const u0Body = renderProvenanceIssueBody(
         manifest,
         'U0',
-        COMPLETE_ISSUE_MAP,
+        WRAPPED_ISSUE_MAP,
       );
       const ulBody = renderProvenanceIssueBody(
         manifest,
         'UL',
-        COMPLETE_ISSUE_MAP,
+        WRAPPED_ISSUE_MAP,
       );
       const usBody = renderProvenanceIssueBody(
         manifest,
         'US',
-        COMPLETE_ISSUE_MAP,
+        WRAPPED_ISSUE_MAP,
       );
 
       for (const [code, body] of [
@@ -1961,7 +2783,7 @@ export default [
         ),
         true,
       );
-      const marker = `T1 / #75 | code:UA | base-ledger-sha256:${manifest.baseLedger.pathSha256}`;
+      const marker = `parent:T1 parent-issue:75 code:UA base-ledger-sha256:${manifest.baseLedger.pathSha256}`;
       assertSame(uaBody.includes(marker), true);
       assertSame(
         uaBody.includes(
@@ -2024,7 +2846,7 @@ export default [
         true,
       );
       assertSame(uaBody.includes('Dependencies: U0 (#100).'), true);
-      assertSame(uaBody.includes('Parent: T1 / #75.'), true);
+      assertSame(uaBody.includes('Native parent: T1 (#75).'), true);
       assertSame(u0Body.includes('zero classification decisions'), true);
       assertSame(ulBody.includes('owns no commit'), true);
       assertSame(
@@ -2053,7 +2875,7 @@ export default [
           () => renderProvenanceIssueBody(manifest, 'UA', { U0: 100 }),
           Es2015ProvenanceError,
         ).message,
-        'Issue map is missing required code UA',
+        'Issue map must contain exact keys',
       );
       assertSame(
         assertThrows(
@@ -2061,6 +2883,435 @@ export default [
           Es2015ProvenanceError,
         ).message,
         'Issue map must be an object',
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance checks and rendering use the immutable manifest after taxonomy reclassification',
+    run: async () => {
+      const files = new Map([[TAXONOMY_PATH, reclassifiedTaxonomyText()]]);
+      const checkDependencies = provenanceCheckDependencies({ files });
+      assertSame(await provenanceCheck(['--check'], checkDependencies), 0);
+
+      const ledgerDependencies = provenanceCheckDependencies({ files });
+      assertSame(
+        await provenanceCheck(['--render-ledger=UA'], ledgerDependencies),
+        0,
+      );
+      assertSame(
+        ledgerDependencies.outputs.stdout.join(''),
+        renderBatchLedger(productionManifest(), 'UA'),
+      );
+
+      const completeDependencies = provenanceCheckDependencies({ files });
+      const completeError = await rejected(() =>
+        provenanceCheck(['--check', '--complete=UA'], completeDependencies),
+      );
+      assertSame(
+        completeError.message,
+        'UA must contain reviewed decisions for every ledger path',
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance Git boundary distinguishes a missing base file',
+    run: async () => {
+      const dependencies = createProvenanceCheckDependencies({
+        environment: { TZ: 'UTC' },
+      });
+      assertSame(
+        await dependencies.readGitFile(
+          'HEAD',
+          'tools/test262/definitely-not-present.json',
+        ),
+        null,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance range policy accepts exact foundation and decision ranges',
+    run: async () => {
+      const foundationChanges = [
+        ...FOUNDATION_ALLOWED_PATHS.map((path) => ({ status: 'A', path })),
+        ...FOUNDATION_DELETIONS.map((path) => ({ status: 'D', path })),
+      ];
+      assertSame(
+        await provenanceCheck(
+          rangeArguments('foundation'),
+          rangeCheckDependencies({
+            changes: foundationChanges,
+            baseHasFoundation: false,
+          }),
+        ),
+        0,
+      );
+
+      const decisionFragmentPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`;
+      const decisionFragmentText = `${JSON.stringify(
+        productionDecisionFragmentValue(),
+        null,
+        2,
+      )}\n`;
+      assertSame(
+        await provenanceCheck(
+          rangeArguments('decision:UL3'),
+          rangeCheckDependencies({
+            changes: [
+              { status: 'M', path: decisionFragmentPath },
+              { status: 'M', path: 'tools/test262/es2015-taxonomy.json' },
+            ],
+            baseHasFoundation: true,
+            headFiles: new Map([[decisionFragmentPath, decisionFragmentText]]),
+          }),
+        ),
+        0,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance range policy rejects forbidden production, selection, tooling, and fragment paths',
+    run: async () => {
+      const foundationChanges = [
+        ...FOUNDATION_ALLOWED_PATHS.map((path) => ({ status: 'A', path })),
+        ...FOUNDATION_DELETIONS.map((path) => ({ status: 'D', path })),
+      ];
+      for (const path of [
+        'src/runtime/forbidden.js',
+        'tools/test262/features.json',
+        'tools/test262/upstream-subset.json',
+        'tools/test262/es2015-anchors.json',
+      ]) {
+        const error = await rejected(() =>
+          provenanceCheck(
+            rangeArguments('foundation'),
+            rangeCheckDependencies({
+              changes: [...foundationChanges, { status: 'M', path }],
+            }),
+          ),
+        );
+        assertSame(
+          error.message,
+          `foundation range forbids changed path ${path}`,
+        );
+      }
+
+      const decisionFragmentPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`;
+      const decisionFragmentText = `${JSON.stringify(
+        productionDecisionFragmentValue(),
+        null,
+        2,
+      )}\n`;
+      for (const path of [
+        `${PROVENANCE_DECISIONS_DIRECTORY}/UL2.json`,
+        'tools/test262/es2015-provenance.js',
+        'src/runtime/forbidden.js',
+        'tools/test262/features.json',
+        'tools/test262/upstream-subset.json',
+      ]) {
+        const error = await rejected(() =>
+          provenanceCheck(
+            rangeArguments('decision:UL3'),
+            rangeCheckDependencies({
+              changes: [
+                { status: 'M', path: decisionFragmentPath },
+                { status: 'M', path },
+              ],
+              baseHasFoundation: true,
+              headFiles: new Map([
+                [decisionFragmentPath, decisionFragmentText],
+              ]),
+            }),
+          ),
+        );
+        assertSame(
+          error.message,
+          `decision:UL3 range forbids changed path ${path}`,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 provenance range policy rejects renames, copies, deletes, unknown statuses, and empty ranges',
+    run: async () => {
+      const cases = [
+        {
+          changes: [
+            {
+              status: 'R100',
+              sourcePath: 'src/old.js',
+              path: 'tools/test262/es2015-provenance.js',
+            },
+          ],
+          message:
+            'foundation range forbids rename src/old.js -> tools/test262/es2015-provenance.js',
+        },
+        {
+          changes: [
+            {
+              status: 'C100',
+              sourcePath: 'src/source.js',
+              path: 'tools/test262/es2015-provenance.js',
+            },
+          ],
+          message:
+            'foundation range forbids copy src/source.js -> tools/test262/es2015-provenance.js',
+        },
+        {
+          changes: [{ status: 'D', path: 'docs/testing.md' }],
+          message: 'foundation range forbids deleted path docs/testing.md',
+        },
+        {
+          changes: [{ status: 'D', path: '.superpowers/unapproved.md' }],
+          message:
+            'foundation range forbids deleted path .superpowers/unapproved.md',
+        },
+        {
+          changes: [{ status: 'T', path: 'docs/testing.md' }],
+          message: 'foundation range has unknown git status T',
+        },
+        {
+          changes: [],
+          message: 'foundation range must not be empty',
+        },
+      ];
+      for (const scenario of cases) {
+        const error = await rejected(() =>
+          provenanceCheck(
+            rangeArguments('foundation'),
+            rangeCheckDependencies({ changes: scenario.changes }),
+          ),
+        );
+        assertSame(error.message, scenario.message);
+      }
+    },
+  },
+  {
+    name: 'ES2015 provenance range policy rejects fake profiles, markers, bases, and content',
+    run: async () => {
+      const foundationChanges = [
+        ...FOUNDATION_ALLOWED_PATHS.map((path) => ({ status: 'A', path })),
+        ...FOUNDATION_DELETIONS.map((path) => ({ status: 'D', path })),
+      ];
+      const scenarios = [
+        {
+          args: [
+            '--check-range',
+            `--base=${RANGE_BASE_SHA}`,
+            `--head=${RANGE_HEAD_SHA}`,
+            '--profile=maintenance',
+            `--marker=${rangeMarker('maintenance')}`,
+          ],
+          dependencies: rangeCheckDependencies({
+            changes: foundationChanges,
+          }),
+          message: 'Unknown provenance range profile maintenance',
+        },
+        {
+          args: [
+            ...rangeArguments('foundation').slice(0, -1),
+            `--marker=${rangeMarker('foundation').replace('56a730c9', '06a730c9')}`,
+          ],
+          dependencies: rangeCheckDependencies({
+            changes: foundationChanges,
+          }),
+          message: 'Provenance PR marker does not match foundation policy',
+        },
+        {
+          args: rangeArguments('foundation'),
+          dependencies: rangeCheckDependencies({
+            changes: foundationChanges,
+            baseHasFoundation: true,
+          }),
+          message:
+            'foundation range requires a base without the initialized provenance foundation',
+        },
+        {
+          args: rangeArguments('decision:UL3'),
+          dependencies: rangeCheckDependencies({
+            changes: [
+              {
+                status: 'M',
+                path: `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`,
+              },
+            ],
+          }),
+          message:
+            'decision:UL3 range requires an initialized provenance foundation in the base',
+        },
+        {
+          args: [
+            '--check-range',
+            '--base=main',
+            `--head=${RANGE_HEAD_SHA}`,
+            '--profile=foundation',
+            `--marker=${rangeMarker('foundation')}`,
+          ],
+          dependencies: rangeCheckDependencies({
+            changes: foundationChanges,
+          }),
+          message: '--base must be an explicit full commit SHA',
+        },
+      ];
+      for (const scenario of scenarios) {
+        const error = await rejected(() =>
+          provenanceCheck(scenario.args, scenario.dependencies),
+        );
+        assertSame(error.message, scenario.message);
+      }
+
+      const nonEmptyFragmentPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`;
+      const nonEmptyFragment = `${JSON.stringify(
+        productionDecisionFragmentValue(),
+        null,
+        2,
+      )}\n`;
+      const contentError = await rejected(() =>
+        provenanceCheck(
+          rangeArguments('foundation'),
+          rangeCheckDependencies({
+            changes: foundationChanges,
+            headFiles: new Map([[nonEmptyFragmentPath, nonEmptyFragment]]),
+          }),
+        ),
+      );
+      assertSame(
+        contentError.message,
+        `foundation range requires an exact empty decision fragment at ${nonEmptyFragmentPath}`,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance CI range mode derives one trusted profile marker from the PR body',
+    run: async () => {
+      const foundationChanges = [
+        ...FOUNDATION_ALLOWED_PATHS.map((path) => ({ status: 'A', path })),
+        ...FOUNDATION_DELETIONS.map((path) => ({ status: 'D', path })),
+      ];
+      const ciArgs = [
+        '--check-range',
+        `--base=${RANGE_BASE_SHA}`,
+        `--head=${RANGE_HEAD_SHA}`,
+        '--pr-body-env=PROVENANCE_PR_BODY',
+      ];
+      const valid = rangeCheckDependencies({ changes: foundationChanges });
+      valid.environment = {
+        TZ: 'UTC',
+        GITHUB_EVENT_NAME: 'pull_request',
+        PROVENANCE_PR_BODY: `U0\n\n${rangeMarker('foundation')}\n`,
+      };
+      assertSame(await provenanceCheck(ciArgs, valid), 0);
+
+      const duplicate = rangeCheckDependencies({
+        changes: foundationChanges,
+      });
+      duplicate.environment = {
+        TZ: 'UTC',
+        GITHUB_EVENT_NAME: 'pull_request',
+        PROVENANCE_PR_BODY: `${rangeMarker('foundation')}\n${rangeMarker('foundation')}`,
+      };
+      assertSame(
+        (await rejected(() => provenanceCheck(ciArgs, duplicate))).message,
+        'PR body must contain exactly one authoritative provenance marker',
+      );
+
+      const unmarkedProtected = rangeCheckDependencies({
+        changes: foundationChanges,
+      });
+      unmarkedProtected.environment = {
+        TZ: 'UTC',
+        GITHUB_EVENT_NAME: 'pull_request',
+        PROVENANCE_PR_BODY: 'No marker',
+      };
+      assertSame(
+        (await rejected(() => provenanceCheck(ciArgs, unmarkedProtected)))
+          .message,
+        'A provenance-owned PR range requires one authoritative provenance marker',
+      );
+
+      const unmarkedUnrelated = rangeCheckDependencies({
+        changes: [{ status: 'M', path: 'README.md' }],
+      });
+      unmarkedUnrelated.environment = {
+        TZ: 'UTC',
+        GITHUB_EVENT_NAME: 'pull_request',
+        PROVENANCE_PR_BODY: 'No marker',
+      };
+      assertSame(await provenanceCheck(ciArgs, unmarkedUnrelated), 0);
+
+      const wrongEvent = rangeCheckDependencies({
+        changes: foundationChanges,
+      });
+      wrongEvent.environment = {
+        TZ: 'UTC',
+        GITHUB_EVENT_NAME: 'push',
+        PROVENANCE_PR_BODY: rangeMarker('foundation'),
+      };
+      assertSame(
+        (await rejected(() => provenanceCheck(ciArgs, wrongEvent))).message,
+        'Provenance PR range checking requires a pull_request event',
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance CLI permits pending review only for an exact complete check',
+    run: async () => {
+      for (const args of [
+        ['--allow-pending-review'],
+        ['--check', '--allow-pending-review'],
+        ['--render-ledger=UA', '--allow-pending-review'],
+        ['--initialize', '--allow-pending-review'],
+      ]) {
+        const error = await rejected(() =>
+          provenanceCheck(args, provenanceCheckDependencies()),
+        );
+        assertSame(
+          error.message,
+          '--allow-pending-review requires --check --complete=CODE',
+          args.join(' '),
+        );
+      }
+
+      const repeated = await rejected(() =>
+        provenanceCheck(
+          [
+            '--check',
+            '--complete=UL4',
+            '--allow-pending-review',
+            '--allow-pending-review',
+          ],
+          provenanceCheckDependencies(),
+        ),
+      );
+      assertSame(
+        repeated.message,
+        'The --allow-pending-review option must not be repeated',
+      );
+
+      const pendingPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL4.json`;
+      const pendingFiles = new Map([
+        [
+          pendingPath,
+          completePendingDecisionFragmentText(productionManifest(), 'UL4'),
+        ],
+      ]);
+      const strictError = await rejected(() =>
+        provenanceCheck(
+          ['--check', '--complete=UL4'],
+          provenanceCheckDependencies({ files: pendingFiles }),
+        ),
+      );
+      assertSame(
+        strictError.message.includes(
+          'review.reviewer must not be pending in strict validation',
+        ),
+        true,
+      );
+      assertSame(
+        await provenanceCheck(
+          ['--check', '--complete=UL4', '--allow-pending-review'],
+          provenanceCheckDependencies({ files: pendingFiles }),
+        ),
+        0,
       );
     },
   },
@@ -2082,7 +3333,7 @@ export default [
       assertSame(conflicting instanceof Es2015ProvenanceCheckError, true);
       assertSame(
         conflicting.message,
-        'Exactly one of --initialize, --check, --render-ledger=CODE, or --render-issue=CODE is required',
+        'Exactly one of --initialize, --check, --check-range, --render-ledger=CODE, or --render-issue=CODE is required',
       );
 
       const nonUtc = await rejected(() =>
@@ -2155,6 +3406,30 @@ export default [
           emptyDecisionFragmentText(productionManifest(), code),
         );
       }
+
+      const legacyUa = JSON.parse(
+        emptyDecisionFragmentText(productionManifest(), 'UA'),
+      );
+      legacyUa.version = 1;
+      delete legacyUa.taxonomyBaseline;
+      const migrationDependencies = provenanceCheckDependencies({
+        files: new Map([
+          [
+            `${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`,
+            `${JSON.stringify(legacyUa, null, 2)}\n`,
+          ],
+        ]),
+      });
+      assertSame(
+        await provenanceCheck(['--initialize'], migrationDependencies),
+        0,
+      );
+      assertSame(
+        migrationDependencies.files.get(
+          `${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`,
+        ),
+        emptyDecisionFragmentText(productionManifest(), 'UA'),
+      );
     },
   },
   {
@@ -2174,7 +3449,7 @@ export default [
       assertSame(driftError instanceof Es2015ProvenanceCheckError, true);
       assertSame(
         driftError.message,
-        `${ES2015_PROVENANCE_FILE} does not match generated provenance bytes`,
+        `${ES2015_PROVENANCE_FILE} is not valid JSON: Unexpected token 'd', "drift\n" is not valid JSON`,
       );
 
       const missing = provenanceCheckDependencies({
@@ -2292,7 +3567,7 @@ export default [
       );
 
       const issueDependencies = provenanceCheckDependencies({
-        files: new Map([[ISSUE_MAP_PATH, json(COMPLETE_ISSUE_MAP)]]),
+        files: new Map([[ISSUE_MAP_PATH, json(WRAPPED_ISSUE_MAP)]]),
       });
       assertSame(
         await provenanceCheck(
@@ -2306,7 +3581,7 @@ export default [
         renderProvenanceIssueBody(
           productionManifest(),
           'UA',
-          COMPLETE_ISSUE_MAP,
+          WRAPPED_ISSUE_MAP,
         ),
       );
 
@@ -2320,11 +3595,20 @@ export default [
         ),
       );
       assertSame(issueError instanceof Es2015ProvenanceCheckError, true);
-      assertSame(issueError.message, 'Issue map is missing required code UA');
+      assertSame(issueError.message, 'Issue map must contain exact keys');
 
       const extraIssueMap = provenanceCheckDependencies({
         files: new Map([
-          [ISSUE_MAP_PATH, json({ ...COMPLETE_ISSUE_MAP, UX: 999 })],
+          [
+            ISSUE_MAP_PATH,
+            json({
+              ...WRAPPED_ISSUE_MAP,
+              issues: {
+                ...WRAPPED_ISSUE_MAP.issues,
+                UX: WRAPPED_ISSUE_MAP.issues.UA,
+              },
+            }),
+          ],
         ]),
       });
       const extraIssueError = await rejected(() =>
@@ -2336,7 +3620,7 @@ export default [
       assertSame(extraIssueError instanceof Es2015ProvenanceCheckError, true);
       assertSame(
         extraIssueError.message,
-        'Issue map contains unapproved code UX',
+        'Issue map issues must contain exact U* codes',
       );
     },
   },

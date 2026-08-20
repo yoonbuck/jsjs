@@ -11,20 +11,22 @@ import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
  * @typedef {{ path: string, variants: number, priorClass: string }} ProvenanceBatchEntry
  * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, paths: readonly string[] }} ProvenanceBaseLedger
  * @typedef {{ code: string, selector: string, scope: string, rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string, entries: readonly ProvenanceBatchEntry[] }} ProvenanceBatch
- * @typedef {{ version: number, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, baseLedger: ProvenanceBaseLedger, batches: readonly ProvenanceBatch[] }} ProvenanceManifest
+ * @typedef {{ blocker: string, issues: readonly number[] }} ProvenanceBlockerOwner
+ * @typedef {{ name: string, baseFoundation: 'absent' | 'present', requiredPaths: readonly string[], allowedPaths: readonly string[], requiredDeletions: readonly string[], allowedDeletions: readonly string[], emptyDecisionFragments: readonly string[], decisionFragment: string | null, generatedPaths: readonly string[] }} ProvenanceRangeProfile
+ * @typedef {{ version: number, taxonomyBaseline: string, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, blockerOwners: readonly ProvenanceBlockerOwner[], rangeProfiles: readonly ProvenanceRangeProfile[], baseLedger: ProvenanceBaseLedger, batches: readonly ProvenanceBatch[] }} ProvenanceManifest
  * @typedef {{ repository: string, commit: string, note: string }} ReviewedDecisionHistoryEntry
  * @typedef {{ reviewer: string, reviewedAt: string, artifact: string }} ReviewedDecisionReview
  * @typedef {{ blocker: string | null, issue: number | null }} ReviewedDecisionDestination
  * @typedef {{ es5id: string | null, es6id: string | null, esid: string | null, features: readonly string[], includeFeatures: readonly string[], includes: readonly string[], flags: readonly string[] }} ReviewedDecisionMetadata
  * @typedef {{ path: string, variants: number, priorClass: string, finalPartition: string, finalStatus: string, evidenceKind: string, specification: { source: string, sourceSha256: string, clause: string | null, anchor: string | null }, metadata: ReviewedDecisionMetadata, history: readonly ReviewedDecisionHistoryEntry[], rationale: string, review: ReviewedDecisionReview, destination: ReviewedDecisionDestination, artifactSha256: string | null }} ReviewedDecision
- * @typedef {{ version: number, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, code: string, decisions: readonly ReviewedDecision[] }} ProvenanceDecisionFragment
+ * @typedef {{ version: number, taxonomyBaseline: string, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, code: string, decisions: readonly ReviewedDecision[] }} ProvenanceDecisionFragment
  * @typedef {{ path: string, variants: number, partition: string, finalClass: string }} ClassificationRecord
- * @typedef {{ title: string, scope: string, dependencies: readonly string[], aggregateCodes: readonly string[], extra?: string }} IssueDefinition
+ * @typedef {{ title: string, scope: string, parentCode: string, dependencies: readonly string[], aggregateCodes: readonly string[], extra?: string }} IssueDefinition
  * @typedef {{ code: string, selector: string, scope: string }} BatchDefinition
  * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }} ApprovedBatchLedger
  */
 
-export const ES2015_PROVENANCE_VERSION = 1;
+export const ES2015_PROVENANCE_VERSION = 2;
 export const ES2015_PROVENANCE_FILE = 'tools/test262/es2015-provenance.json';
 export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
   'UA',
@@ -44,6 +46,7 @@ export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
 
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
+const TAXONOMY_BASELINE = '54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7';
 const SPECIFICATION_SOURCE = 'https://262.ecma-international.org/6.0/';
 const SPECIFICATION_SHA256 =
   '4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0';
@@ -51,30 +54,136 @@ const PARENT_CODE = 'T1';
 const PARENT_ISSUE = 75;
 const ROOT_PREFIX = 'test/';
 const EMPTY_LEDGER_SHA256 = sha256('\n');
-const RFC3339_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+const RFC3339_UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
 const REVIEW_URL =
   /^https:\/\/github\.com\/yoonbuck\/jsjs\/(?:pull|issues)\/\d+#issuecomment-\d+$/;
-const BLOCKERS = new Set([
-  'annex-b-web-compatibility',
-  'binary-data-and-typed-arrays',
-  'early-errors-and-declaration-instantiation',
-  'keyed-collections',
-  'lexical-grammar-and-new-target',
-  'proper-tail-calls',
-  'proxy-and-reflect-metaobject',
-  'regexp-unicode-and-sticky',
-  'remaining-language-runtime-semantics',
-  'remaining-standard-library-additions',
-  'symbol-protocol-dispatch',
-  'test262-cross-realm-host',
+const APPROVED_BLOCKER_OWNERS = Object.freeze([
+  Object.freeze({ blocker: 'annex-b-web-compatibility', issues: [99] }),
+  Object.freeze({
+    blocker: 'binary-data-and-typed-arrays',
+    issues: [87, 88, 89, 90],
+  }),
+  Object.freeze({
+    blocker: 'early-errors-and-declaration-instantiation',
+    issues: [78],
+  }),
+  Object.freeze({ blocker: 'keyed-collections', issues: [83, 84, 85, 86] }),
+  Object.freeze({
+    blocker: 'lexical-grammar-and-new-target',
+    issues: [77],
+  }),
+  Object.freeze({ blocker: 'proper-tail-calls', issues: [97] }),
+  Object.freeze({
+    blocker: 'proxy-and-reflect-metaobject',
+    issues: [79, 80, 81],
+  }),
+  Object.freeze({ blocker: 'regexp-unicode-and-sticky', issues: [91, 92] }),
+  Object.freeze({
+    blocker: 'remaining-language-runtime-semantics',
+    issues: [96],
+  }),
+  Object.freeze({
+    blocker: 'remaining-standard-library-additions',
+    issues: [92, 93, 94, 95],
+  }),
+  Object.freeze({ blocker: 'symbol-protocol-dispatch', issues: [82, 92] }),
+  Object.freeze({ blocker: 'test262-cross-realm-host', issues: [76] }),
+]);
+/** @type {ReadonlyMap<string, ReadonlySet<number>>} */
+const BLOCKER_ISSUES = new Map(
+  APPROVED_BLOCKER_OWNERS.map((entry) => [
+    entry.blocker,
+    new Set(entry.issues),
+  ]),
+);
+const PROVENANCE_DECISIONS_DIRECTORY =
+  'tools/test262/es2015-provenance-decisions';
+const FOUNDATION_ALLOWED_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  '.prettierignore',
+  'docs/conformance.md',
+  'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md',
+  'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+  'docs/testing.md',
+  'package.json',
+  'test/node/es2015-provenance.test.js',
+  'test/node/es2015-taxonomy.test.js',
+  'test/node/repository-invariants.test.js',
+  'test/node/workflow-contract.test.js',
+  'test/run-node.js',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-audit.js',
+  'tools/test262/es2015-provenance-check.js',
+  ...ES2015_PROVENANCE_DECISION_CODES.map(
+    (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+  ),
+  'tools/test262/es2015-provenance.js',
+  ES2015_PROVENANCE_FILE,
+  'tools/test262/es2015-taxonomy.js',
+]);
+const FOUNDATION_DELETIONS = Object.freeze([
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-boundary-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/agent-chain-quality-fix-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/generator-preflight-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/origin-main-blocker-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/pr-gate-runtime-fix-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/recovery-release-gate-report.md',
+  '.superpowers/sdd/2026-08-15-async-runtime-modules-release/whole-milestone-review-fix-report.md',
+]);
+const EMPTY_DECISION_FRAGMENTS = Object.freeze(
+  ES2015_PROVENANCE_DECISION_CODES.map(
+    (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+  ),
+);
+const DECISION_GENERATED_PATHS = Object.freeze([
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-taxonomy.json',
+]);
+const APPROVED_RANGE_PROFILES = Object.freeze([
+  Object.freeze({
+    name: 'foundation',
+    baseFoundation: 'absent',
+    requiredPaths: FOUNDATION_ALLOWED_PATHS,
+    allowedPaths: FOUNDATION_ALLOWED_PATHS,
+    requiredDeletions: FOUNDATION_DELETIONS,
+    allowedDeletions: FOUNDATION_DELETIONS,
+    emptyDecisionFragments: EMPTY_DECISION_FRAGMENTS,
+    decisionFragment: null,
+    generatedPaths: Object.freeze([
+      '.github/workflows/ci.yml',
+      ...EMPTY_DECISION_FRAGMENTS,
+      ES2015_PROVENANCE_FILE,
+    ]),
+  }),
+  ...ES2015_PROVENANCE_DECISION_CODES.map((code) => {
+    const decisionFragment = `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
+    return Object.freeze({
+      name: `decision:${code}`,
+      baseFoundation: 'present',
+      requiredPaths: Object.freeze([decisionFragment]),
+      allowedPaths: Object.freeze(
+        sortStrings([decisionFragment, ...DECISION_GENERATED_PATHS]),
+      ),
+      requiredDeletions: Object.freeze([]),
+      allowedDeletions: Object.freeze([]),
+      emptyDecisionFragments: Object.freeze([]),
+      decisionFragment,
+      generatedPaths: DECISION_GENERATED_PATHS,
+    });
+  }),
 ]);
 
 const MANIFEST_KEYS = Object.freeze([
   'version',
+  'taxonomyBaseline',
   'repository',
   'revision',
   'specification',
   'parent',
+  'blockerOwners',
+  'rangeProfiles',
   'baseLedger',
   'batches',
 ]);
@@ -99,6 +208,7 @@ const BATCH_KEYS = Object.freeze([
 const BATCH_ENTRY_KEYS = Object.freeze(['path', 'variants', 'priorClass']);
 const FRAGMENT_KEYS = Object.freeze([
   'version',
+  'taxonomyBaseline',
   'repository',
   'revision',
   'specification',
@@ -139,6 +249,25 @@ const DECISION_METADATA_KEYS = Object.freeze([
 const HISTORY_KEYS = Object.freeze(['repository', 'commit', 'note']);
 const REVIEW_KEYS = Object.freeze(['reviewer', 'reviewedAt', 'artifact']);
 const DESTINATION_KEYS = Object.freeze(['blocker', 'issue']);
+const BLOCKER_OWNER_KEYS = Object.freeze(['blocker', 'issues']);
+const RANGE_PROFILE_KEYS = Object.freeze([
+  'name',
+  'baseFoundation',
+  'requiredPaths',
+  'allowedPaths',
+  'requiredDeletions',
+  'allowedDeletions',
+  'emptyDecisionFragments',
+  'decisionFragment',
+  'generatedPaths',
+]);
+const ISSUE_MAP_KEYS = Object.freeze([
+  'version',
+  'parent',
+  'baseLedgerSha256',
+  'issues',
+]);
+const ISSUE_MAP_ENTRY_KEYS = Object.freeze(['number', 'id', 'nodeId', 'state']);
 const DECISION_KEYS_WITHOUT_HASH = Object.freeze(
   DECISION_KEYS.filter((key) => key !== 'artifactSha256'),
 );
@@ -233,6 +362,7 @@ const ISSUE_DEFINITIONS = Object.freeze({
   U0: Object.freeze({
     title: 'Provenance tooling foundation',
     scope: 'Pure provenance tooling, rendering, and validation only.',
+    parentCode: 'T1',
     dependencies: Object.freeze([]),
     aggregateCodes: Object.freeze([]),
     extra: 'This node makes zero classification decisions.',
@@ -240,18 +370,21 @@ const ISSUE_DEFINITIONS = Object.freeze({
   UA: Object.freeze({
     title: 'Annex B decisions',
     scope: 'Annex B',
+    parentCode: 'T1',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['UA']),
   }),
   UB: Object.freeze({
     title: 'Built-in decisions',
     scope: 'Built-ins',
+    parentCode: 'T1',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['UB']),
   }),
   UL: Object.freeze({
     title: 'Language decisions',
     scope: 'Language decision grouping',
+    parentCode: 'T1',
     dependencies: Object.freeze(['UL1', 'UL2', 'UL3', 'UL4']),
     aggregateCodes: Object.freeze(['UL1', 'UL2', 'UL3', 'UL4']),
     extra:
@@ -260,30 +393,35 @@ const ISSUE_DEFINITIONS = Object.freeze({
   UL1: Object.freeze({
     title: 'Assignment and update semantics',
     scope: 'Assignment and update semantics',
+    parentCode: 'UL',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['UL1']),
   }),
   UL2: Object.freeze({
     title: 'Object and class definitions',
     scope: 'Object and class definitions',
+    parentCode: 'UL',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['UL2']),
   }),
   UL3: Object.freeze({
     title: 'Grammar and control semantics',
     scope: 'Grammar and control semantics',
+    parentCode: 'UL',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['UL3']),
   }),
   UL4: Object.freeze({
     title: 'Environments and modules',
     scope: 'Environments and modules',
+    parentCode: 'UL',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['UL4']),
   }),
   US: Object.freeze({
     title: 'Staging decisions',
     scope: 'SpiderMonkey staging decision grouping',
+    parentCode: 'T1',
     dependencies: Object.freeze([
       'US1',
       'US2',
@@ -308,42 +446,49 @@ const ISSUE_DEFINITIONS = Object.freeze({
   US1: Object.freeze({
     title: 'Containers and binary data',
     scope: 'Containers and binary data',
+    parentCode: 'US',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['US1']),
   }),
   US2: Object.freeze({
     title: 'Patterns, text, and JSON',
     scope: 'Patterns, text, and JSON',
+    parentCode: 'US',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['US2']),
   }),
   US3: Object.freeze({
     title: 'Numeric, date, and global semantics',
     scope: 'Numeric, date, and global semantics',
+    parentCode: 'US',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['US3']),
   }),
   US4: Object.freeze({
     title: 'Metaobject, function, and Symbol semantics',
     scope: 'Metaobject, function, and Symbol semantics',
+    parentCode: 'US',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['US4']),
   }),
   US5: Object.freeze({
     title: 'Staging language runtime',
     scope: 'Staging language runtime',
+    parentCode: 'US',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['US5']),
   }),
   US6: Object.freeze({
     title: 'Affirmative post-ES2015 candidates',
     scope: 'Affirmative post-ES2015 candidates',
+    parentCode: 'US',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['US6']),
   }),
   US7: Object.freeze({
     title: 'Residual manual semantics',
     scope: 'Residual manual semantics',
+    parentCode: 'US',
     dependencies: Object.freeze(['U0']),
     aggregateCodes: Object.freeze(['US7']),
   }),
@@ -559,6 +704,7 @@ export function buildProvenanceFoundation(classifications) {
 
   return deepFreeze({
     version: ES2015_PROVENANCE_VERSION,
+    taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
     specification: {
@@ -569,6 +715,8 @@ export function buildProvenanceFoundation(classifications) {
       code: PARENT_CODE,
       issue: PARENT_ISSUE,
     },
+    blockerOwners: APPROVED_BLOCKER_OWNERS,
+    rangeProfiles: APPROVED_RANGE_PROFILES,
     baseLedger: {
       rootCount: baseEntries.length,
       variantCount: unknownRecords.reduce(
@@ -851,6 +999,22 @@ function validateImmutableApprovedFoundation(manifest) {
       );
     }
   }
+  if (
+    JSON.stringify(manifest.blockerOwners) !==
+    JSON.stringify(APPROVED_BLOCKER_OWNERS)
+  ) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} blocker owners do not match the approved immutable roadmap pairs`,
+    );
+  }
+  if (
+    JSON.stringify(manifest.rangeProfiles) !==
+    JSON.stringify(APPROVED_RANGE_PROFILES)
+  ) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} range profiles do not match the approved immutable policy`,
+    );
+  }
 }
 
 /**
@@ -1005,16 +1169,25 @@ export function renderProvenanceIssueBody(manifest, code, issueMap) {
       ? dependencyCode
       : renderIssueReference(dependencyCode, issues),
   );
+  const nativeParent =
+    definition.parentCode === PARENT_CODE
+      ? `${PARENT_CODE} (#${PARENT_ISSUE})`
+      : issues === null
+        ? definition.parentCode
+        : renderIssueReference(definition.parentCode, issues);
+  const grouping = code === 'UL' || code === 'US';
   const lines = [
-    `<!-- test262-provenance T1 / #75 | code:${code} | base-ledger-sha256:${normalizedManifest.baseLedger.pathSha256} -->`,
+    `<!-- es2015-provenance-issue parent:T1 parent-issue:75 code:${code} base-ledger-sha256:${normalizedManifest.baseLedger.pathSha256} -->`,
     `# ${code} — ${definition.title}`,
     '',
     ...(issues === null
       ? []
       : [`Issue: ${renderIssueReference(code, issues)}.`]),
-    `Parent: T1 / #75.`,
+    `Roadmap parent: T1 / #75.`,
+    `Native parent: ${nativeParent}.`,
     `Base ledger: ${normalizedManifest.baseLedger.rootCount} roots / ${normalizedManifest.baseLedger.variantCount} variants / SHA-256 ${normalizedManifest.baseLedger.pathSha256}.`,
     `Batch ledger: ${ledger.rootCount} roots / ${ledger.variantCount} variants / SHA-256 ${ledger.pathSha256}.`,
+    `jsjs taxonomy baseline: ${TAXONOMY_BASELINE}.`,
     `Test262 pin: ${TEST262_REPOSITORY} @ ${TEST262_REVISION}.`,
     `Sixth Edition pin: ${SPECIFICATION_SOURCE} @ ${SPECIFICATION_SHA256}.`,
     `Scope: ${definition.scope}.`,
@@ -1029,7 +1202,13 @@ export function renderProvenanceIssueBody(manifest, code, issueMap) {
     'Local Test262 commands are limited to metadata/audit checks or exact targeted paths only.',
     'Require exact-head CI before merge.',
     'Require exact-head CodeQL before merge.',
+    'After merge, rerun reclassification under TZ=UTC and update affected downstream issue ledgers before closing.',
     'Guest production changes are prohibited.',
+    ...(grouping
+      ? []
+      : [
+          'Changes are limited to taxonomy/provenance tooling, data, and documentation; guest semantic fixes are prohibited.',
+        ]),
   ];
 
   if (definition.extra !== undefined) {
@@ -1128,6 +1307,11 @@ function normalizeManifestRecord(record, options) {
       `${ES2015_PROVENANCE_FILE} must declare version ${ES2015_PROVENANCE_VERSION}`,
     );
   }
+  if (record.taxonomyBaseline !== TAXONOMY_BASELINE) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} must retain the reviewed jsjs taxonomy baseline`,
+    );
+  }
   validateReviewedRepositoryRevision(
     record.repository,
     record.revision,
@@ -1143,6 +1327,8 @@ function normalizeManifestRecord(record, options) {
     `${ES2015_PROVENANCE_FILE} parent must contain exact keys`,
     `${ES2015_PROVENANCE_FILE} must retain parent T1 / #75`,
   );
+  const blockerOwners = normalizeBlockerOwners(record.blockerOwners);
+  const rangeProfiles = normalizeRangeProfiles(record.rangeProfiles);
   const baseLedger = normalizeBaseLedger(
     object(record.baseLedger, `${ES2015_PROVENANCE_FILE} baseLedger`),
     options.exactLists,
@@ -1168,10 +1354,13 @@ function normalizeManifestRecord(record, options) {
   }
   return {
     version: ES2015_PROVENANCE_VERSION,
+    taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
     specification,
     parent,
+    blockerOwners,
+    rangeProfiles,
     baseLedger,
     batches,
   };
@@ -1192,6 +1381,11 @@ function normalizeDecisionFragmentRecord(record, expectedCode, options) {
   if (record.version !== ES2015_PROVENANCE_VERSION) {
     throw new Es2015ProvenanceError(
       `${expectedCode} decision fragment must declare version ${ES2015_PROVENANCE_VERSION}`,
+    );
+  }
+  if (record.taxonomyBaseline !== TAXONOMY_BASELINE) {
+    throw new Es2015ProvenanceError(
+      `${expectedCode} decision fragment must retain the reviewed jsjs taxonomy baseline`,
     );
   }
   validateReviewedRepositoryRevision(
@@ -1240,6 +1434,7 @@ function normalizeDecisionFragmentRecord(record, expectedCode, options) {
   }
   return {
     version: ES2015_PROVENANCE_VERSION,
+    taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
     specification,
@@ -1652,9 +1847,18 @@ function normalizeReview(
     record.reviewer === 'pending' &&
     record.reviewedAt === 'pending' &&
     record.artifact === 'pending';
+  const hasPendingField =
+    record.reviewer === 'pending' ||
+    record.reviewedAt === 'pending' ||
+    record.artifact === 'pending';
   if (record.reviewer === 'pending' && !allowPendingReview) {
     throw new Es2015ProvenanceError(
       `${label} review.reviewer must not be pending in strict validation`,
+    );
+  }
+  if (!skipSemanticValidation && hasPendingField && !pending) {
+    throw new Es2015ProvenanceError(
+      `${label} pending review fields must all be pending`,
     );
   }
   if (pending) {
@@ -1691,10 +1895,10 @@ function normalizeReview(
   }
   if (
     typeof record.reviewedAt !== 'string' ||
-    !RFC3339_UTC.test(record.reviewedAt)
+    !isCanonicalUtcRfc3339(record.reviewedAt)
   ) {
     throw new Es2015ProvenanceError(
-      `${label} review.reviewedAt must be a UTC RFC3339 timestamp`,
+      `${label} review.reviewedAt must be a canonical UTC RFC3339 timestamp`,
     );
   }
   if (
@@ -1734,7 +1938,8 @@ function normalizeDestination(
   }
   if (finalStatus.startsWith('blocked:')) {
     const namedBlocker = finalStatus.slice('blocked:'.length);
-    if (blocker !== namedBlocker || !BLOCKERS.has(namedBlocker)) {
+    const issues = BLOCKER_ISSUES.get(namedBlocker);
+    if (blocker !== namedBlocker || issues === undefined) {
       throw new Es2015ProvenanceError(
         `${label} names unknown blocker ${namedBlocker}`,
       );
@@ -1742,12 +1947,203 @@ function normalizeDestination(
     if (issue === null) {
       throw new Es2015ProvenanceError(`${label} requires a destination issue`);
     }
+    if (!issues.has(issue)) {
+      throw new Es2015ProvenanceError(
+        `${label} blocker ${namedBlocker} is not owned by issue #${issue}`,
+      );
+    }
   } else if (blocker !== null || issue !== null) {
     throw new Es2015ProvenanceError(
       `${label} destination applies only to blocked core decisions`,
     );
   }
   return { blocker, issue };
+}
+
+/** @param {unknown} value @returns {readonly ProvenanceBlockerOwner[]} */
+function normalizeBlockerOwners(value) {
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} blockerOwners must be an array`,
+    );
+  }
+  const owners = value.map((entry, index) => {
+    const record = object(
+      entry,
+      `${ES2015_PROVENANCE_FILE} blockerOwners[${index}]`,
+    );
+    requireExactKeys(
+      record,
+      BLOCKER_OWNER_KEYS,
+      `${ES2015_PROVENANCE_FILE} blockerOwners[${index}] must contain exact keys`,
+    );
+    if (typeof record.blocker !== 'string' || record.blocker === '') {
+      throw new Es2015ProvenanceError(
+        `${ES2015_PROVENANCE_FILE} blockerOwners[${index}].blocker must be a string`,
+      );
+    }
+    if (
+      !Array.isArray(record.issues) ||
+      record.issues.some(
+        (issue) => !Number.isSafeInteger(issue) || issue <= 0,
+      ) ||
+      new Set(record.issues).size !== record.issues.length ||
+      record.issues.some(
+        (issue, issueIndex) =>
+          issueIndex > 0 && issue <= record.issues[issueIndex - 1],
+      )
+    ) {
+      throw new Es2015ProvenanceError(
+        `${ES2015_PROVENANCE_FILE} blockerOwners[${index}].issues must be sorted unique positive issue numbers`,
+      );
+    }
+    return Object.freeze({
+      blocker: record.blocker,
+      issues: Object.freeze([...record.issues]),
+    });
+  });
+  assertSortedUniqueStrings(
+    owners.map((entry) => entry.blocker),
+    `${ES2015_PROVENANCE_FILE} blockerOwners`,
+  );
+  return Object.freeze(owners);
+}
+
+/** @param {unknown} value @returns {readonly ProvenanceRangeProfile[]} */
+function normalizeRangeProfiles(value) {
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} rangeProfiles must be an array`,
+    );
+  }
+  const profiles = value.map((entry, index) => {
+    const label = `${ES2015_PROVENANCE_FILE} rangeProfiles[${index}]`;
+    const record = object(entry, label);
+    requireExactKeys(
+      record,
+      RANGE_PROFILE_KEYS,
+      `${label} must contain exact keys`,
+    );
+    if (typeof record.name !== 'string' || record.name === '') {
+      throw new Es2015ProvenanceError(`${label}.name must be a string`);
+    }
+    if (
+      record.baseFoundation !== 'absent' &&
+      record.baseFoundation !== 'present'
+    ) {
+      throw new Es2015ProvenanceError(
+        `${label}.baseFoundation must be absent or present`,
+      );
+    }
+    const requiredPaths = normalizeRepositoryPathList(
+      record.requiredPaths,
+      `${label}.requiredPaths`,
+    );
+    const allowedPaths = normalizeRepositoryPathList(
+      record.allowedPaths,
+      `${label}.allowedPaths`,
+    );
+    const requiredDeletions = normalizeRepositoryPathList(
+      record.requiredDeletions,
+      `${label}.requiredDeletions`,
+    );
+    const allowedDeletions = normalizeRepositoryPathList(
+      record.allowedDeletions,
+      `${label}.allowedDeletions`,
+    );
+    const emptyDecisionFragments = normalizeRepositoryPathList(
+      record.emptyDecisionFragments,
+      `${label}.emptyDecisionFragments`,
+    );
+    const generatedPaths = normalizeRepositoryPathList(
+      record.generatedPaths,
+      `${label}.generatedPaths`,
+    );
+    const decisionFragment = nullableString(
+      record.decisionFragment,
+      `${label}.decisionFragment`,
+    );
+    if (decisionFragment !== null && !validRepositoryPath(decisionFragment)) {
+      throw new Es2015ProvenanceError(
+        `${label}.decisionFragment must be a repository-relative path or null`,
+      );
+    }
+    for (const path of requiredPaths) {
+      if (!allowedPaths.includes(path)) {
+        throw new Es2015ProvenanceError(
+          `${label}.requiredPaths must be a subset of allowedPaths`,
+        );
+      }
+    }
+    for (const path of requiredDeletions) {
+      if (!allowedDeletions.includes(path)) {
+        throw new Es2015ProvenanceError(
+          `${label}.requiredDeletions must be a subset of allowedDeletions`,
+        );
+      }
+    }
+    for (const path of [...emptyDecisionFragments, ...generatedPaths]) {
+      if (!allowedPaths.includes(path)) {
+        throw new Es2015ProvenanceError(
+          `${label} content-owned paths must be allowed`,
+        );
+      }
+    }
+    if (decisionFragment !== null && !allowedPaths.includes(decisionFragment)) {
+      throw new Es2015ProvenanceError(
+        `${label}.decisionFragment must be an allowed path`,
+      );
+    }
+    if (allowedDeletions.some((path) => allowedPaths.includes(path))) {
+      throw new Es2015ProvenanceError(
+        `${label} must not both change and delete one path`,
+      );
+    }
+    return Object.freeze({
+      name: record.name,
+      baseFoundation: record.baseFoundation,
+      requiredPaths,
+      allowedPaths,
+      requiredDeletions,
+      allowedDeletions,
+      emptyDecisionFragments,
+      decisionFragment,
+      generatedPaths,
+    });
+  });
+  const expectedNames = APPROVED_RANGE_PROFILES.map((profile) => profile.name);
+  if (
+    profiles.map((profile) => profile.name).join('\u0000') !==
+    expectedNames.join('\u0000')
+  ) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} rangeProfiles must contain the approved profiles`,
+    );
+  }
+  return Object.freeze(profiles);
+}
+
+/** @param {unknown} value @param {string} label */
+function normalizeRepositoryPathList(value, label) {
+  const paths = normalizeStringList(value, label, true);
+  if (paths.some((path) => !validRepositoryPath(path))) {
+    throw new Es2015ProvenanceError(
+      `${label} must contain repository-relative paths`,
+    );
+  }
+  return paths;
+}
+
+/** @param {string} path */
+function validRepositoryPath(path) {
+  return (
+    path !== '' &&
+    !path.startsWith('/') &&
+    !path.includes('\\') &&
+    !path
+      .split('/')
+      .some((part) => part === '' || part === '.' || part === '..')
+  );
 }
 
 /** @param {unknown} finalPartition @param {string} label */
@@ -1958,6 +2354,36 @@ function isHex64(value) {
   return /^[0-9a-f]{64}$/.test(value);
 }
 
+/** @param {string} value */
+function isCanonicalUtcRfc3339(value) {
+  const match = RFC3339_UTC.exec(value);
+  if (match === null) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
+  if (
+    year === 0 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  ) {
+    return false;
+  }
+  const instant = new Date(0);
+  instant.setUTCFullYear(year, month - 1, day);
+  instant.setUTCHours(hour, minute, second, 0);
+  return (
+    instant.getUTCFullYear() === year &&
+    instant.getUTCMonth() === month - 1 &&
+    instant.getUTCDate() === day &&
+    instant.getUTCHours() === hour &&
+    instant.getUTCMinutes() === minute &&
+    instant.getUTCSeconds() === second
+  );
+}
+
 /** @param {string} repository @param {string} revision @param {string} message */
 function validateReviewedRepositoryRevision(repository, revision, message) {
   if (repository !== TEST262_REPOSITORY || revision !== TEST262_REVISION) {
@@ -1987,15 +2413,15 @@ function normalizeFragments(value) {
   );
 }
 
-/** @param {string} code @param {ReadonlyMap<string, number>} issueMap */
+/** @param {string} code @param {ReadonlyMap<string, { number: number }>} issueMap */
 function renderIssueReference(code, issueMap) {
-  const issueNumber = issueMap.get(code);
-  if (issueNumber === undefined) {
+  const issue = issueMap.get(code);
+  if (issue === undefined) {
     throw new Es2015ProvenanceError(
       `Issue map is missing required code ${code}`,
     );
   }
-  return `${code} (#${issueNumber})`;
+  return `${code} (#${issue.number})`;
 }
 
 /** @param {unknown} value */
@@ -2006,37 +2432,69 @@ function normalizeIssueMap(value) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Es2015ProvenanceError('Issue map must be an object');
   }
-  for (const code of Object.keys(value)) {
-    if (!ALL_RENDER_CODE_SET.has(code)) {
-      throw new Es2015ProvenanceError(
-        `Issue map contains unapproved code ${code}`,
-      );
-    }
+  const record = /** @type {Record<string, any>} */ (value);
+  requireExactKeys(record, ISSUE_MAP_KEYS, 'Issue map must contain exact keys');
+  if (record.version !== 1) {
+    throw new Es2015ProvenanceError('Issue map must declare version 1');
+  }
+  if (record.parent !== PARENT_ISSUE) {
+    throw new Es2015ProvenanceError(
+      `Issue map must retain parent issue #${PARENT_ISSUE}`,
+    );
+  }
+  if (record.baseLedgerSha256 !== APPROVED_BASE_LEDGER.pathSha256) {
+    throw new Es2015ProvenanceError(
+      'Issue map must retain the immutable base ledger SHA-256',
+    );
+  }
+  const issues = object(record.issues, 'Issue map issues');
+  const issueCodes = Object.keys(issues);
+  if (
+    issueCodes.length !== ALL_RENDER_CODES.length ||
+    issueCodes.some((code) => !ALL_RENDER_CODE_SET.has(code)) ||
+    ALL_RENDER_CODES.some(
+      (code) => !Object.prototype.hasOwnProperty.call(issues, code),
+    )
+  ) {
+    throw new Es2015ProvenanceError(
+      'Issue map issues must contain exact U* codes',
+    );
   }
   const map = new Map();
   const issueOwners = new Map([[PARENT_ISSUE, 'T1']]);
+  const restIdOwners = new Map();
+  const nodeIdOwners = new Map();
   for (const code of ALL_RENDER_CODES) {
-    const entry = /** @type {Record<string, any>} */ (value)[code];
-    if (entry === undefined) {
-      throw new Es2015ProvenanceError(
-        `Issue map is missing required code ${code}`,
-      );
-    }
-    let issueNumber;
-    if (Number.isInteger(entry) && entry > 0) {
-      issueNumber = entry;
-    } else if (
-      typeof entry === 'object' &&
-      entry !== null &&
-      Number.isInteger(entry.number) &&
-      entry.number > 0
-    ) {
-      issueNumber = entry.number;
-    } else {
+    const entry = object(issues[code], `Issue map entry ${code}`);
+    requireExactKeys(
+      entry,
+      ISSUE_MAP_ENTRY_KEYS,
+      `Issue map entry ${code} must contain exact keys`,
+    );
+    if (!Number.isSafeInteger(entry.number) || entry.number <= 0) {
       throw new Es2015ProvenanceError(
         `Issue map entry ${code} must provide a positive issue number`,
       );
     }
+    if (!Number.isSafeInteger(entry.id) || entry.id <= 0) {
+      throw new Es2015ProvenanceError(
+        `Issue map entry ${code} must provide a positive REST id`,
+      );
+    }
+    if (
+      typeof entry.nodeId !== 'string' ||
+      !/^I_[A-Za-z0-9_-]+$/u.test(entry.nodeId)
+    ) {
+      throw new Es2015ProvenanceError(
+        `Issue map entry ${code} must provide a GitHub issue node id`,
+      );
+    }
+    if (entry.state !== 'open' && entry.state !== 'closed') {
+      throw new Es2015ProvenanceError(
+        `Issue map entry ${code} state must be open or closed`,
+      );
+    }
+    const issueNumber = entry.number;
     const priorOwner = issueOwners.get(issueNumber);
     if (priorOwner !== undefined) {
       if (priorOwner === 'T1') {
@@ -2049,7 +2507,29 @@ function normalizeIssueMap(value) {
       );
     }
     issueOwners.set(issueNumber, code);
-    map.set(code, issueNumber);
+    const priorRestIdOwner = restIdOwners.get(entry.id);
+    if (priorRestIdOwner !== undefined) {
+      throw new Es2015ProvenanceError(
+        `Issue map reuses REST id ${entry.id} for ${priorRestIdOwner} and ${code}`,
+      );
+    }
+    restIdOwners.set(entry.id, code);
+    const priorNodeIdOwner = nodeIdOwners.get(entry.nodeId);
+    if (priorNodeIdOwner !== undefined) {
+      throw new Es2015ProvenanceError(
+        `Issue map reuses node id ${entry.nodeId} for ${priorNodeIdOwner} and ${code}`,
+      );
+    }
+    nodeIdOwners.set(entry.nodeId, code);
+    map.set(
+      code,
+      Object.freeze({
+        number: issueNumber,
+        id: entry.id,
+        nodeId: entry.nodeId,
+        state: entry.state,
+      }),
+    );
   }
   return map;
 }

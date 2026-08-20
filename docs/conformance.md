@@ -635,7 +635,12 @@ foundation in
 `56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc`. Its
 thirteen atomic batches are `UA`, `UB`, `UL1`, `UL2`, `UL3`, `UL4`, `US1`,
 `US2`, `US3`, `US4`, `US5`, `US6`, and `US7`; `U0` is the tooling foundation
-only and therefore makes zero classification decisions.
+only and therefore makes zero classification decisions. The distinct immutable
+jsjs taxonomy baseline is
+`54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`; it is not a moving PR merge base.
+Only initialization derives the foundation from that baseline. Normal checks,
+completion, and rendering validate the checked-in path and entry hashes
+independently of current taxonomy reclassification.
 
 The reviewed decision fragments under
 `tools/test262/es2015-provenance-decisions/` record immutable evidence, not
@@ -647,6 +652,23 @@ can temporarily use `pending` for all three `review` fields, but strict
 validation cannot: `TZ=UTC npm run test262:es2015:provenance:check` rejects
 pending review fields, verifies the immutable hashes and exact directory
 membership, and remains metadata/hash-only — it cannot call `runTest262Suite`.
+Draft pending review is accepted only by
+`--check --complete=CODE --allow-pending-review`. Before classification, every
+record's edition ids, sorted features/flags/includes, and transitive
+include-feature closure must equal the pinned inventory. Review times are real
+canonical UTC RFC3339 values, and blocked destinations accept only the
+manifest's reviewed blocker/roadmap-owner pairs. Harness/malformed decisions
+retain structural precedence; malformed current metadata accounts for zero
+executable variants without altering the immutable prior variant evidence.
+
+The manifest also owns the persistent PR range profiles. `foundation` permits
+only the exact U0 files, exact empty fragments, and reviewed cleanup deletions
+when its base has no foundation. Each `decision:<CODE>` permits its one
+non-empty fragment plus explicit deterministic generated outputs when its base
+does have the foundation. CI derives the profile from one authoritative PR-body
+marker and supplies actual event base/head SHAs to the same range CLI used by
+local review. Renames, copies, unknown paths, feature/selection or guest-runtime
+changes, unapproved deletes, empty ranges, and fake markers fail closed.
 
 The qualified core ES2015 evidence is:
 

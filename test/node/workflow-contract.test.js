@@ -149,6 +149,14 @@ const DATE_GROUPS = Object.freeze({
  */
 const EXPECTED_DRIFT_COMMAND =
   'git ls-files --error-unmatch docs/test262-report.jsonl docs/conformance.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl docs/conformance.md';
+const EXPECTED_PROVENANCE_RANGE_COMMAND =
+  'node tools/test262/es2015-provenance-check.js --check-range --base="$ES2015_PROVENANCE_BASE_SHA" --head="$ES2015_PROVENANCE_HEAD_SHA" --pr-body-env=ES2015_PROVENANCE_PR_BODY';
+const EXPECTED_PROVENANCE_RANGE_ENV = Object.freeze({
+  ES2015_PROVENANCE_BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+  ES2015_PROVENANCE_HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+  ES2015_PROVENANCE_PR_BODY: '${{ github.event.pull_request.body }}',
+  TZ: 'UTC',
+});
 
 const engine = { createRealm, evaluateScript };
 
@@ -241,6 +249,34 @@ export function assertAdjacentWorkflowSteps(steps, expectedNames) {
         `workflow steps must be adjacent in this exact order: ${expectedNames.join(' -> ')}`,
       );
     }
+  }
+}
+
+/** @param {any} step */
+function assertProvenanceRangeStep(step) {
+  const expectedKeys = ['env', 'if', 'name', 'run'];
+  const actualKeys =
+    typeof step === 'object' && step !== null ? Object.keys(step).sort() : [];
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    throw new Error('provenance range step must contain exact keys');
+  }
+  if (step.name !== 'Check provenance PR range') {
+    throw new Error('provenance range step must retain its authoritative name');
+  }
+  if (step.if !== "github.event_name == 'pull_request'") {
+    throw new Error('provenance range step must be limited to pull_request');
+  }
+  if (step.run !== EXPECTED_PROVENANCE_RANGE_COMMAND) {
+    throw new Error(
+      'provenance range step must pass actual base/head and derive profile from the PR marker',
+    );
+  }
+  if (
+    JSON.stringify(step.env) !== JSON.stringify(EXPECTED_PROVENANCE_RANGE_ENV)
+  ) {
+    throw new Error(
+      'provenance range step must use trusted event identities and the full PR body',
+    );
   }
 }
 
@@ -349,6 +385,16 @@ function syntheticFeature(probe) {
 }
 
 export default [
+  {
+    name: 'the pull request workflow reruns provenance gates when the durable marker is edited',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      assertSame(
+        JSON.stringify(workflow.on?.pull_request?.types),
+        JSON.stringify(['opened', 'synchronize', 'reopened', 'edited']),
+      );
+    },
+  },
   {
     name: 'npm run ci:contract selects only safe local checks',
     run: async () => {
@@ -804,12 +850,14 @@ export default [
           assertAdjacentWorkflowSteps(
             [
               { name: 'Install dependencies' },
+              { name: 'Check provenance PR range' },
               { name: 'Check unknown-edition provenance' },
               { name: 'Intervening mutant step' },
               { name: 'Check the ES2015 taxonomy and exact promotion' },
             ],
             [
               'Install dependencies',
+              'Check provenance PR range',
               'Check unknown-edition provenance',
               'Check the ES2015 taxonomy and exact promotion',
             ],
@@ -819,8 +867,47 @@ export default [
 
       assertSame(
         error.message,
-        'workflow steps must be adjacent in this exact order: Install dependencies -> Check unknown-edition provenance -> Check the ES2015 taxonomy and exact promotion',
+        'workflow steps must be adjacent in this exact order: Install dependencies -> Check provenance PR range -> Check unknown-edition provenance -> Check the ES2015 taxonomy and exact promotion',
       );
+    },
+  },
+  {
+    name: 'the provenance PR range step rejects event, marker, and ref mutants',
+    run: () => {
+      const valid = {
+        name: 'Check provenance PR range',
+        if: "github.event_name == 'pull_request'",
+        run: EXPECTED_PROVENANCE_RANGE_COMMAND,
+        env: EXPECTED_PROVENANCE_RANGE_ENV,
+      };
+      assertProvenanceRangeStep(valid);
+      for (const mutant of [
+        { ...valid, if: undefined },
+        {
+          ...valid,
+          run: valid.run.replace(
+            '$ES2015_PROVENANCE_BASE_SHA',
+            '${{ github.sha }}',
+          ),
+        },
+        {
+          ...valid,
+          run: `${valid.run} --profile=foundation`,
+        },
+        {
+          ...valid,
+          env: { ...valid.env, ES2015_PROVENANCE_PR_BODY: 'branch supplied' },
+        },
+        {
+          ...valid,
+          env: {
+            ...valid.env,
+            ES2015_PROVENANCE_HEAD_SHA: '${{ github.sha }}',
+          },
+        },
+      ]) {
+        assertThrows(() => assertProvenanceRangeStep(mutant), Error);
+      }
     },
   },
   {
@@ -839,6 +926,9 @@ export default [
         (/** @type {any} */ step) =>
           step.name === 'Check unknown-edition provenance',
       );
+      const rangeCheck = job.steps.find(
+        (/** @type {any} */ step) => step.name === 'Check provenance PR range',
+      );
       const taxonomyCheck = job.steps.find(
         (/** @type {any} */ step) =>
           step.name === 'Check the ES2015 taxonomy and exact promotion',
@@ -849,9 +939,15 @@ export default [
 
       assertAdjacentWorkflowSteps(job.steps, [
         'Install dependencies',
+        'Check provenance PR range',
         'Check unknown-edition provenance',
         'Check the ES2015 taxonomy and exact promotion',
       ]);
+      assertProvenanceRangeStep(rangeCheck);
+      const projectCheckout = checkouts.find(
+        (step) => step.with?.repository === undefined,
+      );
+      assertSame(projectCheckout?.with?.['fetch-depth'], '0');
       assertSame(
         provenanceCheck?.run,
         'npm run test262:es2015:provenance:check',

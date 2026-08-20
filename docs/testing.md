@@ -228,6 +228,9 @@ for Task `T1` / issue `#75`:
 
 - base ledger: 2,312 roots / 4,054 variants / SHA-256
   `56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc`
+- immutable jsjs taxonomy baseline:
+  `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` (distinct from a moving PR
+  merge base)
 - U0: tooling foundation only; it makes zero classification decisions
 - atomic decision batches: `UA`, `UB`, `UL1`, `UL2`, `UL3`, `UL4`, `US1`,
   `US2`, `US3`, `US4`, `US5`, `US6`, `US7`
@@ -262,7 +265,9 @@ canonicalizes fragments that are already empty. It refuses to overwrite a
 non-empty fragment; initialization never resets decisions.
 `test262:es2015:provenance:check` is metadata/hash-only: it validates the
 manifest, immutable hashes, exact decision-directory membership, and reviewed
-fragment bytes, but cannot call `runTest262Suite`.
+fragment bytes, but cannot call `runTest262Suite`. It does not rebuild the
+foundation from the current taxonomy, so normal checks, complete-code checks,
+and rendering remain valid after reviewed taxonomy reclassification.
 `test262:es2015:provenance:ledger` requires a caller-supplied
 `--render-ledger=CODE`; it emits the exact code-unit-sorted root list for that
 atomic batch, one path per line with a trailing newline.
@@ -278,8 +283,54 @@ decision fields that affect provenance are:
 
 Draft fragments may temporarily use `reviewer: "pending"`,
 `reviewedAt: "pending"`, and `artifact: "pending"` while review is in flight,
-but strict CI does not: `TZ=UTC npm run test262:es2015:provenance:check`
-rejects pending review fields and incomplete required codes.
+only through the exact draft command:
+
+```sh
+TZ=UTC node tools/test262/es2015-provenance-check.js \
+  --check --complete=UA --allow-pending-review
+```
+
+`--allow-pending-review` conflicts with every other mode. Strict CI and
+`--check --complete=CODE` without that option reject pending review.
+
+Before classification, decision metadata (`es5id`, `es6id`, `esid`, sorted
+features/flags/includes, and transitive include features) must exactly match
+the pinned inventory. Blocked core destinations must use a manifest-pinned
+blocker/roadmap issue pair. Review times are real canonical UTC RFC3339 values.
+Reviewed harness/malformed destinations retain structural precedence;
+malformed current metadata contributes zero executable variants while the
+decision retains its immutable prior variant count.
+
+### Provenance PR range gate
+
+The generated workflow runs the same range CLI used for local final review.
+Every provenance PR body contains exactly one marker; U0 uses:
+
+```text
+<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:foundation base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->
+```
+
+Decision PRs use `profile:decision:<CODE>`. For a live U0 review:
+
+```sh
+BASE=$(git rev-parse origin/main)
+HEAD=$(git rev-parse HEAD)
+MARKER='<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:foundation base-ledger-sha256:56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc -->'
+TZ=UTC node tools/test262/es2015-provenance-check.js \
+  --check-range --base="$BASE" --head="$HEAD" \
+  --profile=foundation --marker="$MARKER"
+```
+
+The `foundation` profile requires the exact U0 files, empty fragments, and
+approved cleanup deletions, and requires a base without the initialized
+foundation. `decision:<CODE>` requires the foundation in base and permits only
+that non-empty source fragment plus the explicitly listed generated taxonomy,
+audit-evidence, report, and conformance outputs. Both reject empty ranges,
+renames/copies, unapproved deletes, `src/**`, feature/selection changes, and
+foreign fragments/tooling. Future foundation maintenance needs a separate
+reviewed profile.
+The workflow includes the `pull_request.edited` activity so changing or
+removing the durable marker reruns the gate.
 
 Local Test262 work for this provenance foundation is targeted-only. For this
 work, do **not** run `TZ=UTC npm run test262:es2015:audit`,
@@ -502,6 +553,7 @@ built-in npm cache) and `npm ci`.
 Only the broad `test262-upstream` execution step receives the 4096 MiB Node heap
 allowance; focused Test262 jobs remain unchanged.
 Inside `test262-upstream`, the generated workflow runs
+the PR-only exact range gate, then
 `TZ=UTC npm run test262:es2015:provenance:check` immediately before
 `TZ=UTC npm run test262:es2015:audit:check`, then performs the selection drift
 check and only then runs the broad subset.

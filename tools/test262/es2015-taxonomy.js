@@ -307,6 +307,7 @@ export function classifyEs2015Inventory(options) {
     executionVariants.set(path, inventoryExecutionVariants(entry, path));
     return entry;
   });
+  validateReviewedProvenanceMetadata(reviewedProvenance, entries);
   validateExecutionResults(selectedResults, executionVariants, 'selected');
   validateExecutionResults(auditResults, executionVariants, 'audit');
 
@@ -452,23 +453,74 @@ export function renderEs2015Taxonomy(report) {
  * @param {boolean} [withoutStatus]
  */
 function classifyRoot(context, withoutStatus = false) {
-  const baseRecord = classifyBaseRoot(context, withoutStatus);
   const reviewed = reviewedDecision(
     context.reviewedProvenance.get(context.path),
     context.path,
   );
+  const baseRecord = classifyBaseRoot(context, withoutStatus);
   if (reviewed === null) {
     return baseRecord;
   }
   if (baseRecord.status !== 'unknown-edition') {
+    if (
+      baseRecord.partition === 'harness-validation' ||
+      baseRecord.partition === 'malformed'
+    ) {
+      return applyStructuralReviewedDecision(baseRecord, reviewed);
+    }
     if (withoutStatus) {
       return baseRecord;
     }
+
     throw new Es2015TaxonomyError(
       `ES2015 reviewed provenance for ${context.path} expected prior class ${reviewed.priorClass}, got ${baseRecord.status}`,
     );
   }
   return applyReviewedDecision(context, baseRecord, reviewed, withoutStatus);
+}
+
+/**
+ * Structural classification remains authoritative, while the review proves why
+ * an immutable unknown-edition ledger entry moves to that structural partition.
+ *
+ * @param {ReturnType<typeof record>} baseRecord
+ * @param {{
+ *   code: string,
+ *   priorClass: string,
+ *   finalPartition: string,
+ *   finalStatus: string,
+ *   artifactSha256: string,
+ * }} reviewed
+ */
+function applyStructuralReviewedDecision(baseRecord, reviewed) {
+  if (
+    reviewed.priorClass !== 'unknown-edition' ||
+    reviewed.finalPartition !== baseRecord.partition ||
+    reviewed.finalStatus !== baseRecord.status
+  ) {
+    throw new Es2015TaxonomyError(
+      `ES2015 reviewed provenance for ${baseRecord.path} must retain structural destination ${baseRecord.partition}`,
+    );
+  }
+  if (baseRecord.partition === 'malformed' && baseRecord.variants !== 0) {
+    throw new Es2015TaxonomyError(
+      `ES2015 malformed root ${baseRecord.path} must account for zero executable variants`,
+    );
+  }
+  return record(
+    baseRecord.path,
+    baseRecord.variants,
+    baseRecord.partition,
+    baseRecord.status,
+    baseRecord.blocker,
+    baseRecord.features,
+    baseRecord.flags,
+    baseRecord.includes,
+    [
+      ...baseRecord.provenance,
+      `review:${reviewed.code}:${reviewed.artifactSha256}`,
+    ],
+  );
 }
 
 /**
@@ -640,6 +692,15 @@ function classifyBaseRoot(context, withoutStatus = false) {
  *   priorClass: string,
  *   finalPartition: string,
  *   finalStatus: string,
+ *   metadata: {
+ *     es5id: string | null,
+ *     es6id: string | null,
+ *     esid: string | null,
+ *     features: readonly string[],
+ *     includeFeatures: readonly string[],
+ *     includes: readonly string[],
+ *     flags: readonly string[],
+ *   },
  *   artifactSha256: string,
  * }} reviewed
  * @param {boolean} withoutStatus
@@ -718,12 +779,17 @@ function reviewedDecision(value, path) {
     typeof decision.code !== 'string' ||
     decision.code === '' ||
     decision.path !== path ||
+    !Number.isInteger(decision.variants) ||
+    decision.variants < 0 ||
     typeof decision.priorClass !== 'string' ||
     decision.priorClass === '' ||
     typeof decision.finalPartition !== 'string' ||
     decision.finalPartition === '' ||
     typeof decision.finalStatus !== 'string' ||
     decision.finalStatus === '' ||
+    typeof decision.metadata !== 'object' ||
+    decision.metadata === null ||
+    Array.isArray(decision.metadata) ||
     typeof decision.artifactSha256 !== 'string' ||
     decision.artifactSha256 === ''
   ) {
@@ -734,11 +800,74 @@ function reviewedDecision(value, path) {
   return {
     code: decision.code,
     path: decision.path,
+    variants: decision.variants,
     priorClass: decision.priorClass,
     finalPartition: decision.finalPartition,
     finalStatus: decision.finalStatus,
+    metadata: decision.metadata,
     artifactSha256: decision.artifactSha256,
   };
+}
+
+/**
+ * @param {Map<string, any>} reviewedProvenance
+ * @param {readonly any[]} inventory
+ */
+function validateReviewedProvenanceMetadata(reviewedProvenance, inventory) {
+  const inventoryByPath = new Map(
+    inventory.map((entry) => [entry.path, entry]),
+  );
+  for (const [path, value] of reviewedProvenance) {
+    const entry = inventoryByPath.get(path);
+    if (entry === undefined) {
+      throw new Es2015TaxonomyError(
+        `ES2015 reviewed provenance for ${path} is missing from the pinned inventory`,
+      );
+    }
+    const reviewed = reviewedDecision(value, path);
+    if (reviewed === null) {
+      throw new Es2015TaxonomyError(
+        `ES2015 reviewed provenance for ${path} is invalid`,
+      );
+    }
+    const metadata = /** @type {Record<string, any>} */ (
+      entry.metadataError !== null && entry.metadataError !== undefined
+        ? {
+            es5id: null,
+            es6id: null,
+            esid: null,
+            features: [],
+            includeFeatures: [],
+            includes: [],
+            flags: [],
+          }
+        : {
+            ...normalizeMetadata(entry.metadata),
+            includeFeatures: normalizedStringValues(
+              entry.includeFeatures ?? [],
+              `${path} includeFeatures`,
+            ),
+          }
+    );
+    for (const field of ['es5id', 'es6id', 'esid']) {
+      if (reviewed.metadata[field] !== metadata[field]) {
+        throw new Es2015TaxonomyError(
+          `ES2015 reviewed provenance for ${path} metadata.${field} does not match the pinned inventory`,
+        );
+      }
+    }
+    for (const field of ['features', 'flags', 'includes', 'includeFeatures']) {
+      if (
+        !Array.isArray(reviewed.metadata[field]) ||
+        reviewed.metadata[field].join('\u0000') !==
+          metadata[field].join('\u0000')
+      ) {
+        throw new Es2015TaxonomyError(
+          `ES2015 reviewed provenance for ${path} metadata.${field} does not match the pinned inventory`,
+        );
+      }
+    }
+  }
 }
 
 /**

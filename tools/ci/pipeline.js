@@ -203,11 +203,13 @@ function pinned(action) {
  * @param {string} name
  * @param {string} run
  * @param {Readonly<Record<string, string>>} [env]
+ * @param {string} [condition]
  * @returns {WorkflowStep}
  */
-function runStep(name, run, env) {
+function runStep(name, run, env, condition) {
   return Object.freeze({
     name,
+    ...(condition === undefined ? {} : { if: condition }),
     run,
     ...(env === undefined ? {} : { env: Object.freeze({ ...env }) }),
   });
@@ -395,6 +397,7 @@ export function createCiJobs(test262) {
       steps: Object.freeze([
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
+          'fetch-depth': '0',
         }),
         usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
           repository: upstreamSlug,
@@ -407,6 +410,19 @@ export function createCiJobs(test262) {
           cache: 'npm',
         }),
         runStep('Install dependencies', 'npm ci'),
+        runStep(
+          'Check provenance PR range',
+          'node tools/test262/es2015-provenance-check.js --check-range --base="$ES2015_PROVENANCE_BASE_SHA" --head="$ES2015_PROVENANCE_HEAD_SHA" --pr-body-env=ES2015_PROVENANCE_PR_BODY',
+          {
+            ES2015_PROVENANCE_BASE_SHA:
+              '${{ github.event.pull_request.base.sha }}',
+            ES2015_PROVENANCE_HEAD_SHA:
+              '${{ github.event.pull_request.head.sha }}',
+            ES2015_PROVENANCE_PR_BODY: '${{ github.event.pull_request.body }}',
+            TZ: 'UTC',
+          },
+          "github.event_name == 'pull_request'",
+        ),
         runStep(
           'Check unknown-edition provenance',
           'npm run test262:es2015:provenance:check',
@@ -495,6 +511,7 @@ export function renderWorkflowYaml(jobs) {
     '  push:',
     '    branches: [main]',
     '  pull_request:',
+    '    types: [opened, synchronize, reopened, edited]',
     '',
     '# Least privilege: no job in this workflow writes to the repository.',
     'permissions:',

@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "version": 2,
+  "taxonomyBaseline": "54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7",
   "repository": "https://github.com/tc39/test262.git",
   "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
   "specification": {
