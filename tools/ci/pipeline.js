@@ -614,7 +614,7 @@ export function toGithubSlug(repository) {
 }
 
 /**
- * The twelve ordinary checks CI runs as distinct jobs, plus the trusted
+ * The thirteen ordinary checks CI runs as distinct jobs, plus the trusted
  * provenance base guard whose active steps run only in the privileged event.
  *
  * `ci-drift` runs `ci:check`, which is what makes this module the source of
@@ -624,11 +624,14 @@ export function toGithubSlug(repository) {
  * what actually verifies the vendored parser build before anything else spends
  * CI time.
  *
- * The three Test262 jobs are deliberately separate. `test262-fixtures` runs the
+ * The four Test262 jobs are deliberately separate. `test262-fixtures` runs the
  * local hand-written fixture tree, which exercises the runner's semantics.
  * `test262-es2015-release` checks out the exact pinned tree for the focused
- * Promise, generator, static-module, object/function, and syntax suites. It
- * never runs broad selection or writes broad report artifacts.
+ * Promise, generator, static-module, object/function, syntax, and cross-Realm
+ * suites. It never runs broad selection or writes broad report artifacts.
+ * `test262-cross-realm` runs only the immutable H0 cross-Realm corpus so CI can
+ * show its deliberate RED state directly, without coupling that signal to the
+ * rest of the focused ES2015 suites.
  * `test262-upstream` checks out the real `tc39/test262` tree at exactly the
  * pinned revision and runs the curated subset against it, which exercises the
  * engine — and uploads its report even on failure, because a red conformance run
@@ -722,6 +725,31 @@ export function createCiJobs(test262) {
           {
             TZ: 'UTC',
           },
+        ),
+      ],
+      ['vendor'],
+    ),
+    ordinaryJob(
+      'test262-cross-realm',
+      'Pinned Test262 cross-Realm H0 corpus',
+      [
+        usesStep('Check out the project', 'actions/checkout', {
+          'persist-credentials': 'false',
+        }),
+        usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
+          repository: upstreamSlug,
+          ref: test262.revision,
+          path: test262.checkoutPath,
+          'persist-credentials': 'false',
+        }),
+        usesStep('Set up Node', 'actions/setup-node', {
+          'node-version': NODE_VERSION,
+          cache: 'npm',
+        }),
+        runStep('Install dependencies', 'npm ci'),
+        runStep(
+          'Run the focused cross-Realm Test262 suite',
+          'npm run test262:cross-realm',
         ),
       ],
       ['vendor'],
