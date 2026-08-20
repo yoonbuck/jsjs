@@ -27,6 +27,7 @@ import { EngineObject, getWithObjectOperationRealm } from './object.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
 import { toBoolean, toObject } from './conversion.js';
+import { withLinkedActiveExecutionRealm } from './reference.js';
 
 /**
  * @typedef {import('./realm.js').Realm} Realm
@@ -151,6 +152,36 @@ export function getIteratorRecord(iterator, realm) {
     done: false,
     realm,
   };
+}
+
+/**
+ * Dispatches the public ES2015 `[[Enumerate]]` operation while making the
+ * evaluating Realm visible to a separately owned target Agent. The target can
+ * therefore allocate its public iterator and iterator results in the Realm
+ * that evaluates the `for-in` statement. A direct context-free
+ * `EngineObject#enumerate()` call remains responsible for rejecting its lack
+ * of an active Realm.
+ *
+ * @param {Realm} realm
+ * @param {EngineObject} object
+ * @returns {IteratorRecord}
+ */
+export function getEnumerateIteratorRecord(realm, object) {
+  const targetAgent = object.agent;
+
+  if (targetAgent === null || targetAgent === realm.agent) {
+    return getIteratorRecord(object.enumerate(), realm);
+  }
+
+  const link = targetAgent.enterSynchronousAgentLink(realm.agent);
+
+  try {
+    return withLinkedActiveExecutionRealm(realm, targetAgent, () =>
+      getIteratorRecord(object.enumerate(), realm),
+    );
+  } finally {
+    targetAgent.exitSynchronousCallChain(link);
+  }
 }
 
 /**

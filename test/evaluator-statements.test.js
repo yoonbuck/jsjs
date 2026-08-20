@@ -42,6 +42,88 @@ function createEnumeratingTarget(realm, iterator, onEnumerate = () => {}) {
   return new EnumeratingTarget(realm.intrinsics.objectPrototype);
 }
 
+/**
+ * @param {import('../src/runtime/realm.js').Realm} realm
+ * @param {readonly unknown[]} values
+ * @param {{
+ *   returnBehavior?: 'object' | 'getter-throw' | 'call-throw' | 'non-object',
+ * }} [options]
+ * @returns {{
+ *   iterator: EngineObject,
+ *   state: {
+ *     index: number,
+ *     nextCalls: number,
+ *     returnGets: number,
+ *     returnCalls: number,
+ *   },
+ * }}
+ */
+function createForInIterator(realm, values, options = {}) {
+  const state = {
+    index: 0,
+    nextCalls: 0,
+    returnGets: 0,
+    returnCalls: 0,
+  };
+  const iterator = new EngineObject(realm.intrinsics.objectPrototype);
+  iterator.defineOwnProperty('next', {
+    value: realm.createNativeFunction({
+      name: 'next',
+      length: 0,
+      call() {
+        state.nextCalls += 1;
+        if (state.index >= values.length) {
+          return createIterResultObject(realm, undefined, true);
+        }
+        const value = values[state.index];
+        state.index += 1;
+        return createIterResultObject(realm, value, false);
+      },
+    }),
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+
+  const returnBehavior = options.returnBehavior ?? 'object';
+  if (returnBehavior === 'getter-throw') {
+    iterator.defineOwnProperty('return', {
+      get: realm.createNativeFunction({
+        name: 'get return',
+        length: 0,
+        call() {
+          state.returnGets += 1;
+          throw new GuestErrorSignal('TypeError', 'return getter');
+        },
+      }),
+      enumerable: false,
+      configurable: true,
+    });
+  } else {
+    iterator.defineOwnProperty('return', {
+      value: realm.createNativeFunction({
+        name: 'return',
+        length: 0,
+        call() {
+          state.returnCalls += 1;
+          if (returnBehavior === 'call-throw') {
+            throw new GuestErrorSignal('TypeError', 'return call');
+          }
+          if (returnBehavior === 'non-object') {
+            return 1;
+          }
+          return createIterResultObject(realm, undefined, true);
+        },
+      }),
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+
+  return { iterator, state };
+}
+
 const tests = [
   {
     name: 'the statement and expression dispatch tables are disjoint',
@@ -661,17 +743,358 @@ const tests = [
     },
   },
   {
-    name: 'synchronous for-in allocates an ordinary cross-Realm iterator in the evaluating Realm',
+    name: 'synchronous for-in closes delivered Enumerate values on abrupt exits',
     run() {
-      const agent = createAgent();
-      const evaluatingRealm = createRealm({ agent });
-      const targetRealm = createRealm({ agent });
+      /** @type {string[]} */
+      const failures = [];
+      /**
+       * @param {string} label
+       * @param {unknown} actual
+       * @param {unknown} expected
+       */
+      function expect(label, actual, expected) {
+        if (!Object.is(actual, expected)) {
+          failures.push(
+            `${label}: expected ${String(expected)}, received ${String(actual)}`,
+          );
+        }
+      }
+
+      const cases = [
+        {
+          label: 'break',
+          source: 'for (var key in source) { break; } "break";',
+          returnBehavior: 'object',
+          type: 'normal',
+          value: 'break',
+          returnCalls: 1,
+          returnGets: 0,
+        },
+        {
+          label: 'return',
+          source:
+            'function stop() { for (var key in source) { return "returned"; } } stop();',
+          returnBehavior: 'object',
+          type: 'normal',
+          value: 'returned',
+          returnCalls: 1,
+          returnGets: 0,
+        },
+        {
+          label: 'throw precedence',
+          source: 'for (var key in source) { throw new Error("body"); }',
+          returnBehavior: 'call-throw',
+          type: 'throw',
+          value: 'body',
+          returnCalls: 1,
+          returnGets: 0,
+        },
+        {
+          label: 'return getter',
+          source: 'for (var key in source) { break; }',
+          returnBehavior: 'getter-throw',
+          type: 'throw',
+          value: 'return getter',
+          returnCalls: 0,
+          returnGets: 1,
+        },
+        {
+          label: 'return call',
+          source: 'for (var key in source) { break; }',
+          returnBehavior: 'call-throw',
+          type: 'throw',
+          value: 'return call',
+          returnCalls: 1,
+          returnGets: 0,
+        },
+        {
+          label: 'non-object return',
+          source: 'for (var key in source) { break; }',
+          returnBehavior: 'non-object',
+          type: 'throw',
+          value: 'Iterator return method returned a non-object value',
+          returnCalls: 1,
+          returnGets: 0,
+        },
+        {
+          label: 'outer break',
+          source:
+            'outer: { for (var key in source) { break outer; } } "outer break";',
+          returnBehavior: 'object',
+          type: 'normal',
+          value: 'outer break',
+          returnCalls: 1,
+          returnGets: 0,
+        },
+        {
+          label: 'outer continue',
+          source:
+            'var count = 0; outer: while (count < 1) { count += 1; ' +
+            'for (var key in source) { continue outer; } } count;',
+          returnBehavior: 'object',
+          type: 'normal',
+          value: 1,
+          returnCalls: 1,
+          returnGets: 0,
+        },
+      ];
+
+      for (const entry of cases) {
+        const realm = createRealm();
+        const { iterator, state } = createForInIterator(realm, ['key'], {
+          returnBehavior:
+            /** @type {'object' | 'getter-throw' | 'call-throw' | 'non-object'} */ (
+              entry.returnBehavior
+            ),
+        });
+        defineGlobal(realm, 'source', createEnumeratingTarget(realm, iterator));
+        const completion = evaluateScript(realm, entry.source);
+        expect(`${entry.label} completion`, completion.type, entry.type);
+        const value =
+          completion.value instanceof EngineObject
+            ? completion.value.get('message', completion.value)
+            : completion.value;
+        expect(`${entry.label} value`, value, entry.value);
+        expect(
+          `${entry.label} return calls`,
+          state.returnCalls,
+          entry.returnCalls,
+        );
+        expect(
+          `${entry.label} return getter reads`,
+          state.returnGets,
+          entry.returnGets,
+        );
+      }
+
+      const targetRealm = createRealm();
+      const targetFailure = createForInIterator(targetRealm, ['key'], {
+        returnBehavior: 'call-throw',
+      });
+      defineGlobal(
+        targetRealm,
+        'source',
+        createEnumeratingTarget(targetRealm, targetFailure.iterator),
+      );
+      const targetCompletion = evaluateScript(
+        targetRealm,
+        'var target = null; for (target.key in source) {}',
+      );
+      expect('target failure completion', targetCompletion.type, 'throw');
+      expect('target failure return calls', targetFailure.state.returnCalls, 1);
+
+      const continueRealm = createRealm();
+      const continued = createForInIterator(continueRealm, ['key']);
+      defineGlobal(
+        continueRealm,
+        'source',
+        createEnumeratingTarget(continueRealm, continued.iterator),
+      );
+      const continuedCompletion = evaluateScript(
+        continueRealm,
+        'for (var key in source) { continue; } "exhausted";',
+      );
+      expect('owned continue completion', continuedCompletion.type, 'normal');
+      expect('owned continue value', continuedCompletion.value, 'exhausted');
+      expect('owned continue return calls', continued.state.returnCalls, 0);
+      expect('owned continue next calls', continued.state.nextCalls, 2);
+      assertSame(failures.join('\n'), '');
+    },
+  },
+  {
+    name: 'synchronous for-in leaves IteratorStep and IteratorValue failures unclosed',
+    run() {
+      /** @type {{
+       *   label: string,
+       *   install: (
+       *     realm: import('../src/runtime/realm.js').Realm,
+       *     iterator: EngineObject,
+       *   ) => void,
+       *   message: string,
+       * }[]} */
+      const cases = [
+        {
+          label: 'step',
+          install(realm, iterator) {
+            iterator.defineOwnProperty('next', {
+              value: realm.createNativeFunction({
+                name: 'next',
+                length: 0,
+                call() {
+                  throw new GuestErrorSignal('TypeError', 'next failure');
+                },
+              }),
+              writable: true,
+              enumerable: false,
+              configurable: true,
+            });
+          },
+          message: 'next failure',
+        },
+        {
+          label: 'value',
+          install(realm, iterator) {
+            const result = createIterResultObject(realm, 'key', false);
+            result.defineOwnProperty('value', {
+              get: realm.createNativeFunction({
+                name: 'get value',
+                length: 0,
+                call() {
+                  throw new GuestErrorSignal('TypeError', 'value failure');
+                },
+              }),
+              enumerable: true,
+              configurable: true,
+            });
+            iterator.defineOwnProperty('next', {
+              value: realm.createNativeFunction({
+                name: 'next',
+                length: 0,
+                call() {
+                  return result;
+                },
+              }),
+              writable: true,
+              enumerable: false,
+              configurable: true,
+            });
+          },
+          message: 'value failure',
+        },
+      ];
+
+      for (const entry of cases) {
+        const realm = createRealm();
+        const { iterator, state } = createForInIterator(realm, ['key']);
+        entry.install(realm, iterator);
+        defineGlobal(realm, 'source', createEnumeratingTarget(realm, iterator));
+        const completion = evaluateScript(
+          realm,
+          'for (var key in source) { throw new Error("body"); }',
+        );
+        assertSame(completion.type, 'throw', entry.label);
+        assertSame(
+          /** @type {EngineObject} */ (completion.value).get('message'),
+          entry.message,
+          entry.label,
+        );
+        assertSame(state.returnCalls, 0, entry.label);
+        assertSame(state.returnGets, 0, entry.label);
+      }
+    },
+  },
+  {
+    name: 'synchronous for-in stops live rechecks at a dispatched exotic remainder',
+    run() {
+      const realm = createRealm();
+      const remainder = createForInIterator(realm, []);
+      let enumerateCalls = 0;
+      let boundaryGets = 0;
+      class EnumerateBoundary extends EngineObject {
+        enumerate() {
+          enumerateCalls += 1;
+          return remainder.iterator;
+        }
+
+        /**
+         * @param {import('../src/runtime/descriptors.js').PropertyKey} key
+         */
+        getOwnProperty(key) {
+          if (key === 'duplicate') {
+            boundaryGets += 1;
+            throw new Error('live lookup crossed Enumerate boundary');
+          }
+          return super.getOwnProperty(key);
+        }
+      }
+
+      const boundary = new EnumerateBoundary(realm.intrinsics.objectPrototype);
+      boundary.defineOwnProperty('duplicate', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const source = new EngineObject(boundary);
+      source.defineOwnProperty('first', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      source.defineOwnProperty('duplicate', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(realm, 'source', source);
+
+      const completion = evaluateScript(
+        realm,
+        'var keys = []; for (var key in source) { keys.push(key); delete source.duplicate; } keys.join(",");',
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'first');
+      assertSame(enumerateCalls, 1);
+      assertSame(boundaryGets, 0);
+    },
+  },
+  {
+    name: 'synchronous for-in rejects non-string exotic remainder values after an ordinary prefix',
+    run() {
+      for (const value of [Symbol('remainder'), 1]) {
+        const realm = createRealm();
+        const remainder = createForInIterator(realm, [value]);
+        let enumerateCalls = 0;
+        class EnumerateBoundary extends EngineObject {
+          enumerate() {
+            enumerateCalls += 1;
+            return remainder.iterator;
+          }
+        }
+
+        const boundary = new EnumerateBoundary(
+          realm.intrinsics.objectPrototype,
+        );
+        const source = new EngineObject(boundary);
+        source.defineOwnProperty('prefix', {
+          value: 1,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        defineGlobal(realm, 'source', source);
+
+        const completion = evaluateScript(realm, 'for (var key in source) {}');
+        assertSame(completion.type, 'throw');
+        assertSame(
+          /** @type {EngineObject} */ (completion.value).get('message'),
+          'Enumerate iterator value is not a string',
+        );
+        assertSame(enumerateCalls, 1);
+        assertSame(remainder.state.nextCalls, 1);
+      }
+    },
+  },
+  {
+    name: 'synchronous for-in bridges a separate target Agent into its evaluating Realm',
+    run() {
+      const evaluatingAgent = createAgent();
+      const targetAgent = createAgent();
+      const evaluatingRealm = createRealm({ agent: evaluatingAgent });
+      const targetRealm = createRealm({ agent: targetAgent });
       let enumerateCalls = 0;
       /** @type {{ iterator: EngineObject | null }} */
       const captured = { iterator: null };
 
       class CapturingTarget extends EngineObject {
         enumerate() {
+          assertSame(
+            targetAgent.activeExecutionRealm,
+            evaluatingRealm,
+            'separate target Agent must see the evaluating Realm',
+          );
           enumerateCalls += 1;
           const iterator = super.enumerate();
           captured.iterator = iterator;
@@ -716,6 +1139,9 @@ const tests = [
         '1,2,text',
       );
       assertSame(enumerateCalls, 1);
+      assertSame(targetAgent.activeExecutionRealm, null);
+      assertSame(evaluatingAgent._generatorHostChain, null);
+      assertSame(targetAgent._generatorHostChain, null);
       const iterator = captured.iterator;
       if (iterator === null) {
         throw new Error('Expected for-in to retain its iterator');
@@ -729,6 +1155,47 @@ const tests = [
           .realm,
         evaluatingRealm,
       );
+      const result = /** @type {EngineObject} */ (
+        /** @type {any} */ (iterator.get('next', iterator)).callFunction(
+          iterator,
+          [],
+          evaluatingRealm,
+        )
+      );
+      assertSame(
+        result.getPrototypeOf(),
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+
+      class AbruptTarget extends EngineObject {
+        /** @returns {EngineObject} */
+        enumerate() {
+          assertSame(
+            targetAgent.activeExecutionRealm,
+            evaluatingRealm,
+            'abrupt dispatch must still install the evaluating Realm',
+          );
+          throw new GuestErrorSignal('TypeError', 'enumerate abrupt');
+        }
+      }
+
+      defineGlobal(
+        evaluatingRealm,
+        'abruptSource',
+        new AbruptTarget(targetRealm.intrinsics.objectPrototype),
+      );
+      const abrupt = evaluateScript(
+        evaluatingRealm,
+        'for (var key in abruptSource) {}',
+      );
+      assertSame(abrupt.type, 'throw');
+      assertSame(
+        /** @type {EngineObject} */ (abrupt.value).get('message'),
+        'enumerate abrupt',
+      );
+      assertSame(targetAgent.activeExecutionRealm, null);
+      assertSame(evaluatingAgent._generatorHostChain, null);
+      assertSame(targetAgent._generatorHostChain, null);
     },
   },
   {

@@ -15,7 +15,7 @@ import {
 import { createUnsupportedNodeError } from '../runtime/errors.js';
 import {
   getIterator,
-  getIteratorRecord,
+  getEnumerateIteratorRecord,
   iteratorClose,
   iteratorStep,
   iteratorValue,
@@ -1090,7 +1090,7 @@ function dispatchForIn(execution, frame) {
 
     const prepared = captureGeneratorOperation(execution.realm, () => {
       const object = toObject(execution.realm, result.value);
-      return getIteratorRecord(object.enumerate(), execution.realm);
+      return getEnumerateIteratorRecord(execution.realm, object);
     });
 
     if (prepared.type === 'completion') {
@@ -1110,7 +1110,11 @@ function dispatchForIn(execution, frame) {
     const targetResult = takeGeneratorOutput(execution);
 
     if (targetResult.type === 'completion') {
-      return { type: 'pop', result: targetResult };
+      return closeForInWithCompletion(
+        execution,
+        frame,
+        targetResult.completion,
+      );
     }
 
     if (targetResult.type !== 'value') {
@@ -1137,11 +1141,15 @@ function dispatchForIn(execution, frame) {
     frame.value = outcome.completion.value;
 
     if (outcome.action === 'break') {
-      return completionAction(createNormalCompletion(frame.value));
+      return closeForInWithCompletion(
+        execution,
+        frame,
+        createNormalCompletion(frame.value),
+      );
     }
 
     if (outcome.action === 'propagate') {
-      return completionAction(outcome.completion);
+      return closeForInWithCompletion(execution, frame, outcome.completion);
     }
 
     frame.phase = 'next';
@@ -1226,6 +1234,37 @@ function startForInIteration(execution, frame) {
       binding.targetMode,
     ),
   };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {ForInFrame} frame
+ * @param {Completion} completion
+ * @returns {GeneratorFrameAction}
+ */
+function closeForInWithCompletion(execution, frame, completion) {
+  const record = requireForInIterator(frame);
+  const closeResult = captureGeneratorOperation(execution.realm, () =>
+    iteratorClose(execution.realm, record, completion.type === 'throw'),
+  );
+
+  if (closeResult.type === 'completion') {
+    return { type: 'pop', result: closeResult };
+  }
+
+  return completionAction(completion);
+}
+
+/**
+ * @param {ForInFrame} frame
+ * @returns {IteratorRecord}
+ */
+function requireForInIterator(frame) {
+  if (frame.record === null) {
+    throw new TypeError('For-in frame lost its iterator record');
+  }
+
+  return frame.record;
 }
 
 /**

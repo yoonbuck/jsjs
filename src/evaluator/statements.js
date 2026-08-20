@@ -19,7 +19,7 @@ import {
 import { putValue, getValue } from '../runtime/reference.js';
 import {
   getIterator,
-  getIteratorRecord,
+  getEnumerateIteratorRecord,
   iteratorClose,
   iteratorStep,
   iteratorValue,
@@ -634,7 +634,7 @@ function evaluateForInStatement(node, context, labelSet) {
   }
 
   const object = toObject(context.realm, rightValue);
-  const record = getIteratorRecord(object.enumerate(), context.realm);
+  const record = getEnumerateIteratorRecord(context.realm, object);
 
   const isConst = isLexical && isConstantDeclaration(node.left);
 
@@ -656,28 +656,36 @@ function evaluateForInStatement(node, context, labelSet) {
       );
     }
 
-    let iterationContext = context;
-    if (isLexical) {
-      const iterationEnv = newDeclarativeEnvironment(context.env);
-      for (const name of boundNames(node.left)) {
-        if (isConst) {
-          iterationEnv.createImmutableBinding(name, true);
-        } else {
-          iterationEnv.createMutableBinding(name, false);
+    /** @type {Completion} */
+    let bodyResult;
+    try {
+      let iterationContext = context;
+      if (isLexical) {
+        const iterationEnv = newDeclarativeEnvironment(context.env);
+        for (const name of boundNames(node.left)) {
+          if (isConst) {
+            iterationEnv.createImmutableBinding(name, true);
+          } else {
+            iterationEnv.createMutableBinding(name, false);
+          }
         }
+        iterationContext = { ...context, env: iterationEnv };
+        initializeBindingPattern(
+          node.left.declarations[0].id,
+          key,
+          iterationEnv,
+          iterationContext,
+        );
+      } else {
+        assignForInTarget(node.left, key, context);
       }
-      iterationContext = { ...context, env: iterationEnv };
-      initializeBindingPattern(
-        node.left.declarations[0].id,
-        key,
-        iterationEnv,
-        iterationContext,
-      );
-    } else {
-      assignForInTarget(node.left, key, context);
+
+      bodyResult = evaluateStatement(node.body, iterationContext);
+    } catch (error) {
+      iteratorClose(context.realm, record, true);
+      throw error;
     }
 
-    const bodyResult = evaluateStatement(node.body, iterationContext);
     const { value: nextValue, action } = applyLoopBodyResult(
       bodyResult,
       value,
@@ -686,10 +694,12 @@ function evaluateForInStatement(node, context, labelSet) {
     value = nextValue;
 
     if (action === 'break') {
+      iteratorClose(context.realm, record, false);
       return createNormalCompletion(value);
     }
 
     if (action === 'propagate') {
+      iteratorClose(context.realm, record, bodyResult.type === 'throw');
       return { ...bodyResult, value };
     }
   }

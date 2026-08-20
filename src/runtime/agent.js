@@ -324,7 +324,23 @@ export class Agent {
       return null;
     }
 
-    const callerAgent = callerRealm.agent;
+    return this.enterSynchronousAgentLink(callerRealm.agent);
+  }
+
+  /**
+   * Temporarily puts this Agent and a caller Agent on one synchronous execution
+   * path without selecting a callee Realm. Internal object operations use this
+   * when they must expose the caller's active Realm before an object chooses
+   * its Realm-sensitive implementation.
+   *
+   * @param {Agent} callerAgent
+   * @returns {SynchronousCallChain}
+   */
+  enterSynchronousAgentLink(callerAgent) {
+    if (!(callerAgent instanceof Agent)) {
+      throw new TypeError('Synchronous caller must be an Agent');
+    }
+
     let thisChain = this.synchronousCallChainRoot();
     let callerChain = callerAgent.synchronousCallChainRoot();
 

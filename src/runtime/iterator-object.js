@@ -83,6 +83,8 @@ export class ForInIterator extends EngineObject {
     this.visited = new Set();
     /** @type {import('./iterator.js').IteratorRecord | null} */
     this.remainder = null;
+    /** @type {EngineObject | null} */
+    this.remainderBoundary = null;
     /** @type {boolean} */
     this.exhausted = false;
 
@@ -125,7 +127,11 @@ export class ForInIterator extends EngineObject {
         continue;
       }
 
-      const descriptor = findLiveForInDescriptor(this.target, key);
+      const descriptor = findLiveForInDescriptor(
+        this.target,
+        key,
+        this.remainderBoundary,
+      );
 
       if (descriptor === undefined) {
         continue;
@@ -158,6 +164,7 @@ function snapshotForInCandidates(iterator) {
       current !== iterator.target &&
       current.enumerate !== EngineObject.prototype.enumerate
     ) {
+      iterator.remainderBoundary = current;
       iterator.remainder = getIteratorRecord(
         current.enumerate(),
         iterator.realm,
@@ -181,13 +188,18 @@ function snapshotForInCandidates(iterator) {
  *
  * @param {EngineObject} target
  * @param {string} key
+ * @param {EngineObject | null} remainderBoundary
  * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
  */
-function findLiveForInDescriptor(target, key) {
+function findLiveForInDescriptor(target, key, remainderBoundary) {
   /** @type {EngineObject | null} */
   let current = target;
 
   while (current !== null) {
+    if (current === remainderBoundary) {
+      return undefined;
+    }
+
     const descriptor = current.getOwnProperty(key);
 
     if (descriptor !== undefined) {
@@ -222,10 +234,6 @@ function nextForInRemainder(iterator) {
     }
 
     const value = iteratorValue(step, iterator.realm);
-
-    if (typeof value === 'symbol') {
-      continue;
-    }
 
     if (typeof value === 'string') {
       if (iterator.visited.has(value)) {

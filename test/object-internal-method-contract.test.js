@@ -1338,6 +1338,35 @@ export default [
     },
   },
   {
+    name: 'ordinary Enumerate next rejects a foreign receiver',
+    run() {
+      const realm = createRealm();
+      const object = new EngineObject(realm.intrinsics.objectPrototype);
+      object.defineOwnProperty('key', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const iterator = realm.agent.withActiveExecutionRealm(realm, () =>
+        object.enumerate(),
+      );
+      const next = iterator.get('next', iterator);
+      assertThrows(
+        () =>
+          callCallable(
+            /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+              next
+            ),
+            new EngineObject(realm.intrinsics.objectPrototype),
+            [],
+          ),
+        ThrowSignal,
+      );
+    },
+  },
+  {
     name: 'ordinary Enumerate snapshots candidates while live lookup honors deletion, shadowing, and replacement',
     run() {
       const realm = createRealm();

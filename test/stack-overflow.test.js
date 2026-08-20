@@ -4261,6 +4261,34 @@ const tests = [
     },
   },
   {
+    name: 'generator for-in consumes a 50,000-link Enumerate iterator iteratively',
+    run() {
+      const realm = createRealm();
+      const root = new EngineObject(realm.intrinsics.objectPrototype);
+      root.defineOwnProperty('key', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let source = root;
+      for (let index = 0; index < 50000; index += 1) {
+        source = new EngineObject(source);
+      }
+      defineGlobal(realm, 'source', source);
+
+      const completion = evaluateScript(
+        realm,
+        'function* values() { for (var key in source) { yield key; } } ' +
+          'var iterator = values(); var first = iterator.next(); var done = iterator.next(); ' +
+          '[first.value, first.done, done.done].join("|");',
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'key|false|true');
+    },
+  },
+  {
     name: 'a prototype chain built at runtime is walked without host recursion',
     run() {
       // Property lookup follows the prototype chain, and guest code can make
