@@ -21,7 +21,6 @@ import {
 import {
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
-  buildProvenanceFoundation,
   parseEs2015DecisionFragment,
   parseEs2015ProvenanceManifest,
   validateDecisionFragments,
@@ -334,50 +333,21 @@ export function createAuditDependencies(options = {}) {
   const repositoryRootUrl = options.repositoryRootUrl ?? REPOSITORY_ROOT_URL;
   const readRepositoryFile = (/** @type {string} */ path) =>
     readFile(new URL(path, repositoryRootUrl), 'utf8');
-  const readOptionalRepositoryFile = async (/** @type {string} */ path) => {
-    try {
-      return await readRepositoryFile(path);
-    } catch (error) {
-      if (/** @type {any} */ (error)?.code === 'ENOENT') {
-        return null;
-      }
-      throw error;
-    }
-  };
   const readPin = () => readTest262Pin(repositoryRootUrl);
   const checkoutUrl = (/** @type {{ checkoutPath: string }} */ pin) =>
     new URL(`${pin.checkoutPath.replace(/\/$/u, '')}/`, repositoryRootUrl);
-  const readProvenanceManifest = async () => {
-    const explicit = await readOptionalRepositoryFile(ES2015_PROVENANCE_FILE);
-    if (explicit !== null) {
-      return explicit;
-    }
-    return syntheticProvenanceManifestText(
-      await readFile(new URL(ES2015_TAXONOMY_ARTIFACT, REPOSITORY_ROOT_URL), 'utf8'),
+  const readProvenanceManifest = () => readRepositoryFile(ES2015_PROVENANCE_FILE);
+  const readDecisionFragments = async () =>
+    new Map(
+      await Promise.all(
+        ES2015_PROVENANCE_DECISION_CODES.map(async (code) => [
+          code,
+          await readRepositoryFile(
+            `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+          ),
+        ]),
+      ),
     );
-  };
-  const readDecisionFragments = async () => {
-    /** @type {Map<string, string>} */
-    const fragments = new Map();
-    for (const code of ES2015_PROVENANCE_DECISION_CODES) {
-      const text = await readOptionalRepositoryFile(
-        `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
-      );
-      if (text !== null) {
-        fragments.set(code, text);
-      }
-    }
-    if (fragments.size > 0) {
-      return fragments;
-    }
-    const manifest = parseEs2015ProvenanceManifest(await readProvenanceManifest());
-    return new Map(
-      ES2015_PROVENANCE_DECISION_CODES.map((code) => [
-        code,
-        `${JSON.stringify(emptyDecisionFragmentRecord(manifest, code), null, 2)}\n`,
-      ]),
-    );
-  };
   return {
     environment: options.environment ?? process.env,
     readPin,
@@ -914,41 +884,6 @@ async function readOptionalFile(deps, path) {
   }
 }
 
-/** @param {string} text */
-function syntheticProvenanceManifestText(text) {
-  /** @type {unknown} */
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch (error) {
-    throw new Es2015AuditError(
-      `${ES2015_TAXONOMY_ARTIFACT} cannot seed ${ES2015_PROVENANCE_FILE}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    !Array.isArray(/** @type {Record<string, unknown>} */ (parsed).classifications)
-  ) {
-    throw new Es2015AuditError(
-      `${ES2015_TAXONOMY_ARTIFACT} cannot seed ${ES2015_PROVENANCE_FILE}`,
-    );
-  }
-  const manifest = buildProvenanceFoundation(
-    /** @type {Array<any>} */ (
-      /** @type {Record<string, unknown>} */ (parsed).classifications
-    ).map((record) => ({
-      path: record.path,
-      variants: record.variants,
-      partition: record.partition,
-      finalClass: record.status,
-    })),
-  );
-  return `${JSON.stringify(manifest, null, 2)}\n`;
-}
-
 /**
  * @param {ReadonlyMap<string, string> | Record<string, string>} fragments
  * @returns {Map<string, ReturnType<typeof parseEs2015DecisionFragment>>}
@@ -956,9 +891,17 @@ function syntheticProvenanceManifestText(text) {
 function parseDecisionFragments(fragments) {
   const entries =
     fragments instanceof Map ? [...fragments] : Object.entries(fragments);
-  return new Map(
+  const parsed = new Map(
     entries.map(([code, text]) => [code, parseEs2015DecisionFragment(text, code)]),
   );
+  for (const code of ES2015_PROVENANCE_DECISION_CODES) {
+    if (!parsed.has(code)) {
+      throw new Es2015AuditError(
+        `${code} decision fragment is required by ${PROVENANCE_DECISIONS_DIRECTORY}`,
+      );
+    }
+  }
+  return parsed;
 }
 
 /**
@@ -981,22 +924,6 @@ function withDecisionCodes(decisions, fragments) {
       }),
     ]),
   );
-}
-
-/**
- * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} manifest
- * @param {string} code
- */
-function emptyDecisionFragmentRecord(manifest, code) {
-  return {
-    version: manifest.version,
-    repository: manifest.repository,
-    revision: manifest.revision,
-    specification: manifest.specification,
-    parent: manifest.parent,
-    code,
-    decisions: [],
-  };
 }
 
 /**
