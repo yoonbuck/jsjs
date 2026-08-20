@@ -20,11 +20,15 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { load as parseYaml } from 'js-yaml';
+import { load as parseYaml, dump as dumpYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
+import { main as checkProvenanceRange } from '../../tools/test262/es2015-provenance-check.js';
 import {
   UNSUPPORTED_FLAGS,
   decideSkip,
@@ -157,6 +161,375 @@ const EXPECTED_PROVENANCE_RANGE_ENV = Object.freeze({
   ES2015_PROVENANCE_PR_BODY: '${{ github.event.pull_request.body }}',
   TZ: 'UTC',
 });
+
+/**
+ * The trusted provenance base guard, designed in
+ * `docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md`
+ * ("Prerequisite Amendment: Trusted Provenance Base Guard"). None of this is
+ * implemented yet: `tools/ci/pipeline.js` does not render a
+ * `pull_request_target` trigger or a `provenance-base-guard` job, so every
+ * constant below is this test's own independent expectation, not a value
+ * pulled from the generator. These fixed constants are what a later
+ * implementation must reproduce byte-for-byte.
+ */
+const EXPECTED_PR_TARGET_TYPES = Object.freeze([
+  'opened',
+  'synchronize',
+  'reopened',
+  'edited',
+]);
+
+const GUARD_JOB_ID = 'provenance-base-guard';
+const GUARD_ACTIVE_NAME = 'Provenance base guard';
+const GUARD_INACTIVE_NAME = 'Provenance base guard (inactive)';
+const GUARD_CONDITION = "github.event_name == 'pull_request_target'";
+const EXISTING_JOB_PRIVILEGED_EXCLUSION =
+  "github.event_name != 'pull_request_target'";
+const GUARD_RUNNER = 'ubuntu-24.04';
+const GUARD_TIMEOUT_MINUTES = 5;
+
+const GUARD_PERMISSIONS = Object.freeze({
+  contents: 'read',
+  'pull-requests': 'read',
+});
+
+const GUARD_CONCURRENCY = Object.freeze({
+  group: 'provenance-base-guard-${{ github.event.pull_request.number }}',
+  'cancel-in-progress': true,
+});
+
+/**
+ * Every job the pipeline already generates, keyed by job ID, with its current
+ * ordinary-event display name. `EXPECTED_JOB_COMMANDS` above already carries
+ * the same key set, but a second table with the human-readable name keeps this
+ * table hand-derived and readable at the call site rather than piggybacking on
+ * an unrelated table.
+ */
+const ORDINARY_JOB_NAMES = Object.freeze({
+  'ci-drift': 'Workflow drift',
+  vendor: 'Vendor integrity',
+  format: 'Formatting',
+  lint: 'Lint',
+  typecheck: 'Type check',
+  'test-node': 'Node tests',
+  'test-browser': 'Browser tests',
+  'test-jsc': 'JavaScriptCore tests',
+  'test262-fixtures': 'Test262 fixtures',
+  'test262-es2015-release': 'Pinned Test262 ES2015 focused suites',
+  'test262-upstream': 'Pinned Test262 subset',
+  'benchmark-smoke': 'Benchmark smoke',
+});
+
+/**
+ * Builds the `${{ <condition> && '<whenTrue>' || '<whenFalse>' }}` job-name
+ * expression the design requires: `job.name` supports the `github` context,
+ * so the generator must select each display name with a
+ * `github.event_name`-keyed ternary rather than a static string.
+ *
+ * @param {string} condition
+ * @param {string} whenTrue
+ * @param {string} whenFalse
+ * @returns {string}
+ */
+function eventNameTernary(condition, whenTrue, whenFalse) {
+  return `\${{ ${condition} && '${whenTrue}' || '${whenFalse}' }}`;
+}
+
+const GUARD_NAME_EXPRESSION = eventNameTernary(
+  GUARD_CONDITION,
+  GUARD_ACTIVE_NAME,
+  GUARD_INACTIVE_NAME,
+);
+
+/**
+ * @param {string} ordinaryName
+ * @returns {string}
+ */
+function inactiveOnPullRequestTargetName(ordinaryName) {
+  return eventNameTernary(
+    EXISTING_JOB_PRIVILEGED_EXCLUSION,
+    ordinaryName,
+    `${ordinaryName} (inactive on pull_request_target)`,
+  );
+}
+
+/** Per-step environment tables, exactly as the design's mapping table lists. */
+const GUARD_VALIDATE_ENV = Object.freeze({
+  BASE_REPOSITORY: '${{ github.event.pull_request.base.repo.full_name }}',
+  WORKFLOW_REPOSITORY: '${{ github.repository }}',
+  BASE_REF: '${{ github.event.pull_request.base.ref }}',
+  BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+  HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+  PR_NUMBER: '${{ github.event.pull_request.number }}',
+});
+const GUARD_CHECKOUT_ATTEST_ENV = Object.freeze({
+  BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+});
+const GUARD_FETCH_ENV = Object.freeze({
+  PR_NUMBER: '${{ github.event.pull_request.number }}',
+});
+const GUARD_FETCH_ATTEST_ENV = Object.freeze({
+  PR_NUMBER: '${{ github.event.pull_request.number }}',
+  HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+});
+const GUARD_CHECKER_ENV = Object.freeze({
+  BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+  HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+  PR_BODY: '${{ github.event.pull_request.body }}',
+  TZ: 'UTC',
+});
+
+const GUARD_STEP_NAMES = Object.freeze([
+  'Validate the canonical guard target',
+  'Check out the event base commit',
+  'Attest the checked-out base commit',
+  'Set up Node',
+  'Fetch the advertised pull request ref',
+  'Attest the fetched head commit',
+  'Check the trusted-base provenance range',
+]);
+
+/**
+ * Fixed, colon-free, single-line `printf`/`grep -Eq` pipeline. Every check
+ * must pass, in order, before the job reads any repository content: base
+ * repository, workflow repository, base ref, base SHA, head SHA, PR number.
+ */
+const EXPECTED_GUARD_VALIDATE_COMMAND =
+  "printf '%s' \"$BASE_REPOSITORY\" | grep -Eq '^yoonbuck/jsjs$' && printf '%s' \"$WORKFLOW_REPOSITORY\" | grep -Eq '^yoonbuck/jsjs$' && printf '%s' \"$BASE_REF\" | grep -Eq '^main$' && printf '%s' \"$BASE_SHA\" | grep -Eq '^[0-9a-f]{40}$' && printf '%s' \"$HEAD_SHA\" | grep -Eq '^[0-9a-f]{40}$' && printf '%s' \"$PR_NUMBER\" | grep -Eq '^[1-9][0-9]*$'";
+
+/** Requires the checked-out worktree to be exactly the event's base commit. */
+const EXPECTED_GUARD_CHECKOUT_ATTEST_COMMAND =
+  'test "$(git rev-parse --verify \'HEAD^{commit}\')" = "$BASE_SHA"';
+
+/** Verbatim from the design's step 5. */
+const EXPECTED_GUARD_FETCH_COMMAND =
+  'git fetch --no-tags --no-recurse-submodules origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"';
+
+/** Requires both the advertised ref and FETCH_HEAD to equal the event head SHA. */
+const EXPECTED_GUARD_FETCH_ATTEST_COMMAND =
+  'test "$(git rev-parse --verify "refs/remotes/pull/${PR_NUMBER}/head^{commit}")" = "$HEAD_SHA" && test "$(git rev-parse --verify \'FETCH_HEAD^{commit}\')" = "$HEAD_SHA"';
+
+const EXPECTED_GUARD_CHECKER_COMMAND =
+  'node tools/test262/es2015-provenance-check.js --check-range --base="$BASE_SHA" --head="$HEAD_SHA" --pr-body-env=PR_BODY';
+
+/**
+ * The YAML plain-scalar-indicator characters the design forbids as a first
+ * character, so a hand-authored `run`/`name` value can never require quoting.
+ */
+const PLAIN_SCALAR_RESERVED_LEADING_CHARACTERS = new Set([
+  '-',
+  '?',
+  ':',
+  ',',
+  '[',
+  ']',
+  '{',
+  '}',
+  '#',
+  '&',
+  '*',
+  '!',
+  '|',
+  '>',
+  "'",
+  '"',
+  '%',
+  '@',
+  '`',
+]);
+
+/**
+ * The generator's byte-preserving plain-scalar assertion, written out here
+ * because `tools/ci/pipeline.js` does not export it yet (this task adds only
+ * the failing test, not the generator change). It rejects everything the
+ * design lists: a line break, leading/trailing whitespace, a trailing colon, a
+ * colon followed by a space, a space followed by `#`, and a reserved leading
+ * indicator.
+ *
+ * @param {unknown} value
+ * @param {string} description
+ */
+function assertPlainScalarSafe(value, description) {
+  assertSame(
+    typeof value === 'string' && value.length > 0,
+    true,
+    `${description} must be a non-empty string`,
+  );
+  const text = /** @type {string} */ (value);
+  assertSame(
+    /[\r\n]/.test(text),
+    false,
+    `${description} must not contain a line break: ${JSON.stringify(text)}`,
+  );
+  assertSame(
+    text === text.trim(),
+    true,
+    `${description} must not have leading or trailing whitespace: ${JSON.stringify(text)}`,
+  );
+  assertSame(
+    text.endsWith(':'),
+    false,
+    `${description} must not end with a colon: ${JSON.stringify(text)}`,
+  );
+  assertSame(
+    text.includes(': '),
+    false,
+    `${description} must not contain a colon followed by a space: ${JSON.stringify(text)}`,
+  );
+  assertSame(
+    text.includes(' #'),
+    false,
+    `${description} must not contain a space followed by #: ${JSON.stringify(text)}`,
+  );
+  assertSame(
+    PLAIN_SCALAR_RESERVED_LEADING_CHARACTERS.has(text[0]),
+    false,
+    `${description} must not begin with a YAML plain-scalar indicator: ${JSON.stringify(text)}`,
+  );
+}
+
+/**
+ * Dumps `value` with the real `js-yaml` dumper and reloads it with the real
+ * parser, so "plain-scalar-safe" is proven against the actual library rather
+ * than only against the hand-written regex above.
+ *
+ * @param {string} value
+ * @param {string} description
+ */
+function assertRoundTripsAsPlainScalar(value, description) {
+  const dumped = dumpYaml({ value });
+  assertSame(
+    /^value: ['"]/.test(dumped),
+    false,
+    `${description} must dump as an unquoted plain scalar, got: ${dumped}`,
+  );
+  const reloaded = /** @type {{ value: unknown }} */ (parseYaml(dumped)).value;
+  assertSame(
+    reloaded,
+    value,
+    `${description} must round-trip through the real YAML parser unchanged`,
+  );
+}
+
+/**
+ * @param {string} expression A job- or step-name value that may be a
+ *   `${{ ... }}` expression.
+ * @param {string} description
+ */
+function assertNameExpressionOnlyDependsOnEventName(expression, description) {
+  if (!expression.startsWith('${{')) return;
+  assertSame(
+    expression.includes('secrets.'),
+    false,
+    `${description} must never depend on a secret`,
+  );
+  const dynamicReferences = expression.match(/github\.[A-Za-z_.]+/g) ?? [];
+  for (const reference of dynamicReferences) {
+    assertSame(
+      reference,
+      'github.event_name',
+      `${description} must depend only on github.event_name, found ${reference}`,
+    );
+  }
+}
+
+/** Isolates fixture Git repositories from the host's real Git configuration. */
+function isolatedGitEnv(extra) {
+  return Object.freeze({
+    .../** @type {Record<string, string | undefined>} */ (process.env),
+    GIT_CONFIG_GLOBAL: join(
+      tmpdir(),
+      'workflow-contract-guard-fixtures-missing-global-gitconfig',
+    ),
+    GIT_CONFIG_SYSTEM: join(
+      tmpdir(),
+      'workflow-contract-guard-fixtures-missing-system-gitconfig',
+    ),
+    ...extra,
+  });
+}
+
+const GUARD_FIXTURE_IDENTITY = Object.freeze([
+  '-c',
+  'user.name=Provenance Guard Fixture',
+  '-c',
+  'user.email=provenance-guard-fixture@example.invalid',
+]);
+
+/**
+ * @param {string} cwd
+ * @param {readonly string[]} args
+ * @param {Record<string, string> | undefined} [extra]
+ */
+function runGit(cwd, args, extra) {
+  return spawnSync('git', args, {
+    cwd,
+    env: isolatedGitEnv(extra ?? {}),
+    encoding: 'utf8',
+  });
+}
+
+/** A deterministic, isolated Git fixture on an explicit `main` branch. */
+function initGuardFixtureRepository() {
+  const dir = mkdtempSync(join(tmpdir(), 'provenance-base-guard-'));
+  const init = runGit(dir, [
+    ...GUARD_FIXTURE_IDENTITY,
+    'init',
+    '--quiet',
+    '--initial-branch=main',
+  ]);
+  assertSame(init.status, 0, `fixture git init must succeed: ${init.stderr}`);
+  return dir;
+}
+
+let guardFixtureCommitCounter = 0;
+
+/**
+ * @param {string} dir
+ * @returns {string} the new commit's full SHA
+ */
+function commitGuardFixtureFile(dir) {
+  guardFixtureCommitCounter += 1;
+  const counter = guardFixtureCommitCounter;
+  writeFileSync(
+    join(dir, `file-${counter}.txt`),
+    `fixture content ${counter}\n`,
+    'utf8',
+  );
+  const add = runGit(dir, [...GUARD_FIXTURE_IDENTITY, 'add', '-A']);
+  assertSame(add.status, 0, `fixture git add must succeed: ${add.stderr}`);
+  const commit = runGit(dir, [
+    ...GUARD_FIXTURE_IDENTITY,
+    'commit',
+    '--quiet',
+    '-m',
+    `fixture commit ${counter}`,
+  ]);
+  assertSame(
+    commit.status,
+    0,
+    `fixture git commit must succeed: ${commit.stderr}`,
+  );
+  const rev = runGit(dir, ['rev-parse', 'HEAD']);
+  assertSame(rev.status, 0, `fixture rev-parse must succeed: ${rev.stderr}`);
+  return rev.stdout.trim();
+}
+
+/**
+ * Runs one of the guard's fixed single-line shell commands exactly as the
+ * workflow would, with the same isolated Git configuration.
+ *
+ * @param {string} command
+ * @param {string} cwd
+ * @param {Record<string, string>} env
+ */
+function runGuardShellCommand(command, cwd, env) {
+  return spawnSync('bash', ['-c', command], {
+    cwd,
+    env: isolatedGitEnv(env),
+    encoding: 'utf8',
+  });
+}
 
 const engine = { createRealm, evaluateScript };
 
@@ -463,6 +836,18 @@ export default [
           `${id} must inherit the workflow's read-only permissions`,
         );
       }
+
+      // Amended for the trusted provenance base guard: unlike every other
+      // job, the guard does not inherit the workflow's permissions. It
+      // declares its own, and they must be exactly read-only contents plus
+      // read-only pull-requests — no broader inherited or declared scope.
+      const guardJob = requireJob(workflow, GUARD_JOB_ID);
+
+      assertSame(
+        JSON.stringify(guardJob.permissions),
+        JSON.stringify(GUARD_PERMISSIONS),
+        'the guard must declare exactly contents:read and pull-requests:read',
+      );
     },
   },
   {
@@ -539,9 +924,12 @@ export default [
       const { workflow } = await readWorkflow();
       const packageManifest = await readPackageManifest();
 
+      // Amended for the trusted provenance base guard: the job set now also
+      // includes the guard, so the exact-set assumption widens to name it
+      // explicitly rather than silently accepting an extra unexpected job.
       assertSame(
         Object.keys(workflow.jobs).sort().join(','),
-        Object.keys(EXPECTED_JOB_COMMANDS).sort().join(','),
+        [...Object.keys(EXPECTED_JOB_COMMANDS), GUARD_JOB_ID].sort().join(','),
       );
 
       for (const [id, command] of Object.entries(EXPECTED_JOB_COMMANDS)) {
@@ -562,6 +950,17 @@ export default [
           `package.json must declare the ${script} script`,
         );
       }
+
+      // Amended per-job npm-command assumption: unlike every other job, the
+      // guard never runs npm at all (no install, no script) — its checker
+      // invocation is a direct `node` call against the base checkout.
+      const guardCommands = runCommands(requireJob(workflow, GUARD_JOB_ID));
+
+      assertSame(
+        guardCommands.some((command) => command.startsWith('npm')),
+        false,
+        'the guard must never run an npm command',
+      );
     },
   },
   {
@@ -597,7 +996,14 @@ export default [
       const job = requireJob(workflow, 'test-jsc');
       const commands = runCommands(job);
 
-      assertSame(job.name, 'JavaScriptCore tests');
+      // Amended for the trusted provenance base guard: every existing job's
+      // static name becomes a github.event_name-keyed expression so a job
+      // skipped on pull_request_target reports a distinct inactive name
+      // rather than reusing the name a required ordinary-event check expects.
+      assertSame(
+        job.name,
+        inactiveOnPullRequestTargetName('JavaScriptCore tests'),
+      );
       assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
       assertSame(
         commands.includes(JSC_INSTALL_COMMAND),
@@ -661,7 +1067,12 @@ export default [
         'node test/run-node.js test/ci/es2015-promise-test262.test.js test/ci/es2015-generator-test262.test.js test/ci/es2015-module-test262.test.js test/ci/es2015-object-function-test262.test.js test/ci/es2015-syntax-test262.test.js',
         'the release script must run every focused ES2015 suite',
       );
-      assertSame(job.name, 'Pinned Test262 ES2015 focused suites');
+      // Amended for the trusted provenance base guard: see the JavaScriptCore
+      // job assertion above for why this is now an event-keyed expression.
+      assertSame(
+        job.name,
+        inactiveOnPullRequestTargetName('Pinned Test262 ES2015 focused suites'),
+      );
       assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
       assertSame(
         runStep?.env?.TZ,
@@ -1961,6 +2372,622 @@ export default [
           { ...base.groups[0], name: 'aaa', paths: ['test/other.js'] },
         ],
       });
+    },
+  },
+
+  // --- Trusted provenance base guard (RED: not implemented yet) -----------
+  //
+  // The tests below assert the workflow contract for the guard designed in
+  // "Prerequisite Amendment: Trusted Provenance Base Guard" — a dedicated
+  // pull_request_target job that runs a base-authored checker against a
+  // GitHub-declared base/head, never HEAD's own workflow or checkout. None of
+  // `tools/ci/pipeline.js` or `.github/workflows/ci.yml` implements this yet,
+  // so every test in this section is expected to fail until that follow-up
+  // task lands. Expected values are written out independently here, not
+  // imported from the generator.
+
+  {
+    name: 'the committed workflow adds an unfiltered pull_request_target trigger with the exact rerun types',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+
+      assertSame(
+        JSON.stringify(workflow.on?.pull_request_target?.types),
+        JSON.stringify(EXPECTED_PR_TARGET_TYPES),
+        'pull_request_target must rerun on opened, synchronize, reopened, and edited',
+      );
+      assertSame(
+        JSON.stringify(Object.keys(workflow.on?.pull_request_target ?? {})),
+        JSON.stringify(['types']),
+        'pull_request_target must declare only types — no paths, paths-ignore, branches, or branches-ignore',
+      );
+      assertSame(
+        JSON.stringify(Object.keys(workflow.on?.pull_request ?? {})),
+        JSON.stringify(['types']),
+        'the existing pull_request trigger must stay free of path or branch filters too',
+      );
+    },
+  },
+  {
+    name: 'the provenance base guard job runs standalone on an explicit runner with a five-minute timeout and no dependencies',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+
+      assertSame(job.if, GUARD_CONDITION);
+      assertSame(job['runs-on'], GUARD_RUNNER);
+      assertSame(job['timeout-minutes'], GUARD_TIMEOUT_MINUTES);
+      assertSame(
+        Object.prototype.hasOwnProperty.call(job, 'needs'),
+        false,
+        'the guard must not declare needs — it depends on no other job',
+      );
+      assertSame(
+        JSON.stringify(job.concurrency),
+        JSON.stringify(GUARD_CONCURRENCY),
+        'the guard concurrency group must be keyed by the server PR number with cancel-in-progress',
+      );
+    },
+  },
+  {
+    name: 'the guard and every existing job select their display name only from github.event_name, and no other job is a passthrough for the guard requirement',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const guardJob = requireJob(workflow, GUARD_JOB_ID);
+
+      assertSame(guardJob.name, GUARD_NAME_EXPRESSION);
+      assertNameExpressionOnlyDependsOnEventName(
+        guardJob.name,
+        'the guard job name',
+      );
+
+      for (const [id, ordinaryName] of Object.entries(ORDINARY_JOB_NAMES)) {
+        const job = requireJob(workflow, id);
+
+        assertSame(
+          job.if,
+          EXISTING_JOB_PRIVILEGED_EXCLUSION,
+          `${id} must be excluded from the privileged pull_request_target event`,
+        );
+        assertSame(
+          job.name,
+          inactiveOnPullRequestTargetName(ordinaryName),
+          `${id} must keep its ordinary name and gain a distinct inactive name`,
+        );
+        assertNameExpressionOnlyDependsOnEventName(
+          job.name,
+          `the ${id} job name`,
+        );
+      }
+    },
+  },
+  {
+    name: 'the guard job performs exactly the seven steps the design specifies, in order, with no others',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+
+      assertSame(
+        JSON.stringify((job.steps ?? []).map((/** @type {any} */ s) => s.name)),
+        JSON.stringify(GUARD_STEP_NAMES),
+        'the guard must contain exactly these steps, in this order, and no setup, install, or extra step',
+      );
+      assertAdjacentWorkflowSteps(job.steps, GUARD_STEP_NAMES);
+    },
+  },
+  {
+    name: 'the guard validation step runs the fixed printf/grep pipeline against every canonical-target identity, per-step only',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const step = job.steps.find(
+        (/** @type {any} */ s) => s.name === GUARD_STEP_NAMES[0],
+      );
+
+      assertSame(step.run, EXPECTED_GUARD_VALIDATE_COMMAND);
+      assertSame(
+        JSON.stringify(step.env),
+        JSON.stringify(GUARD_VALIDATE_ENV),
+        'the validation step must receive exactly the six identity variables it checks',
+      );
+      assertSame(step.if, undefined, 'validation always runs on the guard job');
+    },
+  },
+  {
+    name: 'the guard checks out the event base SHA with full history and no persisted credentials or submodules',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const checkouts = usesSteps(job, 'actions/checkout');
+
+      assertSame(checkouts.length, 1, 'the guard must check out exactly once');
+
+      const [checkout] = checkouts;
+
+      assertSame(checkout.name, GUARD_STEP_NAMES[1]);
+      assertSame(
+        JSON.stringify(checkout.with),
+        JSON.stringify({
+          ref: '${{ github.event.pull_request.base.sha }}',
+          'fetch-depth': '0',
+          'persist-credentials': 'false',
+          submodules: 'false',
+        }),
+      );
+      assertSame(
+        checkout.env,
+        undefined,
+        'the checkout action needs no step env — its ref is a direct input',
+      );
+    },
+  },
+  {
+    name: 'the guard attests the checked-out worktree is exactly the event base commit before trusting it',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const step = job.steps.find(
+        (/** @type {any} */ s) => s.name === GUARD_STEP_NAMES[2],
+      );
+
+      assertSame(step.run, EXPECTED_GUARD_CHECKOUT_ATTEST_COMMAND);
+      assertSame(
+        JSON.stringify(step.env),
+        JSON.stringify(GUARD_CHECKOUT_ATTEST_ENV),
+      );
+    },
+  },
+  {
+    name: 'the guard sets up Node 20 without any cache or dependency install',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const setups = usesSteps(job, 'actions/setup-node');
+
+      assertSame(setups.length, 1);
+      assertSame(
+        JSON.stringify(setups[0].with),
+        JSON.stringify({ 'node-version': '20' }),
+        'the guard setup-node step must not request npm caching',
+      );
+      assertSame(
+        runCommands(job).some((command) => command.startsWith('npm')),
+        false,
+        'the guard must never run npm ci or any other npm command',
+      );
+    },
+  },
+  {
+    name: 'the guard fetches only the base repository advertised PR ref and attests both the ref and FETCH_HEAD against the event head SHA',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const fetchStep = job.steps.find(
+        (/** @type {any} */ s) => s.name === GUARD_STEP_NAMES[4],
+      );
+      const attestStep = job.steps.find(
+        (/** @type {any} */ s) => s.name === GUARD_STEP_NAMES[5],
+      );
+
+      assertSame(fetchStep.run, EXPECTED_GUARD_FETCH_COMMAND);
+      assertSame(
+        JSON.stringify(fetchStep.env),
+        JSON.stringify(GUARD_FETCH_ENV),
+      );
+      assertSame(attestStep.run, EXPECTED_GUARD_FETCH_ATTEST_COMMAND);
+      assertSame(
+        JSON.stringify(attestStep.env),
+        JSON.stringify(GUARD_FETCH_ATTEST_ENV),
+      );
+    },
+  },
+  {
+    name: 'the guard checker step is the only step carrying PR_BODY or TZ, and it receives exactly base/head/body/UTC',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const checkerStep = job.steps.find(
+        (/** @type {any} */ s) => s.name === GUARD_STEP_NAMES[6],
+      );
+
+      assertSame(checkerStep.run, EXPECTED_GUARD_CHECKER_COMMAND);
+      assertSame(
+        JSON.stringify(checkerStep.env),
+        JSON.stringify(GUARD_CHECKER_ENV),
+      );
+      assertSame(
+        Object.prototype.hasOwnProperty.call(checkerStep.env, 'PR_NUMBER'),
+        false,
+        'the PR number must not reach the checker step',
+      );
+
+      for (const step of job.steps) {
+        if (step.name === GUARD_STEP_NAMES[6]) continue;
+        const env = step.env ?? {};
+        assertSame(
+          Object.prototype.hasOwnProperty.call(env, 'PR_BODY'),
+          false,
+          `${step.name} must not receive PR_BODY`,
+        );
+        assertSame(
+          Object.prototype.hasOwnProperty.call(env, 'TZ'),
+          false,
+          `${step.name} must not receive TZ — only the checker runs under fixed TZ: UTC`,
+        );
+      }
+    },
+  },
+  {
+    name: 'no guard step ever references the PR head repository, proving a fork-shaped event cannot become a remote or URL input',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const serialized = JSON.stringify(job);
+
+      assertSame(
+        serialized.includes('head.repo'),
+        false,
+        'no guard input may derive from github.event.pull_request.head.repo',
+      );
+      assertSame(
+        serialized.includes('head_repo') || serialized.includes('HEAD_REPO'),
+        false,
+        'the guard must not introduce a head-repository variable under any name',
+      );
+      assertSame(
+        EXPECTED_GUARD_FETCH_COMMAND.trim().startsWith(
+          'git fetch --no-tags --no-recurse-submodules origin ',
+        ),
+        true,
+        "the fetch command must use only the base checkout's existing origin remote",
+      );
+    },
+  },
+  {
+    name: 'the guard job never introduces an unsafe checkout, secret, write permission, cache, artifact, reusable workflow call, unpinned action, or command-line PR body interpolation',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, GUARD_JOB_ID);
+      const serialized = JSON.stringify(job);
+
+      assertSame(
+        job.uses === undefined,
+        true,
+        'the guard must be an ordinary job, not a reusable workflow call',
+      );
+      for (const value of Object.values(job.permissions ?? {})) {
+        assertSame(value, 'read', 'every guard permission must be read-only');
+      }
+      assertSame(
+        serialized.includes('secrets.'),
+        false,
+        'the guard must never read a repository, organization, or environment secret',
+      );
+      assertSame(
+        serialized.includes('allow-unsafe-pr-checkout'),
+        false,
+        'the guard must never opt out of safe checkout',
+      );
+      assertSame(
+        serialized.includes('pull_request.head.sha'),
+        false,
+        'the guard must never check out the PR head SHA directly',
+      );
+      assertSame(
+        EXPECTED_GUARD_CHECKER_COMMAND.includes('$PR_BODY'),
+        false,
+        'the PR body must reach the checker only via --pr-body-env, never spliced into the command line',
+      );
+
+      for (const step of job.steps ?? []) {
+        if (typeof step.uses === 'string') {
+          assertSame(
+            /^[^@]+@[0-9a-f]{40}$/.test(step.uses),
+            true,
+            `${step.uses} must be pinned to a full commit SHA`,
+          );
+          assertSame(
+            step.uses.includes('actions/cache'),
+            false,
+            'the guard must not restore or save a cache',
+          );
+          assertSame(
+            step.uses.toLowerCase().includes('artifact'),
+            false,
+            'the guard must not upload or download an artifact',
+          );
+        }
+      }
+    },
+  },
+  {
+    name: 'no job in the committed workflow embeds a live GitHub Actions expression directly in a run command',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+
+      for (const id of Object.keys(workflow.jobs)) {
+        for (const step of workflow.jobs[id].steps ?? []) {
+          if (typeof step.run === 'string') {
+            assertSame(
+              step.run.includes('${{'),
+              false,
+              `${id} step ${step.name} must pass event data through env, not interpolate it into run: ${step.run}`,
+            );
+          }
+        }
+      }
+    },
+  },
+  {
+    name: 'every generated job name, step name, and step run is a byte-preserving YAML plain scalar',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const expectedJobIds = [
+        ...Object.keys(EXPECTED_JOB_COMMANDS),
+        GUARD_JOB_ID,
+      ];
+
+      for (const id of expectedJobIds) {
+        const job = requireJob(workflow, id);
+
+        assertPlainScalarSafe(job.name, `job ${id} name`);
+        assertRoundTripsAsPlainScalar(job.name, `job ${id} name`);
+
+        for (const step of job.steps ?? []) {
+          if (typeof step.name === 'string') {
+            assertPlainScalarSafe(step.name, `${id} step name "${step.name}"`);
+            assertRoundTripsAsPlainScalar(step.name, `${id} step name`);
+          }
+          if (typeof step.run === 'string') {
+            assertPlainScalarSafe(step.run, `${id} step "${step.name}" run`);
+            assertRoundTripsAsPlainScalar(
+              step.run,
+              `${id} step "${step.name}" run`,
+            );
+          }
+        }
+      }
+    },
+  },
+  {
+    name: 'the legacy ordinary-PR "Check provenance PR range" step stays byte-for-byte unchanged and defense-in-depth only',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      const job = requireJob(workflow, 'test262-upstream');
+      const step = job.steps.find(
+        (/** @type {any} */ s) => s.name === 'Check provenance PR range',
+      );
+
+      assertProvenanceRangeStep(step);
+      assertSame(
+        step.if,
+        "github.event_name == 'pull_request'",
+        'the legacy step must remain scoped to pull_request and never run under pull_request_target',
+      );
+    },
+  },
+  {
+    name: 'the checker currently rejects the pull_request_target event the guard needs, proving the gate is not yet implemented',
+    run: async () => {
+      const baseSha = '1111111111111111111111111111111111111111';
+      const headSha = '2222222222222222222222222222222222222222';
+      const deps = {
+        environment: {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request_target',
+          PR_BODY: '',
+        },
+        resolveCommit: async (/** @type {string} */ revision) => revision,
+        mergeBase: async () => baseSha,
+        gitDiff: async () => '',
+        readGitFile: async () => null,
+        stdout: () => {},
+        stderr: () => {},
+      };
+      const argv = [
+        '--check-range',
+        `--base=${baseSha}`,
+        `--head=${headSha}`,
+        '--pr-body-env=PR_BODY',
+      ];
+
+      let thrown;
+      try {
+        await checkProvenanceRange(argv, deps);
+      } catch (error) {
+        thrown = error;
+      }
+
+      assertSame(
+        thrown !== undefined,
+        true,
+        'the checker must currently reject pull_request_target — this proves the guard cannot pass yet',
+      );
+      assertSame(
+        /** @type {Error} */ (thrown).message,
+        'Provenance PR range checking requires a pull_request event',
+      );
+    },
+  },
+  {
+    name: 'the guard validation command accepts only the canonical base repository, workflow repository, main ref, full-hex SHAs, and a positive PR number',
+    run: () => {
+      const fixture = initGuardFixtureRepository();
+      try {
+        const validEnv = {
+          BASE_REPOSITORY: 'yoonbuck/jsjs',
+          WORKFLOW_REPOSITORY: 'yoonbuck/jsjs',
+          BASE_REF: 'main',
+          BASE_SHA: '1925873700c180fc38e7e020fc4b631c1866b082',
+          HEAD_SHA: '996d23372d6c8c0c9ce3a562d59baea7132ef7d3',
+          PR_NUMBER: '77',
+        };
+        const accepted = runGuardShellCommand(
+          EXPECTED_GUARD_VALIDATE_COMMAND,
+          fixture,
+          validEnv,
+        );
+
+        assertSame(
+          accepted.status,
+          0,
+          `the canonical target must validate: ${accepted.stderr}`,
+        );
+
+        const mutants = [
+          { ...validEnv, BASE_REPOSITORY: 'attacker/jsjs' },
+          { ...validEnv, WORKFLOW_REPOSITORY: 'attacker/jsjs' },
+          { ...validEnv, BASE_REF: 'not-main' },
+          { ...validEnv, BASE_REF: 'main-line' },
+          { ...validEnv, BASE_SHA: 'not-a-sha' },
+          { ...validEnv, BASE_SHA: validEnv.BASE_SHA.toUpperCase() },
+          { ...validEnv, HEAD_SHA: 'not-a-sha' },
+          { ...validEnv, PR_NUMBER: '0' },
+          { ...validEnv, PR_NUMBER: '01' },
+          { ...validEnv, PR_NUMBER: '12a' },
+          { ...validEnv, PR_NUMBER: '' },
+          { ...validEnv, PR_NUMBER: '-1' },
+        ];
+
+        for (const mutant of mutants) {
+          const rejected = runGuardShellCommand(
+            EXPECTED_GUARD_VALIDATE_COMMAND,
+            fixture,
+            mutant,
+          );
+
+          assertSame(
+            rejected.status === 0,
+            false,
+            `mutant target must be rejected before checkout: ${JSON.stringify(mutant)}`,
+          );
+        }
+      } finally {
+        rmSync(fixture, { recursive: true, force: true });
+      }
+    },
+  },
+  {
+    name: 'the checkout-HEAD attestation command requires the checked-out worktree to equal the event base SHA',
+    run: () => {
+      const fixture = initGuardFixtureRepository();
+      try {
+        const headSha = commitGuardFixtureFile(fixture);
+        const matching = runGuardShellCommand(
+          EXPECTED_GUARD_CHECKOUT_ATTEST_COMMAND,
+          fixture,
+          { BASE_SHA: headSha },
+        );
+
+        assertSame(
+          matching.status,
+          0,
+          `a checkout equal to the event base SHA must attest: ${matching.stderr}`,
+        );
+
+        const mismatched = runGuardShellCommand(
+          EXPECTED_GUARD_CHECKOUT_ATTEST_COMMAND,
+          fixture,
+          { BASE_SHA: '0'.repeat(40) },
+        );
+
+        assertSame(
+          mismatched.status === 0,
+          false,
+          'a checkout that differs from the event base SHA must fail attestation',
+        );
+      } finally {
+        rmSync(fixture, { recursive: true, force: true });
+      }
+    },
+  },
+  {
+    name: "the fetch and fetched-HEAD attestation commands work only through the base checkout's origin remote and the advertised PR ref, and reject a retargeted or mismatched head",
+    run: () => {
+      const upstream = initGuardFixtureRepository();
+      const clone = initGuardFixtureRepository();
+      try {
+        const headSha = commitGuardFixtureFile(upstream);
+        const otherSha = commitGuardFixtureFile(upstream);
+        const advertise = runGit(upstream, [
+          'update-ref',
+          'refs/pull/77/head',
+          headSha,
+        ]);
+
+        assertSame(
+          advertise.status,
+          0,
+          `the fixture must advertise a PR ref: ${advertise.stderr}`,
+        );
+
+        const remote = runGit(clone, [
+          ...GUARD_FIXTURE_IDENTITY,
+          'remote',
+          'add',
+          'origin',
+          upstream,
+        ]);
+
+        assertSame(
+          remote.status,
+          0,
+          `the fixture clone must add its base origin remote: ${remote.stderr}`,
+        );
+
+        const fetch = runGuardShellCommand(
+          EXPECTED_GUARD_FETCH_COMMAND,
+          clone,
+          {
+            PR_NUMBER: '77',
+          },
+        );
+
+        assertSame(
+          fetch.status,
+          0,
+          `the advertised PR ref must fetch through origin: ${fetch.stderr}`,
+        );
+
+        const matchingAttest = runGuardShellCommand(
+          EXPECTED_GUARD_FETCH_ATTEST_COMMAND,
+          clone,
+          { PR_NUMBER: '77', HEAD_SHA: headSha },
+        );
+
+        assertSame(
+          matchingAttest.status,
+          0,
+          `the fetched ref and FETCH_HEAD must attest against the event head SHA: ${matchingAttest.stderr}`,
+        );
+
+        const mismatchedAttest = runGuardShellCommand(
+          EXPECTED_GUARD_FETCH_ATTEST_COMMAND,
+          clone,
+          { PR_NUMBER: '77', HEAD_SHA: otherSha },
+        );
+
+        assertSame(
+          mismatchedAttest.status === 0,
+          false,
+          'a fetched head SHA that differs from the event head SHA must fail attestation',
+        );
+
+        const missingRefFetch = runGuardShellCommand(
+          EXPECTED_GUARD_FETCH_COMMAND,
+          clone,
+          { PR_NUMBER: '404' },
+        );
+
+        assertSame(
+          missingRefFetch.status === 0,
+          false,
+          'fetching a PR number the base repository never advertised must fail',
+        );
+      } finally {
+        rmSync(upstream, { recursive: true, force: true });
+        rmSync(clone, { recursive: true, force: true });
+      }
     },
   },
 ];
