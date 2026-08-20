@@ -335,11 +335,11 @@ export default [
   {
     name: 'async Test262 mode reports an engine error when the portable hooks are absent',
     run: async () => {
-      const {
-        installDone: _installDone,
-        runJobs: _runJobs,
-        ...engineWithoutAsyncHooks
-      } = createJsjsTest262Engine();
+      const engineWithoutAsyncHooks = {
+        ...createJsjsTest262Engine(),
+      };
+      delete engineWithoutAsyncHooks.installDone;
+      delete engineWithoutAsyncHooks.runJobs;
       const result = await runTest262({
         engine: engineWithoutAsyncHooks,
         host: inMemoryHost({

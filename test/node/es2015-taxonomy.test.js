@@ -641,7 +641,7 @@ async function withIsolatedCwd(action) {
 function fixtureAuditDependencies(fixture, options = {}) {
   const dependencies = createAuditDependencies({
     repositoryRootUrl: fixture.root,
-    environment: options.environment,
+    environment: options.environment ?? { ...process.env, TZ: 'UTC' },
     stderr: options.stderr,
   });
   const pinnedMetadataFiles = new Set([

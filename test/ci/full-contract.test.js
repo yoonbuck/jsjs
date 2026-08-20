@@ -686,11 +686,11 @@ const FULL_CI_CONTRACT_TESTS = [
         throw new Error('the focused Promise suite must retain async roots');
       }
 
-      const {
-        installDone: _installDone,
-        runJobs: _runJobs,
-        ...engineWithoutDoneHooks
-      } = promiseEngine;
+      const engineWithoutDoneHooks = {
+        ...promiseEngine,
+      };
+      delete engineWithoutDoneHooks.installDone;
+      delete engineWithoutDoneHooks.runJobs;
       const recordsWithoutDoneHooks = await runTest262File({
         engine: engineWithoutDoneHooks,
         host,
