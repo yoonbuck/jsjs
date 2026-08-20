@@ -37,6 +37,7 @@ const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 const KNOWN_GOOD_PATH_COUNT = 12434;
 
 const GENERATED_PATH_COUNT = 14107;
+const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 
 const ISSUE_25_EXPANSION_PATH_COUNT = 1662;
 
@@ -228,8 +229,14 @@ export default [
       const baselinePaths = upstreamSubsetPaths(
         parseUpstreamSubset(baselineText),
       );
+      const currentSubset = parseUpstreamSubset(currentText);
+      const promotion = currentSubset.groups.filter(
+        (group) => group.name === PROMOTION_GROUP,
+      );
       const currentPaths = new Set(
-        upstreamSubsetPaths(parseUpstreamSubset(currentText)),
+        currentSubset.groups
+          .filter((group) => group.name !== PROMOTION_GROUP)
+          .flatMap((group) => group.paths),
       );
       const missing = baselinePaths.filter((path) => !currentPaths.has(path));
       const baselinePathSet = new Set(baselinePaths);
@@ -290,6 +297,16 @@ export default [
         currentPaths.size,
         GENERATED_PATH_COUNT,
         'the generated selection must retain its exact pinned path count',
+      );
+      assertSame(
+        promotion.length,
+        1,
+        'the exact ES2015 promotion must stay outside the generated ES5 selection',
+      );
+      assertSame(
+        promotion[0]?.paths.length,
+        6323,
+        'the exact ES2015 promotion must retain its reviewed root count',
       );
       assertSame(
         issue25ExpansionPaths.length,

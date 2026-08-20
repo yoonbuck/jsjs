@@ -1,36 +1,25 @@
 /**
- * Runs the full local CI contract.
+ * Runs the safe local CI contract.
  *
  * The suites in `test/ci/` fall into two categories:
  *
- * 1. Pipeline-mirror suites (e.g. `full-contract.test.js`) that execute the
- *    project's real commands — vendor, format, lint, type check, the Node
- *    sweep, a headless browser, the local fixture suite, and the pinned
- *    upstream Test262 subset — so they are slow, need a browser and an
- *    upstream checkout, and must never run from inside one of the jobs they
- *    describe.
+ * 1. The safe local subset of `full-contract.test.js`, which executes the
+ *    project's real non-upstream commands — vendor, format, lint, type check,
+ *    the Node sweep, a headless browser, and the local fixture suite.
  *
- * 2. Checkout-dependent suites (e.g. `exclusions-check.test.js`) that need a
- *    real upstream Test262 checkout but do not invoke CI commands. They live
- *    here rather than in `test/node/` because they cannot pass without
- *    `vendor/test262`.
+ * Exact-pinned Test262 semantic suites and the broad upstream run are excluded:
+ * the generated exact-SHA CI jobs own those executions.
  *
  * That is why they have their own entry point instead of being registered with
  * `test/run-node.js`: `npm run test:node` stays deterministic and
- * machine-independent, and `npm run ci:contract` is the one command that
- * reproduces the whole pipeline locally.
+ * machine-independent, while `npm run ci:contract` is the safe local
+ * command-level subset.
  *
  * Usage: `node test/run-ci-contract.js`
  */
 
 import { runTests } from './harness/runner.js';
-import fullContract from './ci/full-contract.test.js';
-import exclusionsCheck from './ci/exclusions-check.test.js';
-import es2015GeneratorTest262 from './ci/es2015-generator-test262.test.js';
-import es2015ModuleTest262 from './ci/es2015-module-test262.test.js';
-import es2015ObjectFunctionTest262 from './ci/es2015-object-function-test262.test.js';
-import es2015PromiseTest262 from './ci/es2015-promise-test262.test.js';
-import es2015SyntaxTest262 from './ci/es2015-syntax-test262.test.js';
+import { LOCAL_CI_CONTRACT_TESTS } from './ci/full-contract.test.js';
 
 /**
  * @typedef {import('./suites.js').TestSuite} TestSuite
@@ -40,31 +29,7 @@ import es2015SyntaxTest262 from './ci/es2015-syntax-test262.test.js';
 const CI_CONTRACT_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/ci/full-contract.test.js',
-    tests: fullContract,
-  }),
-  Object.freeze({
-    file: 'test/ci/exclusions-check.test.js',
-    tests: exclusionsCheck,
-  }),
-  Object.freeze({
-    file: 'test/ci/es2015-generator-test262.test.js',
-    tests: es2015GeneratorTest262,
-  }),
-  Object.freeze({
-    file: 'test/ci/es2015-module-test262.test.js',
-    tests: es2015ModuleTest262,
-  }),
-  Object.freeze({
-    file: 'test/ci/es2015-object-function-test262.test.js',
-    tests: es2015ObjectFunctionTest262,
-  }),
-  Object.freeze({
-    file: 'test/ci/es2015-promise-test262.test.js',
-    tests: es2015PromiseTest262,
-  }),
-  Object.freeze({
-    file: 'test/ci/es2015-syntax-test262.test.js',
-    tests: es2015SyntaxTest262,
+    tests: LOCAL_CI_CONTRACT_TESTS,
   }),
 ]);
 

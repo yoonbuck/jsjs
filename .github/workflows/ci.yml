@@ -185,7 +185,7 @@ jobs:
         run: npm run test262:fixtures
 
   test262-es2015-release:
-    name: Pinned Test262 ES2015 async runtime and modules
+    name: Pinned Test262 ES2015 focused suites
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -207,7 +207,7 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Run focused ES2015 async runtime and module Test262
+      - name: Run focused ES2015 Test262 suites
         run: npm run test262:es2015-release
         env:
           TZ: 'UTC'
@@ -240,8 +240,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: 'false'
-      - name: Remove the committed Test262 report
-        run: rm -f docs/test262-report.jsonl
       - name: Check out the pinned Test262 tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,8 +254,14 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Check the ES2015 taxonomy and exact promotion
+        run: npm run test262:es2015:audit:check
+        env:
+          TZ: 'UTC'
       - name: Check the ES5 selection is current
         run: npm run test262:select:check
+      - name: Remove the committed Test262 report
+        run: rm -f docs/test262-report.jsonl
       - name: Run the pinned Test262 subset
         run: npm run test262:upstream
         env:

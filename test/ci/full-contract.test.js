@@ -1,15 +1,13 @@
 /**
- * The full local CI contract.
+ * Local and CI-only command contract tests.
  *
- * This suite executes every command the CI workflow declares, against the real
- * pinned upstream Test262 checkout and a real headless browser. It is
- * deliberately excluded from `npm test`/`npm run test:node`: those must stay
- * deterministic and machine-independent, and running the whole pipeline from
- * inside one of its own jobs would be recursive. `npm run ci:contract` runs
- * this file through `test/run-ci-contract.js`; the deterministic half of the
- * contract (workflow structure, manifests, feature probes) lives in
- * `test/node/workflow-contract.test.js` and runs with the ordinary Node
- * suites.
+ * `npm run ci:contract` runs the explicit safe local subset through
+ * `test/run-ci-contract.js`: real vendor, format, lint, type-check, workflow,
+ * Node, fixture, and browser commands. The remaining tests validate
+ * checkout-dependent exact-pinned and broad Test262 behavior; generated CI jobs
+ * own those executions. The deterministic workflow structure, manifests, and
+ * feature probes live in `test/node/workflow-contract.test.js` and run with the
+ * ordinary Node suites.
  *
  * Nothing here is conditional. A missing browser or a missing upstream
  * checkout fails with the exact command needed to fix it rather than skipping,
@@ -560,7 +558,7 @@ async function readUpstreamHead() {
   return head;
 }
 
-export default [
+const FULL_CI_CONTRACT_TESTS = [
   {
     name: 'the pinned upstream Test262 tree is checked out at exactly the revision package.json pins',
     run: async () => {
@@ -989,7 +987,7 @@ export default [
     },
   },
   {
-    name: 'npm run test262:es2015-release passes all focused async runtime suites without skips',
+    name: 'npm run test262:es2015-release passes every focused ES2015 suite without skips',
     run: () => {
       const results = parseJsonLines(npmRun('test262:es2015-release'));
 
@@ -1010,6 +1008,18 @@ export default [
           },
           {
             name: 'pinned module raw metadata expands once without harness rewriting',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 object/function upstream Test262 files all pass',
+            status: 'passed',
+          },
+          {
+            name: 'focused ES2015 syntax Test262 files pass and out-of-scope neighbors stay classified',
+            status: 'passed',
+          },
+          {
+            name: 'generated selection retains issue #25 and layer-4 generator expansion',
             status: 'passed',
           },
         ]),
@@ -1577,3 +1587,31 @@ export default [
     },
   },
 ];
+
+const LOCAL_CI_CONTRACT_TEST_NAMES = Object.freeze([
+  'npm run vendor:check passes for real',
+  'npm run format passes for real',
+  'npm run format really checks engine sources, not only the tooling around them',
+  'npm run lint passes for real',
+  'npm run typecheck passes for real',
+  'npm run ci:check passes for real, so the committed workflow is not stale',
+  'npm run test:node passes for real and reports only passing suites',
+  'npm run test262:fixtures passes for real against the local fixture tree',
+  'npm run test:browser launches the configured headless browser for real',
+]);
+
+export const LOCAL_CI_CONTRACT_TESTS = Object.freeze(
+  LOCAL_CI_CONTRACT_TEST_NAMES.map((name) => {
+    const test = FULL_CI_CONTRACT_TESTS.find(
+      (candidate) => candidate.name === name,
+    );
+
+    if (test === undefined) {
+      throw new Error(`local CI contract test is missing: ${name}`);
+    }
+
+    return test;
+  }),
+);
+
+export default FULL_CI_CONTRACT_TESTS;

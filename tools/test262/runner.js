@@ -97,6 +97,10 @@ export { DEFAULT_INCLUDES };
  *   paths: readonly string[],
  *   supportedFeatures?: readonly string[],
  *   skipFeatures?: readonly string[],
+ *   supportedFeaturesForPath?: (
+ *     file: string,
+ *     metadata: Test262Metadata,
+ *   ) => readonly string[] | undefined,
  * }} Test262SuiteOptions
  *
  * @typedef {{
@@ -106,6 +110,10 @@ export { DEFAULT_INCLUDES };
  *   includeMalformed?: boolean,
  *   supportedFeatures?: readonly string[],
  *   skipFeatures?: readonly string[],
+ *   supportedFeaturesForPath?: (
+ *     file: string,
+ *     metadata: Test262Metadata,
+ *   ) => readonly string[] | undefined,
  * }} Test262RunOptions
  */
 
@@ -229,6 +237,7 @@ export async function runTest262(options) {
     paths,
     supportedFeatures: options.supportedFeatures,
     skipFeatures: options.skipFeatures,
+    supportedFeaturesForPath: options.supportedFeaturesForPath,
   });
 
   return {
@@ -319,7 +328,15 @@ export async function runTest262File(options) {
     throw error;
   }
 
-  const skip = decideSkip(metadata, options);
+  const pathFeatures = options.supportedFeaturesForPath?.(file, metadata) ?? [];
+  const supportedFeatures = sortStrings([
+    ...(options.supportedFeatures ?? []),
+    ...pathFeatures,
+  ]);
+  const skip = decideSkip(metadata, {
+    supportedFeatures,
+    skipFeatures: options.skipFeatures,
+  });
 
   if (skip !== null) {
     return [

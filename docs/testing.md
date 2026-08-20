@@ -46,9 +46,12 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test:jsc`                                                             | Every portable suite in the `jsc` shell                                                                                                                                                                                         |
 | `npm run test262:fixtures`                                                     | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                                                                                        |
 | `npm run test262:fixtures:manifest`                                            | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
-| `TZ=UTC npm run test262:es2015-release`                                        | Focused pinned Promise+generator+module Test262 release gate; does not rewrite broad reports or selection                                                                                                                       |
-| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | The pinned upstream subset from a real `tc39/test262` checkout; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                         |
-| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | The same run, writing nothing: fails if either generated artifact is stale                                                                                                                                                      |
+| `TZ=UTC npm run test262:es2015-release`                                        | Focused pinned Promise+generator+module+object/function+syntax Test262 release gate; does not rewrite broad reports or selection                                                                                                |
+| `TZ=UTC npm run test262:es2015:audit`                                          | Rebuild the deterministic ES2015 taxonomy from the exact pinned checkout                                                                                                                                                        |
+| `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in ES2015 taxonomy and exact promotion provenance without writing                                                                                                                                            |
+| `TZ=UTC npm run test262:es2015:sync-promoted-report`                           | Rebuild report and coverage bytes from committed pre-promotion records plus immutable exact promotion evidence; never executes the broad subset                                                                                 |
+| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`       | **CI-only:** broad pinned upstream subset; regenerates `docs/test262-report.jsonl` and the coverage block in `docs/conformance.md`                                                                                              |
+| `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check` | **CI-only:** broad pinned run in check mode; fails if either generated artifact is stale                                                                                                                                        |
 | `TZ=UTC npm run test262:select`                                                | Derive the upstream subset from the ES5 selection policy and rewrite `tools/test262/upstream-subset.json`                                                                                                                       |
 | `TZ=UTC npm run test262:select:check`                                          | The same derivation, writing nothing: fails if the committed subset is stale                                                                                                                                                    |
 | `npm run test262:exclusions:check`                                             | Runs every per-file exclusion; fails on stale exclusions, unapproved unverifiable results, stale approvals, missing policy paths, or a missing/wrong pinned checkout                                                            |
@@ -64,7 +67,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run profile:browser`                                                      | Invoke the Chromium CPU/allocation profiler CLI; add its required workload, mode, metric, warmup, and iteration flags                                                                                                           |
 | `npm run profile:smoke`                                                        | Capture a checked one-iteration Node CPU profile of steady `arithmetic-loops` to `.benchmark-results/profile-smoke`                                                                                                             |
 | `npm run profile:analyze`                                                      | Analyze paired schema-2 CPU/allocation sidecars with checksum correlation and equal-observation, interpreter-only hotspot shares; rejects a pair with a zero non-`host` denominator and writes only below `.benchmark-results/` |
-| `npm run ci:contract`                                                          | The full local CI contract: every command CI runs, for real                                                                                                                                                                     |
+| `npm run ci:contract`                                                          | Safe local CI subset: vendor, format, lint, type check, workflow, Node, fixture, and browser checks; no upstream Test262 execution                                                                                              |
 | `npm run typecheck`                                                            | `tsc` in checkJs mode over the repository's `jsconfig.json`                                                                                                                                                                     |
 | `npm run format`                                                               | Prettier `--check` over the entire repository                                                                                                                                                                                   |
 | `npm run lint`                                                                 | ESLint (flat config) over the repository                                                                                                                                                                                        |
@@ -119,12 +122,17 @@ Seven suites that need a filesystem and cannot run in the browser or `jsc`:
 
 ### CI contract (`test/ci/`)
 
-`test/ci/full-contract.test.js` is the full local CI contract. It runs through
-`test/run-ci-contract.js` (`npm run ci:contract`), executing every command CI
-runs as real subprocesses. It is deliberately _not_ registered with the Node
-runner — `test/node/repository-invariants.test.js` fails if it ever is — because
-running the whole pipeline inside one of its own jobs would be recursive and
-would depend on a browser install and an upstream checkout.
+`test/ci/full-contract.test.js` supplies the safe local CI contract, run through
+`test/run-ci-contract.js` (`npm run ci:contract`). It executes the real vendor,
+format, lint, type-check, workflow, Node, fixture, and browser commands. It is
+deliberately _not_ registered with the Node runner — `test/node/repository-invariants.test.js`
+fails if it ever is — because browser checks are not machine-independent.
+
+`npm run ci:contract` does not invoke any checkout-dependent upstream Test262
+execution: not focused semantic suites, taxonomy audit/selection/exclusion
+work, or the broad pinned subset. Run reviewed focused checks directly when
+needed. The generated exact-SHA CI jobs own the taxonomy audit gate and all
+broad pinned execution.
 
 `test/ci/exclusions-check.test.js` verifies the stale-exclusion checker against
 a real upstream Test262 checkout, including its hard failures for a missing
@@ -189,19 +197,57 @@ The upstream revision is pinned in `package.json` under the `test262` key:
 
 ### Running the upstream suite
 
-`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` runs
-the pinned subset against a real `tc39/test262` checkout. It refuses to run
-unless the tree's `HEAD` is exactly the pinned revision and UTC is active.
-Reproduce a CI run locally:
+The broad `test262-upstream` execution is exact-SHA CI authority. Do not run
+the broad upstream subset locally. Local report maintenance is limited to the
+deterministic exact-evidence synchronization below; it does not execute the
+broad subset. In CI, the generated job checks out
+`b363f29d3c43c626dc852744ad64a0b48a003693`, installs dependencies, verifies
+the ES2015 taxonomy and exact promotion under `TZ=UTC`, then runs the broad
+pinned subset. That run byte-checks `docs/test262-report.jsonl` and the
+generated coverage block in `docs/conformance.md`.
+
+### Deterministic ES2015 taxonomy and exact promotion
+
+The taxonomy is a timestamp-free, code-unit-sorted classification of the
+exact pinned `vendor/test262` checkout. Both commands require
+`TZ=UTC`, the repository and revision in `package.json`, and a checkout whose
+`HEAD` is exactly
+`b363f29d3c43c626dc852744ad64a0b48a003693`:
 
 ```sh
-git clone --filter=blob:none https://github.com/tc39/test262.git vendor/test262
-git -C vendor/test262 checkout b363f29d3c43c626dc852744ad64a0b48a003693
-NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream
+TZ=UTC npm run test262:es2015:audit
+TZ=UTC npm run test262:es2015:audit:check
+TZ=UTC npm run test262:es2015:sync-promoted-report
 ```
 
-The report goes to `docs/test262-report.jsonl`, and a compact coverage summary
-goes to stdout.
+`audit` rewrites `tools/test262/es2015-taxonomy.json`; `audit:check` writes
+nothing and fails on taxonomy, pin, policy, classification, count, or
+promotion-provenance drift. `sync-promoted-report` combines the committed
+pre-promotion selected records with immutable exact-promotion execution
+evidence, verifies the pin, exact selected path set, and every promotion
+variant, then rewrites only the report and coverage block. It never executes
+the broad subset; exact-SHA CI remains authoritative and byte-checks the
+derived artifacts after its broad execution. Invoke the package script as
+`npm run test262:es2015:sync-promoted-report` only with `TZ=UTC`, as shown
+above. The CI drift gate uses `audit:check` after the pinned checkout and
+`npm ci`, before the broad pinned execution.
+
+Local upstream execution is limited to a reviewed exact promotion ledger or a
+smaller focused fixture. To record the reviewed exact paths, provide that
+ledger explicitly; do not substitute a directory, glob, or broad selection:
+
+```sh
+TZ=UTC node tools/test262/es2015-audit.js \
+  --paths-file=/absolute/path/to/reviewed-T0.paths.txt \
+  --write-execution
+```
+
+The durable promotion provenance is
+[`tools/test262/es2015-promotion.json`](../tools/test262/es2015-promotion.json):
+6,323 code-unit-sorted roots, 11,955 variants, and ledger SHA-256
+`3f2c617b8639c8048afb1a42b95218250b20b6d51b9313f39473b4ddc1c7c646`.
+The command accepts only that exact reviewed ledger for the pinned checkout;
+it is not permission to run the broad upstream subset locally.
 
 ### Focused ES2015 syntax suite
 
@@ -345,20 +391,20 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 
 Every push and pull request against `main` runs twelve jobs:
 
-| Job                      | What it runs                                                                    | Depends on |
-| ------------------------ | ------------------------------------------------------------------------------- | ---------- |
-| `ci-drift`               | `npm run ci:check`                                                              | —          |
-| `vendor`                 | `npm run vendor:check`                                                          | —          |
-| `format`                 | `npm run format` (Prettier `--check`)                                           | —          |
-| `lint`                   | `npm run lint` (ESLint only)                                                    | —          |
-| `typecheck`              | `npm run typecheck` (`tsc` in checkJs mode)                                     | —          |
-| `test-node`              | `npm run test:node`                                                             | `vendor`   |
-| `test-browser`           | `npm run test:browser` (Playwright headless Chromium)                           | `vendor`   |
-| `test-jsc`               | `npm run test:jsc` (JavaScriptCoreGTK shell)                                    | `vendor`   |
-| `test262-fixtures`       | `npm run test262:fixtures` (local fixture tree)                                 | `vendor`   |
-| `test262-es2015-release` | `npm run test262:es2015-release` (focused pinned Promise+generator+module gate) | `vendor`   |
-| `benchmark-smoke`        | `npm run benchmark:smoke` (correctness-only smoke run)                          | `vendor`   |
-| `test262-upstream`       | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`        | `vendor`   |
+| Job                      | What it runs                                                                                           | Depends on |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ | ---------- |
+| `ci-drift`               | `npm run ci:check`                                                                                     | —          |
+| `vendor`                 | `npm run vendor:check`                                                                                 | —          |
+| `format`                 | `npm run format` (Prettier `--check`)                                                                  | —          |
+| `lint`                   | `npm run lint` (ESLint only)                                                                           | —          |
+| `typecheck`              | `npm run typecheck` (`tsc` in checkJs mode)                                                            | —          |
+| `test-node`              | `npm run test:node`                                                                                    | `vendor`   |
+| `test-browser`           | `npm run test:browser` (Playwright headless Chromium)                                                  | `vendor`   |
+| `test-jsc`               | `npm run test:jsc` (JavaScriptCoreGTK shell)                                                           | `vendor`   |
+| `test262-fixtures`       | `npm run test262:fixtures` (local fixture tree)                                                        | `vendor`   |
+| `test262-es2015-release` | `npm run test262:es2015-release` (focused pinned Promise+generator+module+object/function+syntax gate) | `vendor`   |
+| `benchmark-smoke`        | `npm run benchmark:smoke` (correctness-only smoke run)                                                 | `vendor`   |
+| `test262-upstream`       | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`                               | `vendor`   |
 
 Each job runs on `ubuntu-latest` with Node 20 (via `actions/setup-node` with the
 built-in npm cache) and `npm ci`.

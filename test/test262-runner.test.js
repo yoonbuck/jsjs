@@ -147,7 +147,15 @@ function fixture(description, body, extra = '') {
 
 /**
  * @param {Record<string, string>} tests
- * @param {{ supportedFeatures?: readonly string[], skipFeatures?: readonly string[], paths?: readonly string[] }} [options]
+ * @param {{
+ *   supportedFeatures?: readonly string[],
+ *   skipFeatures?: readonly string[],
+ *   paths?: readonly string[],
+ *   supportedFeaturesForPath?: (
+ *     file: string,
+ *     metadata: import('../tools/test262/metadata.js').Test262Metadata,
+ *   ) => readonly string[] | undefined,
+ * }} [options]
  * @returns {Promise<{ records: readonly any[], summary: any }>}
  */
 function runMemorySuite(tests, options = {}) {
@@ -157,6 +165,7 @@ function runMemorySuite(tests, options = {}) {
     paths: options.paths ?? Object.keys(tests),
     supportedFeatures: options.supportedFeatures ?? [],
     skipFeatures: options.skipFeatures ?? [],
+    supportedFeaturesForPath: options.supportedFeaturesForPath,
   });
 }
 
@@ -926,6 +935,44 @@ export default [
 
       assertSame(records[0].status, 'passed');
       assertSame(JSON.stringify(records[0].features), '["fixture-subset"]');
+    },
+  },
+  {
+    name: 'exact path feature authorization never widens an adjacent Test262 root',
+    run: async () => {
+      /** @type {readonly string[]} */
+      const globallySupported = Object.freeze([]);
+      const exactAuthorization = Object.freeze(['exact-path-feature']);
+      const { records } = await runMemorySuite(
+        {
+          'adjacent.js': fixture(
+            'an adjacent root with the same unclaimed tag',
+            "throw 'must remain skipped';",
+            'features: [exact-path-feature]\n',
+          ),
+          'promoted.js': fixture(
+            'the exact reviewed promoted root',
+            "assert.sameValue(1, 1, 'exact authorization ran');",
+            'features: [exact-path-feature]\n',
+          ),
+        },
+        {
+          supportedFeatures: globallySupported,
+          supportedFeaturesForPath(file) {
+            return file === 'promoted.js' ? exactAuthorization : [];
+          },
+        },
+      );
+
+      assertSame(
+        summarizeRecords(records),
+        [
+          'adjacent.js|null|skipped|unsupported-feature',
+          'promoted.js|non-strict|passed|',
+          'promoted.js|strict|passed|',
+        ].join('\n'),
+      );
+      assertSame(JSON.stringify(globallySupported), '[]');
     },
   },
   {

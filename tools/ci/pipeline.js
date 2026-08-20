@@ -293,8 +293,8 @@ export function toGithubSlug(repository) {
  * The three Test262 jobs are deliberately separate. `test262-fixtures` runs the
  * local hand-written fixture tree, which exercises the runner's semantics.
  * `test262-es2015-release` checks out the exact pinned tree for the focused
- * Promise, generator, and static module suites. It never runs broad selection or
- * writes broad report artifacts.
+ * Promise, generator, static-module, object/function, and syntax suites. It
+ * never runs broad selection or writes broad report artifacts.
  * `test262-upstream` checks out the real `tc39/test262` tree at exactly the
  * pinned revision and runs the curated subset against it, which exercises the
  * engine — and uploads its report even on failure, because a red conformance run
@@ -356,7 +356,7 @@ export function createCiJobs(test262) {
     ),
     Object.freeze({
       id: 'test262-es2015-release',
-      name: 'Pinned Test262 ES2015 async runtime and modules',
+      name: 'Pinned Test262 ES2015 focused suites',
       needs: Object.freeze(['vendor']),
       steps: Object.freeze([
         usesStep('Check out the project', 'actions/checkout', {
@@ -374,7 +374,7 @@ export function createCiJobs(test262) {
         }),
         runStep('Install dependencies', 'npm ci'),
         runStep(
-          'Run focused ES2015 async runtime and module Test262',
+          'Run focused ES2015 Test262 suites',
           'npm run test262:es2015-release',
           {
             TZ: 'UTC',
@@ -396,10 +396,6 @@ export function createCiJobs(test262) {
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
         }),
-        runStep(
-          'Remove the committed Test262 report',
-          `rm -f ${TEST262_REPORT_FILE}`,
-        ),
         usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
           repository: upstreamSlug,
           ref: test262.revision,
@@ -412,8 +408,19 @@ export function createCiJobs(test262) {
         }),
         runStep('Install dependencies', 'npm ci'),
         runStep(
+          'Check the ES2015 taxonomy and exact promotion',
+          'npm run test262:es2015:audit:check',
+          {
+            TZ: 'UTC',
+          },
+        ),
+        runStep(
           'Check the ES5 selection is current',
           'npm run test262:select:check',
+        ),
+        runStep(
+          'Remove the committed Test262 report',
+          `rm -f ${TEST262_REPORT_FILE}`,
         ),
         runStep(
           'Run the pinned Test262 subset',

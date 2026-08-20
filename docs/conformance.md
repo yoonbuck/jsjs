@@ -293,8 +293,9 @@ see [docs/limitations.md](limitations.md#well-known-symbols-are-defined-but-only
 ## Layer 4: Integrated pinned release and broad evidence
 
 `TZ=UTC npm run test262:es2015-release` is the combined focused gate against the
-exact pinned checkout. It runs the Promise, generator, and module suites in
-`test/ci/`, with their roots and local feature allowlists owned by
+exact pinned checkout. It runs the Promise, generator, module, object/function,
+and syntax suites in `test/ci/`, with async-runtime roots and local feature
+allowlists owned by
 `tools/test262/async-runtime-release-manifest.js`. Promise roots, including
 records carrying the `async` flag, and module roots remain focused-only. The
 generator roots remain focused too, and exactly the 11 approved roots also
@@ -543,23 +544,23 @@ implemented:
 
 ## Coverage
 
-The numbers below are generated:
+The numbers below are generated. Local maintenance uses
+`TZ=UTC npm run test262:es2015:sync-promoted-report`: it combines the committed
+pre-promotion selected records with immutable exact-promotion execution evidence,
+validates the exact pin, selected path set, and promotion variants, then rewrites
+[`docs/test262-report.jsonl`](test262-report.jsonl) and this coverage block
+without broad Test262 execution. Follow it with
+`TZ=UTC npm run test262:es2015:audit` and
+`TZ=UTC npm run test262:es2015:audit:check` to refresh and verify the taxonomy.
+
+Broad report regeneration is exact-SHA CI-only:
 `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream` runs the
-pinned subset against `tc39/test262` at the revision `package.json` names, writes
-every per-test record to
-[`docs/test262-report.jsonl`](test262-report.jsonl), and rewrites this block from
-the same run.
-`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream:check`
-fails if either artifact has drifted, and the `test262-upstream` job fails CI the
-same way, so no number here can outlive the run that produced it. The run refuses
-to start outside a UTC time zone, because a few selected tests read the host's
-local offset (see
-[the offsetless-date deviation](limitations.md#the-clock-and-the-local-time-zone-come-from-the-host)),
-so the committed artifacts are a pure function of the engine and the pinned tree,
-not of the machine that generated them; CI pins `TZ=UTC` for the same reason.
-Regenerate with
-`NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`. The
-denominators are defined exactly under
+pinned subset at the revision `package.json` names and byte-checks these derived
+artifacts. It refuses to start outside UTC because a few selected tests read the
+host's local offset (see
+[the offsetless-date deviation](limitations.md#the-clock-and-the-local-time-zone-come-from-the-host));
+CI pins `TZ=UTC` so the evidence is a function of the engine and pinned tree, not
+the machine. The denominators are defined exactly under
 [What the coverage numbers count](#what-the-coverage-numbers-count).
 
 ## ES2015 focused coverage
@@ -567,7 +568,7 @@ denominators are defined exactly under
 Issue #38 (ES2015 object/function runtime updates) is covered by a small,
 hand-picked set of upstream Test262 files, run via
 `test/ci/es2015-object-function-test262.test.js` (part of
-`npm run ci:contract`). Tests that satisfy the broad selection also run there;
+`TZ=UTC npm run test262:es2015-release`). Tests that satisfy the broad selection also run there;
 the focused suite deliberately retains the Object statics and property-order
 cases whose metadata or post-ES5 built-in paths keep them outside that baseline,
 so none of the issue's upstream coverage is silently lost:
@@ -582,8 +583,8 @@ so none of the issue's upstream coverage is silently lost:
   `vendor/test262/test/built-ins/Object/is/{length,name,not-same-value-x-y-number,not-same-value-x-y-object,object-is,same-value-x-y-number}.js` —
   the two new `Object` statics
 
-Reproduce locally: `node test/run-ci-contract.js` (requires the pinned
-upstream checkout at `vendor/test262`; see the Test262 section above).
+Reproduce locally: `TZ=UTC npm run test262:es2015-release` (requires the
+pinned upstream checkout at `vendor/test262`; see the Test262 section above).
 
 Issue #25 syntax coverage is similarly focused in
 `test/ci/es2015-syntax-test262.test.js`. Its pinned list exercises arrow lexical
@@ -601,13 +602,64 @@ remaining unsupported class-field and Unicode/legacy-escape forms.
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 14,107   | 14,107    | 14,107 | 26.331% |
-| (file, variant) | 102,912     | 26,858   | 26,858    | 26,858 | 26.098% |
+| Files           | 53,575      | 20,430   | 20,430    | 20,430 | 38.133% |
+| (file, variant) | 102,912     | 38,813   | 38,813    | 38,813 | 37.715% |
 
 0 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
 
 <!-- test262-coverage:end -->
+
+## Deterministic ES2015 Test262 taxonomy
+
+[`tools/test262/es2015-taxonomy.json`](../tools/test262/es2015-taxonomy.json)
+is the timestamp-free, code-unit-sorted audit of the exact Test262 revision
+`b363f29d3c43c626dc852744ad64a0b48a003693`. It separately preserves core,
+Annex B, later/non-ES2015, unknown-edition, harness-validation, and malformed
+evidence; those partitions must not be combined into an ES2015 claim.
+
+| Edition partition     | Roots      | Variants    |
+| --------------------- | ---------- | ----------- |
+| Core                  | 24,250     | 46,424      |
+| Annex B               | 725        | 960         |
+| Later/non-ES2015      | 26,172     | 51,242      |
+| Unknown edition       | 2,312      | 4,054       |
+| Harness validation    | 116        | 232         |
+| Malformed             | 0          | 0           |
+| **Whole pinned tree** | **53,575** | **102,912** |
+
+The qualified core ES2015 evidence is:
+
+| Core status              | Roots      | Variants   |
+| ------------------------ | ---------- | ---------- |
+| Selected passing         | 19,603     | 37,305     |
+| Audit-passing unselected | 0          | 0          |
+| Blocked                  | 4,645      | 9,115      |
+| Intentional deviation    | 2          | 4          |
+| **Core total**           | **24,250** | **46,424** |
+
+Annex B remains separate:
+
+| Annex B status           | Roots   | Variants |
+| ------------------------ | ------- | -------- |
+| Selected passing         | 71      | 138      |
+| Audit-passing unselected | 23      | 42       |
+| Blocked                  | 631     | 780      |
+| Intentional deviation    | 0       | 0        |
+| **Annex B total**        | **725** | **960**  |
+
+The reviewed promotion is exact-path selection evidence only: its durable
+manifest records 6,323 roots, 11,955 variants, and ledger SHA-256
+`3f2c617b8639c8048afb1a42b95218250b20b6d51b9313f39473b4ddc1c7c646`.
+It authorizes dependencies only for those exact paths and is **not** a broad
+feature-tag claim or a claim that the engine broadly implements ES2015.
+
+Run `TZ=UTC npm run test262:es2015:audit:check` to verify the taxonomy and
+promotion without writing. It requires the exact package pin and pinned
+checkout; the generated CI job runs it after checkout and `npm ci`, before the
+broad Test262 execution. CI is the authority for that broad exact-SHA run;
+local work is restricted to the reviewed `--paths-file` promotion execution or
+smaller focused fixtures.
 
 The detailed report is JSON lines: one `test` record per (file, variant) pair,
 then the `baseline` lines that summarize the run per subset group, a `features`

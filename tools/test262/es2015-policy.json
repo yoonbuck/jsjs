@@ -1,0 +1,398 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "specification": {
+    "source": "https://262.ecma-international.org/6.0/",
+    "sourceSha256": "4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0"
+  },
+  "es2015Features": [
+    "Array.prototype.values",
+    "ArrayBuffer",
+    "DataView",
+    "DataView.prototype.getFloat32",
+    "DataView.prototype.getFloat64",
+    "DataView.prototype.getInt16",
+    "DataView.prototype.getInt32",
+    "DataView.prototype.getInt8",
+    "DataView.prototype.getUint16",
+    "DataView.prototype.getUint32",
+    "DataView.prototype.setUint8",
+    "Float32Array",
+    "Float64Array",
+    "Int16Array",
+    "Int32Array",
+    "Int8Array",
+    "Map",
+    "Object.is",
+    "Promise",
+    "Proxy",
+    "Reflect",
+    "Reflect.construct",
+    "Reflect.set",
+    "Reflect.setPrototypeOf",
+    "Set",
+    "String.fromCodePoint",
+    "String.prototype.endsWith",
+    "String.prototype.includes",
+    "Symbol",
+    "Symbol.hasInstance",
+    "Symbol.isConcatSpreadable",
+    "Symbol.iterator",
+    "Symbol.match",
+    "Symbol.replace",
+    "Symbol.search",
+    "Symbol.species",
+    "Symbol.split",
+    "Symbol.toPrimitive",
+    "Symbol.toStringTag",
+    "Symbol.unscopables",
+    "TypedArray",
+    "Uint16Array",
+    "Uint32Array",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "WeakMap",
+    "WeakSet",
+    "__getter__",
+    "__proto__",
+    "__setter__",
+    "arrow-function",
+    "class",
+    "computed-property-names",
+    "const",
+    "default-parameters",
+    "destructuring-assignment",
+    "destructuring-binding",
+    "for-of",
+    "generators",
+    "let",
+    "new.target",
+    "rest-parameters",
+    "super",
+    "tail-call-optimization",
+    "template"
+  ],
+  "laterFeatures": [
+    "AggregateError",
+    "Array.fromAsync",
+    "Array.prototype.at",
+    "Array.prototype.flat",
+    "Array.prototype.flatMap",
+    "Array.prototype.includes",
+    "Atomics",
+    "Atomics.pause",
+    "Atomics.waitAsync",
+    "BigInt",
+    "Error.isError",
+    "FinalizationRegistry",
+    "Float16Array",
+    "Intl-enumeration",
+    "Intl.DateTimeFormat-datetimestyle",
+    "Intl.DateTimeFormat-dayPeriod",
+    "Intl.DateTimeFormat-extend-timezonename",
+    "Intl.DateTimeFormat-formatRange",
+    "Intl.DateTimeFormat-fractionalSecondDigits",
+    "Intl.DisplayNames",
+    "Intl.DisplayNames-v2",
+    "Intl.DurationFormat",
+    "Intl.Era-monthcode",
+    "Intl.ListFormat",
+    "Intl.Locale",
+    "Intl.Locale-info",
+    "Intl.NumberFormat-unified",
+    "Intl.NumberFormat-v3",
+    "Intl.RelativeTimeFormat",
+    "Intl.Segmenter",
+    "Iterator.prototype.join",
+    "Math.sumPrecise",
+    "Object.fromEntries",
+    "Object.hasOwn",
+    "Promise.allSettled",
+    "Promise.any",
+    "Promise.prototype.finally",
+    "RegExp.escape",
+    "ShadowRealm",
+    "SharedArrayBuffer",
+    "String.prototype.at",
+    "String.prototype.isWellFormed",
+    "String.prototype.matchAll",
+    "String.prototype.replaceAll",
+    "String.prototype.toWellFormed",
+    "String.prototype.trimEnd",
+    "String.prototype.trimStart",
+    "Symbol.asyncIterator",
+    "Symbol.matchAll",
+    "Symbol.prototype.description",
+    "Temporal",
+    "TypedArray.prototype.at",
+    "WeakRef",
+    "align-detached-buffer-semantics-with-web-reality",
+    "arbitrary-module-namespace-names",
+    "array-find-from-last",
+    "array-grouping",
+    "arraybuffer-transfer",
+    "async-functions",
+    "async-iteration",
+    "await-dictionary",
+    "caller",
+    "canonical-tz",
+    "change-array-by-copy",
+    "class-fields-private",
+    "class-fields-private-in",
+    "class-fields-public",
+    "class-methods-private",
+    "class-static-block",
+    "class-static-fields-private",
+    "class-static-fields-public",
+    "class-static-methods-private",
+    "coalesce-expression",
+    "decorators",
+    "dynamic-import",
+    "error-cause",
+    "error-stack-accessor",
+    "explicit-resource-management",
+    "exponentiation",
+    "export-star-as-namespace-from-module",
+    "for-in-order",
+    "globalThis",
+    "hashbang",
+    "host-gc-required",
+    "immutable-arraybuffer",
+    "import-attributes",
+    "import-bytes",
+    "import-defer",
+    "import-text",
+    "import.meta",
+    "intl-normative-optional",
+    "iterator-chunking",
+    "iterator-helpers",
+    "iterator-includes",
+    "iterator-sequencing",
+    "joint-iteration",
+    "json-modules",
+    "json-parse-with-source",
+    "json-superset",
+    "legacy-regexp",
+    "logical-assignment-operators",
+    "nonextensible-applies-to-private",
+    "numeric-separator-literal",
+    "object-rest",
+    "object-spread",
+    "optional-catch-binding",
+    "optional-chaining",
+    "promise-try",
+    "promise-with-resolvers",
+    "proxy-missing-checks",
+    "regexp-dotall",
+    "regexp-duplicate-named-groups",
+    "regexp-lookbehind",
+    "regexp-match-indices",
+    "regexp-modifiers",
+    "regexp-named-groups",
+    "regexp-unicode-property-escapes",
+    "regexp-v-flag",
+    "resizable-arraybuffer",
+    "set-methods",
+    "source-phase-imports",
+    "source-phase-imports-module-source",
+    "stable-array-sort",
+    "stable-typedarray-sort",
+    "string-trimming",
+    "symbols-as-weakmap-keys",
+    "top-level-await",
+    "u180e",
+    "uint8array-base64",
+    "upsert",
+    "well-formed-json-stringify"
+  ],
+  "neutralFeatures": ["IsHTMLDDA", "cross-realm"],
+  "laterFlags": ["CanBlockIsFalse", "CanBlockIsTrue"],
+  "pathRules": [
+    {
+      "prefix": "test/annexB/",
+      "partition": "annex-b",
+      "reason": "Normative-optional Annex B coverage remains separate from ES2015 core."
+    },
+    {
+      "prefix": "test/built-ins/AggregateError/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Array/prototype/flat/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Array/prototype/flatMap/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/AsyncFunction/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/AsyncGeneratorFunction/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Atomics/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/BigInt/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/BigInt64Array/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/BigUint64Array/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/FinalizationRegistry/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Iterator/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Object/entries/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Object/getOwnPropertyDescriptors/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Object/values/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Promise/allSettled/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Promise/any/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/SharedArrayBuffer/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/String/prototype/padEnd/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/String/prototype/padStart/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/Temporal/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/built-ins/WeakRef/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/harness/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/intl402/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/expressions/async-",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/expressions/coalesce/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/expressions/dynamic-import/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/expressions/import.meta/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/expressions/logical-assignment/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/expressions/optional-chaining/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/statements/async-",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/statements/await-using/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/statements/for-await-of/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/language/statements/using/",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/staging/sm/TypedArray/findLast-and-findLastIndex.js",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/staging/sm/object/entries.js",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    },
+    {
+      "prefix": "test/staging/sm/object/values.js",
+      "partition": "later-or-non-es2015",
+      "reason": "Reviewed #71 audit path evidence identifies a later or non-ECMAScript dependency."
+    }
+  ]
+}
