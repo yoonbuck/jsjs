@@ -109,6 +109,7 @@ const ITERATION_STATEMENT_TYPES = new Set([
  *   yieldIdentifierRestricted: boolean,
  *   superAllowed: boolean,
  *   superCallAllowed: boolean,
+ *   newTargetAllowed: boolean,
  *   classDerived: boolean | undefined,
  *   inFunction: boolean,
  *   breakAllowed: boolean,
@@ -169,10 +170,8 @@ function parseWithScriptParser(source, options) {
 let strictParser;
 /** @type {typeof Parser | undefined} */
 let sloppyScriptParser;
-/** @type {typeof Parser | undefined} */
-let directSuperParser;
-/** @type {typeof Parser | undefined} */
-let strictDirectSuperParser;
+/** @type {Map<string, typeof Parser>} */
+const evalParserVariants = new Map();
 
 /**
  * @returns {typeof Parser}
@@ -235,38 +234,37 @@ function getSloppyScriptParser() {
  *
  * @param {boolean} strict
  * @param {boolean} allowDirectSuper
+ * @param {boolean} allowNewTarget
  * @returns {typeof Parser}
  */
-function getEvalParser(strict, allowDirectSuper) {
-  if (!allowDirectSuper) {
+function getEvalParser(strict, allowDirectSuper, allowNewTarget) {
+  if (!allowDirectSuper && !allowNewTarget) {
     return strict ? getStrictParser() : Parser;
   }
 
-  if (directSuperParser === undefined) {
-    directSuperParser = Parser.extend(
+  const key = `${strict ? 1 : 0}:${allowDirectSuper ? 1 : 0}:${
+    allowNewTarget ? 1 : 0
+  }`;
+  let parser = evalParserVariants.get(key);
+
+  if (parser === undefined) {
+    const BaseParser = strict ? getStrictParser() : Parser;
+    parser = BaseParser.extend(
       (Base) =>
         class extends Base {
           get allowDirectSuper() {
-            return true;
+            return allowDirectSuper || super.allowDirectSuper;
+          }
+
+          get allowNewDotTarget() {
+            return allowNewTarget || super.allowNewDotTarget;
           }
         },
     );
+    evalParserVariants.set(key, parser);
   }
 
-  if (strictDirectSuperParser === undefined) {
-    strictDirectSuperParser = getStrictParser().extend(
-      (Base) =>
-        class extends Base {
-          get allowDirectSuper() {
-            return true;
-          }
-        },
-    );
-  }
-
-  return strict
-    ? /** @type {typeof Parser} */ (strictDirectSuperParser)
-    : directSuperParser;
+  return parser;
 }
 
 /**
@@ -291,8 +289,6 @@ export function parseScript(source, options = {}) {
     ? parserOptions.program
     : undefined;
   let reusableProgramSnapshot;
-  /** @type {WeakSet<object> | undefined} */
-  let reusableProgramSnapshotValues;
   let reusableDirectivePrologueOpen = false;
   let reusableProgramStrict = false;
 
@@ -301,11 +297,7 @@ export function parseScript(source, options = {}) {
   }
 
   if (hasReusableProgram) {
-    reusableProgramSnapshotValues = new WeakSet();
-    reusableProgramSnapshot = snapshotProgramGraph(
-      reusableProgram,
-      reusableProgramSnapshotValues,
-    );
+    reusableProgramSnapshot = snapshotProgramGraph(reusableProgram);
     validateReusableProgram(reusableProgramSnapshot);
     const reusableBody = /** @type {any[]} */ (
       ownDataPropertyValue(
@@ -369,11 +361,9 @@ export function parseScript(source, options = {}) {
 
   return validateScriptProgram(
     program,
-    source,
     false,
     hasCustomParse || hasCustomProgram,
     hasReusableProgram,
-    reusableProgramSnapshotValues,
   );
 }
 
@@ -397,8 +387,6 @@ export function parseModule(source, options = {}) {
     ? parserOptions.program
     : undefined;
   let reusableProgramSnapshot;
-  /** @type {WeakSet<object> | undefined} */
-  let sourceIndependentNodes;
 
   if (typeof parse !== 'function') {
     throw new TypeError('Expected options.parse to be a function');
@@ -406,11 +394,7 @@ export function parseModule(source, options = {}) {
 
   if (hasReusableProgram) {
     try {
-      sourceIndependentNodes = new WeakSet();
-      reusableProgramSnapshot = snapshotProgramGraph(
-        reusableProgram,
-        sourceIndependentNodes,
-      );
+      reusableProgramSnapshot = snapshotProgramGraph(reusableProgram);
       validateReusableProgram(reusableProgramSnapshot, true);
       delete parserOptions.program;
     } catch (error) {
@@ -431,20 +415,14 @@ export function parseModule(source, options = {}) {
 
   try {
     if (hasCustomParse) {
-      sourceIndependentNodes = new WeakSet();
-      program = snapshotProgramGraph(program, sourceIndependentNodes);
+      program = snapshotProgramGraph(program);
     }
 
     if (hasReusableProgram) {
       program = mergeReusableProgram(reusableProgramSnapshot, program);
     }
 
-    return validateModuleProgram(
-      program,
-      source,
-      hasCustomParse || hasCustomProgram,
-      sourceIndependentNodes,
-    );
+    return validateModuleProgram(program, hasCustomParse || hasCustomProgram);
   } catch (error) {
     throw asModuleValidationFailure(error);
   }
@@ -463,13 +441,14 @@ export function parseModule(source, options = {}) {
  *
  * @param {string} source
  * @param {boolean} [strict=false]
- * @param {{ superAllowed?: boolean, superCallAllowed?: boolean }} [context]
+ * @param {{ superAllowed?: boolean, superCallAllowed?: boolean, newTargetAllowed?: boolean }} [context]
  * @returns {any}
  */
 export function parseEval(source, strict = false, context = {}) {
   const superCallAllowed = context.superCallAllowed === true;
   const superAllowed = context.superAllowed === true || superCallAllowed;
-  const parser = getEvalParser(strict, superCallAllowed);
+  const newTargetAllowed = context.newTargetAllowed === true;
+  const parser = getEvalParser(strict, superCallAllowed, newTargetAllowed);
   const parserOptions = superAllowed
     ? { ...PARSER_OPTIONS, allowSuperOutsideMethod: true }
     : PARSER_OPTIONS;
@@ -482,15 +461,11 @@ export function parseEval(source, strict = false, context = {}) {
     throw asParseFailure(error, true);
   }
 
-  return validateScriptProgram(
-    program,
-    source,
-    strict,
-    false,
-    false,
-    undefined,
-    { superAllowed, superCallAllowed },
-  );
+  return validateScriptProgram(program, strict, false, false, {
+    superAllowed,
+    superCallAllowed,
+    newTargetAllowed,
+  });
 }
 
 /**
@@ -501,26 +476,23 @@ export function parseEval(source, strict = false, context = {}) {
  * inherits strictness with no directive of its own. The early-error pass folds
  * the program's own `"use strict"` directive in on top of it.
  *
- * `source` is the exact text the parser consumed, threaded through the parse
- * pipeline so early-error validation can stay source-aware where needed.
- *
  * @param {unknown} program
- * @param {string} source
  * @param {boolean} [strict=false]
  * @param {boolean} [customAst=false]
  * @param {boolean} [customAstValidated=false]
- * @param {WeakSet<object>} [sourceIndependentNodes]
- * @param {{ superAllowed: boolean, superCallAllowed: boolean }} [rootContext]
+ * @param {{ superAllowed: boolean, superCallAllowed: boolean, newTargetAllowed: boolean }} [rootContext]
  * @returns {any}
  */
 function validateScriptProgram(
   program,
-  source,
   strict = false,
   customAst = false,
   customAstValidated = false,
-  sourceIndependentNodes,
-  rootContext = { superAllowed: false, superCallAllowed: false },
+  rootContext = {
+    superAllowed: false,
+    superCallAllowed: false,
+    newTargetAllowed: false,
+  },
 ) {
   if (customAst && !customAstValidated) {
     checkUntrustedAstDescriptors(program);
@@ -540,10 +512,8 @@ function validateScriptProgram(
 
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
-    source,
     strict,
     validationContext,
-    sourceIndependentNodes,
     rootContext,
   );
   checkProgramDeclarationEarlyErrors(/** @type {any} */ (program).body);
@@ -557,17 +527,10 @@ function validateScriptProgram(
  * own capability boundary rather than being admitted through script validation.
  *
  * @param {unknown} program
- * @param {string} source
  * @param {boolean} customAst
- * @param {WeakSet<object>} [sourceIndependentNodes]
  * @returns {any}
  */
-function validateModuleProgram(
-  program,
-  source,
-  customAst,
-  sourceIndependentNodes,
-) {
+function validateModuleProgram(program, customAst) {
   if (customAst) {
     checkUntrustedAstDescriptors(program);
   }
@@ -600,10 +563,8 @@ function validateModuleProgram(
 
   checkStatementPositionFunctionDeclarations(
     /** @type {any} */ (program),
-    source,
     true,
     moduleValidationContext,
-    sourceIndependentNodes,
   );
 
   return /** @type {any} */ (program);
@@ -790,10 +751,9 @@ function checkModuleDeclarationEarlyErrors(body, checkLocalExportBindings) {
  * caller-supplied method is used.
  *
  * @param {unknown} program
- * @param {WeakSet<object>} [snapshotValues]
  * @returns {unknown}
  */
-function snapshotProgramGraph(program, snapshotValues) {
+function snapshotProgramGraph(program) {
   /** @type {WeakMap<object, object>} */
   const copies = new WeakMap();
   /** @type {{ source: object, target: object, array: boolean }[]} */
@@ -825,7 +785,6 @@ function snapshotProgramGraph(program, snapshotValues) {
     const array = Array.isArray(value);
     const copy = array ? [] : {};
     copies.set(value, copy);
-    snapshotValues?.add(copy);
     pending.push({ source: value, target: copy, array });
     return copy;
   }
@@ -2282,6 +2241,7 @@ function basicValidationContextKey(nestedArray, patternContext) {
  * @param {boolean} yieldIdentifierRestricted
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
+ * @param {boolean} newTargetAllowed
  * @param {boolean | undefined} classDerived
  * @param {boolean} inFunction
  * @param {boolean} breakAllowed
@@ -2297,6 +2257,7 @@ function syntaxValidationContextKey(
   yieldIdentifierRestricted,
   superAllowed,
   superCallAllowed,
+  newTargetAllowed,
   classDerived,
   inFunction,
   breakAllowed,
@@ -2312,6 +2273,7 @@ function syntaxValidationContextKey(
   key = key * 2 + (yieldIdentifierRestricted ? 1 : 0);
   key = key * 2 + (superAllowed ? 1 : 0);
   key = key * 2 + (superCallAllowed ? 1 : 0);
+  key = key * 2 + (newTargetAllowed ? 1 : 0);
   key = key * 2 + (inFunction ? 1 : 0);
   key = key * 2 + (breakAllowed ? 1 : 0);
   key = key * 2 + (continueAllowed ? 1 : 0);
@@ -2437,11 +2399,10 @@ const STATEMENT_BODY_PARENT_LABELS = new Map([
  * *Reachable* — this pass is what rejects the construct, because the node is the
  * first unsupported one the walk visits on some accepted parse:
  * `ObjectPattern`, `ArrayPattern`,
- * `AssignmentPattern`, `RestElement`, and
- * `MetaProperty` (via `new.target` inside a function). `SpreadElement` is
- * handled shape-sensitively by `unsupportedEs2015Message`, because array
- * elements and call/construction argument lists are implemented while all
- * other placements remain unsupported.
+ * `AssignmentPattern`, and `RestElement`. `SpreadElement` is handled
+ * shape-sensitively by `unsupportedEs2015Message`, because array elements and
+ * call/construction argument lists are implemented while all other placements
+ * remain unsupported.
  *
  * *Parent-blocked* — the node genuinely appears in ASTs Acorn produces, but the
  * walk always rejects an ancestor first, so this entry never fires on its own.
@@ -2480,7 +2441,6 @@ const UNSUPPORTED_ES2015_NODE_MESSAGES = new Map([
   ['ArrayPattern', 'destructuring patterns are not supported'],
   ['AssignmentPattern', 'default value patterns are not supported'],
   ['RestElement', 'rest elements are not supported'],
-  ['MetaProperty', '`new.target` is not supported'],
   ['ImportDeclaration', 'import declarations are not supported'],
   ['ImportExpression', 'dynamic `import` is not supported'],
   ['ExportNamedDeclaration', 'export declarations are not supported'],
@@ -2517,6 +2477,7 @@ const SUPPORTED_EXPRESSION_TYPES = new Set([
   'TemplateLiteral',
   'TaggedTemplateExpression',
   'YieldExpression',
+  'MetaProperty',
 ]);
 
 /**
@@ -2651,6 +2612,7 @@ const RECOGNIZED_AST_NODE_TYPES = new Set([
   'TemplateElement',
   'TaggedTemplateExpression',
   'YieldExpression',
+  'MetaProperty',
   'ImportDefaultSpecifier',
   'ImportNamespaceSpecifier',
   'ImportSpecifier',
@@ -2692,6 +2654,7 @@ const AST_CHILD_PROPERTY_KEYS = new Set([
   'label',
   'left',
   'local',
+  'meta',
   'object',
   'param',
   'params',
@@ -2869,7 +2832,7 @@ const UNTRUSTED_AST_SCALAR_VALIDATORS = new Map([
   ['ArrayPattern', validateNoScalarSyntax],
   ['AssignmentPattern', validateNoScalarSyntax],
   ['RestElement', validateNoScalarSyntax],
-  ['MetaProperty', validateNoScalarSyntax],
+  ['MetaProperty', validateMetaPropertyScalarSyntax],
   ['ImportDeclaration', validateNoScalarSyntax],
   ['ImportExpression', validateNoScalarSyntax],
   ['ExportNamedDeclaration', validateNoScalarSyntax],
@@ -2934,20 +2897,20 @@ const NODE_POSITION_KEYS = new Set(['loc', 'range', 'start', 'end']);
  * makes a cyclic tree — which the `parse` hook could hand us — terminate.
  *
  * @param {any} root
- * @param {string} source The exact text parsed, for the code-point-escape check.
  * @param {boolean} rootStrict
  * @param {{ module: boolean, allOwnKeys: boolean }} [validationContext]
- * @param {WeakSet<object>} [sourceIndependentNodes]
- * @param {{ superAllowed: boolean, superCallAllowed: boolean }} [rootContext]
+ * @param {{ superAllowed: boolean, superCallAllowed: boolean, newTargetAllowed: boolean }} [rootContext]
  * @returns {void}
  */
 function checkStatementPositionFunctionDeclarations(
   root,
-  source,
   rootStrict,
   validationContext = SCRIPT_VALIDATION_CONTEXT,
-  sourceIndependentNodes,
-  rootContext = { superAllowed: false, superCallAllowed: false },
+  rootContext = {
+    superAllowed: false,
+    superCallAllowed: false,
+    newTargetAllowed: false,
+  },
 ) {
   if (validationContext.allOwnKeys) {
     checkCustomLabelEarlyErrors(root);
@@ -2962,6 +2925,7 @@ function checkStatementPositionFunctionDeclarations(
       yieldIdentifierRestricted: false,
       superAllowed: rootContext.superAllowed,
       superCallAllowed: rootContext.superCallAllowed,
+      newTargetAllowed: rootContext.newTargetAllowed,
       classDerived: undefined,
       inFunction: false,
       breakAllowed: false,
@@ -3004,6 +2968,7 @@ function checkStatementPositionFunctionDeclarations(
           item.yieldIdentifierRestricted,
           item.superAllowed,
           item.superCallAllowed,
+          item.newTargetAllowed,
           item.classDerived,
           item.inFunction,
           item.breakAllowed,
@@ -3054,6 +3019,7 @@ function checkStatementPositionFunctionDeclarations(
           item.yieldIdentifierRestricted,
           item.superAllowed,
           item.superCallAllowed,
+          item.newTargetAllowed,
           item.classDerived,
           item.inFunction,
           item.breakAllowed,
@@ -3091,7 +3057,6 @@ function checkStatementPositionFunctionDeclarations(
     checkRegularExpressionLiteral(node);
     checkUnsupportedEs2015Node(
       node,
-      source,
       item.parent,
       item.parentKey,
       item.patternContext,
@@ -3099,8 +3064,8 @@ function checkStatementPositionFunctionDeclarations(
       item.yieldAllowed,
       item.superAllowed,
       item.superCallAllowed,
+      item.newTargetAllowed,
       validationContext,
-      sourceIndependentNodes === undefined || !sourceIndependentNodes.has(node),
     );
     checkUnsupportedForOfAwait(node);
 
@@ -3150,6 +3115,11 @@ function checkStatementPositionFunctionDeclarations(
       item.superCallAllowed,
       item.classDerived,
     );
+    const childNewTargetAllowed = newTargetAllowedForChild(
+      node,
+      undefined,
+      item.newTargetAllowed,
+    );
     const keys = validationContext.allOwnKeys
       ? Reflect.ownKeys(node)
       : Object.keys(node);
@@ -3173,6 +3143,9 @@ function checkStatementPositionFunctionDeclarations(
           ),
           childSuperAllowed,
           childSuperCallAllowed,
+          parentKey === undefined
+            ? childNewTargetAllowed
+            : newTargetAllowedForChild(node, parentKey, item.newTargetAllowed),
           parentKey === undefined
             ? item.classDerived
             : classDerivedForChild(node, parentKey, item.classDerived),
@@ -4281,6 +4254,7 @@ function checkFunctionDeclarationPosition(node, strict, labelCache) {
  * @param {boolean} yieldIdentifierRestricted
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
+ * @param {boolean} newTargetAllowed
  * @param {boolean | undefined} classDerived
  * @param {boolean} inFunction
  * @param {boolean} breakAllowed
@@ -4301,6 +4275,7 @@ function pushChild(
   yieldIdentifierRestricted,
   superAllowed,
   superCallAllowed,
+  newTargetAllowed,
   classDerived,
   inFunction,
   breakAllowed,
@@ -4320,6 +4295,7 @@ function pushChild(
       yieldIdentifierRestricted,
       superAllowed,
       superCallAllowed,
+      newTargetAllowed,
       classDerived,
       inFunction,
       breakAllowed,
@@ -4388,6 +4364,28 @@ function yieldIdentifierRestrictedForChild(parent, key, inherited) {
     parent.generator === true &&
     parent.async !== true
   );
+}
+
+/**
+ * `new.target` is syntactically valid in ordinary function code and in arrows
+ * that inherit such a context. Definition-time names and class heritage stay in
+ * the surrounding context.
+ *
+ * @param {any} parent
+ * @param {string | undefined} key
+ * @param {boolean} inherited
+ * @returns {boolean}
+ */
+function newTargetAllowedForChild(parent, key, inherited) {
+  if (!isFunctionNode(parent)) {
+    return inherited;
+  }
+
+  if (parent.type === 'ArrowFunctionExpression') {
+    return inherited;
+  }
+
+  return key === 'params' || key === 'body';
 }
 
 /**
@@ -5392,6 +5390,10 @@ function isSupportedExpressionPosition(
         (parent.computed === false &&
           node.type === 'Identifier' &&
           direct('property'))
+      );
+    case 'MetaProperty':
+      return (
+        node.type === 'Identifier' && (direct('meta') || direct('property'))
       );
     case 'SequenceExpression':
       return member('expressions');
@@ -6537,6 +6539,38 @@ function validateTemplateElementScalarSyntax(node) {
 
 /**
  * @param {any} node
+ * @returns {string | undefined}
+ */
+function validateMetaPropertyScalarSyntax(node) {
+  const meta = ownDataPropertyValue(node, 'meta');
+
+  if (
+    !meta ||
+    typeof meta !== 'object' ||
+    Array.isArray(meta) ||
+    ownDataPropertyValue(meta, 'type') !== 'Identifier' ||
+    ownDataPropertyValue(meta, 'name') !== 'new'
+  ) {
+    return invalidEvaluatorScalar(node, 'meta');
+  }
+
+  const property = ownDataPropertyValue(node, 'property');
+
+  if (
+    !property ||
+    typeof property !== 'object' ||
+    Array.isArray(property) ||
+    ownDataPropertyValue(property, 'type') !== 'Identifier' ||
+    ownDataPropertyValue(property, 'name') !== 'target'
+  ) {
+    return invalidEvaluatorScalar(node, 'property');
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {any} node
  * @param {string} field
  * @param {(value: unknown) => boolean} accepts
  * @returns {string | undefined}
@@ -6813,6 +6847,11 @@ function validateEvaluatorChildEdges(
       return node.delegate === true
         ? validateRequiredChild(node, 'argument', isExpressionNodeOrUnknown)
         : validateNullableChild(node, 'argument', isExpressionNodeOrUnknown);
+    case 'MetaProperty':
+      return (
+        validateRequiredOwnChild(node, 'meta', isIdentifierNodeOrUnknown) ??
+        validateRequiredOwnChild(node, 'property', isIdentifierNodeOrUnknown)
+      );
     case 'ObjectPattern':
       return validateObjectPatternProperties(node);
     case 'ArrayPattern':
@@ -6885,6 +6924,22 @@ function validateEvaluatorChildEdges(
  */
 function validateRequiredChild(node, field, accepts) {
   return accepts(node[field]) ? undefined : invalidEvaluatorChild(node, field);
+}
+
+/**
+ * @param {any} node
+ * @param {string} field
+ * @param {(value: unknown) => boolean} accepts
+ * @returns {string | undefined}
+ */
+function validateRequiredOwnChild(node, field, accepts) {
+  const descriptor = Object.getOwnPropertyDescriptor(node, field);
+
+  return descriptor !== undefined &&
+    Object.prototype.hasOwnProperty.call(descriptor, 'value') &&
+    accepts(descriptor.value)
+    ? undefined
+    : invalidEvaluatorChild(node, field);
 }
 
 /**
@@ -7488,7 +7543,6 @@ function isObjectLiteralFunction(node) {
 
 /**
  * @param {any} node
- * @param {string} source
  * @param {any} parent
  * @param {string | number | undefined} parentKey
  * @param {'binding' | 'assignment' | undefined} patternContext
@@ -7496,13 +7550,12 @@ function isObjectLiteralFunction(node) {
  * @param {boolean} yieldAllowed
  * @param {boolean} superAllowed
  * @param {boolean} superCallAllowed
+ * @param {boolean} newTargetAllowed
  * @param {{ module: boolean, allOwnKeys: boolean }} validationContext
- * @param {boolean} identifierSourceMatches
  * @returns {void}
  */
 function checkUnsupportedEs2015Node(
   node,
-  source,
   parent,
   parentKey,
   patternContext,
@@ -7510,8 +7563,8 @@ function checkUnsupportedEs2015Node(
   yieldAllowed,
   superAllowed,
   superCallAllowed,
+  newTargetAllowed,
   validationContext,
-  identifierSourceMatches,
 ) {
   if (node.type === 'YieldExpression' && !yieldAllowed) {
     throw unsupportedEs2015Error(
@@ -7543,6 +7596,13 @@ function checkUnsupportedEs2015Node(
     }
   }
 
+  if (node.type === 'MetaProperty' && !newTargetAllowed) {
+    throw unsupportedEs2015Error(
+      '`new.target` is only valid inside function code',
+      node,
+    );
+  }
+
   const typeMessage = unsupportedEs2015Message(
     node,
     parent,
@@ -7555,7 +7615,6 @@ function checkUnsupportedEs2015Node(
   if (typeMessage !== undefined) {
     throw unsupportedEs2015Error(typeMessage, node);
   }
-
 }
 
 /**

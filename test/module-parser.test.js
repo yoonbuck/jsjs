@@ -1075,13 +1075,16 @@ export default [
   {
     name: 'custom modules enforce capability and strict binding early errors',
     run() {
-      const meta = parseModule('function kept() { return 1; }');
-      meta.body[0].body.body[0].argument = {
-        type: 'MetaProperty',
-        meta: { type: 'Identifier', name: 'new' },
-        property: { type: 'Identifier', name: 'target' },
-      };
-      assertThrows(() => parseModule('', { parse: () => meta }), SyntaxError);
+      const meta = parseScript('function kept() { return new.target; }').body[0]
+        .body.body[0].argument;
+      const functionMeta = parseModule('function kept() { return 1; }');
+      functionMeta.body[0].body.body[0].argument = meta;
+      const topLevelMeta = parseModule('export default 1;');
+      topLevelMeta.body[0].declaration = meta;
+      for (const entry of CUSTOM_MODULE_AST_ENTRIES) {
+        assertSame(parseCustomModule(entry, functionMeta).sourceType, 'module');
+        assertThrows(() => parseCustomModule(entry, topLevelMeta), SyntaxError);
+      }
 
       const duplicate = parseModule('function kept(a, b) {}');
       duplicate.body[0].params[1].name = 'a';

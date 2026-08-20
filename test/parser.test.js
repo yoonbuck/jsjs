@@ -3034,12 +3034,218 @@ const tests = [
     },
   },
   {
+    name: 'new.target parses only in exact function-code contexts',
+    run() {
+      for (const source of [
+        'function f(a = new.target) { return new.target; }',
+        'function* g(a = new.target) { yield new.target; }',
+        '({ m(a = new.target) { return new.target; } });',
+        'class C { constructor(a = new.target) { this.value = new.target; } }',
+        'class C { method() { return new.target; } }',
+        'function outer() { return (a = new.target) => new.target; }',
+        'function outer() { return function nested(a = new.target) { return new.target; }; }',
+        'function outer() { return ({ [new.target.name]: 1 }); }',
+        'function outer() { return class extends new.target {}; }',
+      ]) {
+        assertSame(parseScript(source).type, 'Program', source);
+        assertSame(parseEval(source).type, 'Program', source);
+      }
+
+      for (const source of [
+        'new.target;',
+        '(() => new.target);',
+        '({ [new.target]: function () {} });',
+        'class C extends new.target {}',
+      ]) {
+        assertThrows(() => parseScript(source), SyntaxError);
+        assertThrows(() => parseEval(source), SyntaxError);
+      }
+
+      assertSame(
+        parseEval('new.target;', false, { newTargetAllowed: true }).type,
+        'Program',
+      );
+      assertThrows(() => parseEval('new.target;'), SyntaxError);
+      assertSame(
+        parseEval('function nested() { return new.target; }').type,
+        'Program',
+      );
+    },
+  },
+  {
+    name: 'custom and reusable ASTs admit only exact new.target MetaProperty shapes and contexts',
+    run() {
+      const parsed = parseScript('function f(){ return new.target; }');
+      const meta = parsed.body[0].body.body[0].argument;
+
+      function programForFunctionReturn(argument) {
+        const program = parseScript('function f(){ return 0; }');
+        program.body[0].body.body[0].argument = argument;
+        return program;
+      }
+
+      function programForExpression(expression) {
+        const program = parseScript('0;');
+        program.body[0].expression = expression;
+        return program;
+      }
+
+      function assertNormalizedSyntaxError(fn) {
+        const error = /** @type {any} */ (assertThrows(fn, SyntaxError));
+        assertSame(error.name, 'SyntaxError');
+        if (error.pos !== undefined && typeof error.pos !== 'number') {
+          throw new Error(
+            'Expected numeric syntax error position when present',
+          );
+        }
+      }
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        assertSame(parseCustomScript(entry, parsed).sourceType, 'script');
+        for (const malformed of [
+          { ...meta, meta: { type: 'Identifier', name: 'notNew' } },
+          { ...meta, property: { type: 'Identifier', name: 'notTarget' } },
+          { ...meta, meta: null },
+          { ...meta, property: { type: 'Literal', value: 'target' } },
+        ]) {
+          assertNormalizedSyntaxError(() =>
+            parseCustomScript(entry, programForFunctionReturn(malformed)),
+          );
+        }
+      }
+
+      const reusable = parseScript('function f(){ return 0; }');
+      reusable.body[0].body.body[0].argument = meta;
+      assertSame(parseScript('', { program: reusable }).sourceType, 'script');
+
+      const topLevelArrow = parseScript('(() => 0);');
+      topLevelArrow.body[0].expression.body = meta;
+      const wrongParent = parseScript('0;');
+      wrongParent.body[0] = meta;
+      const computedMethodName = parseScript('({ [key]: function () {} });');
+      computedMethodName.body[0].expression.properties[0].key = meta;
+      const classHeritage = parseScript('(class extends Base {});');
+      classHeritage.body[0].expression.superClass = meta;
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        for (const program of [
+          programForExpression(meta),
+          topLevelArrow,
+          wrongParent,
+          computedMethodName,
+          classHeritage,
+        ]) {
+          assertNormalizedSyntaxError(() => parseCustomScript(entry, program));
+        }
+      }
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        assertSame(
+          parseCustomScript(
+            entry,
+            programForFunctionReturn({
+              type: 'ArrowFunctionExpression',
+              id: null,
+              params: [],
+              body: meta,
+              expression: true,
+              generator: false,
+              async: false,
+            }),
+          ).sourceType,
+          'script',
+        );
+        assertSame(
+          parseCustomScript(
+            entry,
+            programForFunctionReturn({
+              type: 'ObjectExpression',
+              properties: computedMethodName.body[0].expression.properties,
+            }),
+          ).sourceType,
+          'script',
+        );
+        assertSame(
+          parseCustomScript(
+            entry,
+            programForFunctionReturn(classHeritage.body[0].expression),
+          ).sourceType,
+          'script',
+        );
+      }
+
+      const nestedOrdinary = programForFunctionReturn({
+        type: 'FunctionExpression',
+        id: null,
+        params: [],
+        body: {
+          type: 'BlockStatement',
+          body: [{ type: 'ReturnStatement', argument: meta }],
+        },
+        generator: false,
+        async: false,
+        expression: false,
+      });
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        assertSame(
+          parseCustomScript(entry, nestedOrdinary).sourceType,
+          'script',
+        );
+      }
+
+      let getterExecuted = false;
+      const accessorMeta = {
+        type: 'MetaProperty',
+        property: { type: 'Identifier', name: 'target' },
+      };
+      Object.defineProperty(accessorMeta, 'meta', {
+        enumerable: true,
+        get() {
+          getterExecuted = true;
+          throw new Error('getter executed');
+        },
+      });
+      assertNormalizedSyntaxError(() =>
+        parseCustomScript('parse', programForFunctionReturn(accessorMeta)),
+      );
+      assertSame(getterExecuted, false);
+
+      const inheritedProperty = Object.create({
+        property: { type: 'Identifier', name: 'target' },
+      });
+      Object.defineProperties(inheritedProperty, {
+        type: { value: 'MetaProperty', enumerable: true },
+        meta: {
+          value: { type: 'Identifier', name: 'new' },
+          enumerable: true,
+        },
+      });
+      assertNormalizedSyntaxError(() =>
+        parseCustomScript('parse', programForFunctionReturn(inheritedProperty)),
+      );
+
+      const metadataNode = { ...meta, extra: { type: 'Literal', value: 0 } };
+      assertNormalizedSyntaxError(() =>
+        parseCustomScript('parse', programForFunctionReturn(metadataNode)),
+      );
+
+      const selfCycle = {
+        type: 'MetaProperty',
+        meta: { type: 'Identifier', name: 'new' },
+        property: { type: 'Identifier', name: 'target' },
+      };
+      selfCycle.meta = selfCycle;
+      assertNormalizedSyntaxError(() =>
+        parseCustomScript('parse', programForFunctionReturn(selfCycle)),
+      );
+    },
+  },
+  {
     name: 'each remaining reachable unsupported ES2015 construct is rejected by the pass from parseScript and parseEval',
     run() {
       const rejected = [
         'var object = { async method() {} };',
         'var object = { ...source };',
-        'function withMeta() { return new.target; }',
       ];
 
       for (const source of rejected) {
@@ -3056,7 +3262,12 @@ const tests = [
 
       assertSame(
         JSON.stringify(
-          literals.map(({ value, raw, start, end }) => [value, raw, start, end]),
+          literals.map(({ value, raw, start, end }) => [
+            value,
+            raw,
+            start,
+            end,
+          ]),
         ),
         JSON.stringify([
           [5, '0b101', 0, 5],
@@ -3098,8 +3309,8 @@ const tests = [
       assertThrows(() => parseScript('"use strict"; 010;'), SyntaxError);
 
       const stringLiteral = parseScript('"\\u{d800}";').body[0].expression;
-      const templateCooked = parseScript('`\\u{d800}`;').body[0].expression
-        .quasis[0].value.cooked;
+      const templateCooked =
+        parseScript('`\\u{d800}`;').body[0].expression.quasis[0].value.cooked;
 
       assertSame(stringLiteral.value.length, 1);
       assertSame(stringLiteral.value.charCodeAt(0), 0xd800);
@@ -3162,7 +3373,6 @@ const tests = [
         'class C { field = 1; }',
         'class C { #private; }',
         'class C { static {} }',
-        'class C { method() { return new.target; } }',
       ];
 
       for (const source of rejected) {
@@ -4111,7 +4321,7 @@ const tests = [
     run() {
       const realm = createRealm();
 
-      for (const body of ['return function f() { return new.target; };']) {
+      for (const body of ['return ({ ...source });']) {
         assertSame(
           evaluateScript(
             realm,

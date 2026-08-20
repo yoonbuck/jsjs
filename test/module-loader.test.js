@@ -121,7 +121,7 @@ export default [
     },
   },
   {
-    name: 'loader rejects nested unsupported capability as the starting-SHA regression guard',
+    name: 'loader rejects nested post-parse validation failures as the starting-SHA regression guard',
     async run() {
       const loader = createModuleLoader(createRealm(), {
         resolve(specifier) {
@@ -130,10 +130,10 @@ export default [
         load(identifier) {
           return identifier === 'root'
             ? 'import "invalid"; export const ok = 1;'
-            : 'function unsupported() { return new.target; }';
+            : 'function unsupported() { var invalid = /]/; }';
         },
       });
-      // Unlike the grammar-level fixture above, this parsed at the exact starting SHA.
+      // Unlike the grammar-level fixture above, this reaches post-parse validation.
       const error = await rejected(loadModuleGraph(loader, 'root', null));
       assertSame(error instanceof ModuleLoaderError, true);
       assertSame(error.phase, 'parse');
