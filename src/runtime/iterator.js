@@ -260,12 +260,28 @@ export function iteratorNextWithMethod(iterator, method, sent, callerRealm) {
     linkGeneratorHostChainToValue(activeAgent, iteratorMethod);
   }
 
-  const result = callCallable(
-    iteratorMethod,
-    iterator,
-    sent === undefined ? [] : [sent.value],
-    callerRealm,
-  );
+  // `callCallable` is a Table 6 terminal, but its helper frame remains on the
+  // host stack until the iterator method returns. Account for that frame on an
+  // already-active generator chain before dispatching recursively.
+  const callFrame =
+    activeAgent?.enterGeneratorHostFrame(
+      callerRealm?.stackGuard.maxDepth ?? Number.POSITIVE_INFINITY,
+    ) ?? null;
+  /** @type {unknown} */
+  let result;
+
+  try {
+    result = callCallable(
+      iteratorMethod,
+      iterator,
+      sent === undefined ? [] : [sent.value],
+      callerRealm,
+    );
+  } finally {
+    if (callFrame !== null) {
+      activeAgent?.exitGeneratorHostFrame(callFrame);
+    }
+  }
 
   if (!(result instanceof EngineObject)) {
     throw new GuestErrorSignal('TypeError', 'Iterator result is not an object');

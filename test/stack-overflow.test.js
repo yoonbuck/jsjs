@@ -25,6 +25,7 @@ import { EngineObject } from '../src/runtime/object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { Reference, getValue } from '../src/runtime/reference.js';
 import { SuperReferenceBase } from '../src/runtime/super-reference.js';
+import { iteratorNextWithMethod } from '../src/runtime/iterator.js';
 import {
   HostileExotic,
   createEnumerationIterator,
@@ -1952,6 +1953,44 @@ const tests = [
       );
       assertSame(realmA.stackGuard.depth, 0);
       assertSame(realmB.stackGuard.depth, 0);
+    },
+  },
+  {
+    name: 'iterator Table 6 dispatch accounts for its helper frame on an active generator chain',
+    run() {
+      const realm = createRealm({ maxStackDepth: 2 });
+      const iterator = new EngineObject(realm.intrinsics.objectPrototype);
+      const result = new EngineObject(realm.intrinsics.objectPrototype);
+      const next = realm.createNativeFunction({
+        name: 'next',
+        length: 0,
+        call() {
+          return result;
+        },
+      });
+      const hostChain = realm.agent.enterGeneratorHostChain(
+        realm.stackGuard.maxDepth,
+      );
+
+      realm.stackGuard.enter();
+
+      try {
+        const error = /** @type {GuestErrorSignal} */ (
+          assertThrows(
+            () => iteratorNextWithMethod(iterator, next, undefined, realm),
+            GuestErrorSignal,
+          )
+        );
+
+        assertSame(error.typeName, 'RangeError');
+        assertSame(error.guestMessage, 'Maximum call stack size exceeded');
+        assertSame(generatorHostChainRoot(realm.agent).depth, 1);
+      } finally {
+        realm.stackGuard.exit();
+        realm.agent.exitGeneratorHostChain(hostChain);
+      }
+
+      assertGeneratorAccountingCleared([realm]);
     },
   },
   {
