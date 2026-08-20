@@ -914,7 +914,7 @@ export function renderBatchLedger(manifest, code) {
   return `${batch.entries.map((entry) => entry.path).join('\n')}\n`;
 }
 
-/** @param {unknown} manifest @param {string} code @param {unknown} issueMap */
+/** @param {unknown} manifest @param {string} code @param {unknown} [issueMap] */
 export function renderProvenanceIssueBody(manifest, code, issueMap) {
   const definition = ISSUE_DEFINITIONS[code];
   if (definition === undefined) {
@@ -930,24 +930,14 @@ export function renderProvenanceIssueBody(manifest, code, issueMap) {
   validateProvenanceFoundation(normalizedManifest);
   const issues = normalizeIssueMap(issueMap);
   const ledger = renderLedgerSummary(normalizedManifest, code);
-  const dependencies = definition.dependencies.map((dependencyCode) => {
-    const issueNumber = issues.get(dependencyCode);
-    if (issueNumber === undefined) {
-      throw new Es2015ProvenanceError(
-        `Issue map is missing required code ${dependencyCode}`,
-      );
-    }
-    return `${dependencyCode} (#${issueNumber})`;
-  });
-  const selfIssue = issues.get(code);
-  if (selfIssue === undefined) {
-    throw new Es2015ProvenanceError(`Issue map is missing required code ${code}`);
-  }
+  const dependencies = definition.dependencies.map((dependencyCode) =>
+    issues === null ? dependencyCode : renderIssueReference(dependencyCode, issues),
+  );
   const lines = [
     `<!-- test262-provenance T1 / #75 | code:${code} | base-ledger-sha256:${normalizedManifest.baseLedger.pathSha256} -->`,
     `# ${code} — ${definition.title}`,
     '',
-    `Issue: #${selfIssue}.`,
+    ...(issues === null ? [] : [`Issue: ${renderIssueReference(code, issues)}.`]),
     `Parent: T1 / #75.`,
     `Base ledger: ${normalizedManifest.baseLedger.rootCount} roots / ${normalizedManifest.baseLedger.variantCount} variants / SHA-256 ${normalizedManifest.baseLedger.pathSha256}.`,
     `Batch ledger: ${ledger.rootCount} roots / ${ledger.variantCount} variants / SHA-256 ${ledger.pathSha256}.`,
@@ -1860,8 +1850,20 @@ function normalizeFragments(value) {
   throw new Es2015ProvenanceError('Provenance decision fragments must be a map or object');
 }
 
+/** @param {string} code @param {ReadonlyMap<string, number>} issueMap */
+function renderIssueReference(code, issueMap) {
+  const issueNumber = issueMap.get(code);
+  if (issueNumber === undefined) {
+    throw new Es2015ProvenanceError(`Issue map is missing required code ${code}`);
+  }
+  return `${code} (#${issueNumber})`;
+}
+
 /** @param {unknown} value */
 function normalizeIssueMap(value) {
+  if (value === undefined) {
+    return null;
+  }
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Es2015ProvenanceError('Issue map must be an object');
   }

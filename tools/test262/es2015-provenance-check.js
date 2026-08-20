@@ -82,15 +82,13 @@ export async function main(argv = [], dependencies = {}) {
       }
       case 'render-issue': {
         const manifest = await loadReviewedManifest(deps);
-        if (options.issueMapPath === null) {
-          throw new Es2015ProvenanceCheckError(
-            '--issue-map=PATH is required with --render-issue=CODE',
-          );
-        }
-        const issueMap = parseJson(
-          await readRequiredFile(deps, options.issueMapPath),
-          options.issueMapPath,
-        );
+        const issueMap =
+          options.issueMapPath === null
+            ? undefined
+            : parseJson(
+                await readRequiredFile(deps, options.issueMapPath),
+                options.issueMapPath,
+              );
         deps.stdout(renderProvenanceIssueBody(manifest, mode.code, issueMap));
         return 0;
       }

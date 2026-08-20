@@ -1705,6 +1705,32 @@ export default [
     },
   },
   {
+    name: 'ES2015 provenance renders deterministic initial issue bodies without issue numbers',
+    run: () => {
+      const manifest = productionManifest();
+      const initialUaBody = renderProvenanceIssueBody(manifest, 'UA');
+      const repeatedInitialUaBody = renderProvenanceIssueBody(manifest, 'UA');
+      const initialU0Body = renderProvenanceIssueBody(manifest, 'U0');
+      const initialUlBody = renderProvenanceIssueBody(manifest, 'UL');
+
+      assertSame(initialUaBody, repeatedInitialUaBody);
+      assertSame(initialUaBody.endsWith('\n'), true);
+      assertSame(initialU0Body.endsWith('\n'), true);
+      assertSame(initialUlBody.endsWith('\n'), true);
+      assertSame(initialUaBody.includes('Issue: #'), false);
+      assertSame(initialU0Body.includes('Issue: #'), false);
+      assertSame(initialUlBody.includes('Issue: #'), false);
+      assertSame(initialUaBody.includes('Dependencies: U0.'), true);
+      assertSame(initialUaBody.includes('Dependencies: U0 (#'), false);
+      assertSame(initialU0Body.includes('Dependencies: none.'), true);
+      assertSame(initialUlBody.includes('Dependencies: UL1, UL2, UL3, UL4.'), true);
+      assertSame(initialUlBody.includes('Dependencies: UL1 (#'), false);
+      assertSame(initialUaBody.includes('Parent: T1 / #75.'), true);
+      assertSame(initialU0Body.includes('Parent: T1 / #75.'), true);
+      assertSame(initialUlBody.includes('Parent: T1 / #75.'), true);
+    },
+  },
+  {
     name: 'ES2015 provenance renders deterministic issue bodies with exact dependency markers',
     run: () => {
       const manifest = productionManifest();
@@ -1776,6 +1802,13 @@ export default [
           Es2015ProvenanceError,
         ).message,
         'Issue map is missing required code UA',
+      );
+      assertSame(
+        assertThrows(
+          () => renderProvenanceIssueBody(manifest, 'UA', null),
+          Es2015ProvenanceError,
+        ).message,
+        'Issue map must be an object',
       );
     },
   },
@@ -1936,6 +1969,40 @@ export default [
         ledgerDependencies.outputs.stdout.join(''),
         renderBatchLedger(productionManifest(), 'UA'),
       );
+
+      const initialU0Dependencies = provenanceCheckDependencies();
+      assertSame(
+        await provenanceCheck(['--render-issue=U0'], initialU0Dependencies),
+        0,
+      );
+      assertSame(
+        initialU0Dependencies.outputs.stdout.join(''),
+        renderProvenanceIssueBody(productionManifest(), 'U0'),
+      );
+
+      const initialUlDependencies = provenanceCheckDependencies();
+      assertSame(
+        await provenanceCheck(['--render-issue=UL'], initialUlDependencies),
+        0,
+      );
+      assertSame(
+        initialUlDependencies.outputs.stdout.join(''),
+        renderProvenanceIssueBody(productionManifest(), 'UL'),
+      );
+
+      const initialUaDependencies = provenanceCheckDependencies();
+      assertSame(
+        await provenanceCheck(['--render-issue=UA'], initialUaDependencies),
+        0,
+      );
+      const initialUaOutput = initialUaDependencies.outputs.stdout.join('');
+      assertSame(initialUaOutput, renderProvenanceIssueBody(productionManifest(), 'UA'));
+      const repeatedInitialUaDependencies = provenanceCheckDependencies();
+      assertSame(
+        await provenanceCheck(['--render-issue=UA'], repeatedInitialUaDependencies),
+        0,
+      );
+      assertSame(repeatedInitialUaDependencies.outputs.stdout.join(''), initialUaOutput);
 
       const issueDependencies = provenanceCheckDependencies({
         files: new Map([[ISSUE_MAP_PATH, json(COMPLETE_ISSUE_MAP)]]),
