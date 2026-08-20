@@ -72,7 +72,7 @@ export { DEFAULT_INCLUDES };
  *
  * @typedef {{
  *   createRealm(): any,
- *   installHostBindings(realm: any): void,
+ *   installHostBindings(realm: any): unknown,
  *   evaluateScript(realm: any, source: string): CompletionRecord,
  *   evaluateModule?: (
  *     realm: any,

@@ -1080,7 +1080,8 @@ export default [
         host: createMemoryHost(
           { 'raw.js': rawSource },
           {
-            'assert.js': "throw new Error('assert.js must not run for raw tests');",
+            'assert.js':
+              "throw new Error('assert.js must not run for raw tests');",
             'sta.js': "throw new Error('sta.js must not run for raw tests');",
           },
         ),
@@ -1092,8 +1093,31 @@ export default [
       assertSame(summarizeRecords(records), 'raw.js|raw|passed|');
       assertSame(
         JSON.stringify(calls),
-        JSON.stringify(['createRealm', 'installHostBindings', 'evaluateScript:test']),
+        JSON.stringify([
+          'createRealm',
+          'installHostBindings',
+          'evaluateScript:test',
+        ]),
       );
+    },
+  },
+  {
+    name: 'raw roots receive host bindings but no harness',
+    run: async () => {
+      const rawSource = fixture(
+        'raw roots receive host bindings but no harness',
+        [
+          "if (typeof $262 !== 'object') throw 'missing host';",
+          "if (typeof assert !== 'undefined') throw 'harness leaked';",
+        ].join('\n'),
+        'flags: [raw]\n',
+      );
+      const { records } = await runMemorySuite(
+        { 'raw-host-bindings.js': rawSource },
+        { paths: ['raw-host-bindings.js'] },
+      );
+
+      assertSame(summarizeRecords(records), 'raw-host-bindings.js|raw|passed|');
     },
   },
   {

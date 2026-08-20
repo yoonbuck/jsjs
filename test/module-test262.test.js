@@ -317,7 +317,9 @@ export default [
             calls.push('installHostBindings');
           },
           evaluateScript() {
-            throw new Error('raw module roots must not evaluate harness includes');
+            throw new Error(
+              'raw module roots must not evaluate harness includes',
+            );
           },
           async evaluateModule(realm, source, identifier) {
             moduleRealm = realm;
@@ -334,8 +336,32 @@ export default [
       assertSame(moduleRealm, createdRealm);
       assertSame(
         JSON.stringify(calls),
-        JSON.stringify(['createRealm', 'installHostBindings', 'evaluateModule']),
+        JSON.stringify([
+          'createRealm',
+          'installHostBindings',
+          'evaluateModule',
+        ]),
       );
+    },
+  },
+  {
+    name: 'raw module roots receive host bindings but no harness',
+    run: async () => {
+      const rawRoot = 'test/language/module-code/raw-host-bindings.js';
+      const rawSource = rawModuleFixture(
+        'raw module roots receive host bindings but no harness',
+        [
+          "if (typeof $262 !== 'object') throw 'missing host';",
+          "if (typeof assert !== 'undefined') throw 'harness leaked';",
+        ].join('\n'),
+      );
+      const { run } = await runModuleFixture(new Map([[rawRoot, rawSource]]), [
+        rawRoot,
+      ]);
+
+      assertSame(run.summary.passed, 1);
+      assertSame(run.summary.failed, 0);
+      assertSame(run.records[0].variant, 'raw');
     },
   },
   {
