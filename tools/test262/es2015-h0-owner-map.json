@@ -1,0 +1,406 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "owners": [
+    {
+      "code": "B0",
+      "issue": 87,
+      "blocker": "binary-data-and-typed-arrays",
+      "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+    },
+    {
+      "code": "B1",
+      "issue": 88,
+      "blocker": "binary-data-and-typed-arrays",
+      "title": "Implement ES2015 DataView"
+    },
+    {
+      "code": "B2",
+      "issue": 89,
+      "blocker": "binary-data-and-typed-arrays",
+      "title": "Implement integer-indexed exotica and TypedArray constructors"
+    },
+    {
+      "code": "C0",
+      "issue": 83,
+      "blocker": "keyed-collections",
+      "title": "Implement the ordered collection kernel and ES2015 Map"
+    },
+    {
+      "code": "C1",
+      "issue": 84,
+      "blocker": "keyed-collections",
+      "title": "Implement ES2015 Set and live collection iterators"
+    },
+    {
+      "code": "C2",
+      "issue": 85,
+      "blocker": "keyed-collections",
+      "title": "Implement ES2015 WeakMap and WeakSet with private weak storage"
+    },
+    {
+      "code": "G0",
+      "issue": 96,
+      "blocker": "remaining-language-runtime-semantics",
+      "title": "Complete remaining core ES2015 language runtime semantics"
+    },
+    {
+      "code": "G1",
+      "issue": 97,
+      "blocker": "proper-tail-calls",
+      "title": "Implement mandatory ES2015 proper tail calls"
+    },
+    {
+      "code": "L0",
+      "issue": 93,
+      "blocker": "remaining-standard-library-additions",
+      "title": "Complete ES2015 Array and Object additions"
+    },
+    {
+      "code": "L1",
+      "issue": 94,
+      "blocker": "remaining-standard-library-additions",
+      "title": "Complete ES2015 String, Number, and Math additions"
+    },
+    {
+      "code": "L2",
+      "issue": 95,
+      "blocker": "remaining-standard-library-additions",
+      "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+    },
+    {
+      "code": "M0",
+      "issue": 79,
+      "blocker": "proxy-and-reflect-metaobject",
+      "title": "Formalize the ES2015 object internal-method contract"
+    },
+    {
+      "code": "M2",
+      "issue": 81,
+      "blocker": "proxy-and-reflect-metaobject",
+      "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+    },
+    {
+      "code": "P1",
+      "issue": 78,
+      "blocker": "early-errors-and-declaration-instantiation",
+      "title": "Complete core ES2015 early errors and declaration instantiation"
+    },
+    {
+      "code": "R0",
+      "issue": 91,
+      "blocker": "regexp-unicode-and-sticky",
+      "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+    },
+    {
+      "code": "R1",
+      "issue": 92,
+      "blocker": "symbol-protocol-dispatch",
+      "title": "Complete RegExp/String Symbol protocol integration"
+    }
+  ],
+  "rules": [
+    {
+      "name": "array-builtins-to-l0",
+      "primaryOwner": "L0",
+      "pathPrefix": "test/built-ins/Array/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined",
+        "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true",
+        "unexpected-throw:guest object with message: Object.getPrototypeOf(array.concat()) returns CustomCtor.prototype Expected SameValue(«», «[object Object]») to be true",
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "arraybuffer-to-b0",
+      "primaryOwner": "B0",
+      "pathPrefix": "test/built-ins/ArrayBuffer/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "boolean-to-l2",
+      "primaryOwner": "L2",
+      "pathPrefix": "test/built-ins/Boolean/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "dataview-arraybuffer-prerequisite-to-b0",
+      "primaryOwner": "B0",
+      "pathPrefix": "test/built-ins/DataView/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "B1",
+          "signature": "dataview-constructor-depends-on-arraybuffer-data-blocks"
+        }
+      ]
+    },
+    {
+      "name": "date-to-l2",
+      "primaryOwner": "L2",
+      "pathPrefix": "test/built-ins/Date/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "error-to-l2",
+      "primaryOwner": "L2",
+      "pathPrefix": "test/built-ins/Error/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "function-builtins-to-l2",
+      "primaryOwner": "L2",
+      "pathPrefix": "test/built-ins/Function/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "function-derived-construction-to-g0",
+      "primaryOwner": "G0",
+      "pathPrefix": "test/built-ins/Function/internals/Construct/derived-",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected a ReferenceError but got a different error constructor with the same name",
+        "unexpected-throw:guest object with message: Expected a TypeError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "M0",
+          "signature": "cross-realm-error-constructor-identity"
+        }
+      ]
+    },
+    {
+      "name": "function-revoked-proxy-construction-to-m2",
+      "primaryOwner": "M2",
+      "pathPrefix": "test/built-ins/Function/internals/Construct/base-ctor-revoked-proxy-realm.js",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "M0",
+          "signature": "ordinary-construct-internal-method-prerequisite"
+        }
+      ]
+    },
+    {
+      "name": "generatorfunction-to-g0",
+      "primaryOwner": "G0",
+      "pathPrefix": "test/built-ins/GeneratorFunction/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "json-revoked-proxy-to-m2",
+      "primaryOwner": "M2",
+      "pathPrefix": "test/built-ins/JSON/stringify/replacer-array-proxy-revoked-realm.js",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "L2",
+          "signature": "json-stringify-consumes-proxy-revocation-semantics"
+        }
+      ]
+    },
+    {
+      "name": "language-global-declaration-instantiation-to-p1",
+      "primaryOwner": "P1",
+      "pathPrefix": "test/language/global-code/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Identifier 'test262Var' has already been declared"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "language-primitive-putvalue-proxy-to-m2",
+      "primaryOwner": "M2",
+      "pathPrefix": "test/language/types/reference/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Proxy is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "M0",
+          "signature": "ordinary-set-internal-method-prerequisite"
+        }
+      ]
+    },
+    {
+      "name": "language-super-runtime-to-g0",
+      "primaryOwner": "G0",
+      "pathPrefix": "test/language/expressions/super/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "map-to-c0",
+      "primaryOwner": "C0",
+      "pathPrefix": "test/built-ins/Map/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Map is not defined"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "nativeerrors-to-l2",
+      "primaryOwner": "L2",
+      "pathPrefix": "test/built-ins/NativeErrors/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "number-to-l1",
+      "primaryOwner": "L1",
+      "pathPrefix": "test/built-ins/Number/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "object-to-l0",
+      "primaryOwner": "L0",
+      "pathPrefix": "test/built-ins/Object/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "promise-to-l2",
+      "primaryOwner": "L2",
+      "pathPrefix": "test/built-ins/Promise/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "proxy-to-m2",
+      "primaryOwner": "M2",
+      "pathPrefix": "test/built-ins/Proxy/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined",
+        "unexpected-throw:guest object with message: Expected a TypeError but got a ReferenceError",
+        "unexpected-throw:guest object with message: OProxy is not a constructor",
+        "unexpected-throw:guest object with message: Proxy is not defined",
+        "unexpected-throw:guest object with message: expression is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "M0",
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ]
+    },
+    {
+      "name": "regexp-constructor-to-r0",
+      "primaryOwner": "R0",
+      "pathPrefix": "test/built-ins/RegExp/proto-from-ctor-realm.js",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "regexp-getters-to-r0",
+      "primaryOwner": "R0",
+      "pathPrefix": "test/built-ins/RegExp/prototype/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined",
+        "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "regexp-symbol-split-to-r1",
+      "primaryOwner": "R1",
+      "pathPrefix": "test/built-ins/RegExp/prototype/Symbol.split/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "R0",
+          "signature": "regexp-symbol-split-consumes-regexp-constructor-realm-semantics"
+        }
+      ]
+    },
+    {
+      "name": "set-to-c1",
+      "primaryOwner": "C1",
+      "pathPrefix": "test/built-ins/Set/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Set is not defined"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "string-to-l1",
+      "primaryOwner": "L1",
+      "pathPrefix": "test/built-ins/String/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "typedarray-constructors-to-b2",
+      "primaryOwner": "B2",
+      "pathPrefix": "test/built-ins/TypedArrayConstructors/",
+      "failureSignatures": [
+        "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": "B0",
+          "signature": "typedarray-constructors-consume-arraybuffer-data-blocks"
+        }
+      ]
+    },
+    {
+      "name": "weakmap-to-c2",
+      "primaryOwner": "C2",
+      "pathPrefix": "test/built-ins/WeakMap/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: WeakMap is not defined"
+      ],
+      "secondaryEvidence": []
+    },
+    {
+      "name": "weakset-to-c2",
+      "primaryOwner": "C2",
+      "pathPrefix": "test/built-ins/WeakSet/",
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: WeakSet is not defined"
+      ],
+      "secondaryEvidence": []
+    }
+  ]
+}

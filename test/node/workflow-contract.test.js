@@ -20,6 +20,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 // @ts-expect-error node:fs's sync fixture helpers (mkdir/mkdtemp/rm/writeFile)
 // are not declared in this repo's Node shim (types/host.d.ts only covers the
 // async fs/promises surface plus existsSync/constants).
@@ -928,6 +929,11 @@ function stderrText(result) {
   return '';
 }
 
+/** @param {string} text */
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
 /**
  * A synthetic manifest with a probe that only completes on an engine that
  * really evaluates arithmetic and loops, so the probe machinery is exercised
@@ -1308,6 +1314,60 @@ export default [
         JSON.stringify(runCommands(job)),
         JSON.stringify(['npm ci', 'npm run test262:cross-realm']),
       );
+    },
+  },
+  {
+    name: 'the H0 disposition workflow artifacts keep separate source, disposition, and promotion identities',
+    run: async () => {
+      const [pathsText, ownerMapText, dispositionText, promotionText, deltasText] =
+        await Promise.all([
+          readRepositoryFile('tools/test262/es2015-h0-paths.json'),
+          readRepositoryFile('tools/test262/es2015-h0-owner-map.json'),
+          readRepositoryFile('tools/test262/es2015-h0-disposition.json'),
+          readRepositoryFile('tools/test262/es2015-h0-promotion.json'),
+          readRepositoryFile('tools/test262/es2015-h0-owner-deltas.json'),
+        ]);
+      const paths = JSON.parse(pathsText);
+      const ownerMap = JSON.parse(ownerMapText);
+      const disposition = JSON.parse(dispositionText);
+      const promotion = JSON.parse(promotionText);
+      const deltas = JSON.parse(deltasText);
+
+      assertSame(paths.rootCount, 135);
+      assertSame(paths.variantCount, 267);
+      assertSame(paths.ledgerSha256, sha256(`${paths.paths.join('\n')}\n`));
+      assertSame(ownerMap.repository, paths.repository);
+      assertSame(ownerMap.revision, paths.revision);
+      assertSame(disposition.ownerMapSha256, sha256(ownerMapText));
+      assertSame(disposition.h0LedgerSha256, paths.ledgerSha256);
+      assertSame(disposition.h0RootCount, paths.rootCount);
+      assertSame(disposition.h0VariantCount, paths.variantCount);
+      assertSame(
+        disposition.passedRootCount + disposition.reassignedRootCount,
+        paths.rootCount,
+      );
+      assertSame(
+        disposition.passedVariantCount + disposition.reassignedVariantCount,
+        paths.variantCount,
+      );
+      assertSame(promotion.h0LedgerSha256, paths.ledgerSha256);
+      assertSame(promotion.h0RootCount, paths.rootCount);
+      assertSame(promotion.h0VariantCount, paths.variantCount);
+      assertSame(promotion.dispositionSha256, sha256(dispositionText));
+      assertSame(
+        promotion.promotedRootCount,
+        disposition.passedRootCount,
+        'only complete-root passed H0 dispositions are promoted',
+      );
+      assertSame(
+        promotion.promotedVariantCount,
+        disposition.completePassedVariantCount,
+        'promoted variant count follows complete-root passed disposition variants',
+      );
+      assertSame(deltas.dispositionSha256, sha256(dispositionText));
+      assertSame(deltas.promotionSha256, sha256(promotionText));
+      assertSame(deltas.crossRealm.remainingRoots, 0);
+      assertSame(deltas.crossRealm.remainingVariants, 0);
     },
   },
   {

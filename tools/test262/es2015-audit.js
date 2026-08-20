@@ -26,8 +26,16 @@ import {
   validateDecisionFragments,
 } from './es2015-provenance.js';
 import {
+  assertExactH0DispositionDelta,
+  buildEs2015H0Disposition,
+  buildEs2015H0OwnerDeltas,
+  buildEs2015Promotion,
   ES2015_PROMOTION_FILE,
+  ES2015_H0_DISPOSITION_FILE,
+  ES2015_H0_PROMOTION_FILE,
+  ES2015_H0_PROMOTION_GROUP,
   parseEs2015Promotion,
+  parseEs2015H0Disposition,
   promotionPaths,
   supportedFeaturesForPromotedPath,
   validateEs2015Promotion,
@@ -185,9 +193,45 @@ export async function main(argv = [], dependencies = {}) {
   assertSubsetPin(subset, pin);
   const features = parseFeatureManifest(featuresText);
   const promotion = parsePromotion(promotionText, subset);
-  const promotionPathSet = new Set(
+  const h0PromotionText = await readOptionalFile(deps, ES2015_H0_PROMOTION_FILE);
+  const h0DispositionText = await readOptionalFile(
+    deps,
+    ES2015_H0_DISPOSITION_FILE,
+  );
+  const h0Promotion = parsePromotion(
+    h0PromotionText,
+    subset,
+    ES2015_H0_PROMOTION_GROUP,
+    ES2015_H0_PROMOTION_FILE,
+  );
+  const h0Disposition =
+    h0DispositionText === null
+      ? null
+      : parseEs2015H0Disposition(h0DispositionText);
+  if (h0Promotion !== null && h0Disposition === null) {
+    throw new Es2015AuditError(
+      `${ES2015_H0_DISPOSITION_FILE} is required by ${ES2015_H0_PROMOTION_FILE}`,
+    );
+  }
+  const t0PromotionPathSet = new Set(
     promotion === null ? [] : promotionPaths(promotion),
   );
+  const h0PromotionPathSet = new Set(
+    h0Promotion === null ? [] : promotionPaths(h0Promotion),
+  );
+  const h0DispositionPaths = new Set(
+    h0Disposition === null
+      ? []
+      : h0Disposition.dispositions.map((entry) => entry.path),
+  );
+  const h0DispositionRecords =
+    h0Disposition === null ? [] : h0RecordsFromDisposition(h0Disposition);
+  const h0ReassignedBlockers =
+    h0Disposition === null ? {} : h0BlockersFromDisposition(h0Disposition);
+  const promotionPathSet = new Set([
+    ...t0PromotionPathSet,
+    ...h0PromotionPathSet,
+  ]);
 
   const roots = sortStrings(await deps.listRoots()).filter(
     (path) =>
@@ -216,13 +260,46 @@ export async function main(argv = [], dependencies = {}) {
   const selectedPaths = upstreamSubsetPaths(subset);
   assertSelectedRoots(selectedPaths, roots);
   const evidence = parseAuditEvidence(auditEvidenceText, pin);
+  const nonH0EvidenceBlockers = Object.fromEntries(
+    Object.entries(evidence.blockers).filter(
+      ([path]) => !h0DispositionPaths.has(path),
+    ),
+  );
   if (promotion !== null) {
     validateEs2015Promotion(promotion, {
       pin,
       policy,
       selectedPaths,
-      inventory: inventory.filter((root) => promotionPathSet.has(root.path)),
+      inventory: inventory.filter((root) => t0PromotionPathSet.has(root.path)),
     });
+  }
+  if (h0Promotion !== null) {
+    validateEs2015Promotion(h0Promotion, {
+      pin,
+      policy,
+      selectedPaths,
+      inventory: inventory.filter((root) => h0PromotionPathSet.has(root.path)),
+    });
+  }
+
+  if (options.writeDisposition !== null) {
+    await writeH0Disposition({
+      deps,
+      options,
+      pin,
+      features,
+      inventory,
+    });
+    return 0;
+  }
+  if (options.writePromotion !== null || options.writeOwnerDeltas !== null) {
+    await writeH0PromotionAndDeltas({
+      deps,
+      options,
+      pin,
+      inventory,
+    });
+    return 0;
   }
 
   if (options.writeExecution) {
@@ -262,12 +339,28 @@ export async function main(argv = [], dependencies = {}) {
           selectedPaths.includes(record.file) &&
           !promotionPathSet.has(record.file),
       ),
-      ...evidence.records.filter((record) => promotionPathSet.has(record.file)),
+      ...evidence.records.filter((record) =>
+        t0PromotionPathSet.has(record.file),
+      ),
+      ...h0DispositionRecords.filter((record) =>
+        h0PromotionPathSet.has(record.file),
+      ),
     ],
     'selected execution evidence',
   );
   const auditResults = recordsByPath(
-    evidence.records.filter((record) => !promotionPathSet.has(record.file)),
+    [
+      ...evidence.records.filter(
+        (record) =>
+          !t0PromotionPathSet.has(record.file) &&
+          !h0DispositionPaths.has(record.file),
+      ),
+      ...h0DispositionRecords.filter(
+        (record) =>
+          h0DispositionPaths.has(record.file) &&
+          !h0PromotionPathSet.has(record.file),
+      ),
+    ],
     'audit execution evidence',
   );
   const classifications = classifyEs2015Inventory({
@@ -277,7 +370,7 @@ export async function main(argv = [], dependencies = {}) {
     selected: new Set(selectedPaths),
     selectedResults,
     auditResults,
-    blockers: evidence.blockers,
+    blockers: { ...nonH0EvidenceBlockers, ...h0ReassignedBlockers },
     intentionalDeviations: evidence.intentionalDeviations,
     reviewedProvenance,
   });
@@ -292,6 +385,8 @@ export async function main(argv = [], dependencies = {}) {
     reportText,
     auditEvidenceText,
     promotionText,
+    h0DispositionText,
+    h0PromotionText,
     classifications,
   });
   validateArtifact(artifact);
@@ -409,6 +504,22 @@ function parseOptions(argv) {
   let check = false;
   /** @type {string | null} */
   let pathsFile = null;
+  /** @type {string | null} */
+  let pathsManifest = null;
+  /** @type {string | null} */
+  let ownerMap = null;
+  /** @type {string | null} */
+  let disposition = null;
+  /** @type {string | null} */
+  let promotionFile = null;
+  /** @type {string | null} */
+  let writeDisposition = null;
+  /** @type {string | null} */
+  let writePromotion = null;
+  /** @type {string | null} */
+  let writeOwnerDeltas = null;
+  /** @type {string | null} */
+  let baselineTaxonomy = null;
   let writeExecution = false;
   let syncPromotedReport = false;
 
@@ -447,12 +558,84 @@ function parseOptions(argv) {
       pathsFile = argument.slice('--paths-file='.length);
       continue;
     }
+    if (argument.startsWith('--paths-manifest=')) {
+      pathsManifest = parseSinglePathOption(
+        argument,
+        '--paths-manifest=',
+        pathsManifest,
+      );
+      continue;
+    }
+    if (argument.startsWith('--owner-map=')) {
+      ownerMap = parseSinglePathOption(argument, '--owner-map=', ownerMap);
+      continue;
+    }
+    if (argument.startsWith('--disposition=')) {
+      disposition = parseSinglePathOption(
+        argument,
+        '--disposition=',
+        disposition,
+      );
+      continue;
+    }
+    if (argument.startsWith('--promotion-file=')) {
+      promotionFile = parseSinglePathOption(
+        argument,
+        '--promotion-file=',
+        promotionFile,
+      );
+      continue;
+    }
+    if (argument.startsWith('--write-disposition=')) {
+      writeDisposition = parseSinglePathOption(
+        argument,
+        '--write-disposition=',
+        writeDisposition,
+      );
+      continue;
+    }
+    if (argument.startsWith('--write-promotion=')) {
+      writePromotion = parseSinglePathOption(
+        argument,
+        '--write-promotion=',
+        writePromotion,
+      );
+      continue;
+    }
+    if (argument.startsWith('--write-owner-deltas=')) {
+      writeOwnerDeltas = parseSinglePathOption(
+        argument,
+        '--write-owner-deltas=',
+        writeOwnerDeltas,
+      );
+      continue;
+    }
+    if (argument.startsWith('--baseline-taxonomy=')) {
+      baselineTaxonomy = parseSinglePathOption(
+        argument,
+        '--baseline-taxonomy=',
+        baselineTaxonomy,
+      );
+      continue;
+    }
     throw new Es2015AuditError(`Unknown audit option: ${argument}`);
   }
 
-  if (check && (pathsFile !== null || writeExecution)) {
+  if (
+    check &&
+    (pathsFile !== null ||
+      writeExecution ||
+      pathsManifest !== null ||
+      ownerMap !== null ||
+      disposition !== null ||
+      promotionFile !== null ||
+      writeDisposition !== null ||
+      writePromotion !== null ||
+      writeOwnerDeltas !== null ||
+      baselineTaxonomy !== null)
+  ) {
     throw new Es2015AuditError(
-      'The --check option cannot be combined with promotion execution',
+      'The --check option cannot be combined with focused H0 generation',
     );
   }
   if ((pathsFile === null) !== !writeExecution) {
@@ -465,7 +648,58 @@ function parseOptions(argv) {
       'Promotion execution cannot be combined with promoted-report synchronization',
     );
   }
-  return { check, pathsFile, writeExecution, syncPromotedReport };
+  if (writeDisposition !== null) {
+    if (pathsManifest === null || ownerMap === null) {
+      throw new Es2015AuditError(
+        'H0 disposition generation requires --paths-manifest and --owner-map',
+      );
+    }
+    if (disposition !== null || writePromotion !== null || writeOwnerDeltas !== null) {
+      throw new Es2015AuditError(
+        'H0 disposition generation must run separately from promotion generation',
+      );
+    }
+  }
+  if (writePromotion !== null || writeOwnerDeltas !== null) {
+    if (pathsManifest === null || disposition === null) {
+      throw new Es2015AuditError(
+        'H0 promotion generation requires --paths-manifest and --disposition',
+      );
+    }
+    if (promotionFile !== null && writePromotion !== null && promotionFile !== writePromotion) {
+      throw new Es2015AuditError(
+        'The --promotion-file and --write-promotion paths must match',
+      );
+    }
+  }
+  return {
+    check,
+    pathsFile,
+    pathsManifest,
+    ownerMap,
+    disposition,
+    promotionFile,
+    writeDisposition,
+    writePromotion,
+    writeOwnerDeltas,
+    baselineTaxonomy,
+    writeExecution,
+    syncPromotedReport,
+  };
+}
+
+/**
+ * @param {string} argument
+ * @param {string} prefix
+ * @param {string | null} current
+ */
+function parseSinglePathOption(argument, prefix, current) {
+  if (current !== null || argument.length === prefix.length) {
+    throw new Es2015AuditError(
+      `The ${prefix.slice(0, -1)} option must name one path`,
+    );
+  }
+  return argument.slice(prefix.length);
 }
 
 /**
@@ -942,33 +1176,74 @@ function withDecisionCodes(decisions, fragments) {
  *
  * @param {string | null} text
  * @param {ReturnType<typeof parseUpstreamSubset>} subset
+ * @param {string} [groupName]
+ * @param {string} [fileName]
  */
-function parsePromotion(text, subset) {
+function parsePromotion(
+  text,
+  subset,
+  groupName = PROMOTION_GROUP,
+  fileName = ES2015_PROMOTION_FILE,
+) {
   const groups = subset.groups.filter(
-    (group) => group.name === PROMOTION_GROUP,
+    (group) => group.name === groupName,
   );
   if (text === null) {
     if (groups.length > 0) {
       throw new Es2015AuditError(
-        `${ES2015_PROMOTION_FILE} is required by ${PROMOTION_GROUP}`,
+        `${fileName} is required by ${groupName}`,
       );
     }
     return null;
   }
   if (groups.length !== 1) {
     throw new Es2015AuditError(
-      `${ES2015_PROMOTION_FILE} requires exactly one ${PROMOTION_GROUP} subset group`,
+      `${fileName} requires exactly one ${groupName} subset group`,
     );
   }
 
   const promotion = parseEs2015Promotion(text);
+  if ((promotion.groupName ?? PROMOTION_GROUP) !== groupName) {
+    throw new Es2015AuditError(`${fileName} must declare ${groupName}`);
+  }
   const paths = promotionPaths(promotion);
   if (!sameStrings(groups[0].paths, paths)) {
     throw new Es2015AuditError(
-      `${PROMOTION_GROUP} must select exactly the reviewed promotion paths`,
+      `${groupName} must select exactly the reviewed promotion paths`,
     );
   }
   return promotion;
+}
+
+/** @param {ReturnType<typeof parseEs2015H0Disposition>} disposition */
+function h0RecordsFromDisposition(disposition) {
+  /** @type {Array<{ type: 'test', file: string, variant: string, status: 'passed' | 'failed' | 'skipped' }>} */
+  const records = [];
+  for (const entry of disposition.dispositions) {
+    for (const evidence of entry.evidence) {
+      records.push({
+        type: 'test',
+        file: entry.path,
+        variant: evidence.variant,
+        status: /** @type {'passed' | 'failed' | 'skipped'} */ (
+          evidence.status
+        ),
+      });
+    }
+  }
+  return records;
+}
+
+/** @param {ReturnType<typeof parseEs2015H0Disposition>} disposition */
+function h0BlockersFromDisposition(disposition) {
+  /** @type {Record<string, string>} */
+  const blockers = {};
+  for (const entry of disposition.dispositions) {
+    if (entry.status === 'reassigned') {
+      blockers[entry.path] = entry.primaryOwner.blocker;
+    }
+  }
+  return blockers;
 }
 
 /**
@@ -989,6 +1264,216 @@ function assertSelectedAuditEvidence(records, selectedPaths, promoted) {
       );
     }
   }
+}
+
+/**
+ * @param {{
+ *   deps: AuditDependencies,
+ *   options: ReturnType<typeof parseOptions>,
+ *   pin: { repository: string, revision: string },
+ *   features: ReturnType<typeof parseFeatureManifest>,
+ *   inventory: readonly any[],
+ * }} context
+ */
+async function writeH0Disposition(context) {
+  const { deps, options, pin, features, inventory } = context;
+  if (
+    options.pathsManifest === null ||
+    options.ownerMap === null ||
+    options.writeDisposition === null
+  ) {
+    throw new Es2015AuditError('H0 disposition generation is not configured');
+  }
+  const [pathsManifestText, ownerMapText, baselineTaxonomyText] =
+    await Promise.all([
+      deps.readFile(options.pathsManifest),
+      deps.readFile(options.ownerMap),
+      deps.readFile(options.baselineTaxonomy ?? ES2015_TAXONOMY_ARTIFACT),
+    ]);
+  const pathsManifest = JSON.parse(pathsManifestText);
+  const paths = sortedPathsManifestPaths(pathsManifest, options.pathsManifest);
+  const taxonomyFeatures = taxonomyFeaturesByPath(baselineTaxonomyText);
+  const h0Inventory = inventory.filter((root) => paths.includes(root.path));
+  const records = await deps.runPromotion({
+    paths,
+    supportedFeatures: featureNames(features),
+    supportedFeaturesForPath(file, metadata) {
+      const expected = taxonomyFeatures.get(file);
+      if (expected === undefined) {
+        throw new Es2015AuditError(
+          `${ES2015_TAXONOMY_ARTIFACT} must still classify ${file}`,
+        );
+      }
+      const actual = sortStrings([...(metadata.features ?? [])]);
+      if (!sameStrings(actual, expected)) {
+        throw new Es2015AuditError(
+          `${ES2015_TAXONOMY_ARTIFACT} feature tags drifted for ${file}`,
+        );
+      }
+      return expected;
+    },
+  });
+  const executionEvidenceText = `${JSON.stringify(
+    {
+      version: ES2015_AUDIT_EVIDENCE_VERSION,
+      repository: pin.repository,
+      revision: pin.revision,
+      records: records.map((record) => normalizeH0ExecutionRecord(record)),
+    },
+    null,
+    2,
+  )}\n`;
+  const disposition = buildEs2015H0Disposition({
+    pathsManifestText,
+    baselineTaxonomyText,
+    executionEvidenceText,
+    ownerMapText,
+    pin,
+    inventory: h0Inventory,
+  });
+  await deps.writeFile(
+    options.writeDisposition,
+    `${JSON.stringify(disposition, null, 2)}\n`,
+  );
+}
+
+/**
+ * @param {{
+ *   deps: AuditDependencies,
+ *   options: ReturnType<typeof parseOptions>,
+ *   pin: { repository: string, revision: string },
+ *   inventory: readonly any[],
+ * }} context
+ */
+async function writeH0PromotionAndDeltas(context) {
+  const { deps, options, pin, inventory } = context;
+  if (options.pathsManifest === null || options.disposition === null) {
+    throw new Es2015AuditError('H0 promotion generation is not configured');
+  }
+  const [pathsManifestText, dispositionText, baselineTaxonomyText] =
+    await Promise.all([
+      deps.readFile(options.pathsManifest),
+      deps.readFile(options.disposition),
+      deps.readFile(options.baselineTaxonomy ?? ES2015_TAXONOMY_ARTIFACT),
+    ]);
+  const pathsManifest = JSON.parse(pathsManifestText);
+  const paths = sortedPathsManifestPaths(pathsManifest, options.pathsManifest);
+  const h0Inventory = inventory.filter((root) => paths.includes(root.path));
+  const promotion = buildEs2015Promotion({
+    sourceTaxonomyText: baselineTaxonomyText,
+    dispositionText,
+    pin,
+    inventory: h0Inventory,
+  });
+  const promotionText = `${JSON.stringify(promotion, null, 2)}\n`;
+
+  if (options.writePromotion !== null) {
+    await deps.writeFile(options.writePromotion, promotionText);
+  }
+  if (options.writeOwnerDeltas !== null) {
+    const afterTaxonomyText = renderTaxonomyWithH0Disposition(
+      baselineTaxonomyText,
+      JSON.parse(dispositionText),
+    );
+    const ownerDeltas = buildEs2015H0OwnerDeltas({
+      beforeTaxonomyText: baselineTaxonomyText,
+      afterTaxonomyText,
+      dispositionText,
+      promotionText,
+    });
+    assertExactH0DispositionDelta({
+      before: baselineTaxonomyText,
+      after: afterTaxonomyText,
+      disposition: dispositionText,
+      promotion: promotionText,
+      ownerDeltas,
+    });
+    await deps.writeFile(
+      options.writeOwnerDeltas,
+      `${JSON.stringify(ownerDeltas, null, 2)}\n`,
+    );
+  }
+}
+
+/** @param {any} record */
+function normalizeH0ExecutionRecord(record) {
+  const value = /** @type {any} */ (record);
+  return {
+    type: value?.type,
+    file: value?.file,
+    variant: value?.variant,
+    status: value?.status,
+    ...(value?.reason === undefined ? {} : { reason: value.reason }),
+    ...(value?.message === undefined ? {} : { message: value.message }),
+  };
+}
+
+/** @param {any} pathsManifest @param {string} label */
+function sortedPathsManifestPaths(pathsManifest, label) {
+  if (
+    typeof pathsManifest !== 'object' ||
+    pathsManifest === null ||
+    !Array.isArray(pathsManifest.paths)
+  ) {
+    throw new Es2015AuditError(`${label} must contain a paths array`);
+  }
+  const paths = sortStrings([...pathsManifest.paths]);
+  if (
+    paths.some((path) => typeof path !== 'string') ||
+    !sameStrings(pathsManifest.paths, paths) ||
+    new Set(paths).size !== paths.length
+  ) {
+    throw new Es2015AuditError(`${label} paths must be sorted and unique`);
+  }
+  return paths;
+}
+
+/** @param {string} taxonomyText */
+function taxonomyFeaturesByPath(taxonomyText) {
+  const taxonomy = JSON.parse(taxonomyText);
+  if (!Array.isArray(taxonomy.classifications)) {
+    throw new Es2015AuditError(`${ES2015_TAXONOMY_ARTIFACT} is invalid`);
+  }
+  const features = new Map();
+  for (const entry of taxonomy.classifications) {
+    if (typeof entry?.path === 'string') {
+      features.set(entry.path, sortStrings([...(entry.features ?? [])]));
+    }
+  }
+  return features;
+}
+
+/**
+ * @param {string} taxonomyText
+ * @param {any} disposition
+ */
+function renderTaxonomyWithH0Disposition(taxonomyText, disposition) {
+  const taxonomy = JSON.parse(taxonomyText);
+  const dispositions = new Map(
+    disposition.dispositions.map((/** @type {any} */ entry) => [
+      entry.path,
+      entry,
+    ]),
+  );
+  taxonomy.classifications = taxonomy.classifications.map((/** @type {any} */ entry) => {
+    const h0 = dispositions.get(entry.path);
+    if (h0 === undefined) {
+      return entry;
+    }
+    if (h0.status === 'passed') {
+      return {
+        ...entry,
+        status: 'selected-passing',
+        blocker: null,
+      };
+    }
+    return {
+      ...entry,
+      status: `blocked:${h0.primaryOwner.blocker}`,
+      blocker: h0.primaryOwner.blocker,
+    };
+  });
+  return `${JSON.stringify(taxonomy)}\n`;
 }
 
 /**
@@ -1606,6 +2091,8 @@ async function listFiles(directory, prefix = '') {
  *   subsetText: string, featuresText: string, reportText: string,
  *   auditEvidenceText: string,
  *   promotionText: string | null,
+ *   h0DispositionText?: string | null,
+ *   h0PromotionText?: string | null,
  *   classifications: readonly any[],
  * }} options
  */
@@ -1633,6 +2120,12 @@ function buildArtifact(options) {
       ...(options.promotionText === null
         ? {}
         : { promotionSha256: sha256(options.promotionText) }),
+      ...(options.h0DispositionText == null
+        ? {}
+        : { h0DispositionSha256: sha256(options.h0DispositionText) }),
+      ...(options.h0PromotionText == null
+        ? {}
+        : { h0PromotionSha256: sha256(options.h0PromotionText) }),
     },
     summary,
     statusTables: statusTables(options.classifications),

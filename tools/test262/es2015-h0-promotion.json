@@ -1,0 +1,342 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "sourceTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
+  "h0LedgerSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+  "h0RootCount": 135,
+  "h0VariantCount": 267,
+  "dispositionSha256": "9392c9e853308288af12761f9bb2ab0a14f4a85f221b0b68f347f884fd943b22",
+  "promotedLedgerSha256": "17d850eaf79e80f0260f8332a2bc594d3492bb286084c51e87f06cd6ec8853a7",
+  "promotedRootCount": 40,
+  "promotedVariantCount": 78,
+  "entries": [
+    {
+      "path": "test/built-ins/Array/length/define-own-prop-length-overflow-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-array.js",
+      "variants": 2,
+      "features": [
+        "Symbol.species",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Array/prototype/filter/create-proto-from-ctor-realm-array.js",
+      "variants": 2,
+      "features": [
+        "Symbol.species",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Array/prototype/map/create-proto-from-ctor-realm-array.js",
+      "variants": 2,
+      "features": [
+        "Symbol.species",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Array/prototype/slice/create-proto-from-ctor-realm-array.js",
+      "variants": 2,
+      "features": [
+        "Symbol.species",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/create-proto-from-ctor-realm-array.js",
+      "variants": 2,
+      "features": [
+        "Symbol.species",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Function/call-bind-this-realm-undef.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Function/call-bind-this-realm-value.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Function/internals/Call/class-ctor-realm.js",
+      "variants": 2,
+      "features": [
+        "class",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Function/prototype/apply/argarray-not-object-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Function/prototype/apply/this-not-callable-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/String/prototype/toString/non-generic-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/String/prototype/valueOf/non-generic-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/for/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/hasInstance/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.hasInstance",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/isConcatSpreadable/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.isConcatSpreadable",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/iterator/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.iterator",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/keyFor/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/match/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.match",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/replace/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.replace",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/search/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.search",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/species/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.species",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/split/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.split",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/toPrimitive/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.split",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/toStringTag/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.toStringTag",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Symbol/unscopables/cross-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol.unscopables",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/ThrowTypeError/distinct-cross-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/eval-code/indirect/realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/expressions/call/eval-realm-indirect.js",
+      "variants": 1,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/expressions/generators/eval-body-proto-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm",
+        "generators"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/expressions/new/non-ctor-err-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/expressions/tagged-template/cache-realm.js",
+      "variants": 2,
+      "features": [
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/global-code/script-decl-func-dups.js",
+      "variants": 2,
+      "features": [],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/global-code/script-decl-func.js",
+      "variants": 2,
+      "features": [],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/global-code/script-decl-lex-deletion.js",
+      "variants": 1,
+      "features": [],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/global-code/script-decl-lex-restricted-global.js",
+      "variants": 2,
+      "features": [],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/global-code/script-decl-lex.js",
+      "variants": 2,
+      "features": [],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/global-code/script-decl-var-collision.js",
+      "variants": 2,
+      "features": [],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/global-code/script-decl-var.js",
+      "variants": 2,
+      "features": [],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/language/types/reference/get-value-prop-base-primitive-realm.js",
+      "variants": 2,
+      "features": [
+        "Symbol",
+        "cross-realm"
+      ],
+      "includeFeatures": []
+    }
+  ]
+}

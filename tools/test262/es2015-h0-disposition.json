@@ -1,0 +1,4572 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "sourceTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
+  "h0LedgerSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+  "h0RootCount": 135,
+  "h0VariantCount": 267,
+  "executionEvidenceSha256": "22b80429109136a0686bf845c83c01ccd8b23b5d05fec891872ef83160f84de6",
+  "ownerMapSha256": "d50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b",
+  "passedRootCount": 40,
+  "passedVariantCount": 79,
+  "completePassedVariantCount": 78,
+  "reassignedRootCount": 95,
+  "reassignedVariantCount": 188,
+  "dispositions": [
+    {
+      "path": "test/built-ins/Array/from/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/length/define-own-prop-length-overflow-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/of/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/proto-from-ctor-realm-one.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/proto-from-ctor-realm-two.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/proto-from-ctor-realm-zero.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-array.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-non-array.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Object.getPrototypeOf(array.concat()) returns CustomCtor.prototype Expected SameValue(«», «[object Object]») to be true"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Object.getPrototypeOf(array.concat()) returns CustomCtor.prototype Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Object.getPrototypeOf(array.concat()) returns CustomCtor.prototype Expected SameValue(«», «[object Object]») to be true"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Object.getPrototypeOf(array.concat()) returns CustomCtor.prototype Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Object.getPrototypeOf(array.concat()) returns CustomCtor.prototype Expected SameValue(«», «[object Object]») to be true"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/filter/create-proto-from-ctor-realm-array.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/filter/create-proto-from-ctor-realm-non-array.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/map/create-proto-from-ctor-realm-array.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/map/create-proto-from-ctor-realm-non-array.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/slice/create-proto-from-ctor-realm-array.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/slice/create-proto-from-ctor-realm-non-array.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/create-proto-from-ctor-realm-array.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/create-proto-from-ctor-realm-non-array.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected SameValue(«», «[object Object]») to be true",
+          "signature": "unexpected-throw:guest object with message: Expected SameValue(«», «[object Object]») to be true"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/ArrayBuffer/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "B0",
+        "issue": 87,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: ArrayBuffer is not defined",
+          "signature": "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: ArrayBuffer is not defined",
+          "signature": "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Boolean/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/DataView/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "B0",
+        "issue": 87,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "B1",
+            "issue": 88,
+            "blocker": "binary-data-and-typed-arrays",
+            "title": "Implement ES2015 DataView"
+          },
+          "signature": "dataview-constructor-depends-on-arraybuffer-data-blocks"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: ArrayBuffer is not defined",
+          "signature": "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: ArrayBuffer is not defined",
+          "signature": "unexpected-throw:guest object with message: ArrayBuffer is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Date/proto-from-ctor-realm-one.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Date/proto-from-ctor-realm-two.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Date/proto-from-ctor-realm-zero.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Error/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/call-bind-this-realm-undef.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/call-bind-this-realm-value.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/internals/Call/class-ctor-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/internals/Construct/base-ctor-revoked-proxy-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "ordinary-construct-internal-method-prerequisite"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/internals/Construct/derived-return-val-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "G0",
+        "issue": 96,
+        "blocker": "remaining-language-runtime-semantics",
+        "title": "Complete remaining core ES2015 language runtime semantics"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected a TypeError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "cross-realm-error-constructor-identity"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: Expected a TypeError but got a different error constructor with the same name"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: Expected a TypeError but got a different error constructor with the same name"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/internals/Construct/derived-this-uninitialized-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "G0",
+        "issue": 96,
+        "blocker": "remaining-language-runtime-semantics",
+        "title": "Complete remaining core ES2015 language runtime semantics"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected a ReferenceError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "cross-realm-error-constructor-identity"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected a ReferenceError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: Expected a ReferenceError but got a different error constructor with the same name"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected a ReferenceError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: Expected a ReferenceError but got a different error constructor with the same name"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/proto-from-ctor-realm-prototype.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/prototype/apply/argarray-not-object-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/prototype/apply/this-not-callable-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/prototype/bind/get-fn-realm-recursive.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/prototype/bind/get-fn-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Function/prototype/bind/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/GeneratorFunction/proto-from-ctor-realm-prototype.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "G0",
+        "issue": 96,
+        "blocker": "remaining-language-runtime-semantics",
+        "title": "Complete remaining core ES2015 language runtime semantics"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/GeneratorFunction/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "G0",
+        "issue": 96,
+        "blocker": "remaining-language-runtime-semantics",
+        "title": "Complete remaining core ES2015 language runtime semantics"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/replacer-array-proxy-revoked-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "L2",
+            "issue": 95,
+            "blocker": "remaining-standard-library-additions",
+            "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+          },
+          "signature": "json-stringify-consumes-proxy-revocation-semantics"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Map/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "C0",
+        "issue": 83,
+        "blocker": "keyed-collections",
+        "title": "Implement the ordered collection kernel and ES2015 Map"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Map is not defined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Map is not defined",
+          "signature": "unexpected-throw:guest object with message: Map is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Map is not defined",
+          "signature": "unexpected-throw:guest object with message: Map is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/NativeErrors/EvalError/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/NativeErrors/RangeError/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/NativeErrors/ReferenceError/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/NativeErrors/SyntaxError/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/NativeErrors/TypeError/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/NativeErrors/URIError/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Number/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L1",
+        "issue": 94,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 String, Number, and Math additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Object/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Promise/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/apply/arguments-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Proxy is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/apply/null-handler-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/apply/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/arguments-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Proxy is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/null-handler-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/return-not-object-throws-boolean-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/return-not-object-throws-null-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/return-not-object-throws-number-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/return-not-object-throws-string-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/return-not-object-throws-symbol-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/return-not-object-throws-undefined-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/trap-is-undefined-proto-from-cross-realm-newtarget.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Proxy is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/construct/trap-is-undefined-proto-from-newtarget-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Proxy is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/desc-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/null-handler-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/targetdesc-configurable-desc-not-configurable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-not-configurable-target-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/targetdesc-undefined-not-configurable-descriptor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/targetdesc-undefined-target-is-not-extensible-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/defineProperty/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/deleteProperty/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/get-fn-realm-recursive.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a constructor",
+          "signature": "unexpected-throw:guest object with message: expression is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a constructor",
+          "signature": "unexpected-throw:guest object with message: expression is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/get-fn-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a constructor",
+          "signature": "unexpected-throw:guest object with message: expression is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a constructor",
+          "signature": "unexpected-throw:guest object with message: expression is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/get/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/getOwnPropertyDescriptor/result-type-is-not-object-nor-undefined-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/getOwnPropertyDescriptor/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/getPrototypeOf/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/has/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/isExtensible/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/ownKeys/return-not-list-object-throws-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a constructor",
+          "signature": "unexpected-throw:guest object with message: expression is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a constructor",
+          "signature": "unexpected-throw:guest object with message: expression is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/ownKeys/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/preventExtensions/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/revocable/tco-fn-realm.js",
+      "status": "reassigned",
+      "variants": 1,
+      "requiredVariants": [
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Expected a TypeError but got a ReferenceError"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Expected a TypeError but got a ReferenceError",
+          "signature": "unexpected-throw:guest object with message: Expected a TypeError but got a ReferenceError"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/set/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Proxy/setPrototypeOf/trap-is-not-callable-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: OProxy is not a constructor"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "proxy-traps-require-complete-internal-method-contract"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: OProxy is not a constructor",
+          "signature": "unexpected-throw:guest object with message: OProxy is not a constructor"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/Symbol.split/splitter-proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R1",
+        "issue": 92,
+        "blocker": "symbol-protocol-dispatch",
+        "title": "Complete RegExp/String Symbol protocol integration"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "R0",
+            "issue": 91,
+            "blocker": "regexp-unicode-and-sticky",
+            "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+          },
+          "signature": "regexp-symbol-split-consumes-regexp-constructor-realm-semantics"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/global/cross-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/ignoreCase/cross-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/multiline/cross-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/source/cross-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name",
+          "signature": "unexpected-throw:guest object with message: cross-realm RegExp.prototype getter method against primary realm RegExp.prototype Expected a TypeError but got a different error constructor with the same name"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/sticky/cross-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/unicode/cross-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Cannot convert null or undefined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Cannot convert null or undefined",
+          "signature": "unexpected-throw:guest object with message: Cannot convert null or undefined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Set/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "C1",
+        "issue": 84,
+        "blocker": "keyed-collections",
+        "title": "Implement ES2015 Set and live collection iterators"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Set is not defined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Set is not defined",
+          "signature": "unexpected-throw:guest object with message: Set is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Set is not defined",
+          "signature": "unexpected-throw:guest object with message: Set is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/String/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "L1",
+        "issue": 94,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 String, Number, and Math additions"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/String/prototype/toString/non-generic-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/String/prototype/valueOf/non-generic-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/for/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/hasInstance/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/isConcatSpreadable/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/iterator/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/keyFor/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/match/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/replace/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/search/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/species/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/split/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/toPrimitive/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/toStringTag/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/Symbol/unscopables/cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/ThrowTypeError/distinct-cross-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/TypedArrayConstructors/ctors/buffer-arg/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "B2",
+        "issue": 89,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement integer-indexed exotica and TypedArray constructors"
+      },
+      "failureSignatures": [
+        "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "B0",
+            "issue": 87,
+            "blocker": "binary-data-and-typed-arrays",
+            "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+          },
+          "signature": "typedarray-constructors-consume-arraybuffer-data-blocks"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/TypedArrayConstructors/ctors/length-arg/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "B2",
+        "issue": 89,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement integer-indexed exotica and TypedArray constructors"
+      },
+      "failureSignatures": [
+        "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "B0",
+            "issue": 87,
+            "blocker": "binary-data-and-typed-arrays",
+            "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+          },
+          "signature": "typedarray-constructors-consume-arraybuffer-data-blocks"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/TypedArrayConstructors/ctors/no-args/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "B2",
+        "issue": 89,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement integer-indexed exotica and TypedArray constructors"
+      },
+      "failureSignatures": [
+        "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "B0",
+            "issue": 87,
+            "blocker": "binary-data-and-typed-arrays",
+            "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+          },
+          "signature": "typedarray-constructors-consume-arraybuffer-data-blocks"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/TypedArrayConstructors/ctors/object-arg/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "B2",
+        "issue": 89,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement integer-indexed exotica and TypedArray constructors"
+      },
+      "failureSignatures": [
+        "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "B0",
+            "issue": 87,
+            "blocker": "binary-data-and-typed-arrays",
+            "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+          },
+          "signature": "typedarray-constructors-consume-arraybuffer-data-blocks"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/TypedArrayConstructors/ctors/typedarray-arg/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "B2",
+        "issue": 89,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement integer-indexed exotica and TypedArray constructors"
+      },
+      "failureSignatures": [
+        "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "B0",
+            "issue": 87,
+            "blocker": "binary-data-and-typed-arrays",
+            "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+          },
+          "signature": "typedarray-constructors-consume-arraybuffer-data-blocks"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "harness-error",
+          "message": "include testTypedArray.js threw: guest object with message: Float64Array is not defined",
+          "signature": "harness-error:include testTypedArray.js threw: guest object with message: Float64Array is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/WeakMap/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "C2",
+        "issue": 85,
+        "blocker": "keyed-collections",
+        "title": "Implement ES2015 WeakMap and WeakSet with private weak storage"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: WeakMap is not defined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: WeakMap is not defined",
+          "signature": "unexpected-throw:guest object with message: WeakMap is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: WeakMap is not defined",
+          "signature": "unexpected-throw:guest object with message: WeakMap is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/built-ins/WeakSet/proto-from-ctor-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "C2",
+        "issue": 85,
+        "blocker": "keyed-collections",
+        "title": "Implement ES2015 WeakMap and WeakSet with private weak storage"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: WeakSet is not defined"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: WeakSet is not defined",
+          "signature": "unexpected-throw:guest object with message: WeakSet is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: WeakSet is not defined",
+          "signature": "unexpected-throw:guest object with message: WeakSet is not defined"
+        }
+      ]
+    },
+    {
+      "path": "test/language/eval-code/indirect/realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/expressions/call/eval-realm-indirect.js",
+      "status": "passed",
+      "variants": 1,
+      "requiredVariants": [
+        "non-strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/expressions/generators/eval-body-proto-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/expressions/new/non-ctor-err-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/expressions/super/realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "G0",
+        "issue": 96,
+        "blocker": "remaining-language-runtime-semantics",
+        "title": "Complete remaining core ES2015 language runtime semantics"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: expression is not a function"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: expression is not a function",
+          "signature": "unexpected-throw:guest object with message: expression is not a function"
+        }
+      ]
+    },
+    {
+      "path": "test/language/expressions/tagged-template/cache-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-func-dups.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-func.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-lex-deletion.js",
+      "status": "passed",
+      "variants": 1,
+      "requiredVariants": [
+        "non-strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-lex-restricted-global.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-lex-var-declared-via-eval.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "P1",
+        "issue": 78,
+        "blocker": "early-errors-and-declaration-instantiation",
+        "title": "Complete core ES2015 early errors and declaration instantiation"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Identifier 'test262Var' has already been declared"
+      ],
+      "secondaryEvidence": [],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Identifier 'test262Var' has already been declared",
+          "signature": "unexpected-throw:guest object with message: Identifier 'test262Var' has already been declared"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-lex.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-var-collision.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/global-code/script-decl-var.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/types/reference/get-value-prop-base-primitive-realm.js",
+      "status": "passed",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "passed"
+        },
+        {
+          "variant": "strict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "test/language/types/reference/put-value-prop-base-primitive-realm.js",
+      "status": "reassigned",
+      "variants": 2,
+      "requiredVariants": [
+        "non-strict",
+        "strict"
+      ],
+      "primaryOwner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "failureSignatures": [
+        "unexpected-throw:guest object with message: Proxy is not defined"
+      ],
+      "secondaryEvidence": [
+        {
+          "owner": {
+            "code": "M0",
+            "issue": 79,
+            "blocker": "proxy-and-reflect-metaobject",
+            "title": "Formalize the ES2015 object internal-method contract"
+          },
+          "signature": "ordinary-set-internal-method-prerequisite"
+        }
+      ],
+      "evidence": [
+        {
+          "variant": "non-strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        },
+        {
+          "variant": "strict",
+          "status": "failed",
+          "reason": "unexpected-throw",
+          "message": "guest object with message: Proxy is not defined",
+          "signature": "unexpected-throw:guest object with message: Proxy is not defined"
+        }
+      ]
+    }
+  ]
+}

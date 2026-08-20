@@ -247,6 +247,105 @@ const AUDIT_PROMOTION = JSON.stringify({
     },
   ],
 });
+const H0_AUDIT_PASSED_PATH = 'test/language/h0-passed.js';
+const H0_AUDIT_REASSIGNED_PATH = 'test/built-ins/Proxy/h0-failed.js';
+const H0_AUDIT_PATHS = Object.freeze([
+  H0_AUDIT_REASSIGNED_PATH,
+  H0_AUDIT_PASSED_PATH,
+]);
+const H0_AUDIT_TAXONOMY = `${JSON.stringify({
+  version: 3,
+  pin: {
+    repository: AUDIT_PIN.repository,
+    revision: AUDIT_PIN.revision,
+  },
+  classifications: [
+    {
+      path: H0_AUDIT_REASSIGNED_PATH,
+      variants: 2,
+      partition: 'core',
+      status: 'blocked:test262-cross-realm-host',
+      blocker: 'test262-cross-realm-host',
+      features: [],
+      flags: [],
+      includes: [],
+      provenance: ['es6id'],
+    },
+    {
+      path: H0_AUDIT_PASSED_PATH,
+      variants: 2,
+      partition: 'core',
+      status: 'blocked:test262-cross-realm-host',
+      blocker: 'test262-cross-realm-host',
+      features: ['cross-realm'],
+      flags: [],
+      includes: [],
+      provenance: ['feature:cross-realm'],
+    },
+  ],
+})}\n`;
+const H0_AUDIT_PATHS_MANIFEST = JSON.stringify({
+  version: 1,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  sourceTaxonomySha256: sha256(H0_AUDIT_TAXONOMY),
+  ledgerSha256: sha256(`${H0_AUDIT_PATHS.join('\n')}\n`),
+  rootCount: 2,
+  variantCount: 4,
+  paths: H0_AUDIT_PATHS,
+});
+const H0_AUDIT_OWNER_MAP = JSON.stringify({
+  version: 1,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  owners: [
+    {
+      code: 'M2',
+      issue: 81,
+      blocker: 'proxy-and-reflect-metaobject',
+      title: 'Implement ES2015 Proxy traps, revocation, and invariants',
+    },
+  ],
+  rules: [
+    {
+      name: 'proxy-ordinary-object-throw',
+      primaryOwner: 'M2',
+      pathPrefix: 'test/built-ins/Proxy/',
+      failureSignatures: ['unexpected-throw:Object'],
+      secondaryEvidence: [],
+    },
+  ],
+});
+const H0_AUDIT_RECORDS = Object.freeze([
+  {
+    type: 'test',
+    file: H0_AUDIT_REASSIGNED_PATH,
+    variant: 'non-strict',
+    status: 'failed',
+    reason: 'unexpected-throw',
+    message: 'Object',
+  },
+  {
+    type: 'test',
+    file: H0_AUDIT_REASSIGNED_PATH,
+    variant: 'strict',
+    status: 'failed',
+    reason: 'unexpected-throw',
+    message: 'Object',
+  },
+  {
+    type: 'test',
+    file: H0_AUDIT_PASSED_PATH,
+    variant: 'non-strict',
+    status: 'passed',
+  },
+  {
+    type: 'test',
+    file: H0_AUDIT_PASSED_PATH,
+    variant: 'strict',
+    status: 'passed',
+  },
+]);
 const AUDIT_COVERAGE_DOCUMENT = [
   '# Fixture coverage',
   '',
@@ -1141,6 +1240,87 @@ export default [
       );
       assertSame(error instanceof Es2015AuditError, true);
       assertSame(error.message.includes('does not match'), true);
+    },
+  },
+  {
+    name: 'ES2015 audit writes H0 disposition, pass-only promotion, and owner deltas from exact focused evidence',
+    run: async () => {
+      /** @type {readonly string[] | undefined} */
+      let executedPaths;
+      const roots = new Map([
+        ...AUDIT_ROOTS,
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const dependencies = auditDependencies({
+        roots,
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+        ]),
+        runPromotion: async ({ paths }) => {
+          executedPaths = paths;
+          return H0_AUDIT_RECORDS;
+        },
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--owner-map=tools/test262/es2015-h0-owner-map.json',
+            '--write-disposition=tools/test262/es2015-h0-disposition.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      assertSame(JSON.stringify(executedPaths), JSON.stringify(H0_AUDIT_PATHS));
+      assertSame(dependencies.writes.includes(AUDIT_PATH), false);
+
+      const dispositionText = fixtureOutput(
+        dependencies,
+        'tools/test262/es2015-h0-disposition.json',
+      );
+      const disposition = JSON.parse(dispositionText);
+      assertSame(disposition.h0RootCount, 2);
+      assertSame(disposition.h0VariantCount, 4);
+      assertSame(disposition.passedRootCount, 1);
+      assertSame(disposition.reassignedRootCount, 1);
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--disposition=tools/test262/es2015-h0-disposition.json',
+            '--promotion-file=tools/test262/es2015-h0-promotion.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      const promotion = JSON.parse(
+        fixtureOutput(dependencies, 'tools/test262/es2015-h0-promotion.json'),
+      );
+      const ownerDeltas = JSON.parse(
+        fixtureOutput(dependencies, 'tools/test262/es2015-h0-owner-deltas.json'),
+      );
+      assertSame(promotion.h0RootCount, 2);
+      assertSame(promotion.h0VariantCount, 4);
+      assertSame(promotion.promotedRootCount, 1);
+      assertSame(promotion.promotedVariantCount, 2);
+      assertSame(promotion.entries[0].path, H0_AUDIT_PASSED_PATH);
+      assertSame(ownerDeltas.crossRealm.removedRoots, 2);
+      assertSame(ownerDeltas.crossRealm.remainingRoots, 0);
     },
   },
   {

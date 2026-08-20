@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "h0LedgerSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+  "dispositionSha256": "9392c9e853308288af12761f9bb2ab0a14f4a85f221b0b68f347f884fd943b22",
+  "promotionSha256": "bab2ee18c7b8e660f7a5feef56d0e14f129e590dd615c1f344ff7f21303a448e",
+  "trackingIssue": 70,
+  "crossRealm": {
+    "blocker": "test262-cross-realm-host",
+    "removedRoots": 135,
+    "removedVariants": 267,
+    "remainingRoots": 0,
+    "remainingVariants": 0
+  },
+  "deltas": [
+    {
+      "owner": {
+        "code": "H0",
+        "issue": 76,
+        "blocker": "test262-cross-realm-host",
+        "title": "Implement portable harness-only Test262 cross-Realm support"
+      },
+      "direction": "removed",
+      "roots": 135,
+      "variants": 267,
+      "pathsSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950"
+    },
+    {
+      "owner": {
+        "code": "B0",
+        "issue": 87,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+      },
+      "direction": "added",
+      "roots": 2,
+      "variants": 4,
+      "pathsSha256": "edea7f4aa74231aedad8cc01d907767f75d63f775fcd63a13caf1ad5d55b51e5"
+    },
+    {
+      "owner": {
+        "code": "B2",
+        "issue": 89,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement integer-indexed exotica and TypedArray constructors"
+      },
+      "direction": "added",
+      "roots": 5,
+      "variants": 10,
+      "pathsSha256": "e8a9a7396b029a5f72ded88e736392747ea692ffe8ffced897f1e38303a13f1c"
+    },
+    {
+      "owner": {
+        "code": "C0",
+        "issue": 83,
+        "blocker": "keyed-collections",
+        "title": "Implement the ordered collection kernel and ES2015 Map"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "pathsSha256": "b5b569f2db6a20a2e5b1aa26b305920dc7bea2952ec4b9bb649cb2f53348fa06"
+    },
+    {
+      "owner": {
+        "code": "C1",
+        "issue": 84,
+        "blocker": "keyed-collections",
+        "title": "Implement ES2015 Set and live collection iterators"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "pathsSha256": "1c06f01b93d6be694366be4d0e987a39a9fba0996b9acdb191a122fc60b2dd84"
+    },
+    {
+      "owner": {
+        "code": "C2",
+        "issue": 85,
+        "blocker": "keyed-collections",
+        "title": "Implement ES2015 WeakMap and WeakSet with private weak storage"
+      },
+      "direction": "added",
+      "roots": 2,
+      "variants": 4,
+      "pathsSha256": "248aebee124bb45894839e5638f44398b33083da59dc53929ae34ee29a7af6a0"
+    },
+    {
+      "owner": {
+        "code": "G0",
+        "issue": 96,
+        "blocker": "remaining-language-runtime-semantics",
+        "title": "Complete remaining core ES2015 language runtime semantics"
+      },
+      "direction": "added",
+      "roots": 5,
+      "variants": 10,
+      "pathsSha256": "f4a9cfead2e3b892f728fff6a3c1bedd89435d1d86b62d8b473cb720d0d087c1"
+    },
+    {
+      "owner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "direction": "added",
+      "roots": 11,
+      "variants": 22,
+      "pathsSha256": "666d80434aaeee949f774fa14fb7105eaea5442d10a6dcd5675367e14842ea48"
+    },
+    {
+      "owner": {
+        "code": "L1",
+        "issue": 94,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 String, Number, and Math additions"
+      },
+      "direction": "added",
+      "roots": 2,
+      "variants": 4,
+      "pathsSha256": "b3cc497bc61615929f842601f1f95a29e34cc382203fe5ad9e68e2e2d4b72e33"
+    },
+    {
+      "owner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "direction": "added",
+      "roots": 17,
+      "variants": 34,
+      "pathsSha256": "8426899dc521b32170e3bea64f9a8e368562e0cc75eb4d0df08a55d37d171c4d"
+    },
+    {
+      "owner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "direction": "added",
+      "roots": 40,
+      "variants": 79,
+      "pathsSha256": "b6c0ff16fde3dffbf58384105f6bd718f48470e4832c5a9077778e1508680766"
+    },
+    {
+      "owner": {
+        "code": "P1",
+        "issue": 78,
+        "blocker": "early-errors-and-declaration-instantiation",
+        "title": "Complete core ES2015 early errors and declaration instantiation"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "pathsSha256": "80c9e4c41001ea0382bea315dab951927f670b5c9c32ba2db7dea6e509bd1aee"
+    },
+    {
+      "owner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "direction": "added",
+      "roots": 7,
+      "variants": 14,
+      "pathsSha256": "26c700ec8285dad07875cf02a977f25131e6432e26cae9ded5e8bd628edc2b5a"
+    },
+    {
+      "owner": {
+        "code": "R1",
+        "issue": 92,
+        "blocker": "symbol-protocol-dispatch",
+        "title": "Complete RegExp/String Symbol protocol integration"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "pathsSha256": "155de047e0673869076931fb2451546798fc0821634eff4a206a3a685459287f"
+    }
+  ],
+  "promotionGroup": "es2015/h0-cross-realm-passed"
+}
