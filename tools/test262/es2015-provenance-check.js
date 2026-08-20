@@ -19,6 +19,13 @@ const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
+const PROVENANCE_RANGE_GATE_OWNER_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+  ES2015_PROVENANCE_FILE,
+]);
 const PRIMARY_OPTION_LABEL =
   'Exactly one of --initialize, --check, --check-range, --render-ledger=CODE, or --render-issue=CODE is required';
 const ISSUE_RENDER_CODES = Object.freeze([
@@ -481,7 +488,7 @@ async function checkRange(deps, options) {
     );
   }
   const changes = parseRangeChanges(await deps.gitDiff(base, head));
-  const marker = markerForRange(deps, options, changes);
+  const marker = await markerForRange(deps, options, changes, base, head);
   if (marker === null) return;
 
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
@@ -549,8 +556,10 @@ function explicitCommitSha(value, option) {
  * @param {ProvenanceCheckDependencies} deps
  * @param {{ rangeProfile: string | null, rangeMarker: string | null, prBodyEnvironment: string | null }} options
  * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ * @param {string} base
+ * @param {string} head
  */
-function markerForRange(deps, options, changes) {
+async function markerForRange(deps, options, changes, base, head) {
   if (options.prBodyEnvironment === null) {
     const parsed = parseProvenanceRangeMarker(
       /** @type {string} */ (options.rangeMarker),
@@ -582,7 +591,7 @@ function markerForRange(deps, options, changes) {
     .split(/\r?\n/u)
     .filter((line) => line.includes('es2015-provenance-pr'));
   if (markerLines.length === 0) {
-    if (changes.some((change) => provenanceOwnedRangePath(change.path))) {
+    if (await provenanceOwnedRange(deps, changes, base, head)) {
       throw new Es2015ProvenanceCheckError(
         'A provenance-owned PR range requires one authoritative provenance marker',
       );
@@ -616,14 +625,37 @@ function provenanceRangeMarker(profile, baseLedgerSha256) {
   return `<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:${profile} base-ledger-sha256:${baseLedgerSha256} -->`;
 }
 
-/** @param {string} path */
-function provenanceOwnedRangePath(path) {
-  return (
-    path.startsWith('tools/test262/es2015-provenance') ||
-    path ===
-      'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md' ||
-    path === 'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md'
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ * @param {string} base
+ * @param {string} head
+ */
+async function provenanceOwnedRange(deps, changes, base, head) {
+  const changedPaths = changes.flatMap((change) =>
+    change.sourcePath === null
+      ? [change.path]
+      : [change.sourcePath, change.path],
   );
+  const gateOwnerPaths = new Set(PROVENANCE_RANGE_GATE_OWNER_PATHS);
+  if (changedPaths.some((path) => gateOwnerPaths.has(path))) return true;
+
+  const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
+  const manifestText =
+    baseManifestText ?? (await deps.readGitFile(head, ES2015_PROVENANCE_FILE));
+  if (manifestText === null) return false;
+  const manifest = parseRangeManifest(
+    manifestText,
+    baseManifestText === null
+      ? 'provenance ownership head'
+      : 'provenance ownership base',
+  );
+  const ownedPaths = new Set(gateOwnerPaths);
+  for (const profile of manifest.rangeProfiles) {
+    for (const path of profile.allowedPaths) ownedPaths.add(path);
+    for (const path of profile.allowedDeletions) ownedPaths.add(path);
+  }
+  return changedPaths.some((path) => ownedPaths.has(path));
 }
 
 /** @param {string} text */
@@ -746,19 +778,21 @@ async function validateRangeContent(deps, head, manifest, profile) {
   }
   if (profile.decisionFragment !== null) {
     const code = profile.name.slice('decision:'.length);
-    const text = await readRequiredGitFile(
-      deps,
-      head,
-      profile.decisionFragment,
-    );
-    const fragment = parseEs2015DecisionFragment(text, code);
-    if (text !== renderJson(fragment) || fragment.decisions.length === 0) {
-      throw new Es2015ProvenanceCheckError(
-        `${profile.name} range requires one canonical non-empty source fragment`,
-      );
+    const fragments = new Map();
+    for (const fragmentCode of ES2015_PROVENANCE_DECISION_CODES) {
+      const path = decisionFragmentPath(fragmentCode);
+      const text = await readRequiredGitFile(deps, head, path);
+      const fragment = parseEs2015DecisionFragment(text, fragmentCode);
+      if (text !== renderJson(fragment)) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile.name} range requires an exact canonical decision fragment at ${path}`,
+        );
+      }
+      fragments.set(fragmentCode, fragment);
     }
-    validateDecisionFragments(manifest, new Map([[code, fragment]]), {
-      allowPendingReview: true,
+    validateDecisionFragments(manifest, fragments, {
+      allowPendingReview: false,
+      requireCompleteCodes: [code],
     });
   }
 }

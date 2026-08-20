@@ -427,6 +427,40 @@ function completePendingDecisionFragmentText(manifest, code) {
   )}\n`;
 }
 
+/** @param {ProvenanceManifest} manifest @param {string} code */
+function completeReviewedDecisionFragmentText(manifest, code) {
+  const batch = manifest.batches.find((entry) => entry.code === code);
+  if (batch === undefined) {
+    throw new Error(`expected production manifest batch ${code}`);
+  }
+  const decisions = batch.entries.map((entry) => {
+    const decision = {
+      ...decisionWithoutHash(),
+      path: entry.path,
+      variants: entry.variants,
+      priorClass: entry.priorClass,
+    };
+    return {
+      ...decision,
+      artifactSha256: canonicalDecisionSha256(decision),
+    };
+  });
+  return `${JSON.stringify(
+    {
+      version: manifest.version,
+      taxonomyBaseline: manifest.taxonomyBaseline,
+      repository: manifest.repository,
+      revision: manifest.revision,
+      specification: manifest.specification,
+      parent: manifest.parent,
+      code,
+      decisions,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 /** @param {ProvenanceBatch} batch */
 function refreshBatchLedger(batch) {
   batch.rootCount = batch.entries.length;
@@ -2947,11 +2981,10 @@ export default [
       );
 
       const decisionFragmentPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`;
-      const decisionFragmentText = `${JSON.stringify(
-        productionDecisionFragmentValue(),
-        null,
-        2,
-      )}\n`;
+      const decisionFragmentText = completeReviewedDecisionFragmentText(
+        productionManifest(),
+        'UL3',
+      );
       assertSame(
         await provenanceCheck(
           rangeArguments('decision:UL3'),
@@ -2966,6 +2999,69 @@ export default [
         ),
         0,
       );
+    },
+  },
+  {
+    name: 'ES2015 provenance decision ranges require one exact complete strictly reviewed batch',
+    run: async () => {
+      const manifest = productionManifest();
+      const decisionFragmentPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL3.json`;
+      const complete = JSON.parse(
+        completeReviewedDecisionFragmentText(manifest, 'UL3'),
+      );
+      const partial = {
+        ...complete,
+        decisions: complete.decisions.slice(0, 1),
+      };
+      const otherFragmentPath = `${PROVENANCE_DECISIONS_DIRECTORY}/UL2.json`;
+      const wrongCode = JSON.parse(emptyDecisionFragmentText(manifest, 'UL2'));
+      wrongCode.code = 'UL3';
+      const scenarios = [
+        {
+          files: new Map([
+            [decisionFragmentPath, `${JSON.stringify(partial, null, 2)}\n`],
+          ]),
+          message: 'UL3 must contain reviewed decisions for every ledger path',
+        },
+        {
+          files: new Map([
+            [
+              decisionFragmentPath,
+              completePendingDecisionFragmentText(manifest, 'UL3'),
+            ],
+          ]),
+          message: `UL3 decision for ${complete.decisions[0].path} review.reviewer must not be pending in strict validation`,
+        },
+        {
+          files: new Map([
+            [
+              decisionFragmentPath,
+              completeReviewedDecisionFragmentText(manifest, 'UL3'),
+            ],
+            [otherFragmentPath, `${JSON.stringify(wrongCode, null, 2)}\n`],
+          ]),
+          message: 'UL2 decision fragment must retain code UL2',
+        },
+      ];
+      for (const scenario of scenarios) {
+        const error = await rejected(() =>
+          provenanceCheck(
+            rangeArguments('decision:UL3'),
+            rangeCheckDependencies({
+              changes: [
+                { status: 'M', path: decisionFragmentPath },
+                {
+                  status: 'M',
+                  path: 'tools/test262/es2015-taxonomy.json',
+                },
+              ],
+              baseHasFoundation: true,
+              headFiles: scenario.files,
+            }),
+          ),
+        );
+        assertSame(error.message, scenario.message);
+      }
     },
   },
   {
@@ -3227,6 +3323,98 @@ export default [
           .message,
         'A provenance-owned PR range requires one authoritative provenance marker',
       );
+
+      for (const path of [
+        ...new Set([...FOUNDATION_ALLOWED_PATHS, ...DECISION_GENERATED_PATHS]),
+      ]) {
+        const unmarked = rangeCheckDependencies({
+          changes: [{ status: 'M', path }],
+        });
+        unmarked.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: 'No marker',
+        };
+        assertSame(
+          (await rejected(() => provenanceCheck(ciArgs, unmarked))).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+          path,
+        );
+      }
+
+      for (const changes of [
+        [
+          { status: 'M', path: '.github/workflows/ci.yml' },
+          { status: 'M', path: 'tools/ci/pipeline.js' },
+        ],
+        [{ status: 'M', path: 'tools/test262/es2015-audit.js' }],
+        [
+          {
+            status: 'R100',
+            sourcePath:
+              'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+            path: 'docs/renamed-design.md',
+          },
+        ],
+        [
+          {
+            status: 'R100',
+            sourcePath: 'docs/unowned.md',
+            path: 'docs/testing.md',
+          },
+        ],
+        [
+          {
+            status: 'C100',
+            sourcePath: 'tools/test262/es2015-taxonomy.js',
+            path: 'docs/copied-taxonomy.js',
+          },
+        ],
+      ]) {
+        const unmarked = rangeCheckDependencies({ changes });
+        unmarked.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: 'No marker',
+        };
+        assertSame(
+          (await rejected(() => provenanceCheck(ciArgs, unmarked))).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+        );
+      }
+
+      for (const scenario of [
+        {
+          change: {
+            status: 'R100',
+            sourcePath:
+              'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+            path: 'docs/renamed-design.md',
+          },
+          message:
+            'foundation range forbids rename docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md -> docs/renamed-design.md',
+        },
+        {
+          change: {
+            status: 'C100',
+            sourcePath: 'tools/test262/es2015-taxonomy.js',
+            path: 'docs/copied-taxonomy.js',
+          },
+          message:
+            'foundation range forbids copy tools/test262/es2015-taxonomy.js -> docs/copied-taxonomy.js',
+        },
+      ]) {
+        const marked = rangeCheckDependencies({ changes: [scenario.change] });
+        marked.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: rangeMarker('foundation'),
+        };
+        assertSame(
+          (await rejected(() => provenanceCheck(ciArgs, marked))).message,
+          scenario.message,
+        );
+      }
 
       const unmarkedUnrelated = rangeCheckDependencies({
         changes: [{ status: 'M', path: 'README.md' }],

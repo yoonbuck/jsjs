@@ -944,6 +944,14 @@ export default [
         'Check the ES2015 taxonomy and exact promotion',
       ]);
       assertProvenanceRangeStep(rangeCheck);
+      assertSame(
+        job.steps.some(
+          (/** @type {any} */ step) =>
+            typeof step.run === 'string' && step.run.includes('--complete='),
+        ),
+        false,
+        'the range step must derive the decision code and enforce completeness without a branch-controlled second command',
+      );
       const projectCheckout = checkouts.find(
         (step) => step.with?.repository === undefined,
       );
