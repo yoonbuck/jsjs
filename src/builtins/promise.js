@@ -1,4 +1,5 @@
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
+import { callCallable } from '../runtime/capabilities.js';
 import { toObject } from '../runtime/conversion.js';
 import { isCallable, isConstructor } from '../runtime/descriptors.js';
 import { getFunctionRealm } from '../runtime/function-realm.js';
@@ -58,13 +59,15 @@ export function createPromiseIntrinsics(realm) {
       const resolvingFunctions = createResolvingFunctions(promise, realm);
 
       try {
-        executor.callFunction(
+        callCallable(
+          executor,
           undefined,
           [resolvingFunctions.resolve, resolvingFunctions.reject],
           realm,
         );
       } catch (error) {
-        resolvingFunctions.reject.callFunction(
+        callCallable(
+          resolvingFunctions.reject,
           undefined,
           [abruptValue(realm, error)],
           realm,
@@ -134,7 +137,7 @@ export function createPromiseIntrinsics(realm) {
           );
         }
 
-        return then.callFunction(thisValue, [undefined, args[0]], realm);
+        return callCallable(then, thisValue, [undefined, args[0]], realm);
       },
     }),
   );
@@ -172,7 +175,7 @@ export function createPromiseIntrinsics(realm) {
         }
 
         const capability = newPromiseCapability(thisValue, realm);
-        capability.resolve.callFunction(undefined, [resolution], realm);
+        callCallable(capability.resolve, undefined, [resolution], realm);
         return capability.promise;
       },
     }),
@@ -192,7 +195,7 @@ export function createPromiseIntrinsics(realm) {
         }
 
         const capability = newPromiseCapability(thisValue, realm);
-        capability.reject.callFunction(undefined, [args[0]], realm);
+        callCallable(capability.reject, undefined, [args[0]], realm);
         return capability.promise;
       },
     }),
@@ -212,7 +215,8 @@ export function createPromiseIntrinsics(realm) {
         try {
           iteratorRecord = getIterator(realm, args[0]);
         } catch (error) {
-          resultCapability.reject.callFunction(
+          callCallable(
+            resultCapability.reject,
             undefined,
             [abruptValue(realm, error)],
             realm,
@@ -244,7 +248,8 @@ export function createPromiseIntrinsics(realm) {
         try {
           iteratorRecord = getIterator(realm, args[0]);
         } catch (error) {
-          resultCapability.reject.callFunction(
+          callCallable(
+            resultCapability.reject,
             undefined,
             [abruptValue(realm, error)],
             realm,

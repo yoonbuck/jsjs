@@ -15,6 +15,7 @@
 
 import { EngineObject } from '../runtime/object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
+import { callCallable, constructCallable } from '../runtime/capabilities.js';
 import { isConstructor } from '../runtime/descriptors.js';
 import { toInteger } from '../runtime/conversion.js';
 import { createDynamicFunction } from '../evaluator/dynamic-function.js';
@@ -51,7 +52,8 @@ class BoundFunction extends NativeFunction {
 
     if (isConstructor(target)) {
       construct = (args, _functionObject, newTarget, callerRealm) => {
-        const result = target.constructFunction(
+        const result = constructCallable(
+          target,
           combineArguments(boundArgs, args),
           newTarget === boundFunction ? target : newTarget,
           callerRealm ?? realm,
@@ -77,7 +79,8 @@ class BoundFunction extends NativeFunction {
       name: boundName,
       length,
       call(_thisValue, args, _functionObject, callerRealm) {
-        return target.callFunction(
+        return callCallable(
+          target,
           boundThis,
           combineArguments(boundArgs, args),
           callerRealm ?? realm,
@@ -237,7 +240,8 @@ export function createFunctionIntrinsics(realm) {
               {},
               realm,
             );
-      return target.callFunction(
+      return callCallable(
+        target,
         thisArgument,
         callArguments,
         callerRealm ?? realm,
@@ -260,7 +264,7 @@ export function createFunctionIntrinsics(realm) {
         callArguments.push(args[index]);
       }
 
-      return target.callFunction(args[0], callArguments, callerRealm ?? realm);
+      return callCallable(target, args[0], callArguments, callerRealm ?? realm);
     },
   );
   defineNativeMethod(realm, functionPrototype, 'bind', 1, (thisValue, args) => {

@@ -12,7 +12,8 @@ import {
   enterObjectOperationRealm,
   exitObjectOperationRealm,
 } from '../src/runtime/object.js';
-import { EngineArray } from '../src/runtime/array-object.js';
+import { EngineArray, isArrayObject } from '../src/runtime/array-object.js';
+import { createPrimitiveWrapper } from '../src/runtime/primitive-object.js';
 import * as objectOperations from '../src/runtime/object.js';
 import { ThrowSignal, GuestErrorSignal } from '../src/runtime/completion.js';
 import {
@@ -1511,6 +1512,135 @@ export default [
       assertSame(names.join(','), 'own,tail');
       assertSame(enumerateCalls, 1);
       assertSame(nextGets, 1);
+    },
+  },
+  {
+    name: 'array identity does not follow a diagnostic class name',
+    run() {
+      const fake = new EngineObject();
+      fake.getClassName = () => 'Array';
+      fake.defineOwnProperty('0', {
+        value: 'spoof',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(isArrayObject(fake), false);
+    },
+  },
+  {
+    name: 'current exotic public descriptors preserve Array, String, and Arguments behavior',
+    run() {
+      const realm = createRealm();
+      const array = new EngineArray(realm.intrinsics.arrayPrototype);
+
+      assertSame(
+        array.defineOwnProperty('2', {
+          value: 'third',
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        }),
+        true,
+      );
+      assertSame(array.get('length', array), 3);
+      assertSame(array.defineOwnProperty('length', { value: 1 }), true);
+      assertSame(array.get('length', array), 1);
+      assertSame(array.hasProperty('2'), false);
+
+      const string = createPrimitiveWrapper(realm, 'hi');
+      assertSame(string.get('0', string), 'h');
+      assertSame(string.hasProperty('1'), true);
+      assertSame(string.delete('0'), false);
+      assertSame(string.ownPropertyKeys().map(String).join(','), '0,1,length');
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'function mapped(a) {' +
+            'arguments[0] = 2;' +
+            'Object.defineProperty(arguments, "0", { writable: false });' +
+            'a = 3;' +
+            'var unmapped = arguments[0];' +
+            'delete arguments[0];' +
+            'return unmapped + ":" + typeof arguments[0] + ":" + a;' +
+            '} mapped(1);',
+        ).value,
+        '2:undefined:3',
+      );
+    },
+  },
+  {
+    name: 'semantic callers retain JSON mutation, language operators, and object reflection',
+    run() {
+      const realm = createRealm();
+      const revived = /** @type {EngineObject} */ (
+        evaluateScript(
+          realm,
+          'JSON.parse("[1,2]", function (key, value) {' +
+            'return key === "0" ? undefined : key === "1" ? 3 : value;' +
+            '});',
+        ).value
+      );
+
+      assertSame(revived.get('length', revived), 2);
+      assertSame(revived.hasProperty('0'), false);
+      assertSame(revived.get('1', revived), 3);
+      assertSame(
+        evaluateScript(
+          realm,
+          'var proto = { inherited: 1 };' +
+            'var object = Object.create(proto);' +
+            'object.own = 2;' +
+            'var withValue;' +
+            'with (object) { withValue = inherited + own; }' +
+            'var C = function C() {};' +
+            'var instance = new C();' +
+            'var before = Object.isExtensible(object);' +
+            'Object.preventExtensions(object);' +
+            'var ownDescriptor = Object.getOwnPropertyDescriptor(object, "own").value;' +
+            '("inherited" in object) + ":" + withValue + ":" + ' +
+            '(instance instanceof C) + ":" + before + ":" + ' +
+            'Object.isExtensible(object) + ":" + ownDescriptor + ":" + ' +
+            'Reflect.ownKeys(object).join(",");',
+        ).value,
+        'true:3:true:true:false:2:own',
+      );
+    },
+  },
+  {
+    name: 'evaluator calls and construction retain native callable behavior',
+    run() {
+      const realm = createRealm();
+      const native = realm.createNativeFunction({
+        name: 'native',
+        length: 1,
+        call(_thisValue, args) {
+          return /** @type {number} */ (args[0]) + 1;
+        },
+        construct(args) {
+          const instance = new EngineObject(realm.intrinsics.objectPrototype);
+          instance.defineOwnProperty('value', {
+            value: args[0],
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          return instance;
+        },
+      });
+      realm.globalObject.defineOwnProperty('native', {
+        value: native,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(
+        evaluateScript(realm, 'native(4) + ":" + (new native(6)).value;').value,
+        '5:6',
+      );
     },
   },
 ];

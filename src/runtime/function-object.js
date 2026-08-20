@@ -726,29 +726,6 @@ export class ArgumentsObject extends EngineObject {
   }
 
   /**
-   * Overrides `_peekOwnDescriptor` to inject the live parameter-binding value
-   * for mapped argument indices. The ordinary descriptor is detached before a
-   * live value is substituted, so callers cannot mutate stored metadata.
-   *
-   * @param {import('./descriptors.js').PropertyKey} name
-   * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
-   */
-  _peekOwnDescriptor(name) {
-    const raw = ordinaryGetOwnProperty(this, name);
-    if (raw === undefined) {
-      return undefined;
-    }
-    const parameterName = this._parameterMap.get(name);
-    if (parameterName === undefined) {
-      return raw;
-    }
-    return {
-      ...raw,
-      value: this._environment.getBindingValue(parameterName, false),
-    };
-  }
-
-  /**
    * @param {import('./descriptors.js').PropertyKey} name
    * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
    */

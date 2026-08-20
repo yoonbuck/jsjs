@@ -6,6 +6,7 @@ import {
   setPrototypeOfOrThrow,
 } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { callCallable } from '../runtime/capabilities.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isDataDescriptor } from '../runtime/descriptors.js';
 import { toObject, toPropertyKey } from '../runtime/conversion.js';
@@ -131,7 +132,7 @@ export function createObjectIntrinsics(realm) {
           object.get('toString', object),
           'toString is not callable',
         );
-        return method.callFunction(object, [], realm);
+        return callCallable(method, object, [], realm);
       },
     }),
   );

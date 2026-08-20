@@ -38,34 +38,6 @@ function assertGuestTypeError(body) {
 }
 
 /**
- * @param {object} target
- * @param {import('../src/runtime/descriptors.js').PropertyKey} name
- * @param {string} message
- * @returns {import('../src/runtime/descriptors.js').CompletePropertyDescriptor}
- */
-function peekOwnDescriptor(target, name, message) {
-  // Raw descriptors must be reacquired after mutation; do not retain them.
-  const peek =
-    /** @type {{ _peekOwnDescriptor?: (name: import('../src/runtime/descriptors.js').PropertyKey) => import('../src/runtime/descriptors.js').CompletePropertyDescriptor | undefined }} */ (
-      target
-    )._peekOwnDescriptor;
-  if (typeof peek !== 'function') {
-    assertSame(typeof peek, 'function', message);
-    throw new Error('unreachable');
-  }
-  const descriptor = peek.call(target, name);
-  if (descriptor === undefined) {
-    assertSame(
-      descriptor === undefined,
-      false,
-      `${message}: missing ${String(name)}`,
-    );
-    throw new Error('unreachable');
-  }
-  return descriptor;
-}
-
-/**
  * @param {import('../src/runtime/realm.js').Realm} realm
  * @param {string} source
  * @returns {unknown}
@@ -109,14 +81,7 @@ const tests = [
         2,
       );
       assertSame(object.ownPropertyKeys()[0], key);
-      assertSame(
-        peekOwnDescriptor(
-          object,
-          key,
-          'the raw symbol-key descriptor should keep the stored value after public descriptor mutation',
-        ).value,
-        2,
-      );
+      assertSame(object.get(key, object), 2);
     },
   },
   {
@@ -134,36 +99,15 @@ const tests = [
         JSON.stringify(object.ownPropertyKeys().map(String)),
         '["2","name","Symbol(first)","Symbol(second)"]',
       );
-      assertSame(
-        peekOwnDescriptor(
-          object,
-          first,
-          'EngineObject should expose mixed-order symbol descriptors to the hot-path protocol',
-        ).value,
-        2,
-      );
-      assertSame(
-        peekOwnDescriptor(
-          object,
-          second,
-          'EngineObject should preserve later symbol descriptors in mixed own-key order',
-        ).value,
-        4,
-      );
+      assertSame(object.get(first, object), 2);
+      assertSame(object.get(second, object), 4);
 
       const array = new EngineArray();
       assertSame(array.set(first, 1, array), true);
 
       assertSame(array.get('length'), 0);
       assertSame(array.get(first), 1);
-      assertSame(
-        peekOwnDescriptor(
-          array,
-          first,
-          'EngineArray should keep symbol writes on the non-index descriptor path',
-        ).value,
-        1,
-      );
+      assertSame(array.get(first, array), 1);
     },
   },
   {
@@ -210,14 +154,6 @@ const tests = [
       assertSame(object.get('value'), 17);
       assertSame(liveCalls, 1);
       assertSame(detachedCalls, 0);
-      assertSame(
-        peekOwnDescriptor(
-          prototype,
-          'x',
-          'super reads should still use the stored prototype accessor',
-        ).get,
-        liveGetter,
-      );
     },
   },
   {
@@ -259,14 +195,7 @@ const tests = [
         ).value,
         8,
       );
-      assertSame(
-        peekOwnDescriptor(
-          argumentsObject,
-          '0',
-          'ArgumentsObject should expose mapped indices through the hot-path descriptor protocol',
-        ).value,
-        8,
-      );
+      assertSame(argumentsObject.get('0', argumentsObject), 8);
     },
   },
   {
@@ -308,14 +237,6 @@ const tests = [
       assertSame(runScript(realm, 'probe;'), 'live');
       assertSame(liveCalls, 1);
       assertSame(detachedCalls, 0);
-      assertSame(
-        peekOwnDescriptor(
-          realm.globalObject,
-          'probe',
-          'identifier fast-path reads should still use the stored global accessor',
-        ).get,
-        liveGetter,
-      );
     },
   },
   {
@@ -348,14 +269,7 @@ const tests = [
         ).value,
         'a',
       );
-      assertSame(
-        peekOwnDescriptor(
-          stringObject,
-          '0',
-          'EnginePrimitiveObject should expose virtual string indices through the hot-path descriptor protocol',
-        ).value,
-        'a',
-      );
+      assertSame(stringObject.get('0', stringObject), 'a');
     },
   },
 ];

@@ -14,7 +14,7 @@
  * synchronous generator chain.
  *
  * Nothing in this module reaches into the host: it calls guest functions
- * through `callFunction`, reads guest properties through `[[Get]]`, and reports
+ * through `callCallable`, reads guest properties through `[[Get]]`, and reports
  * failures as `GuestErrorSignal`s the nearest realm-aware boundary materialises
  * into guest errors, exactly like the rest of the runtime. The one realm the
  * operations carry is for `CreateIterResultObject`'s prototype and for wrapping
@@ -24,6 +24,7 @@
  */
 
 import { EngineObject, getWithObjectOperationRealm } from './object.js';
+import { callCallable } from './capabilities.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
 import { toBoolean, toObject } from './conversion.js';
@@ -222,7 +223,7 @@ export function getIterator(realm, obj, method) {
   }
 
   linkGeneratorHostChainToValue(realm.agent, iteratorMethod);
-  const iterator = iteratorMethod.callFunction(obj, [], realm);
+  const iterator = callCallable(iteratorMethod, obj, [], realm);
 
   if (!(iterator instanceof EngineObject)) {
     throw new GuestErrorSignal(
@@ -259,7 +260,8 @@ export function iteratorNextWithMethod(iterator, method, sent, callerRealm) {
     linkGeneratorHostChainToValue(activeAgent, iteratorMethod);
   }
 
-  const result = iteratorMethod.callFunction(
+  const result = callCallable(
+    iteratorMethod,
     iterator,
     sent === undefined ? [] : [sent.value],
     callerRealm,
@@ -374,7 +376,7 @@ export function iteratorClose(realm, record, completionIsThrow) {
     }
 
     linkGeneratorHostChainToValue(realm.agent, returnMethod);
-    innerValue = returnMethod.callFunction(iterator, [], realm);
+    innerValue = callCallable(returnMethod, iterator, [], realm);
   } catch (error) {
     innerThrew = true;
     innerError = error;

@@ -15,6 +15,7 @@ import { GuestErrorSignal } from './completion.js';
  */
 
 const MAX_ARRAY_LENGTH = 4294967295;
+const ARRAY_OBJECTS = new WeakSet();
 
 /**
  * An array exotic object (ECMA-262 15.4): an ordinary engine object whose
@@ -28,6 +29,7 @@ export class EngineArray extends EngineObject {
    */
   constructor(prototype = null) {
     super(prototype, 'Array');
+    ARRAY_OBJECTS.add(this);
 
     ordinaryDefineOwnProperty(this, 'length', {
       value: 0,
@@ -202,6 +204,14 @@ export class EngineArray extends EngineObject {
 
     return indices.sort((left, right) => right - left);
   }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is EngineArray}
+ */
+export function isArrayObject(value) {
+  return value instanceof EngineObject && ARRAY_OBJECTS.has(value);
 }
 
 /**

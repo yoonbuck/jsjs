@@ -1,5 +1,7 @@
 import { EngineObject } from './object.js';
 
+const REGEXP_OBJECTS = new WeakSet();
+
 /**
  * @typedef {import('./regexp-syntax.js').FlagSet} FlagSet
  * @typedef {import('./regexp-compat.js').CompiledPattern} CompiledPattern
@@ -29,6 +31,7 @@ export class EngineRegExp extends EngineObject {
    */
   constructor(prototype, patternSource, flags, compiled) {
     super(prototype, 'RegExp');
+    REGEXP_OBJECTS.add(this);
 
     /** @type {string} */
     this.patternSource = patternSource;
@@ -87,6 +90,14 @@ export class EngineRegExp extends EngineObject {
   matchAt(input, index) {
     return this.compiled.matchAt(input, index);
   }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is EngineRegExp}
+ */
+export function isRegExpObject(value) {
+  return value instanceof EngineObject && REGEXP_OBJECTS.has(value);
 }
 
 /**

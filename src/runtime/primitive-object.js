@@ -39,31 +39,6 @@ export class EnginePrimitiveObject extends EngineObject {
   }
 
   /**
-   * Overrides `_peekOwnDescriptor` to expose virtual string-index character
-   * properties. Virtual index descriptors are constructed on demand; they are
-   * not stored and cannot be cached.
-   *
-   * @param {PropertyKey} name
-   * @returns {CompletePropertyDescriptor | undefined}
-   */
-  _peekOwnDescriptor(name) {
-    const stored = ordinaryGetOwnProperty(this, name);
-    if (stored !== undefined) {
-      return stored;
-    }
-
-    const index = stringIndex(this.primitiveValue, name);
-    return index === undefined
-      ? undefined
-      : {
-          value: /** @type {string} */ (this.primitiveValue)[index],
-          writable: false,
-          enumerable: true,
-          configurable: false,
-        };
-  }
-
-  /**
    * @param {PropertyKey} name
    * @returns {CompletePropertyDescriptor | undefined}
    */
@@ -106,17 +81,34 @@ export class EnginePrimitiveObject extends EngineObject {
 
     return keys;
   }
+}
 
-  /**
-   * @param {PropertyKey} name
-   * @returns {boolean}
-   */
-  hasProperty(name) {
-    return (
-      stringIndex(this.primitiveValue, name) !== undefined ||
-      super.hasProperty(name)
-    );
-  }
+/**
+ * @param {unknown} value
+ * @returns {value is EnginePrimitiveObject}
+ */
+export function isPrimitiveObject(value) {
+  return value instanceof EnginePrimitiveObject;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {'string' | 'number' | 'boolean' | 'symbol' | undefined}
+ */
+export function primitiveDataType(value) {
+  return isPrimitiveObject(value)
+    ? /** @type {'string' | 'number' | 'boolean' | 'symbol'} */ (
+        typeof value.primitiveValue
+      )
+    : undefined;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string | number | boolean | symbol | undefined}
+ */
+export function primitiveData(value) {
+  return isPrimitiveObject(value) ? value.primitiveValue : undefined;
 }
 
 /**

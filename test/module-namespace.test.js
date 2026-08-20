@@ -106,6 +106,23 @@ export default [
     },
   },
   {
+    name: 'module namespace preserves its exotic Table 5 contract',
+    async run() {
+      const realm = createRealm();
+      const loader = loaderFor({ entry: 'export let value = 1;' }, realm);
+      const namespace = await loader.loadAndEvaluate('entry');
+
+      assertSame(namespace.getPrototypeOf(), null);
+      assertSame(namespace.isExtensible(), false);
+      assertSame(namespace.preventExtensions(), true);
+      assertSame(namespace.hasProperty('value'), true);
+      assertSame(namespace.set('value', 2, namespace), false);
+      assertSame(namespace.delete('value'), false);
+      assertSame(namespace.defineOwnProperty('value', { value: 2 }), false);
+      assertSame(namespace.ownPropertyKeys()[0], 'value');
+    },
+  },
+  {
     name: 'namespace uses null-only prototype and compatible toStringTag descriptor',
     async run() {
       const realm = createRealm();

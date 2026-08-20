@@ -1,5 +1,6 @@
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { GuestErrorSignal, ThrowSignal } from '../src/runtime/completion.js';
+import { registerCallable } from '../src/runtime/capabilities.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { createAbruptRealmCallable } from '../src/runtime/function-realm.js';
 import { PromiseObject } from '../src/runtime/promise.js';
@@ -1671,6 +1672,7 @@ export default [
           };
         },
       };
+      registerCallable(abruptHandler);
       const child = promiseObject(
         registrationThen.callFunction(pending.promise, [abruptHandler]),
       );

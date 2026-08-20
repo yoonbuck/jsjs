@@ -20,7 +20,8 @@ import {
 } from '../runtime/code-units.js';
 import { isCallable } from '../runtime/descriptors.js';
 import { isSymbol, symbolDescriptiveString } from '../runtime/symbol.js';
-import { EngineObject } from '../runtime/object.js';
+import { callCallable } from '../runtime/capabilities.js';
+import { isRegExpObject } from '../runtime/regexp-object.js';
 import { toLowerCaseString, toUpperCaseString } from './string-case.js';
 import {
   expandReplacement,
@@ -49,6 +50,7 @@ import {
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
+ * @typedef {import('../runtime/object.js').EngineObject} EngineObject
  * @typedef {import('../runtime/regexp-object.js').EngineRegExp} EngineRegExp
  *
  * @typedef {{
@@ -482,7 +484,8 @@ export function createPrimitiveWrapperIntrinsics(realm) {
               value,
               (matched, position, captures, whole) =>
                 toString(
-                  replaceValue.callFunction(
+                  callCallable(
+                    replaceValue,
                     undefined,
                     [matched, ...captures, position, whole],
                     realm,
@@ -520,7 +523,8 @@ export function createPrimitiveWrapperIntrinsics(realm) {
         if (isCallable(replaceValue)) {
           return replaceFirst(value, search, (matched, position, whole) =>
             toString(
-              replaceValue.callFunction(
+              callCallable(
+                replaceValue,
                 undefined,
                 [matched, position, whole],
                 realm,
@@ -782,19 +786,6 @@ function toRegExp(realm, pattern) {
     pattern === undefined ? '' : toString(pattern, realm),
     '',
   );
-}
-
-/**
- * Only the `[[Class]]` is consulted, exactly as ES5 15.5.4.10-14 specify, so
- * an ordinary object that merely carries `source`/`global`/`exec` properties
- * is not a RegExp for this test: it is a plain object, and its pattern is
- * `ToString(value)`.
- *
- * @param {unknown} value
- * @returns {boolean}
- */
-function isRegExpObject(value) {
-  return value instanceof EngineObject && value.getClassName() === 'RegExp';
 }
 
 /**

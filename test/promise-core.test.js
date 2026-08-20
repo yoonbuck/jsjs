@@ -1,5 +1,6 @@
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { ThrowSignal } from '../src/runtime/completion.js';
+import { registerCallable } from '../src/runtime/capabilities.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { newPromiseCapability } from '../src/runtime/promise.js';
 import { assertSame, assertThrows } from './harness/assert.js';
@@ -741,6 +742,7 @@ export default [
           };
         },
       };
+      registerCallable(abruptThen);
       const thenable = new EngineObject(realm.intrinsics.objectPrototype);
       thenable.defineOwnProperty('then', {
         value: abruptThen,
@@ -779,6 +781,7 @@ export default [
           return { type: 'normal', value: null };
         },
       };
+      registerCallable(malformedThen);
       const thenable = new EngineObject(realm.intrinsics.objectPrototype);
       thenable.defineOwnProperty('then', {
         value: malformedThen,

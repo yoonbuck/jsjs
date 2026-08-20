@@ -1,11 +1,16 @@
 import { EngineObject } from '../runtime/object.js';
-import { EngineArray } from '../runtime/array-object.js';
+import { EngineArray, isArrayObject } from '../runtime/array-object.js';
+import { callCallable } from '../runtime/capabilities.js';
 import {
   toInteger,
   toNumber,
   toString,
   toUint32,
 } from '../runtime/conversion.js';
+import {
+  primitiveData,
+  primitiveDataType,
+} from '../runtime/primitive-object.js';
 import {
   charCodeOfCodeUnit,
   codeUnitFromCharCode,
@@ -572,10 +577,9 @@ function walkBody(realm, holder, name, reviver) {
   const value = holder.get(name, holder);
 
   if (value instanceof EngineObject) {
-    const keys =
-      value.getClassName() === 'Array'
-        ? arrayIndexKeys(value, realm)
-        : enumerableOwnNames(value);
+    const keys = isArrayObject(value)
+      ? arrayIndexKeys(value, realm)
+      : enumerableOwnNames(value);
 
     for (const key of keys) {
       const revived = walk(realm, value, key, reviver);
@@ -593,7 +597,7 @@ function walkBody(realm, holder, name, reviver) {
     }
   }
 
-  return reviver.callFunction(holder, [name, value], realm);
+  return callCallable(reviver, holder, [name, value], realm);
 }
 
 /**
@@ -764,25 +768,23 @@ function serializePropertyBody(realm, state, key, holder) {
     const toJSON = value.get('toJSON', value);
 
     if (isCallable(toJSON)) {
-      value = toJSON.callFunction(value, [key], realm);
+      value = callCallable(toJSON, value, [key], realm);
     }
   }
 
   if (state.replacerFunction !== undefined) {
-    value = state.replacerFunction.callFunction(holder, [key, value], realm);
+    value = callCallable(state.replacerFunction, holder, [key, value], realm);
   }
 
   if (value instanceof EngineObject) {
-    const className = value.getClassName();
+    const primitiveType = primitiveDataType(value);
 
-    if (className === 'Number') {
+    if (primitiveType === 'number') {
       value = toNumber(value, realm);
-    } else if (className === 'String') {
+    } else if (primitiveType === 'string') {
       value = toString(value, realm);
-    } else if (className === 'Boolean') {
-      value = /** @type {{ primitiveValue: boolean }} */ (
-        /** @type {unknown} */ (value)
-      ).primitiveValue;
+    } else if (primitiveType === 'boolean') {
+      value = primitiveData(value);
     }
   }
 
@@ -805,7 +807,7 @@ function serializePropertyBody(realm, state, key, holder) {
   }
 
   if (value instanceof EngineObject && !isCallable(value)) {
-    return value.getClassName() === 'Array'
+    return isArrayObject(value)
       ? serializeArray(realm, state, value)
       : serializeObject(realm, state, value);
   }
@@ -971,10 +973,10 @@ function propertyListOf(realm, replacer) {
       item = entry;
     } else if (typeof entry === 'number') {
       item = toString(entry, realm);
-    } else if (entry instanceof EngineObject) {
-      const className = entry.getClassName();
+    } else {
+      const primitiveType = primitiveDataType(entry);
 
-      if (className === 'String' || className === 'Number') {
+      if (primitiveType === 'string' || primitiveType === 'number') {
         item = toString(entry, realm);
       }
     }
@@ -998,14 +1000,11 @@ function propertyListOf(realm, replacer) {
 function gapOf(realm, space) {
   let normalized = space;
 
-  if (normalized instanceof EngineObject) {
-    const className = normalized.getClassName();
-
-    if (className === 'Number') {
-      normalized = toNumber(normalized, realm);
-    } else if (className === 'String') {
-      normalized = toString(normalized, realm);
-    }
+  const primitiveType = primitiveDataType(normalized);
+  if (primitiveType === 'number') {
+    normalized = toNumber(normalized, realm);
+  } else if (primitiveType === 'string') {
+    normalized = toString(normalized, realm);
   }
 
   if (typeof normalized === 'number') {
@@ -1051,7 +1050,7 @@ function jsonStringify(realm, value, replacer, space) {
   if (replacer instanceof EngineObject) {
     if (isCallable(replacer)) {
       state.replacerFunction = replacer;
-    } else if (replacer.getClassName() === 'Array') {
+    } else if (isArrayObject(replacer)) {
       state.propertyList = propertyListOf(realm, replacer);
     }
   }

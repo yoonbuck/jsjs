@@ -400,21 +400,6 @@ export class EngineObject {
   }
 
   /**
-   * Returns the stored `CompletePropertyDescriptor` directly — no copy.
-   * Callers must treat the returned object as read-only and must not retain
-   * it across any operation that could mutate `_properties` (define, delete,
-   * set). Subclasses that synthesise virtual properties (e.g. `ArgumentsObject`)
-   * override this to match their `getOwnProperty` semantics while still
-   * avoiding the copy on the common case.
-   *
-   * @param {PropertyKey} name
-   * @returns {CompletePropertyDescriptor | undefined}
-   */
-  _peekOwnDescriptor(name) {
-    return ordinaryPeekOwnDescriptor(this, name);
-  }
-
-  /**
    * @param {PropertyKey} name
    * @returns {CompletePropertyDescriptor | undefined}
    */
@@ -462,7 +447,7 @@ export class EngineObject {
     while (current !== null) {
       const key = current.agent?.wellKnownSymbols[name];
       const descriptor =
-        key === undefined ? undefined : current._peekOwnDescriptor(key);
+        key === undefined ? undefined : current.getOwnProperty(key);
 
       if (descriptor !== undefined) {
         if (isDataDescriptor(descriptor)) {
@@ -477,7 +462,7 @@ export class EngineObject {
         return linkObjectValueAgent(this.agent, value);
       }
 
-      current = ordinaryGetPrototypeOf(current);
+      current = current.getPrototypeOf();
     }
 
     return undefined;
@@ -618,6 +603,7 @@ export function ordinaryEnumerate(target) {
  */
 export function ordinaryDefineOwnProperty(target, name, descriptor) {
   if (
+    target.getOwnProperty === EngineObject.prototype.getOwnProperty &&
     descriptor !== null &&
     typeof descriptor === 'object' &&
     isValueOnlyDescriptor(descriptor)
@@ -638,7 +624,7 @@ export function ordinaryDefineOwnProperty(target, name, descriptor) {
   }
 
   const candidate = validatePropertyDescriptor(descriptor);
-  const current = target._peekOwnDescriptor(name);
+  const current = target.getOwnProperty(name);
 
   if (current === undefined) {
     if (!ordinaryIsExtensible(target)) {
@@ -754,7 +740,7 @@ export function ordinaryDefineOwnProperty(target, name, descriptor) {
  * @returns {boolean}
  */
 export function ordinaryDelete(target, name) {
-  const descriptor = target._peekOwnDescriptor(name);
+  const descriptor = target.getOwnProperty(name);
 
   if (descriptor === undefined) {
     return true;
@@ -870,96 +856,6 @@ export function setIntegrityLevel(object, level) {
   }
 
   return object;
-}
-
-/**
- * Computes the `ForInStatement` enumeration order (ECMA-262 12.6.4): every
- * enumerable string-keyed own property across `object`'s prototype chain,
- * each name visited at most once. A name already seen anywhere earlier in
- * the chain is never revisited later even when it isn't enumerable there —
- * that's exactly the spec's shadowing rule ("a property of a prototype is
- * not enumerated if it is 'shadowed' because some previous object in the
- * prototype chain has a property with the same name", regardless of that
- * earlier property's own enumerability). Symbol keys are skipped outright:
- * ES5 has no symbols, and later editions exclude them from `for-in` too.
- * Order within one object follows `ownPropertyKeys()` (insertion order),
- * matching `Object.keys`.
- *
- * @param {EngineObject} object
- * @returns {string[]}
- */
-export function enumerableKeysForIn(object) {
-  const seen = new Set();
-  /** @type {string[]} */
-  const result = [];
-
-  for (
-    let current = /** @type {EngineObject | null} */ (object);
-    current !== null;
-    current = current.getPrototypeOf()
-  ) {
-    for (const key of current.ownPropertyKeys()) {
-      if (typeof key !== 'string' || seen.has(key)) {
-        continue;
-      }
-
-      seen.add(key);
-
-      const descriptor = current._peekOwnDescriptor(key);
-      if (descriptor !== undefined && descriptor.enumerable === true) {
-        result.push(key);
-      }
-    }
-  }
-
-  return result;
-}
-
-/**
- * Re-checks one enumerated name against the live object graph, which
- * `evaluateForInStatement` does immediately before running the body for
- * that name (ECMA-262 12.6.4: "If a property that has not yet been visited
- * during enumeration is deleted, then it will not be visited").
- *
- * The check repeats exactly the lookup `enumerableKeysForIn` used to
- * decide the name in the first place — walk the prototype chain, stop at
- * the first object with an own property of that name, and answer with that
- * property's enumerability — so the shadowing rule stays consistent
- * between the snapshot and the re-check. Deleting an own property that
- * shadowed an enumerable inherited one therefore leaves the name live (the
- * inherited property is what the body now sees), while deleting one that
- * shadowed a *non-enumerable* inherited property drops the name, and so
- * does making the property non-enumerable mid-loop: 12.6.4 step 6 asks for
- * the next property "whose [[Enumerable]] attribute is true" each time
- * round, not for the attribute it had at loop entry.
- *
- * Those last two cases are where real engines disagree — JavaScriptCore
- * answers as this does, V8 keeps such a name because its re-check is a
- * bare `HasProperty` — which is the spec telling us it left the choice
- * open: 12.6.4 fixes only the deletion rule and leaves "the mechanics and
- * order of enumerating the properties" implementation-defined. Answering
- * with the same walk the snapshot used is the self-consistent choice: a
- * name whose first own occurrence is non-enumerable never enters the
- * snapshot, so it should not survive in it either.
- *
- * @param {EngineObject} object
- * @param {string} key
- * @returns {boolean}
- */
-export function isEnumerableForIn(object, key) {
-  for (
-    let current = /** @type {EngineObject | null} */ (object);
-    current !== null;
-    current = current.getPrototypeOf()
-  ) {
-    const descriptor = current._peekOwnDescriptor(key);
-
-    if (descriptor !== undefined) {
-      return descriptor.enumerable === true;
-    }
-  }
-
-  return false;
 }
 
 /**

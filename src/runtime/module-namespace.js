@@ -14,6 +14,7 @@ import {
   ordinaryDefineOwnProperty,
   ordinaryDelete,
   ordinaryGetOwnProperty,
+  ordinaryHasProperty,
   ordinaryOwnPropertyKeys,
   ordinaryPreventExtensions,
 } from './object.js';
@@ -65,17 +66,6 @@ export class ModuleNamespaceObject extends EngineObject {
    * @param {PropertyKey} key
    * @returns {CompletePropertyDescriptor | undefined}
    */
-  _peekOwnDescriptor(key) {
-    const resolved = this._resolvedExports.get(/** @type {string} */ (key));
-    return resolved === undefined
-      ? ordinaryGetOwnProperty(this, key)
-      : exportDescriptor(resolved);
-  }
-
-  /**
-   * @param {PropertyKey} key
-   * @returns {CompletePropertyDescriptor | undefined}
-   */
   getOwnProperty(key) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
     return resolved === undefined
@@ -84,14 +74,17 @@ export class ModuleNamespaceObject extends EngineObject {
   }
 
   /**
+   * Export existence must not read a live binding: a linked namespace can be
+   * queried before its module's declarations are initialized.
+   *
    * @param {PropertyKey} key
    * @returns {boolean}
    */
   hasProperty(key) {
-    if (typeof key === 'string' && this._resolvedExports.has(key)) {
-      return true;
-    }
-    return super.hasProperty(key);
+    return (
+      (typeof key === 'string' && this._resolvedExports.has(key)) ||
+      ordinaryHasProperty(this, key)
+    );
   }
 
   /**

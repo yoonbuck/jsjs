@@ -1,4 +1,5 @@
-import { EngineArray } from '../runtime/array-object.js';
+import { EngineArray, isArrayObject } from '../runtime/array-object.js';
+import { callCallable } from '../runtime/capabilities.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import {
   defineOwnPropertyOrThrow,
@@ -74,7 +75,7 @@ export function createArrayIntrinsics(realm) {
     arrayConstructor,
     'isArray',
     1,
-    (_thisValue, args) => args[0] instanceof EngineArray,
+    (_thisValue, args) => isArrayObject(args[0]),
   );
   installMutatingArrayMethods(realm, arrayPrototype);
   installNonMutatingArrayMethods(realm, arrayPrototype);
@@ -388,10 +389,10 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
     const join = object.get('join', object);
 
     if (isCallable(join)) {
-      return join.callFunction(object, [], realm);
+      return callCallable(join, object, [], realm);
     }
 
-    return objectToString.callFunction(object, [], realm);
+    return callCallable(objectToString, object, [], realm);
   });
   defineNativeMethod(
     realm,
@@ -428,7 +429,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
         );
 
         result += toString(
-          toLocaleString.callFunction(elementObject, [], realm),
+          callCallable(toLocaleString, elementObject, [], realm),
           realm,
         );
       }
@@ -445,7 +446,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
      * @returns {void}
      */
     function append(value) {
-      if (value instanceof EngineArray) {
+      if (isArrayObject(value)) {
         const length = arrayLikeLength(value, realm);
 
         for (let index = 0; index < length; index += 1) {
@@ -653,7 +654,8 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
       createDataProperty(
         result,
         name,
-        callback.callFunction(
+        callCallable(
+          callback,
           args[1],
           [object.get(name, object), index, object],
           realm,
@@ -682,7 +684,7 @@ function installNonMutatingArrayMethods(realm, arrayPrototype) {
 
       const value = object.get(name, object);
 
-      if (callback.callFunction(args[1], [value, index, object], realm)) {
+      if (callCallable(callback, args[1], [value, index, object], realm)) {
         createDataProperty(result, String(nextIndex), value);
         nextIndex += 1;
       }
@@ -725,7 +727,8 @@ function defineIterationMethod(
       }
 
       const completion = visit(
-        callback.callFunction(
+        callCallable(
+          callback,
           args[1],
           [object.get(property, object), index, object],
           realm,
@@ -791,7 +794,8 @@ function defineReduceMethod(realm, arrayPrototype, name, rightToLeft) {
       const property = String(index);
 
       if (object.hasProperty(property)) {
-        accumulator = callback.callFunction(
+        accumulator = callCallable(
+          callback,
           undefined,
           [accumulator, object.get(property, object), index, object],
           realm,
@@ -871,7 +875,7 @@ function insertSorted(sorted, value, compare, callerRealm) {
 function compareArrayValues(left, right, compare, callerRealm) {
   if (compare !== undefined) {
     const result = toNumber(
-      compare.callFunction(undefined, [left, right], callerRealm),
+      callCallable(compare, undefined, [left, right], callerRealm),
       callerRealm,
     );
     return Number.isNaN(result) ? 0 : result;

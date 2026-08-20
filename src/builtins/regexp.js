@@ -1,6 +1,5 @@
-import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
-import { EngineRegExp } from '../runtime/regexp-object.js';
+import { EngineRegExp, isRegExpObject } from '../runtime/regexp-object.js';
 import { compilePattern } from '../runtime/regexp-compat.js';
 import { parseFlags, RegExpSyntaxError } from '../runtime/regexp-syntax.js';
 import { toBoolean, toInteger, toString } from '../runtime/conversion.js';
@@ -8,6 +7,7 @@ import { GuestErrorSignal } from '../runtime/completion.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
+ * @typedef {import('../runtime/object.js').EngineObject} EngineObject
  *
  * @typedef {{
  *   regExpConstructor: import('./shared.js').NativeFunction,
@@ -449,14 +449,6 @@ function convertSyntaxError(error) {
   }
 
   return error;
-}
-
-/**
- * @param {unknown} value
- * @returns {boolean}
- */
-function isRegExpObject(value) {
-  return value instanceof EngineObject && value.getClassName() === 'RegExp';
 }
 
 /**
