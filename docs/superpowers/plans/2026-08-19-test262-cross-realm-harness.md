@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the Test262 runner install a portable, harness-only, same-Agent `$262.createRealm`/`$262.evalScript` host interface and move issue #76's exact 135 roots / 267 variants from `test262-cross-realm-host` to selected-and-passing.
+**Goal:** Make the Test262 runner install a portable, harness-only, same-Agent `$262.createRealm`/`$262.evalScript` host interface and make issue #76's exact 135 roots / 267 variants reach selector-zero through generated complete-root pass or reviewed reassignment dispositions.
 
-**Architecture:** The portable runner requires one explicit `installHostBindings(realm)` engine hook and invokes it once immediately after creating every root Realm, including raw script and raw module roots. The jsjs Test262 engine bridge owns the concrete `$262` object, recursively creates child Realms on the same Agent, and maps parse/runtime failures into the owning guest Realm without exposing `$262` through normal Realm construction or the public API. Existing immutable promotion tooling gains a second independently hashed H0 promotion source so T0 provenance stays intact while exact H0 paths enter the selected subset.
+**Architecture:** The portable runner requires one explicit `installHostBindings(realm)` engine hook and invokes it once immediately after creating every root Realm, including raw script and raw module roots. The jsjs Test262 engine bridge owns the concrete `$262` object, recursively creates child Realms on the same Agent, and maps parse/runtime failures into the owning guest Realm without exposing `$262` through normal Realm construction or the public API. Existing immutable tooling gains generated H0 root dispositions, a pass-only promotion manifest, and atomic reassignment ledgers so T0 provenance stays intact while the H0 selector reaches zero without claiming all roots semantically pass.
 
 **Tech Stack:** ECMAScript modules, Node.js 20, existing jsjs Realm/Agent/evaluator APIs, existing portable Test262 runner, pinned Test262 revision `b363f29d3c43c626dc852744ad64a0b48a003693`, Chromium via Playwright, JavaScriptCore at `/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc`, JSON evidence artifacts, GitHub Actions, CodeQL, and `TZ=UTC`.
 
@@ -12,6 +12,7 @@
 
 - Start from exact `origin/main` SHA `54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`; the approved design commits are `e43426e`, `093a4b4`, and `a81688f`.
 - The definitive H0 ledger is issue #76 comment `5347037600`, `H0.paths.txt`, SHA-256 `3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950`, exactly 135 roots / 267 variants.
+- Exact H0 execution evidence must cover every root and every required variant once. A root receives exactly one generated disposition: `passed` only for complete-root pass evidence, or `reassigned` only for reviewed concrete failure signatures mapped to one existing roadmap owner under taxonomy precedence.
 - `$262` is Test262 embedding infrastructure only: never a normal guest global, public runtime export, `Realm` option, or adapter-specific semantic fork.
 - Install host bindings for every root Realm, including raw script and raw module roots, before harness includes, async setup, or module evaluation.
 - Raw roots still receive no strict prefix, `assert.js`, `sta.js`, declared includes, or source rewriting.
@@ -19,7 +20,8 @@
 - `$262.createRealm` creates a same-Agent child, recursively installs the same host bindings, and returns the child's `$262`; `$262.global` is the exact child global.
 - `$262.evalScript` accepts only primitive strings, performs no host `String` coercion, preserves persistent global declarations/completion values/thrown identity, and creates parse/type errors in its owning Realm.
 - Keep `detachArrayBuffer`, `gc`, `agent`, `AbstractModuleSource`, and later hooks absent. Keep existing `print`/`$DONE` behavior on its current runner path.
-- Do not widen `tools/test262/features.json` and do not infer promotion from a global feature tag.
+- Do not widen `tools/test262/features.json` and do not infer promotion from a global feature tag. Partially passing roots are never promoted; missing, skipped, mixed, duplicate, unknown-owner, mismatched, or unexplained evidence fails closed.
+- Keep Task 3 implementation commit `c52823113ec704b09ed9850f698d1d36bf479c48` unchanged. Do not implement downstream runtime semantics in this branch to make unrelated H0 failures pass.
 - Never run `npm run ci:contract`, `npm run test262:upstream`,
   `npm run test262:upstream:check`, or any wrapper that invokes broad upstream
   Test262 locally. The exact 135-path H0 corpus is the only local Test262
@@ -41,11 +43,12 @@
 - Create `tools/test262/es2015-h0-paths.json`: immutable H0 ledger for focused
   execution after taxonomy reclassification.
 - Modify `package.json`, `tools/ci/pipeline.js`, and generated `.github/workflows/ci.yml`: add the focused H0 job to the ES2015 release gate without broad local execution.
-- Modify `tools/test262/es2015-promotion.js`, `tools/test262/upstream-select.js`, `tools/test262/upstream-run.js`, and `tools/test262/es2015-audit.js`: support multiple independently immutable promotion manifests.
-- Create `tools/test262/es2015-h0-promotion.json`: exact H0 metadata/include authorization and ledger provenance.
-- Modify `test/node/es2015-taxonomy.test.js`, `test/node/upstream-select.test.js`, and `test/node/workflow-contract.test.js`: cover multiple promotion sources, overlap rejection, exact selection, and CI contracts.
+- Modify `tools/test262/es2015-promotion.js`, `tools/test262/upstream-select.js`, `tools/test262/upstream-run.js`, and `tools/test262/es2015-audit.js`: support generated H0 dispositions, pass-only promotion manifests, exact selection, and reviewed reassignment.
+- Create `tools/test262/es2015-h0-disposition.json`: deterministic root-level dispositions covering every immutable H0 root once and every required variant once.
+- Create `tools/test262/es2015-h0-promotion.json`: exact H0 pass-only metadata/include authorization and ledger provenance derived only from complete-root `passed` dispositions.
+- Modify `test/node/es2015-taxonomy.test.js`, `test/node/upstream-select.test.js`, and `test/node/workflow-contract.test.js`: cover disposition validation, partial-promotion rejection, exact selection, reassignment, and CI contracts.
 - Regenerate `tools/test262/upstream-subset.json`, `tools/test262/es2015-audit-evidence.json`, `tools/test262/es2015-taxonomy.json`, `docs/test262-report.jsonl`, and the generated coverage block in `docs/conformance.md`.
-- Update `docs/testing.md`, `docs/conformance.md`, and `README.md` only where the new focused command, selected totals, or harness-only boundary is directly documented.
+- Update `docs/testing.md`, `docs/conformance.md`, and `README.md` only where the new focused command, generated passed/reassigned counts, selector-zero result, or harness-only boundary is directly documented.
 
 ---
 
@@ -497,13 +500,17 @@ Expected: PASS. JSC has no focused-suite argument path, so defer its one full
 local execution to Task 6 instead of redundantly running the entire portable
 registry here.
 
-- [ ] **Step 7: Run the exact H0 corpus GREEN**
+- [ ] **Step 7: Run the exact H0 corpus for complete evidence**
 
 ```bash
 TZ=UTC npm run test262:cross-realm
 ```
 
-Expected: exactly 135 roots / 267 variants, all passed, none skipped. If an
+Expected after Task 3 commit `c52823113ec704b09ed9850f698d1d36bf479c48`: the
+immutable corpus executes exactly 135 roots / 267 variants with no missing or
+skipped variants, and no failure is caused by missing `$262` host bindings or
+harness leakage. The observed baseline is 40 roots / 79 variants passed and 95
+roots / 188 variants still blocked by reviewed downstream runtime gaps. If an
 exact path reveals a cross-Realm host defect, add the smallest portable probe
 first, observe RED, then fix only that defect. Do not repair unrelated M0/B0 or
 later-feature failures in this PR.
@@ -525,10 +532,11 @@ git commit -m "Implement harness-only Test262 cross-Realm bindings" \
 
 ---
 
-### Task 4: Promote H0 with Independent Provenance
+### Task 4: Generate H0 Dispositions and Pass-Only Promotion
 
 **Files:**
 
+- Create: `tools/test262/es2015-h0-disposition.json`
 - Create: `tools/test262/es2015-h0-promotion.json`
 - Modify: `tools/test262/es2015-promotion.js`
 - Modify: `tools/test262/upstream-select.js`
@@ -542,41 +550,45 @@ git commit -m "Implement harness-only Test262 cross-Realm bindings" \
 
 - Preserves: existing T0 manifest and group
   `es2015/audit-passing-promotion` byte-for-byte.
-- Produces: a second descriptor for
-  `tools/test262/es2015-h0-promotion.json` and group
-  `es2015/h0-cross-realm`.
-- Produces: combined exact-path authorization that rejects duplicate paths
-  across manifests and validates each source taxonomy/ledger independently.
-- Produces:
-  `buildEs2015Promotion({ sourceTaxonomyText, ledgerText, pin, inventory })`
-  for deterministic manifest generation.
-- Produces:
-  `assertExactPromotionDelta({ before, after, promotion, blocker })`, which
-  derives expected totals from `before`, requires exact promotion-path movement,
-  and rejects every unrelated classification change.
+- Produces: deterministic `tools/test262/es2015-h0-disposition.json` covering
+  every immutable H0 root once and every required variant once.
+- Produces: one generated disposition per root:
+  - `passed` only when the complete required variant set passed; or
+  - `reassigned` only when every required variant has a concrete reviewed
+    failure signature and exactly one named existing roadmap blocker is the
+    next actual blocker under taxonomy precedence.
+- Preserves secondary prerequisite/failure evidence on reassignment records
+  without replacing the single primary owner.
+- Produces: `tools/test262/es2015-h0-promotion.json` and group
+  `es2015/h0-cross-realm-passed`, generated only from complete-root `passed`
+  dispositions.
+- Produces pure helpers:
+  - `buildEs2015H0Disposition({ ledgerText, executionEvidence, ownerMap })`;
+  - `buildEs2015Promotion({ sourceTaxonomyText, dispositionText, pin, inventory })`;
+  - `assertExactH0DispositionDelta({ before, after, disposition, promotion })`.
 
-- [ ] **Step 1: Write multiple-promotion RED tests**
+- [ ] **Step 1: Write disposition and partial-promotion RED tests**
 
-Add fixture manifests proving:
+Add fixture evidence proving:
 
-- each manifest validates its own repository, revision, source taxonomy hash,
-  ledger hash, counts, metadata, and include closure;
-- combined paths are code-unit sorted and unique;
-- overlap between T0 and H0 is rejected;
-- each subset group must exactly equal its matching manifest;
-- a missing manifest/group or foreign path fails closed;
-- authorization returns dependencies only for the exact manifest entry; and
-- generated taxonomy records a SHA-256 keyed by each promotion file rather
-  than replacing T0 provenance.
-- missing, incomplete, failed, or skipped H0 execution evidence cannot remove
-  an H0 blocker or write selected-passing evidence;
-- only paths named by the immutable H0 manifest can lose
-  `test262-cross-realm-host`; and
-- successful complete evidence moves exactly all 135 manifest paths while
-  leaving unrelated classifications byte-equivalent.
-- whole-tree/core denominators remain balanced while selected/blocked totals
-  change by the promotion's derived root/variant counts rather than hard-coded
-  global totals.
+- the disposition artifact validates its repository, revision, ledger hash,
+  root count, variant count, code-unit path order, and exact per-root variant
+  sets;
+- duplicate roots, duplicate variants, missing roots, missing variants, variant
+  mismatches, and foreign paths fail closed;
+- skipped variants, mixed pass/fail evidence, partial pass evidence, unknown
+  owners, unexplained signatures, and unrelated blocker movement fail closed;
+- a reviewed owner allowlist maps concrete failure signatures only to existing
+  roadmap blockers; no new catch-all blocker is accepted;
+- each reassigned root has one primary next blocker under taxonomy precedence
+  while retaining secondary evidence;
+- only complete-root `passed` dispositions are eligible for promotion;
+- the observed pre-rebase evidence can express 40 roots / 79 variants passed and
+  95 roots / 188 variants reassigned without hard-coding those as final totals;
+- generated taxonomy records disposition and promotion SHA-256 values without
+  replacing T0 provenance; and
+- whole-tree/core denominators remain balanced while selected/reassigned totals
+  are derived from generated root/variant sets.
 
 - [ ] **Step 2: Run RED**
 
@@ -587,118 +599,78 @@ node test/run-node.js \
   test/node/workflow-contract.test.js
 ```
 
-Expected: FAIL because tooling supports one promotion manifest/group.
+Expected: FAIL because tooling has no H0 disposition model, no reviewed owner
+mapping, and no pass-only H0 promotion source.
 
-- [ ] **Step 3: Generalize immutable promotion sources**
+- [ ] **Step 3: Implement generated dispositions and reviewed owner mapping**
 
-Define:
+Define the H0 disposition source descriptor alongside immutable promotion
+sources. The generator must read exact execution evidence, recompute the H0
+ledger hash, validate every required root/variant exactly once, and produce
+root-level dispositions. It must never manually delete
+`test262-cross-realm-host`; only generated taxonomy synchronization may consume
+dispositions.
 
-```js
-export const ES2015_PROMOTION_SOURCES = Object.freeze([
-  Object.freeze({
-    file: 'tools/test262/es2015-promotion.json',
-    group: 'es2015/audit-passing-promotion',
-  }),
-  Object.freeze({
-    file: 'tools/test262/es2015-h0-promotion.json',
-    group: 'es2015/h0-cross-realm',
-  }),
-]);
-```
+Implement a reviewed allowlist from concrete failure signatures to existing
+roadmap blockers. Unknown owners, unreviewed signatures, duplicate evidence,
+missing evidence, skipped evidence, mixed root outcomes, and partial-pass roots
+leave the H0 blocker unchanged. Reassignment records include secondary
+prerequisite/failure evidence, but taxonomy precedence selects one primary
+owner.
 
-Keep the existing v1 manifest schema. Make parser errors name the descriptor's
-file. Add plural helpers that validate all sources, reject overlap, merge
-groups, and provide exact per-path feature authorization. Do not mutate or
-re-hash the T0 manifest. Implement the pure builder as:
+- [ ] **Step 4: Generate the observed H0 disposition artifact**
 
-```js
-export function buildEs2015Promotion(options) {
-  const paths = parseLedger(options.ledgerText);
-  const roots = new Map(options.inventory.map((root) => [root.path, root]));
-  const entries = paths.map((path) => {
-    const root = roots.get(path);
-    if (root === undefined || root.metadata === null) {
-      throw new Es2015PromotionError(`promotion inventory is missing ${path}`);
-    }
-    return {
-      path,
-      variants: root.variants,
-      features: sortStrings([...root.metadata.features]),
-      includeFeatures: sortStrings([...root.includeFeatures]),
-    };
-  });
-  return serializeEs2015Promotion({
-    pin: options.pin,
-    sourceTaxonomySha256: sha256(options.sourceTaxonomyText),
-    ledgerSha256: sha256(options.ledgerText),
-    entries,
-  });
-}
-```
-
-The real implementation must reuse existing validation helpers rather than
-duplicating their rules. Extend the audit CLI with
-`--write-promotion=tools/test262/es2015-h0-promotion.json`; require it together
-with `--paths-manifest=tools/test262/es2015-h0-paths.json`, write no execution
-evidence in this mode, and reject a destination not named by
-`ES2015_PROMOTION_SOURCES`. Add
-`--baseline-taxonomy=PATH` for final H0 generation and
-check mode; compare that reconciled pre-H0 artifact with generated output
-through `assertExactPromotionDelta` before writing.
-
-- [ ] **Step 4: Generate the exact H0 manifest from pre-H0 evidence**
-
-Generate one code-unit-sorted entry per path from the committed Task 1
-manifest and `buildEs2015Inventory`, recording `variants`, normalized root
-`features`, and transitive `includeFeatures`:
+Generate from the Task 3 complete evidence and immutable path manifest:
 
 ```bash
 TZ=UTC node tools/test262/es2015-audit.js \
   --paths-manifest=tools/test262/es2015-h0-paths.json \
+  --write-disposition=tools/test262/es2015-h0-disposition.json
+```
+
+Expected at the current observed baseline: 40 roots / 79 variants receive
+`passed`, and 95 roots / 188 variants receive reviewed `reassigned`
+dispositions. Treat these counts as evidence only; regenerate final counts after
+moving-main reconciliation.
+
+- [ ] **Step 5: Build the exact pass-only H0 promotion manifest**
+
+Generate one code-unit-sorted entry per complete-root `passed` disposition,
+recording normalized metadata, include closure, disposition hash, source
+taxonomy hash, and ledger hash:
+
+```bash
+TZ=UTC node tools/test262/es2015-audit.js \
+  --paths-manifest=tools/test262/es2015-h0-paths.json \
+  --disposition=tools/test262/es2015-h0-disposition.json \
   --write-promotion=tools/test262/es2015-h0-promotion.json
 ```
 
-The output must contain:
+The promotion manifest must not contain reassigned or partially passing roots.
+Validate live pinned metadata/include closure and independently recompute all
+source digests before accepting it.
 
-```js
-const manifest = {
-  version: 1,
-  repository: 'https://github.com/tc39/test262.git',
-  revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
-  sourceTaxonomySha256:
-    'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
-  ledgerSha256:
-    '3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950',
-  rootCount: 135,
-  variantCount: 267,
-  entries,
-};
-```
+- [ ] **Step 6: Wire selection, execution, audit, and report synchronization**
 
-Validate live pinned metadata/include closure and independently recompute the
-source-taxonomy digest before accepting the manifest.
-
-- [ ] **Step 5: Wire selection, execution, audit, and report synchronization**
-
-Update `upstream-select.js` to load both manifests and emit both exact groups.
+Update `upstream-select.js` to emit T0 plus H0 pass-only promotion groups.
 Update `upstream-run.js` to validate/authorize all promotion sources. Update
-`es2015-audit.js` so focused execution identifies the target promotion file,
-keeps T0 evidence, and generates the H0 evidence/blocker reclassification
-atomically only after all 267 exact variants pass. The generator, not a manual
-JSON edit, removes only manifest-named H0 blocker entries and records per-file
-promotion hashes in the taxonomy artifact. Missing, failed, skipped, duplicate,
-or foreign evidence must leave the prior evidence file unchanged.
+`es2015-audit.js` so focused execution identifies the target disposition and
+promotion files, keeps T0 evidence, and writes disposition, promotion, evidence,
+taxonomy, and downstream owner-ledger deltas atomically. Missing, failed,
+skipped, duplicate, foreign, unknown-owner, or unexplained evidence writes no
+success record and removes no H0 blocker.
 
-Use an explicit option:
+Use explicit options:
 
 ```text
+--disposition=tools/test262/es2015-h0-disposition.json
 --promotion-file=tools/test262/es2015-h0-promotion.json
 ```
 
-with `--paths-manifest=tools/test262/es2015-h0-paths.json` and
-`--write-execution`, rejecting an unknown promotion source.
+with `--paths-manifest=tools/test262/es2015-h0-paths.json`, rejecting unknown
+sources.
 
-- [ ] **Step 6: Run GREEN tooling tests**
+- [ ] **Step 7: Run GREEN tooling tests**
 
 ```bash
 node test/run-node.js \
@@ -710,29 +682,33 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 7: Run fresh specification and quality reviews**
+- [ ] **Step 8: Run fresh specification and quality reviews**
 
 Require reviewers to verify immutable T0 provenance, exact H0 hash/counts,
 duplicate rejection, no global feature widening, deterministic UTC generation,
-and downstream compatibility. Fix and repeat Step 6.
+partial-promotion fail-closed behavior, reviewed owner mapping, and downstream
+compatibility. Fix and repeat Step 7.
 
-- [ ] **Step 8: Commit the promotion tooling**
+- [ ] **Step 9: Commit the disposition and promotion tooling**
 
 ```bash
-git add tools/test262/es2015-h0-promotion.json tools/test262/es2015-promotion.js tools/test262/upstream-select.js tools/test262/upstream-run.js tools/test262/es2015-audit.js test/node/es2015-taxonomy.test.js test/node/upstream-select.test.js test/node/workflow-contract.test.js
-git commit -m "Add exact H0 Test262 promotion provenance" \
+git add tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-promotion.json tools/test262/es2015-promotion.js tools/test262/upstream-select.js tools/test262/upstream-run.js tools/test262/es2015-audit.js test/node/es2015-taxonomy.test.js test/node/upstream-select.test.js test/node/workflow-contract.test.js
+git commit -m "Add exact H0 Test262 dispositions" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
 
 ---
 
-### Task 5: Reclassify and Publish Deterministic Evidence
+### Task 5: Atomically Reclassify Selector-Zero Evidence
 
 **Files:**
 
+- Modify: `tools/test262/es2015-h0-disposition.json`
+- Modify: `tools/test262/es2015-h0-promotion.json`
 - Modify: `tools/test262/upstream-subset.json`
 - Modify: `tools/test262/es2015-audit-evidence.json`
 - Modify: `tools/test262/es2015-taxonomy.json`
+- Modify: generated downstream owner ledgers/count deltas
 - Modify: `docs/test262-report.jsonl`
 - Modify: generated coverage block in `docs/conformance.md`
 - Modify: `docs/testing.md`
@@ -740,9 +716,13 @@ git commit -m "Add exact H0 Test262 promotion provenance" \
 
 **Interfaces:**
 
-- Consumes: exact H0 manifest and passing focused execution.
-- Produces: selected/passing H0 roots with zero core
-  `test262-cross-realm-host` blockers and balanced taxonomy totals.
+- Consumes: exact H0 path manifest, complete H0 execution evidence, generated H0
+  dispositions, reviewed owner mapping, and pass-only promotion manifest.
+- Produces: zero core `test262-cross-realm-host` selectors by promoting only
+  complete-root passes and reassigning the remaining roots to existing roadmap
+  owners.
+- Produces: selected evidence, reassignment evidence, taxonomy, report, and
+  downstream owner-ledger updates from one generator transaction.
 
 - [ ] **Step 1: Reconcile moving `origin/main` before final evidence**
 
@@ -764,42 +744,46 @@ git rebase origin/main
 test "$(git merge-base HEAD origin/main)" = "$FINAL_PR_BASE"
 ```
 
-Compare original-baseline and final-base classifications by path. Every
-non-H0 movement must correspond to a reviewed parallel-main merge such as
-#75/#77/#79; unexplained movement is a hard stop. Require the immutable H0
-artifact still has exactly 135 roots / 267 variants and the same ledger hash,
-and derive the final-base core `test262-cross-realm-host` selector. Require that
-selector's code-unit-sorted path set and 267-variant sum equal the immutable H0
-artifact exactly: no removed H0 path and no concurrent extra path with the same
-blocker. If the sets differ, stop for explicit roadmap review rather than
-silently shrinking or expanding H0. This dynamic equality proof is what makes
-the later global H0-zero assertion valid.
+Compare original-baseline and final-base classifications by path. Every non-H0
+movement must correspond to a reviewed parallel-main merge such as #75/#77/#79;
+unexplained movement is a hard stop. Require the immutable H0 artifact still has
+exactly 135 roots / 267 variants and the same ledger hash, and derive the
+final-base core `test262-cross-realm-host` selector. Require that selector's
+code-unit-sorted path set and 267-variant sum equal the immutable H0 artifact
+exactly: no removed H0 path and no concurrent extra path with the same blocker.
+If the sets differ, stop for explicit roadmap review rather than silently
+shrinking or expanding H0. This dynamic equality proof is what makes the later
+selector-zero assertion valid.
 
-- [ ] **Step 2: Regenerate H0 provenance from the reconciled final base**
+- [ ] **Step 2: Regenerate final disposition and pass-only promotion**
 
-Regenerate `es2015-h0-promotion.json` so its source taxonomy hash names
-`h0-final-base-taxonomy.json`, then regenerate exact selection and execute only
-the immutable 135-path corpus:
+Regenerate the final disposition and promotion so their source taxonomy hashes
+name `h0-final-base-taxonomy.json`, then regenerate exact selection and execute
+only the immutable 135-path corpus:
 
 ```bash
+TZ=UTC npm run test262:cross-realm
 TZ=UTC node tools/test262/es2015-audit.js \
   --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json" \
   --paths-manifest=tools/test262/es2015-h0-paths.json \
+  --write-disposition=tools/test262/es2015-h0-disposition.json
+TZ=UTC node tools/test262/es2015-audit.js \
+  --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json" \
+  --paths-manifest=tools/test262/es2015-h0-paths.json \
+  --disposition=tools/test262/es2015-h0-disposition.json \
   --write-promotion=tools/test262/es2015-h0-promotion.json
 TZ=UTC npm run test262:select
-TZ=UTC node tools/test262/es2015-audit.js \
-  --baseline-taxonomy="$ARTIFACTS/h0-final-base-taxonomy.json" \
-  --promotion-file=tools/test262/es2015-h0-promotion.json \
-  --paths-manifest=tools/test262/es2015-h0-paths.json \
-  --write-execution
 ```
 
-Expected: all 267 variants pass. The reviewed generator atomically writes
-passing evidence and removes only the exact 135 manifest-named blockers.
-Missing, failed, skipped, duplicate, or foreign evidence writes neither a
-success record nor blocker removal.
+Expected: the exact execution evidence covers every H0 root and every required
+variant once. The generator derives final counts after rebase, not from the
+observed 40/79 and 95/188 baseline. Complete-root passes become the only
+promotion entries; all other reviewed roots are reassigned to one existing
+primary roadmap owner while retaining secondary evidence. Missing, failed,
+skipped, duplicate, foreign, unknown-owner, or unexplained evidence writes
+neither a success record nor blocker removal.
 
-- [ ] **Step 3: Generate and verify the exact reclassification delta**
+- [ ] **Step 3: Generate and verify the atomic selector-zero delta**
 
 ```bash
 TZ=UTC npm run test262:es2015:sync-promoted-report
@@ -811,15 +795,24 @@ TZ=UTC node tools/test262/es2015-audit.js \
 TZ=UTC npm run test262:select:check
 ```
 
-`assertExactPromotionDelta` must prove:
+`assertExactH0DispositionDelta` must prove:
 
-- the post-H0 selector is zero roots / zero variants;
-- exactly the immutable 135 paths / 267 variants moved from the H0 blocker to
-  selected-and-passing;
-- expected selected/blocked totals equal the reconciled final-base totals plus
-  or minus the exact 135/267 delta, without hard-coded global totals;
+- the post-H0 `test262-cross-realm-host` selector is zero roots / zero variants;
+- `passed` + `reassigned` root union equals the immutable 135 paths exactly;
+- `passed` + `reassigned` variant union equals the immutable 267 variants
+  exactly;
+- the pass-only promotion manifest contains exactly the complete-root `passed`
+  dispositions and no reassigned or partial roots;
+- every reassigned root names one reviewed existing owner and preserves secondary
+  evidence;
+- expected selected/blocked/reassigned totals equal the reconciled final-base
+  totals plus or minus generated root/variant deltas, without hard-coded global
+  totals;
+- exact path/hash equality holds for H0 ledger, disposition, promotion, evidence,
+  taxonomy, report, and downstream owner ledgers;
 - whole-tree, core, Annex B, unknown, and harness denominators balance; and
-- every non-H0 classification is byte-equivalent to the reconciled final base.
+- every non-H0 classification is byte-equivalent to the reconciled final base,
+  except reviewed concurrent-main movement already accounted for in Step 1.
 
 Any additional movement is a hard stop unless a new `origin/main` fetch proves
 it is a reviewed rebase consequence, in which case repeat Steps 1-3.
@@ -827,9 +820,10 @@ it is a reviewed rebase consequence, in which case repeat Steps 1-3.
 - [ ] **Step 4: Update direct documentation from generated totals**
 
 Document the original issue baseline, final PR base, focused command,
-harness-only boundary, exact H0 ledger/hash, and generator-derived final totals.
-State that `$262` remains absent from public runtime APIs and normal Realm
-globals, and that B0 owns detachment.
+harness-only boundary, exact H0 ledger/hash, generated passed/reassigned counts,
+and selector-zero result. State that `$262` remains absent from public runtime
+APIs and normal Realm globals, that B0 owns detachment, and that #76 completed
+host support rather than making all 135 roots semantically pass.
 
 - [ ] **Step 5: Run focused drift gates only**
 
@@ -849,16 +843,17 @@ broad upstream Test262.
 - [ ] **Step 6: Run fresh evidence reviews**
 
 Use fresh maximum-effort non-Claude-Opus-5 reviewers for specification and
-quality. Require original/final base separation, exact arithmetic,
-ledger/source hashes, T0 preservation, generated blocker removal, selected
-evidence completeness, generated report consistency, and zero unintended path
-movement. Fix and rerun Steps 1-5 if main moved; otherwise rerun Steps 2-5.
+quality. Require original/final base separation, exact arithmetic, ledger/source
+hashes, T0 preservation, generated disposition and blocker movement,
+complete-root-only promotion, reviewed owner reassignment, generated report and
+owner-ledger consistency, and zero unintended path movement. Fix and rerun Steps
+1-5 if main moved; otherwise rerun Steps 2-5.
 
 - [ ] **Step 7: Commit reconciled deterministic evidence**
 
 ```bash
-git add tools/test262/es2015-h0-promotion.json tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
-git commit -m "Promote exact cross-Realm Test262 roots" \
+git add tools/test262/es2015-h0-disposition.json tools/test262/es2015-h0-promotion.json tools/test262/upstream-subset.json tools/test262/es2015-audit-evidence.json tools/test262/es2015-taxonomy.json docs/test262-report.jsonl docs/conformance.md docs/testing.md README.md
+git commit -m "Reclassify exact cross-Realm Test262 roots" \
   -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 ```
 
@@ -1018,7 +1013,7 @@ The PR body uses `Tracks #76`, not `Fixes #76`, and distinguishes:
 - original issue baseline `ORIGINAL_ISSUE_BASE`;
 - reconciled final merge base `FINAL_PR_BASE`;
 - reviewed PR head `REVIEWED_HEAD`;
-- H0 ledger hash and 135/267 result;
+- H0 ledger hash, generated passed/reassigned counts, and selector-zero result;
 - host-interface/non-goal summary;
 - Node/Chromium/JSC/focused UTC/taxonomy/static/benchmark evidence;
 - pending/final exact CI run ID, PR-head CodeQL analysis IDs/categories, and
@@ -1294,15 +1289,17 @@ printf '%s\n' "$H0_MAIN_CODEQL_RUN" \
 Inspect the exact-main log and SARIF for zero extraction or parse diagnostics.
 API unavailability is a hard failure, not a fallback.
 
-Verify the merged taxonomy/report bytes equal the reviewed head, the H0 selector
-is still zero, and `assertExactPromotionDelta` still proves exactly 135/267
-movement against `h0-final-base-taxonomy.json`.
+Verify the merged taxonomy/report/disposition/promotion bytes equal the reviewed
+head, the H0 selector is still zero, and `assertExactH0DispositionDelta` still
+proves the exact 135-root / 267-variant passed-or-reassigned union against
+`h0-final-base-taxonomy.json`.
 
 ```bash
 ARTIFACTS=/Users/jordan/.copilot/session-state/fcbbda7f-04cc-47b2-851a-cf80bf236732/files
 REVIEWED_HEAD=$(cat "$ARTIFACTS/h0-reviewed-head.txt")
 SQUASH_SHA=$(cat "$ARTIFACTS/h0-squash-sha.txt")
 for PATH_IN_REPO in \
+  tools/test262/es2015-h0-disposition.json \
   tools/test262/es2015-h0-promotion.json \
   tools/test262/es2015-audit-evidence.json \
   tools/test262/es2015-taxonomy.json \
@@ -1332,19 +1329,23 @@ Publish on #76:
 - exact PR CodeQL analysis IDs/categories and workflow run;
 - exact-main dynamic CodeQL analysis IDs/categories, run, SARIF/log hashes, and
   zero open alerts;
-- exact ledger hash and 135/267 passing/reclassification result;
+- exact ledger hash, generated passed/reassigned counts, and selector-zero result;
 - original issue baseline, final PR base, reviewed head, and squash SHA;
-- post-merge taxonomy SHA-256 and balanced totals;
-- `$262` non-leakage and B0/non-goal statements.
+- post-merge taxonomy/disposition/promotion SHA-256 values and balanced totals;
+- deterministic added path/hash/count deltas for every affected downstream owner
+  issue and #70; and
+- `$262` non-leakage, B0/non-goal, and host-support-completion statements.
 
-Only now close #76 explicitly. Update #70 selected/core counts and H0 status.
-Update downstream issue counts/dependencies only from the post-merge taxonomy,
-explicitly naming newly unblocked issues. Preserve closed #74 as resolved
-dependency history. Update the merged PR body one final time with the squash
-SHA and exact-main CodeQL evidence.
+Only now close #76 explicitly, after exact-main CodeQL and post-merge generated
+verification. Update #70 selected/core/reassigned counts and H0 status from the
+post-merge generated artifacts. Update every affected downstream owner issue
+with deterministic added path/hash/count deltas, explicitly naming newly
+unblocked issues. Preserve closed #74 as resolved dependency history. Update the
+merged PR body one final time with the squash SHA and exact-main CodeQL evidence.
+Do not describe the outcome as 135 semantic passes.
 
 - [ ] **Step 8: Report completion to the project coordinator**
 
 Send the coordinator one concise message with PR URL, squash SHA, exact CI and
-CodeQL runs, taxonomy/ledger hashes, updated issue URLs, and newly unblocked
-roadmap nodes.
+CodeQL runs, taxonomy/disposition/promotion/ledger hashes, generated
+passed/reassigned counts, updated issue URLs, and newly unblocked roadmap nodes.

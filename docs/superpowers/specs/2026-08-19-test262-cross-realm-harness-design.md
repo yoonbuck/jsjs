@@ -2,14 +2,21 @@
 
 ## Goal
 
-Implement issue #76 at exact baseline
-`54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7`: unblock the H0 ledger's exact
-135 core roots / 267 executable variants with portable, same-Agent
-`$262.createRealm` and `$262.evalScript` support.
+Complete issue #76's harness host-support scope at exact baseline
+`54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` by installing portable,
+same-Agent `$262.createRealm` and `$262.evalScript` support and by generating
+selector-zero disposition for the H0 ledger's exact 135 core roots / 267
+executable variants.
+
+Completion means every H0 root is either a complete-root pass or a reviewed
+reassignment to one existing roadmap blocker. It does not mean all 135 roots
+semantically pass.
 
 The definitive path ledger is issue #76 comment
 `5347037600`, `H0.paths.txt`, SHA-256
 `3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950`.
+That immutable ledger remains 135 roots / 267 variants. Exact execution
+evidence must cover every root and every required variant once.
 
 ## Scope
 
@@ -25,7 +32,8 @@ embedding infrastructure:
 ArrayBuffer detachment remains B0. `AbstractModuleSource`, garbage collection,
 and later Agent hooks are excluded. Existing asynchronous `print`/`$DONE`
 bridging remains on the runner's current path and is not duplicated inside
-`$262`.
+`$262`. Downstream runtime semantics remain out of scope for the harness-only
+implementation.
 
 ## Architecture
 
@@ -107,15 +115,34 @@ Strict RED-first portable probes cover:
 - thrown-value identity across `evalScript`.
 
 After the focused probes pass, run the exact H0 ledger under `TZ=UTC` against
-the pinned Test262 SHA. The post-change taxonomy must reclassify all 135 roots /
-267 variants away from `test262-cross-realm-host` without widening a feature
-tag or changing another owning blocker.
+the pinned Test262 SHA to produce complete root/variant execution evidence. The
+generator assigns exactly one root-level disposition:
+
+- `passed` only when the root's complete required variant set passed; or
+- `reassigned` only when every required variant has a concrete reviewed failure
+  signature and one named existing roadmap blocker is the next actual blocker
+  under taxonomy precedence.
+
+Promotion contains only complete-root passes; partially passing roots are never
+promoted. Missing variants, skipped variants, mixed pass/fail evidence,
+duplicate roots or variants, unknown owners, variant mismatches, or unexplained
+failures fail closed and leave the H0 blocker unchanged. Reassignment records
+retain secondary prerequisite/failure evidence without replacing the single
+primary owner.
+
+The current observed host-support baseline is 40 roots / 79 variants passed and
+95 roots / 188 variants reassigned. Final counts are regenerated after
+moving-main reconciliation, not hard-coded. Generator-owned disposition,
+promotion, taxonomy, and downstream owner-ledger updates make the H0 selector
+zero without manual blocker deletion, while preserving global taxonomy balance
+and the exact H0 root/variant union.
 
 ## Gates
 
 Run Node, Chromium, and JavaScriptCore portable suites, with JSC at
 `/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc`.
-Run the focused UTC Test262 ledger locally, taxonomy/audit/selection drift
-checks, typecheck, lint, formatting, vendor and generated-CI invariants, and
-benchmark smoke. Broad pinned Test262 runs only in exact-head CI. Exact-head
-CodeQL and CI must pass before merge.
+Run the focused UTC Test262 ledger locally to collect exact evidence, then run
+taxonomy/audit/selection drift checks, typecheck, lint, formatting, vendor and
+generated-CI invariants, and benchmark smoke. Broad pinned Test262 runs only in
+exact-head CI. Exact-head CodeQL and CI must pass before merge. Publish the
+outcome as harness host-support completion, not 135 semantic passes.
