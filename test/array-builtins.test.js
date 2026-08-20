@@ -41,7 +41,7 @@ const tests = [
       assertSame(/** @type {EngineObject} */ (called).get('length'), 0);
       assertSame(/** @type {EngineObject} */ (constructed).get('length'), 0);
       assertSame(
-        /** @type {EngineObject} */ (called).getPrototype(),
+        /** @type {EngineObject} */ (called).getPrototypeOf(),
         realm.intrinsics.arrayPrototype,
       );
     },
@@ -127,7 +127,7 @@ const tests = [
         false,
       );
       assertSame(
-        realmOne.intrinsics.arrayPrototype.getPrototype(),
+        realmOne.intrinsics.arrayPrototype.getPrototypeOf(),
         realmOne.intrinsics.objectPrototype,
       );
     },

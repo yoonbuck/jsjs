@@ -586,7 +586,7 @@ export class EngineFunction extends EngineObject {
       return false;
     }
 
-    const proto = this.get('prototype');
+    const proto = this.get('prototype', this);
 
     if (!(proto instanceof EngineObject)) {
       throw new GuestErrorSignal(
@@ -595,14 +595,14 @@ export class EngineFunction extends EngineObject {
       );
     }
 
-    let current = /** @type {EngineObject | null} */ (value.getPrototype());
+    let current = /** @type {EngineObject | null} */ (value.getPrototypeOf());
 
     while (current !== null) {
       if (current === proto) {
         return true;
       }
 
-      current = current.getPrototype();
+      current = current.getPrototypeOf();
     }
 
     return false;
@@ -648,7 +648,9 @@ export class EngineFunction extends EngineObject {
  */
 function ordinaryCreateFromConstructor(newTarget, fallbackPrototype, agent) {
   const candidate =
-    newTarget instanceof EngineObject ? newTarget.get('prototype') : undefined;
+    newTarget instanceof EngineObject
+      ? newTarget.get('prototype', newTarget)
+      : undefined;
   const prototype =
     candidate instanceof EngineObject ? candidate : fallbackPrototype;
   return new EngineObject(prototype, 'Object', agent);
@@ -666,7 +668,7 @@ function ordinaryCreateFromConstructor(newTarget, fallbackPrototype, agent) {
  */
 export function constructSuper(args, functionEnvironment) {
   const superConstructor =
-    functionEnvironment.activeConstructor?.getPrototype();
+    functionEnvironment.activeConstructor?.getPrototypeOf();
 
   if (!isConstructor(superConstructor)) {
     throw new GuestErrorSignal(

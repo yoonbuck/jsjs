@@ -215,7 +215,7 @@ const tests = [
       assertSame(first instanceof EngineObject, true);
       assertSame(result instanceof EngineObject, true);
       assertSame(
-        /** @type {EngineObject} */ (first).getPrototype(),
+        /** @type {EngineObject} */ (first).getPrototypeOf(),
         iterableRealm.intrinsics.objectPrototype,
       );
       assertSame(
@@ -223,7 +223,7 @@ const tests = [
         iterableRealm.agent,
       );
       assertSame(
-        /** @type {EngineObject} */ (result).getPrototype(),
+        /** @type {EngineObject} */ (result).getPrototypeOf(),
         generatorRealm.intrinsics.objectPrototype,
       );
       assertSame(
@@ -503,7 +503,7 @@ const tests = [
 
       assertSame(caught instanceof EngineObject, true);
       assertSame(
-        /** @type {EngineObject} */ (caught).getPrototype(),
+        /** @type {EngineObject} */ (caught).getPrototypeOf(),
         realm.intrinsics.typeErrorPrototype,
       );
       assertSame(realm.globalObject.get('closeCalls'), 1);

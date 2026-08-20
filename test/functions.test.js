@@ -250,7 +250,7 @@ const tests = [
       evaluateScript(realm, 'function f() {}');
 
       const f = /** @type {any} */ (realm.globalObject.get('f'));
-      assertSame(f.getPrototype(), realm.intrinsics.functionPrototype);
+      assertSame(f.getPrototypeOf(), realm.intrinsics.functionPrototype);
     },
   },
   {
@@ -578,7 +578,7 @@ const tests = [
       const constructor = /** @type {any} */ (realm.globalObject.get('P'));
       const instance = /** @type {any} */ (realm.globalObject.get('p'));
 
-      assertSame(instance.getPrototype(), constructor.get('prototype'));
+      assertSame(instance.getPrototypeOf(), constructor.get('prototype'));
       assertSame(evaluateScript(realm, 'p.constructor === P;').value, true);
     },
   },
@@ -654,7 +654,7 @@ const tests = [
       );
 
       const instance = /** @type {any} */ (realm.globalObject.get('p'));
-      assertSame(instance.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(instance.getPrototypeOf(), realm.intrinsics.objectPrototype);
     },
   },
   {

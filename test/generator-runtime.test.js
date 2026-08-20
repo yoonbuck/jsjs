@@ -97,7 +97,7 @@ const tests = [
       );
       const generatorFunction =
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
-          g.getPrototype()
+          g.getPrototypeOf()
         ).get('constructor');
       const generatorFunctionPrototype =
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
@@ -118,7 +118,7 @@ const tests = [
       assertSame(
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
           generatorFunction
-        ).getPrototype(),
+        ).getPrototypeOf(),
         realm.intrinsics.functionConstructor,
       );
       assertDataDescriptor(
@@ -148,7 +148,7 @@ const tests = [
         true,
       );
       assertSame(
-        generatorFunctionPrototype.getPrototype(),
+        generatorFunctionPrototype.getPrototypeOf(),
         realm.intrinsics.functionPrototype,
       );
       assertDataDescriptor(
@@ -193,7 +193,7 @@ const tests = [
         generatorFunctionPrototype,
       );
       assertSame(
-        generatorPrototype.getPrototype(),
+        generatorPrototype.getPrototypeOf(),
         realm.intrinsics.iteratorPrototype,
       );
     },
@@ -446,7 +446,7 @@ const tests = [
       );
 
       assertSame(
-        yielded.getPrototype(),
+        yielded.getPrototypeOf(),
         generatorRealm.intrinsics.objectPrototype,
       );
       assertSame(observed[0], generatorRealm);
@@ -454,13 +454,13 @@ const tests = [
       assertSame(generatorRealm.agent.activeExecutionRealm, null);
       assertSame(methodRealm.agent.activeExecutionRealm, null);
       assertSame(
-        throwYield.getPrototype(),
+        throwYield.getPrototypeOf(),
         generatorRealm.intrinsics.objectPrototype,
       );
       for (const result of [completed, alreadyCompleted, returned, thrown]) {
         assertSame(result.get('done'), true);
         assertSame(
-          result.getPrototype(),
+          result.getPrototypeOf(),
           methodRealm.intrinsics.objectPrototype,
         );
       }
@@ -632,7 +632,7 @@ const tests = [
       assertSame(
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
           declaration.get('prototype')
-        ).getPrototype(),
+        ).getPrototypeOf(),
         realm.intrinsics.generatorPrototype,
       );
     },
@@ -724,7 +724,7 @@ const tests = [
       assertSame(generator.state, 'suspendedYield');
       assertSame(yielded.get('value'), 'pause');
       assertSame(yielded.get('done'), false);
-      assertSame(yielded.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(yielded.getPrototypeOf(), realm.intrinsics.objectPrototype);
 
       const returned = new GeneratorObject(realm, generatorPrototype, {
         resume() {

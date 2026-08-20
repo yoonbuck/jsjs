@@ -140,7 +140,7 @@ export function applyClassHeritage(state, heritage) {
         );
       }
 
-      const parentPrototype = heritage.get('prototype');
+      const parentPrototype = heritage.get('prototype', heritage);
 
       if (
         parentPrototype !== null &&

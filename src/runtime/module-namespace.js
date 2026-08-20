@@ -136,22 +136,18 @@ export class ModuleNamespaceObject extends EngineObject {
    * this-side binding, and any other key is an own property this exotic
    * object refuses to create (its `[[Extensible]]` is `false` and it has no
    * writable data properties). Overriding the polymorphic `set` (rather than
-   * only `put`) is what makes this rejection reach `super.prop = value`
-   * assignments too: `SuperReferenceBase#setReferencedValue` and ordinary
+   * only the Set operation) is what makes this rejection reach `super.prop = value`
+   * assignments too: `SuperReferenceBase#set` and ordinary
    * `EngineObject#set`'s prototype walk both dispatch to whichever object's
    * `set` governs the lookup, receiver and all.
    *
    * @param {PropertyKey} _key
    * @param {unknown} _value
    * @param {unknown} _receiver
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  set(_key, _value, _receiver, throwOnError = false) {
-    return rejectOperation(
-      throwOnError,
-      'Cannot assign to a module namespace object',
-    );
+  set(_key, _value, _receiver) {
+    return false;
   }
 
   /**
@@ -292,17 +288,4 @@ function exportDescriptor(resolved) {
     enumerable: true,
     configurable: false,
   };
-}
-
-/**
- * @param {boolean} throwOnError
- * @param {string} message
- * @returns {false}
- */
-function rejectOperation(throwOnError, message) {
-  if (throwOnError) {
-    throw new GuestErrorSignal('TypeError', message);
-  }
-
-  return false;
 }

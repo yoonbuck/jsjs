@@ -1,4 +1,9 @@
-import { EngineObject, defineOwnPropertyOrThrow } from './object.js';
+import {
+  EngineObject,
+  defineOwnPropertyOrThrow,
+  enterObjectOperationRealm,
+  exitObjectOperationRealm,
+} from './object.js';
 import { Reference, UnresolvableReference } from './reference.js';
 import { GuestErrorSignal } from './completion.js';
 import { isDataDescriptor } from './descriptors.js';
@@ -430,7 +435,19 @@ export class ObjectEnvironmentRecord {
       callerRealm.agent.linkGeneratorHostChain(this.bindingObject.agent);
     }
 
-    this.bindingObject.put(name, value, strict, callerRealm);
+    enterObjectOperationRealm(callerRealm);
+    /** @type {boolean} */
+    let succeeded;
+
+    try {
+      succeeded = this.bindingObject.set(name, value, this.bindingObject);
+    } finally {
+      exitObjectOperationRealm(callerRealm);
+    }
+
+    if (!succeeded && strict) {
+      throw new GuestErrorSignal('TypeError', 'Cannot assign to property');
+    }
   }
 
   /**
@@ -455,7 +472,13 @@ export class ObjectEnvironmentRecord {
       return undefined;
     }
 
-    return this.bindingObject.get(name, callerRealm);
+    enterObjectOperationRealm(callerRealm);
+
+    try {
+      return this.bindingObject.get(name, this.bindingObject);
+    } finally {
+      exitObjectOperationRealm(callerRealm);
+    }
   }
 
   /**
@@ -916,7 +939,7 @@ export function bindThisValue(functionEnvironment, value) {
  */
 export function getSuperBase(functionEnvironment) {
   if (functionEnvironment?.homeObject instanceof EngineObject) {
-    return functionEnvironment.homeObject.getPrototype();
+    return functionEnvironment.homeObject.getPrototypeOf();
   }
 
   throw new GuestErrorSignal(

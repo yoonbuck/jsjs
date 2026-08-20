@@ -38,7 +38,7 @@ function assertGuestThrow(completion, constructorName, realm) {
   }
 
   let current = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
 
   while (current !== null) {
@@ -46,7 +46,7 @@ function assertGuestThrow(completion, constructorName, realm) {
       return /** @type {EngineObject} */ (completion.value);
     }
 
-    current = current.getPrototype();
+    current = current.getPrototypeOf();
   }
 
   throw new Error(

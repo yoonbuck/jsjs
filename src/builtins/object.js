@@ -58,7 +58,7 @@ export function createObjectIntrinsics(realm) {
 
     const candidate =
       newTarget instanceof EngineObject
-        ? newTarget.get('prototype', realm)
+        ? newTarget.get('prototype', newTarget)
         : undefined;
     return new EngineObject(
       candidate instanceof EngineObject ? candidate : objectPrototype,
@@ -128,7 +128,7 @@ export function createObjectIntrinsics(realm) {
       call(thisValue) {
         const object = toObject(realm, thisValue);
         const method = requireCallable(
-          object.get('toString', realm),
+          object.get('toString', object),
           'toString is not callable',
         );
         return method.callFunction(object, [], realm);
@@ -178,14 +178,14 @@ export function createObjectIntrinsics(realm) {
         }
 
         const object = toObject(realm, thisValue);
-        let current = value.getPrototype();
+        let current = value.getPrototypeOf();
 
         while (current !== null) {
           if (current === object) {
             return true;
           }
 
-          current = current.getPrototype();
+          current = current.getPrototypeOf();
         }
 
         return false;
@@ -363,7 +363,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     (_this, args) => {
       const object = requireObjectArgument(args[0]);
       const name = toPropertyKey(args[1], realm);
-      const descriptor = toPropertyDescriptor(args[2], realm);
+      const descriptor = toPropertyDescriptor(args[2]);
       defineOwnPropertyOrThrow(object, name, descriptor);
       return object;
     },
@@ -476,7 +476,7 @@ function defineProperties(realm, object, propertiesValue) {
 
     definitions.push({
       name,
-      descriptor: toPropertyDescriptor(properties.get(name, realm), realm),
+      descriptor: toPropertyDescriptor(properties.get(name, properties)),
     });
   }
 

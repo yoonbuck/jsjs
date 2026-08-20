@@ -6,11 +6,21 @@ import { createModuleLoader } from '../src/runtime/module-loader.js';
 import { loadModuleGraph } from '../src/runtime/module-loader.js';
 import { linkModuleGraph } from '../src/runtime/module-linker.js';
 import { evaluateModuleGraph } from '../src/evaluator/modules.js';
-import { EngineObject } from '../src/runtime/object.js';
+import {
+  EngineObject,
+  enterObjectOperationRealm,
+  exitObjectOperationRealm,
+} from '../src/runtime/object.js';
 import { EngineArray } from '../src/runtime/array-object.js';
 import * as objectOperations from '../src/runtime/object.js';
 import { ThrowSignal, GuestErrorSignal } from '../src/runtime/completion.js';
+import {
+  Reference,
+  UnresolvableReference,
+  putValue,
+} from '../src/runtime/reference.js';
 import { GeneratorObject } from '../src/runtime/generator-object.js';
+import { ObjectEnvironmentRecord } from '../src/runtime/environment.js';
 import { typeOf } from '../src/runtime/operators.js';
 import {
   callCallable,
@@ -88,6 +98,230 @@ export default [
       descriptor.value = 2;
 
       assertSame(object.get('value'), 1);
+    },
+  },
+  {
+    name: 'Get passes the original receiver to an inherited accessor',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('receiver', {
+        get() {
+          return this;
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      const receiver = new EngineObject(prototype);
+
+      assertSame(prototype.get('receiver', receiver), receiver);
+      assertSame(receiver.get('receiver', receiver), receiver);
+    },
+  },
+  {
+    name: 'Get and Set preserve an explicit undefined receiver',
+    run() {
+      const prototype = new EngineObject();
+      prototype.defineOwnProperty('receiver', {
+        get() {
+          return this;
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      prototype.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(prototype.get('receiver'), prototype);
+      assertSame(prototype.get('receiver', undefined), undefined);
+      assertSame(prototype.set('value', 2, undefined), false);
+      assertSame(prototype.get('value', prototype), 1);
+    },
+  },
+  {
+    name: 'an active target Realm outranks an outer object operation Realm',
+    run() {
+      const operationRealm = createRealm();
+      const targetRealm = createRealm();
+      const accessorRealm = createRealm();
+      const target = new EngineObject(targetRealm.intrinsics.objectPrototype);
+      let observedCallerRealm = null;
+      const getter = accessorRealm.createNativeFunction({
+        name: 'get value',
+        length: 0,
+        call(_thisValue, _args, _functionObject, callerRealm) {
+          observedCallerRealm = callerRealm ?? null;
+          return 1;
+        },
+      });
+      target.defineOwnProperty('value', {
+        get: getter,
+        enumerable: true,
+        configurable: true,
+      });
+
+      targetRealm.agent.withActiveExecutionRealm(targetRealm, () => {
+        enterObjectOperationRealm(operationRealm);
+
+        try {
+          target.get('value', target);
+        } finally {
+          exitObjectOperationRealm(operationRealm);
+        }
+      });
+
+      assertSame(observedCallerRealm, targetRealm);
+    },
+  },
+  {
+    name: 'accessors normalize an absent active Realm to undefined',
+    run() {
+      const realm = createRealm();
+      const object = new EngineObject(realm.intrinsics.objectPrototype);
+      const getter = realm.createNativeFunction({
+        name: 'get value',
+        length: 0,
+        call() {
+          return 1;
+        },
+      });
+      object.defineOwnProperty('value', {
+        get: getter,
+        enumerable: true,
+        configurable: true,
+      });
+
+      realm.agent.withNoActiveExecutionRealm(() => {
+        assertSame(object.get('value', object), 1);
+      });
+    },
+  },
+  {
+    name: 'Set returns false while strict reference wrappers choose the error',
+    run() {
+      const object = new EngineObject();
+      object.defineOwnProperty('locked', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+
+      assertSame(object.set('locked', 2, object), false);
+      assertThrows(
+        () => putValue(new Reference(object, 'locked', true, object), 2),
+        GuestErrorSignal,
+      );
+      assertSame(object.get('locked', object), 1);
+    },
+  },
+  {
+    name: 'sloppy global assignment preserves its caller Realm for inherited setters',
+    run() {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const globalRealm = createRealm({ agent: createAgent() });
+      const accessorRealm = createRealm({ agent: createAgent() });
+      const globalPrototype = new EngineObject(
+        globalRealm.intrinsics.objectPrototype,
+      );
+      const globalObject = new EngineObject(globalPrototype);
+      let observedCallerRealm = null;
+      const setter = accessorRealm.createNativeFunction({
+        name: 'set created',
+        length: 1,
+        call(_thisValue, _args, _functionObject, caller) {
+          observedCallerRealm = caller ?? null;
+          return undefined;
+        },
+      });
+      globalPrototype.defineOwnProperty('created', {
+        set: setter,
+        enumerable: true,
+        configurable: true,
+      });
+      const reference = new UnresolvableReference(
+        'created',
+        false,
+        globalObject,
+      );
+
+      assertSame(putValue(reference, 1, callerRealm), 1);
+      assertSame(observedCallerRealm, callerRealm);
+    },
+  },
+  {
+    name: 'Get HasProperty and Set dispatch through an overridden own-property seam once',
+    run() {
+      const root = new EngineObject();
+      root.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const middle = new EngineObject(root);
+      const ordinaryGetOwnProperty = EngineObject.prototype.getOwnProperty;
+      let ownPropertyCalls = 0;
+      middle.getOwnProperty = function (key) {
+        ownPropertyCalls += 1;
+        return ordinaryGetOwnProperty.call(this, key);
+      };
+      const receiver = new EngineObject(middle);
+
+      assertSame(receiver.get('value', receiver), 1);
+      assertSame(ownPropertyCalls, 1);
+
+      ownPropertyCalls = 0;
+      assertSame(receiver.hasProperty('value'), true);
+      assertSame(ownPropertyCalls, 1);
+
+      ownPropertyCalls = 0;
+      assertSame(receiver.set('value', 2, receiver), true);
+      assertSame(ownPropertyCalls, 1);
+      assertSame(receiver.get('value', receiver), 2);
+    },
+  },
+  {
+    name: 'object environments preserve their caller Realm for foreign accessors',
+    run() {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const targetRealm = createRealm({ agent: createAgent() });
+      const accessorRealm = createRealm({ agent: createAgent() });
+      const object = new EngineObject(targetRealm.intrinsics.objectPrototype);
+      /** @type {(import('../src/runtime/realm.js').Realm | null)[]} */
+      const observedRealms = [];
+      const getter = accessorRealm.createNativeFunction({
+        name: 'get value',
+        length: 0,
+        call(_thisValue, _args, _functionObject, caller) {
+          observedRealms.push(caller ?? null);
+          return 1;
+        },
+      });
+      const setter = accessorRealm.createNativeFunction({
+        name: 'set value',
+        length: 1,
+        call(_thisValue, _args, _functionObject, caller) {
+          observedRealms.push(caller ?? null);
+          return undefined;
+        },
+      });
+      object.defineOwnProperty('value', {
+        get: getter,
+        set: setter,
+        enumerable: true,
+        configurable: true,
+      });
+      const environment = new ObjectEnvironmentRecord(object);
+
+      assertSame(environment.getBindingValue('value', false, callerRealm), 1);
+      environment.setMutableBinding('value', 2, false, callerRealm);
+      assertSame(observedRealms.length, 2);
+      assertSame(observedRealms[0], callerRealm);
+      assertSame(observedRealms[1], callerRealm);
     },
   },
   {
@@ -192,7 +426,7 @@ export default [
         assertSame(
           /** @type {EngineObject} */ (
             /** @type {ThrowSignal} */ (error).value
-          ).getPrototype(),
+          ).getPrototypeOf(),
           operationRealm.intrinsics.rangeErrorPrototype,
         );
         assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
@@ -258,6 +492,43 @@ export default [
       assertSame(operationRealm.agent.activeExecutionRealm, null);
       assertSame(valueRealm.agent.activeExecutionRealm, null);
       assertSame(array.get('length'), 1);
+    },
+  },
+  {
+    name: 'ArraySetLength uses the active object operation Realm for coercion',
+    run() {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const arrayRealm = createRealm({ agent: createAgent() });
+      const valueRealm = createRealm({ agent: createAgent() });
+      const array = new EngineArray(arrayRealm.intrinsics.arrayPrototype);
+      const value = new EngineObject(valueRealm.intrinsics.objectPrototype);
+      /** @type {(import('../src/runtime/realm.js').Realm | null)[]} */
+      const observedRealms = [];
+      const valueOf = valueRealm.createNativeFunction({
+        name: 'valueOf',
+        length: 0,
+        call(_thisValue, _args, _functionObject, caller) {
+          observedRealms.push(caller ?? null);
+          return 1;
+        },
+      });
+      value.defineOwnProperty('valueOf', {
+        value: valueOf,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      enterObjectOperationRealm(callerRealm);
+
+      try {
+        assertSame(array.set('length', value, array), true);
+      } finally {
+        exitObjectOperationRealm(callerRealm);
+      }
+      assertSame(observedRealms.length, 2);
+      assertSame(observedRealms[0], callerRealm);
+      assertSame(observedRealms[1], callerRealm);
     },
   },
   {
@@ -673,7 +944,7 @@ export default [
       assertSame(
         /** @type {EngineObject} */ (
           native.constructFunction([])
-        ).getPrototype(),
+        ).getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
       assertSame(realm.agent.activeExecutionRealm, null);

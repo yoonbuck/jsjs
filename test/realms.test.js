@@ -13,11 +13,11 @@ const tests = [
 
       assertSame(realm.globalObject instanceof EngineObject, true);
       assertSame(
-        realm.globalObject.getPrototype(),
+        realm.globalObject.getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
       assertSame(
-        realm.intrinsics.functionPrototype.getPrototype(),
+        realm.intrinsics.functionPrototype.getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
     },

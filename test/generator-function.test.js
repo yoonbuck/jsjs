@@ -51,7 +51,7 @@ function assertGeneratorSyntaxError(realm, args) {
   }
 
   assertSame(
-    completion.value.getPrototype(),
+    completion.value.getPrototypeOf(),
     realm.intrinsics.syntaxErrorPrototype,
   );
 }
@@ -537,34 +537,37 @@ const tests = [
       );
 
       assertSame(
-        called.getPrototype(),
+        called.getPrototypeOf(),
         realmA.intrinsics.generatorFunctionPrototype,
       );
       assertSame(
-        constructed.getPrototype(),
+        constructed.getPrototypeOf(),
         realmA.intrinsics.generatorFunctionPrototype,
       );
       assertSame(
-        calledPrototype.getPrototype(),
+        calledPrototype.getPrototypeOf(),
         realmA.intrinsics.generatorPrototype,
       );
       assertSame(
-        constructedPrototype.getPrototype(),
+        constructedPrototype.getPrototypeOf(),
         realmA.intrinsics.generatorPrototype,
       );
-      assertSame(calledIterator.getPrototype(), calledPrototype);
-      assertSame(constructedIterator.getPrototype(), constructedPrototype);
-      assertSame(calledYield.getPrototype(), realmA.intrinsics.objectPrototype);
+      assertSame(calledIterator.getPrototypeOf(), calledPrototype);
+      assertSame(constructedIterator.getPrototypeOf(), constructedPrototype);
       assertSame(
-        calledReturn.getPrototype(),
+        calledYield.getPrototypeOf(),
         realmA.intrinsics.objectPrototype,
       );
       assertSame(
-        constructedYield.getPrototype(),
+        calledReturn.getPrototypeOf(),
         realmA.intrinsics.objectPrototype,
       );
       assertSame(
-        calledYield.getPrototype() === realmB.intrinsics.objectPrototype,
+        constructedYield.getPrototypeOf(),
+        realmA.intrinsics.objectPrototype,
+      );
+      assertSame(
+        calledYield.getPrototypeOf() === realmB.intrinsics.objectPrototype,
         false,
       );
       assertSame(calledYield.get('value'), 'A');
@@ -600,11 +603,11 @@ const tests = [
       }
 
       assertSame(
-        completion.value.getPrototype(),
+        completion.value.getPrototypeOf(),
         realmA.intrinsics.syntaxErrorPrototype,
       );
       assertSame(
-        completion.value.getPrototype() ===
+        completion.value.getPrototypeOf() ===
           realmB.intrinsics.syntaxErrorPrototype,
         false,
       );

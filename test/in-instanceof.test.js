@@ -42,11 +42,11 @@ function assertGuestThrow(completion, constructorName, realm) {
   const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
   const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
   let cur = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
   while (cur !== null) {
     if (cur === proto) return;
-    cur = cur.getPrototype();
+    cur = cur.getPrototypeOf();
   }
   throw new Error(`Thrown value is not an instance of ${constructorName}`);
 }

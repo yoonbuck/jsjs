@@ -188,7 +188,7 @@ function installDatePrototypeMethods(realm, datePrototype) {
       return null;
     }
 
-    const toISOString = object.get('toISOString', realm);
+    const toISOString = object.get('toISOString', object);
     if (!isCallable(toISOString)) {
       throw new GuestErrorSignal('TypeError', 'toISOString is not callable');
     }

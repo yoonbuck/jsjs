@@ -121,7 +121,7 @@ export class IntrinsicFunctionPrototype extends EngineObject {
       return false;
     }
 
-    const prototype = this.get('prototype');
+    const prototype = this.get('prototype', this);
 
     if (!(prototype instanceof EngineObject)) {
       throw new GuestErrorSignal(
@@ -130,14 +130,14 @@ export class IntrinsicFunctionPrototype extends EngineObject {
       );
     }
 
-    let current = value.getPrototype();
+    let current = value.getPrototypeOf();
 
     while (current !== null) {
       if (current === prototype) {
         return true;
       }
 
-      current = current.getPrototype();
+      current = current.getPrototypeOf();
     }
 
     return false;

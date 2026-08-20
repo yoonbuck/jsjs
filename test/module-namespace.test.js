@@ -5,6 +5,7 @@ import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import { linkModuleGraph } from '../src/runtime/module-linker.js';
 import { loadModuleGraph } from '../src/runtime/module-loader.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { Reference, putValue } from '../src/runtime/reference.js';
 
 /**
  * @param {Record<string, string>} sources
@@ -52,7 +53,7 @@ export default [
       const namespace = await loader.loadAndEvaluate('root');
       const toStringTag = realm.agent.wellKnownSymbols.toStringTag;
 
-      assertSame(namespace.getPrototype(), null);
+      assertSame(namespace.getPrototypeOf(), null);
       assertSame(namespace.isExtensible(), false);
       assertSame(namespace.agent, realm.agent);
       assertSame(
@@ -82,8 +83,11 @@ export default [
       assertSame(descriptor.writable, true);
       assertSame(descriptor.enumerable, true);
       assertSame(descriptor.configurable, false);
-      assertSame(namespace.put('value', 2), false);
-      assertThrows(() => namespace.put('value', 2, true), GuestErrorSignal);
+      assertSame(namespace.set('value', 2, namespace), false);
+      assertThrows(
+        () => putValue(new Reference(namespace, 'value', true, namespace), 2),
+        GuestErrorSignal,
+      );
       assertSame(namespace.delete('value'), false);
       assertSame(namespace.defineOwnProperty('value', { value: 1 }), true);
       assertSame(
@@ -376,19 +380,19 @@ export default [
       assertSame(namespace.set('extra', 2, namespace), false);
       assertSame(namespace.set('extra', 2, child), false);
       assertThrows(
-        () => namespace.set('value', 2, namespace, true),
+        () => putValue(new Reference(namespace, 'value', true, namespace), 2),
         GuestErrorSignal,
       );
       assertThrows(
-        () => namespace.set('value', 2, child, true),
+        () => putValue(new Reference(namespace, 'value', true, child), 2),
         GuestErrorSignal,
       );
       assertThrows(
-        () => namespace.set('extra', 2, namespace, true),
+        () => putValue(new Reference(namespace, 'extra', true, namespace), 2),
         GuestErrorSignal,
       );
       assertThrows(
-        () => namespace.set('extra', 2, child, true),
+        () => putValue(new Reference(namespace, 'extra', true, child), 2),
         GuestErrorSignal,
       );
 
@@ -421,7 +425,7 @@ export default [
 
       assertSame(error.phase, 'evaluate');
       assertSame(
-        error.value.getPrototype(),
+        error.value.getPrototypeOf(),
         realm.intrinsics.typeErrorPrototype,
       );
       assertSame(error.value.get('name'), 'TypeError');

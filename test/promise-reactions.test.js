@@ -23,7 +23,7 @@ function assertNormalValue(completion, expected) {
 function assertGuestTypeError(realm, completion) {
   assertSame(completion.type, 'throw');
   assertSame(
-    /** @type {EngineObject} */ (completion.value).getPrototype(),
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf(),
     realm.intrinsics.typeErrorPrototype,
   );
 }
@@ -586,7 +586,7 @@ export default [
       assertSame(observedCallerRealm, callerRealm);
       assertSame(child.realm, constructorRealm);
       assertSame(child.agent, constructorRealm.agent);
-      assertSame(child.getPrototype(), speciesPrototype);
+      assertSame(child.getPrototypeOf(), speciesPrototype);
 
       let invalidGetterCalls = 0;
       constructor.defineOwnProperty(speciesSymbol, {
@@ -610,7 +610,7 @@ export default [
 
       assertSame(invalidGetterCalls, 1);
       assertSame(
-        /** @type {EngineObject} */ (invalid).getPrototype(),
+        /** @type {EngineObject} */ (invalid).getPrototypeOf(),
         callerRealm.intrinsics.typeErrorPrototype,
       );
 
@@ -702,7 +702,7 @@ export default [
       );
       assertSame(child.realm, subclassRealm);
       assertSame(child.agent, subclassRealm.agent);
-      assertSame(child.getPrototype(), subclassPrototype);
+      assertSame(child.getPrototypeOf(), subclassPrototype);
     },
   },
   {
@@ -811,7 +811,7 @@ export default [
       assertSame(baseGetterCalls, 0);
       assertSame(intermediateReceiver, subclass);
       assertSame(intermediateCallerRealm, methodRealm);
-      assertSame(intermediateChild.getPrototype(), subclass.get('prototype'));
+      assertSame(intermediateChild.getPrototypeOf(), subclass.get('prototype'));
 
       subclass.defineOwnProperty(subclassRealm.agent.wellKnownSymbols.species, {
         value: ownSpecies,
@@ -823,7 +823,7 @@ export default [
         then.callFunction(source, [], methodRealm),
       );
 
-      assertSame(ownDataChild.getPrototype(), ownSpecies.get('prototype'));
+      assertSame(ownDataChild.getPrototypeOf(), ownSpecies.get('prototype'));
       assertSame(intermediateGetterCalls, 1);
       assertSame(baseGetterCalls, 0);
 
@@ -848,7 +848,7 @@ export default [
       assertSame(ownGetterCalls, 1);
       assertSame(ownReceiver, subclass);
       assertSame(ownCallerRealm, methodRealm);
-      assertSame(ownAccessorChild.getPrototype(), subclass.get('prototype'));
+      assertSame(ownAccessorChild.getPrototypeOf(), subclass.get('prototype'));
       assertSame(intermediateGetterCalls, 1);
       assertSame(baseGetterCalls, 0);
     },
@@ -910,11 +910,11 @@ export default [
       assertSame(fallbackChild.realm, methodRealm);
       assertSame(fallbackChild.agent, methodRealm.agent);
       assertSame(
-        fallbackChild.getPrototype(),
+        fallbackChild.getPrototypeOf(),
         methodRealm.intrinsics.promisePrototype,
       );
       assertSame(
-        fallbackChild.getPrototype() === subclass.get('prototype'),
+        fallbackChild.getPrototypeOf() === subclass.get('prototype'),
         false,
       );
 
@@ -940,7 +940,7 @@ export default [
 
       assertSame(invalidGetterCalls, 1);
       assertSame(
-        /** @type {EngineObject} */ (invalid).getPrototype(),
+        /** @type {EngineObject} */ (invalid).getPrototypeOf(),
         methodRealm.intrinsics.typeErrorPrototype,
       );
 
@@ -1241,7 +1241,7 @@ export default [
       ]) {
         assertSame(promise.realm, subclassRealm);
         assertSame(promise.agent, subclassAgent);
-        assertSame(promise.getPrototype(), subPrototype);
+        assertSame(promise.getPrototypeOf(), subPrototype);
       }
       assertSame(capturedResolve.getFunctionRealm().value, baseRealm);
       assertSame(capturedReject.getFunctionRealm().value, baseRealm);
@@ -1408,7 +1408,9 @@ export default [
       assertSame(rejectedChild.promiseResult, 'rejected-recovered');
       assertSame(abruptChild.promiseState, 'rejected');
       assertSame(
-        /** @type {EngineObject} */ (abruptChild.promiseResult).getPrototype(),
+        /** @type {EngineObject} */ (
+          abruptChild.promiseResult
+        ).getPrototypeOf(),
         handlerRealm.intrinsics.typeErrorPrototype,
       );
       assertSame(hostFailureChild.promiseState, 'pending');
@@ -1568,7 +1570,7 @@ export default [
       assertSame(
         /** @type {EngineObject} */ (
           rejected.promise.promiseResult
-        ).getPrototype(),
+        ).getPrototypeOf(),
         thenRealm.intrinsics.typeErrorPrototype,
       );
       assertSame(failed.promise.promiseState, 'pending');
@@ -1680,16 +1682,16 @@ export default [
       assertSame(handlerContext, settlementRealm);
       assertSame(child.promiseState, 'rejected');
       assertSame(
-        /** @type {EngineObject} */ (child.promiseResult).getPrototype(),
+        /** @type {EngineObject} */ (child.promiseResult).getPrototypeOf(),
         settlementRealm.intrinsics.typeErrorPrototype,
       );
       assertSame(
-        /** @type {EngineObject} */ (child.promiseResult).getPrototype() ===
+        /** @type {EngineObject} */ (child.promiseResult).getPrototypeOf() ===
           registrationRealm.intrinsics.typeErrorPrototype,
         false,
       );
       assertSame(
-        /** @type {EngineObject} */ (child.promiseResult).getPrototype() ===
+        /** @type {EngineObject} */ (child.promiseResult).getPrototypeOf() ===
           lookupErrorRealm.intrinsics.typeErrorPrototype,
         false,
       );

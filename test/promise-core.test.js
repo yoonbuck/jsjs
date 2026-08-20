@@ -22,7 +22,7 @@ function assertNormalValue(completion, expected) {
 function assertGuestTypeError(realm, completion) {
   assertSame(completion.type, 'throw');
   assertSame(
-    /** @type {EngineObject} */ (completion.value).getPrototype(),
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf(),
     realm.intrinsics.typeErrorPrototype,
   );
 }
@@ -245,11 +245,11 @@ export default [
         );
 
         assertSame(
-          promise.getPrototype(),
+          promise.getPrototypeOf(),
           newTargetRealm.intrinsics.promisePrototype,
         );
         assertSame(
-          promise.getPrototype() ===
+          promise.getPrototypeOf() ===
             constructorRealm.intrinsics.promisePrototype,
           false,
         );
@@ -322,7 +322,7 @@ export default [
 
       assertSame(promise.realm, allocationRealm);
       assertSame(promise.agent, allocationRealm.agent);
-      assertSame(promise.getPrototype(), foreignPrototype);
+      assertSame(promise.getPrototypeOf(), foreignPrototype);
       assertSame(promise.agent === prototypeRealm.agent, false);
     },
   },
@@ -373,8 +373,8 @@ export default [
       );
 
       assertSame(prototypeReads, 1);
-      assertSame(promise.getPrototype(), realm.intrinsics.promisePrototype);
-      assertSame(promise.getPrototype() === secondPrototype, false);
+      assertSame(promise.getPrototypeOf(), realm.intrinsics.promisePrototype);
+      assertSame(promise.getPrototypeOf() === secondPrototype, false);
     },
   },
   {
@@ -493,7 +493,7 @@ export default [
       assertSame(resolve.callFunction(undefined, [promise]), undefined);
       assertSame(promise.promiseState, 'rejected');
       assertSame(
-        /** @type {EngineObject} */ (promise.promiseResult).getPrototype(),
+        /** @type {EngineObject} */ (promise.promiseResult).getPrototypeOf(),
         realm.intrinsics.typeErrorPrototype,
       );
     },

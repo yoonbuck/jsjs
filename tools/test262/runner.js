@@ -993,14 +993,14 @@ function matchErrorType(realm, value, typeName) {
     return 'mismatch';
   }
 
-  let current = value.getPrototype();
+  let current = value.getPrototypeOf();
 
   while (isGuestObject(current)) {
     if (current === prototype) {
       return 'match';
     }
 
-    current = current.getPrototype();
+    current = current.getPrototypeOf();
   }
 
   return 'mismatch';
@@ -1008,25 +1008,28 @@ function matchErrorType(realm, value, typeName) {
 
 /**
  * @param {unknown} value
- * @returns {value is { get(name: string): unknown, getPrototype(): unknown }}
+ * @returns {value is {
+ *   get(name: string, receiver?: unknown): unknown,
+ *   getPrototypeOf(): unknown,
+ * }}
  */
 function isGuestObject(value) {
   return (
     typeof value === 'object' &&
     value !== null &&
     typeof (/** @type {any} */ (value).get) === 'function' &&
-    typeof (/** @type {any} */ (value).getPrototype) === 'function'
+    typeof (/** @type {any} */ (value).getPrototypeOf) === 'function'
   );
 }
 
 /**
- * @param {{ get(name: string): unknown }} object
+ * @param {{ get(name: string, receiver?: unknown): unknown }} object
  * @param {string} name
  * @returns {unknown}
  */
 function readGuestProperty(object, name) {
   try {
-    return object.get(name);
+    return object.get(name, object);
   } catch {
     return undefined;
   }

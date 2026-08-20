@@ -993,7 +993,7 @@ function createGeneratorObject(
     args,
     functionEnvironment,
   );
-  const prototype = functionObject.get('prototype');
+  const prototype = functionObject.get('prototype', functionObject);
   const generatorPrototype =
     prototype instanceof EngineObject
       ? prototype

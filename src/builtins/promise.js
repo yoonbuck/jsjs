@@ -125,7 +125,8 @@ export function createPromiseIntrinsics(realm) {
       name: 'catch',
       length: 1,
       call(thisValue, args) {
-        const then = toObject(realm, thisValue).get('then', realm);
+        const object = toObject(realm, thisValue);
+        const then = object.get('then', object);
         if (!isCallable(then)) {
           throw new GuestErrorSignal(
             'TypeError',
@@ -165,7 +166,7 @@ export function createPromiseIntrinsics(realm) {
         const resolution = args[0];
         if (
           resolution instanceof PromiseObject &&
-          resolution.get('constructor', realm) === thisValue
+          resolution.get('constructor', resolution) === thisValue
         ) {
           return resolution;
         }
@@ -293,7 +294,7 @@ function promiseAllocationFromNewTarget(
     return { realm: defaultRealm, prototype: defaultPrototype };
   }
 
-  const prototype = newTarget.get('prototype', defaultRealm);
+  const prototype = newTarget.get('prototype', newTarget);
   if (!isCallable(newTarget)) {
     return {
       realm: defaultRealm,

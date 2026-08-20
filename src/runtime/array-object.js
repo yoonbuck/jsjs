@@ -2,6 +2,7 @@ import {
   EngineObject,
   ordinaryDefineOwnProperty,
   ordinaryDelete,
+  currentObjectOperationRealm,
   ordinaryGetOwnProperty,
   ordinaryOwnPropertyKeys,
 } from './object.js';
@@ -83,7 +84,10 @@ export class EngineArray extends EngineObject {
       return ordinaryDefineOwnProperty(this, 'length', descriptor);
     }
 
-    const callerRealm = this.agent?.activeExecutionRealm ?? undefined;
+    const callerRealm =
+      currentObjectOperationRealm() ??
+      this.agent?.activeExecutionRealm ??
+      undefined;
     const newLength = toUint32(descriptor.value, callerRealm);
 
     if (newLength !== toNumber(descriptor.value, callerRealm)) {

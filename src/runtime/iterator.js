@@ -59,7 +59,7 @@ export function getMethod(realm, value, key) {
     value instanceof EngineObject ? value : toObject(realm, value);
 
   linkGeneratorHostChainToAgent(realm.agent, receiver.agent);
-  const func = receiver.get(key, realm);
+  const func = receiver.get(key, value);
   linkGeneratorHostChainToValue(realm.agent, func);
 
   if (func === undefined || func === null) {
@@ -154,7 +154,7 @@ export function getIterator(realm, obj, method) {
   }
 
   linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
-  const nextMethod = iterator.get('next', realm);
+  const nextMethod = iterator.get('next', iterator);
 
   linkGeneratorHostChainToValue(realm.agent, nextMethod);
   return {
@@ -229,11 +229,11 @@ export function iteratorNext(record, sent) {
  * ECMA-262 §7.4.3 `IteratorComplete ( iterResult )`.
  *
  * @param {EngineObject} result
- * @param {Realm} [realm]
+ * @param {Realm} [_realm]
  * @returns {boolean}
  */
-export function iteratorComplete(result, realm) {
-  return toBoolean(result.get('done', realm));
+export function iteratorComplete(result, _realm) {
+  return toBoolean(result.get('done', result));
 }
 
 /**
@@ -244,7 +244,7 @@ export function iteratorComplete(result, realm) {
  * @returns {unknown}
  */
 export function iteratorValue(result, realm) {
-  const value = result.get('value', realm);
+  const value = result.get('value', result);
 
   if (realm !== undefined) {
     linkGeneratorHostChainToValue(realm.agent, value);

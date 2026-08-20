@@ -91,7 +91,7 @@ const tests = [
         configurable: true,
       });
 
-      object.put(key, 2, true);
+      assertSame(object.set(key, 2, object), true);
 
       const descriptor = publicDescriptor(
         object,
@@ -125,10 +125,10 @@ const tests = [
       const first = Symbol('first');
       const second = Symbol('second');
       const object = new EngineObject();
-      object.put('name', 1, true);
-      object.put(first, 2, true);
-      object.put('2', 3, true);
-      object.put(second, 4, true);
+      assertSame(object.set('name', 1, object), true);
+      assertSame(object.set(first, 2, object), true);
+      assertSame(object.set('2', 3, object), true);
+      assertSame(object.set(second, 4, object), true);
 
       assertSame(
         JSON.stringify(object.ownPropertyKeys().map(String)),
@@ -152,7 +152,7 @@ const tests = [
       );
 
       const array = new EngineArray();
-      array.put(first, 1, true);
+      assertSame(array.set(first, 1, array), true);
 
       assertSame(array.get('length'), 0);
       assertSame(array.get(first), 1);

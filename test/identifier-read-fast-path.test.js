@@ -159,7 +159,7 @@ const tests = [
     run() {
       const realm = createRealm();
       const object = new EngineObject(realm.intrinsics.objectPrototype);
-      object.put('present', 99, false);
+      assertSame(object.set('present', 99, object), true);
       const env = new ObjectEnvironmentRecord(object);
 
       assertSame(getIdentifierBindingValue(env, 'present', false), 99);
@@ -338,7 +338,14 @@ const tests = [
       // Bind the SAME name on both the object record (via the global object)
       // and the declarative record, so declarative-over-object precedence is
       // actually exercised rather than assumed.
-      global.objectRecord.bindingObject.put('collides', 'from-object', false);
+      assertSame(
+        global.objectRecord.bindingObject.set(
+          'collides',
+          'from-object',
+          global.objectRecord.bindingObject,
+        ),
+        true,
+      );
       global.createMutableBinding('collides', false);
       global.initializeBinding('collides', 'from-declarative');
 

@@ -109,11 +109,11 @@ const tests = [
       assertSame(called instanceof EngineObject, true);
       assertSame(constructed instanceof EngineObject, true);
       assertSame(
-        /** @type {EngineObject} */ (called).getPrototype(),
+        /** @type {EngineObject} */ (called).getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
       assertSame(
-        /** @type {EngineObject} */ (constructed).getPrototype(),
+        /** @type {EngineObject} */ (constructed).getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
     },
@@ -564,7 +564,7 @@ const tests = [
       ).value;
 
       assertSame(
-        /** @type {EngineObject} */ (caught).getPrototype(),
+        /** @type {EngineObject} */ (caught).getPrototypeOf(),
         functionRealm.intrinsics.typeErrorPrototype,
       );
     },

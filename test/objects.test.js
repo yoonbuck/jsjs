@@ -15,9 +15,9 @@ import {
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 const tests = [
-  // ── Behavioral: getProperty returns a detached descriptor (Finding 1) ──────
+  // ── Behavioral: public own descriptors are detached (Finding 1) ──────────
   {
-    name: 'getProperty returns a detached copy: mutating it does not affect future reads',
+    name: 'getOwnProperty returns a detached copy: mutating it does not affect future reads',
     run() {
       const obj = new EngineObject();
       obj.defineOwnProperty('x', {
@@ -26,7 +26,7 @@ const tests = [
         enumerable: true,
         configurable: true,
       });
-      const desc = obj.getProperty('x');
+      const desc = obj.getOwnProperty('x');
       assertSame(desc !== undefined, true);
       if (desc === undefined) {
         throw new Error('expected descriptor');
@@ -38,7 +38,7 @@ const tests = [
     },
   },
   {
-    name: 'getProperty on inherited property returns detached copy: mutating it does not affect prototype',
+    name: 'inherited reads use Get while getOwnProperty stays own-only',
     run() {
       const proto = new EngineObject();
       proto.defineOwnProperty('y', {
@@ -48,16 +48,16 @@ const tests = [
         configurable: true,
       });
       const child = new EngineObject(proto);
-      const desc = child.getProperty('y');
-      assertSame(desc !== undefined, true);
+      assertSame(child.getOwnProperty('y'), undefined);
+      const desc = proto.getOwnProperty('y');
       if (desc === undefined) {
-        throw new Error('expected descriptor');
+        throw new Error('expected prototype descriptor');
       }
       assertSame(desc.value, 'proto-val');
       desc.value = 'hacked';
-      // Proto and child reads must still return original value.
-      assertSame(proto.get('y'), 'proto-val');
-      assertSame(child.get('y'), 'proto-val');
+      // A detached public descriptor cannot mutate the inherited value.
+      assertSame(proto.get('y', proto), 'proto-val');
+      assertSame(child.get('y', child), 'proto-val');
     },
   },
   // ── Behavioral: defineOwnProperty validates descriptor type (Finding 2) ────
@@ -219,7 +219,7 @@ const tests = [
         enumerable: true,
         configurable: true,
       });
-      const reference = new Reference(object, 'count', true);
+      const reference = new Reference(object, 'count', true, object);
 
       assertSame(getValue(reference), 2);
       assertSame(putValue(reference, 3), 3);
@@ -313,7 +313,7 @@ const tests = [
     },
   },
   {
-    name: 'put respects inherited writability and inherited setters',
+    name: 'Set respects inherited writability and inherited setters',
     run() {
       const prototype = new EngineObject();
       prototype.defineOwnProperty('readOnly', {
@@ -332,16 +332,19 @@ const tests = [
       });
       const object = new EngineObject(prototype);
 
-      assertSame(object.put('readOnly', 2), false);
+      assertSame(object.set('readOnly', 2, object), false);
       assertSame(object.getOwnProperty('readOnly'), undefined);
-      assertThrows(() => object.put('readOnly', 2, true), GuestErrorSignal);
-      assertSame(object.put('sink', 7, true), true);
+      assertThrows(
+        () => putValue(new Reference(object, 'readOnly', true, object), 2),
+        GuestErrorSignal,
+      );
+      assertSame(object.set('sink', 7, object), true);
       assertSame(setterValue, '7');
       assertSame(object.getOwnProperty('sink'), undefined);
     },
   },
   {
-    name: 'put invokes own accessors and rejects getter-only assignments',
+    name: 'Set invokes own accessors and rejects getter-only assignments',
     run() {
       let setterValue = 'unset';
       const object = new EngineObject();
@@ -360,11 +363,14 @@ const tests = [
         configurable: true,
       });
 
-      assertSame(object.put('sink', 9, true), true);
+      assertSame(object.set('sink', 9, object), true);
       assertSame(setterValue, '9');
       assertSame(isAccessorDescriptor(object.getOwnProperty('sink')), true);
-      assertSame(object.put('getterOnly', 2), false);
-      assertThrows(() => object.put('getterOnly', 2, true), GuestErrorSignal);
+      assertSame(object.set('getterOnly', 2, object), false);
+      assertThrows(
+        () => putValue(new Reference(object, 'getterOnly', true, object), 2),
+        GuestErrorSignal,
+      );
     },
   },
   // ── Behavioral: receiver-aware ordinary Set (ES2015 [[Set]] boundary) ─────
@@ -404,7 +410,7 @@ const tests = [
       assertSame(prototype.set('locked', 2, receiver), false);
       assertSame(receiver.getOwnProperty('locked'), undefined);
       assertThrows(
-        () => prototype.set('locked', 2, receiver, true),
+        () => putValue(new Reference(prototype, 'locked', true, receiver), 2),
         GuestErrorSignal,
       );
       assertSame(receiver.getOwnProperty('locked'), undefined);
@@ -425,7 +431,7 @@ const tests = [
         configurable: true,
       });
       const receiver = new EngineObject(prototype);
-      assertSame(prototype.set('sink', 5, receiver, true), true);
+      assertSame(prototype.set('sink', 5, receiver), true);
       assertSame(observedReceiver, receiver);
       assertSame(observedValue, '5');
       assertSame(receiver.getOwnProperty('sink'), undefined);
@@ -473,7 +479,11 @@ const tests = [
       assertSame(prototype.set('value', 'updated', receiver), false);
       assertSame(receiver.get('value'), 'frozen');
       assertThrows(
-        () => prototype.set('value', 'updated', receiver, true),
+        () =>
+          putValue(
+            new Reference(prototype, 'value', true, receiver),
+            'updated',
+          ),
         GuestErrorSignal,
       );
       assertSame(receiver.get('value'), 'frozen');
@@ -505,7 +515,7 @@ const tests = [
     },
   },
   {
-    name: 'set rejects a non-object receiver for a writable data descriptor: sloppy false, strict throws',
+    name: 'set rejects a non-object receiver while Reference owns strict failure',
     run() {
       const prototype = new EngineObject();
       prototype.defineOwnProperty('value', {
@@ -517,14 +527,18 @@ const tests = [
       assertSame(prototype.set('value', 'updated', 'not-an-object'), false);
       assertSame(prototype.get('value'), 1);
       assertThrows(
-        () => prototype.set('value', 'updated', 'not-an-object', true),
+        () =>
+          putValue(
+            new Reference(prototype, 'value', true, 'not-an-object'),
+            'updated',
+          ),
         GuestErrorSignal,
       );
       assertSame(prototype.get('value'), 1);
     },
   },
   {
-    name: 'put delegates to set with itself as the receiver',
+    name: 'Set accepts the object as its own receiver',
     run() {
       let setterValue = 'unset';
       let observedReceiver = null;
@@ -537,7 +551,7 @@ const tests = [
         enumerable: true,
         configurable: true,
       });
-      assertSame(object.put('sink', 3, true), true);
+      assertSame(object.set('sink', 3, object), true);
       assertSame(setterValue, '3');
       assertSame(observedReceiver, object);
     },

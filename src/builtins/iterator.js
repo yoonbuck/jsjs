@@ -211,7 +211,7 @@ function arrayIteratorNext(realm, thisValue) {
   }
 
   const index = thisValue.nextIndex;
-  const length = toLength(array.get('length', realm), realm);
+  const length = toLength(array.get('length', array), realm);
 
   if (index >= length) {
     thisValue.iteratedObject = undefined;
@@ -224,7 +224,7 @@ function arrayIteratorNext(realm, thisValue) {
     return createIterResultObject(realm, index, false);
   }
 
-  const elementValue = array.get(String(index), realm);
+  const elementValue = array.get(String(index), array);
 
   if (thisValue.kind === 'value') {
     return createIterResultObject(realm, elementValue, false);

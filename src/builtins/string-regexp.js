@@ -1,4 +1,5 @@
 import { EngineArray } from '../runtime/array-object.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
 import { toBoolean, toInteger, toString } from '../runtime/conversion.js';
 import { codeUnitsBetween } from '../runtime/code-units.js';
 import { regExpExec } from './regexp.js';
@@ -47,13 +48,13 @@ import { regExpExec } from './regexp.js';
  * @returns {EngineArray | null}
  */
 export function matchWithRegExp(realm, rx, S) {
-  const global = toBoolean(rx.get('global', realm));
+  const global = toBoolean(rx.get('global', rx));
 
   if (!global) {
     return regExpExec(realm, rx, S);
   }
 
-  rx.put('lastIndex', 0, true, realm);
+  setRegExpLastIndexOrThrow(rx, 0);
 
   const A = new EngineArray(realm.intrinsics.arrayPrototype);
   let previousLastIndex = 0;
@@ -66,16 +67,16 @@ export function matchWithRegExp(realm, rx, S) {
       break;
     }
 
-    const thisIndex = toInteger(rx.get('lastIndex', realm), realm);
+    const thisIndex = toInteger(rx.get('lastIndex', rx), realm);
 
     if (thisIndex === previousLastIndex) {
-      rx.put('lastIndex', thisIndex + 1, true, realm);
+      setRegExpLastIndexOrThrow(rx, thisIndex + 1);
       previousLastIndex = thisIndex + 1;
     } else {
       previousLastIndex = thisIndex;
     }
 
-    defineDataProperty(A, String(n), toString(result.get('0', realm), realm));
+    defineDataProperty(A, String(n), toString(result.get('0', result), realm));
     n += 1;
   }
 
@@ -109,10 +110,10 @@ export function matchWithRegExp(realm, rx, S) {
  * @returns {string}
  */
 export function replaceWithRegExp(realm, rx, S, computeReplacement) {
-  const global = toBoolean(rx.get('global', realm));
+  const global = toBoolean(rx.get('global', rx));
 
   if (global) {
-    rx.put('lastIndex', 0, true, realm);
+    setRegExpLastIndexOrThrow(rx, 0);
   }
 
   let output = '';
@@ -127,18 +128,18 @@ export function replaceWithRegExp(realm, rx, S, computeReplacement) {
     }
 
     if (global) {
-      const thisIndex = toInteger(rx.get('lastIndex', realm), realm);
+      const thisIndex = toInteger(rx.get('lastIndex', rx), realm);
 
       if (thisIndex === previousLastIndex) {
-        rx.put('lastIndex', thisIndex + 1, true, realm);
+        setRegExpLastIndexOrThrow(rx, thisIndex + 1);
         previousLastIndex = thisIndex + 1;
       } else {
         previousLastIndex = thisIndex;
       }
     }
 
-    const position = toInteger(match.get('index', realm), realm);
-    const matched = toString(match.get('0', realm), realm);
+    const position = toInteger(match.get('index', match), realm);
+    const matched = toString(match.get('0', match), realm);
     const captures = readCaptures(rx, match);
 
     output += codeUnitsBetween(S, tailStart, position);
@@ -279,10 +280,23 @@ function readCaptures(rx, match) {
   const captures = [];
 
   for (let group = 1; group <= n; group += 1) {
-    captures.push(/** @type {string | undefined} */ (match.get(String(group))));
+    captures.push(
+      /** @type {string | undefined} */ (match.get(String(group), match)),
+    );
   }
 
   return captures;
+}
+
+/**
+ * @param {EngineRegExp} object
+ * @param {number} value
+ * @returns {void}
+ */
+function setRegExpLastIndexOrThrow(object, value) {
+  if (!object.set('lastIndex', value, object)) {
+    throw new GuestErrorSignal('TypeError', 'Cannot assign to property');
+  }
 }
 
 /**

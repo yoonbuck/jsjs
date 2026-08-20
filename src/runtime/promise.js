@@ -363,7 +363,7 @@ export function newPromiseReactionJob(reaction, argument, currentRealm) {
  * @returns {unknown}
  */
 export function speciesConstructor(object, defaultConstructor, currentRealm) {
-  const constructor = object.get('constructor', currentRealm);
+  const constructor = object.get('constructor', object);
 
   if (constructor === undefined) {
     return defaultConstructor;
@@ -435,7 +435,7 @@ export function createResolvingFunctions(promise, currentRealm) {
       /** @type {unknown} */
       let then;
       try {
-        then = resolution.get('then', currentRealm);
+        then = resolution.get('then', resolution);
       } catch (error) {
         rejectPromise(promise, abruptValue(currentRealm, error), currentRealm);
         return undefined;
@@ -548,7 +548,7 @@ function resolvePromiseAllCapability(resultCapability, values, currentRealm) {
  * @returns {unknown}
  */
 function promiseResolve(constructor, value, currentRealm) {
-  const resolve = constructor.get('resolve', currentRealm);
+  const resolve = constructor.get('resolve', constructor);
 
   if (!isCallable(resolve)) {
     throw new GuestErrorSignal(
@@ -568,7 +568,8 @@ function promiseResolve(constructor, value, currentRealm) {
  * @returns {unknown}
  */
 function invokeThen(currentRealm, promise, onFulfilled, onRejected) {
-  const then = toObject(currentRealm, promise).get('then', currentRealm);
+  const promiseObject = toObject(currentRealm, promise);
+  const then = promiseObject.get('then', promise);
 
   if (!isCallable(then)) {
     throw new GuestErrorSignal(

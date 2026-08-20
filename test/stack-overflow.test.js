@@ -155,7 +155,8 @@ function assertRealmRangeError(completion, realms) {
   assertSame(error.get('message'), 'Maximum call stack size exceeded');
   assertSame(
     realms.some(
-      (realm) => error.getPrototype() === realm.intrinsics.rangeErrorPrototype,
+      (realm) =>
+        error.getPrototypeOf() === realm.intrinsics.rangeErrorPrototype,
     ),
     true,
   );
@@ -418,7 +419,7 @@ function assertInvalidForeignGeneratorReceiverPreflights(
     `Generator.prototype.${method} called on incompatible receiver`,
   );
   assertSame(
-    error.getPrototype(),
+    error.getPrototypeOf(),
     methodRealm.intrinsics.typeErrorPrototype,
     `${method} must materialize its receiver error in the method Realm`,
   );
@@ -704,7 +705,7 @@ function assertExecutingForeignGeneratorReceiverPreflights(shareAgent, method) {
   assertSame(error.get('name'), 'TypeError');
   assertSame(error.get('message'), 'Generator is already running');
   assertSame(
-    error.getPrototype(),
+    error.getPrototypeOf(),
     methodRealm.intrinsics.typeErrorPrototype,
     `${method} must materialize its executing-state error in the method Realm`,
   );
@@ -1170,7 +1171,7 @@ function assertGeneratorMethodParticipantsLinked(
     if (throughCall) {
       defineGlobal(callerRealm, 'borrowedNext', borrowedNext);
     } else {
-      generator.put('next', borrowedNext, true);
+      assertSame(generator.set('next', borrowedNext, generator), true);
     }
   }
 
@@ -1257,16 +1258,15 @@ function assertCachedComputedTargetRelinked(form, superTarget) {
      * @param {string | symbol} name
      * @param {unknown} value
      * @param {unknown} receiver
-     * @param {boolean} throwOnError
-     * @param {import('../src/runtime/realm.js').Realm} [callerRealm]
      * @returns {boolean}
      */
-    set(name, value, receiver, throwOnError, callerRealm) {
+    set(name, value, receiver) {
       setCalls += 1;
       assertLinked('put', form === 'assignment' ? 140 : 70);
+      const callerRealm = this.agent?.activeExecutionRealm ?? undefined;
       inspectPut.callFunction(undefined, [], callerRealm);
       overflow.callFunction(undefined, [], callerRealm);
-      return super.set(name, value, receiver, throwOnError, callerRealm);
+      return super.set(name, value, receiver);
     }
   }
 
@@ -1346,7 +1346,7 @@ function assertCachedComputedTargetRelinked(form, superTarget) {
 
   assertRealmRangeError(second, realms);
   assertSame(
-    /** @type {EngineObject} */ (second.value).getPrototype(),
+    /** @type {EngineObject} */ (second.value).getPrototypeOf(),
     realmB.intrinsics.rangeErrorPrototype,
   );
   assertSame(keyCoercions, 1);
@@ -1538,7 +1538,7 @@ const tests = [
       const error = /** @type {EngineObject} */ (completion.value);
 
       assertSame(
-        error.getPrototype(),
+        error.getPrototypeOf(),
         realm.intrinsics.rangeErrorPrototype,
         'the error must inherit from this realm\u2019s %RangeError.prototype%',
       );
@@ -1896,8 +1896,8 @@ const tests = [
       assertSame(error.get('name'), 'RangeError');
       assertSame(error.get('message'), 'Maximum call stack size exceeded');
       assertSame(
-        error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
-          error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+        error.getPrototypeOf() === realmA.intrinsics.rangeErrorPrototype ||
+          error.getPrototypeOf() === realmB.intrinsics.rangeErrorPrototype,
         true,
       );
       assertSame(realmA.stackGuard.depth, 0);
@@ -1923,8 +1923,8 @@ const tests = [
       assertSame(error.get('name'), 'RangeError');
       assertSame(error.get('message'), 'Maximum call stack size exceeded');
       assertSame(
-        error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
-          error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+        error.getPrototypeOf() === realmA.intrinsics.rangeErrorPrototype ||
+          error.getPrototypeOf() === realmB.intrinsics.rangeErrorPrototype,
         true,
       );
       assertSame(realmA.stackGuard.depth, 0);
@@ -2137,8 +2137,8 @@ const tests = [
         assertSame(error instanceof EngineObject, true);
         assertSame(error.get('name'), 'RangeError');
         assertSame(
-          error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
-            error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+          error.getPrototypeOf() === realmA.intrinsics.rangeErrorPrototype ||
+            error.getPrototypeOf() === realmB.intrinsics.rangeErrorPrototype,
           true,
         );
         assertSame(realmA.stackGuard.depth, 0);
@@ -3386,9 +3386,10 @@ const tests = [
       class InspectingSuperBase extends EngineObject {
         /**
          * @param {string | symbol} name
-         * @returns {import('../src/runtime/descriptors.js').PropertyDescriptorRecord | undefined}
+         * @param {unknown} receiver
+         * @returns {unknown}
          */
-        getProperty(name) {
+        get(name, receiver) {
           lookupCalls += 1;
           const roots = [realmA, realmB, realmD].map((realm) =>
             generatorHostChainRoot(realm.agent),
@@ -3398,7 +3399,7 @@ const tests = [
             roots[0] !== null &&
             roots.every((root) => root === roots[0]) &&
             roots[0].maxDepth === 120;
-          return super.getProperty(name);
+          return super.get(name, receiver);
         }
       }
 
@@ -4102,6 +4103,93 @@ const tests = [
         ),
         'RangeError',
       );
+    },
+  },
+  {
+    name: '50,000-link Get HasProperty and Set stay iterative and dispatch a middle exotic once',
+    run() {
+      const root = new EngineObject();
+      root.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let ordinaryTop = root;
+      for (let index = 0; index < 50000; index += 1) {
+        ordinaryTop = new EngineObject(ordinaryTop);
+      }
+
+      assertSame(ordinaryTop.get('value', ordinaryTop), 1);
+      assertSame(ordinaryTop.hasProperty('value'), true);
+      assertSame(ordinaryTop.set('value', 2, ordinaryTop), true);
+      assertSame(ordinaryTop.get('value', ordinaryTop), 2);
+      assertSame(
+        root.setPrototypeOf(ordinaryTop),
+        false,
+        'a 50,000-link prototype cycle is rejected without recursion',
+      );
+
+      let getCalls = 0;
+      let hasPropertyCalls = 0;
+      let setCalls = 0;
+      class RecordingMiddle extends EngineObject {
+        /**
+         * @param {string | symbol} key
+         * @param {unknown} receiver
+         * @returns {unknown}
+         */
+        get(key, receiver) {
+          getCalls += 1;
+          return super.get(key, receiver);
+        }
+
+        /**
+         * @param {string | symbol} key
+         * @returns {boolean}
+         */
+        hasProperty(key) {
+          hasPropertyCalls += 1;
+          return super.hasProperty(key);
+        }
+
+        /**
+         * @param {string | symbol} key
+         * @param {unknown} value
+         * @param {unknown} receiver
+         * @returns {boolean}
+         */
+        set(key, value, receiver) {
+          setCalls += 1;
+          return super.set(key, value, receiver);
+        }
+      }
+
+      const exoticRoot = new EngineObject();
+      exoticRoot.defineOwnProperty('value', {
+        value: 3,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      let exoticBase = exoticRoot;
+      for (let index = 0; index < 25000; index += 1) {
+        exoticBase = new EngineObject(exoticBase);
+      }
+      const middle = new RecordingMiddle(exoticBase);
+      let exoticTop = middle;
+      for (let index = 0; index < 25000; index += 1) {
+        exoticTop = new EngineObject(exoticTop);
+      }
+
+      assertSame(exoticTop.get('value', exoticTop), 3);
+      assertSame(getCalls, 1);
+      assertSame(exoticTop.hasProperty('value'), true);
+      assertSame(hasPropertyCalls, 1);
+      assertSame(exoticTop.set('value', 4, exoticTop), true);
+      assertSame(setCalls, 1);
+      assertSame(exoticTop.get('value', exoticTop), 4);
     },
   },
   {

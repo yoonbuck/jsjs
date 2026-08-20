@@ -130,13 +130,40 @@ function captureGuestTypeError(body) {
 /** @type {import('./harness/runner.js').TestCase[]} */
 const tests = [
   {
+    name: 'GetMethod preserves a primitive receiver for strict iterator getters',
+    run() {
+      assertSame(
+        evalValue(
+          '"use strict"; var seen; Object.defineProperty(String.prototype, ' +
+            'Symbol.iterator, { get: function () { seen = typeof this; ' +
+            'return function () { return { next: function () { return { done: true }; } }; }; } }); ' +
+            'for (var value of "x") {} seen;',
+        ),
+        'string',
+      );
+    },
+  },
+  {
+    name: 'Array iterator indexed accessors receive the iterated array',
+    run() {
+      assertSame(
+        evalValue(
+          'var array = [0]; Object.defineProperty(array, "0", {' +
+            'get: function () { return this === array; } }); ' +
+            'array.values().next().value;',
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'CreateIterResultObject builds a mutable value/done result',
     run() {
       const realm = createRealm();
       const result = createIterResultObject(realm, 42, false);
       assertSame(result.get('value'), 42);
       assertSame(result.get('done'), false);
-      assertSame(result.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(result.getPrototypeOf(), realm.intrinsics.objectPrototype);
       const descriptor = /** @type {any} */ (result.getOwnProperty('value'));
       assertSame(descriptor.writable, true);
       assertSame(descriptor.enumerable, true);
@@ -223,9 +250,9 @@ const tests = [
     run() {
       const realm = createRealm();
       const result = createIterResultObject(realm, undefined, false);
-      result.put('done', '', true);
+      assertSame(result.set('done', '', result), true);
       assertSame(iteratorComplete(result), false);
-      result.put('done', 'yes', true);
+      assertSame(result.set('done', 'yes', result), true);
       assertSame(iteratorComplete(result), true);
     },
   },
@@ -411,12 +438,12 @@ const tests = [
       const otherRealm = createRealm();
       // Distinct realms mint distinct %ArrayIteratorPrototype% identities.
       assertSame(
-        arrayIterator.getPrototype() ===
+        arrayIterator.getPrototypeOf() ===
           otherRealm.intrinsics.arrayIteratorPrototype,
         false,
       );
       assertSame(
-        arrayIterator.getPrototype() ===
+        arrayIterator.getPrototypeOf() ===
           realm.intrinsics.arrayIteratorPrototype,
         true,
       );

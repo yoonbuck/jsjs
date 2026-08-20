@@ -98,10 +98,10 @@ const tests = [
             : {
                 value: iteratorValue(result),
                 iteratorOwned:
-                  record.iterator.getPrototype() ===
+                  record.iterator.getPrototypeOf() ===
                   owner.intrinsics.arrayIteratorPrototype,
                 resultOwned:
-                  result.getPrototype() === owner.intrinsics.objectPrototype,
+                  result.getPrototypeOf() === owner.intrinsics.objectPrototype,
               };
         } catch (error) {
           return {
@@ -153,7 +153,7 @@ const tests = [
       assertSame(result === false, false);
       assertSame(iteratorValue(/** @type {EngineObject} */ (result)), 33);
       assertSame(
-        record.iterator.getPrototype(),
+        record.iterator.getPrototypeOf(),
         owner.intrinsics.arrayIteratorPrototype,
       );
     },

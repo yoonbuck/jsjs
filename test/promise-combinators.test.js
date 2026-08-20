@@ -21,7 +21,7 @@ function assertNormalValue(completion, expected) {
 function assertGuestTypeError(realm, completion) {
   assertSame(completion.type, 'throw');
   assertSame(
-    /** @type {EngineObject} */ (completion.value).getPrototype(),
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf(),
     realm.intrinsics.typeErrorPrototype,
   );
 }
@@ -92,6 +92,31 @@ export default [
       }
       assertSame(all.promiseResult.get('length'), 0);
       assertSame(race.promiseState, 'pending');
+    },
+  },
+  {
+    name: 'Promise.all preserves primitive receivers for strict then getters',
+    run: () => {
+      assertNormalValue(
+        evaluateScript(
+          createRealm(),
+          [
+            '"use strict";',
+            'var seen;',
+            'class C extends Promise {}',
+            'C.resolve = function () { return 1; };',
+            'Object.defineProperty(Number.prototype, "then", {',
+            '  get: function () {',
+            '    seen = typeof this;',
+            '    return function (resolve) { resolve(1); };',
+            '  }',
+            '});',
+            'C.all([1]);',
+            'seen;',
+          ].join('\n'),
+        ),
+        'number',
+      );
     },
   },
   {
@@ -540,7 +565,7 @@ export default [
       for (const promise of [noIterator, badStep, nonCallableResolve]) {
         assertSame(promise.promiseState, 'rejected');
         assertSame(
-          /** @type {EngineObject} */ (promise.promiseResult).getPrototype(),
+          /** @type {EngineObject} */ (promise.promiseResult).getPrototypeOf(),
           realm.intrinsics.typeErrorPrototype,
         );
       }

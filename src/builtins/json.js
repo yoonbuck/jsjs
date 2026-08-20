@@ -569,7 +569,7 @@ function walk(realm, holder, name, reviver) {
  * @returns {unknown}
  */
 function walkBody(realm, holder, name, reviver) {
-  const value = holder.get(name, realm);
+  const value = holder.get(name, holder);
 
   if (value instanceof EngineObject) {
     const keys =
@@ -602,7 +602,7 @@ function walkBody(realm, holder, name, reviver) {
  * @returns {Generator<string, void, void>}
  */
 function* arrayIndexKeys(array, realm) {
-  const length = toUint32(array.get('length', realm), realm);
+  const length = toUint32(array.get('length', array), realm);
 
   for (let index = 0; index < length; index += 1) {
     yield String(index);
@@ -758,10 +758,10 @@ function serializeProperty(realm, state, key, holder) {
  * @returns {string | undefined}
  */
 function serializePropertyBody(realm, state, key, holder) {
-  let value = holder.get(key, realm);
+  let value = holder.get(key, holder);
 
   if (value instanceof EngineObject) {
-    const toJSON = value.get('toJSON', realm);
+    const toJSON = value.get('toJSON', value);
 
     if (isCallable(toJSON)) {
       value = toJSON.callFunction(value, [key], realm);
@@ -918,7 +918,7 @@ function serializeArray(realm, state, value) {
 
   state.indent += state.gap;
 
-  const length = toUint32(value.get('length', realm), realm);
+  const length = toUint32(value.get('length', value), realm);
 
   /** @type {string[]} */
   const partial = [];
@@ -962,7 +962,7 @@ function propertyListOf(realm, replacer) {
       continue;
     }
 
-    const entry = replacer.get(index, realm);
+    const entry = replacer.get(index, replacer);
 
     /** @type {string | undefined} */
     let item;

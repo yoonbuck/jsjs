@@ -178,10 +178,10 @@ function installErrorPrototypeToString(realm, errorPrototype) {
           'Error.prototype.toString called on a non-object',
         );
 
-        const rawName = object.get('name', realm);
+        const rawName = object.get('name', object);
         const name = rawName === undefined ? 'Error' : toString(rawName, realm);
 
-        const rawMessage = object.get('message', realm);
+        const rawMessage = object.get('message', object);
         const message =
           rawMessage === undefined ? '' : toString(rawMessage, realm);
 

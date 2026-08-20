@@ -85,7 +85,7 @@ const tests = [
       evaluateScript(realm, 'var o = {};');
 
       const o = /** @type {any} */ (realm.globalObject.get('o'));
-      assertSame(o.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(o.getPrototypeOf(), realm.intrinsics.objectPrototype);
     },
   },
   {
@@ -241,9 +241,9 @@ const tests = [
       evaluateScript(realm, 'var a = [];');
 
       const a = /** @type {any} */ (realm.globalObject.get('a'));
-      assertSame(a.getPrototype(), realm.intrinsics.arrayPrototype);
+      assertSame(a.getPrototypeOf(), realm.intrinsics.arrayPrototype);
       assertSame(
-        realm.intrinsics.arrayPrototype.getPrototype(),
+        realm.intrinsics.arrayPrototype.getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
     },

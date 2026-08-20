@@ -34,13 +34,13 @@ function assertGuestThrow(completion, constructorName, realm) {
   const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
 
   let current = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
   while (current !== null) {
     if (current === proto) {
       return;
     }
-    current = current.getPrototype();
+    current = current.getPrototypeOf();
   }
 
   throw new Error(
