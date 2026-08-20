@@ -87,15 +87,31 @@ primitive value while lookup starts at the transient wrapper.
 iterator over string keys visible to `for-in`, while `[[OwnPropertyKeys]]`
 returns the complete own-key list, including Symbols, in ES2015 order.
 
-The iterator returned by `enumerate()` is a Realm-owned `EngineObject` with
-engine-private enumeration state and a branded `nextEnumeratedKey()` internal
-operation that returns an IteratorResult-shaped engine record. It is not a
-host iterator, host generator, raw key array, or guest-visible reuse of Array
-iteration. Realm bootstrap gives every guest object an owning Realm in addition
-to its shared Agent; ordinary `enumerate()` uses that ownership to create the
-iterator in the target object's Realm. Cross-Realm `for-in` therefore consumes
-the target Realm's iterator through the same engine protocol without changing
-the evaluating Realm's error boundary.
+The object returned by `enumerate()` implements the public ECMAScript iterator
+protocol. Ordinary enumeration returns a Realm-appropriate `EngineObject` with
+a callable `next` property. Each call produces a normal IteratorResult object
+through `createIterResultObject`. It is not a host iterator, host generator, raw
+key array, or private brand-only protocol. A private brand may optimize the
+ordinary iterator implementation, but every consumer still performs observable
+`next` lookup/call/result validation through the shared iterator abstract
+operations. This is required because #81's future Proxy `[[Enumerate]]` trap may
+return an arbitrary engine object.
+
+The Table 5 signature has no Realm parameter and ordinary objects do not acquire
+a Realm from their prototype. The engine therefore maintains an Agent-scoped
+dynamic execution-Realm stack, visible across the linked synchronous Agent call
+chain. Script/module evaluators, guest/native function entry, generator resume,
+and Realm-bearing job execution push their active Realm and restore the previous
+value in a `finally` path. A Realm-null host job establishes no guest execution
+Realm. `ordinaryEnumerate` reads the active execution Realm to allocate its
+iterator, native `next` function, and IteratorResult objects.
+
+Cross-Realm `for-in` allocates in the evaluating execution Realm, not a Realm
+inferred from the target or its prototype. A direct host call with no active
+execution Realm fails fast with a host `TypeError`; tests or embedding adapters
+that intentionally invoke the internal method directly use an explicit
+non-semantic `withActiveExecutionRealm(realm, callback)` boundary. The mechanism
+does not alter object identity or existing Agent ownership.
 
 ### Callable and constructor capabilities
 
@@ -113,11 +129,13 @@ capability brands and dispatch helpers rather than renaming every implementation
   engine-internal accessor boundary; guest values cannot gain callable status by
   imitating a method shape.
 
-Module-private WeakSet brands own the callable, constructor, and for-in iterator
-capabilities. Sanctioned engine constructors register instances when creating
-function or iterator objects. Predicates consult only those brands; dispatch
-then invokes the corresponding method. A subclass cannot gain a capability by
-adding a same-named host method or diagnostic tag.
+Module-private WeakSet brands own the callable and constructor capabilities.
+Sanctioned engine constructors register instances when creating function
+objects. Predicates consult only those brands; dispatch then invokes the
+corresponding method. A subclass cannot gain a capability by adding a same-named
+host method or diagnostic tag. Ordinary for-in iterators may also carry a
+private implementation brand, but arbitrary `[[Enumerate]]` results are accepted
+and consumed only through their public iterator protocol.
 
 ## Ordinary object algorithms
 
@@ -142,12 +160,8 @@ corresponding internal-method parameters and return the corresponding result.
 Only this ordinary layer reads or mutates the base object's prototype,
 extensibility, and property-map slots. Exotic implementations may read their own
 branded state but may not reach into ordinary base storage.
-
-Every guest `EngineObject` also carries an owning Realm. Ordinary construction
-inherits it from the prototype. The finite set of null-prototype creation sites
-passes the Realm explicitly: fundamental intrinsic bootstrap, module namespace
-creation, and `Object.create(null)`. The Realm supplies the Agent, so those
-sites no longer pass a bare Agent as a substitute for object ownership.
+Ordinary objects retain their existing Agent ownership model and gain no
+inherited or universal Realm slot.
 
 `ordinaryGetOwnProperty` returns a detached complete descriptor to semantic
 callers. Raw stored descriptors are an implementation detail available only
@@ -176,15 +190,21 @@ object/prototype boundary it invokes the polymorphic `ownPropertyKeys`,
 `getOwnProperty`, and `getPrototypeOf` methods; it never reads the ordinary
 property map or prototype slot directly for a semantic decision. If the
 remaining prototype supplies an exotic `enumerate`, ordinary enumeration
-consumes that iterator as the remainder of the chain, suppressing keys already
-visited by the ordinary prefix. This leaves the override point needed by #81's
-future Proxy `[[Enumerate]]` trap without implementing that trap here.
+turns its returned object into a normal Iterator Record by observably getting
+`next`, then consumes it through `IteratorStep` and `IteratorValue` while
+suppressing strings already visited by the ordinary prefix. Getter/call abrupt
+completions, non-callable `next`, and malformed iterator results propagate
+through the shared iterator operations. This leaves the override point needed
+by #81's future Proxy `[[Enumerate]]` trap without implementing that trap here.
 
-Enumeration considers only string keys. A key enters the visited set when it is
-encountered as an own key even if its descriptor is non-enumerable, so it
-shadows the same enumerable key on a prototype. Symbols never enter the result.
-Duplicate strings from later prototypes or exotic remainder iterators are
-suppressed.
+Enumeration considers only string keys. After `ownPropertyKeys` supplies a key,
+`getOwnProperty` observes its descriptor. An absent descriptor does not mark the
+key visited, so deletion before descriptor observation permits an enumerable
+prototype property of the same name to be discovered. A present descriptor
+marks the key visited even when non-enumerable, so an observed non-enumerable own
+property suppresses its enumerable prototype duplicate. Symbols never enter the
+visited set or result. Duplicate strings from later prototypes or exotic
+remainder iterators are suppressed.
 
 The engine preserves its existing ES2015-permitted deterministic behavior:
 
@@ -311,9 +331,11 @@ can interpose. Such uses are explicit and covered by the direct-slot invariant.
 
 Both synchronous and generator `for-in` evaluate the right-hand expression,
 handle `null`/`undefined` at the language algorithm before object dispatch, call
-`enumerate()` exactly once, and consume its internal next operation. Iterator
-values and abrupt completions propagate through the owning evaluator path. The
-old raw prototype/key snapshots and live raw-descriptor checks are removed.
+`enumerate()` exactly once, require an object result, observably read and validate
+its `next`, and consume the resulting Iterator Record through the shared
+`IteratorStep` and `IteratorValue` operations. Iterator values and abrupt
+completions propagate through the owning evaluator path. The old raw
+prototype/key snapshots and live raw-descriptor checks are removed.
 
 ## Brands and class tags
 
@@ -388,6 +410,12 @@ Tests prove:
 - enumeration pins add/delete/reconfigure behavior, prototype replacement,
   index/string order, duplicate and non-enumerable shadowing, Symbol exclusion,
   null prototypes, cross-Realm targets, and iterator Realm ownership;
+- public enumeration iterator tests pin abrupt `next` getters/calls,
+  non-callable `next`, non-object step results, abrupt `done`/`value` access, and
+  the Realm owning ordinary iterator/result objects and guest errors;
+- visited-state tests distinguish deletion before descriptor observation (which
+  may reveal a prototype duplicate) from an observed non-enumerable own
+  descriptor (which suppresses its prototype duplicate);
 - an exotic in the middle of a 50,000-link ordinary chain is observed exactly
   once and is not skipped by the iterative optimization;
 - spoofed host objects with `callFunction`, `constructFunction`,
@@ -399,8 +427,8 @@ Tests prove:
 Separate 50,000-link ordinary Get, Set, HasProperty, prototype, and enumeration
 tests guard host-stack safety. A hostile exotic in the middle of the
 50,000-link enumeration chain proves that iterative flattening does not bypass
-`enumerate`, `ownPropertyKeys`, `getOwnProperty`, `getPrototypeOf`, iterator
-values, or abrupt completion.
+`enumerate`, `ownPropertyKeys`, `getOwnProperty`, `getPrototypeOf`, public
+iterator values, or abrupt completion.
 
 ## Test262 attribution and evidence
 
