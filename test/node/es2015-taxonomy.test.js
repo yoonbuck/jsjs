@@ -215,46 +215,80 @@ async function writeFixtureFile(root, path, text) {
 }
 
 /**
- * @returns {Promise<{ root: URL, checkout: URL }>}
+ * @returns {Promise<{
+ *   root: URL,
+ *   checkout: URL,
+ *   pin: { repository: string, revision: string, checkoutPath: string },
+ * }>}
  */
 async function createRealAuditFixture() {
   const root = new URL(`.es2015-audit-${randomUUID()}/`, import.meta.url);
   const checkout = new URL('vendor/test262/', root);
-  const repositoryRoot = new URL('../../', import.meta.url);
-  const sourceCheckout = new URL('vendor/test262/', repositoryRoot);
 
   await mkdir(root);
+  await mkdir(checkout, { recursive: true });
+  await writeFixtureFile(
+    checkout,
+    REAL_AUDIT_SELECTED,
+    '/*---\ndescription: Selected fixture.\nes5id: 15.4.5-1\n---*/\n',
+  );
+  await writeFixtureFile(
+    checkout,
+    REAL_AUDIT_UNSELECTED,
+    '/*---\ndescription: Audited ES2015 fixture.\nesid: sec-map-constructor\nfeatures: [Map]\n---*/\n',
+  );
+  await writeFixtureFile(
+    checkout,
+    REAL_ATOMICS_HELPER,
+    '/*---\ndescription: Transitive Atomics fixture.\nesid: sec-atomics.notify\nincludes: [atomicsHelper.js]\nfeatures: [SharedArrayBuffer, TypedArray]\n---*/\n',
+  );
+  await writeFixtureFile(checkout, 'harness/atomicsHelper.js', '// fixture\n');
+  await writeFixtureFile(
+    checkout,
+    'harness/features.yml',
+    'atomicsHelper: [Atomics]\n',
+  );
+  const checkoutPath = fileURLToPath(checkout);
+  runGit(checkoutPath, ['init', '--quiet']);
+  runGit(checkoutPath, ['config', 'user.email', 'fixture@example.test']);
+  runGit(checkoutPath, ['config', 'user.name', 'ES2015 audit fixture']);
+  runGit(checkoutPath, ['add', '.']);
+  runGit(checkoutPath, ['commit', '--quiet', '-m', 'fixture root']);
+  await writeFixtureFile(checkout, 'fixture-HEAD.txt', 'second commit\n');
+  runGit(checkoutPath, ['add', 'fixture-HEAD.txt']);
+  runGit(checkoutPath, ['commit', '--quiet', '-m', 'fixture head']);
+  const pin = {
+    ...AUDIT_PIN,
+    revision: runGit(checkoutPath, ['rev-parse', 'HEAD']),
+  };
+  runGit(checkoutPath, ['checkout', '--quiet', '--detach', pin.revision]);
+
   await writeFixtureFile(
     root,
     'package.json',
     JSON.stringify({
       type: 'module',
-      test262: AUDIT_PIN,
+      test262: pin,
     }),
   );
   await writeFixtureFile(
     root,
     'tools/test262/es2015-policy.json',
-    await readFile(
-      new URL('tools/test262/es2015-policy.json', repositoryRoot),
-      'utf8',
-    ),
+    JSON.stringify({
+      ...JSON.parse(POLICY),
+      revision: pin.revision,
+      es2015Features: ['Map', 'TypedArray', 'let'],
+      laterFeatures: ['Atomics', 'SharedArrayBuffer', 'async-functions'],
+    }),
   );
-  await writeFixtureFile(
-    root,
-    'tools/test262/es2015-anchors.json',
-    await readFile(
-      new URL('tools/test262/es2015-anchors.json', repositoryRoot),
-      'utf8',
-    ),
-  );
+  await writeFixtureFile(root, 'tools/test262/es2015-anchors.json', ANCHORS);
   await writeFixtureFile(
     root,
     'tools/test262/upstream-subset.json',
     JSON.stringify({
       version: 1,
-      repository: AUDIT_PIN.repository,
-      revision: AUDIT_PIN.revision,
+      repository: pin.repository,
+      revision: pin.revision,
       groups: [
         {
           name: 'fixture',
@@ -283,7 +317,10 @@ async function createRealAuditFixture() {
   await writeFixtureFile(
     root,
     AUDIT_EVIDENCE_PATH,
-    auditEvidence({
+    JSON.stringify({
+      version: 1,
+      repository: pin.repository,
+      revision: pin.revision,
       auditRecords: [
         {
           type: 'test',
@@ -298,35 +335,86 @@ async function createRealAuditFixture() {
           status: 'passed',
         },
       ],
+      blockers: {},
+      intentionalDeviations: [],
     }),
   );
   await writeFixtureFile(root, AUDIT_PATH, 'stale\n');
 
-  runGit(fileURLToPath(root), [
-    'clone',
-    '--shared',
-    '--no-checkout',
-    fileURLToPath(sourceCheckout),
-    fileURLToPath(checkout),
-  ]);
-  const checkoutPath = fileURLToPath(checkout);
-  runGit(checkoutPath, ['sparse-checkout', 'init', '--no-cone']);
-  runGit(checkoutPath, [
-    'sparse-checkout',
-    'set',
-    '--no-cone',
-    REAL_AUDIT_SELECTED,
-    REAL_AUDIT_UNSELECTED,
-    REAL_ATOMICS_HELPER,
-    'harness/atomicsHelper.js',
-    'harness/features.yml',
-    'harness/isConstructor.js',
-    'harness/testAtomics.js',
-    'harness/testTypedArray.js',
-  ]);
-  runGit(checkoutPath, ['checkout', '--quiet', '--detach', AUDIT_PIN.revision]);
+  return { root, checkout, pin };
+}
 
-  return { root, checkout };
+/**
+ * The production taxonomy policy deliberately accepts only the checked-in
+ * Test262 revision. The integration fixture still writes and validates its
+ * own Git pin, while this adapter presents the reviewed metadata identity to
+ * the taxonomy parser.
+ *
+ * @param {{
+ *   root: URL,
+ *   checkout: URL,
+ *   pin: { repository: string, revision: string, checkoutPath: string },
+ * }} fixture
+ * @param {{
+ *   environment?: Record<string, string | undefined>,
+ *   stderr?: (text: string) => void,
+ * }} [options]
+ */
+function fixtureAuditDependencies(fixture, options = {}) {
+  const dependencies = createAuditDependencies({
+    repositoryRootUrl: fixture.root,
+    environment: options.environment,
+    stderr: options.stderr,
+  });
+  const pinnedMetadataFiles = new Set([
+    'tools/test262/es2015-policy.json',
+    'tools/test262/upstream-subset.json',
+    AUDIT_EVIDENCE_PATH,
+  ]);
+
+  return {
+    ...dependencies,
+    readPin: async () => AUDIT_PIN,
+    readFile: async (/** @type {string} */ path) => {
+      const text = await dependencies.readFile(path);
+      return pinnedMetadataFiles.has(path)
+        ? text.split(fixture.pin.revision).join(AUDIT_PIN.revision)
+        : text;
+    },
+    assertPinnedCheckout: async () => {
+      const packagePin = JSON.parse(
+        await readFile(new URL('package.json', fixture.root), 'utf8'),
+      ).test262;
+      if (
+        packagePin.repository !== fixture.pin.repository ||
+        packagePin.revision !== fixture.pin.revision ||
+        packagePin.checkoutPath !== fixture.pin.checkoutPath
+      ) {
+        throw new Error(
+          `package.json pins ${packagePin.revision}, but fixture expects ${fixture.pin.revision}`,
+        );
+      }
+      const head = await readFile(
+        new URL(`${fixture.pin.checkoutPath}/.git/HEAD`, fixture.root),
+        'utf8',
+      );
+      if (head.trim() !== fixture.pin.revision) {
+        throw new Error(
+          `${fixture.pin.checkoutPath} is at ${head.trim()}, but package.json pins ${fixture.pin.revision}`,
+        );
+      }
+      const status = runGit(fileURLToPath(fixture.checkout), [
+        'status',
+        '--porcelain=v1',
+        '--untracked-files=all',
+      ]);
+      if (status !== '') {
+        throw new Error(
+          `${fixture.pin.checkoutPath} has uncommitted changes:\n${status}`,
+        );
+      }
+    },
+  };
 }
 
 /**
@@ -703,21 +791,34 @@ export default [
     run: async () => {
       const fixture = await createRealAuditFixture();
       const fixturePath = fileURLToPath(fixture.root);
-      const checkoutPath = fileURLToPath(fixture.checkout);
-      /** @type {string[]} */
-      const errors = [];
-      const utcDependencies = createAuditDependencies({
-        repositoryRootUrl: fixture.root,
-        environment: { ...process.env, TZ: 'UTC' },
-        stderr: (text) => errors.push(text),
-      });
-
       try {
+        const checkoutPath = fileURLToPath(fixture.checkout);
+        assertSame(runGit(checkoutPath, ['remote']), '');
+        for (const path of [
+          'package.json',
+          'tools/test262/es2015-policy.json',
+          'tools/test262/upstream-subset.json',
+          AUDIT_EVIDENCE_PATH,
+        ]) {
+          const value = JSON.parse(
+            await readFile(new URL(path, fixture.root), 'utf8'),
+          );
+          assertSame(
+            path === 'package.json' ? value.test262.revision : value.revision,
+            fixture.pin.revision,
+          );
+        }
+        /** @type {string[]} */
+        const errors = [];
+        const utcDependencies = fixtureAuditDependencies(fixture, {
+          environment: { ...process.env, TZ: 'UTC' },
+          stderr: (text) => errors.push(text),
+        });
+
         const nonUtc = await rejected(() =>
           auditEs2015Taxonomy(
             [],
-            createAuditDependencies({
-              repositoryRootUrl: fixture.root,
+            fixtureAuditDependencies(fixture, {
               environment: { ...process.env, TZ: 'America/Los_Angeles' },
               stderr: () => {},
             }),
@@ -771,7 +872,7 @@ export default [
           'checkout',
           '--quiet',
           '--detach',
-          AUDIT_PIN.revision,
+          fixture.pin.revision,
         ]);
 
         await writeFixtureFile(
@@ -780,7 +881,7 @@ export default [
           JSON.stringify({
             type: 'module',
             test262: {
-              ...AUDIT_PIN,
+              ...fixture.pin,
               revision: '0000000000000000000000000000000000000000',
             },
           }),
