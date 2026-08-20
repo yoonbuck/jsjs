@@ -22,6 +22,7 @@ import benchmarkCompare from './node/benchmark-compare.test.js';
 import benchmarkHosts from './node/benchmark-hosts.test.js';
 import jscRunner from './node/jsc-runner.test.js';
 import benchmarkSummary from './node/benchmark-summary.test.js';
+import es2015Provenance from './node/es2015-provenance.test.js';
 import profileAnalysis from './node/profile-analysis.test.js';
 import profilingCli from './node/profiling-cli.test.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
@@ -66,6 +67,10 @@ const NODE_ONLY_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/node/repository-invariants.test.js',
     tests: repositoryInvariants,
+  }),
+  Object.freeze({
+    file: 'test/node/es2015-provenance.test.js',
+    tests: es2015Provenance,
   }),
   Object.freeze({
     file: 'test/node/es2015-taxonomy.test.js',

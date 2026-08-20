@@ -149,6 +149,14 @@ const DATE_GROUPS = Object.freeze({
  */
 const EXPECTED_DRIFT_COMMAND =
   'git ls-files --error-unmatch docs/test262-report.jsonl docs/conformance.md > /dev/null && git diff --exit-code -- docs/test262-report.jsonl docs/conformance.md';
+const EXPECTED_PROVENANCE_RANGE_COMMAND =
+  'node tools/test262/es2015-provenance-check.js --check-range --base="$ES2015_PROVENANCE_BASE_SHA" --head="$ES2015_PROVENANCE_HEAD_SHA" --pr-body-env=ES2015_PROVENANCE_PR_BODY';
+const EXPECTED_PROVENANCE_RANGE_ENV = Object.freeze({
+  ES2015_PROVENANCE_BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+  ES2015_PROVENANCE_HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+  ES2015_PROVENANCE_PR_BODY: '${{ github.event.pull_request.body }}',
+  TZ: 'UTC',
+});
 
 const engine = { createRealm, evaluateScript };
 
@@ -214,6 +222,62 @@ function usesSteps(job, action) {
     (/** @type {any} */ step) =>
       typeof step.uses === 'string' && step.uses.startsWith(`${action}@`),
   );
+}
+
+/**
+ * @param {readonly any[]} steps
+ * @param {readonly string[]} expectedNames
+ */
+export function assertAdjacentWorkflowSteps(steps, expectedNames) {
+  const indexes = expectedNames.map((name) =>
+    steps.findIndex((step) => step?.name === name),
+  );
+
+  for (let index = 0; index < expectedNames.length; index += 1) {
+    const name = expectedNames[index];
+    const occurrences = steps.filter((step) => step?.name === name).length;
+    if (occurrences !== 1) {
+      throw new Error(
+        `workflow must contain exactly one step named "${name}"; found ${occurrences}`,
+      );
+    }
+  }
+
+  for (let index = 1; index < indexes.length; index += 1) {
+    if (indexes[index] !== indexes[0] + index) {
+      throw new Error(
+        `workflow steps must be adjacent in this exact order: ${expectedNames.join(' -> ')}`,
+      );
+    }
+  }
+}
+
+/** @param {any} step */
+function assertProvenanceRangeStep(step) {
+  const expectedKeys = ['env', 'if', 'name', 'run'];
+  const actualKeys =
+    typeof step === 'object' && step !== null ? Object.keys(step).sort() : [];
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    throw new Error('provenance range step must contain exact keys');
+  }
+  if (step.name !== 'Check provenance PR range') {
+    throw new Error('provenance range step must retain its authoritative name');
+  }
+  if (step.if !== "github.event_name == 'pull_request'") {
+    throw new Error('provenance range step must be limited to pull_request');
+  }
+  if (step.run !== EXPECTED_PROVENANCE_RANGE_COMMAND) {
+    throw new Error(
+      'provenance range step must pass actual base/head and derive profile from the PR marker',
+    );
+  }
+  if (
+    JSON.stringify(step.env) !== JSON.stringify(EXPECTED_PROVENANCE_RANGE_ENV)
+  ) {
+    throw new Error(
+      'provenance range step must use trusted event identities and the full PR body',
+    );
+  }
 }
 
 function nonUtcUpstreamDiagnosticInvocation() {
@@ -321,6 +385,16 @@ function syntheticFeature(probe) {
 }
 
 export default [
+  {
+    name: 'the pull request workflow reruns provenance gates when the durable marker is edited',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      assertSame(
+        JSON.stringify(workflow.on?.pull_request?.types),
+        JSON.stringify(['opened', 'synchronize', 'reopened', 'edited']),
+      );
+    },
+  },
   {
     name: 'npm run ci:contract selects only safe local checks',
     run: async () => {
@@ -769,7 +843,75 @@ export default [
     },
   },
   {
-    name: 'the pinned Test262 job checks the deterministic ES2015 taxonomy before broad execution',
+    name: 'the workflow adjacency contract rejects an intervening Test262 step',
+    run: () => {
+      const error = assertThrows(
+        () =>
+          assertAdjacentWorkflowSteps(
+            [
+              { name: 'Install dependencies' },
+              { name: 'Check provenance PR range' },
+              { name: 'Check unknown-edition provenance' },
+              { name: 'Intervening mutant step' },
+              { name: 'Check the ES2015 taxonomy and exact promotion' },
+            ],
+            [
+              'Install dependencies',
+              'Check provenance PR range',
+              'Check unknown-edition provenance',
+              'Check the ES2015 taxonomy and exact promotion',
+            ],
+          ),
+        Error,
+      );
+
+      assertSame(
+        error.message,
+        'workflow steps must be adjacent in this exact order: Install dependencies -> Check provenance PR range -> Check unknown-edition provenance -> Check the ES2015 taxonomy and exact promotion',
+      );
+    },
+  },
+  {
+    name: 'the provenance PR range step rejects event, marker, and ref mutants',
+    run: () => {
+      const valid = {
+        name: 'Check provenance PR range',
+        if: "github.event_name == 'pull_request'",
+        run: EXPECTED_PROVENANCE_RANGE_COMMAND,
+        env: EXPECTED_PROVENANCE_RANGE_ENV,
+      };
+      assertProvenanceRangeStep(valid);
+      for (const mutant of [
+        { ...valid, if: undefined },
+        {
+          ...valid,
+          run: valid.run.replace(
+            '$ES2015_PROVENANCE_BASE_SHA',
+            '${{ github.sha }}',
+          ),
+        },
+        {
+          ...valid,
+          run: `${valid.run} --profile=foundation`,
+        },
+        {
+          ...valid,
+          env: { ...valid.env, ES2015_PROVENANCE_PR_BODY: 'branch supplied' },
+        },
+        {
+          ...valid,
+          env: {
+            ...valid.env,
+            ES2015_PROVENANCE_HEAD_SHA: '${{ github.sha }}',
+          },
+        },
+      ]) {
+        assertThrows(() => assertProvenanceRangeStep(mutant), Error);
+      }
+    },
+  },
+  {
+    name: 'the pinned Test262 job checks provenance immediately before taxonomy and broad execution',
     run: async () => {
       const { workflow } = await readWorkflow();
       const job = requireJob(workflow, 'test262-upstream');
@@ -780,6 +922,13 @@ export default [
       const install = job.steps.find(
         (/** @type {any} */ step) => step.name === 'Install dependencies',
       );
+      const provenanceCheck = job.steps.find(
+        (/** @type {any} */ step) =>
+          step.name === 'Check unknown-edition provenance',
+      );
+      const rangeCheck = job.steps.find(
+        (/** @type {any} */ step) => step.name === 'Check provenance PR range',
+      );
       const taxonomyCheck = job.steps.find(
         (/** @type {any} */ step) =>
           step.name === 'Check the ES2015 taxonomy and exact promotion',
@@ -788,6 +937,30 @@ export default [
         (/** @type {any} */ step) => step.run === 'npm run test262:upstream',
       );
 
+      assertAdjacentWorkflowSteps(job.steps, [
+        'Install dependencies',
+        'Check provenance PR range',
+        'Check unknown-edition provenance',
+        'Check the ES2015 taxonomy and exact promotion',
+      ]);
+      assertProvenanceRangeStep(rangeCheck);
+      assertSame(
+        job.steps.some(
+          (/** @type {any} */ step) =>
+            typeof step.run === 'string' && step.run.includes('--complete='),
+        ),
+        false,
+        'the range step must derive the decision code and enforce completeness without a branch-controlled second command',
+      );
+      const projectCheckout = checkouts.find(
+        (step) => step.with?.repository === undefined,
+      );
+      assertSame(projectCheckout?.with?.['fetch-depth'], '0');
+      assertSame(
+        provenanceCheck?.run,
+        'npm run test262:es2015:provenance:check',
+      );
+      assertSame(provenanceCheck?.env?.TZ, 'UTC');
       assertSame(
         taxonomyCheck !== undefined,
         true,
@@ -802,10 +975,9 @@ export default [
         'the taxonomy check must follow the pinned Test262 checkout',
       );
       assertSame(
-        job.steps.indexOf(/** @type {any} */ (install)) <
-          job.steps.indexOf(/** @type {any} */ (taxonomyCheck)),
+        install !== undefined,
         true,
-        'the taxonomy check must follow dependency installation',
+        'the pinned Test262 job must install dependencies',
       );
       assertSame(
         job.steps.indexOf(/** @type {any} */ (taxonomyCheck)) <
