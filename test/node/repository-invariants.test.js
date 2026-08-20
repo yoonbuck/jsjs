@@ -197,6 +197,70 @@ const REQUIRED_PROVENANCE_SCRIPT_COMMANDS = Object.freeze({
   'test262:es2015:provenance:ledger':
     'node tools/test262/es2015-provenance-check.js',
 });
+/** @type {readonly FunctionOwnershipStep[]} */
+const CHECK_FOUNDATION_OWNERSHIP_STEPS = Object.freeze([
+  {
+    type: 'binding-awaited-call',
+    binding: 'actualManifestText',
+    callee: 'readRequiredFile',
+    argsPrefix: ['deps', 'ES2015_PROVENANCE_FILE'],
+    label: 'manifest read',
+  },
+  {
+    type: 'not-equal-guard',
+    left: 'actualManifestText',
+    right: 'expectedManifestText',
+    label: 'manifest byte guard',
+  },
+  {
+    type: 'binding-call',
+    binding: 'manifest',
+    callee: 'parseEs2015ProvenanceManifest',
+    argsPrefix: ['actualManifestText'],
+    label: 'manifest parse',
+  },
+  {
+    type: 'call',
+    callee: 'validateProvenanceFoundation',
+    argsPrefix: ['manifest', 'classifications'],
+    label: 'foundation validation',
+  },
+  {
+    type: 'call',
+    callee: 'validateDecisionFragments',
+    argsPrefix: ['manifest', 'fragments'],
+    label: 'decision fragment validation',
+  },
+]);
+/** @type {readonly FunctionOwnershipStep[]} */
+const LOAD_REVIEWED_MANIFEST_OWNERSHIP_STEPS = Object.freeze([
+  {
+    type: 'binding-awaited-call',
+    binding: 'actualText',
+    callee: 'readRequiredFile',
+    argsPrefix: ['deps', 'ES2015_PROVENANCE_FILE'],
+    label: 'manifest read',
+  },
+  {
+    type: 'not-equal-guard',
+    left: 'actualText',
+    right: 'expectedText',
+    label: 'manifest byte guard',
+  },
+  {
+    type: 'binding-call',
+    binding: 'manifest',
+    callee: 'parseEs2015ProvenanceManifest',
+    argsPrefix: ['actualText'],
+    label: 'manifest parse',
+  },
+  {
+    type: 'call',
+    callee: 'validateProvenanceFoundation',
+    argsPrefix: ['manifest', 'classifications'],
+    label: 'foundation validation',
+  },
+]);
 
 /**
  * Turns one Prettier CLI path argument into a matcher. Only the shapes this
@@ -331,6 +395,223 @@ export function orderedSubstringOffsets(source, orderedTokens, label) {
     }
     offsets.push(offset);
     fromIndex = offset + normalizedToken.length;
+  }
+
+  return offsets;
+}
+
+/**
+ * @typedef {{
+ *   type: 'binding-awaited-call' | 'binding-call' | 'call' | 'not-equal-guard',
+ *   label: string,
+ *   binding?: string,
+ *   callee?: string,
+ *   argsPrefix?: readonly string[],
+ *   left?: string,
+ *   right?: string,
+ * }} FunctionOwnershipStep
+ */
+
+/**
+ * @param {string} source
+ * @returns {any}
+ */
+function parseJavaScriptModule(source) {
+  return parse(source, {
+    ecmaVersion: 2020,
+    sourceType: 'module',
+  });
+}
+
+/**
+ * @param {any} node
+ * @returns {node is { type: string, start: number, end: number }}
+ */
+function isAstNode(node) {
+  return (
+    typeof node === 'object' &&
+    node !== null &&
+    typeof node.type === 'string' &&
+    typeof node.start === 'number' &&
+    typeof node.end === 'number'
+  );
+}
+
+/**
+ * @param {any} node
+ * @returns {boolean}
+ */
+function isNestedFunctionNode(node) {
+  return (
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'ArrowFunctionExpression'
+  );
+}
+
+/**
+ * @param {string} source
+ * @param {string} functionName
+ * @returns {any}
+ */
+export function namedFunctionBody(source, functionName) {
+  const program = parseJavaScriptModule(source);
+
+  for (const statement of program.body) {
+    const declaration =
+      statement.type === 'ExportNamedDeclaration'
+        ? statement.declaration
+        : statement;
+    if (
+      declaration?.type === 'FunctionDeclaration' &&
+      declaration.id?.name === functionName
+    ) {
+      return declaration.body;
+    }
+  }
+
+  throw new Error(`Missing function ${functionName}`);
+}
+
+/**
+ * @param {any} node
+ * @returns {any[]}
+ */
+function descendantNodesInSourceOrder(node) {
+  /** @type {any[]} */
+  const nodes = [];
+
+  /**
+   * @param {any} candidate
+   * @param {boolean} [allowFunction]
+   */
+  function visit(candidate, allowFunction = false) {
+    if (!isAstNode(candidate)) {
+      return;
+    }
+    if (!allowFunction && isNestedFunctionNode(candidate)) {
+      return;
+    }
+    nodes.push(candidate);
+    for (const value of Object.values(candidate)) {
+      if (Array.isArray(value)) {
+        for (const entry of value) {
+          visit(entry);
+        }
+        continue;
+      }
+      visit(value);
+    }
+  }
+
+  visit(node, true);
+  nodes.sort((left, right) => left.start - right.start);
+  return nodes;
+}
+
+/**
+ * @param {any} node
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isIdentifierNamed(node, name) {
+  return node?.type === 'Identifier' && node.name === name;
+}
+
+/**
+ * @param {any} node
+ * @param {string} callee
+ * @param {readonly string[]} [argsPrefix]
+ * @returns {boolean}
+ */
+function matchesCall(node, callee, argsPrefix = []) {
+  return (
+    node?.type === 'CallExpression' &&
+    isIdentifierNamed(node.callee, callee) &&
+    node.arguments.length >= argsPrefix.length &&
+    argsPrefix.every((name, index) =>
+      isIdentifierNamed(node.arguments[index], name),
+    )
+  );
+}
+
+/**
+ * @param {any} node
+ * @param {FunctionOwnershipStep} step
+ * @returns {boolean}
+ */
+function matchesOwnershipStep(node, step) {
+  switch (step.type) {
+    case 'binding-awaited-call':
+      return (
+        node?.type === 'VariableDeclarator' &&
+        isIdentifierNamed(node.id, /** @type {string} */ (step.binding)) &&
+        node.init?.type === 'AwaitExpression' &&
+        matchesCall(
+          node.init.argument,
+          /** @type {string} */ (step.callee),
+          step.argsPrefix,
+        )
+      );
+    case 'binding-call':
+      return (
+        node?.type === 'VariableDeclarator' &&
+        isIdentifierNamed(node.id, /** @type {string} */ (step.binding)) &&
+        matchesCall(
+          node.init,
+          /** @type {string} */ (step.callee),
+          step.argsPrefix,
+        )
+      );
+    case 'call':
+      return matchesCall(
+        node,
+        /** @type {string} */ (step.callee),
+        step.argsPrefix,
+      );
+    case 'not-equal-guard':
+      return (
+        node?.type === 'IfStatement' &&
+        node.test?.type === 'BinaryExpression' &&
+        node.test.operator === '!==' &&
+        isIdentifierNamed(node.test.left, /** @type {string} */ (step.left)) &&
+        isIdentifierNamed(node.test.right, /** @type {string} */ (step.right))
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * @param {string} source
+ * @param {string} functionName
+ * @param {readonly FunctionOwnershipStep[]} orderedSteps
+ * @param {string} label
+ * @returns {number[]}
+ */
+export function orderedFunctionOwnershipOffsets(
+  source,
+  functionName,
+  orderedSteps,
+  label,
+) {
+  const nodes = descendantNodesInSourceOrder(
+    namedFunctionBody(source, functionName),
+  );
+  const offsets = [];
+  let fromIndex = 0;
+
+  for (const step of orderedSteps) {
+    const offset = nodes.findIndex(
+      (node, index) => index >= fromIndex && matchesOwnershipStep(node, step),
+    );
+    if (offset < 0) {
+      throw new Error(
+        `${label} is missing required ${step.label} inside ${functionName}`,
+      );
+    }
+    offsets.push(nodes[offset].start);
+    fromIndex = offset + 1;
   }
 
   return offsets;
@@ -800,6 +1081,165 @@ export default [
           orderedSubstringOffsets(
             'parse -> read -> validate',
             ['read', 'parse'],
+            'fixture',
+          ),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'orderedFunctionOwnershipOffsets accepts minimal positive provenance fixtures',
+    run: async () => {
+      assertSame(
+        orderedFunctionOwnershipOffsets(
+          [
+            'async function checkFoundation(deps) {',
+            '  const actualManifestText = await readRequiredFile(',
+            '    deps,',
+            '    ES2015_PROVENANCE_FILE,',
+            '  );',
+            '  if (actualManifestText !== expectedManifestText) {',
+            "    throw new Error('drift');",
+            '  }',
+            '  const manifest = parseEs2015ProvenanceManifest(actualManifestText);',
+            '  validateProvenanceFoundation(manifest, classifications);',
+            '  validateDecisionFragments(manifest, fragments, {',
+            '    allowPendingReview: false,',
+            '  });',
+            '}',
+          ].join('\n'),
+          'checkFoundation',
+          CHECK_FOUNDATION_OWNERSHIP_STEPS,
+          'fixture',
+        ).length,
+        CHECK_FOUNDATION_OWNERSHIP_STEPS.length,
+      );
+      assertSame(
+        orderedFunctionOwnershipOffsets(
+          [
+            'async function loadReviewedManifest(deps) {',
+            '  const actualText = await readRequiredFile(',
+            '    deps,',
+            '    ES2015_PROVENANCE_FILE,',
+            '  );',
+            '  if (actualText !== expectedText) {',
+            "    throw new Error('drift');",
+            '  }',
+            '  const manifest = parseEs2015ProvenanceManifest(actualText);',
+            '  validateProvenanceFoundation(manifest, classifications);',
+            '  return manifest;',
+            '}',
+          ].join('\n'),
+          'loadReviewedManifest',
+          LOAD_REVIEWED_MANIFEST_OWNERSHIP_STEPS,
+          'fixture',
+        ).length,
+        LOAD_REVIEWED_MANIFEST_OWNERSHIP_STEPS.length,
+      );
+    },
+  },
+  {
+    name: 'orderedFunctionOwnershipOffsets rejects validations outside the target function body',
+    run: async () => {
+      assertThrows(
+        () =>
+          orderedFunctionOwnershipOffsets(
+            [
+              'async function checkFoundation(deps) {',
+              '  const actualManifestText = await readRequiredFile(',
+              '    deps,',
+              '    ES2015_PROVENANCE_FILE,',
+              '  );',
+              '  if (actualManifestText !== expectedManifestText) {',
+              "    throw new Error('drift');",
+              '  }',
+              '  const manifest = parseEs2015ProvenanceManifest(actualManifestText);',
+              '}',
+              'async function laterValidation(manifest, classifications, fragments) {',
+              '  validateProvenanceFoundation(manifest, classifications);',
+              '  validateDecisionFragments(manifest, fragments, {',
+              '    allowPendingReview: false,',
+              '  });',
+              '}',
+            ].join('\n'),
+            'checkFoundation',
+            CHECK_FOUNDATION_OWNERSHIP_STEPS,
+            'fixture',
+          ),
+        Error,
+      );
+      assertThrows(
+        () =>
+          orderedFunctionOwnershipOffsets(
+            [
+              'async function loadReviewedManifest(deps) {',
+              '  const actualText = await readRequiredFile(',
+              '    deps,',
+              '    ES2015_PROVENANCE_FILE,',
+              '  );',
+              '  if (actualText !== expectedText) {',
+              "    throw new Error('drift');",
+              '  }',
+              '  const manifest = parseEs2015ProvenanceManifest(actualText);',
+              '  return manifest;',
+              '}',
+              'function laterValidation(manifest, classifications) {',
+              '  validateProvenanceFoundation(manifest, classifications);',
+              '}',
+            ].join('\n'),
+            'loadReviewedManifest',
+            LOAD_REVIEWED_MANIFEST_OWNERSHIP_STEPS,
+            'fixture',
+          ),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'orderedFunctionOwnershipOffsets ignores comments and strings that mention validation calls',
+    run: async () => {
+      assertThrows(
+        () =>
+          orderedFunctionOwnershipOffsets(
+            [
+              'async function checkFoundation(deps) {',
+              '  const actualManifestText = await readRequiredFile(',
+              '    deps,',
+              '    ES2015_PROVENANCE_FILE,',
+              '  );',
+              '  if (actualManifestText !== expectedManifestText) {',
+              "    throw new Error('drift');",
+              '  }',
+              '  const manifest = parseEs2015ProvenanceManifest(actualManifestText);',
+              '  // validateProvenanceFoundation(manifest, classifications);',
+              "  const note = 'validateDecisionFragments(manifest, fragments, {})';",
+              '}',
+            ].join('\n'),
+            'checkFoundation',
+            CHECK_FOUNDATION_OWNERSHIP_STEPS,
+            'fixture',
+          ),
+        Error,
+      );
+      assertThrows(
+        () =>
+          orderedFunctionOwnershipOffsets(
+            [
+              'async function loadReviewedManifest(deps) {',
+              '  const actualText = await readRequiredFile(',
+              '    deps,',
+              '    ES2015_PROVENANCE_FILE,',
+              '  );',
+              '  if (actualText !== expectedText) {',
+              "    throw new Error('drift');",
+              '  }',
+              "  const note = 'parseEs2015ProvenanceManifest(actualText)';",
+              '  /* validateProvenanceFoundation(manifest, classifications); */',
+              '  return manifest;',
+              '}',
+            ].join('\n'),
+            'loadReviewedManifest',
+            LOAD_REVIEWED_MANIFEST_OWNERSHIP_STEPS,
             'fixture',
           ),
         Error,
@@ -1945,29 +2385,16 @@ export default [
         'tools/test262/es2015-provenance-check.js',
       );
 
-      orderedSubstringOffsets(
+      orderedFunctionOwnershipOffsets(
         source,
-        [
-          'async function checkFoundation(deps, completeCode) {',
-          'const actualManifestText = await readRequiredFile(',
-          'ES2015_PROVENANCE_FILE',
-          'if (actualManifestText !== expectedManifestText)',
-          'parseEs2015ProvenanceManifest(actualManifestText)',
-          'validateProvenanceFoundation(manifest, classifications)',
-          'validateDecisionFragments(manifest, fragments',
-        ],
+        'checkFoundation',
+        CHECK_FOUNDATION_OWNERSHIP_STEPS,
         'checkFoundation',
       );
-      orderedSubstringOffsets(
+      orderedFunctionOwnershipOffsets(
         source,
-        [
-          'async function loadReviewedManifest(deps) {',
-          'const actualText = await readRequiredFile(',
-          'ES2015_PROVENANCE_FILE',
-          'if (actualText !== expectedText)',
-          'parseEs2015ProvenanceManifest(actualText)',
-          'validateProvenanceFoundation(manifest, classifications)',
-        ],
+        'loadReviewedManifest',
+        LOAD_REVIEWED_MANIFEST_OWNERSHIP_STEPS,
         'loadReviewedManifest',
       );
     },
