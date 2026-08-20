@@ -107,6 +107,53 @@ export function createIterResultObject(realm, value, done) {
 }
 
 /**
+ * Captures the public iterator protocol operations for an already-created
+ * iterator. `[[Enumerate]]` returns an iterator directly, unlike `@@iterator`,
+ * but both consumers must observe and validate `next` the same way.
+ *
+ * @param {unknown} iterator
+ * @param {Realm} [realm]
+ * @returns {IteratorRecord}
+ */
+export function getIteratorRecord(iterator, realm) {
+  if (!(iterator instanceof EngineObject)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Enumerate result is not an object',
+    );
+  }
+
+  if (realm !== undefined) {
+    linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
+  }
+
+  const nextMethod = getWithObjectOperationRealm(
+    realm,
+    iterator,
+    'next',
+    iterator,
+  );
+
+  if (realm !== undefined) {
+    linkGeneratorHostChainToValue(realm.agent, nextMethod);
+  }
+
+  if (!isCallable(nextMethod)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Enumerate iterator next is not callable',
+    );
+  }
+
+  return {
+    iterator,
+    nextMethod,
+    done: false,
+    realm,
+  };
+}
+
+/**
  * ECMA-262 §7.4.1 `GetIterator ( obj [ , hint [ , method ] ] )`, sync hint. When
  * no `method` is supplied it is resolved via `GetMethod` on the `@@iterator`
  * key; an `obj` with no such method is not iterable and is a `TypeError`. The
@@ -153,21 +200,7 @@ export function getIterator(realm, obj, method) {
     );
   }
 
-  linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
-  const nextMethod = getWithObjectOperationRealm(
-    realm,
-    iterator,
-    'next',
-    iterator,
-  );
-
-  linkGeneratorHostChainToValue(realm.agent, nextMethod);
-  return {
-    iterator,
-    nextMethod,
-    done: false,
-    realm,
-  };
+  return getIteratorRecord(iterator, realm);
 }
 
 /**

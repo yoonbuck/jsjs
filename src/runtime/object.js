@@ -440,6 +440,13 @@ export class EngineObject {
   }
 
   /**
+   * @returns {EngineObject}
+   */
+  enumerate() {
+    return ordinaryEnumerate(this);
+  }
+
+  /**
    * Looks up one semantic well-known-symbol property across Agent boundaries.
    * Each object in the prototype chain owns a distinct physical symbol key, so
    * the walk derives that object's key before checking only its own descriptor.
@@ -560,6 +567,42 @@ export class EngineObject {
       'Cannot convert object to primitive value',
     );
   }
+}
+
+/**
+ * Creates the ordinary public iterator for ES2015 `[[Enumerate]]`. Its
+ * allocation Realm is dynamic execution state rather than a property of the
+ * target object, so cross-Realm `for-in` follows the evaluating Realm.
+ *
+ * @param {EngineObject} target
+ * @returns {EngineObject}
+ */
+export function ordinaryEnumerate(target) {
+  const realm = target.agent?.activeExecutionRealm;
+
+  if (realm === null || realm === undefined) {
+    throw new TypeError(
+      'Ordinary Enumerate requires an active execution Realm',
+    );
+  }
+
+  const factory = realm.intrinsics.forInIteratorFactory;
+
+  if (typeof factory !== 'function') {
+    throw new TypeError(
+      'Realm is missing the ordinary for-in iterator factory',
+    );
+  }
+
+  const iterator = factory(target);
+
+  if (!(iterator instanceof EngineObject)) {
+    throw new TypeError(
+      'Ordinary for-in iterator factory returned a non-object',
+    );
+  }
+
+  return iterator;
 }
 
 /**

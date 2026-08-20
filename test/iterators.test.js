@@ -10,6 +10,7 @@ import { GuestErrorSignal, ThrowSignal } from '../src/runtime/completion.js';
 import {
   createIterResultObject,
   getIterator,
+  getIteratorRecord,
   getMethod,
   iteratorClose,
   iteratorComplete,
@@ -395,6 +396,59 @@ const tests = [
       assertSame(iteratorValue(/** @type {EngineObject} */ (second)), 'b');
 
       assertSame(iteratorStep(record), false);
+    },
+  },
+  {
+    name: 'GetIteratorRecord captures an observable next once and rejects malformed Enumerate iterators',
+    run() {
+      const realm = createRealm();
+      const iterator = new EngineObject(realm.intrinsics.objectPrototype);
+      let nextGets = 0;
+      let nextCalls = 0;
+      const next = realm.createNativeFunction({
+        name: 'next',
+        length: 0,
+        call() {
+          nextCalls += 1;
+          return createIterResultObject(
+            realm,
+            nextCalls === 1 ? 'key' : undefined,
+            nextCalls !== 1,
+          );
+        },
+      });
+
+      iterator.defineOwnProperty('next', {
+        get: realm.createNativeFunction({
+          name: 'get next',
+          length: 0,
+          call(thisValue) {
+            assertSame(thisValue, iterator);
+            nextGets += 1;
+            return next;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+
+      const record = getIteratorRecord(iterator, realm);
+      assertSame(nextGets, 1);
+      iterator.defineOwnProperty('next', {
+        value: 0,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const first = iteratorStep(record);
+      assertSame(first !== false, true);
+      assertSame(iteratorValue(/** @type {EngineObject} */ (first)), 'key');
+      assertSame(nextCalls, 1);
+      assertSame(iteratorStep(record), false);
+
+      assertThrows(() => getIteratorRecord(1, realm), GuestErrorSignal);
+      assertThrows(() => getIteratorRecord(iterator, realm), GuestErrorSignal);
     },
   },
   {

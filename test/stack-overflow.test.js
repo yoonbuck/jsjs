@@ -4193,6 +4193,74 @@ const tests = [
     },
   },
   {
+    name: '50,000-link Enumerate stays iterative and dispatches a middle exotic once',
+    run() {
+      const realm = createRealm();
+      const root = new EngineObject(realm.intrinsics.objectPrototype);
+      root.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let ownPropertyKeysCalls = 0;
+      let getOwnPropertyCalls = 0;
+      let getPrototypeOfCalls = 0;
+      class RecordingMiddle extends EngineObject {
+        ownPropertyKeys() {
+          ownPropertyKeysCalls += 1;
+          return super.ownPropertyKeys();
+        }
+
+        /**
+         * @param {import('../src/runtime/descriptors.js').PropertyKey} key
+         */
+        getOwnProperty(key) {
+          getOwnPropertyCalls += 1;
+          return super.getOwnProperty(key);
+        }
+
+        getPrototypeOf() {
+          getPrototypeOfCalls += 1;
+          return super.getPrototypeOf();
+        }
+      }
+
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
+      }
+      const middle = new RecordingMiddle(lower);
+      let top = middle;
+      for (let index = 0; index < 24999; index += 1) {
+        top = new EngineObject(top);
+      }
+
+      const iterator = realm.agent.withActiveExecutionRealm(realm, () =>
+        top.enumerate(),
+      );
+      const next =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          iterator.get('next', iterator)
+        );
+      const first = /** @type {EngineObject} */ (
+        next.callFunction(iterator, [], realm)
+      );
+
+      assertSame(first.get('value', first), 'value');
+      assertSame(first.get('done', first), false);
+      assertSame(ownPropertyKeysCalls, 1);
+      assertSame(getOwnPropertyCalls, 1);
+      assertSame(getPrototypeOfCalls, 2);
+
+      const done = /** @type {EngineObject} */ (
+        next.callFunction(iterator, [], realm)
+      );
+      assertSame(done.get('done', done), true);
+    },
+  },
+  {
     name: 'a prototype chain built at runtime is walked without host recursion',
     run() {
       // Property lookup follows the prototype chain, and guest code can make

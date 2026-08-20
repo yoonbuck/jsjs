@@ -1,4 +1,11 @@
 import { EngineObject } from './object.js';
+import { GuestErrorSignal } from './completion.js';
+import {
+  createIterResultObject,
+  getIteratorRecord,
+  iteratorStep,
+  iteratorValue,
+} from './iterator.js';
 
 /**
  * The two built-in iterator exotic-ish objects — really ordinary objects with
@@ -48,5 +55,185 @@ export class StringIterator extends EngineObject {
     this.iteratedString = string;
     /** @type {number} */
     this.nextIndex = 0;
+  }
+}
+
+/**
+ * An ordinary ES2015 `[[Enumerate]]` iterator. Its state remains private, but
+ * its sole consumer-facing operation is an own public `next` method that
+ * returns ordinary IteratorResult objects.
+ */
+export class ForInIterator extends EngineObject {
+  /**
+   * @param {import('./realm.js').Realm} realm
+   * @param {EngineObject} target
+   */
+  constructor(realm, target) {
+    super(realm.intrinsics.objectPrototype, 'Object', realm.agent);
+
+    /** @type {import('./realm.js').Realm} */
+    this.realm = realm;
+    /** @type {EngineObject} */
+    this.target = target;
+    /** @type {string[]} */
+    this.candidates = [];
+    /** @type {number} */
+    this.candidateIndex = 0;
+    /** @type {Set<string>} */
+    this.visited = new Set();
+    /** @type {import('./iterator.js').IteratorRecord | null} */
+    this.remainder = null;
+    /** @type {boolean} */
+    this.exhausted = false;
+
+    snapshotForInCandidates(this);
+
+    const iterator = this;
+    this.defineOwnProperty('next', {
+      value: realm.createNativeFunction({
+        name: 'next',
+        length: 0,
+        call(thisValue) {
+          if (thisValue !== iterator) {
+            throw new GuestErrorSignal(
+              'TypeError',
+              'For-in iterator next called on an incompatible receiver',
+            );
+          }
+          return iterator.next();
+        },
+      }),
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+
+  /**
+   * @returns {EngineObject}
+   */
+  next() {
+    if (this.exhausted) {
+      return createIterResultObject(this.realm, undefined, true);
+    }
+
+    while (this.candidateIndex < this.candidates.length) {
+      const key = this.candidates[this.candidateIndex];
+      this.candidateIndex += 1;
+
+      if (this.visited.has(key)) {
+        continue;
+      }
+
+      const descriptor = findLiveForInDescriptor(this.target, key);
+
+      if (descriptor === undefined) {
+        continue;
+      }
+
+      this.visited.add(key);
+      if (descriptor.enumerable === true) {
+        return createIterResultObject(this.realm, key, false);
+      }
+    }
+
+    return nextForInRemainder(this);
+  }
+}
+
+/**
+ * Snapshots only initial string candidates. Their descriptors are intentionally
+ * read later so deletion, reconfiguration, and prototype replacement remain
+ * observable before a candidate is yielded.
+ *
+ * @param {ForInIterator} iterator
+ * @returns {void}
+ */
+function snapshotForInCandidates(iterator) {
+  /** @type {EngineObject | null} */
+  let current = iterator.target;
+
+  while (current !== null) {
+    if (
+      current !== iterator.target &&
+      current.enumerate !== EngineObject.prototype.enumerate
+    ) {
+      iterator.remainder = getIteratorRecord(
+        current.enumerate(),
+        iterator.realm,
+      );
+      return;
+    }
+
+    for (const key of current.ownPropertyKeys()) {
+      if (typeof key === 'string') {
+        iterator.candidates.push(key);
+      }
+    }
+
+    current = current.getPrototypeOf();
+  }
+}
+
+/**
+ * Rechecks a snapshotted key against the current prototype graph. A descriptor
+ * is returned only for the first live owner, preserving shadowing semantics.
+ *
+ * @param {EngineObject} target
+ * @param {string} key
+ * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
+ */
+function findLiveForInDescriptor(target, key) {
+  /** @type {EngineObject | null} */
+  let current = target;
+
+  while (current !== null) {
+    const descriptor = current.getOwnProperty(key);
+
+    if (descriptor !== undefined) {
+      return descriptor;
+    }
+
+    current = current.getPrototypeOf();
+  }
+
+  return undefined;
+}
+
+/**
+ * @param {ForInIterator} iterator
+ * @returns {EngineObject}
+ */
+function nextForInRemainder(iterator) {
+  const record = iterator.remainder;
+
+  if (record === null) {
+    iterator.exhausted = true;
+    return createIterResultObject(iterator.realm, undefined, true);
+  }
+
+  for (;;) {
+    const step = iteratorStep(record);
+
+    if (step === false) {
+      record.done = true;
+      iterator.exhausted = true;
+      return createIterResultObject(iterator.realm, undefined, true);
+    }
+
+    const value = iteratorValue(step, iterator.realm);
+
+    if (typeof value === 'symbol') {
+      continue;
+    }
+
+    if (typeof value === 'string') {
+      if (iterator.visited.has(value)) {
+        continue;
+      }
+      iterator.visited.add(value);
+    }
+
+    return createIterResultObject(iterator.realm, value, false);
   }
 }

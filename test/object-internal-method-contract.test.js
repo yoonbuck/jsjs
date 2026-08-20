@@ -31,6 +31,7 @@ import {
   isConstructor,
 } from '../src/runtime/capabilities.js';
 import { createAbruptRealmCallable } from '../src/runtime/function-realm.js';
+import { createIterResultObject } from '../src/runtime/iterator.js';
 
 /**
  * @param {import('../src/runtime/realm.js').Realm} realm
@@ -1299,6 +1300,188 @@ export default [
       assertSame(sourceAgent.activeExecutionRealm, null);
       assertSame(targetAgent.activeExecutionRealm, null);
       assertSame(targetRealm.agent, targetAgent);
+    },
+  },
+  {
+    name: 'ordinary Enumerate returns a public Realm-owned iterator protocol object',
+    run() {
+      const realm = createRealm();
+      const object = new EngineObject(realm.intrinsics.objectPrototype);
+      object.defineOwnProperty('first', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const iterator = realm.agent.withActiveExecutionRealm(realm, () =>
+        object.enumerate(),
+      );
+      const next = iterator.get('next', iterator);
+      assertSame(isCallable(next), true);
+
+      const first = /** @type {EngineObject} */ (
+        callCallable(next, iterator, [])
+      );
+      assertSame(first.get('value', first), 'first');
+      assertSame(first.get('done', first), false);
+      assertSame(first.getPrototypeOf(), realm.intrinsics.objectPrototype);
+
+      const done = /** @type {EngineObject} */ (
+        callCallable(next, iterator, [])
+      );
+      assertSame(done.get('done', done), true);
+      assertSame(done.getPrototypeOf(), realm.intrinsics.objectPrototype);
+      assertSame(iterator.getPrototypeOf(), realm.intrinsics.objectPrototype);
+
+      assertThrows(() => object.enumerate(), TypeError);
+    },
+  },
+  {
+    name: 'ordinary Enumerate snapshots candidates while live lookup honors deletion, shadowing, and replacement',
+    run() {
+      const realm = createRealm();
+      const initialPrototype = new EngineObject(
+        realm.intrinsics.objectPrototype,
+      );
+      const object = new EngineObject(initialPrototype);
+      const replacementPrototype = new EngineObject(
+        realm.intrinsics.objectPrototype,
+      );
+
+      for (const key of ['2', '1', 'text', 'removed']) {
+        object.defineOwnProperty(key, {
+          value: key,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      }
+      object.defineOwnProperty('shadow', {
+        value: 'own',
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      initialPrototype.defineOwnProperty('removed', {
+        value: 'initial',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      initialPrototype.defineOwnProperty('shadow', {
+        value: 'initial',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      replacementPrototype.defineOwnProperty('removed', {
+        value: 'replacement',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      replacementPrototype.defineOwnProperty('shadow', {
+        value: 'replacement',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      replacementPrototype.defineOwnProperty('late', {
+        value: 'late',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const iterator = realm.agent.withActiveExecutionRealm(realm, () =>
+        object.enumerate(),
+      );
+      object.delete('removed');
+      assertSame(object.setPrototypeOf(replacementPrototype), true);
+
+      const next = iterator.get('next', iterator);
+      /** @type {string[]} */
+      const names = [];
+      for (;;) {
+        const step = /** @type {EngineObject} */ (
+          callCallable(next, iterator, [])
+        );
+        if (step.get('done', step) === true) {
+          break;
+        }
+        names.push(/** @type {string} */ (step.get('value', step)));
+      }
+
+      assertSame(names.join(','), '1,2,text,removed');
+    },
+  },
+  {
+    name: 'ordinary Enumerate consumes an overridden prototype Enumerate remainder through its public protocol',
+    run() {
+      const realm = createRealm();
+      let enumerateCalls = 0;
+      let nextGets = 0;
+      let index = 0;
+      const remainder = new EngineObject(realm.intrinsics.objectPrototype);
+      const values = ['own', 'tail', 'tail'];
+      const next = realm.createNativeFunction({
+        name: 'next',
+        length: 0,
+        call() {
+          const value = values[index];
+          index += 1;
+          return createIterResultObject(realm, value, index > values.length);
+        },
+      });
+      remainder.defineOwnProperty('next', {
+        get: realm.createNativeFunction({
+          name: 'get next',
+          length: 0,
+          call(thisValue) {
+            assertSame(thisValue, remainder);
+            nextGets += 1;
+            return next;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+
+      class EnumerateBoundary extends EngineObject {
+        enumerate() {
+          enumerateCalls += 1;
+          return remainder;
+        }
+      }
+
+      const boundary = new EnumerateBoundary(realm.intrinsics.objectPrototype);
+      const object = new EngineObject(boundary);
+      object.defineOwnProperty('own', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const iterator = realm.agent.withActiveExecutionRealm(realm, () =>
+        object.enumerate(),
+      );
+      const iteratorNext = iterator.get('next', iterator);
+      /** @type {string[]} */
+      const names = [];
+      for (;;) {
+        const result = /** @type {EngineObject} */ (
+          callCallable(iteratorNext, iterator, [])
+        );
+        if (result.get('done', result) === true) {
+          break;
+        }
+        names.push(/** @type {string} */ (result.get('value', result)));
+      }
+
+      assertSame(names.join(','), 'own,tail');
+      assertSame(enumerateCalls, 1);
+      assertSame(nextGets, 1);
     },
   },
 ];
