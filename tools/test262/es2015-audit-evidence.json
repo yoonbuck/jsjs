@@ -69143,18 +69143,6 @@
     },
     {
       "type": "test",
-      "file": "test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/assignment/dstr/ident-name-prop-name-literal-extends-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
       "file": "test/language/expressions/assignment/dstr/obj-empty-symbol.js",
       "variant": "non-strict",
       "status": "passed"
@@ -70535,54 +70523,6 @@
     },
     {
       "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-binary.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-binary.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-octal.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-numeric-octal.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-string-default-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-string-default-escaped-ext.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-string-unicode-escape.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-inst/literal-string-unicode-escape.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
       "file": "test/language/expressions/class/accessor-name-static-computed-in.js",
       "variant": "non-strict",
       "status": "passed"
@@ -70602,54 +70542,6 @@
     {
       "type": "test",
       "file": "test/language/expressions/class/accessor-name-static-computed-yield-expr.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-numeric-binary.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-numeric-binary.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-numeric-octal.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-numeric-octal.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-string-default-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-string-default-escaped-ext.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-string-unicode-escape.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/accessor-name-static/literal-string-unicode-escape.js",
       "variant": "strict",
       "status": "passed"
     },
@@ -77420,30 +77312,6 @@
       "file": "test/language/expressions/class/heritage-async-arrow-function.js",
       "variant": "strict",
       "status": "failed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/ident-name-method-def-default-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/ident-name-method-def-default-escaped-ext.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/ident-name-method-def-extends-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/expressions/class/ident-name-method-def-extends-escaped-ext.js",
-      "variant": "strict",
-      "status": "passed"
     },
     {
       "type": "test",
@@ -97835,54 +97703,6 @@
     },
     {
       "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-numeric-binary.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-numeric-binary.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-numeric-octal.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-numeric-octal.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-string-default-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-string-default-escaped-ext.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-string-unicode-escape.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-inst/literal-string-unicode-escape.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
       "file": "test/language/statements/class/accessor-name-static-computed-yield-expr.js",
       "variant": "non-strict",
       "status": "passed"
@@ -97890,54 +97710,6 @@
     {
       "type": "test",
       "file": "test/language/statements/class/accessor-name-static-computed-yield-expr.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-numeric-binary.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-numeric-binary.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-numeric-octal.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-numeric-octal.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-string-default-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-string-default-escaped-ext.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-string-unicode-escape.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/accessor-name-static/literal-string-unicode-escape.js",
       "variant": "strict",
       "status": "passed"
     },
@@ -105366,30 +105138,6 @@
     {
       "type": "test",
       "file": "test/language/statements/class/getter-param-dflt.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/ident-name-method-def-default-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/ident-name-method-def-default-escaped-ext.js",
-      "variant": "strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/ident-name-method-def-extends-escaped-ext.js",
-      "variant": "non-strict",
-      "status": "passed"
-    },
-    {
-      "type": "test",
-      "file": "test/language/statements/class/ident-name-method-def-extends-escaped-ext.js",
       "variant": "strict",
       "status": "passed"
     },

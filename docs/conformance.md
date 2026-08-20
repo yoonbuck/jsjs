@@ -605,8 +605,8 @@ remaining unsupported class-field and Unicode/legacy-escape forms.
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 20,430   | 20,430    | 20,430 | 38.133% |
-| (file, variant) | 102,912     | 38,813   | 38,813    | 38,813 | 37.715% |
+| Files           | 53,575      | 20,452   | 20,452    | 20,452 | 38.175% |
+| (file, variant) | 102,912     | 38,855   | 38,855    | 38,855 | 37.756% |
 
 0 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
@@ -635,18 +635,18 @@ The qualified core ES2015 evidence is:
 
 | Core status              | Roots      | Variants   |
 | ------------------------ | ---------- | ---------- |
-| Selected passing         | 19,603     | 37,305     |
-| Audit-passing unselected | 82         | 162        |
+| Selected passing         | 19,625     | 37,347     |
+| Audit-passing unselected | 60         | 120        |
 | Blocked                  | 4,563      | 8,953      |
 | Intentional deviation    | 2          | 4          |
 | **Core total**           | **24,250** | **46,424** |
 
 Issue #77's exact 83-root lexical grammar and `new.target` ledger now has no
-core `lexical-grammar-and-new-target` blockers: 82 roots passed focused
-execution, while the Function.prototype.toString Unicode root moved by
-exact-path review to `remaining-standard-library-additions` because it depends
-on exact source preservation. The separate Annex B escape root remains in the
-Annex B partition.
+core `lexical-grammar-and-new-target` blockers: 22 roots entered selected
+passing evidence, 60 roots remain audit-passing unselected, and the
+Function.prototype.toString Unicode root moved by exact-path review to
+`remaining-standard-library-additions` because it depends on exact source
+preservation. The separate Annex B escape root remains in the Annex B partition.
 
 Annex B remains separate:
 
