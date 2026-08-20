@@ -713,7 +713,7 @@ function reviewedDecision(value, path) {
       `ES2015 reviewed provenance for ${path} must be an object`,
     );
   }
-  const decision = value;
+  const decision = /** @type {Record<string, any>} */ (value);
   if (
     typeof decision.code !== 'string' ||
     decision.code === '' ||

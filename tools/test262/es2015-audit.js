@@ -70,7 +70,8 @@ const SUBSET_FILE = 'tools/test262/upstream-subset.json';
 const FEATURES_FILE = 'tools/test262/features.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
 const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
-const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
+const PROVENANCE_DECISIONS_DIRECTORY =
+  'tools/test262/es2015-provenance-decisions';
 const AUDIT_EVIDENCE_KEYS = Object.freeze([
   'version',
   'repository',
@@ -169,7 +170,9 @@ export async function main(argv = [], dependencies = {}) {
   const promotionText = await readOptionalFile(deps, ES2015_PROMOTION_FILE);
   const policy = parseEs2015Policy(policyText);
   const anchors = parseEs2015Anchors(anchorsText);
-  const provenanceManifest = parseEs2015ProvenanceManifest(provenanceManifestText);
+  const provenanceManifest = parseEs2015ProvenanceManifest(
+    provenanceManifestText,
+  );
   const parsedDecisionFragments = parseDecisionFragments(decisionFragmentTexts);
   const reviewedProvenance = withDecisionCodes(
     validateDecisionFragments(provenanceManifest, parsedDecisionFragments, {
@@ -336,16 +339,20 @@ export function createAuditDependencies(options = {}) {
   const readPin = () => readTest262Pin(repositoryRootUrl);
   const checkoutUrl = (/** @type {{ checkoutPath: string }} */ pin) =>
     new URL(`${pin.checkoutPath.replace(/\/$/u, '')}/`, repositoryRootUrl);
-  const readProvenanceManifest = () => readRepositoryFile(ES2015_PROVENANCE_FILE);
+  const readProvenanceManifest = () =>
+    readRepositoryFile(ES2015_PROVENANCE_FILE);
   const readDecisionFragments = async () =>
     new Map(
       await Promise.all(
-        ES2015_PROVENANCE_DECISION_CODES.map(async (code) => [
-          code,
-          await readRepositoryFile(
-            `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
-          ),
-        ]),
+        ES2015_PROVENANCE_DECISION_CODES.map(
+          async (code) =>
+            /** @type {[string, string]} */ ([
+              code,
+              await readRepositoryFile(
+                `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+              ),
+            ]),
+        ),
       ),
     );
   return {
@@ -892,7 +899,10 @@ function parseDecisionFragments(fragments) {
   const entries =
     fragments instanceof Map ? [...fragments] : Object.entries(fragments);
   const parsed = new Map(
-    entries.map(([code, text]) => [code, parseEs2015DecisionFragment(text, code)]),
+    entries.map(([code, text]) => [
+      code,
+      parseEs2015DecisionFragment(text, code),
+    ]),
   );
   for (const code of ES2015_PROVENANCE_DECISION_CODES) {
     if (!parsed.has(code)) {
