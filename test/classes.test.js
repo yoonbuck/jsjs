@@ -577,8 +577,10 @@ const tests = [
           Derived;
         `,
       ).value;
-      const Alternate = evaluateScript(realm, 'class Alternate {} Alternate;')
-        .value;
+      const Alternate = evaluateScript(
+        realm,
+        'class Alternate {} Alternate;',
+      ).value;
       const result = /** @type {any} */ (Derived).constructFunction(
         [],
         Alternate,

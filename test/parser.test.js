@@ -3078,18 +3078,30 @@ const tests = [
       const parsed = parseScript('function f(){ return new.target; }');
       const meta = parsed.body[0].body.body[0].argument;
 
+      /**
+       * @param {any} argument
+       * @returns {any}
+       */
       function programForFunctionReturn(argument) {
         const program = parseScript('function f(){ return 0; }');
         program.body[0].body.body[0].argument = argument;
         return program;
       }
 
+      /**
+       * @param {any} expression
+       * @returns {any}
+       */
       function programForExpression(expression) {
         const program = parseScript('0;');
         program.body[0].expression = expression;
         return program;
       }
 
+      /**
+       * @param {() => any} fn
+       * @returns {void}
+       */
       function assertNormalizedSyntaxError(fn) {
         const error = /** @type {any} */ (assertThrows(fn, SyntaxError));
         assertSame(error.name, 'SyntaxError');
@@ -3229,11 +3241,11 @@ const tests = [
         parseCustomScript('parse', programForFunctionReturn(metadataNode)),
       );
 
-      const selfCycle = {
+      const selfCycle = /** @type {any} */ ({
         type: 'MetaProperty',
         meta: { type: 'Identifier', name: 'new' },
         property: { type: 'Identifier', name: 'target' },
-      };
+      });
       selfCycle.meta = selfCycle;
       assertNormalizedSyntaxError(() =>
         parseCustomScript('parse', programForFunctionReturn(selfCycle)),
@@ -3258,16 +3270,17 @@ const tests = [
     name: 'ES2015 binary and octal literals retain exact values, raw text, and locations',
     run() {
       const program = parseScript('0b101; 0B101; 0o17; 0O17;');
-      const literals = program.body.map((statement) => statement.expression);
+      const literals = program.body.map(
+        /** @param {any} statement */
+        (statement) => statement.expression,
+      );
 
       assertSame(
         JSON.stringify(
-          literals.map(({ value, raw, start, end }) => [
-            value,
-            raw,
-            start,
-            end,
-          ]),
+          literals.map(
+            /** @param {any} literal */
+            ({ value, raw, start, end }) => [value, raw, start, end],
+          ),
         ),
         JSON.stringify([
           [5, '0b101', 0, 5],

@@ -487,7 +487,9 @@ const tests = [
     run() {
       assertSame(run('(function F(){ return new.target; })();'), undefined);
       assertSame(
-        run('var F = function F(){ this.same = new.target === F; }; new F().same;'),
+        run(
+          'var F = function F(){ this.same = new.target === F; }; new F().same;',
+        ),
         true,
       );
       assertSame(

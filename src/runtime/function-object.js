@@ -370,7 +370,9 @@ export class EngineFunction extends EngineObject {
       const generatorFactory = this._generatorFactory;
 
       if (generatorFactory === undefined) {
-        throw new TypeError('Generator function is missing a generator factory');
+        throw new TypeError(
+          'Generator function is missing a generator factory',
+        );
       }
 
       const completion = this.executeWithFunctionEnvironment(

@@ -253,11 +253,17 @@ function getEvalParser(strict, allowDirectSuper, allowNewTarget) {
       (Base) =>
         class extends Base {
           get allowDirectSuper() {
-            return allowDirectSuper || super.allowDirectSuper;
+            return (
+              allowDirectSuper ||
+              Reflect.get(Base.prototype, 'allowDirectSuper', this)
+            );
           }
 
           get allowNewDotTarget() {
-            return allowNewTarget || super.allowNewDotTarget;
+            return (
+              allowNewTarget ||
+              Reflect.get(Base.prototype, 'allowNewDotTarget', this)
+            );
           }
         },
     );
