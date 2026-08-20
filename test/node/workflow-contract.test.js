@@ -216,6 +216,34 @@ function usesSteps(job, action) {
   );
 }
 
+/**
+ * @param {readonly any[]} steps
+ * @param {readonly string[]} expectedNames
+ */
+export function assertAdjacentWorkflowSteps(steps, expectedNames) {
+  const indexes = expectedNames.map((name) =>
+    steps.findIndex((step) => step?.name === name),
+  );
+
+  for (let index = 0; index < expectedNames.length; index += 1) {
+    const name = expectedNames[index];
+    const occurrences = steps.filter((step) => step?.name === name).length;
+    if (occurrences !== 1) {
+      throw new Error(
+        `workflow must contain exactly one step named "${name}"; found ${occurrences}`,
+      );
+    }
+  }
+
+  for (let index = 1; index < indexes.length; index += 1) {
+    if (indexes[index] !== indexes[0] + index) {
+      throw new Error(
+        `workflow steps must be adjacent in this exact order: ${expectedNames.join(' -> ')}`,
+      );
+    }
+  }
+}
+
 function nonUtcUpstreamDiagnosticInvocation() {
   return {
     command: /** @type {{ execPath: string }} */ (
@@ -769,7 +797,34 @@ export default [
     },
   },
   {
-    name: 'the pinned Test262 job checks the deterministic ES2015 taxonomy before broad execution',
+    name: 'the workflow adjacency contract rejects an intervening Test262 step',
+    run: () => {
+      const error = assertThrows(
+        () =>
+          assertAdjacentWorkflowSteps(
+            [
+              { name: 'Install dependencies' },
+              { name: 'Check unknown-edition provenance' },
+              { name: 'Intervening mutant step' },
+              { name: 'Check the ES2015 taxonomy and exact promotion' },
+            ],
+            [
+              'Install dependencies',
+              'Check unknown-edition provenance',
+              'Check the ES2015 taxonomy and exact promotion',
+            ],
+          ),
+        Error,
+      );
+
+      assertSame(
+        error.message,
+        'workflow steps must be adjacent in this exact order: Install dependencies -> Check unknown-edition provenance -> Check the ES2015 taxonomy and exact promotion',
+      );
+    },
+  },
+  {
+    name: 'the pinned Test262 job checks provenance immediately before taxonomy and broad execution',
     run: async () => {
       const { workflow } = await readWorkflow();
       const job = requireJob(workflow, 'test262-upstream');
@@ -780,6 +835,10 @@ export default [
       const install = job.steps.find(
         (/** @type {any} */ step) => step.name === 'Install dependencies',
       );
+      const provenanceCheck = job.steps.find(
+        (/** @type {any} */ step) =>
+          step.name === 'Check unknown-edition provenance',
+      );
       const taxonomyCheck = job.steps.find(
         (/** @type {any} */ step) =>
           step.name === 'Check the ES2015 taxonomy and exact promotion',
@@ -788,6 +847,16 @@ export default [
         (/** @type {any} */ step) => step.run === 'npm run test262:upstream',
       );
 
+      assertAdjacentWorkflowSteps(job.steps, [
+        'Install dependencies',
+        'Check unknown-edition provenance',
+        'Check the ES2015 taxonomy and exact promotion',
+      ]);
+      assertSame(
+        provenanceCheck?.run,
+        'npm run test262:es2015:provenance:check',
+      );
+      assertSame(provenanceCheck?.env?.TZ, 'UTC');
       assertSame(
         taxonomyCheck !== undefined,
         true,
@@ -802,10 +871,9 @@ export default [
         'the taxonomy check must follow the pinned Test262 checkout',
       );
       assertSame(
-        job.steps.indexOf(/** @type {any} */ (install)) <
-          job.steps.indexOf(/** @type {any} */ (taxonomyCheck)),
+        install !== undefined,
         true,
-        'the taxonomy check must follow dependency installation',
+        'the pinned Test262 job must install dependencies',
       );
       assertSame(
         job.steps.indexOf(/** @type {any} */ (taxonomyCheck)) <

@@ -47,6 +47,9 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:fixtures`                                                     | Test262 runner over `test/fixtures/test262`, forcing the `fixture-subset` feature (JSON lines on stdout)                                                                                                                        |
 | `npm run test262:fixtures:manifest`                                            | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
 | `TZ=UTC npm run test262:es2015-release`                                        | Focused pinned Promise+generator+module+object/function+syntax Test262 release gate; does not rewrite broad reports or selection                                                                                                |
+| `TZ=UTC npm run test262:es2015:provenance`                                     | Rebuild the immutable unknown-edition provenance foundation, create or canonicalize empty decision fragments, and refuse to overwrite any non-empty fragment                                                                    |
+| `TZ=UTC npm run test262:es2015:provenance:check`                               | Verify the checked-in unknown-edition provenance foundation and decision fragments without writing; metadata/hash-only and cannot call `runTest262Suite`                                                                        |
+| `TZ=UTC npm run test262:es2015:provenance:ledger -- --render-ledger=UA`        | Render the exact code-unit-sorted ledger for one atomic provenance batch code (`UA`, `UB`, `UL1`-`UL4`, `US1`-`US7`)                                                                                                            |
 | `TZ=UTC npm run test262:es2015:audit`                                          | Rebuild the deterministic ES2015 taxonomy from the exact pinned checkout                                                                                                                                                        |
 | `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in ES2015 taxonomy and exact promotion provenance without writing                                                                                                                                            |
 | `TZ=UTC npm run test262:es2015:sync-promoted-report`                           | Rebuild report and coverage bytes from committed pre-promotion records plus immutable exact promotion evidence; never executes the broad subset                                                                                 |
@@ -96,14 +99,18 @@ function, runtime, yield, control-flow, delegation, and stack behavior.
 
 ### Node-only suites (`test/node/`)
 
-Seven suites that need a filesystem and cannot run in the browser or `jsc`:
+Twelve suites need a filesystem and cannot run in the browser or `jsc`:
 
 - `test/node/benchmark-cli.test.js` — validates benchmark CLI argument
   parsing, sequential all-host orchestration, and atomic validated report
   writes.
+- `test/node/benchmark-compare.test.js` — validates ordered capture-pair
+  comparison, significance gating, and report/CSV decision output.
 - `test/node/benchmark-hosts.test.js` — covers the real Node smoke host plus
   the browser/JSC host adapters' parsing, path-guard, setup-error, and
   monotonic-clock helpers.
+- `test/node/jsc-runner.test.js` — covers the JSC host runner's argument-free
+  bridge, result reporting, and required global contract.
 - `test/node/benchmark-summary.test.js` — validates cross-host compatibility
   checks, deterministic CSV output, and summary CLI file I/O.
 - `test/node/profile-analysis.test.js` — covers deterministic profile-sidecar
@@ -112,6 +119,13 @@ Seven suites that need a filesystem and cannot run in the browser or `jsc`:
   normalization, and paired atomic analysis output replacement.
 - `test/node/profiling-cli.test.js` — covers protocol lifecycle cleanup, atomic
   raw profile output, and Node/Chromium capture orchestration.
+- `test/node/es2015-provenance.test.js` — covers the immutable unknown-edition
+  base ledger, all 13 batch identities, exact ledger/issue rendering, strict
+  versus draft review validation, and the filesystem CLI boundary.
+- `test/node/es2015-taxonomy.test.js` — validates the deterministic ES2015
+  taxonomy, exact promotion evidence, and metadata-only audit/check boundary.
+- `test/node/upstream-select.test.js` — validates the generated upstream subset
+  derivation from policy, feature manifests, and exclusions.
 - `test/node/repository-invariants.test.js` — architecture checks: vendor
   invariants, parser dependency isolation, suite registration, Markdown link
   contracts, documentation command validity, reference doc existence.
@@ -202,9 +216,76 @@ the broad upstream subset locally. Local report maintenance is limited to the
 deterministic exact-evidence synchronization below; it does not execute the
 broad subset. In CI, the generated job checks out
 `b363f29d3c43c626dc852744ad64a0b48a003693`, installs dependencies, verifies
-the ES2015 taxonomy and exact promotion under `TZ=UTC`, then runs the broad
-pinned subset. That run byte-checks `docs/test262-report.jsonl` and the
-generated coverage block in `docs/conformance.md`.
+unknown-edition provenance, verifies the ES2015 taxonomy and exact promotion
+under `TZ=UTC`, then runs the broad pinned subset. That run byte-checks
+`docs/test262-report.jsonl` and the generated coverage block in
+`docs/conformance.md`.
+
+### Unknown-edition provenance foundation (U0)
+
+The checked-in unknown-edition ledger is the immutable provenance foundation
+for Task `T1` / issue `#75`:
+
+- base ledger: 2,312 roots / 4,054 variants / SHA-256
+  `56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc`
+- U0: tooling foundation only; it makes zero classification decisions
+- atomic decision batches: `UA`, `UB`, `UL1`, `UL2`, `UL3`, `UL4`, `US1`,
+  `US2`, `US3`, `US4`, `US5`, `US6`, `US7`
+
+| Code  | Roots | Variants | `pathSha256`                                                       | `entryLedgerSha256`                                                |
+| ----- | ----: | -------: | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `UA`  |   314 |      323 | `d29150e412486095bac0103f5d7e913917269870a9769cd8343a5cc9638af98e` | `a6664c97c45fd047a4d136b62f2121b630fa742c6e21594111457e367d88cc09` |
+| `UB`  |    32 |       64 | `4e21b1884213e2831ffe58fb5c5128f17d417168aeabeac3c3817f8f6350623a` | `99441828b25381a9ce86cbad7bdaaeb612100d2425990f0689f08bf6f7059a1a` |
+| `UL1` |   434 |      835 | `1bad4b5aed5f665cfcd270a57c90553b1fe4a1dabb1334fa950527b1113b937a` | `f5044351e9319bacd6d07fdbb4f6eb995f87ab7a2c307893fbd173fcacf9b1f5` |
+| `UL2` |   182 |      364 | `b5e8412e46d0bb2d976de247d312269b9ac34fa9cda77d15a2aa11c1eb0abb45` | `2516f31b492778b05737a34c24aead5520ba0804b824c4fb0af54b49fca75640` |
+| `UL3` |   109 |      212 | `af158f399b1827dd2012030fbec2fdbbb28f184c011a310550928eb718dca406` | `4b4543298d376734ef7a58ce6eb2a84ed1b0997a588e509ec25a36705378c6e8` |
+| `UL4` |    48 |       48 | `9316f73cad2c6608ad14d6e837e5383100bb2ebd0a4feb2ba9f198ee35e5d3ac` | `4ecb3fa2541b0ba3932c61bd5b92d3a137561202036b6009bfbdf2f25a997b58` |
+| `US1` |   210 |      406 | `63ff657590ebb5aa167c19975344817789a9a67b820ce0092f990376afa873f7` | `f1ef59740d3a9cbae631e0c65cd7d4aa24bd6619129d76179ca7d32e795b184f` |
+| `US2` |   176 |      352 | `3b3db618ae579287c0cbe5a77124c883c3129395bf83fe7523dc1f32e3fe7d15` | `5acbdcb3fdaf4e9fc95a157aac51e20041cc38b47de8717d655eb9b32e5cbfdb` |
+| `US3` |    99 |      190 | `42d21ddbd59de80f8c14b1508c3502c8c0bc023061ff24c16160f1bfaec7daa1` | `06922dfb4dc6fa2d2e07e7bcbf8364fcd8fc943921820a15c057b17e55fb8528` |
+| `US4` |   176 |      318 | `19bc8b322158aa59af8d0b5efd38cf58885be50fdb6394b56cc94a2b94754c0b` | `e548e96a5d68e6117c454d0117831f81445d0eec93f7b873ea82a6d7673a7d66` |
+| `US5` |   306 |      540 | `fdc5ed38ef91366ee6bd9f8aa8d49917b5d9bbc2746cfd62a50f22a22cd03df5` | `87d0388e420d5ffdde58c81705b19daca1d3488e3de4330b1cc8e9ad63bd36f0` |
+| `US6` |    48 |       89 | `90dfecd04460d739d4a7242b6ff14c4ef83abcf3e73d7893b392138372ce1cf1` | `c7c524d8b8cd8f0094f631be7d16abcc7f946db86546aaf6339d9cd9853d6a16` |
+| `US7` |   178 |      313 | `1e2cda5adef593ae134f0ab0e759091f57522821460c904c7f44c4217c891e28` | `6fa9daa7322394f0f96b754ef6674ccb80b916cd4209c2308f7591eaf46f7e23` |
+
+The foundation is generated by:
+
+```sh
+TZ=UTC npm run test262:es2015:provenance
+TZ=UTC npm run test262:es2015:provenance:check
+TZ=UTC npm run test262:es2015:provenance:ledger -- --render-ledger=UA
+```
+
+`test262:es2015:provenance` rewrites
+`tools/test262/es2015-provenance.json`, creates missing decision fragments, and
+canonicalizes fragments that are already empty. It refuses to overwrite a
+non-empty fragment; initialization never resets decisions.
+`test262:es2015:provenance:check` is metadata/hash-only: it validates the
+manifest, immutable hashes, exact decision-directory membership, and reviewed
+fragment bytes, but cannot call `runTest262Suite`.
+`test262:es2015:provenance:ledger` requires a caller-supplied
+`--render-ledger=CODE`; it emits the exact code-unit-sorted root list for that
+atomic batch, one path per line with a trailing newline.
+
+Each non-empty decision record is reviewed evidence, not free-form notes. The
+decision fields that affect provenance are:
+
+- `evidenceKind`, `specification.{source,sourceSha256,clause,anchor}`,
+  `metadata.{es5id,es6id,esid,features,includeFeatures,includes,flags}`,
+  `history[{repository,commit,note}]`, `rationale`, and `artifactSha256`
+- `review.{reviewer,reviewedAt,artifact}` for the independent provenance review
+- `destination.{blocker,issue}` only for blocked core destinations
+
+Draft fragments may temporarily use `reviewer: "pending"`,
+`reviewedAt: "pending"`, and `artifact: "pending"` while review is in flight,
+but strict CI does not: `TZ=UTC npm run test262:es2015:provenance:check`
+rejects pending review fields and incomplete required codes.
+
+Local Test262 work for this provenance foundation is targeted-only. For this
+work, do **not** run `TZ=UTC npm run test262:es2015:audit`,
+`--write-execution`, `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`,
+or `npm run ci:contract` locally. Commands that execute broad upstream Test262
+run only in exact-head CI.
 
 ### Deterministic ES2015 taxonomy and exact promotion
 
@@ -222,19 +303,22 @@ TZ=UTC npm run test262:es2015:sync-promoted-report
 
 `audit` rewrites `tools/test262/es2015-taxonomy.json`; `audit:check` writes
 nothing and fails on taxonomy, pin, policy, classification, count, or
-promotion-provenance drift. `sync-promoted-report` combines the committed
+promotion-provenance drift. It is metadata/hash-only and cannot call
+`runTest262Suite`. `sync-promoted-report` combines the committed
 pre-promotion selected records with immutable exact-promotion execution
 evidence, verifies the pin, exact selected path set, and every promotion
 variant, then rewrites only the report and coverage block. It never executes
 the broad subset; exact-SHA CI remains authoritative and byte-checks the
 derived artifacts after its broad execution. Invoke the package script as
 `npm run test262:es2015:sync-promoted-report` only with `TZ=UTC`, as shown
-above. The CI drift gate uses `audit:check` after the pinned checkout and
-`npm ci`, before the broad pinned execution.
+above. The CI drift gate uses `test262:es2015:provenance:check` and then
+`audit:check` after the pinned checkout and `npm ci`, before the broad pinned
+execution.
 
-Local upstream execution is limited to a reviewed exact promotion ledger or a
-smaller focused fixture. To record the reviewed exact paths, provide that
-ledger explicitly; do not substitute a directory, glob, or broad selection:
+The repository's general promotion policy, outside issue `#75` / U0, limits
+local upstream execution to a reviewed exact promotion ledger or a smaller
+focused fixture. To record the reviewed exact paths, provide that ledger
+explicitly; do not substitute a directory, glob, or broad selection:
 
 ```sh
 TZ=UTC node tools/test262/es2015-audit.js \
@@ -247,7 +331,9 @@ The durable promotion provenance is
 6,323 code-unit-sorted roots, 11,955 variants, and ledger SHA-256
 `3f2c617b8639c8048afb1a42b95218250b20b6d51b9313f39473b4ddc1c7c646`.
 The command accepts only that exact reviewed ledger for the pinned checkout;
-it is not permission to run the broad upstream subset locally.
+it is not permission to run the broad upstream subset locally. The stricter
+issue `#75` / U0 policy above prohibits this `--write-execution` command
+entirely for the unknown-edition provenance work.
 
 ### Focused ES2015 syntax suite
 
@@ -378,6 +464,11 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 ### Generated artifacts
 
 - `docs/test262-report.jsonl` — full per-test records from the UTC upstream run
+- `tools/test262/es2015-provenance.json` — immutable unknown-edition base
+  ledger plus the 13 batch ledgers (generated by
+  `TZ=UTC npm run test262:es2015:provenance`)
+- `tools/test262/es2015-provenance-decisions/*.json` — the 13 reviewed decision
+  fragments owned by the provenance foundation generator and strict checker
 - `tools/test262/upstream-subset.json` — the checked-in selection (generated by
   `TZ=UTC npm run test262:select`)
 - The `<!-- test262-coverage:begin/end -->` block in `docs/conformance.md` — rewritten by
@@ -410,6 +501,10 @@ Each job runs on `ubuntu-latest` with Node 20 (via `actions/setup-node` with the
 built-in npm cache) and `npm ci`.
 Only the broad `test262-upstream` execution step receives the 4096 MiB Node heap
 allowance; focused Test262 jobs remain unchanged.
+Inside `test262-upstream`, the generated workflow runs
+`TZ=UTC npm run test262:es2015:provenance:check` immediately before
+`TZ=UTC npm run test262:es2015:audit:check`, then performs the selection drift
+check and only then runs the broad subset.
 
 `benchmark-smoke` does not upload timing artifacts and does not enforce
 thresholds, baselines, or regression decisions; those semantics are intentionally
@@ -443,10 +538,13 @@ runs under all three runners.
 ### `vendor/test262 is not a git checkout`
 
 This error from `tools/test262/upstream-run.js` means the upstream Test262
-checkout is missing. The upstream commands (`npm run test262:upstream`,
+checkout is missing. The taxonomy metadata commands
+(`npm run test262:es2015:audit`, `npm run test262:es2015:audit:check`), focused
+release commands, and upstream commands (`npm run test262:upstream`,
 `npm run test262:upstream:check`, `npm run test262:select`,
 `npm run test262:select:check`, and `npm run test262:exclusions:check`) require
-it. Fix it with:
+it. The provenance initialize/check commands use only committed repository
+artifacts and do not require the checkout. Fix missing checkout commands with:
 
 ```sh
 git clone --filter=blob:none https://github.com/tc39/test262.git vendor/test262

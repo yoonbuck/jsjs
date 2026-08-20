@@ -197,6 +197,24 @@ const REQUIRED_PROVENANCE_SCRIPT_COMMANDS = Object.freeze({
   'test262:es2015:provenance:ledger':
     'node tools/test262/es2015-provenance-check.js',
 });
+const U0_ALLOWED_CHANGED_PATHS = new Set([
+  '.github/workflows/ci.yml',
+  '.prettierignore',
+  'docs/conformance.md',
+  'docs/testing.md',
+  'package.json',
+  'test/node/es2015-provenance.test.js',
+  'test/node/es2015-taxonomy.test.js',
+  'test/node/repository-invariants.test.js',
+  'test/node/workflow-contract.test.js',
+  'test/run-node.js',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-audit.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/es2015-provenance.json',
+  'tools/test262/es2015-taxonomy.js',
+]);
 /** @type {readonly FunctionOwnershipStep[]} */
 const CHECK_FOUNDATION_OWNERSHIP_STEPS = Object.freeze([
   {
@@ -651,6 +669,65 @@ export function readRequiredPackageScripts(manifestText) {
   }
 
   return resolved;
+}
+
+/**
+ * @typedef {{
+ *   path: string,
+ *   content?: string,
+ *   status?: 'added' | 'modified' | 'deleted',
+ * }} U0PathPolicyChange
+ */
+
+/**
+ * @param {readonly U0PathPolicyChange[]} changes
+ * @returns {string[]}
+ */
+export function u0NoProductionPathPolicyViolations(changes) {
+  /** @type {string[]} */
+  const violations = [];
+
+  for (const change of changes) {
+    const { path } = change;
+    if (path.startsWith('src/')) {
+      violations.push(`U0 path policy forbids production path: ${path}`);
+      continue;
+    }
+    if (path === FEATURES_MANIFEST_FILE || path === UPSTREAM_SUBSET_FILE) {
+      violations.push(
+        `U0 path policy forbids selection-owned generated artifact: ${path}`,
+      );
+      continue;
+    }
+    if (path.startsWith(`${ES2015_PROVENANCE_DECISIONS_DIRECTORY}/`)) {
+      let fragment;
+      try {
+        fragment = JSON.parse(change.content ?? '');
+      } catch {
+        violations.push(
+          `U0 path policy requires an empty decision fragment: ${path}`,
+        );
+        continue;
+      }
+      if (
+        !Array.isArray(fragment?.decisions) ||
+        fragment.decisions.length !== 0
+      ) {
+        violations.push(
+          `U0 path policy forbids non-empty provenance decisions: ${path}`,
+        );
+      }
+      continue;
+    }
+    if (path.startsWith('.superpowers/') && change.status === 'deleted') {
+      continue;
+    }
+    if (!U0_ALLOWED_CHANGED_PATHS.has(path)) {
+      violations.push(`U0 path policy forbids unrelated path: ${path}`);
+    }
+  }
+
+  return violations;
 }
 
 /**
@@ -1276,6 +1353,78 @@ export default [
           ),
         Error,
       );
+    },
+  },
+  {
+    name: 'the U0 path policy permits only explicit tooling, tests, docs, and empty decisions',
+    run: async () => {
+      /** @type {U0PathPolicyChange[]} */
+      const allowedChanges = [
+        { path: '.github/workflows/ci.yml' },
+        { path: '.prettierignore' },
+        { path: 'docs/conformance.md' },
+        { path: 'docs/testing.md' },
+        { path: 'package.json' },
+        { path: 'test/node/es2015-provenance.test.js' },
+        { path: 'test/node/es2015-taxonomy.test.js' },
+        { path: 'test/node/repository-invariants.test.js' },
+        { path: 'test/node/workflow-contract.test.js' },
+        { path: 'test/run-node.js' },
+        { path: 'tools/ci/pipeline.js' },
+        { path: 'tools/test262/es2015-audit.js' },
+        { path: 'tools/test262/es2015-provenance-check.js' },
+        { path: 'tools/test262/es2015-provenance.js' },
+        { path: 'tools/test262/es2015-provenance.json' },
+        {
+          path: 'tools/test262/es2015-provenance-decisions/UA.json',
+          content: '{"decisions":[]}',
+        },
+        { path: 'tools/test262/es2015-taxonomy.js' },
+        {
+          path: '.superpowers/sdd/example/report.md',
+          status: 'deleted',
+        },
+      ];
+
+      assertSame(
+        JSON.stringify(u0NoProductionPathPolicyViolations(allowedChanges)),
+        '[]',
+        'the positive U0 fixture must exercise the explicit allowed path policy',
+      );
+
+      const forbiddenFixtures = [
+        {
+          change: { path: 'src/runtime/object.js' },
+          diagnostic:
+            'U0 path policy forbids production path: src/runtime/object.js',
+        },
+        {
+          change: { path: 'tools/test262/features.json' },
+          diagnostic:
+            'U0 path policy forbids selection-owned generated artifact: tools/test262/features.json',
+        },
+        {
+          change: { path: 'tools/test262/upstream-subset.json' },
+          diagnostic:
+            'U0 path policy forbids selection-owned generated artifact: tools/test262/upstream-subset.json',
+        },
+        {
+          change: {
+            path: 'tools/test262/es2015-provenance-decisions/UA.json',
+            content: '{"decisions":[{"path":"test/language/example.js"}]}',
+          },
+          diagnostic:
+            'U0 path policy forbids non-empty provenance decisions: tools/test262/es2015-provenance-decisions/UA.json',
+        },
+      ];
+
+      for (const fixture of forbiddenFixtures) {
+        assertSame(
+          JSON.stringify(u0NoProductionPathPolicyViolations([fixture.change])),
+          JSON.stringify([fixture.diagnostic]),
+          `the U0 policy must diagnose ${fixture.change.path} precisely`,
+        );
+      }
     },
   },
   {

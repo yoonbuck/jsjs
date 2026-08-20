@@ -408,6 +408,13 @@ export function createCiJobs(test262) {
         }),
         runStep('Install dependencies', 'npm ci'),
         runStep(
+          'Check unknown-edition provenance',
+          'npm run test262:es2015:provenance:check',
+          {
+            TZ: 'UTC',
+          },
+        ),
+        runStep(
           'Check the ES2015 taxonomy and exact promotion',
           'npm run test262:es2015:audit:check',
           {
