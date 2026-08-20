@@ -14,21 +14,24 @@ The definitive path ledger is issue #76 comment
 ## Scope
 
 The Test262 runner installs the pinned harness host interface before evaluating
-non-raw tests. `$262` remains embedding infrastructure:
+each variant, including raw variants. The `raw` flag suppresses source
+rewriting and harness includes, not host-defined functions. `$262` remains
+embedding infrastructure:
 
 - it is absent from every normally-created Realm;
 - it is not exported from the public runtime API;
-- it is installed only through the injected Test262 engine bridge; and
-- raw Test262 variants receive no harness-defined or host-defined bindings.
+- it is installed only through the injected Test262 engine bridge.
 
 ArrayBuffer detachment remains B0. Garbage collection and later Agent hooks are
 excluded.
 
 ## Architecture
 
-Extend `Test262Engine` with an `installHost(realm)` hook. `runVariant` creates
-the variant Realm, invokes that hook for non-raw variants, then follows the
-existing module, asynchronous, or synchronous execution path. This keeps the
+Extend `Test262Engine` with an optional `installHost(realm)` hook. `runVariant`
+creates the variant Realm, invokes the hook when supplied, then follows the
+existing module, asynchronous, or synchronous execution path. Optionality
+preserves focused engine doubles that intentionally expose only the hooks their
+test needs; the production jsjs bridge always supplies it. This keeps the
 shared runner host-neutral and prevents Node, Chromium, and JavaScriptCore
 adapters from developing semantic forks.
 
@@ -71,7 +74,7 @@ or embedding API. Both violate the roadmap boundary.
 Strict RED-first portable probes cover:
 
 - global `$262` descriptors and exact ordinary-object/function branding;
-- absence from normal Realms and raw Test262 variants;
+- absence from normal Realms and presence in raw Test262 variants;
 - same-Agent symbol identity with distinct globals and intrinsics;
 - recursive host availability in child Realms;
 - persistent global declarations and completion values through `evalScript`;
