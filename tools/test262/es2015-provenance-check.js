@@ -682,7 +682,7 @@ function hasMaintenanceProfile(text) {
       value !== null &&
       Array.isArray(value.rangeProfiles) &&
       value.rangeProfiles.some(
-        (profile) =>
+        (/** @type {{ name?: unknown }} */ profile) =>
           typeof profile === 'object' &&
           profile !== null &&
           profile.name === FOUNDATION_MAINTENANCE_PROFILE,
@@ -703,7 +703,10 @@ function sha256(text) {
  * @param {string} name
  */
 function rangeProfileForManifest(manifest, name) {
-  const profile = manifest.rangeProfiles.find((entry) => entry.name === name);
+  const profile = manifest.rangeProfiles.find(
+    (/** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */ entry) =>
+      entry.name === name,
+  );
   if (profile === undefined) {
     throw new Es2015ProvenanceCheckError(
       `Unknown provenance range profile ${name}`,
@@ -817,9 +820,13 @@ async function provenanceOwnedRange(deps, changes, base, head) {
     baseManifestText !== null &&
     sha256(baseManifestText) === FOUNDATION_BOOTSTRAP_MANIFEST_SHA256
   ) {
+    /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */
     const bootstrapFoundationProfile = JSON.parse(
       baseManifestText,
-    ).rangeProfiles.find((profile) => profile.name === 'foundation');
+    ).rangeProfiles.find(
+      (/** @type {{ name: string }} */ profile) =>
+        profile.name === 'foundation',
+    );
     addRangeProfileOwnership(
       ownedPaths,
       bootstrapFoundationProfile,

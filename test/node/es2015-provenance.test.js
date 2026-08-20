@@ -170,6 +170,7 @@ const CAPTURED_FOUNDATION_MAINTENANCE_RANGE_PROFILE = Object.freeze({
     ES2015_PROVENANCE_FILE,
   ]),
 });
+/** @param {string} code */
 function capturedDecisionRangeProfile(code) {
   const decisionFragment = `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
   return Object.freeze({
@@ -1116,7 +1117,8 @@ function maintenanceRangeMarker() {
 function foundationBootstrapManifestText() {
  const manifest = JSON.parse(approvedProvenanceManifestText());
  manifest.rangeProfiles = manifest.rangeProfiles.filter(
-   (profile) => profile.name !== 'foundation-maintenance',
+   (/** @type {{ name: string }} */ profile) =>
+     profile.name !== 'foundation-maintenance',
  );
  const text = `${JSON.stringify(manifest, null, 2)}\n`;
  assertSame(
@@ -1126,7 +1128,10 @@ function foundationBootstrapManifestText() {
  return text;
 }
 
-/** @param {string} profile */
+/**
+ * @param {string} profile
+ * @param {{ baseSha?: string, headSha?: string, marker?: string }} options
+ */
 function rangeArguments(profile, options = {}) {
  return [
    '--check-range',
@@ -3264,10 +3269,14 @@ export default [
         );
       }
 
+      /** @type {{ rangeProfiles: { name: string, allowedPaths: string[] }[] }} */
       const broadenedHeadManifest = JSON.parse(approvedProvenanceManifestText());
       const maintenanceProfile = broadenedHeadManifest.rangeProfiles.find(
         (profile) => profile.name === 'foundation-maintenance',
       );
+      if (maintenanceProfile === undefined) {
+        throw new Error('missing foundation-maintenance fixture profile');
+      }
       maintenanceProfile.allowedPaths.push('src/runtime/forbidden.js');
       maintenanceProfile.allowedPaths.sort();
       assertSame(
