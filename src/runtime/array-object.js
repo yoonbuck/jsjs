@@ -1,4 +1,10 @@
-import { EngineObject } from './object.js';
+import {
+  EngineObject,
+  ordinaryDefineOwnProperty,
+  ordinaryDelete,
+  ordinaryGetOwnProperty,
+  ordinaryOwnPropertyKeys,
+} from './object.js';
 import { toNumber, toUint32 } from './conversion.js';
 import { GuestErrorSignal } from './completion.js';
 
@@ -22,7 +28,7 @@ export class EngineArray extends EngineObject {
   constructor(prototype = null) {
     super(prototype, 'Array');
 
-    super.defineOwnProperty('length', {
+    ordinaryDefineOwnProperty(this, 'length', {
       value: 0,
       writable: true,
       enumerable: false,
@@ -33,33 +39,20 @@ export class EngineArray extends EngineObject {
   /**
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
+  defineOwnProperty(name, descriptor) {
     if (name === 'length') {
-      return this._defineLength(descriptor, throwOnError, callerRealm);
+      return this._defineLength(descriptor);
     }
 
     const index = toArrayIndex(name);
 
     if (index === undefined) {
-      return super.defineOwnProperty(
-        name,
-        descriptor,
-        throwOnError,
-        callerRealm,
-      );
+      return ordinaryDefineOwnProperty(this, name, descriptor);
     }
 
-    return this._defineIndex(
-      index,
-      name,
-      descriptor,
-      throwOnError,
-      callerRealm,
-    );
+    return this._defineIndex(index, name, descriptor);
   }
 
   /**
@@ -67,7 +60,7 @@ export class EngineArray extends EngineObject {
    */
   _length() {
     const descriptor = /** @type {PropertyDescriptorRecord} */ (
-      super.getOwnProperty('length')
+      ordinaryGetOwnProperty(this, 'length')
     );
     return /** @type {number} */ (descriptor.value);
   }
@@ -79,27 +72,20 @@ export class EngineArray extends EngineObject {
    * `length` just above it.
    *
    * @param {PropertyDescriptorRecord} descriptor
-   * @param {boolean} throwOnError
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  _defineLength(descriptor, throwOnError, callerRealm) {
+  _defineLength(descriptor) {
     const current = /** @type {PropertyDescriptorRecord} */ (
-      super.getOwnProperty('length')
+      ordinaryGetOwnProperty(this, 'length')
     );
 
     if (!('value' in descriptor)) {
-      return super.defineOwnProperty(
-        'length',
-        descriptor,
-        throwOnError,
-        callerRealm,
-      );
+      return ordinaryDefineOwnProperty(this, 'length', descriptor);
     }
 
-    const newLength = toUint32(descriptor.value, callerRealm);
+    const newLength = toUint32(descriptor.value);
 
-    if (newLength !== toNumber(descriptor.value, callerRealm)) {
+    if (newLength !== toNumber(descriptor.value)) {
       throw new GuestErrorSignal('RangeError', 'Invalid array length');
     }
 
@@ -108,19 +94,11 @@ export class EngineArray extends EngineObject {
     const oldLength = /** @type {number} */ (current.value);
 
     if (newLength >= oldLength) {
-      return super.defineOwnProperty(
-        'length',
-        lengthDescriptor,
-        throwOnError,
-        callerRealm,
-      );
+      return ordinaryDefineOwnProperty(this, 'length', lengthDescriptor);
     }
 
     if (!current.writable) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot change the length of a non-writable array length',
-      );
+      return false;
     }
 
     // A `length` update that also clears `writable` must stay writable
@@ -131,36 +109,32 @@ export class EngineArray extends EngineObject {
       lengthDescriptor.writable = true;
     }
 
-    if (
-      !super.defineOwnProperty(
-        'length',
-        lengthDescriptor,
-        throwOnError,
-        callerRealm,
-      )
-    ) {
+    if (!ordinaryDefineOwnProperty(this, 'length', lengthDescriptor)) {
       return false;
     }
 
     for (const index of this._indicesAtOrAbove(newLength)) {
-      if (super.delete(String(index), false)) {
+      if (ordinaryDelete(this, String(index))) {
         continue;
       }
 
-      super.defineOwnProperty(
-        'length',
-        { value: index + 1, writable: newWritable },
-        false,
-      );
+      if (
+        !ordinaryDefineOwnProperty(this, 'length', {
+          value: index + 1,
+          writable: newWritable,
+        })
+      ) {
+        return false;
+      }
 
-      return rejectOperation(
-        throwOnError,
-        'Cannot delete a non-configurable array element',
-      );
+      return false;
     }
 
-    if (!newWritable) {
-      super.defineOwnProperty('length', { writable: false }, false);
+    if (
+      !newWritable &&
+      !ordinaryDefineOwnProperty(this, 'length', { writable: false })
+    ) {
+      return false;
     }
 
     return true;
@@ -174,29 +148,27 @@ export class EngineArray extends EngineObject {
    * @param {number} index
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
-   * @param {boolean} throwOnError
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  _defineIndex(index, name, descriptor, throwOnError, callerRealm) {
+  _defineIndex(index, name, descriptor) {
     const current = /** @type {PropertyDescriptorRecord} */ (
-      super.getOwnProperty('length')
+      ordinaryGetOwnProperty(this, 'length')
     );
     const oldLength = /** @type {number} */ (current.value);
 
     if (index >= oldLength && !current.writable) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot add an element beyond a non-writable array length',
-      );
-    }
-
-    if (!super.defineOwnProperty(name, descriptor, throwOnError, callerRealm)) {
       return false;
     }
 
-    if (index >= oldLength) {
-      super.defineOwnProperty('length', { value: index + 1 }, false);
+    if (!ordinaryDefineOwnProperty(this, name, descriptor)) {
+      return false;
+    }
+
+    if (
+      index >= oldLength &&
+      !ordinaryDefineOwnProperty(this, 'length', { value: index + 1 })
+    ) {
+      return false;
     }
 
     return true;
@@ -215,7 +187,7 @@ export class EngineArray extends EngineObject {
     /** @type {number[]} */
     const indices = [];
 
-    for (const key of super.ownPropertyKeys()) {
+    for (const key of ordinaryOwnPropertyKeys(this)) {
       const index = toArrayIndex(key);
 
       if (index !== undefined && index >= length) {
@@ -291,22 +263,4 @@ export function toArrayIndex(name) {
   }
 
   return val;
-}
-
-/**
- * Signals a guest-visible array-operation rejection, matching the same
- * mechanism as `rejectOperation` in `object.js`. When `throwOnError` is
- * true, throws a `GuestErrorSignal` so the nearest realm-aware boundary
- * can materialise a proper guest `TypeError` throw completion.
- *
- * @param {boolean} throwOnError
- * @param {string} message
- * @returns {false}
- */
-function rejectOperation(throwOnError, message) {
-  if (throwOnError) {
-    throw new GuestErrorSignal('TypeError', message);
-  }
-
-  return false;
 }

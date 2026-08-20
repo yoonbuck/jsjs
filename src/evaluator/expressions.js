@@ -471,10 +471,18 @@ function evaluateDeleteExpression(argument, context) {
     return ref.base.deleteBinding(ref.referencedName);
   }
 
-  // Property reference: delegate to [[Delete]], which already throws a
-  // GuestErrorSignal('TypeError') when strict is true and the property is
-  // non-configurable.
-  return /** @type {any} */ (ref.base).delete(ref.referencedName, ref.strict);
+  // Property reference: Table 5 [[Delete]] returns only a Boolean. The
+  // evaluator owns strict-mode translation in this evaluating Realm.
+  const deleted = /** @type {any} */ (ref.base).delete(ref.referencedName);
+
+  if (!deleted && ref.strict) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Cannot delete a non-configurable property',
+    );
+  }
+
+  return deleted;
 }
 
 /**

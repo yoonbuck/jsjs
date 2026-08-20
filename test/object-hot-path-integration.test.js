@@ -4,7 +4,10 @@ import { EngineArray } from '../src/runtime/array-object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { DeclarativeEnvironmentRecord } from '../src/runtime/environment.js';
 import { ArgumentsObject } from '../src/runtime/function-object.js';
-import { EngineObject } from '../src/runtime/object.js';
+import {
+  EngineObject,
+  defineOwnPropertyOrThrow,
+} from '../src/runtime/object.js';
 import { EnginePrimitiveObject } from '../src/runtime/primitive-object.js';
 import { createRealm } from '../src/runtime/realm.js';
 
@@ -81,16 +84,12 @@ const tests = [
     run() {
       const key = Symbol('hot');
       const object = new EngineObject();
-      object.defineOwnProperty(
-        key,
-        {
-          value: 1,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      object.defineOwnProperty(key, {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       object.put(key, 2, true);
 
@@ -190,16 +189,12 @@ const tests = [
         },
       });
       const prototype = new EngineObject(realm.intrinsics.objectPrototype);
-      prototype.defineOwnProperty(
-        'x',
-        {
-          get: liveGetter,
-          set: undefined,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      prototype.defineOwnProperty('x', {
+        get: liveGetter,
+        set: undefined,
+        enumerable: true,
+        configurable: true,
+      });
       const object = /** @type {EngineObject} */ (
         runScript(realm, '({ get value() { return super.x; } });')
       );
@@ -238,16 +233,12 @@ const tests = [
       );
 
       argumentsObject.mapParameter('0', 'value');
-      argumentsObject.defineOwnProperty(
-        '0',
-        {
-          value: 7,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      argumentsObject.defineOwnProperty('0', {
+        value: 7,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       assertSame(environment.getBindingValue('value', false), 7);
 
       environment.setMutableBinding('value', 8, false);
@@ -300,16 +291,12 @@ const tests = [
           return 'detached';
         },
       });
-      realm.globalObject.defineOwnProperty(
-        'probe',
-        {
-          get: liveGetter,
-          set: undefined,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      realm.globalObject.defineOwnProperty('probe', {
+        get: liveGetter,
+        set: undefined,
+        enumerable: true,
+        configurable: true,
+      });
 
       const descriptor = publicDescriptor(
         realm.globalObject,
@@ -342,7 +329,7 @@ const tests = [
 
       assertSame(stringObject.defineOwnProperty('0', { value: 'x' }), false);
       assertGuestTypeError(() =>
-        stringObject.defineOwnProperty('0', { value: 'x' }, true),
+        defineOwnPropertyOrThrow(stringObject, '0', { value: 'x' }),
       );
 
       const descriptor = publicDescriptor(

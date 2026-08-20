@@ -1,4 +1,4 @@
-import { EngineObject } from './object.js';
+import { EngineObject, defineOwnPropertyOrThrow } from './object.js';
 import { Reference, UnresolvableReference } from './reference.js';
 import { GuestErrorSignal } from './completion.js';
 import { isDataDescriptor } from './descriptors.js';
@@ -410,16 +410,12 @@ export class ObjectEnvironmentRecord {
    * @returns {void}
    */
   createMutableBinding(name, deletable = true) {
-    this.bindingObject.defineOwnProperty(
-      name,
-      {
-        value: undefined,
-        writable: true,
-        enumerable: true,
-        configurable: deletable,
-      },
-      true,
-    );
+    defineOwnPropertyOrThrow(this.bindingObject, name, {
+      value: undefined,
+      writable: true,
+      enumerable: true,
+      configurable: deletable,
+    });
   }
 
   /**
@@ -550,8 +546,8 @@ export class GlobalEnvironmentRecord {
    * semantics.
    *
    * When the name is not already an own property, creation goes through
-   * `CreateMutableBinding`, whose `[[DefineOwnProperty]]` runs with the Throw
-   * flag set (ECMA-262 10.2.1.2.2). On a non-extensible global object that
+   * `CreateMutableBinding`, whose `[[DefineOwnProperty]]` must succeed
+   * (ECMA-262 10.2.1.2.2). On a non-extensible global object that
    * raises a guest `TypeError`, which is the ES5.1 10.5 behavior for declaring
    * a new global `var` (or function) when the global can no longer grow —
    * this method no longer silently no-ops in that case.
@@ -585,8 +581,7 @@ export class GlobalEnvironmentRecord {
    * - non-configurable own property that is a writable *and* enumerable data
    *   property: only its value is updated;
    * - any other non-configurable own property (an accessor, or a data
-   *   property that is not both writable and enumerable): a guest `TypeError`,
-   *   raised by `[[DefineOwnProperty]]` running with the Throw flag.
+   *   property that is not both writable and enumerable): a guest `TypeError`.
    *
    * @param {PropertyKey} name
    * @param {unknown} value
@@ -612,24 +607,20 @@ export class GlobalEnvironmentRecord {
     if (keepAttributesUpdateValue) {
       // Non-configurable but writable+enumerable: leave the attributes, update
       // the value only (10.5 step 5.e falls through to SetMutableBinding).
-      this.globalObject.defineOwnProperty(name, { value }, true);
+      defineOwnPropertyOrThrow(this.globalObject, name, { value });
     } else {
       // Fresh name, a configurable property (redefined), or an illegal target.
-      // `[[DefineOwnProperty]]` with the Throw flag turns an illegal target
+      // The owning global-binding algorithm turns an illegal target
       // (a non-configurable accessor / non-writable / non-enumerable property,
       // or a new property on a non-extensible global) into a guest TypeError,
       // matching 10.5 step 5.e.iv and the CreateMutableBinding extensibility
       // check.
-      this.globalObject.defineOwnProperty(
-        name,
-        {
-          value,
-          writable: true,
-          enumerable: true,
-          configurable: deletable,
-        },
-        true,
-      );
+      defineOwnPropertyOrThrow(this.globalObject, name, {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: deletable,
+      });
     }
 
     this.varNames.add(name);

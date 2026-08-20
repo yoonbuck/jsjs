@@ -7,7 +7,11 @@ import {
   isGenericDescriptor,
   validatePropertyDescriptor,
 } from '../src/runtime/descriptors.js';
-import { EngineObject } from '../src/runtime/object.js';
+import {
+  EngineObject,
+  defineOwnPropertyOrThrow,
+  deletePropertyOrThrow,
+} from '../src/runtime/object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 const tests = [
@@ -166,7 +170,7 @@ const tests = [
       // Value change on non-writable non-configurable must be rejected.
       assertSame(obj.defineOwnProperty('locked', { value: 2 }), false);
       assertThrows(
-        () => obj.defineOwnProperty('locked', { value: 2 }, true),
+        () => defineOwnPropertyOrThrow(obj, 'locked', { value: 2 }),
         GuestErrorSignal,
       );
       // Same-value is allowed.
@@ -209,16 +213,12 @@ const tests = [
     name: 'engine objects provide the property-reference protocol',
     run() {
       const object = new EngineObject();
-      object.defineOwnProperty(
-        'count',
-        {
-          value: 2,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      object.defineOwnProperty('count', {
+        value: 2,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       const reference = new Reference(object, 'count', true);
 
       assertSame(getValue(reference), 2);
@@ -230,27 +230,25 @@ const tests = [
     name: 'engine objects preserve insertion order and walk their prototype chain',
     run() {
       const prototype = new EngineObject();
-      prototype.defineOwnProperty(
-        'shared',
-        {
-          value: 'proto',
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      prototype.defineOwnProperty('shared', {
+        value: 'proto',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       const object = new EngineObject(prototype);
-      object.defineOwnProperty(
-        'first',
-        { value: 1, writable: true, enumerable: true, configurable: true },
-        true,
-      );
-      object.defineOwnProperty(
-        'second',
-        { value: 2, writable: true, enumerable: true, configurable: true },
-        true,
-      );
+      object.defineOwnProperty('first', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      object.defineOwnProperty('second', {
+        value: 2,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       assertSame(
         JSON.stringify(object.ownPropertyKeys()),
@@ -264,54 +262,47 @@ const tests = [
     name: 'non-configurable data properties reject incompatible changes',
     run() {
       const object = new EngineObject();
-      object.defineOwnProperty(
-        'locked',
-        {
-          value: 1,
-          writable: false,
-          enumerable: true,
-          configurable: false,
-        },
-        true,
-      );
+      object.defineOwnProperty('locked', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
 
-      assertSame(
-        object.defineOwnProperty('locked', { writable: false }, true),
-        true,
-      );
+      assertSame(object.defineOwnProperty('locked', { writable: false }), true);
       assertThrows(
-        () => object.defineOwnProperty('locked', { configurable: true }, true),
+        () =>
+          defineOwnPropertyOrThrow(object, 'locked', { configurable: true }),
         GuestErrorSignal,
       );
       assertThrows(
-        () => object.defineOwnProperty('locked', { value: 2 }, true),
+        () => defineOwnPropertyOrThrow(object, 'locked', { value: 2 }),
         GuestErrorSignal,
       );
       assertSame(object.delete('locked'), false);
-      assertThrows(() => object.delete('locked', true), GuestErrorSignal);
+      assertThrows(
+        () => deletePropertyOrThrow(object, 'locked'),
+        GuestErrorSignal,
+      );
     },
   },
   {
     name: 'non-configurable properties reject enumerable changes',
     run() {
       const object = new EngineObject();
-      object.defineOwnProperty(
-        'locked',
-        {
-          value: 1,
-          writable: true,
-          enumerable: true,
-          configurable: false,
-        },
-        true,
-      );
+      object.defineOwnProperty('locked', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+      });
 
       assertSame(
         object.defineOwnProperty('locked', { enumerable: false }),
         false,
       );
       assertThrows(
-        () => object.defineOwnProperty('locked', { enumerable: false }, true),
+        () => defineOwnPropertyOrThrow(object, 'locked', { enumerable: false }),
         GuestErrorSignal,
       );
       const descriptor = object.getOwnProperty('locked');
@@ -325,28 +316,20 @@ const tests = [
     name: 'put respects inherited writability and inherited setters',
     run() {
       const prototype = new EngineObject();
-      prototype.defineOwnProperty(
-        'readOnly',
-        {
-          value: 1,
-          writable: false,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      prototype.defineOwnProperty('readOnly', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      });
       let setterValue = 'unset';
-      prototype.defineOwnProperty(
-        'sink',
-        {
-          set(value) {
-            setterValue = String(value);
-          },
-          enumerable: true,
-          configurable: true,
+      prototype.defineOwnProperty('sink', {
+        set(value) {
+          setterValue = String(value);
         },
-        true,
-      );
+        enumerable: true,
+        configurable: true,
+      });
       const object = new EngineObject(prototype);
 
       assertSame(object.put('readOnly', 2), false);
@@ -362,28 +345,20 @@ const tests = [
     run() {
       let setterValue = 'unset';
       const object = new EngineObject();
-      object.defineOwnProperty(
-        'sink',
-        {
-          set(value) {
-            setterValue = String(value);
-          },
-          enumerable: true,
-          configurable: true,
+      object.defineOwnProperty('sink', {
+        set(value) {
+          setterValue = String(value);
         },
-        true,
-      );
-      object.defineOwnProperty(
-        'getterOnly',
-        {
-          get() {
-            return 1;
-          },
-          enumerable: true,
-          configurable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      object.defineOwnProperty('getterOnly', {
+        get() {
+          return 1;
         },
-        true,
-      );
+        enumerable: true,
+        configurable: true,
+      });
 
       assertSame(object.put('sink', 9, true), true);
       assertSame(setterValue, '9');

@@ -14,6 +14,104 @@ import { GuestErrorSignal } from './completion.js';
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
  */
 
+/**
+ * @param {EngineObject} target
+ * @returns {EngineObject | null}
+ */
+export function ordinaryGetPrototypeOf(target) {
+  return target._prototype;
+}
+
+/**
+ * @param {EngineObject} target
+ * @returns {boolean}
+ */
+export function ordinaryIsExtensible(target) {
+  return target._extensible;
+}
+
+/**
+ * @param {EngineObject} target
+ * @returns {boolean}
+ */
+export function ordinaryPreventExtensions(target) {
+  target._extensible = false;
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {EngineObject | null} value
+ * @returns {boolean}
+ */
+export function ordinarySetPrototypeOf(target, value) {
+  if (value === ordinaryGetPrototypeOf(target)) {
+    return true;
+  }
+
+  if (value !== null && !(value instanceof EngineObject)) {
+    return false;
+  }
+
+  if (!ordinaryIsExtensible(target)) {
+    return false;
+  }
+
+  for (
+    let current = /** @type {EngineObject | null} */ (value);
+    current !== null;
+    current = current.getPrototypeOf()
+  ) {
+    if (current === target) {
+      return false;
+    }
+  }
+
+  target._prototype = value;
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @returns {PropertyKey[]}
+ */
+export function ordinaryOwnPropertyKeys(target) {
+  /** @type {string[]} */
+  const indexKeys = [];
+  /** @type {string[]} */
+  const stringKeys = [];
+  /** @type {symbol[]} */
+  const symbolKeys = [];
+
+  for (const key of target._properties.keys()) {
+    if (typeof key === 'symbol') {
+      symbolKeys.push(key);
+    } else if (isArrayIndexKey(key)) {
+      indexKeys.push(key);
+    } else {
+      stringKeys.push(key);
+    }
+  }
+
+  indexKeys.sort((left, right) => Number(left) - Number(right));
+
+  return [...indexKeys, ...stringKeys, ...symbolKeys];
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {CompletePropertyDescriptor | undefined}
+ */
+export function ordinaryGetOwnProperty(target, name) {
+  const descriptor = ordinaryPeekOwnDescriptor(target, name);
+  return descriptor === undefined
+    ? undefined
+    : /** @type {CompletePropertyDescriptor} */ (
+        copyPropertyDescriptor(descriptor)
+      );
+}
+
 export class EngineObject {
   /**
    * @param {EngineObject | null} [prototype=null]
@@ -52,22 +150,28 @@ export class EngineObject {
    * @returns {EngineObject | null}
    */
   getPrototype() {
-    return this._prototype;
+    return this.getPrototypeOf();
+  }
+
+  /**
+   * @returns {EngineObject | null}
+   */
+  getPrototypeOf() {
+    return ordinaryGetPrototypeOf(this);
   }
 
   /**
    * @returns {boolean}
    */
   isExtensible() {
-    return this._extensible;
+    return ordinaryIsExtensible(this);
   }
 
   /**
-   * @returns {EngineObject}
+   * @returns {boolean}
    */
   preventExtensions() {
-    this._extensible = false;
-    return this;
+    return ordinaryPreventExtensions(this);
   }
 
   /**
@@ -81,30 +185,7 @@ export class EngineObject {
    * @returns {boolean}
    */
   setPrototypeOf(value) {
-    if (value === this._prototype) {
-      return true;
-    }
-
-    if (value !== null && !(value instanceof EngineObject)) {
-      return false;
-    }
-
-    if (!this._extensible) {
-      return false;
-    }
-
-    for (
-      let current = /** @type {EngineObject | null} */ (value);
-      current !== null;
-      current = current.getPrototype()
-    ) {
-      if (current === this) {
-        return false;
-      }
-    }
-
-    this._prototype = value;
-    return true;
+    return ordinarySetPrototypeOf(this, value);
   }
 
   /**
@@ -120,26 +201,7 @@ export class EngineObject {
    * @returns {PropertyKey[]}
    */
   ownPropertyKeys() {
-    /** @type {string[]} */
-    const indexKeys = [];
-    /** @type {string[]} */
-    const stringKeys = [];
-    /** @type {symbol[]} */
-    const symbolKeys = [];
-
-    for (const key of this._properties.keys()) {
-      if (typeof key === 'symbol') {
-        symbolKeys.push(key);
-      } else if (isArrayIndexKey(key)) {
-        indexKeys.push(key);
-      } else {
-        stringKeys.push(key);
-      }
-    }
-
-    indexKeys.sort((left, right) => Number(left) - Number(right));
-
-    return [...indexKeys, ...stringKeys, ...symbolKeys];
+    return ordinaryOwnPropertyKeys(this);
   }
 
   /**
@@ -154,7 +216,7 @@ export class EngineObject {
    * @returns {CompletePropertyDescriptor | undefined}
    */
   _peekOwnDescriptor(name) {
-    return this._properties.get(name);
+    return ordinaryPeekOwnDescriptor(this, name);
   }
 
   /**
@@ -162,12 +224,7 @@ export class EngineObject {
    * @returns {CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
-    const descriptor = this._peekOwnDescriptor(name);
-    return descriptor === undefined
-      ? undefined
-      : /** @type {CompletePropertyDescriptor} */ (
-          copyPropertyDescriptor(descriptor)
-        );
+    return ordinaryGetOwnProperty(this, name);
   }
 
   /**
@@ -191,7 +248,7 @@ export class EngineObject {
         return copyPropertyDescriptor(own);
       }
 
-      current = current._prototype;
+      current = ordinaryGetPrototypeOf(current);
     }
 
     return undefined;
@@ -211,7 +268,7 @@ export class EngineObject {
       }
 
       /** @type {EngineObject | null} */
-      const proto = current._prototype;
+      const proto = ordinaryGetPrototypeOf(current);
 
       if (proto === null) {
         return false;
@@ -282,7 +339,7 @@ export class EngineObject {
         return linkObjectValueAgent(this.agent, value);
       }
 
-      current = current._prototype;
+      current = ordinaryGetPrototypeOf(current);
     }
 
     return undefined;
@@ -301,21 +358,23 @@ export class EngineObject {
         : Boolean(own.writable);
     }
 
-    if (this._prototype === null) {
-      return this._extensible;
+    const prototype = ordinaryGetPrototypeOf(this);
+
+    if (prototype === null) {
+      return ordinaryIsExtensible(this);
     }
 
-    const inherited = this._prototype.getProperty(name);
+    const inherited = prototype.getProperty(name);
 
     if (inherited === undefined) {
-      return this._extensible;
+      return ordinaryIsExtensible(this);
     }
 
     if (isAccessorDescriptor(inherited)) {
       return inherited.set !== undefined;
     }
 
-    return this._extensible && Boolean(inherited.writable);
+    return ordinaryIsExtensible(this) && Boolean(inherited.writable);
   }
 
   /**
@@ -365,7 +424,7 @@ export class EngineObject {
       }
 
       /** @type {EngineObject | null} */
-      const proto = current._prototype;
+      const proto = ordinaryGetPrototypeOf(current);
 
       if (proto === null) {
         return setWithOwnDescriptor(
@@ -408,198 +467,18 @@ export class EngineObject {
   /**
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [_callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false, _callerRealm) {
-    // Fast path: a {value}-only update on an existing writable data descriptor
-    // avoids validatePropertyDescriptor, completePropertyDescriptor, and the
-    // full branching logic below. This is the hottest path from `put`.
-    // Guard: only enter fast-path if descriptor is a non-null object, so that
-    // invalid inputs (null, numbers, etc.) still reach validatePropertyDescriptor
-    // with its canonical error message.
-    // The `_properties` read is deliberately direct rather than through the
-    // virtual `_peekOwnDescriptor`: this branch is about to *write* the stored
-    // descriptor, so it needs the real stored object, not a subclass's
-    // synthesised stand-in (`ArgumentsObject` returns a fresh object for a
-    // mapped parameter, and mutating that would update nothing).
-    if (
-      descriptor !== null &&
-      typeof descriptor === 'object' &&
-      isValueOnlyDescriptor(descriptor)
-    ) {
-      const stored = this._properties.get(name);
-      if (stored !== undefined && 'value' in stored) {
-        if (stored.writable === true) {
-          stored.value = descriptor.value;
-          return true;
-        }
-        if (!stored.configurable) {
-          if (!Object.is(descriptor.value, stored.value)) {
-            return rejectOperation(
-              throwOnError,
-              'Cannot change value of a non-configurable non-writable property',
-            );
-          }
-          return true;
-        }
-      }
-    }
-
-    const candidate = validatePropertyDescriptor(descriptor);
-    const current = this._peekOwnDescriptor(name);
-
-    if (current === undefined) {
-      if (!this._extensible) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot define property on non-extensible object',
-        );
-      }
-
-      this._properties.set(name, completePropertyDescriptor(candidate));
-      return true;
-    }
-
-    if (
-      isEmptyDescriptor(candidate) ||
-      isDescriptorSubsetEqual(current, candidate)
-    ) {
-      return true;
-    }
-
-    if (!current.configurable) {
-      if (candidate.configurable === true) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot make a non-configurable property configurable',
-        );
-      }
-
-      if (
-        'enumerable' in candidate &&
-        candidate.enumerable !== current.enumerable
-      ) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change enumerable on a non-configurable property',
-        );
-      }
-    }
-
-    const currentIsData = isDataDescriptor(current);
-    const candidateIsData = isDataDescriptor(candidate);
-    const candidateIsAccessor = isAccessorDescriptor(candidate);
-
-    if (
-      (candidateIsData || candidateIsAccessor) &&
-      currentIsData !== candidateIsData
-    ) {
-      if (!current.configurable) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change descriptor kind of a non-configurable property',
-        );
-      }
-
-      const converted = candidateIsAccessor
-        ? completePropertyDescriptor({
-            get: undefined,
-            set: undefined,
-            enumerable: current.enumerable,
-            configurable: current.configurable,
-            ...candidate,
-          })
-        : completePropertyDescriptor({
-            value: undefined,
-            writable: false,
-            enumerable: current.enumerable,
-            configurable: current.configurable,
-            ...candidate,
-          });
-
-      this._properties.set(name, converted);
-      return true;
-    }
-
-    if (currentIsData) {
-      if (!current.configurable && !current.writable) {
-        if (candidate.writable === true) {
-          return rejectOperation(
-            throwOnError,
-            'Cannot make a non-configurable non-writable property writable',
-          );
-        }
-
-        if (
-          'value' in candidate &&
-          !Object.is(candidate.value, current.value)
-        ) {
-          return rejectOperation(
-            throwOnError,
-            'Cannot change value of a non-configurable non-writable property',
-          );
-        }
-      }
-
-      this._properties.set(
-        name,
-        completePropertyDescriptor({
-          ...current,
-          ...candidate,
-        }),
-      );
-      return true;
-    }
-
-    if (!current.configurable) {
-      if ('get' in candidate && candidate.get !== current.get) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change getter of a non-configurable property',
-        );
-      }
-
-      if ('set' in candidate && candidate.set !== current.set) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change setter of a non-configurable property',
-        );
-      }
-    }
-
-    this._properties.set(
-      name,
-      completePropertyDescriptor({
-        ...current,
-        ...candidate,
-      }),
-    );
-    return true;
+  defineOwnProperty(name, descriptor) {
+    return ordinaryDefineOwnProperty(this, name, descriptor);
   }
 
   /**
    * @param {PropertyKey} name
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  delete(name, throwOnError = false) {
-    const descriptor = this._peekOwnDescriptor(name);
-
-    if (descriptor === undefined) {
-      return true;
-    }
-
-    if (!descriptor.configurable) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot delete a non-configurable property',
-      );
-    }
-
-    this._properties.delete(name);
-    return true;
+  delete(name) {
+    return ordinaryDelete(this, name);
   }
 
   /**
@@ -658,6 +537,244 @@ export class EngineObject {
 }
 
 /**
+ * Defines an ordinary own property while retaining the value-only data-property
+ * update fast path. False is the complete rejection channel for descriptor
+ * incompatibility and non-extensibility; callers that require success own the
+ * guest error translation.
+ *
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @param {PropertyDescriptorRecord} descriptor
+ * @returns {boolean}
+ */
+export function ordinaryDefineOwnProperty(target, name, descriptor) {
+  if (
+    descriptor !== null &&
+    typeof descriptor === 'object' &&
+    isValueOnlyDescriptor(descriptor)
+  ) {
+    const stored = ordinaryPeekOwnDescriptor(target, name);
+    if (stored !== undefined && 'value' in stored) {
+      if (stored.writable === true) {
+        stored.value = descriptor.value;
+        return true;
+      }
+      if (!stored.configurable && !Object.is(descriptor.value, stored.value)) {
+        return false;
+      }
+      if (!stored.configurable) {
+        return true;
+      }
+    }
+  }
+
+  const candidate = validatePropertyDescriptor(descriptor);
+  const current = target._peekOwnDescriptor(name);
+
+  if (current === undefined) {
+    if (!ordinaryIsExtensible(target)) {
+      return false;
+    }
+
+    ordinarySetOwnDescriptor(
+      target,
+      name,
+      completePropertyDescriptor(candidate),
+    );
+    return true;
+  }
+
+  if (
+    isEmptyDescriptor(candidate) ||
+    isDescriptorSubsetEqual(current, candidate)
+  ) {
+    return true;
+  }
+
+  if (!current.configurable) {
+    if (candidate.configurable === true) {
+      return false;
+    }
+
+    if (
+      'enumerable' in candidate &&
+      candidate.enumerable !== current.enumerable
+    ) {
+      return false;
+    }
+  }
+
+  const currentIsData = isDataDescriptor(current);
+  const candidateIsData = isDataDescriptor(candidate);
+  const candidateIsAccessor = isAccessorDescriptor(candidate);
+
+  if (
+    (candidateIsData || candidateIsAccessor) &&
+    currentIsData !== candidateIsData
+  ) {
+    if (!current.configurable) {
+      return false;
+    }
+
+    const converted = candidateIsAccessor
+      ? completePropertyDescriptor({
+          get: undefined,
+          set: undefined,
+          enumerable: current.enumerable,
+          configurable: current.configurable,
+          ...candidate,
+        })
+      : completePropertyDescriptor({
+          value: undefined,
+          writable: false,
+          enumerable: current.enumerable,
+          configurable: current.configurable,
+          ...candidate,
+        });
+
+    ordinarySetOwnDescriptor(target, name, converted);
+    return true;
+  }
+
+  if (currentIsData) {
+    if (!current.configurable && !current.writable) {
+      if (candidate.writable === true) {
+        return false;
+      }
+
+      if ('value' in candidate && !Object.is(candidate.value, current.value)) {
+        return false;
+      }
+    }
+
+    ordinarySetOwnDescriptor(
+      target,
+      name,
+      completePropertyDescriptor({
+        ...current,
+        ...candidate,
+      }),
+    );
+    return true;
+  }
+
+  if (!current.configurable) {
+    if ('get' in candidate && candidate.get !== current.get) {
+      return false;
+    }
+
+    if ('set' in candidate && candidate.set !== current.set) {
+      return false;
+    }
+  }
+
+  ordinarySetOwnDescriptor(
+    target,
+    name,
+    completePropertyDescriptor({
+      ...current,
+      ...candidate,
+    }),
+  );
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {boolean}
+ */
+export function ordinaryDelete(target, name) {
+  const descriptor = target._peekOwnDescriptor(name);
+
+  if (descriptor === undefined) {
+    return true;
+  }
+
+  if (!descriptor.configurable) {
+    return false;
+  }
+
+  ordinaryDeleteStoredProperty(target, name);
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {CompletePropertyDescriptor | undefined}
+ */
+function ordinaryPeekOwnDescriptor(target, name) {
+  return target._properties.get(name);
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @param {CompletePropertyDescriptor} descriptor
+ * @returns {void}
+ */
+function ordinarySetOwnDescriptor(target, name, descriptor) {
+  target._properties.set(name, descriptor);
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {void}
+ */
+function ordinaryDeleteStoredProperty(target, name) {
+  target._properties.delete(name);
+}
+
+/**
+ * @param {EngineObject} object
+ * @param {PropertyKey} name
+ * @param {PropertyDescriptorRecord} descriptor
+ * @returns {void}
+ */
+export function defineOwnPropertyOrThrow(object, name, descriptor) {
+  if (!object.defineOwnProperty(name, descriptor)) {
+    throw new GuestErrorSignal('TypeError', 'Cannot define requested property');
+  }
+}
+
+/**
+ * @param {EngineObject} object
+ * @param {PropertyKey} name
+ * @returns {void}
+ */
+export function deletePropertyOrThrow(object, name) {
+  if (!object.delete(name)) {
+    throw new GuestErrorSignal('TypeError', 'Cannot delete requested property');
+  }
+}
+
+/**
+ * @param {EngineObject} object
+ * @param {EngineObject | null} prototype
+ * @returns {void}
+ */
+export function setPrototypeOfOrThrow(object, prototype) {
+  if (!object.setPrototypeOf(prototype)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Cannot set the requested object prototype',
+    );
+  }
+}
+
+/**
+ * @param {EngineObject} object
+ * @returns {void}
+ */
+export function preventExtensionsOrThrow(object) {
+  if (!object.preventExtensions()) {
+    throw new GuestErrorSignal('TypeError', 'Cannot prevent extensions');
+  }
+}
+
+/**
  * Applies the ES object integrity levels shared by Object.seal, Object.freeze,
  * and engine-created immutable objects.
  *
@@ -672,16 +789,16 @@ export function setIntegrityLevel(object, level) {
 
   for (const name of object.ownPropertyKeys()) {
     const descriptor = object.getOwnProperty(name);
-    object.defineOwnProperty(
+    defineOwnPropertyOrThrow(
+      object,
       name,
       level === 'frozen' && isDataDescriptor(descriptor)
         ? { writable: false, configurable: false }
         : { configurable: false },
-      true,
     );
   }
 
-  object.preventExtensions();
+  preventExtensionsOrThrow(object);
   return object;
 }
 
@@ -927,11 +1044,9 @@ function setWithOwnDescriptor(
     }
 
     if (ownerIsReceiver) {
-      return receiver.defineOwnProperty(
-        name,
-        { value },
-        throwOnError,
-        callerRealm,
+      return (
+        receiver.defineOwnProperty(name, { value }) ||
+        rejectOperation(throwOnError, 'Cannot assign to property')
       );
     }
 
@@ -945,19 +1060,19 @@ function setWithOwnDescriptor(
         );
       }
 
-      return receiver.defineOwnProperty(
-        name,
-        { value },
-        throwOnError,
-        callerRealm,
+      return (
+        receiver.defineOwnProperty(name, { value }) ||
+        rejectOperation(throwOnError, 'Cannot assign to property')
       );
     }
 
-    return receiver.defineOwnProperty(
-      name,
-      { value, writable: true, enumerable: true, configurable: true },
-      throwOnError,
-      callerRealm,
+    return (
+      receiver.defineOwnProperty(name, {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      }) || rejectOperation(throwOnError, 'Cannot assign to property')
     );
   }
 

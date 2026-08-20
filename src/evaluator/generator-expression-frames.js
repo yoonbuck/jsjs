@@ -3516,10 +3516,18 @@ function applyUnaryOperator(operator, result, realm) {
       );
     }
 
-    return /** @type {any} */ (result.reference.base).delete(
+    const deleted = /** @type {any} */ (result.reference.base).delete(
       result.reference.referencedName,
-      result.reference.strict,
     );
+
+    if (!deleted && result.reference.strict) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Cannot delete a non-configurable property',
+      );
+    }
+
+    return deleted;
   }
 
   if (operator === 'typeof') {

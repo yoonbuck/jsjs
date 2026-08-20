@@ -1,4 +1,9 @@
-import { EngineObject } from './object.js';
+import {
+  EngineObject,
+  ordinaryDefineOwnProperty,
+  ordinaryDelete,
+  ordinaryGetOwnProperty,
+} from './object.js';
 import { isAccessorDescriptor } from './descriptors.js';
 import {
   constructCallable,
@@ -691,8 +696,8 @@ export function constructSuper(args, functionEnvironment) {
  * writable data properties exactly as the specification requires.
  *
  * ES5 10.6 also unmaps an index on `delete arguments[i]`. This is implemented
- * in `ArgumentsObject.delete()` below: the override calls `super.delete()` to
- * remove the own property, then removes the corresponding entry from the
+ * in `ArgumentsObject.delete()` below: the override removes the ordinary own
+ * property, then removes the corresponding entry from the
  * parameter map so the alias to the formal-parameter binding is severed.
  */
 export class ArgumentsObject extends EngineObject {
@@ -720,17 +725,14 @@ export class ArgumentsObject extends EngineObject {
 
   /**
    * Overrides `_peekOwnDescriptor` to inject the live parameter-binding value
-   * for mapped argument indices. When no mapping exists the raw stored
-   * descriptor is returned without any copy (the common case). When a mapping
-   * exists a new object is created so the stored descriptor is not mutated with
-   * the live value — callers of `_peekOwnDescriptor` must not retain the
-   * returned object across mutations regardless.
+   * for mapped argument indices. The ordinary descriptor is detached before a
+   * live value is substituted, so callers cannot mutate stored metadata.
    *
    * @param {import('./descriptors.js').PropertyKey} name
    * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
    */
   _peekOwnDescriptor(name) {
-    const raw = this._properties.get(name);
+    const raw = ordinaryGetOwnProperty(this, name);
     if (raw === undefined) {
       return undefined;
     }
@@ -749,7 +751,7 @@ export class ArgumentsObject extends EngineObject {
    * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
-    const descriptor = super.getOwnProperty(name);
+    const descriptor = ordinaryGetOwnProperty(this, name);
     const parameterName = this._parameterMap.get(name);
 
     if (descriptor === undefined || parameterName === undefined) {
@@ -771,11 +773,10 @@ export class ArgumentsObject extends EngineObject {
    * present.
    *
    * @param {PropertyKey} name
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  delete(name, throwOnError = false) {
-    const deleted = super.delete(name, throwOnError);
+  delete(name) {
+    const deleted = ordinaryDelete(this, name);
 
     if (deleted) {
       this._parameterMap.delete(name);
@@ -787,18 +788,11 @@ export class ArgumentsObject extends EngineObject {
   /**
    * @param {PropertyKey} name
    * @param {import('./descriptors.js').PropertyDescriptorRecord} descriptor
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
+  defineOwnProperty(name, descriptor) {
     const parameterName = this._parameterMap.get(name);
-    const defined = super.defineOwnProperty(
-      name,
-      descriptor,
-      throwOnError,
-      callerRealm,
-    );
+    const defined = ordinaryDefineOwnProperty(this, name, descriptor);
 
     if (!defined || parameterName === undefined) {
       return defined;

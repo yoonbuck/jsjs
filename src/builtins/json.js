@@ -581,19 +581,14 @@ function walkBody(realm, holder, name, reviver) {
       const revived = walk(realm, value, key, reviver);
 
       if (revived === undefined) {
-        value.delete(key, false);
+        value.delete(key);
       } else {
-        value.defineOwnProperty(
-          key,
-          {
-            value: revived,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          },
-          false,
-          realm,
-        );
+        value.defineOwnProperty(key, {
+          value: revived,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
       }
     }
   }

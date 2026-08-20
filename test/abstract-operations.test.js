@@ -37,62 +37,46 @@ const tests = [
       /** @type {string[]} */
       const trace = [];
       const object = createConversionObject();
-      object.defineOwnProperty(
-        'toString',
-        {
-          value() {
-            trace.push('toString');
-            return 'guest';
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      object.defineOwnProperty('toString', {
+        value() {
+          trace.push('toString');
+          return 'guest';
         },
-        true,
-      );
-      object.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            trace.push('valueOf');
-            return 3;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      object.defineOwnProperty('valueOf', {
+        value() {
+          trace.push('valueOf');
+          return 3;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       assertSame(toPrimitive(object, 'string'), 'guest');
       assertSame(toPrimitive(object, 'number'), 3);
       assertSame(JSON.stringify(trace), '["toString","valueOf"]');
 
       const invalid = createConversionObject();
-      invalid.defineOwnProperty(
-        'toString',
-        {
-          value() {
-            return invalid;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      invalid.defineOwnProperty('toString', {
+        value() {
+          return invalid;
         },
-        true,
-      );
-      invalid.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            return invalid;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      invalid.defineOwnProperty('valueOf', {
+        value() {
+          return invalid;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       assertThrows(() => toPrimitive(invalid), GuestErrorSignal);
     },
@@ -188,18 +172,14 @@ const tests = [
     name: 'equality operations follow strict and abstract comparison rules',
     run() {
       const numericObject = createConversionObject();
-      numericObject.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            return 5;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      numericObject.defineOwnProperty('valueOf', {
+        value() {
+          return 5;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       assertSame(strictEqualityComparison(0, -0), true);
       assertSame(strictEqualityComparison(NaN, NaN), false);
@@ -214,18 +194,14 @@ const tests = [
     name: 'arithmetic operators use primitive coercion rules',
     run() {
       const stringObject = createConversionObject();
-      stringObject.defineOwnProperty(
-        'toString',
-        {
-          value() {
-            return 'prefix';
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      stringObject.defineOwnProperty('toString', {
+        value() {
+          return 'prefix';
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       assertSame(add('x', 1), 'x1');
       assertSame(add(stringObject, '!'), 'prefix!');
@@ -242,33 +218,25 @@ const tests = [
       /** @type {string[]} */
       const trace = [];
       const left = createConversionObject();
-      left.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            trace.push('left');
-            return 2;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      left.defineOwnProperty('valueOf', {
+        value() {
+          trace.push('left');
+          return 2;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       const right = createConversionObject();
-      right.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            trace.push('right');
-            return 3;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      right.defineOwnProperty('valueOf', {
+        value() {
+          trace.push('right');
+          return 3;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       assertSame(abstractRelationalComparison(left, right, true), true);
       assertSame(JSON.stringify(trace), '["left","right"]');
@@ -280,33 +248,25 @@ const tests = [
       /** @type {string[]} */
       const trace = [];
       const left = createConversionObject();
-      left.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            trace.push('left');
-            return 2;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      left.defineOwnProperty('valueOf', {
+        value() {
+          trace.push('left');
+          return 2;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       const right = createConversionObject();
-      right.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            trace.push('right');
-            return 3;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      right.defineOwnProperty('valueOf', {
+        value() {
+          trace.push('right');
+          return 3;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       trace.length = 0;
       assertSame(abstractRelationalComparison(left, right, false), true);
@@ -374,50 +334,38 @@ const tests = [
       /** @type {string[]} */
       const trace = [];
       const object = createConversionObject();
-      object.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            trace.push('valueOf');
-            return -1;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      object.defineOwnProperty('valueOf', {
+        value() {
+          trace.push('valueOf');
+          return -1;
         },
-        true,
-      );
-      object.defineOwnProperty(
-        'toString',
-        {
-          value() {
-            trace.push('toString');
-            return '5';
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      object.defineOwnProperty('toString', {
+        value() {
+          trace.push('toString');
+          return '5';
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       assertSame(toUint16(object), 65535);
       assertSame(JSON.stringify(trace), '["valueOf"]');
 
       const thrown = new Error('boom');
       const bad = createConversionObject();
-      bad.defineOwnProperty(
-        'valueOf',
-        {
-          value() {
-            throw thrown;
-          },
-          writable: true,
-          enumerable: true,
-          configurable: true,
+      bad.defineOwnProperty('valueOf', {
+        value() {
+          throw thrown;
         },
-        true,
-      );
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
       let caught;
 

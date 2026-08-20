@@ -1,4 +1,8 @@
-import { EngineObject } from './object.js';
+import {
+  EngineObject,
+  ordinaryGetOwnProperty,
+  ordinaryOwnPropertyKeys,
+} from './object.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
@@ -36,15 +40,14 @@ export class EnginePrimitiveObject extends EngineObject {
 
   /**
    * Overrides `_peekOwnDescriptor` to expose virtual string-index character
-   * properties without copying the stored descriptor for the common case (an
-   * explicitly stored property such as `length`). Virtual index descriptors
-   * are constructed on demand; they are not stored and cannot be cached.
+   * properties. Virtual index descriptors are constructed on demand; they are
+   * not stored and cannot be cached.
    *
    * @param {PropertyKey} name
    * @returns {CompletePropertyDescriptor | undefined}
    */
   _peekOwnDescriptor(name) {
-    const stored = this._properties.get(name);
+    const stored = ordinaryGetOwnProperty(this, name);
     if (stored !== undefined) {
       return stored;
     }
@@ -65,7 +68,7 @@ export class EnginePrimitiveObject extends EngineObject {
    * @returns {CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
-    const ordinary = super.getOwnProperty(name);
+    const ordinary = ordinaryGetOwnProperty(this, name);
 
     if (ordinary !== undefined) {
       return ordinary;
@@ -87,7 +90,7 @@ export class EnginePrimitiveObject extends EngineObject {
    */
   ownPropertyKeys() {
     if (typeof this.primitiveValue !== 'string') {
-      return super.ownPropertyKeys();
+      return ordinaryOwnPropertyKeys(this);
     }
 
     /** @type {PropertyKey[]} */
@@ -97,7 +100,7 @@ export class EnginePrimitiveObject extends EngineObject {
       keys.push(String(index));
     }
 
-    for (const key of super.ownPropertyKeys()) {
+    for (const key of ordinaryOwnPropertyKeys(this)) {
       keys.push(key);
     }
 

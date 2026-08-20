@@ -7,6 +7,7 @@ import { loadModuleGraph } from '../src/runtime/module-loader.js';
 import { linkModuleGraph } from '../src/runtime/module-linker.js';
 import { evaluateModuleGraph } from '../src/evaluator/modules.js';
 import { EngineObject } from '../src/runtime/object.js';
+import * as objectOperations from '../src/runtime/object.js';
 import { ThrowSignal, GuestErrorSignal } from '../src/runtime/completion.js';
 import { GeneratorObject } from '../src/runtime/generator-object.js';
 import { typeOf } from '../src/runtime/operators.js';
@@ -42,6 +43,52 @@ async function linkedModule(realm, source) {
 }
 
 export default [
+  {
+    name: 'Table 5 metadata methods return booleans and wrappers own failure',
+    run() {
+      const object = new EngineObject();
+      const descriptor = {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      };
+
+      assertSame(object.preventExtensions(), true);
+      assertSame(object.isExtensible(), false);
+      assertSame(
+        /** @type {any} */ (object).defineOwnProperty('new', descriptor, true),
+        false,
+      );
+      assertSame(/** @type {any} */ (object).delete('missing', true), true);
+      assertSame(typeof objectOperations.defineOwnPropertyOrThrow, 'function');
+      assertThrows(
+        () =>
+          objectOperations.defineOwnPropertyOrThrow(object, 'new', descriptor),
+        GuestErrorSignal,
+      );
+    },
+  },
+  {
+    name: 'public descriptors are detached from ordinary storage',
+    run() {
+      const object = new EngineObject();
+      object.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      const descriptor = object.getOwnProperty('value');
+      if (descriptor === undefined) {
+        throw new Error('Expected an own descriptor');
+      }
+      descriptor.value = 2;
+
+      assertSame(object.get('value'), 1);
+    },
+  },
   {
     name: 'raw engine accessors remain non-callable after descriptor reflection',
     run() {

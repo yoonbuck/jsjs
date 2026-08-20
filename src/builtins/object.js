@@ -1,4 +1,10 @@
-import { EngineObject, setIntegrityLevel } from '../runtime/object.js';
+import {
+  EngineObject,
+  defineOwnPropertyOrThrow,
+  preventExtensionsOrThrow,
+  setIntegrityLevel,
+  setPrototypeOfOrThrow,
+} from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isDataDescriptor } from '../runtime/descriptors.js';
@@ -249,7 +255,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     objectConstructor,
     'getPrototypeOf',
     1,
-    (_this, args) => requireObjectArgument(args[0]).getPrototype(),
+    (_this, args) => requireObjectArgument(args[0]).getPrototypeOf(),
   );
   defineNativeMethod(
     realm,
@@ -278,12 +284,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
         return target;
       }
 
-      if (!target.setPrototypeOf(proto)) {
-        throw new GuestErrorSignal(
-          'TypeError',
-          'Object.setPrototypeOf could not set the requested prototype',
-        );
-      }
+      setPrototypeOfOrThrow(target, proto);
 
       return target;
     },
@@ -363,7 +364,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
       const object = requireObjectArgument(args[0]);
       const name = toPropertyKey(args[1], realm);
       const descriptor = toPropertyDescriptor(args[2], realm);
-      object.defineOwnProperty(name, descriptor, true, realm);
+      defineOwnPropertyOrThrow(object, name, descriptor);
       return object;
     },
   );
@@ -390,7 +391,11 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     objectConstructor,
     'preventExtensions',
     1,
-    (_this, args) => requireObjectArgument(args[0]).preventExtensions(),
+    (_this, args) => {
+      const object = requireObjectArgument(args[0]);
+      preventExtensionsOrThrow(object);
+      return object;
+    },
   );
   defineNativeMethod(realm, objectConstructor, 'isSealed', 1, (_this, args) => {
     const object = requireObjectArgument(args[0]);
@@ -476,7 +481,7 @@ function defineProperties(realm, object, propertiesValue) {
   }
 
   for (const { name, descriptor } of definitions) {
-    object.defineOwnProperty(name, descriptor, true, realm);
+    defineOwnPropertyOrThrow(object, name, descriptor);
   }
 
   return object;

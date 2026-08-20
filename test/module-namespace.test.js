@@ -85,7 +85,6 @@ export default [
       assertSame(namespace.put('value', 2), false);
       assertThrows(() => namespace.put('value', 2, true), GuestErrorSignal);
       assertSame(namespace.delete('value'), false);
-      assertThrows(() => namespace.delete('value', true), GuestErrorSignal);
       assertSame(namespace.defineOwnProperty('value', { value: 1 }), true);
       assertSame(
         namespace.defineOwnProperty('value', {
@@ -96,10 +95,6 @@ export default [
         true,
       );
       assertSame(namespace.defineOwnProperty('value', { value: 2 }), false);
-      assertThrows(
-        () => namespace.defineOwnProperty('value', { value: 2 }, true),
-        GuestErrorSignal,
-      );
 
       namespace.get('bump').callFunction(undefined, []);
       assertSame(namespace.get('value'), 2);

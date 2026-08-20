@@ -3,6 +3,15 @@ import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
 
+class RefusingDeleteObject extends EngineObject {
+  /**
+   * @returns {boolean}
+   */
+  delete() {
+    return false;
+  }
+}
+
 /**
  * Runs `source` in a fresh realm and returns the completion record.
  *
@@ -97,6 +106,42 @@ const tests = [
         '"use strict"; var a = [1, 2, 3]; delete a.length;',
       );
       assertGuestThrow(result, 'TypeError', realm);
+    },
+  },
+  {
+    name: 'strict and sloppy delete own false results in synchronous and generator evaluation',
+    run() {
+      const realm = createRealm();
+      const target = new RefusingDeleteObject(realm.intrinsics.objectPrototype);
+      realm.globalObject.defineOwnProperty('target', {
+        value: target,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertNormal(runIn(realm, 'delete target.value;'), false);
+
+      const strict = runIn(realm, '"use strict"; delete target.value;');
+      assertGuestThrow(strict, 'TypeError', realm);
+
+      assertSame(
+        runIn(
+          realm,
+          'var generator = (function* () { return delete target.value; })(); ' +
+            'generator.next().value;',
+        ).value,
+        false,
+      );
+      const generatorStrict = runIn(
+        realm,
+        'var generator = (function* () { "use strict"; return delete target.value; })(); ' +
+          'var caught; try { generator.next(); } catch (error) { caught = error; } caught;',
+      );
+      assertSame(
+        /** @type {EngineObject} */ (generatorStrict.value).getPrototype(),
+        realm.intrinsics.typeErrorPrototype,
+      );
     },
   },
 

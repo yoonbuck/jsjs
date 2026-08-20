@@ -9,7 +9,14 @@ import {
   MODULE_NAMESPACE_BINDING,
   SourceTextModuleRecord,
 } from './module-record.js';
-import { EngineObject } from './object.js';
+import {
+  EngineObject,
+  ordinaryDefineOwnProperty,
+  ordinaryDelete,
+  ordinaryGetOwnProperty,
+  ordinaryOwnPropertyKeys,
+  ordinaryPreventExtensions,
+} from './object.js';
 
 /**
  * @typedef {import('./descriptors.js').CompletePropertyDescriptor} CompletePropertyDescriptor
@@ -45,13 +52,13 @@ export class ModuleNamespaceObject extends EngineObject {
     this._exportNames = Object.freeze([...this._resolvedExports.keys()].sort());
     this._toStringTag = record.realm.agent.wellKnownSymbols.toStringTag;
 
-    super.defineOwnProperty(this._toStringTag, {
+    ordinaryDefineOwnProperty(this, this._toStringTag, {
       value: 'Module',
       writable: false,
       enumerable: false,
       configurable: false,
     });
-    this.preventExtensions();
+    ordinaryPreventExtensions(this);
   }
 
   /**
@@ -61,7 +68,7 @@ export class ModuleNamespaceObject extends EngineObject {
   _peekOwnDescriptor(key) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
     return resolved === undefined
-      ? super._peekOwnDescriptor(key)
+      ? ordinaryGetOwnProperty(this, key)
       : exportDescriptor(resolved);
   }
 
@@ -72,7 +79,7 @@ export class ModuleNamespaceObject extends EngineObject {
   getOwnProperty(key) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
     return resolved === undefined
-      ? super.getOwnProperty(key)
+      ? ordinaryGetOwnProperty(this, key)
       : exportDescriptor(resolved);
   }
 
@@ -98,20 +105,13 @@ export class ModuleNamespaceObject extends EngineObject {
   /**
    * @param {PropertyKey} key
    * @param {PropertyDescriptorRecord} descriptor
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(key, descriptor, throwOnError = false, callerRealm) {
+  defineOwnProperty(key, descriptor) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
 
     if (resolved === undefined) {
-      return super.defineOwnProperty(
-        key,
-        descriptor,
-        throwOnError,
-        callerRealm,
-      );
+      return ordinaryDefineOwnProperty(this, key, descriptor);
     }
 
     const candidate = validatePropertyDescriptor(descriptor);
@@ -127,10 +127,7 @@ export class ModuleNamespaceObject extends EngineObject {
       return true;
     }
 
-    return rejectOperation(
-      throwOnError,
-      'Cannot redefine a module namespace export',
-    );
+    return false;
   }
 
   /**
@@ -159,25 +156,21 @@ export class ModuleNamespaceObject extends EngineObject {
 
   /**
    * @param {PropertyKey} key
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  delete(key, throwOnError = false) {
+  delete(key) {
     if (this._resolvedExports.has(/** @type {string} */ (key))) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot delete a module namespace export',
-      );
+      return false;
     }
 
-    return super.delete(key, throwOnError);
+    return ordinaryDelete(this, key);
   }
 
   /**
    * @returns {PropertyKey[]}
    */
   ownPropertyKeys() {
-    return [...this._exportNames, ...super.ownPropertyKeys()];
+    return [...this._exportNames, ...ordinaryOwnPropertyKeys(this)];
   }
 }
 

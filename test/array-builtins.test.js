@@ -2,10 +2,7 @@ import { assertSame } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineArray } from '../src/runtime/array-object.js';
-
-/**
- * @typedef {import('../src/runtime/object.js').EngineObject} EngineObject
- */
+import { EngineObject } from '../src/runtime/object.js';
 
 /**
  * @param {string} source
@@ -13,6 +10,15 @@ import { EngineArray } from '../src/runtime/array-object.js';
  */
 function run(source) {
   return evaluateScript(createRealm(), source).value;
+}
+
+class RefusingDeleteArrayLike extends EngineObject {
+  /**
+   * @returns {boolean}
+   */
+  delete() {
+    return false;
+  }
 }
 
 const tests = [
@@ -414,6 +420,43 @@ const tests = [
         ),
         'TypeError:3:3',
       );
+    },
+  },
+  {
+    name: 'Array required deletion turns an exotic false result into TypeError',
+    run() {
+      const realm = createRealm();
+      const target = new RefusingDeleteArrayLike(
+        realm.intrinsics.objectPrototype,
+      );
+      EngineObject.prototype.defineOwnProperty.call(target, '0', {
+        value: 'value',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      EngineObject.prototype.defineOwnProperty.call(target, 'length', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      realm.globalObject.defineOwnProperty('target', {
+        value: target,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name; try { Array.prototype.pop.call(target); } ' +
+            'catch (error) { name = error.name; } name;',
+        ).value,
+        'TypeError',
+      );
+      assertSame(target.get('length'), 1);
     },
   },
   {

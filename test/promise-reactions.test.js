@@ -572,15 +572,11 @@ export default [
         },
       });
 
-      constructor.defineOwnProperty(
-        speciesSymbol,
-        {
-          get: getter,
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      constructor.defineOwnProperty(speciesSymbol, {
+        get: getter,
+        enumerable: false,
+        configurable: true,
+      });
 
       const child = promiseObject(
         then.callFunction(source, [undefined, undefined], callerRealm),
@@ -593,22 +589,18 @@ export default [
       assertSame(child.getPrototype(), speciesPrototype);
 
       let invalidGetterCalls = 0;
-      constructor.defineOwnProperty(
-        speciesSymbol,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              invalidGetterCalls += 1;
-              return 1;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      constructor.defineOwnProperty(speciesSymbol, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            invalidGetterCalls += 1;
+            return 1;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const invalid = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], callerRealm),
@@ -627,22 +619,18 @@ export default [
         'TypeError',
         'foreign species getter failure',
       );
-      constructor.defineOwnProperty(
-        speciesSymbol,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              abruptGetterCalls += 1;
-              throw new ThrowSignal(accessorError);
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      constructor.defineOwnProperty(speciesSymbol, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            abruptGetterCalls += 1;
+            throw new ThrowSignal(accessorError);
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const abrupt = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], callerRealm),
@@ -796,7 +784,6 @@ export default [
           enumerable: false,
           configurable: true,
         },
-        true,
       );
       intermediate.defineOwnProperty(
         intermediateRealm.agent.wellKnownSymbols.species,
@@ -814,7 +801,6 @@ export default [
           enumerable: false,
           configurable: true,
         },
-        true,
       );
 
       const intermediateChild = promiseObject(
@@ -827,16 +813,12 @@ export default [
       assertSame(intermediateCallerRealm, methodRealm);
       assertSame(intermediateChild.getPrototype(), subclass.get('prototype'));
 
-      subclass.defineOwnProperty(
-        subclassRealm.agent.wellKnownSymbols.species,
-        {
-          value: ownSpecies,
-          writable: true,
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      subclass.defineOwnProperty(subclassRealm.agent.wellKnownSymbols.species, {
+        value: ownSpecies,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
       const ownDataChild = promiseObject(
         then.callFunction(source, [], methodRealm),
       );
@@ -845,24 +827,20 @@ export default [
       assertSame(intermediateGetterCalls, 1);
       assertSame(baseGetterCalls, 0);
 
-      subclass.defineOwnProperty(
-        subclassRealm.agent.wellKnownSymbols.species,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call(thisValue, _args, _functionObject, callerRealmArgument) {
-              ownGetterCalls += 1;
-              ownReceiver = thisValue;
-              ownCallerRealm = callerRealmArgument;
-              return thisValue;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      subclass.defineOwnProperty(subclassRealm.agent.wellKnownSymbols.species, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call(thisValue, _args, _functionObject, callerRealmArgument) {
+            ownGetterCalls += 1;
+            ownReceiver = thisValue;
+            ownCallerRealm = callerRealmArgument;
+            return thisValue;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const ownAccessorChild = promiseObject(
         then.callFunction(source, [], methodRealm),
       );
@@ -912,22 +890,18 @@ export default [
       const foreignSpecies = baseRealm.agent.wellKnownSymbols.species;
       let nullGetterCalls = 0;
 
-      foreignPromise.defineOwnProperty(
-        foreignSpecies,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              nullGetterCalls += 1;
-              return null;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      foreignPromise.defineOwnProperty(foreignSpecies, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            nullGetterCalls += 1;
+            return null;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const fallbackChild = promiseObject(
         then.callFunction(source, [], methodRealm),
       );
@@ -945,22 +919,18 @@ export default [
       );
 
       let invalidGetterCalls = 0;
-      foreignPromise.defineOwnProperty(
-        foreignSpecies,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              invalidGetterCalls += 1;
-              return 1;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      foreignPromise.defineOwnProperty(foreignSpecies, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            invalidGetterCalls += 1;
+            return 1;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const invalid = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], methodRealm),
@@ -979,22 +949,18 @@ export default [
         'TypeError',
         'inherited foreign species getter failure',
       );
-      foreignPromise.defineOwnProperty(
-        foreignSpecies,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              abruptGetterCalls += 1;
-              throw new ThrowSignal(accessorError);
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      foreignPromise.defineOwnProperty(foreignSpecies, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            abruptGetterCalls += 1;
+            throw new ThrowSignal(accessorError);
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const abrupt = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], methodRealm),
@@ -1092,25 +1058,21 @@ export default [
         'TypeError',
         'then constructor getter failure',
       );
-      source.defineOwnProperty(
-        'constructor',
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get constructor',
-            length: 0,
-            call(thisValue, _args, _functionObject, callerRealmArgument) {
-              constructorGetterCalls += 1;
-              constructorReceiver = thisValue;
-              constructorCallerRealm = callerRealmArgument;
-              order.push('constructor-error');
-              throw new ThrowSignal(constructorError);
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      source.defineOwnProperty('constructor', {
+        get: accessorRealm.createNativeFunction({
+          name: 'get constructor',
+          length: 0,
+          call(thisValue, _args, _functionObject, callerRealmArgument) {
+            constructorGetterCalls += 1;
+            constructorReceiver = thisValue;
+            constructorCallerRealm = callerRealmArgument;
+            order.push('constructor-error');
+            throw new ThrowSignal(constructorError);
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const abrupt = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], outerRealm),

@@ -311,12 +311,7 @@ export default [
         },
       });
 
-      newTarget.defineOwnProperty(
-        'prototype',
-        { value: foreignPrototype },
-        true,
-        allocationRealm,
-      );
+      newTarget.defineOwnProperty('prototype', { value: foreignPrototype });
       const promise = assertPromiseObject(
         promiseConstructor.constructFunction(
           [executor],

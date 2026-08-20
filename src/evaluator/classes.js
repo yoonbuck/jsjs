@@ -325,7 +325,7 @@ function findConstructorDefinition(definitions) {
  * @returns {void}
  */
 function defineClassProperty(object, key, descriptor) {
-  if (!object.defineOwnProperty(key, descriptor, false)) {
+  if (!object.defineOwnProperty(key, descriptor)) {
     throw new GuestErrorSignal('TypeError', 'Cannot define class property');
   }
 }
