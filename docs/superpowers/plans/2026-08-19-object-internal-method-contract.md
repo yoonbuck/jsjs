@@ -680,9 +680,18 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 - Modify: `src/runtime/primitive-object.js`
 - Modify: `src/runtime/function-object.js`
 - Modify: `src/runtime/module-namespace.js`
+- Modify: `src/evaluator/expressions.js`
+- Modify: `src/evaluator/generator-expression-frames.js`
+- Modify: `src/builtins/array.js`
+- Modify as required by typecheck: object/class/declaration/bootstrap callers that pass a must-succeed flag to `defineOwnProperty` or `delete`
 - Modify: `test/objects.test.js`
 - Modify: `test/object-builtins.test.js`
 - Modify: `test/abstract-operations.test.js`
+- Modify: `test/delete.test.js`
+- Modify: `test/array-builtins.test.js`
+- Modify: `test/object-array-literals.test.js`
+- Modify: `test/module-namespace.test.js`
+- Modify: `test/object-hot-path-integration.test.js`
 - Modify: `test/object-internal-method-contract.test.js`
 
 **Interfaces:**
@@ -691,6 +700,7 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 - Produces: default `EngineObject` entry points for `getPrototypeOf`, `setPrototypeOf`, `isExtensible`, `preventExtensions`, `getOwnProperty`, `defineOwnProperty`, `delete`, and `ownPropertyKeys`.
 - Produces: named `ordinary*` metadata helpers that are the only readers/writers of ordinary prototype, extensibility, and property-map storage.
 - Produces: wrapper helpers that translate a false result at the owning semantic layer, such as `defineOwnPropertyOrThrow`, `deletePropertyOrThrow`, `setPrototypeOfOrThrow`, and `preventExtensionsOrThrow`.
+- Produces: complete removal of the `throwOnError`/`callerRealm` overloads from `defineOwnProperty` and `delete`, with every must-succeed caller and strict/sloppy delete evaluator migrated atomically.
 
 - [ ] **Step 1: Add metadata and wrapper RED tests**
 
@@ -742,7 +752,7 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   },
   ```
 
-  Add object-built-in tests proving `Object.defineProperty`, `Object.preventExtensions`, `Object.seal`, and `Object.freeze` throw or return according to their own algorithms after a false internal result.
+  Add object-built-in tests proving `Object.defineProperty`, `Object.preventExtensions`, `Object.seal`, and `Object.freeze` throw or return according to their own algorithms after a false internal result. Add RED cases for strict versus sloppy language `delete`, Array required-delete failure, must-succeed define failure, exotic false Define/Delete returns, and Realm-owned guest errors.
 
 - [ ] **Step 2: Run the metadata RED command**
 
@@ -807,11 +817,17 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   }
   ```
 
-  Implement corresponding delete/prototype/prevent-extensions wrappers. Native built-ins invoke their wrapper inside their native function Realm; evaluator/reference paths invoke their strict/sloppy wrapper; no wrapper is an `EngineObject` internal method.
+  Implement corresponding delete/prototype/prevent-extensions wrappers only where multiple callers share that real specification operation. Native built-ins invoke their wrapper inside their native function Realm; evaluator language paths translate false according to strict/sloppy semantics in the evaluating Realm; no wrapper is an `EngineObject` internal method or generic catch-all.
 
-- [ ] **Step 5: Migrate current metadata-only callers**
+- [ ] **Step 5: Migrate current metadata and Boolean-result callers**
 
-  Replace direct base-slot access in Array, String wrapper, mapped Arguments, and ModuleNamespace implementations with explicit `ordinary*` helpers. Do not use `super.method()` as a hidden route to ordinary storage. Leave Get/Has/Set traversal to Task 4 and Enumerate to Task 5.
+  Replace direct base-slot access in Array, String wrapper, mapped Arguments, and ModuleNamespace implementations with explicit `ordinary*` helpers. Do not use `super.method()` as a hidden route to ordinary storage.
+
+  Remove the throwing overloads completely. Migrate synchronous and generator `delete` evaluation to call Boolean `delete(key)` and then apply language semantics: strict false throws a Realm-owned guest `TypeError`; sloppy returns false. Preserve reference resolution, property-key coercion, right evaluation, unresolvable handling, and abrupt order.
+
+  Migrate every must-succeed Define/Delete caller that currently passes `true`, including Array native algorithms and any directly failing object/class/declaration/bootstrap path found by typecheck. A false result becomes the owning algorithm's specified guest/internal failure; it is never ignored. Update directly affected tests and types. If a caller outside the metadata/define/delete surface emerges, stop and classify it rather than absorbing Get/Set work.
+
+  Leave Get/Has/Set traversal, `put`/`canPut`/`getProperty`, primitive/super/global Set migration, and all remaining property-reference work to Task 4. Leave Enumerate to Task 5.
 
 - [ ] **Step 6: Run the metadata GREEN command**
 
@@ -821,14 +837,19 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   node test/run-node.js test/object-internal-method-contract.test.js && \
   node test/run-node.js test/objects.test.js && \
   node test/run-node.js test/object-builtins.test.js && \
-  node test/run-node.js test/abstract-operations.test.js
+  node test/run-node.js test/abstract-operations.test.js && \
+  node test/run-node.js test/delete.test.js && \
+  node test/run-node.js test/array-builtins.test.js && \
+  node test/run-node.js test/object-array-literals.test.js && \
+  node test/run-node.js test/module-namespace.test.js && \
+  node test/run-node.js test/object-hot-path-integration.test.js
   ```
 
   Expected: PASS. Boolean metadata methods never choose an error Realm, descriptors are detached, and public Object APIs still materialize correct guest errors.
 
 - [ ] **Step 7: Request a fresh specification review for ordinary metadata**
 
-  Require a fresh reviewer to verify all eight Task 3 Table 5 operations, exact Boolean semantics, wrappers outside the seam, detached descriptors, ordinary-helper ownership, and preserved descriptor/integrity semantics.
+  Require a fresh reviewer to verify all eight Task 3 Table 5 operations, exact Boolean semantics, complete overload removal, strict/sloppy delete order and Realm ownership, must-succeed caller handling, wrappers outside the seam, detached descriptors, ordinary-helper ownership, and preserved descriptor/integrity/Array/namespace semantics.
 
 - [ ] **Step 8: Fix and re-review every confirmed metadata specification finding**
 
@@ -836,7 +857,7 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
 - [ ] **Step 9: Request a different fresh quality review for ordinary metadata**
 
-  Require inspection of the direct-slot helper allowlist, fast paths, raw descriptor lifetime, Array/Arguments/namespace migration, JSDoc, and test portability. Do not use Claude Opus 5.
+  Require inspection of the direct-slot helper allowlist, fast paths, raw descriptor lifetime, Array/Arguments/namespace migration, must-succeed caller completeness, no silent false results, JSDoc, and test portability. Do not use Claude Opus 5.
 
 - [ ] **Step 10: Fix and re-review every confirmed metadata quality finding**
 
@@ -849,8 +870,13 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
     src/builtins/object.js src/runtime/environment.js \
     src/runtime/array-object.js src/runtime/primitive-object.js \
     src/runtime/function-object.js src/runtime/module-namespace.js \
+    src/evaluator/expressions.js src/evaluator/generator-expression-frames.js \
+    src/builtins/array.js \
     test/objects.test.js test/object-builtins.test.js \
-    test/abstract-operations.test.js test/object-internal-method-contract.test.js
+    test/abstract-operations.test.js test/delete.test.js \
+    test/array-builtins.test.js test/object-array-literals.test.js \
+    test/module-namespace.test.js test/object-hot-path-integration.test.js \
+    test/object-internal-method-contract.test.js
   git commit -m "feat: formalize ordinary object metadata methods" \
     -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
   ```
@@ -974,13 +1000,13 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
   `ordinarySet` applies `OrdinarySetWithOwnDescriptor` to the original receiver and returns only a Boolean. It preserves the existing writable-own-data fast path, invokes a setter with the original receiver, and calls the receiver's polymorphic `defineOwnProperty` for data properties. `ordinaryHasProperty` likewise uses raw reads only while all relevant methods are ordinary. Neither helper creates a guest error.
 
-- [ ] **Step 4: Migrate Reference, primitive, super, delete, and global assignment**
+- [ ] **Step 4: Migrate Reference, primitive, super, and global assignment**
 
-  Replace primitive `getProperty`/`canPut` branches with `wrapper.get(key, primitive)` and `wrapper.set(key, value, primitive)`. After a false result, `putValue` throws only for a strict Reference and silently returns the assigned value otherwise. Replace `super` reads with `superBase.get(key, receiver)` and writes with `superBase.set(key, value, receiver)`. Make strict delete throw only after `base.delete(key)` returns false. Make an unresolvable sloppy assignment call `globalObject.set(name, value, globalObject)`.
+  Replace primitive `getProperty`/`canPut` branches with `wrapper.get(key, primitive)` and `wrapper.set(key, value, primitive)`. After a false result, `putValue` throws only for a strict Reference and silently returns the assigned value otherwise. Replace `super` reads with `superBase.get(key, receiver)` and writes with `superBase.set(key, value, receiver)`. Make an unresolvable sloppy assignment call `globalObject.set(name, value, globalObject)`. Task 3 already owns strict/sloppy delete and must-succeed Define/Delete migration.
 
 - [ ] **Step 5: Remove legacy operations from every listed caller**
 
-  Delete definitions and semantic calls for `getPrototype`, `getProperty`, `canPut`, and `put`. Replace prototype walks with `getPrototypeOf`; replace property descriptor walks with public `getOwnProperty`; replace strict Boolean overloads with explicit wrappers. Do not leave compatibility aliases.
+  Delete definitions and semantic calls for `getPrototype`, `getProperty`, `canPut`, and `put`. Replace prototype walks with `getPrototypeOf`; replace property descriptor walks with public `getOwnProperty`. Do not leave compatibility aliases. Do not revisit Task 3's completed Boolean Define/Delete migration except to fix a confirmed integration regression.
 
 - [ ] **Step 6: Run the receiver-aware GREEN command**
 
