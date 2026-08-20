@@ -57,6 +57,9 @@ The capability pass stops rejecting:
 Acorn remains responsible for decoding values and rejecting malformed,
 surrogate, out-of-range, incomplete, escaped-reserved-word, and otherwise
 invalid lexical forms at parse phase. The engine does not add a second decoder.
+Focused tests audit decoded escaped identifiers against their exact
+IdentifierName and BindingIdentifier contexts rather than assuming every
+decoded identifier is valid.
 
 `MetaProperty` becomes a supported expression with exact ESTree validation:
 
@@ -66,12 +69,27 @@ invalid lexical forms at parse phase. The engine does not add a second decoder.
 - `property.name` is exactly `target`; and
 - no unsupported scalar or child shape can reach evaluation.
 
-The syntax walk carries a `newTargetAllowed` capability. Entering a non-arrow
-function body enables it. Arrow functions inherit it. A script, module, or
-top-level custom arrow does not have it. Direct eval receives it only from a
-caller that is executing function code; indirect eval remains script context.
-Invalid placement is a parse-phase `SyntaxError`, including custom and reused
-AST entry points.
+The syntax capability is a lexical function-code property, distinct from the
+runtime value. Entering ordinary, method, class-constructor, or generator
+function code establishes the capability. A nested non-arrow function
+establishes a new capability and runtime environment. Arrow functions inherit
+both from the nearest enclosing function code. A script, module, or top-level
+custom arrow does not have it. Direct eval inherits both capability and current
+value from its caller; indirect eval remains script context. A direct eval in a
+top-level arrow is invalid because that arrow has no enclosing function code.
+
+This is not enforced by a generic walk flag alone. Tests pin exact acceptance
+and rejection for:
+
+- Acorn source ASTs;
+- reusable Program snapshots; and
+- hostile custom ASTs.
+
+Every accepted `MetaProperty` has exact own data-property children
+`meta: Identifier("new")` and `property: Identifier("target")`, no malformed or
+extra evaluator-relevant child edge, a supported expression parent position,
+and an acyclic AST edge graph. Inherited fields, accessors, wrong names, wrong
+positions, and cycles produce a normalized parse-phase `SyntaxError`.
 
 ## Runtime Semantics
 
@@ -86,14 +104,23 @@ This distinction prevents synthetic global records from accidentally
 authorizing `new.target` while allowing ordinary called functions to evaluate
 it to `undefined`.
 
-Ordinary `[[Construct]]` executes the function body with a fresh function
-environment whose `newTarget` is the value passed to `constructFunction`.
-Class construction continues using its existing `newTarget` slot. Ordinary
-calls, methods, and generator calls create a function-code record with an
-`undefined` value. Arrows retain their enclosing function record. Direct eval
-reuses the caller record. Dynamic `Function` construction uses the ordinary
-constructor path. Bound and super construction retain their existing corrected
-target/new-target propagation.
+All ordinary `[[Construct]]` execution, not only class construction, creates a
+fresh function environment whose `newTarget` is the exact value passed to
+`EngineFunction.constructFunction(args, newTarget)`. Ordinary calls and method
+calls create a function-code record whose value is `undefined`. Class
+construction continues using its existing slot. Generator calls instantiate
+parameters in function code with `undefined`; generator resume frames retain
+that same environment. Generator functions remain non-constructible, while
+`new.target` in their bodies is permitted and evaluates to `undefined`.
+
+Arrows retain the enclosing `FunctionExecutionEnvironment` record itself rather
+than copying a value snapshot. Direct eval reuses the caller record. Dynamic
+`Function` construction uses the ordinary constructor path. Bound construction
+preserves its target correction (`new bound()` exposes the bound target) and
+propagates an explicit alternate new target. Base and derived `super`
+construction preserve the active value. Cross-Realm calls link the exact value
+through the existing Agent boundary and materialize failures in the owning
+Realm.
 
 The synchronous evaluator and resumable generator evaluator both dispatch
 `MetaProperty`. Evaluation reads the nearest authorized function environment's
@@ -120,14 +147,16 @@ Implementation is strict RED-first:
 2. Prove exact binary/octal spellings and values, valid and invalid Unicode
    code-point escapes in all owned lexical positions, and explicit rejection
    of numeric separators.
-3. Prove `new.target` call-versus-construct values, alternate new targets,
-   classes and super, bound construction, methods, generators, arrows, returned
-   closures, direct versus indirect eval, dynamic functions, member use, and
-   tagged-template use.
-4. Prove parse-phase failures and custom/reused AST parity for malformed or
-   wrong-context `MetaProperty` trees.
-5. Run only the exact 83-root focused Test262 ledger under `TZ=UTC`.
-6. Regenerate and check the taxonomy, requiring the core P0 selector to reach
+3. Prove `new.target` for ordinary call, `new`, Reflect-style alternate new
+   targets through available engine APIs, bound construction, base and derived
+   classes and `super`, methods, generators, arrows nested in function code and
+   at top level, returned closures, direct versus indirect eval, dynamic
+   functions, member use, tagged-template use, and template substitutions.
+4. Prove cross-Realm value propagation and Realm-owned errors.
+5. Prove parse-phase failures and exact source/reusable/hostile-custom AST
+   parity for malformed shapes, child edges, cycles, and wrong contexts.
+6. Run only the exact 83-root focused Test262 ledger under `TZ=UTC`.
+7. Regenerate and check the taxonomy, requiring the core P0 selector to reach
    zero without changing whole-tree edition denominators. Reclassify remaining
    failures to their existing semantic owners.
 
