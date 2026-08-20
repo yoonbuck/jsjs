@@ -104,6 +104,88 @@ const DECISION_GENERATED_PATHS = Object.freeze([
   'tools/test262/es2015-audit-evidence.json',
   'tools/test262/es2015-taxonomy.json',
 ]);
+const EMPTY_DECISION_FRAGMENTS = Object.freeze(
+  ES2015_PROVENANCE_DECISION_CODES.map(
+    (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+  ),
+);
+const FOUNDATION_MAINTENANCE_ALLOWED_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  'docs/conformance.md',
+  'docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md',
+  'docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md',
+  'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+  'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md',
+  'docs/testing.md',
+  'test/node/es2015-provenance.test.js',
+  'test/node/workflow-contract.test.js',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance-decisions/UA.json',
+  'tools/test262/es2015-provenance-decisions/UB.json',
+  'tools/test262/es2015-provenance-decisions/UL1.json',
+  'tools/test262/es2015-provenance-decisions/UL2.json',
+  'tools/test262/es2015-provenance-decisions/UL3.json',
+  'tools/test262/es2015-provenance-decisions/UL4.json',
+  'tools/test262/es2015-provenance-decisions/US1.json',
+  'tools/test262/es2015-provenance-decisions/US2.json',
+  'tools/test262/es2015-provenance-decisions/US3.json',
+  'tools/test262/es2015-provenance-decisions/US4.json',
+  'tools/test262/es2015-provenance-decisions/US5.json',
+  'tools/test262/es2015-provenance-decisions/US6.json',
+  'tools/test262/es2015-provenance-decisions/US7.json',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/es2015-provenance.json',
+]);
+const CAPTURED_FOUNDATION_RANGE_PROFILE = Object.freeze({
+  name: 'foundation',
+  baseFoundation: 'absent',
+  requiredPaths: FOUNDATION_ALLOWED_PATHS,
+  allowedPaths: FOUNDATION_ALLOWED_PATHS,
+  requiredDeletions: FOUNDATION_DELETIONS,
+  allowedDeletions: FOUNDATION_DELETIONS,
+  emptyDecisionFragments: EMPTY_DECISION_FRAGMENTS,
+  decisionFragment: null,
+  generatedPaths: Object.freeze([
+    '.github/workflows/ci.yml',
+    ...EMPTY_DECISION_FRAGMENTS,
+    ES2015_PROVENANCE_FILE,
+  ]),
+});
+const CAPTURED_FOUNDATION_MAINTENANCE_RANGE_PROFILE = Object.freeze({
+  name: 'foundation-maintenance',
+  baseFoundation: 'present',
+  requiredPaths: Object.freeze([]),
+  allowedPaths: FOUNDATION_MAINTENANCE_ALLOWED_PATHS,
+  requiredDeletions: Object.freeze([]),
+  allowedDeletions: Object.freeze([]),
+  emptyDecisionFragments: EMPTY_DECISION_FRAGMENTS,
+  decisionFragment: null,
+  generatedPaths: Object.freeze([
+    '.github/workflows/ci.yml',
+    ES2015_PROVENANCE_FILE,
+  ]),
+});
+function capturedDecisionRangeProfile(code) {
+  const decisionFragment = `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`;
+  return Object.freeze({
+    name: `decision:${code}`,
+    baseFoundation: 'present',
+    requiredPaths: Object.freeze([decisionFragment]),
+    allowedPaths: Object.freeze([
+      'docs/conformance.md',
+      'docs/test262-report.jsonl',
+      'tools/test262/es2015-audit-evidence.json',
+      decisionFragment,
+      'tools/test262/es2015-taxonomy.json',
+    ]),
+    requiredDeletions: Object.freeze([]),
+    allowedDeletions: Object.freeze([]),
+    emptyDecisionFragments: Object.freeze([]),
+    decisionFragment,
+    generatedPaths: DECISION_GENERATED_PATHS,
+  });
+}
 const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
@@ -1100,12 +1182,39 @@ export default [
         ]),
       );
       assertSame(productionManifest().taxonomyBaseline, TAXONOMY_BASELINE);
+      const manifest = productionManifest();
+      const foundationProfile = manifest.rangeProfiles.find(
+        (profile) => profile.name === 'foundation',
+      );
+      const maintenanceProfile = manifest.rangeProfiles.find(
+        (profile) => profile.name === 'foundation-maintenance',
+      );
+      const decisionProfiles = manifest.rangeProfiles.filter((profile) =>
+        profile.name.startsWith('decision:'),
+      );
       assertSame(
-        json(productionManifest().rangeProfiles.map((profile) => profile.name)),
+        json(manifest.rangeProfiles.map((profile) => profile.name)),
         json([
           'foundation',
+          'foundation-maintenance',
           ...ES2015_PROVENANCE_DECISION_CODES.map((code) => `decision:${code}`),
         ]),
+      );
+      assertSame(
+        json(maintenanceProfile),
+        json(CAPTURED_FOUNDATION_MAINTENANCE_RANGE_PROFILE),
+      );
+      assertSame(
+        json(foundationProfile),
+        json(CAPTURED_FOUNDATION_RANGE_PROFILE),
+      );
+      assertSame(
+        json(decisionProfiles),
+        json(
+          ES2015_PROVENANCE_DECISION_CODES.map((code) =>
+            capturedDecisionRangeProfile(code),
+          ),
+        ),
       );
     },
   },
