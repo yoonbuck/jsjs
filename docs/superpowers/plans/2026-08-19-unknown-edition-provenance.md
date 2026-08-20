@@ -77,8 +77,8 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
   derives the profile inside the range CLI; a branch cannot invent another
   profile.
 - Every rendered U* issue body includes the exact sentence `History, age,
-  path/directory, and source/text similarity may prioritize review but can
-  never decide edition.`
+path/directory, and source/text similarity may prioritize review but can
+never decide edition.`
 - `foundation` allows only the exact U0 paths/content policies and reviewed
   cleanup deletions when the base lacks the foundation.
 - `foundation-maintenance` requires the initialized foundation in base. Its
@@ -87,9 +87,32 @@ REST/GraphQL through `gh`, pinned Test262 metadata/audit tooling.
   `ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04`;
   afterward every maintenance range is authorized by the trusted base-tree
   `foundation-maintenance` profile before head policy is read. It permits only
-  the exact maintenance allowlist: provenance tooling/schema/tests, workflow
-  generator/contract files, the canonical manifest, the directly related docs,
-  and exact empty decision fragments. It rejects `src/**`, feature/selection or
+  the canonical manifest path set in `tools/test262/es2015-provenance.json`
+  profile `foundation-maintenance`: `.github/workflows/ci.yml`,
+  `docs/conformance.md`,
+  `docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md`,
+  `docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md`,
+  `docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md`,
+  `docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md`,
+  `docs/testing.md`, `test/node/es2015-provenance.test.js`,
+  `test/node/workflow-contract.test.js`, `tools/ci/pipeline.js`,
+  `tools/test262/es2015-provenance-check.js`,
+  `tools/test262/es2015-provenance-decisions/UA.json`,
+  `tools/test262/es2015-provenance-decisions/UB.json`,
+  `tools/test262/es2015-provenance-decisions/UL1.json`,
+  `tools/test262/es2015-provenance-decisions/UL2.json`,
+  `tools/test262/es2015-provenance-decisions/UL3.json`,
+  `tools/test262/es2015-provenance-decisions/UL4.json`,
+  `tools/test262/es2015-provenance-decisions/US1.json`,
+  `tools/test262/es2015-provenance-decisions/US2.json`,
+  `tools/test262/es2015-provenance-decisions/US3.json`,
+  `tools/test262/es2015-provenance-decisions/US4.json`,
+  `tools/test262/es2015-provenance-decisions/US5.json`,
+  `tools/test262/es2015-provenance-decisions/US6.json`,
+  `tools/test262/es2015-provenance-decisions/US7.json`,
+  `tools/test262/es2015-provenance.js`, and
+  `tools/test262/es2015-provenance.json`. Descriptive category labels do not
+  authorize any additional path. It rejects `src/**`, feature/selection or
   taxonomy/audit-output changes, non-empty fragments, renames/copies,
   deletions, empty ranges, and head-only profile broadening.
 - Each `decision:<CODE>` requires the initialized foundation and allows only its
