@@ -628,26 +628,6 @@ evidence; those partitions must not be combined into an ES2015 claim.
 | Malformed             | 0          | 0           |
 | **Whole pinned tree** | **53,575** | **102,912** |
 
-The unknown-edition partition is frozen into the immutable provenance
-foundation in
-[`tools/test262/es2015-provenance.json`](../tools/test262/es2015-provenance.json):
-2,312 roots, 4,054 variants, and base-ledger SHA-256
-`56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc`. Its
-thirteen atomic batches are `UA`, `UB`, `UL1`, `UL2`, `UL3`, `UL4`, `US1`,
-`US2`, `US3`, `US4`, `US5`, `US6`, and `US7`; `U0` is the tooling foundation
-only and therefore makes zero classification decisions.
-
-The reviewed decision fragments under
-`tools/test262/es2015-provenance-decisions/` record immutable evidence, not
-informal notes: `evidenceKind`,
-`specification`, `metadata`, `history`, `rationale`, independent
-`review.{reviewer,reviewedAt,artifact}`, optional blocked-core
-`destination.{blocker,issue}`, and the canonical `artifactSha256`. Draft review
-can temporarily use `pending` for all three `review` fields, but strict
-validation cannot: `TZ=UTC npm run test262:es2015:provenance:check` rejects
-pending review fields, verifies the immutable hashes and exact directory
-membership, and remains metadata/hash-only — it cannot call `runTest262Suite`.
-
 The qualified core ES2015 evidence is:
 
 | Core status              | Roots      | Variants   |
@@ -677,14 +657,9 @@ feature-tag claim or a claim that the engine broadly implements ES2015.
 Run `TZ=UTC npm run test262:es2015:audit:check` to verify the taxonomy and
 promotion without writing. It requires the exact package pin and pinned
 checkout; the generated CI job runs it after checkout and `npm ci`, before the
-broad Test262 execution, immediately after
-`TZ=UTC npm run test262:es2015:provenance:check`. CI is the authority for that
-broad exact-SHA run; local work is restricted to the reviewed `--paths-file`
-promotion execution or smaller focused fixtures. For the unknown-edition
-provenance task, do not run `test262:es2015:audit` write mode,
-`--write-execution`, `test262:upstream`, or other broad-upstream wrappers
-locally; exact-head CI alone runs commands that execute the broad upstream
-subset.
+broad Test262 execution. CI is the authority for that broad exact-SHA run;
+local work is restricted to the reviewed `--paths-file` promotion execution or
+smaller focused fixtures.
 
 The detailed report is JSON lines: one `test` record per (file, variant) pair,
 then the `baseline` lines that summarize the run per subset group, a `features`

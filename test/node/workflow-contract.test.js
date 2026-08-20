@@ -769,7 +769,7 @@ export default [
     },
   },
   {
-    name: 'the pinned Test262 job checks unknown-edition provenance before the deterministic ES2015 taxonomy and broad execution',
+    name: 'the pinned Test262 job checks the deterministic ES2015 taxonomy before broad execution',
     run: async () => {
       const { workflow } = await readWorkflow();
       const job = requireJob(workflow, 'test262-upstream');
@@ -780,10 +780,6 @@ export default [
       const install = job.steps.find(
         (/** @type {any} */ step) => step.name === 'Install dependencies',
       );
-      const provenanceCheck = job.steps.find(
-        (/** @type {any} */ step) =>
-          step.name === 'Check unknown-edition provenance',
-      );
       const taxonomyCheck = job.steps.find(
         (/** @type {any} */ step) =>
           step.name === 'Check the ES2015 taxonomy and exact promotion',
@@ -793,16 +789,6 @@ export default [
       );
 
       assertSame(
-        provenanceCheck !== undefined,
-        true,
-        'the pinned Test262 job must check unknown-edition provenance',
-      );
-      assertSame(
-        provenanceCheck?.run,
-        'npm run test262:es2015:provenance:check',
-      );
-      assertSame(provenanceCheck?.env?.TZ, 'UTC');
-      assertSame(
         taxonomyCheck !== undefined,
         true,
         'the pinned Test262 job must check the ES2015 taxonomy and exact promotion',
@@ -811,21 +797,15 @@ export default [
       assertSame(taxonomyCheck?.env?.TZ, 'UTC');
       assertSame(
         job.steps.indexOf(/** @type {any} */ (upstream)) <
-          job.steps.indexOf(/** @type {any} */ (provenanceCheck)),
+          job.steps.indexOf(/** @type {any} */ (taxonomyCheck)),
         true,
-        'the provenance check must follow the pinned Test262 checkout',
+        'the taxonomy check must follow the pinned Test262 checkout',
       );
       assertSame(
         job.steps.indexOf(/** @type {any} */ (install)) <
-          job.steps.indexOf(/** @type {any} */ (provenanceCheck)),
-        true,
-        'the provenance check must follow dependency installation',
-      );
-      assertSame(
-        job.steps.indexOf(/** @type {any} */ (provenanceCheck)) <
           job.steps.indexOf(/** @type {any} */ (taxonomyCheck)),
         true,
-        'the provenance check must precede the taxonomy check',
+        'the taxonomy check must follow dependency installation',
       );
       assertSame(
         job.steps.indexOf(/** @type {any} */ (taxonomyCheck)) <

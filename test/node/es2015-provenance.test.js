@@ -1,4 +1,4 @@
-import * as fs from 'node:fs';
+import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import {
@@ -29,147 +29,104 @@ import {
   summarizeEs2015Classification,
 } from '../../tools/test262/es2015-taxonomy.js';
 
-/**
- * @typedef {ReturnType<typeof buildProvenanceFoundation>} ProvenanceManifest
- * @typedef {ProvenanceManifest['batches'][number]} ProvenanceBatch
- * @typedef {ProvenanceBatch['entries'][number]} ProvenanceBatchEntry
- * @typedef {{ path: string, variants: number, partition: string, finalClass: string, features: readonly string[], flags: readonly string[], includes: readonly string[] }} ClassificationRecord
- * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }} ApprovedBatchSummary
- * @typedef {readonly { type: 'test', file: string, variant: 'non-strict' | 'strict', status: 'passed' }[]} ExecutionRecords
- */
-
-const readFileSyncText =
-  /** @type {(path: URL, encoding: string) => string} */ (
-    /** @type {any} */ (fs).readFileSync
-  );
-
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
 const SPECIFICATION_SOURCE = 'https://262.ecma-international.org/6.0/';
 const SPECIFICATION_SHA256 =
   '4d4243dc2f04c9cdd09498f2cc2af6f6cdc07b0430da5578e7cf440d4f7846a0';
 const TAXONOMY_PATH = 'tools/test262/es2015-taxonomy.json';
-const PROVENANCE_DECISIONS_DIRECTORY =
-  'tools/test262/es2015-provenance-decisions';
+const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
 const ISSUE_MAP_PATH = '/fixture/es2015-provenance-created-issues.json';
-const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
+const PRODUCTION_TAXONOMY_TEXT = fs.readFileSync(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
 );
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
-/** @type {Readonly<{ baseLedger: { rootCount: number, variantCount: number, pathSha256: string }, batches: Record<string, ApprovedBatchSummary> }>} */
 const APPROVED_PRODUCTION_FOUNDATION = Object.freeze({
   baseLedger: Object.freeze({
     rootCount: 2312,
     variantCount: 4054,
-    pathSha256:
-      '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc',
+    pathSha256: '56a730c9db7732ac89c0bd455908f106e2a1c0205ec4fd707b8cb9be771175bc',
   }),
   batches: Object.freeze({
     UA: Object.freeze({
       rootCount: 314,
       variantCount: 323,
-      pathSha256:
-        'd29150e412486095bac0103f5d7e913917269870a9769cd8343a5cc9638af98e',
-      entryLedgerSha256:
-        'a6664c97c45fd047a4d136b62f2121b630fa742c6e21594111457e367d88cc09',
+      pathSha256: 'd29150e412486095bac0103f5d7e913917269870a9769cd8343a5cc9638af98e',
+      entryLedgerSha256: 'a6664c97c45fd047a4d136b62f2121b630fa742c6e21594111457e367d88cc09',
     }),
     UB: Object.freeze({
       rootCount: 32,
       variantCount: 64,
-      pathSha256:
-        '4e21b1884213e2831ffe58fb5c5128f17d417168aeabeac3c3817f8f6350623a',
-      entryLedgerSha256:
-        '99441828b25381a9ce86cbad7bdaaeb612100d2425990f0689f08bf6f7059a1a',
+      pathSha256: '4e21b1884213e2831ffe58fb5c5128f17d417168aeabeac3c3817f8f6350623a',
+      entryLedgerSha256: '99441828b25381a9ce86cbad7bdaaeb612100d2425990f0689f08bf6f7059a1a',
     }),
     UL1: Object.freeze({
       rootCount: 434,
       variantCount: 835,
-      pathSha256:
-        '1bad4b5aed5f665cfcd270a57c90553b1fe4a1dabb1334fa950527b1113b937a',
-      entryLedgerSha256:
-        'f5044351e9319bacd6d07fdbb4f6eb995f87ab7a2c307893fbd173fcacf9b1f5',
+      pathSha256: '1bad4b5aed5f665cfcd270a57c90553b1fe4a1dabb1334fa950527b1113b937a',
+      entryLedgerSha256: 'f5044351e9319bacd6d07fdbb4f6eb995f87ab7a2c307893fbd173fcacf9b1f5',
     }),
     UL2: Object.freeze({
       rootCount: 182,
       variantCount: 364,
-      pathSha256:
-        'b5e8412e46d0bb2d976de247d312269b9ac34fa9cda77d15a2aa11c1eb0abb45',
-      entryLedgerSha256:
-        '2516f31b492778b05737a34c24aead5520ba0804b824c4fb0af54b49fca75640',
+      pathSha256: 'b5e8412e46d0bb2d976de247d312269b9ac34fa9cda77d15a2aa11c1eb0abb45',
+      entryLedgerSha256: '2516f31b492778b05737a34c24aead5520ba0804b824c4fb0af54b49fca75640',
     }),
     UL3: Object.freeze({
       rootCount: 109,
       variantCount: 212,
-      pathSha256:
-        'af158f399b1827dd2012030fbec2fdbbb28f184c011a310550928eb718dca406',
-      entryLedgerSha256:
-        '4b4543298d376734ef7a58ce6eb2a84ed1b0997a588e509ec25a36705378c6e8',
+      pathSha256: 'af158f399b1827dd2012030fbec2fdbbb28f184c011a310550928eb718dca406',
+      entryLedgerSha256: '4b4543298d376734ef7a58ce6eb2a84ed1b0997a588e509ec25a36705378c6e8',
     }),
     UL4: Object.freeze({
       rootCount: 48,
       variantCount: 48,
-      pathSha256:
-        '9316f73cad2c6608ad14d6e837e5383100bb2ebd0a4feb2ba9f198ee35e5d3ac',
-      entryLedgerSha256:
-        '4ecb3fa2541b0ba3932c61bd5b92d3a137561202036b6009bfbdf2f25a997b58',
+      pathSha256: '9316f73cad2c6608ad14d6e837e5383100bb2ebd0a4feb2ba9f198ee35e5d3ac',
+      entryLedgerSha256: '4ecb3fa2541b0ba3932c61bd5b92d3a137561202036b6009bfbdf2f25a997b58',
     }),
     US1: Object.freeze({
       rootCount: 210,
       variantCount: 406,
-      pathSha256:
-        '63ff657590ebb5aa167c19975344817789a9a67b820ce0092f990376afa873f7',
-      entryLedgerSha256:
-        'f1ef59740d3a9cbae631e0c65cd7d4aa24bd6619129d76179ca7d32e795b184f',
+      pathSha256: '63ff657590ebb5aa167c19975344817789a9a67b820ce0092f990376afa873f7',
+      entryLedgerSha256: 'f1ef59740d3a9cbae631e0c65cd7d4aa24bd6619129d76179ca7d32e795b184f',
     }),
     US2: Object.freeze({
       rootCount: 176,
       variantCount: 352,
-      pathSha256:
-        '3b3db618ae579287c0cbe5a77124c883c3129395bf83fe7523dc1f32e3fe7d15',
-      entryLedgerSha256:
-        '5acbdcb3fdaf4e9fc95a157aac51e20041cc38b47de8717d655eb9b32e5cbfdb',
+      pathSha256: '3b3db618ae579287c0cbe5a77124c883c3129395bf83fe7523dc1f32e3fe7d15',
+      entryLedgerSha256: '5acbdcb3fdaf4e9fc95a157aac51e20041cc38b47de8717d655eb9b32e5cbfdb',
     }),
     US3: Object.freeze({
       rootCount: 99,
       variantCount: 190,
-      pathSha256:
-        '42d21ddbd59de80f8c14b1508c3502c8c0bc023061ff24c16160f1bfaec7daa1',
-      entryLedgerSha256:
-        '06922dfb4dc6fa2d2e07e7bcbf8364fcd8fc943921820a15c057b17e55fb8528',
+      pathSha256: '42d21ddbd59de80f8c14b1508c3502c8c0bc023061ff24c16160f1bfaec7daa1',
+      entryLedgerSha256: '06922dfb4dc6fa2d2e07e7bcbf8364fcd8fc943921820a15c057b17e55fb8528',
     }),
     US4: Object.freeze({
       rootCount: 176,
       variantCount: 318,
-      pathSha256:
-        '19bc8b322158aa59af8d0b5efd38cf58885be50fdb6394b56cc94a2b94754c0b',
-      entryLedgerSha256:
-        'e548e96a5d68e6117c454d0117831f81445d0eec93f7b873ea82a6d7673a7d66',
+      pathSha256: '19bc8b322158aa59af8d0b5efd38cf58885be50fdb6394b56cc94a2b94754c0b',
+      entryLedgerSha256: 'e548e96a5d68e6117c454d0117831f81445d0eec93f7b873ea82a6d7673a7d66',
     }),
     US5: Object.freeze({
       rootCount: 306,
       variantCount: 540,
-      pathSha256:
-        'fdc5ed38ef91366ee6bd9f8aa8d49917b5d9bbc2746cfd62a50f22a22cd03df5',
-      entryLedgerSha256:
-        '87d0388e420d5ffdde58c81705b19daca1d3488e3de4330b1cc8e9ad63bd36f0',
+      pathSha256: 'fdc5ed38ef91366ee6bd9f8aa8d49917b5d9bbc2746cfd62a50f22a22cd03df5',
+      entryLedgerSha256: '87d0388e420d5ffdde58c81705b19daca1d3488e3de4330b1cc8e9ad63bd36f0',
     }),
     US6: Object.freeze({
       rootCount: 48,
       variantCount: 89,
-      pathSha256:
-        '90dfecd04460d739d4a7242b6ff14c4ef83abcf3e73d7893b392138372ce1cf1',
-      entryLedgerSha256:
-        'c7c524d8b8cd8f0094f631be7d16abcc7f946db86546aaf6339d9cd9853d6a16',
+      pathSha256: '90dfecd04460d739d4a7242b6ff14c4ef83abcf3e73d7893b392138372ce1cf1',
+      entryLedgerSha256: 'c7c524d8b8cd8f0094f631be7d16abcc7f946db86546aaf6339d9cd9853d6a16',
     }),
     US7: Object.freeze({
       rootCount: 178,
       variantCount: 313,
-      pathSha256:
-        '1e2cda5adef593ae134f0ab0e759091f57522821460c904c7f44c4217c891e28',
-      entryLedgerSha256:
-        '6fa9daa7322394f0f96b754ef6674ccb80b916cd4209c2308f7591eaf46f7e23',
+      pathSha256: '1e2cda5adef593ae134f0ab0e759091f57522821460c904c7f44c4217c891e28',
+      entryLedgerSha256: '6fa9daa7322394f0f96b754ef6674ccb80b916cd4209c2308f7591eaf46f7e23',
     }),
   }),
 });
@@ -210,12 +167,10 @@ function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
-/** @param {readonly ProvenanceBatchEntry[]} entries */
 function entryLedgerText(entries) {
   return `${entries.map((entry) => json([entry.path, entry.variants, entry.priorClass])).join('\n')}\n`;
 }
 
-/** @param {readonly ProvenanceBatchEntry[]} entries */
 function entryLedgerSha256(entries) {
   return sha256(entryLedgerText(entries));
 }
@@ -225,7 +180,6 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-/** @returns {readonly ClassificationRecord[]} */
 function foundationClassifications() {
   return [
     {
@@ -258,37 +212,44 @@ function foundationClassifications() {
   ];
 }
 
-/** @type {readonly ClassificationRecord[] | undefined} */
+function decisionClassifications() {
+  return [
+    {
+      path: 'test/language/example.js',
+      variants: 2,
+      partition: 'unknown-edition',
+      finalClass: 'unknown-edition',
+      features: [],
+      flags: [],
+      includes: [],
+    },
+  ];
+}
+
 let cachedProductionClassifications;
 
-/** @returns {readonly ClassificationRecord[]} */
 function productionClassifications() {
   if (cachedProductionClassifications !== undefined) {
     return cachedProductionClassifications;
   }
   const taxonomy = JSON.parse(
-    readFileSyncText(
+    fs.readFileSync(
       new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
       'utf8',
     ),
   );
-  cachedProductionClassifications = taxonomy.classifications.map(
-    (/** @type {any} */ record) => ({
-      path: record.path,
-      variants: record.variants,
-      partition: record.partition,
-      finalClass: record.status,
-      features: record.features,
-      flags: record.flags,
-      includes: record.includes,
-    }),
-  );
-  return /** @type {readonly ClassificationRecord[]} */ (
-    cachedProductionClassifications
-  );
+  cachedProductionClassifications = taxonomy.classifications.map((record) => ({
+    path: record.path,
+    variants: record.variants,
+    partition: record.partition,
+    finalClass: record.status,
+    features: record.features,
+    flags: record.flags,
+    includes: record.includes,
+  }));
+  return cachedProductionClassifications;
 }
 
-/** @returns {ProvenanceManifest} */
 function productionManifest() {
   return buildProvenanceFoundation(productionClassifications());
 }
@@ -300,14 +261,12 @@ function approvedProvenanceManifestText() {
 function driftedTaxonomyText() {
   const taxonomy = JSON.parse(PRODUCTION_TAXONOMY_TEXT);
   const targetPath = productionManifest().baseLedger.paths[0];
-  const record = taxonomy.classifications.find(
-    (/** @type {any} */ entry) => entry.path === targetPath,
-  );
+  const record = taxonomy.classifications.find((entry) => entry.path === targetPath);
   record.variants += 1;
   return `${JSON.stringify(taxonomy, null, 2)}\n`;
 }
 
-/** @param {ProvenanceManifest} manifest @param {string} code */
+/** @param {ReturnType<typeof productionManifest>} manifest @param {string} code */
 function emptyDecisionFragmentText(manifest, code) {
   return `${JSON.stringify(
     {
@@ -324,20 +283,13 @@ function emptyDecisionFragmentText(manifest, code) {
   )}\n`;
 }
 
-/** @param {ProvenanceBatch} batch */
 function refreshBatchLedger(batch) {
   batch.rootCount = batch.entries.length;
-  batch.variantCount = batch.entries.reduce(
-    (sum, entry) => sum + entry.variants,
-    0,
-  );
-  batch.pathSha256 = sha256(
-    `${batch.entries.map((entry) => entry.path).join('\n')}\n`,
-  );
+  batch.variantCount = batch.entries.reduce((sum, entry) => sum + entry.variants, 0);
+  batch.pathSha256 = sha256(`${batch.entries.map((entry) => entry.path).join('\n')}\n`);
   batch.entryLedgerSha256 = entryLedgerSha256(batch.entries);
 }
 
-/** @param {ProvenanceManifest} manifest */
 function findNonUl3BatchEntry(manifest) {
   for (const batch of manifest.batches) {
     if (batch.code === 'UL3') continue;
@@ -352,7 +304,6 @@ function findNonUl3BatchEntry(manifest) {
   throw new Error('expected a non-UL3 production batch entry');
 }
 
-/** @param {ProvenanceManifest} manifest */
 function findVariantRedistributionPair(manifest) {
   for (const batch of manifest.batches) {
     if (batch.code === 'UL3') continue;
@@ -368,41 +319,26 @@ function findVariantRedistributionPair(manifest) {
       }
     }
   }
-  throw new Error(
-    'expected production manifest entries that can redistribute variants',
-  );
+  throw new Error('expected production manifest entries that can redistribute variants');
 }
 
 function tamperedPriorClassManifest() {
   const classifications = clone(productionClassifications());
   const manifest = clone(productionManifest());
   const target = findNonUl3BatchEntry(manifest);
-  const batch = manifest.batches.find(
-    (/** @type {ProvenanceBatch} */ entry) => entry.code === target.code,
-  );
-  const entry = batch?.entries.find(
-    (/** @type {ProvenanceBatchEntry} */ candidate) =>
-      candidate.path === target.path,
-  );
+  const batch = manifest.batches.find((entry) => entry.code === target.code);
+  const entry = batch?.entries.find((candidate) => candidate.path === target.path);
   if (entry === undefined) {
-    throw new Error(
-      'expected a production manifest entry to mutate priorClass',
-    );
+    throw new Error('expected a production manifest entry to mutate priorClass');
   }
   entry.priorClass = `${entry.priorClass}:tampered`;
   if (batch === undefined) {
-    throw new Error(
-      'expected a production manifest batch to mutate priorClass',
-    );
+    throw new Error('expected a production manifest batch to mutate priorClass');
   }
   refreshBatchLedger(batch);
-  const classification = classifications.find(
-    (/** @type {ClassificationRecord} */ record) => record.path === target.path,
-  );
+  const classification = classifications.find((record) => record.path === target.path);
   if (classification === undefined) {
-    throw new Error(
-      'expected a production classification to mutate priorClass',
-    );
+    throw new Error('expected a production classification to mutate priorClass');
   }
   classification.finalClass = `${classification.finalClass}:tampered`;
   return {
@@ -417,45 +353,26 @@ function redistributedVariantsManifest() {
   const classifications = clone(productionClassifications());
   const manifest = clone(productionManifest());
   const target = findVariantRedistributionPair(manifest);
-  const batch = manifest.batches.find(
-    (/** @type {ProvenanceBatch} */ entry) => entry.code === target.code,
-  );
-  const source = batch?.entries.find(
-    (/** @type {ProvenanceBatchEntry} */ entry) =>
-      entry.path === target.sourcePath,
-  );
-  const destination = batch?.entries.find(
-    (/** @type {ProvenanceBatchEntry} */ entry) =>
-      entry.path === target.targetPath,
-  );
+  const batch = manifest.batches.find((entry) => entry.code === target.code);
+  const source = batch?.entries.find((entry) => entry.path === target.sourcePath);
+  const destination = batch?.entries.find((entry) => entry.path === target.targetPath);
   if (source === undefined || destination === undefined) {
-    throw new Error(
-      'expected production manifest entries to redistribute variants',
-    );
+    throw new Error('expected production manifest entries to redistribute variants');
   }
   source.variants -= 1;
   destination.variants += 1;
   if (batch === undefined) {
-    throw new Error(
-      'expected a production manifest batch to redistribute variants',
-    );
+    throw new Error('expected a production manifest batch to redistribute variants');
   }
   refreshBatchLedger(batch);
   const sourceClassification = classifications.find(
-    (/** @type {ClassificationRecord} */ record) =>
-      record.path === target.sourcePath,
+    (record) => record.path === target.sourcePath,
   );
   const destinationClassification = classifications.find(
-    (/** @type {ClassificationRecord} */ record) =>
-      record.path === target.targetPath,
+    (record) => record.path === target.targetPath,
   );
-  if (
-    sourceClassification === undefined ||
-    destinationClassification === undefined
-  ) {
-    throw new Error(
-      'expected production classifications to redistribute variants',
-    );
+  if (sourceClassification === undefined || destinationClassification === undefined) {
+    throw new Error('expected production classifications to redistribute variants');
   }
   sourceClassification.variants -= 1;
   destinationClassification.variants += 1;
@@ -562,9 +479,7 @@ function productionDecisionFragmentValue() {
 
 /** @param {{ decisions: { artifactSha256: string }[] }} fragment */
 function refreshFragmentHash(fragment) {
-  fragment.decisions[0].artifactSha256 = canonicalDecisionSha256(
-    fragment.decisions[0],
-  );
+  fragment.decisions[0].artifactSha256 = canonicalDecisionSha256(fragment.decisions[0]);
   return fragment;
 }
 
@@ -597,7 +512,7 @@ function classificationAnchors() {
 
 /** @param {string} path */
 function passedExecution(path) {
-  return /** @type {ExecutionRecords} */ ([
+  return [
     {
       type: 'test',
       file: path,
@@ -610,22 +525,12 @@ function passedExecution(path) {
       variant: 'strict',
       status: 'passed',
     },
-  ]);
-}
-
-/** @param {string} path @returns {ReadonlyMap<string, ExecutionRecords>} */
-function singleExecutionResult(path) {
-  /** @type {Map<string, ExecutionRecords>} */
-  const results = new Map();
-  results.set(path, passedExecution(path));
-  return results;
+  ];
 }
 
 /** @param {string} code */
 function productionBatchPath(code) {
-  const batch = productionManifest().batches.find(
-    (entry) => entry.code === code,
-  );
+  const batch = productionManifest().batches.find((entry) => entry.code === code);
   const path = batch?.entries[0]?.path;
   if (typeof path !== 'string') {
     throw new Error(`expected production manifest entry for ${code}`);
@@ -654,11 +559,13 @@ function reviewedProvenanceMap(decisions) {
   const fragments = new Map();
   for (const spec of decisions) {
     const decision = reviewedDecisionWithoutHash(spec);
-    const fragment = fragments.get(spec.code) ?? {
-      ...validDecisionFragmentValue(),
-      code: spec.code,
-      decisions: [],
-    };
+    const fragment =
+      fragments.get(spec.code) ??
+      {
+        ...validDecisionFragmentValue(),
+        code: spec.code,
+        decisions: [],
+      };
     fragment.decisions.push({
       ...decision,
       artifactSha256: canonicalDecisionSha256(decision),
@@ -687,14 +594,10 @@ function reviewedProvenanceMap(decisions) {
 
 /** @param {{ code: string, path: string, finalPartition: string, finalStatus: string }} spec */
 function reviewedProvenanceStub(spec) {
-  const batch = productionManifest().batches.find(
-    (entry) => entry.code === spec.code,
-  );
+  const batch = productionManifest().batches.find((entry) => entry.code === spec.code);
   const ledgerEntry = batch?.entries.find((entry) => entry.path === spec.path);
   if (ledgerEntry === undefined) {
-    throw new Error(
-      `expected reviewed provenance ledger entry for ${spec.code} ${spec.path}`,
-    );
+    throw new Error(`expected reviewed provenance ledger entry for ${spec.code} ${spec.path}`);
   }
   const decision = reviewedDecisionWithoutHash(spec);
   return new Map([
@@ -734,20 +637,15 @@ async function rejected(action) {
  */
 function provenanceCheckDependencies(options = {}) {
   const manifest = productionManifest();
-  /** @type {Map<string, string>} */
   const files = new Map([
     [TAXONOMY_PATH, PRODUCTION_TAXONOMY_TEXT],
     [ES2015_PROVENANCE_FILE, approvedProvenanceManifestText()],
-  ]);
-  for (const code of ES2015_PROVENANCE_DECISION_CODES) {
-    files.set(
+    ...ES2015_PROVENANCE_DECISION_CODES.map((code) => [
       `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
       emptyDecisionFragmentText(manifest, code),
-    );
-  }
-  for (const [path, text] of options.files?.entries() ?? []) {
-    files.set(path, text);
-  }
+    ]),
+    ...(options.files ?? []),
+  ]);
   /** @type {string[]} */
   const writes = [];
   /** @type {string[]} */
@@ -763,7 +661,7 @@ function provenanceCheckDependencies(options = {}) {
 
   return {
     environment: { TZ: options.timezone ?? 'UTC' },
-    readFile: async (/** @type {string} */ path) => {
+    readFile: async (path) => {
       const value = files.get(path);
       if (value === undefined) {
         const error = new Error(`missing fixture file ${path}`);
@@ -772,7 +670,7 @@ function provenanceCheckDependencies(options = {}) {
       }
       return value;
     },
-    readdir: async (/** @type {string} */ path) => {
+    readdir: async (path) => {
       if (path !== PROVENANCE_DECISIONS_DIRECTORY) {
         const error = new Error(`missing fixture directory ${path}`);
         Object.assign(error, { code: 'ENOENT' });
@@ -780,15 +678,12 @@ function provenanceCheckDependencies(options = {}) {
       }
       return decisionDirectoryEntries;
     },
-    writeFile: async (
-      /** @type {string} */ path,
-      /** @type {string} */ text,
-    ) => {
+    writeFile: async (path, text) => {
       writes.push(path);
       files.set(path, text);
     },
-    stdout: (/** @type {string} */ text) => stdout.push(text),
-    stderr: (/** @type {string} */ text) => stderr.push(text),
+    stdout: (text) => stdout.push(text),
+    stderr: (text) => stderr.push(text),
     files,
     writes,
     outputs: { stdout, stderr },
@@ -800,10 +695,7 @@ export default [
     name: 'ES2015 provenance exports the approved contract constants',
     run: () => {
       assertSame(ES2015_PROVENANCE_VERSION, 1);
-      assertSame(
-        ES2015_PROVENANCE_FILE,
-        'tools/test262/es2015-provenance.json',
-      );
+      assertSame(ES2015_PROVENANCE_FILE, 'tools/test262/es2015-provenance.json');
       assertSame(
         json(ES2015_PROVENANCE_DECISION_CODES),
         json([
@@ -923,8 +815,7 @@ export default [
       badFragmentSpecification.specification.sourceSha256 = '0'.repeat(64);
       assertSame(
         assertThrows(
-          () =>
-            parseEs2015DecisionFragment(json(badFragmentSpecification), 'UL3'),
+          () => parseEs2015DecisionFragment(json(badFragmentSpecification), 'UL3'),
           Es2015ProvenanceError,
         ).message,
         'UL3 decision fragment must retain the reviewed Sixth Edition source identity',
@@ -969,9 +860,7 @@ export default [
       validateProvenanceFoundation(manifest, classifications);
 
       const unsortedBase = clone(manifest);
-      unsortedBase.baseLedger.paths = [
-        ...unsortedBase.baseLedger.paths,
-      ].reverse();
+      unsortedBase.baseLedger.paths = [...unsortedBase.baseLedger.paths].reverse();
       assertSame(
         assertThrows(
           () => validateProvenanceFoundation(unsortedBase, classifications),
@@ -987,8 +876,7 @@ export default [
       ];
       assertSame(
         assertThrows(
-          () =>
-            validateProvenanceFoundation(duplicateBatchPath, classifications),
+          () => validateProvenanceFoundation(duplicateBatchPath, classifications),
           Es2015ProvenanceError,
         ).message,
         'UA batch ledger must not repeat base paths',
@@ -1013,11 +901,8 @@ export default [
       missingBase.baseLedger.paths = [missingBase.baseLedger.paths[0]];
       missingBase.baseLedger.rootCount = 1;
       missingBase.baseLedger.variantCount =
-        manifest.baseLedger.variantCount -
-        manifest.batches[0].entries[1].variants;
-      missingBase.baseLedger.pathSha256 = sha256(
-        `${missingBase.baseLedger.paths[0]}\n`,
-      );
+        manifest.baseLedger.variantCount - manifest.batches[0].entries[1].variants;
+      missingBase.baseLedger.pathSha256 = sha256(`${missingBase.baseLedger.paths[0]}\n`);
       assertSame(
         assertThrows(
           () => validateProvenanceFoundation(missingBase, classifications),
@@ -1058,8 +943,7 @@ export default [
       wrongBatchVariants.batches[0].variantCount = 99;
       assertSame(
         assertThrows(
-          () =>
-            validateProvenanceFoundation(wrongBatchVariants, classifications),
+          () => validateProvenanceFoundation(wrongBatchVariants, classifications),
           Es2015ProvenanceError,
         ).message,
         'UA variant count does not match its reviewed ledger',
@@ -1099,7 +983,7 @@ export default [
   {
     name: 'ES2015 provenance pins immutable production entry ledgers without host filesystem reads',
     run: () => {
-      const moduleSource = readFileSyncText(
+      const moduleSource = fs.readFileSync(
         new URL('../../tools/test262/es2015-provenance.js', import.meta.url),
         'utf8',
       );
@@ -1108,10 +992,7 @@ export default [
       const classifications = productionClassifications();
       const manifest = productionManifest();
       validateProvenanceFoundation(manifest, classifications);
-      assertSame(
-        manifest.baseLedger.rootCount,
-        APPROVED_PRODUCTION_FOUNDATION.baseLedger.rootCount,
-      );
+      assertSame(manifest.baseLedger.rootCount, APPROVED_PRODUCTION_FOUNDATION.baseLedger.rootCount);
       assertSame(
         manifest.baseLedger.variantCount,
         APPROVED_PRODUCTION_FOUNDATION.baseLedger.variantCount,
@@ -1122,18 +1003,12 @@ export default [
       );
 
       for (const code of ES2015_PROVENANCE_DECISION_CODES) {
-        const batch = manifest.batches.find(
-          (/** @type {ProvenanceBatch} */ entry) => entry.code === code,
-        );
+        const batch = manifest.batches.find((entry) => entry.code === code);
         const expected = APPROVED_PRODUCTION_FOUNDATION.batches[code];
         if (batch === undefined || expected === undefined) {
           throw new Error(`missing approved production batch ${code}`);
         }
-        assertSame(
-          batch.rootCount,
-          expected.rootCount,
-          `${code} root count must stay immutable`,
-        );
+        assertSame(batch.rootCount, expected.rootCount, `${code} root count must stay immutable`);
         assertSame(
           batch.variantCount,
           expected.variantCount,
@@ -1157,18 +1032,14 @@ export default [
       }
 
       const alteredClassifications = classifications.filter(
-        (/** @type {ClassificationRecord} */ record) =>
+        (record) =>
           record.path !==
           'test/annexB/built-ins/RegExp/RegExp-invalid-control-escape-character-class-range.js',
       );
       const alteredManifest = buildProvenanceFoundation(alteredClassifications);
       assertSame(
         assertThrows(
-          () =>
-            validateProvenanceFoundation(
-              alteredManifest,
-              alteredClassifications,
-            ),
+          () => validateProvenanceFoundation(alteredManifest, alteredClassifications),
           Es2015ProvenanceError,
         ).message,
         `${ES2015_PROVENANCE_FILE} base ledger root count does not match the approved immutable ledger`,
@@ -1183,18 +1054,12 @@ export default [
         json(productionDecisionFragmentValue()),
         'UL3',
       );
-      const validated = validateDecisionFragments(
-        manifest,
-        new Map([['UL3', fragment]]),
-        {
-          allowPendingReview: false,
-        },
-      );
+      const validated = validateDecisionFragments(manifest, new Map([['UL3', fragment]]), {
+        allowPendingReview: false,
+      });
       const decision = validated.get(PRODUCTION_UL3_PATH);
       if (decision === undefined) {
-        throw new Error(
-          'validated decisions must include the exact batch path',
-        );
+        throw new Error('validated decisions must include the exact batch path');
       }
       assertSame(
         decision.artifactSha256,
@@ -1248,20 +1113,14 @@ export default [
       );
 
       const malformedReviewUrl = clone(productionDecisionFragmentValue());
-      malformedReviewUrl.decisions[0].review.artifact =
-        'https://example.com/review';
+      malformedReviewUrl.decisions[0].review.artifact = 'https://example.com/review';
       refreshFragmentHash(malformedReviewUrl);
       assertSame(
         assertThrows(
           () =>
             validateDecisionFragments(
               manifest,
-              {
-                UL3: parseEs2015DecisionFragment(
-                  json(malformedReviewUrl),
-                  'UL3',
-                ),
-              },
+              { UL3: parseEs2015DecisionFragment(json(malformedReviewUrl), 'UL3') },
               { allowPendingReview: false },
             ),
           Es2015ProvenanceError,
@@ -1325,12 +1184,7 @@ export default [
           () =>
             validateDecisionFragments(
               manifest,
-              {
-                UL3: parseEs2015DecisionFragment(
-                  json(missingDestinationIssue),
-                  'UL3',
-                ),
-              },
+              { UL3: parseEs2015DecisionFragment(json(missingDestinationIssue), 'UL3') },
               { allowPendingReview: false },
             ),
           Es2015ProvenanceError,
@@ -1368,12 +1222,7 @@ export default [
           () =>
             validateDecisionFragments(
               manifest,
-              {
-                UL3: parseEs2015DecisionFragment(
-                  json(strictPendingReviewer),
-                  'UL3',
-                ),
-              },
+              { UL3: parseEs2015DecisionFragment(json(strictPendingReviewer), 'UL3') },
               { allowPendingReview: false },
             ),
           Es2015ProvenanceError,
@@ -1393,10 +1242,7 @@ export default [
         { UL3: parseEs2015DecisionFragment(json(pendingDraft), 'UL3') },
         { allowPendingReview: true },
       );
-      assertSame(
-        draftValidated.get(PRODUCTION_UL3_PATH)?.review.reviewer,
-        'pending',
-      );
+      assertSame(draftValidated.get(PRODUCTION_UL3_PATH)?.review.reviewer, 'pending');
     },
   },
   {
@@ -1407,7 +1253,8 @@ export default [
         'UL3',
       );
       const tamperedPriorClass = tamperedPriorClassManifest();
-      const priorClassMessage = `${tamperedPriorClass.code} entry ledger SHA-256 does not match the approved immutable ledger`;
+      const priorClassMessage =
+        `${tamperedPriorClass.code} entry ledger SHA-256 does not match the approved immutable ledger`;
       assertSame(
         assertThrows(
           () =>
@@ -1422,24 +1269,16 @@ export default [
       assertSame(
         assertThrows(
           () =>
-            validateDecisionFragments(
-              tamperedPriorClass.manifest,
-              { UL3: fragment },
-              {
-                allowPendingReview: false,
-              },
-            ),
+            validateDecisionFragments(tamperedPriorClass.manifest, { UL3: fragment }, {
+              allowPendingReview: false,
+            }),
           Es2015ProvenanceError,
         ).message,
         priorClassMessage,
       );
       assertSame(
         assertThrows(
-          () =>
-            renderBatchLedger(
-              tamperedPriorClass.manifest,
-              tamperedPriorClass.code,
-            ),
+          () => renderBatchLedger(tamperedPriorClass.manifest, tamperedPriorClass.code),
           Es2015ProvenanceError,
         ).message,
         priorClassMessage,
@@ -1458,7 +1297,8 @@ export default [
       );
 
       const redistributedVariants = redistributedVariantsManifest();
-      const variantMessage = `${redistributedVariants.code} entry ledger SHA-256 does not match the approved immutable ledger`;
+      const variantMessage =
+        `${redistributedVariants.code} entry ledger SHA-256 does not match the approved immutable ledger`;
       assertSame(
         assertThrows(
           () =>
@@ -1473,24 +1313,16 @@ export default [
       assertSame(
         assertThrows(
           () =>
-            validateDecisionFragments(
-              redistributedVariants.manifest,
-              { UL3: fragment },
-              {
-                allowPendingReview: false,
-              },
-            ),
+            validateDecisionFragments(redistributedVariants.manifest, { UL3: fragment }, {
+              allowPendingReview: false,
+            }),
           Es2015ProvenanceError,
         ).message,
         variantMessage,
       );
       assertSame(
         assertThrows(
-          () =>
-            renderBatchLedger(
-              redistributedVariants.manifest,
-              redistributedVariants.code,
-            ),
+          () => renderBatchLedger(redistributedVariants.manifest, redistributedVariants.code),
           Es2015ProvenanceError,
         ).message,
         variantMessage,
@@ -1511,14 +1343,10 @@ export default [
       assertSame(
         assertThrows(
           () =>
-            validateDecisionFragments(
-              productionManifest(),
-              {},
-              {
-                allowPendingReview: false,
-                requireCompleteCodes: ['UL3'],
-              },
-            ),
+            validateDecisionFragments(productionManifest(), {}, {
+              allowPendingReview: false,
+              requireCompleteCodes: ['UL3'],
+            }),
           Es2015ProvenanceError,
         ).message,
         'UL3 decision fragment is required when complete-code validation is enabled',
@@ -1531,14 +1359,10 @@ export default [
       assertSame(
         assertThrows(
           () =>
-            validateDecisionFragments(
-              productionManifest(),
-              { UL3: incompleteCode },
-              {
-                allowPendingReview: true,
-                requireCompleteCodes: ['UL3'],
-              },
-            ),
+            validateDecisionFragments(productionManifest(), { UL3: incompleteCode }, {
+              allowPendingReview: true,
+              requireCompleteCodes: ['UL3'],
+            }),
           Es2015ProvenanceError,
         ).message,
         'UL3 must contain reviewed decisions for every ledger path',
@@ -1577,9 +1401,9 @@ export default [
         ],
       });
       const selected = new Set(['test/language/reviewed-core.js']);
-      const selectedResults = singleExecutionResult(
-        'test/language/reviewed-core.js',
-      );
+      const selectedResults = new Map([
+        ['test/language/reviewed-core.js', passedExecution('test/language/reviewed-core.js')],
+      ]);
       const withoutReviewed = classifyEs2015Inventory({
         policy: classificationPolicy(),
         anchors: classificationAnchors(),
@@ -1656,13 +1480,11 @@ export default [
         anchors: classificationAnchors(),
         inventory,
         selected: new Set([corePath]),
-        selectedResults: singleExecutionResult(corePath),
-        auditResults: singleExecutionResult(annexPath),
+        selectedResults: new Map([[corePath, passedExecution(corePath)]]),
+        auditResults: new Map([[annexPath, passedExecution(annexPath)]]),
         reviewedProvenance: reviewed,
       });
-      const byPath = new Map(
-        classifications.map((record) => [record.path, record]),
-      );
+      const byPath = new Map(classifications.map((record) => [record.path, record]));
 
       assertSame(
         json([
@@ -1696,9 +1518,7 @@ export default [
             path: corePath,
             partition: 'core',
             status: 'selected-passing',
-            provenance: [
-              `review:UL3:${reviewed.get(corePath)?.artifactSha256}`,
-            ],
+            provenance: [`review:UL3:${reviewed.get(corePath)?.artifactSha256}`],
           },
           {
             path: annexPath,
@@ -1713,9 +1533,7 @@ export default [
             path: laterPath,
             partition: 'later-or-non-es2015',
             status: 'later-or-non-es2015',
-            provenance: [
-              `review:UB:${reviewed.get(laterPath)?.artifactSha256}`,
-            ],
+            provenance: [`review:UB:${reviewed.get(laterPath)?.artifactSha256}`],
           },
           {
             path: 'test/language/untouched.js',
@@ -1833,7 +1651,7 @@ export default [
                 },
               ],
             }),
-            auditResults: singleExecutionResult(statusPath),
+            auditResults: new Map([[statusPath, passedExecution(statusPath)]]),
             reviewedProvenance: reviewedProvenanceStub({
               code: 'US1',
               path: statusPath,
@@ -1870,7 +1688,7 @@ export default [
                 },
               ],
             }),
-            auditResults: singleExecutionResult(priorClassPath),
+            auditResults: new Map([[priorClassPath, passedExecution(priorClassPath)]]),
             reviewedProvenance: reviewedProvenanceStub({
               code: 'US2',
               path: priorClassPath,
@@ -1905,10 +1723,7 @@ export default [
       assertSame(initialUaBody.includes('Dependencies: U0.'), true);
       assertSame(initialUaBody.includes('Dependencies: U0 (#'), false);
       assertSame(initialU0Body.includes('Dependencies: none.'), true);
-      assertSame(
-        initialUlBody.includes('Dependencies: UL1, UL2, UL3, UL4.'),
-        true,
-      );
+      assertSame(initialUlBody.includes('Dependencies: UL1, UL2, UL3, UL4.'), true);
       assertSame(initialUlBody.includes('Dependencies: UL1 (#'), false);
       assertSame(initialUaBody.includes('Parent: T1 / #75.'), true);
       assertSame(initialU0Body.includes('Parent: T1 / #75.'), true);
@@ -1920,26 +1735,10 @@ export default [
     run: () => {
       const manifest = productionManifest();
       const uaLedger = renderBatchLedger(manifest, 'UA');
-      const uaBody = renderProvenanceIssueBody(
-        manifest,
-        'UA',
-        COMPLETE_ISSUE_MAP,
-      );
-      const u0Body = renderProvenanceIssueBody(
-        manifest,
-        'U0',
-        COMPLETE_ISSUE_MAP,
-      );
-      const ulBody = renderProvenanceIssueBody(
-        manifest,
-        'UL',
-        COMPLETE_ISSUE_MAP,
-      );
-      const usBody = renderProvenanceIssueBody(
-        manifest,
-        'US',
-        COMPLETE_ISSUE_MAP,
-      );
+      const uaBody = renderProvenanceIssueBody(manifest, 'UA', COMPLETE_ISSUE_MAP);
+      const u0Body = renderProvenanceIssueBody(manifest, 'U0', COMPLETE_ISSUE_MAP);
+      const ulBody = renderProvenanceIssueBody(manifest, 'UL', COMPLETE_ISSUE_MAP);
+      const usBody = renderProvenanceIssueBody(manifest, 'US', COMPLETE_ISSUE_MAP);
 
       for (const [code, body] of [
         ['UA', uaBody],
@@ -1947,11 +1746,7 @@ export default [
         ['UL', ulBody],
         ['US', usBody],
       ]) {
-        assertSame(
-          body.endsWith('\n'),
-          true,
-          `${code} body must end with a newline`,
-        );
+        assertSame(body.endsWith('\n'), true, `${code} body must end with a newline`);
       }
 
       assertSame(uaLedger.endsWith('\n'), true);
@@ -1975,71 +1770,24 @@ export default [
         ),
         true,
       );
-      assertSame(
-        uaBody.includes(
-          `Test262 pin: ${TEST262_REPOSITORY} @ ${TEST262_REVISION}`,
-        ),
-        true,
-      );
-      assertSame(
-        uaBody.includes(
-          `Sixth Edition pin: ${SPECIFICATION_SOURCE} @ ${SPECIFICATION_SHA256}`,
-        ),
-        true,
-      );
+      assertSame(uaBody.includes(`Test262 pin: ${TEST262_REPOSITORY} @ ${TEST262_REVISION}`), true);
+      assertSame(uaBody.includes(`Sixth Edition pin: ${SPECIFICATION_SOURCE} @ ${SPECIFICATION_SHA256}`), true);
       assertSame(uaBody.includes('Scope: Annex B'), true);
-      assertSame(
-        uaBody.includes(
-          'Non-goals: guest runtime behavior, tools/test262/features.json, and broad selection changes.',
-        ),
-        true,
-      );
-      assertSame(
-        uaBody.includes('History alone never establishes edition evidence.'),
-        true,
-      );
-      assertSame(
-        uaBody.includes('Guest production changes are prohibited.'),
-        true,
-      );
-      assertSame(
-        uaBody.includes(
-          'Independent specification review and independent quality/provenance review are required.',
-        ),
-        true,
-      );
-      assertSame(
-        uaBody.includes('Generate artifacts and timestamps with TZ=UTC.'),
-        true,
-      );
-      assertSame(
-        uaBody.includes(
-          'Local Test262 commands are limited to metadata/audit checks or exact targeted paths only.',
-        ),
-        true,
-      );
+      assertSame(uaBody.includes('Non-goals: guest runtime behavior, tools/test262/features.json, and broad selection changes.'), true);
+      assertSame(uaBody.includes('History alone never establishes edition evidence.'), true);
+      assertSame(uaBody.includes('Guest production changes are prohibited.'), true);
+      assertSame(uaBody.includes('Independent specification review and independent quality/provenance review are required.'), true);
+      assertSame(uaBody.includes('Generate artifacts and timestamps with TZ=UTC.'), true);
+      assertSame(uaBody.includes('Local Test262 commands are limited to metadata/audit checks or exact targeted paths only.'), true);
       assertSame(uaBody.includes('Require exact-head CI before merge.'), true);
-      assertSame(
-        uaBody.includes('Require exact-head CodeQL before merge.'),
-        true,
-      );
+      assertSame(uaBody.includes('Require exact-head CodeQL before merge.'), true);
       assertSame(uaBody.includes('Dependencies: U0 (#100).'), true);
       assertSame(uaBody.includes('Parent: T1 / #75.'), true);
       assertSame(u0Body.includes('zero classification decisions'), true);
       assertSame(ulBody.includes('owns no commit'), true);
-      assertSame(
-        ulBody.includes(
-          'Dependencies: UL1 (#104), UL2 (#105), UL3 (#106), UL4 (#107).',
-        ),
-        true,
-      );
+      assertSame(ulBody.includes('Dependencies: UL1 (#104), UL2 (#105), UL3 (#106), UL4 (#107).'), true);
       assertSame(usBody.includes('owns no commit'), true);
-      assertSame(
-        usBody.includes(
-          'Dependencies: US1 (#109), US2 (#110), US3 (#111), US4 (#112), US5 (#113), US6 (#114), US7 (#115).',
-        ),
-        true,
-      );
+      assertSame(usBody.includes('Dependencies: US1 (#109), US2 (#110), US3 (#111), US4 (#112), US5 (#113), US6 (#114), US7 (#115).'), true);
 
       assertSame(
         assertThrows(
@@ -2086,10 +1834,7 @@ export default [
       );
 
       const nonUtc = await rejected(() =>
-        provenanceCheck(
-          [],
-          provenanceCheckDependencies({ timezone: 'America/Los_Angeles' }),
-        ),
+        provenanceCheck([], provenanceCheckDependencies({ timezone: 'America/Los_Angeles' })),
       );
       assertSame(nonUtc instanceof Es2015ProvenanceCheckError, true);
       assertSame(nonUtc.message.includes('UTC'), true);
@@ -2127,18 +1872,9 @@ export default [
     name: 'ES2015 provenance CLI initializes the exact manifest and empty fragments',
     run: async () => {
       const dependencies = provenanceCheckDependencies({
-        files: new Map([
-          [
-            TAXONOMY_PATH,
-            readFileSyncText(
-              new URL(
-                '../../tools/test262/es2015-taxonomy.json',
-                import.meta.url,
-              ),
-              'utf8',
-            ),
-          ],
-        ]),
+        files: new Map(
+          [[TAXONOMY_PATH, fs.readFileSync(new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url), 'utf8')]],
+        ),
         decisionDirectoryEntries: [],
       });
       assertSame(await provenanceCheck(['--initialize'], dependencies), 0);
@@ -2149,9 +1885,7 @@ export default [
       );
       for (const code of ES2015_PROVENANCE_DECISION_CODES) {
         assertSame(
-          dependencies.files.get(
-            `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
-          ),
+          dependencies.files.get(`${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`),
           emptyDecisionFragmentText(productionManifest(), code),
         );
       }
@@ -2160,17 +1894,12 @@ export default [
   {
     name: 'ES2015 provenance CLI check rejects missing or extra files, reports drift paths, and requires complete fragments',
     run: async () => {
-      assertSame(
-        await provenanceCheck(['--check'], provenanceCheckDependencies()),
-        0,
-      );
+      assertSame(await provenanceCheck(['--check'], provenanceCheckDependencies()), 0);
 
       const drift = provenanceCheckDependencies({
         files: new Map([[ES2015_PROVENANCE_FILE, 'drift\n']]),
       });
-      const driftError = await rejected(() =>
-        provenanceCheck(['--check'], drift),
-      );
+      const driftError = await rejected(() => provenanceCheck(['--check'], drift));
       assertSame(driftError instanceof Es2015ProvenanceCheckError, true);
       assertSame(
         driftError.message,
@@ -2183,9 +1912,7 @@ export default [
         ).map((code) => `${code}.json`),
       });
       missing.files.delete(`${PROVENANCE_DECISIONS_DIRECTORY}/US7.json`);
-      const missingError = await rejected(() =>
-        provenanceCheck(['--check'], missing),
-      );
+      const missingError = await rejected(() => provenanceCheck(['--check'], missing));
       assertSame(missingError instanceof Es2015ProvenanceCheckError, true);
       assertSame(
         missingError.message,
@@ -2198,9 +1925,7 @@ export default [
           'UX.json',
         ],
       });
-      const extraError = await rejected(() =>
-        provenanceCheck(['--check'], extra),
-      );
+      const extraError = await rejected(() => provenanceCheck(['--check'], extra));
       assertSame(extraError instanceof Es2015ProvenanceCheckError, true);
       assertSame(
         extraError.message,
@@ -2223,10 +1948,7 @@ export default [
       );
 
       const incompleteError = await rejected(() =>
-        provenanceCheck(
-          ['--check', '--complete=UA'],
-          provenanceCheckDependencies(),
-        ),
+        provenanceCheck(['--check', '--complete=UA'], provenanceCheckDependencies()),
       );
       assertSame(incompleteError instanceof Es2015ProvenanceCheckError, true);
       assertSame(
@@ -2274,22 +1996,13 @@ export default [
         0,
       );
       const initialUaOutput = initialUaDependencies.outputs.stdout.join('');
-      assertSame(
-        initialUaOutput,
-        renderProvenanceIssueBody(productionManifest(), 'UA'),
-      );
+      assertSame(initialUaOutput, renderProvenanceIssueBody(productionManifest(), 'UA'));
       const repeatedInitialUaDependencies = provenanceCheckDependencies();
       assertSame(
-        await provenanceCheck(
-          ['--render-issue=UA'],
-          repeatedInitialUaDependencies,
-        ),
+        await provenanceCheck(['--render-issue=UA'], repeatedInitialUaDependencies),
         0,
       );
-      assertSame(
-        repeatedInitialUaDependencies.outputs.stdout.join(''),
-        initialUaOutput,
-      );
+      assertSame(repeatedInitialUaDependencies.outputs.stdout.join(''), initialUaOutput);
 
       const issueDependencies = provenanceCheckDependencies({
         files: new Map([[ISSUE_MAP_PATH, json(COMPLETE_ISSUE_MAP)]]),
@@ -2303,11 +2016,7 @@ export default [
       );
       assertSame(
         issueDependencies.outputs.stdout.join(''),
-        renderProvenanceIssueBody(
-          productionManifest(),
-          'UA',
-          COMPLETE_ISSUE_MAP,
-        ),
+        renderProvenanceIssueBody(productionManifest(), 'UA', COMPLETE_ISSUE_MAP),
       );
 
       const incompleteIssueMap = provenanceCheckDependencies({
@@ -2334,10 +2043,7 @@ export default [
         ),
       );
       assertSame(extraIssueError instanceof Es2015ProvenanceCheckError, true);
-      assertSame(
-        extraIssueError.message,
-        'Issue map contains unapproved code UX',
-      );
+      assertSame(extraIssueError.message, 'Issue map contains unapproved code UX');
     },
   },
 ];

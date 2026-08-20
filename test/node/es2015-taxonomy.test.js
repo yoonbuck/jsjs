@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import * as fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
@@ -28,10 +28,6 @@ const FIXTURE_ROOT = new URL('../fixtures/es2015-taxonomy/', import.meta.url);
 const PHYSICAL_FIXTURE_PATHS = new Map([
   ['test/language/malformed.js', 'test/language/malformed.js.txt'],
 ]);
-const readFileSyncText =
-  /** @type {(path: URL, encoding: string) => string} */ (
-    /** @type {any} */ (fs).readFileSync
-  );
 const POLICY = JSON.stringify({
   version: 1,
   repository: 'https://github.com/tc39/test262.git',
@@ -166,9 +162,7 @@ function auditEvidence(options = {}) {
 
 const AUDIT_EVIDENCE = auditEvidence();
 const EXACT_PATHS_FILE = '/absolute/exact.paths.txt';
-const PROVENANCE_DECISIONS_DIRECTORY =
-  'tools/test262/es2015-provenance-decisions';
-/** @type {ReturnType<typeof buildProvenanceFoundation> | undefined} */
+const PROVENANCE_DECISIONS_DIRECTORY = 'tools/test262/es2015-provenance-decisions';
 let cachedApprovedProvenanceManifest;
 
 /** @param {string} text */
@@ -198,13 +192,13 @@ function approvedProvenanceManifest() {
     return cachedApprovedProvenanceManifest;
   }
   const taxonomy = JSON.parse(
-    readFileSyncText(
+    readFileSync(
       new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
       'utf8',
     ),
   );
   cachedApprovedProvenanceManifest = buildProvenanceFoundation(
-    taxonomy.classifications.map((/** @type {any} */ record) => ({
+    taxonomy.classifications.map((record) => ({
       path: record.path,
       variants: record.variants,
       partition: record.partition,
@@ -216,17 +210,13 @@ function approvedProvenanceManifest() {
 
 function provenanceFixtureFiles() {
   const manifest = approvedProvenanceManifest();
-  /** @type {Map<string, string>} */
-  const files = new Map([
+  return new Map([
     [ES2015_PROVENANCE_FILE, `${JSON.stringify(manifest, null, 2)}\n`],
-  ]);
-  for (const code of ES2015_PROVENANCE_DECISION_CODES) {
-    files.set(
+    ...ES2015_PROVENANCE_DECISION_CODES.map((code) => [
       `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
       emptyDecisionFragmentText(manifest, code),
-    );
-  }
-  return files;
+    ]),
+  ]);
 }
 
 const AUDIT_PROMOTION = JSON.stringify({
@@ -581,9 +571,7 @@ function auditDependencies(options = {}) {
       (async () => {
         const value = files.get(ES2015_PROVENANCE_FILE);
         if (value === undefined) {
-          const error = new Error(
-            `missing fixture file ${ES2015_PROVENANCE_FILE}`,
-          );
+          const error = new Error(`missing fixture file ${ES2015_PROVENANCE_FILE}`);
           Object.assign(error, { code: 'ENOENT' });
           throw error;
         }
@@ -907,10 +895,8 @@ export default [
               new Map([
                 [
                   'UA',
-                  /** @type {string} */ (
-                    provenanceFiles.get(
-                      `${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`,
-                    )
+                  provenanceFiles.get(
+                    `${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`,
                   ),
                 ],
               ]),
@@ -1127,9 +1113,7 @@ export default [
       const mismatch = auditDependencies({
         subset: AUDIT_PROMOTION_SUBSET,
         promotion: AUDIT_PROMOTION,
-        pathFiles: new Map([
-          ['wrong-ledger.txt', 'test/language/selected.js\n'],
-        ]),
+        pathFiles: new Map([['wrong-ledger.txt', 'test/language/selected.js\n']]),
         runPromotion: async () => AUDIT_RECORDS,
       });
       const error = await rejected(() =>
