@@ -246,11 +246,12 @@ probe must also prove that GitHub evaluates the distinct name for a job skipped
 by its job-level `if`. No context containing `(inactive` may ever be selected
 for branch protection; those always-green skipped contexts are diagnostic only.
 
-The guard also uses job-level concurrency keyed only by the server-provided PR
-number, with `cancel-in-progress: true`. A body edit or synchronize event must
-cancel an older guard before the older run can finish after newer range or
-marker data and become the apparent current result. A cancelled run is
-non-satisfying; the final event's active run must complete successfully.
+The guard also uses job-level concurrency with a fixed
+`provenance-base-guard-` prefix followed only by the server-provided PR number
+and `cancel-in-progress: true`. A body edit or synchronize event must cancel an
+older guard before the older run can finish after newer range or marker data and
+become the apparent current result. A cancelled run is non-satisfying; the final
+event's active run must complete successfully.
 
 Every existing job also receives the job-level condition
 `github.event_name != 'pull_request_target'`. The guard receives
@@ -271,7 +272,7 @@ The dedicated job has no dependencies on other jobs, runs on explicit
 `ubuntu-24.04`, has a five-minute timeout, and performs only these operations:
 
 1. Pass the server event's base repository, workflow repository, base ref, base
-   SHA, head SHA, and PR number through environment variables to one fixed
+   SHA, head SHA, and PR number through step environment variables to one fixed
    single-line shell command. Before any checkout or fetch, require:
 
    - base repository exactly `yoonbuck/jsjs`;
@@ -279,6 +280,10 @@ The dedicated job has no dependencies on other jobs, runs on explicit
    - base ref exactly `main`;
    - base and head identities each match `^[0-9a-f]{40}$`; and
    - PR number matches `^[1-9][0-9]*$`.
+
+   The plain-scalar-safe command performs these regex checks with fixed
+   `printf`/`grep -Eq` pipelines rather than beginning a YAML scalar with shell
+   bracket syntax.
 
    These checks make the guard authoritative only for PRs targeting canonical
    protected main. Retargeting to any other base repository or branch fails
@@ -334,20 +339,23 @@ variable and applies the exact one-marker parser. A neutral range with no
 marker and no base-owned provenance path returns success; a provenance-owned
 range without one authoritative marker fails closed.
 
-The job maps event values to environment variables exactly as follows:
+The workflow maps values through per-step `env`, never job-level `env`, and only
+to the steps that consume them:
 
-| Environment variable | Trusted expression |
-| --- | --- |
-| `BASE_REPOSITORY` | `${{ github.event.pull_request.base.repo.full_name }}` |
-| `WORKFLOW_REPOSITORY` | `${{ github.repository }}` |
-| `BASE_REF` | `${{ github.event.pull_request.base.ref }}` |
-| `BASE_SHA` | `${{ github.event.pull_request.base.sha }}` |
-| `HEAD_SHA` | `${{ github.event.pull_request.head.sha }}` |
-| `PR_NUMBER` | `${{ github.event.pull_request.number }}` |
-| `PR_BODY` | `${{ github.event.pull_request.body }}` |
+| Environment variable | Trusted value | Step consumers |
+| --- | --- | --- |
+| `BASE_REPOSITORY` | `${{ github.event.pull_request.base.repo.full_name }}` | canonical-target validation only |
+| `WORKFLOW_REPOSITORY` | `${{ github.repository }}` | canonical-target validation only |
+| `BASE_REF` | `${{ github.event.pull_request.base.ref }}` | canonical-target validation only |
+| `BASE_SHA` | `${{ github.event.pull_request.base.sha }}` | canonical-target validation, checkout-HEAD attestation, checker |
+| `HEAD_SHA` | `${{ github.event.pull_request.head.sha }}` | canonical-target validation, fetched-HEAD attestation, checker |
+| `PR_NUMBER` | `${{ github.event.pull_request.number }}` | canonical-target validation, advertised-ref fetch, fetched-HEAD attestation |
+| `PR_BODY` | `${{ github.event.pull_request.body }}` | checker only |
+| `TZ` | fixed literal `UTC` | checker only |
 
 No head repository, branch name, clone URL, or other PR-controlled string is
-mapped into an action input or shell command.
+mapped into an action input or shell command. In particular, the untrusted PR
+body is unavailable to checkout, setup, validation, fetch, and attestation.
 
 The unauthenticated advertised-ref fetch depends on `yoonbuck/jsjs` remaining
 public. If repository visibility changes, the guard fails closed. Restoring it
@@ -399,6 +407,15 @@ parse the generated YAML and require each new `run`, `with`, and `env` value to
 round-trip exactly. Existing jobs retain their current steps, dependencies,
 action pins, commands, environments, and ordinary-event names.
 
+The generator adds a byte-preserving plain-scalar assertion for every job
+`name` and step `run` value. It rejects CR/LF, colon followed by space, space
+followed by `#`, and a first character that YAML reserves as a plain-scalar
+indicator (`-`, `?`, `:`, comma, brackets, braces, `#`, `&`, `*`, `!`, `|`,
+`>`, apostrophe, quotation mark, `%`, `@`, or grave accent). Guard commands use
+colon-free diagnostics and safe leading words such as `test`, `printf`, `git`,
+and `node`. This adds validation without quoting or otherwise changing existing
+generated workflow bytes.
+
 The base checker needs exactly two narrow changes:
 
 - accept `GITHUB_EVENT_NAME` equal to `pull_request_target` in addition to
@@ -432,6 +449,10 @@ YAML, not merely the generator objects:
   advertised base-repository PR-ref fetch, fetched-ref and `FETCH_HEAD`
   equality with the event head SHA, checker command, timeout, and exact
   event-derived environment values;
+- `TZ: UTC` appears only on the checker step, and `PR_BODY` is unavailable to
+  every other step;
+- all generated job names and run strings satisfy the explicit YAML
+  plain-scalar validator and round-trip through the parser unchanged;
 - fork-shaped event identities in which the head repository differs from the
   base repository, proving the fetch still uses only the base checkout's
   `origin` and `refs/pull/<number>/head`;
