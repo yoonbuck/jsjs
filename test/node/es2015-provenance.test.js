@@ -34,66 +34,79 @@ const APPROVED_PRODUCTION_FOUNDATION = Object.freeze({
       rootCount: 314,
       variantCount: 323,
       pathSha256: 'd29150e412486095bac0103f5d7e913917269870a9769cd8343a5cc9638af98e',
+      entryLedgerSha256: 'a6664c97c45fd047a4d136b62f2121b630fa742c6e21594111457e367d88cc09',
     }),
     UB: Object.freeze({
       rootCount: 32,
       variantCount: 64,
       pathSha256: '4e21b1884213e2831ffe58fb5c5128f17d417168aeabeac3c3817f8f6350623a',
+      entryLedgerSha256: '99441828b25381a9ce86cbad7bdaaeb612100d2425990f0689f08bf6f7059a1a',
     }),
     UL1: Object.freeze({
       rootCount: 434,
       variantCount: 835,
       pathSha256: '1bad4b5aed5f665cfcd270a57c90553b1fe4a1dabb1334fa950527b1113b937a',
+      entryLedgerSha256: 'f5044351e9319bacd6d07fdbb4f6eb995f87ab7a2c307893fbd173fcacf9b1f5',
     }),
     UL2: Object.freeze({
       rootCount: 182,
       variantCount: 364,
       pathSha256: 'b5e8412e46d0bb2d976de247d312269b9ac34fa9cda77d15a2aa11c1eb0abb45',
+      entryLedgerSha256: '2516f31b492778b05737a34c24aead5520ba0804b824c4fb0af54b49fca75640',
     }),
     UL3: Object.freeze({
       rootCount: 109,
       variantCount: 212,
       pathSha256: 'af158f399b1827dd2012030fbec2fdbbb28f184c011a310550928eb718dca406',
+      entryLedgerSha256: '4b4543298d376734ef7a58ce6eb2a84ed1b0997a588e509ec25a36705378c6e8',
     }),
     UL4: Object.freeze({
       rootCount: 48,
       variantCount: 48,
       pathSha256: '9316f73cad2c6608ad14d6e837e5383100bb2ebd0a4feb2ba9f198ee35e5d3ac',
+      entryLedgerSha256: '4ecb3fa2541b0ba3932c61bd5b92d3a137561202036b6009bfbdf2f25a997b58',
     }),
     US1: Object.freeze({
       rootCount: 210,
       variantCount: 406,
       pathSha256: '63ff657590ebb5aa167c19975344817789a9a67b820ce0092f990376afa873f7',
+      entryLedgerSha256: 'f1ef59740d3a9cbae631e0c65cd7d4aa24bd6619129d76179ca7d32e795b184f',
     }),
     US2: Object.freeze({
       rootCount: 176,
       variantCount: 352,
       pathSha256: '3b3db618ae579287c0cbe5a77124c883c3129395bf83fe7523dc1f32e3fe7d15',
+      entryLedgerSha256: '5acbdcb3fdaf4e9fc95a157aac51e20041cc38b47de8717d655eb9b32e5cbfdb',
     }),
     US3: Object.freeze({
       rootCount: 99,
       variantCount: 190,
       pathSha256: '42d21ddbd59de80f8c14b1508c3502c8c0bc023061ff24c16160f1bfaec7daa1',
+      entryLedgerSha256: '06922dfb4dc6fa2d2e07e7bcbf8364fcd8fc943921820a15c057b17e55fb8528',
     }),
     US4: Object.freeze({
       rootCount: 176,
       variantCount: 318,
       pathSha256: '19bc8b322158aa59af8d0b5efd38cf58885be50fdb6394b56cc94a2b94754c0b',
+      entryLedgerSha256: 'e548e96a5d68e6117c454d0117831f81445d0eec93f7b873ea82a6d7673a7d66',
     }),
     US5: Object.freeze({
       rootCount: 306,
       variantCount: 540,
       pathSha256: 'fdc5ed38ef91366ee6bd9f8aa8d49917b5d9bbc2746cfd62a50f22a22cd03df5',
+      entryLedgerSha256: '87d0388e420d5ffdde58c81705b19daca1d3488e3de4330b1cc8e9ad63bd36f0',
     }),
     US6: Object.freeze({
       rootCount: 48,
       variantCount: 89,
       pathSha256: '90dfecd04460d739d4a7242b6ff14c4ef83abcf3e73d7893b392138372ce1cf1',
+      entryLedgerSha256: 'c7c524d8b8cd8f0094f631be7d16abcc7f946db86546aaf6339d9cd9853d6a16',
     }),
     US7: Object.freeze({
       rootCount: 178,
       variantCount: 313,
       pathSha256: '1e2cda5adef593ae134f0ab0e759091f57522821460c904c7f44c4217c891e28',
+      entryLedgerSha256: '6fa9daa7322394f0f96b754ef6674ccb80b916cd4209c2308f7591eaf46f7e23',
     }),
   }),
 });
@@ -106,6 +119,14 @@ function json(value) {
 /** @param {string} text */
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
+}
+
+function entryLedgerText(entries) {
+  return `${entries.map((entry) => json([entry.path, entry.variants, entry.priorClass])).join('\n')}\n`;
+}
+
+function entryLedgerSha256(entries) {
+  return sha256(entryLedgerText(entries));
 }
 
 /** @param {unknown} value */
@@ -187,6 +208,13 @@ function productionManifest() {
   return buildProvenanceFoundation(productionClassifications());
 }
 
+function refreshBatchLedger(batch) {
+  batch.rootCount = batch.entries.length;
+  batch.variantCount = batch.entries.reduce((sum, entry) => sum + entry.variants, 0);
+  batch.pathSha256 = sha256(`${batch.entries.map((entry) => entry.path).join('\n')}\n`);
+  batch.entryLedgerSha256 = entryLedgerSha256(batch.entries);
+}
+
 function findNonUl3BatchEntry(manifest) {
   for (const batch of manifest.batches) {
     if (batch.code === 'UL3') continue;
@@ -220,6 +248,7 @@ function findVariantRedistributionPair(manifest) {
 }
 
 function tamperedPriorClassManifest() {
+  const classifications = clone(productionClassifications());
   const manifest = clone(productionManifest());
   const target = findNonUl3BatchEntry(manifest);
   const batch = manifest.batches.find((entry) => entry.code === target.code);
@@ -228,14 +257,25 @@ function tamperedPriorClassManifest() {
     throw new Error('expected a production manifest entry to mutate priorClass');
   }
   entry.priorClass = `${entry.priorClass}:tampered`;
+  if (batch === undefined) {
+    throw new Error('expected a production manifest batch to mutate priorClass');
+  }
+  refreshBatchLedger(batch);
+  const classification = classifications.find((record) => record.path === target.path);
+  if (classification === undefined) {
+    throw new Error('expected a production classification to mutate priorClass');
+  }
+  classification.finalClass = `${classification.finalClass}:tampered`;
   return {
     manifest,
+    classifications,
     code: target.code,
     path: target.path,
   };
 }
 
 function redistributedVariantsManifest() {
+  const classifications = clone(productionClassifications());
   const manifest = clone(productionManifest());
   const target = findVariantRedistributionPair(manifest);
   const batch = manifest.batches.find((entry) => entry.code === target.code);
@@ -246,8 +286,24 @@ function redistributedVariantsManifest() {
   }
   source.variants -= 1;
   destination.variants += 1;
+  if (batch === undefined) {
+    throw new Error('expected a production manifest batch to redistribute variants');
+  }
+  refreshBatchLedger(batch);
+  const sourceClassification = classifications.find(
+    (record) => record.path === target.sourcePath,
+  );
+  const destinationClassification = classifications.find(
+    (record) => record.path === target.targetPath,
+  );
+  if (sourceClassification === undefined || destinationClassification === undefined) {
+    throw new Error('expected production classifications to redistribute variants');
+  }
+  sourceClassification.variants -= 1;
+  destinationClassification.variants += 1;
   return {
     manifest,
+    classifications,
     code: target.code,
     path: target.sourcePath,
   };
@@ -589,7 +645,7 @@ export default [
           () => validateProvenanceFoundation(missingBase, classifications),
           Es2015ProvenanceError,
         ).message,
-        `Base ledger is missing path ${removedBase}`,
+        `UA batch ledger has unexpected non-base path ${removedBase}`,
       );
 
       const unexpectedBase = clone(manifest);
@@ -607,7 +663,7 @@ export default [
           () => validateProvenanceFoundation(unexpectedBase, classifications),
           Es2015ProvenanceError,
         ).message,
-        'Base ledger has unexpected path test/annexB/unexpected.js',
+        'Base path test/annexB/unexpected.js does not appear in any provenance batch',
       );
 
       const wrongBatchRoots = clone(manifest);
@@ -662,8 +718,14 @@ export default [
     },
   },
   {
-    name: 'ES2015 provenance locks the immutable production foundation',
+    name: 'ES2015 provenance pins immutable production entry ledgers without host filesystem reads',
     run: () => {
+      const moduleSource = fs.readFileSync(
+        new URL('../../tools/test262/es2015-provenance.js', import.meta.url),
+        'utf8',
+      );
+      assertSame(moduleSource.includes('node:fs'), false);
+
       const classifications = productionClassifications();
       const manifest = productionManifest();
       validateProvenanceFoundation(manifest, classifications);
@@ -693,6 +755,16 @@ export default [
           batch.pathSha256,
           expected.pathSha256,
           `${code} path hash must stay immutable`,
+        );
+        assertSame(
+          batch.entryLedgerSha256,
+          expected.entryLedgerSha256,
+          `${code} entry ledger hash must stay immutable`,
+        );
+        assertSame(
+          entryLedgerSha256(batch.entries),
+          expected.entryLedgerSha256,
+          `${code} checked-in taxonomy must derive the pinned entry ledger hash`,
         );
       }
 
@@ -919,7 +991,18 @@ export default [
       );
       const tamperedPriorClass = tamperedPriorClassManifest();
       const priorClassMessage =
-        `${tamperedPriorClass.code} prior class for ${tamperedPriorClass.path} does not match the approved immutable ledger`;
+        `${tamperedPriorClass.code} entry ledger SHA-256 does not match the approved immutable ledger`;
+      assertSame(
+        assertThrows(
+          () =>
+            validateProvenanceFoundation(
+              tamperedPriorClass.manifest,
+              tamperedPriorClass.classifications,
+            ),
+          Es2015ProvenanceError,
+        ).message,
+        priorClassMessage,
+      );
       assertSame(
         assertThrows(
           () =>
@@ -952,7 +1035,18 @@ export default [
 
       const redistributedVariants = redistributedVariantsManifest();
       const variantMessage =
-        `${redistributedVariants.code} variant count for ${redistributedVariants.path} does not match the approved immutable ledger`;
+        `${redistributedVariants.code} entry ledger SHA-256 does not match the approved immutable ledger`;
+      assertSame(
+        assertThrows(
+          () =>
+            validateProvenanceFoundation(
+              redistributedVariants.manifest,
+              redistributedVariants.classifications,
+            ),
+          Es2015ProvenanceError,
+        ).message,
+        variantMessage,
+      );
       assertSame(
         assertThrows(
           () =>
