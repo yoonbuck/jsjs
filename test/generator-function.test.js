@@ -134,6 +134,148 @@ const tests = [
     },
   },
   {
+    name: 'dynamic GeneratorFunction normal calls expose undefined new.target on first resume',
+    run() {
+      assertNormal(
+        run(`
+          var GeneratorFunction = function* () {}.constructor;
+          var g = GeneratorFunction('yield new.target;');
+          var first = g().next();
+          first.value === undefined && first.done === false;
+        `),
+        true,
+      );
+    },
+  },
+  {
+    name: 'generator declaration and method parameter defaults evaluate new.target at call time',
+    run() {
+      assertNormal(
+        run(`
+          var log = '';
+          function* declaration(value = (log += 'd', new.target)) {
+            log += 'D';
+            yield value;
+          }
+          var object = {
+            *method(value = (log += 'm', new.target)) {
+              log += 'M';
+              yield value;
+            }
+          };
+          var declarationIterator = declaration();
+          var afterDeclarationCall = log;
+          var declarationFirst = declarationIterator.next();
+          var methodIterator = object.method();
+          var afterMethodCall = log;
+          var methodFirst = methodIterator.next();
+          [
+            afterDeclarationCall,
+            declarationFirst.value === undefined,
+            declarationFirst.done,
+            afterMethodCall,
+            methodFirst.value === undefined,
+            methodFirst.done,
+            log
+          ].join(':');
+        `),
+        'd:true:false:dDm:true:false:dDmM',
+      );
+    },
+  },
+  {
+    name: 'dynamic GeneratorFunction parameter defaults instantiate at call time with undefined new.target',
+    run() {
+      assertNormal(
+        run(`
+          var log = '';
+          var GeneratorFunction = function* () {}.constructor;
+          var g = GeneratorFunction(
+            'value = (log += "p", new.target)',
+            'log += "b"; yield value;'
+          );
+          var iterator = g();
+          var afterCall = log;
+          var first = iterator.next();
+          [
+            afterCall,
+            first.value === undefined,
+            first.done,
+            log
+          ].join(':');
+        `),
+        'p:true:false:pb',
+      );
+    },
+  },
+  {
+    name: 'generator resume retains the same function environment for new.target',
+    run() {
+      assertNormal(
+        run(`
+          function* g() {
+            yield 'pause';
+            yield new.target;
+          }
+          var iterator = g();
+          var first = iterator.next();
+          var second = iterator.next();
+          [
+            first.value,
+            first.done,
+            second.value === undefined,
+            second.done
+          ].join(':');
+        `),
+        'pause:false:true:false',
+      );
+    },
+  },
+  {
+    name: 'resumable generator expressions dispatch new.target without replacing the function environment',
+    run() {
+      assertNormal(
+        run(`
+          function* g() {
+            var observed = new.target || (yield 'resume');
+            yield observed;
+          }
+          var iterator = g();
+          var first = iterator.next();
+          var second = iterator.next('sent');
+          var third = iterator.next();
+          [
+            first.value,
+            first.done,
+            second.value,
+            second.done,
+            third.value === undefined,
+            third.done
+          ].join(':');
+        `),
+        'resume:false:sent:false:true:true',
+      );
+    },
+  },
+  {
+    name: 'generator functions remain non-constructible when their body references new.target',
+    run() {
+      assertNormal(
+        run(`
+          function* g() { yield new.target; }
+          var caught;
+          try {
+            new g();
+          } catch (error) {
+            caught = error.name;
+          }
+          caught;
+        `),
+        'TypeError',
+      );
+    },
+  },
+  {
     name: 'GeneratorFunction splits zero one and many arguments like Function',
     run() {
       assertNormal(

@@ -407,6 +407,113 @@ const tests = [
       );
     },
   },
+  {
+    name: 'direct eval in a parameter initializer and strict eval inherit new.target',
+    run() {
+      assertNormal(
+        run(`
+          function F(a = eval('new.target')) {
+            return [a, eval('"use strict"; new.target')];
+          }
+          var called = F();
+          var constructed = new F();
+          [
+            called[0] === undefined,
+            called[1] === undefined,
+            constructed[0] === F,
+            constructed[1] === F
+          ].join(':');
+        `),
+        'true:true:true:true',
+      );
+    },
+  },
+  {
+    name: 'direct eval inside a lexical arrow inherits the enclosing ordinary invocation new.target',
+    run() {
+      assertNormal(
+        run(`
+          function F() {
+            this.observed = (() => eval("new.target"))();
+          }
+          var called = F();
+          var constructed = new F();
+          [
+            called === undefined,
+            this.observed === undefined,
+            constructed.observed === F
+          ].join(':');
+        `),
+        'true:true:true',
+      );
+    },
+  },
+  {
+    name: 'direct eval inside a top-level lexical arrow rejects new.target with a realm-local SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, '(() => eval("new.target"))();'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'indirect eval rejects new.target with a realm-local SyntaxError',
+    run() {
+      const realm = createRealm();
+      assertGuestThrow(
+        runIn(realm, '(0, eval)("new.target");'),
+        'SyntaxError',
+        realm,
+      );
+    },
+  },
+  {
+    name: 'strict eval keeps a fresh lexical environment while retaining the caller function record',
+    run() {
+      assertNormal(
+        run(`
+          function F() {
+            var evalValue = eval(
+              '"use strict"; var strictVar = new.target; ' +
+              'let strictLex = strictVar; strictLex === F;'
+            );
+            this.result = evalValue + ':' + typeof strictVar;
+          }
+          new F().result;
+        `),
+        'true:undefined',
+      );
+    },
+  },
+  {
+    name: 'direct eval parse failures use the direct caller Realm SyntaxError',
+    run() {
+      const realmA = createRealm();
+      const realmB = createRealm();
+      const foreign = runIn(
+        realmA,
+        '(function foreignEvalParseFailure() { return eval("}"); })',
+      ).value;
+
+      realmB.globalObject.defineOwnProperty('foreignEvalParseFailure', {
+        value: foreign,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+
+      const completion = runIn(realmB, 'foreignEvalParseFailure();');
+      assertGuestThrow(completion, 'SyntaxError', realmA);
+      assertSame(
+        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+          realmB.intrinsics.syntaxErrorPrototype,
+        false,
+      );
+    },
+  },
 
   {
     name: 'direct eval var inside a catch block hoists into the enclosing function scope',
