@@ -125,6 +125,7 @@ the exact contract. The engine still rejects async functions/generators and
 | `npm run test:browser`                      | Every portable suite in headless Chromium via Playwright           |
 | `npm run test:jsc`                          | Every portable suite in the `jsc` shell                            |
 | `TZ=UTC npm run test262:modules`            | Focused pinned ES2015 static-module Test262 suite                  |
+| `TZ=UTC npm run test262:cross-realm`        | Immutable H0 cross-Realm harness corpus with reviewed dispositions |
 | `TZ=UTC npm run test262:es2015:audit:check` | Verify the pinned ES2015 taxonomy and exact promotion              |
 | `npm run typecheck`                         | `tsc` in checkJs mode                                              |
 | `npm run format`                            | Prettier `--check` over the repository                             |
@@ -164,6 +165,11 @@ feature-tag claim. See [docs/testing.md](docs/testing.md#deterministic-es2015-ta
 for its UTC, exact-pin, focused-local, and CI-authority rules. `npm run
 ci:contract` intentionally excludes every checkout-dependent upstream Test262
 execution; exact-SHA CI alone owns the broad pinned run.
+
+The focused cross-Realm H0 corpus is a Test262-harness-only capability check:
+it does not expose `$262` through the public runtime API or ordinary Realm
+globals. Its exact pass-only promotions and reviewed reassignment evidence are
+documented in [docs/testing.md](docs/testing.md#exact-h0-cross-realm-host-reconciliation-76).
 Conformance methodology, live coverage, and the detailed report are in
 [docs/conformance.md](docs/conformance.md).
 

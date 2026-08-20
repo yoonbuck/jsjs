@@ -50,6 +50,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `TZ=UTC npm run test262:es2015:provenance`                                     | Rebuild the immutable unknown-edition provenance foundation, create or canonicalize empty decision fragments, and refuse to overwrite any non-empty fragment                                                                    |
 | `TZ=UTC npm run test262:es2015:provenance:check`                               | Verify the checked-in unknown-edition provenance foundation and decision fragments without writing; metadata/hash-only and cannot call `runTest262Suite`                                                                        |
 | `TZ=UTC npm run test262:es2015:provenance:ledger -- --render-ledger=UA`        | Render the exact code-unit-sorted ledger for one atomic provenance batch code (`UA`, `UB`, `UL1`-`UL4`, `US1`-`US7`)                                                                                                            |
+| `TZ=UTC npm run test262:cross-realm`                                           | Execute only the immutable H0 cross-Realm harness corpus; complete roots promote and all remaining roots retain reviewed reassignment evidence                                                                                  |
 | `TZ=UTC npm run test262:es2015:audit`                                          | Rebuild the deterministic ES2015 taxonomy from the exact pinned checkout                                                                                                                                                        |
 | `TZ=UTC npm run test262:es2015:audit:check`                                    | Verify the checked-in ES2015 taxonomy and exact promotion provenance without writing                                                                                                                                            |
 | `TZ=UTC npm run test262:es2015:sync-promoted-report`                           | Rebuild report and coverage bytes from committed pre-promotion records plus immutable exact promotion evidence; never executes the broad subset                                                                                 |
@@ -472,6 +473,47 @@ The command accepts only that exact reviewed ledger for the pinned checkout;
 it is not permission to run the broad upstream subset locally. The stricter
 issue `#75` / U0 policy above prohibits this `--write-execution` command
 entirely for the unknown-edition provenance work.
+
+### Exact H0 cross-Realm host reconciliation (#76)
+
+Issue #76 preserved original issue base
+`54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7` separately from final PR base
+`8d75b48af2ee7ab04e7c5006980417227ec34568`. The final-base source taxonomy
+artifact, `h0-final-base-taxonomy.json`, has SHA-256
+`e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953`.
+Its core `test262-cross-realm-host` selector exactly matched the immutable H0
+ledger: 135 roots, 267 variants, SHA-256
+`3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950`.
+
+Run only the focused corpus when refreshing this evidence:
+
+```sh
+TZ=UTC npm run test262:cross-realm
+```
+
+`npm run test262:cross-realm` must run with `TZ=UTC`; it never invokes the
+broad upstream subset.
+
+The generated final disposition has 40 complete-root passes / 78 variants and
+95 reviewed reassignments / 189 variants (94 all-fail roots / 187 variants and
+one mixed root / two variants); its pass-plus-reassigned union is exactly the
+immutable 135-root / 267-variant ledger. The pass-only promotion has 40 roots,
+78 variants, and ledger SHA-256
+`17d850eaf79e80f0260f8332a2bc594d3492bb286084c51e87f06cd6ec8853a7`.
+After generation, the core `test262-cross-realm-host` selector is zero roots
+and zero variants.
+
+The reviewed artifact SHA-256 identities are owner map
+`d50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b`,
+disposition
+`a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857`,
+owner deltas
+`ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b`,
+and promotion
+`a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c`.
+This is Test262-harness-only host support: `$262` remains absent from public
+runtime APIs and normal Realm globals. B0 owns detachment; #76 removes the
+host blocker without claiming that all 135 roots semantically pass.
 
 ### Focused ES2015 syntax suite
 

@@ -665,6 +665,14 @@ function auditDependencies(options = {}) {
       writes.push(path);
       files.set(path, value);
     },
+    writeFilesAtomically: async (
+      /** @type {readonly { path: string, text: string }[]} */ artifacts,
+    ) => {
+      for (const artifact of artifacts) {
+        writes.push(artifact.path);
+        files.set(artifact.path, artifact.text);
+      }
+    },
     listRoots: async () => [...roots.keys()],
     readRoot: async (/** @type {string} */ path) => {
       const value = roots.get(path);
@@ -838,6 +846,94 @@ export default [
       });
       assertSame(await auditEs2015Taxonomy([], second), 0);
       assertSame(second.files.get(AUDIT_PATH), output);
+      const baselineCheck = auditDependencies({
+        files: new Map([
+          [AUDIT_PATH, output],
+          ['final-base-taxonomy.json', '{}\n'],
+        ]),
+      });
+      const missingH0 = await rejected(() =>
+        auditEs2015Taxonomy(
+          ['--check', '--baseline-taxonomy=final-base-taxonomy.json'],
+          baselineCheck,
+        ),
+      );
+      assertSame(
+        missingH0.message.includes(
+          'requires H0 disposition and promotion artifacts',
+        ),
+        true,
+      );
+      const syncBaseline = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--sync-promoted-report',
+            '--baseline-taxonomy=final-base-taxonomy.json',
+          ],
+          auditDependencies({
+            subset: AUDIT_PROMOTION_SUBSET,
+            promotion: AUDIT_PROMOTION,
+            files: new Map([
+              ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+              ['final-base-taxonomy.json', '{}\n'],
+            ]),
+          }),
+        ),
+      );
+      assertSame(
+        syncBaseline.message.includes(
+          'cannot be combined with promoted-report synchronization',
+        ),
+        true,
+      );
+      const partialH0Output = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--paths-manifest=paths.json',
+            '--disposition=disposition.json',
+            '--write-promotion=promotion.json',
+          ],
+          auditDependencies(),
+        ),
+      );
+      assertSame(
+        partialH0Output.message.includes(
+          'must write promotion and owner deltas together',
+        ),
+        true,
+      );
+      const aliasedH0Outputs = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--paths-manifest=paths.json',
+            '--disposition=disposition.json',
+            '--write-promotion=artifacts.json',
+            '--write-owner-deltas=artifacts.json',
+          ],
+          auditDependencies(),
+        ),
+      );
+      assertSame(
+        aliasedH0Outputs.message.includes('must use distinct output paths'),
+        true,
+      );
+      const mixedFocusedModes = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--sync-promoted-report',
+            '--paths-manifest=paths.json',
+            '--owner-map=owner-map.json',
+            '--write-disposition=disposition.json',
+          ],
+          auditDependencies(),
+        ),
+      );
+      assertSame(
+        mixedFocusedModes.message.includes(
+          'cannot combine focused generation, execution, and report synchronization modes',
+        ),
+        true,
+      );
 
       const stale = auditDependencies({
         files: new Map([[AUDIT_PATH, 'stale\n']]),
@@ -1318,7 +1414,10 @@ export default [
         fixtureOutput(dependencies, 'tools/test262/es2015-h0-promotion.json'),
       );
       const ownerDeltas = JSON.parse(
-        fixtureOutput(dependencies, 'tools/test262/es2015-h0-owner-deltas.json'),
+        fixtureOutput(
+          dependencies,
+          'tools/test262/es2015-h0-owner-deltas.json',
+        ),
       );
       assertSame(promotion.h0RootCount, 2);
       assertSame(promotion.h0VariantCount, 4);
@@ -1393,6 +1492,461 @@ export default [
           ),
         ).executionPassedVariantCount,
         3,
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit validates H0 owner evidence before writing promotion artifacts',
+    run: async () => {
+      const roots = new Map([
+        ...AUDIT_ROOTS,
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const dependencies = auditDependencies({
+        roots,
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+        ]),
+        runPromotion: async () => H0_AUDIT_RECORDS,
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--owner-map=tools/test262/es2015-h0-owner-map.json',
+            '--write-disposition=tools/test262/es2015-h0-disposition.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      dependencies.writes.length = 0;
+      const staleOwnerMap = JSON.parse(H0_AUDIT_OWNER_MAP);
+      staleOwnerMap.owners[0].title = 'Stale reviewed owner';
+      dependencies.files.set(
+        'tools/test262/es2015-h0-owner-map.json',
+        JSON.stringify(staleOwnerMap),
+      );
+
+      const error = await rejected(() =>
+        auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--disposition=tools/test262/es2015-h0-disposition.json',
+            '--promotion-file=tools/test262/es2015-h0-promotion.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+          ],
+          dependencies,
+        ),
+      );
+      assertSame(error.message.includes('owner-map'), true);
+      assertSame(
+        dependencies.writes.includes('tools/test262/es2015-h0-promotion.json'),
+        false,
+      );
+      assertSame(
+        dependencies.writes.includes(
+          'tools/test262/es2015-h0-owner-deltas.json',
+        ),
+        false,
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit regenerates H0 promotion without validating a stale prior promotion',
+    run: async () => {
+      const roots = new Map([
+        ...AUDIT_ROOTS,
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const dependencies = auditDependencies({
+        roots,
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+        ]),
+        runPromotion: async () => H0_AUDIT_RECORDS,
+      });
+      const dispositionOptions = [
+        '--paths-manifest=tools/test262/es2015-h0-paths.json',
+        '--owner-map=tools/test262/es2015-h0-owner-map.json',
+        '--write-disposition=tools/test262/es2015-h0-disposition.json',
+      ];
+      const promotionOptions = [
+        '--paths-manifest=tools/test262/es2015-h0-paths.json',
+        '--disposition=tools/test262/es2015-h0-disposition.json',
+        '--promotion-file=tools/test262/es2015-h0-promotion.json',
+        '--write-promotion=tools/test262/es2015-h0-promotion.json',
+        '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+      ];
+
+      assertSame(
+        await auditEs2015Taxonomy(dispositionOptions, dependencies),
+        0,
+      );
+      assertSame(await auditEs2015Taxonomy(promotionOptions, dependencies), 0);
+      const priorPromotion = JSON.parse(
+        fixtureOutput(dependencies, 'tools/test262/es2015-h0-promotion.json'),
+      );
+      dependencies.files.set(
+        'tools/test262/upstream-subset.json',
+        JSON.stringify({
+          version: 1,
+          repository: AUDIT_PIN.repository,
+          revision: AUDIT_PIN.revision,
+          groups: [
+            {
+              name: 'es2015/h0-cross-realm-passed',
+              summary: 'The stale prior H0 promotion group.',
+              paths: priorPromotion.entries.map(
+                (/** @type {any} */ entry) => entry.path,
+              ),
+            },
+          ],
+        }),
+      );
+      dependencies.runPromotion = async () =>
+        H0_AUDIT_RECORDS.map((record) => ({
+          type: 'test',
+          file: record.file,
+          variant: record.variant,
+          status: 'passed',
+        }));
+
+      assertSame(
+        await auditEs2015Taxonomy(dispositionOptions, dependencies),
+        0,
+      );
+      assertSame(await auditEs2015Taxonomy(promotionOptions, dependencies), 0);
+      assertSame(
+        JSON.parse(
+          fixtureOutput(dependencies, 'tools/test262/es2015-h0-promotion.json'),
+        ).entries.length,
+        2,
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit synchronizes H0 pass-only promoted records from disposition evidence',
+    run: async () => {
+      const roots = new Map([
+        ...AUDIT_ROOTS,
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const h0Subset = JSON.stringify({
+        version: 1,
+        repository: AUDIT_PIN.repository,
+        revision: AUDIT_PIN.revision,
+        groups: [
+          {
+            name: 'es2015/h0-cross-realm-passed',
+            summary: 'The exact complete-pass H0 fixture root.',
+            paths: [H0_AUDIT_PASSED_PATH],
+          },
+        ],
+      });
+      const dependencies = auditDependencies({
+        roots,
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+          ['docs/test262-report.jsonl', ''],
+          ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+        ]),
+        runPromotion: async () => H0_AUDIT_RECORDS,
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--owner-map=tools/test262/es2015-h0-owner-map.json',
+            '--write-disposition=tools/test262/es2015-h0-disposition.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--disposition=tools/test262/es2015-h0-disposition.json',
+            '--promotion-file=tools/test262/es2015-h0-promotion.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      dependencies.files.set('tools/test262/upstream-subset.json', h0Subset);
+      assertSame(
+        await auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+        0,
+      );
+
+      const records = fixtureOutput(dependencies, 'docs/test262-report.jsonl')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter((record) => record.type === 'test');
+      assertSame(
+        JSON.stringify(
+          records.map((record) => [record.file, record.variant, record.status]),
+        ),
+        JSON.stringify([
+          [H0_AUDIT_PASSED_PATH, 'non-strict', 'passed'],
+          [H0_AUDIT_PASSED_PATH, 'strict', 'passed'],
+        ]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit rejects an H0 promotion that omits a complete pass disposition',
+    run: async () => {
+      const roots = new Map([
+        ...AUDIT_ROOTS,
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const dependencies = auditDependencies({
+        roots,
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+          ['docs/test262-report.jsonl', ''],
+          ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+        ]),
+        runPromotion: async () =>
+          H0_AUDIT_RECORDS.map((record) => ({
+            type: 'test',
+            file: record.file,
+            variant: record.variant,
+            status: 'passed',
+          })),
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--owner-map=tools/test262/es2015-h0-owner-map.json',
+            '--write-disposition=tools/test262/es2015-h0-disposition.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--disposition=tools/test262/es2015-h0-disposition.json',
+            '--promotion-file=tools/test262/es2015-h0-promotion.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      const promotion = JSON.parse(
+        fixtureOutput(dependencies, 'tools/test262/es2015-h0-promotion.json'),
+      );
+      assertSame(promotion.entries.length, 2);
+      const retained = promotion.entries[0];
+      const stalePromotion = {
+        ...promotion,
+        promotedLedgerSha256: sha256(`${retained.path}\n`),
+        promotedRootCount: 1,
+        promotedVariantCount: retained.variants,
+        entries: [retained],
+      };
+      dependencies.files.set(
+        'tools/test262/es2015-h0-promotion.json',
+        `${JSON.stringify(stalePromotion)}\n`,
+      );
+      dependencies.files.set(
+        'tools/test262/upstream-subset.json',
+        JSON.stringify({
+          version: 1,
+          repository: AUDIT_PIN.repository,
+          revision: AUDIT_PIN.revision,
+          groups: [
+            {
+              name: 'es2015/h0-cross-realm-passed',
+              summary: 'A stale incomplete H0 promotion fixture.',
+              paths: [retained.path],
+            },
+          ],
+        }),
+      );
+
+      const error = await rejected(() =>
+        auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+      );
+      assertSame(error instanceof Es2015AuditError, true);
+      assertSame(
+        error.message.includes(
+          'does not match complete passed H0 dispositions',
+        ),
+        true,
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit preserves prior standard promotion records when adding H0 promotion records',
+    run: async () => {
+      const roots = new Map([
+        ...AUDIT_ROOTS,
+        [
+          H0_AUDIT_REASSIGNED_PATH,
+          '/*---\ndescription: H0 reassigned fixture.\nes6id: 13.2\n---*/\n',
+        ],
+        [
+          H0_AUDIT_PASSED_PATH,
+          '/*---\ndescription: H0 passed fixture.\nes6id: 13.2\nfeatures: [cross-realm]\n---*/\n',
+        ],
+      ]);
+      const combinedSubset = JSON.stringify({
+        version: 1,
+        repository: AUDIT_PIN.repository,
+        revision: AUDIT_PIN.revision,
+        groups: [
+          {
+            name: 'es2015/audit-passing-promotion',
+            summary: 'An exact reviewed promotion fixture root.',
+            paths: [AUDIT_PROMOTION_PATH],
+          },
+          {
+            name: 'es2015/h0-cross-realm-passed',
+            summary: 'The exact complete-pass H0 fixture root.',
+            paths: [H0_AUDIT_PASSED_PATH],
+          },
+          {
+            name: 'fixture',
+            summary: 'A selected fixture root.',
+            paths: ['test/language/selected.js'],
+          },
+        ],
+      });
+      const dependencies = auditDependencies({
+        roots,
+        subset: AUDIT_PROMOTION_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        files: new Map([
+          ['tools/test262/es2015-h0-paths.json', H0_AUDIT_PATHS_MANIFEST],
+          ['tools/test262/es2015-h0-owner-map.json', H0_AUDIT_OWNER_MAP],
+          [AUDIT_PATH, H0_AUDIT_TAXONOMY],
+          [
+            'docs/test262-report.jsonl',
+            [
+              ...AUDIT_RECORDS.map((record) => JSON.stringify(record)),
+              JSON.stringify({
+                type: 'test',
+                file: 'test/language/selected.js',
+                variant: 'non-strict',
+                status: 'passed',
+              }),
+              JSON.stringify({
+                type: 'test',
+                file: 'test/language/selected.js',
+                variant: 'strict',
+                status: 'passed',
+              }),
+              '',
+            ].join('\n'),
+          ],
+          ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+        ]),
+        runPromotion: async () => H0_AUDIT_RECORDS,
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--owner-map=tools/test262/es2015-h0-owner-map.json',
+            '--write-disposition=tools/test262/es2015-h0-disposition.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      assertSame(
+        await auditEs2015Taxonomy(
+          [
+            '--paths-manifest=tools/test262/es2015-h0-paths.json',
+            '--disposition=tools/test262/es2015-h0-disposition.json',
+            '--promotion-file=tools/test262/es2015-h0-promotion.json',
+            '--write-promotion=tools/test262/es2015-h0-promotion.json',
+            '--write-owner-deltas=tools/test262/es2015-h0-owner-deltas.json',
+          ],
+          dependencies,
+        ),
+        0,
+      );
+      dependencies.files.set(
+        'tools/test262/upstream-subset.json',
+        combinedSubset,
+      );
+      assertSame(
+        await auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+        0,
+      );
+
+      const records = fixtureOutput(dependencies, 'docs/test262-report.jsonl')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter((record) => record.type === 'test');
+      assertSame(
+        JSON.stringify(
+          records.map((record) => [record.file, record.variant, record.status]),
+        ),
+        JSON.stringify([
+          [AUDIT_PROMOTION_PATH, 'non-strict', 'passed'],
+          [AUDIT_PROMOTION_PATH, 'strict', 'passed'],
+          [H0_AUDIT_PASSED_PATH, 'non-strict', 'passed'],
+          [H0_AUDIT_PASSED_PATH, 'strict', 'passed'],
+          ['test/language/selected.js', 'non-strict', 'passed'],
+          ['test/language/selected.js', 'strict', 'passed'],
+        ]),
       );
     },
   },

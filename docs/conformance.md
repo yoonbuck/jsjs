@@ -605,8 +605,8 @@ remaining unsupported class-field and Unicode/legacy-escape forms.
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 20,452   | 20,452    | 20,452 | 38.175% |
-| (file, variant) | 102,912     | 38,855   | 38,855    | 38,855 | 37.756% |
+| Files           | 53,575      | 20,492   | 20,492    | 20,492 | 38.249% |
+| (file, variant) | 102,912     | 38,933   | 38,933    | 38,933 | 37.831% |
 
 0 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
@@ -714,9 +714,9 @@ The qualified core ES2015 evidence is:
 
 | Core status              | Roots      | Variants   |
 | ------------------------ | ---------- | ---------- |
-| Selected passing         | 19,625     | 37,347     |
+| Selected passing         | 19,665     | 37,425     |
 | Audit-passing unselected | 60         | 120        |
-| Blocked                  | 4,563      | 8,953      |
+| Blocked                  | 4,523      | 8,875      |
 | Intentional deviation    | 2          | 4          |
 | **Core total**           | **24,250** | **46,424** |
 

@@ -79,8 +79,7 @@ export default [
         disposition,
         ownerMapText,
         taxonomyFeaturesByPath,
-      } =
-        await loadCrossRealmSelection();
+      } = await loadCrossRealmSelection();
       const pin = await readTest262Pin();
       const ownerMap = parseEs2015H0OwnerMap(ownerMapText, pin);
 
@@ -203,7 +202,6 @@ async function loadCrossRealmSelection() {
   assertSame(disposition.h0LedgerSha256, EXPECTED_LEDGER_SHA256);
   assertSame(disposition.h0RootCount, EXPECTED_ROOT_COUNT);
   assertSame(disposition.h0VariantCount, EXPECTED_VARIANT_COUNT);
-  assertSame(disposition.sourceTaxonomySha256, artifact.sourceTaxonomySha256);
   assertSame(disposition.ownerMapSha256, sha256(ownerMapText));
   assertSame(
     disposition.completePassedRootCount + disposition.reassignedRootCount,
@@ -215,8 +213,7 @@ async function loadCrossRealmSelection() {
     EXPECTED_VARIANT_COUNT,
   );
   assertSame(
-    disposition.completePassedVariantCount +
-      disposition.reassignedVariantCount,
+    disposition.completePassedVariantCount + disposition.reassignedVariantCount,
     EXPECTED_VARIANT_COUNT,
   );
   assertSame(
@@ -229,37 +226,26 @@ async function loadCrossRealmSelection() {
   assertSame(sha256(`${artifact.paths.join('\n')}\n`), artifact.ledgerSha256);
 
   const taxonomyEntries = parseTaxonomyClassifications(taxonomyText);
-  const selectedEntries =
-    sha256(taxonomyText) === artifact.sourceTaxonomySha256
-      ? sortStrings(
-          taxonomyEntries
-            .filter(
-              (entry) =>
-                entry.partition === 'core' &&
-                entry.blocker === 'test262-cross-realm-host' &&
-                !entry.path.startsWith('test/annexB/'),
-            )
-            .map((entry) => entry.path),
-        )
-      : null;
+  const selectedEntries = sortStrings([...artifact.paths]);
+  const immutablePathSet = new Set(selectedEntries);
+  const variantCount = taxonomyEntries
+    .filter((entry) => immutablePathSet.has(entry.path))
+    .reduce((total, entry) => total + entry.variants, 0);
+  const postH0Selector = taxonomyEntries.filter(
+    (entry) =>
+      entry.partition === 'core' &&
+      entry.blocker === 'test262-cross-realm-host' &&
+      !entry.path.startsWith('test/annexB/'),
+  );
 
-  if (selectedEntries !== null) {
-    const variantCount = taxonomyEntries
-      .filter(
-        (entry) =>
-          entry.partition === 'core' &&
-          entry.blocker === 'test262-cross-realm-host' &&
-          !entry.path.startsWith('test/annexB/'),
-      )
-      .reduce((total, entry) => total + entry.variants, 0);
-
-    assertSame(selectedEntries.length, EXPECTED_ROOT_COUNT);
-    assertSame(variantCount, EXPECTED_VARIANT_COUNT);
-    assertSame(
-      sha256(`${selectedEntries.join('\n')}\n`),
-      EXPECTED_LEDGER_SHA256,
-    );
-  }
+  assertSame(selectedEntries.length, EXPECTED_ROOT_COUNT);
+  assertSame(variantCount, EXPECTED_VARIANT_COUNT);
+  assertSame(sha256(`${selectedEntries.join('\n')}\n`), EXPECTED_LEDGER_SHA256);
+  assertSame(postH0Selector.length, 0);
+  assertSame(
+    postH0Selector.reduce((total, entry) => total + entry.variants, 0),
+    0,
+  );
 
   const taxonomyByPath = new Map(
     taxonomyEntries.map((entry) => [entry.path, entry]),
@@ -270,8 +256,7 @@ async function loadCrossRealmSelection() {
     artifactText,
     disposition,
     ownerMapText,
-    derivedPaths:
-      selectedEntries === null ? null : Object.freeze(selectedEntries),
+    derivedPaths: Object.freeze(selectedEntries),
     taxonomyFeaturesByPath: new Map(
       artifact.paths.map((path) => {
         const entry = taxonomyByPath.get(path);
@@ -321,9 +306,10 @@ function parseH0Artifact(text) {
  * @returns {TaxonomyClassification[]}
  */
 function parseTaxonomyClassifications(text) {
-  const taxonomy = /** @type {{ classifications: TaxonomyClassification[] }} */ (
-    JSON.parse(text)
-  );
+  const taxonomy =
+    /** @type {{ classifications: TaxonomyClassification[] }} */ (
+      JSON.parse(text)
+    );
 
   if (
     typeof taxonomy !== 'object' ||
