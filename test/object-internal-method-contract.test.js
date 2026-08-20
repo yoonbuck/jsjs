@@ -25,6 +25,7 @@ import {
 import { GeneratorObject } from '../src/runtime/generator-object.js';
 import { ObjectEnvironmentRecord } from '../src/runtime/environment.js';
 import { typeOf } from '../src/runtime/operators.js';
+import { SuperReferenceBase } from '../src/runtime/super-reference.js';
 import {
   callCallable,
   constructCallable,
@@ -33,6 +34,10 @@ import {
 } from '../src/runtime/capabilities.js';
 import { createAbruptRealmCallable } from '../src/runtime/function-realm.js';
 import { createIterResultObject } from '../src/runtime/iterator.js';
+import {
+  HostileExotic,
+  createEnumerationIterator,
+} from './harness/hostile-exotic.js';
 
 /**
  * @param {import('../src/runtime/realm.js').Realm} realm
@@ -55,6 +60,40 @@ async function linkedModule(realm, source) {
   const record = await loadModuleGraph(loader, 'entry');
   linkModuleGraph(record);
   return record;
+}
+
+/**
+ * @param {import('../src/runtime/realm.js').Realm} realm
+ * @param {string} name
+ * @param {unknown} value
+ * @returns {void}
+ */
+function defineGlobal(realm, name, value) {
+  realm.globalObject.defineOwnProperty(name, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * @param {readonly unknown[][]} actual
+ * @param {readonly unknown[][]} expected
+ * @returns {void}
+ */
+function assertCallRecords(actual, expected) {
+  assertSame(actual.length, expected.length);
+
+  for (let index = 0; index < expected.length; index += 1) {
+    const received = actual[index];
+    const wanted = expected[index];
+    assertSame(received.length, wanted.length);
+
+    for (let entry = 0; entry < wanted.length; entry += 1) {
+      assertSame(received[entry], wanted[entry]);
+    }
+  }
 }
 
 export default [
@@ -1512,6 +1551,601 @@ export default [
       assertSame(names.join(','), 'own,tail');
       assertSame(enumerateCalls, 1);
       assertSame(nextGets, 1);
+    },
+  },
+  {
+    name: 'hostile exotic exposes all twelve Table 5 seams and propagates abrupt completions',
+    run() {
+      const prototype = new EngineObject();
+      const iterator = new EngineObject();
+      const exotic = new HostileExotic(prototype, iterator);
+      const nextPrototype = new EngineObject();
+      const receiver = new EngineObject();
+      const descriptor = {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      };
+      const symbol = Symbol('hostile');
+      exotic.virtual.set('own', descriptor);
+      exotic.virtual.set(symbol, descriptor);
+
+      assertSame(exotic.getPrototypeOf(), prototype);
+      assertSame(exotic.setPrototypeOf(nextPrototype), false);
+      assertSame(exotic.isExtensible(), true);
+      assertSame(exotic.preventExtensions(), false);
+      assertSame(exotic.getOwnProperty('own'), descriptor);
+      assertSame(exotic.hasProperty('own'), true);
+      assertSame(exotic.get('read', receiver), 'get:read');
+      assertSame(exotic.set('write', 2, receiver), false);
+      assertSame(exotic.delete('own'), false);
+      assertSame(exotic.defineOwnProperty('defined', descriptor), false);
+      assertSame(exotic.enumerate(), iterator);
+      const keys = exotic.ownPropertyKeys();
+      assertSame(keys.length, 2);
+      assertSame(keys[0], 'own');
+      assertSame(keys[1], symbol);
+      assertCallRecords(exotic.calls, [
+        ['getPrototypeOf'],
+        ['setPrototypeOf', nextPrototype],
+        ['isExtensible'],
+        ['preventExtensions'],
+        ['getOwnProperty', 'own'],
+        ['hasProperty', 'own'],
+        ['get', 'read', receiver],
+        ['set', 'write', 2, receiver],
+        ['delete', 'own'],
+        ['defineOwnProperty', 'defined', descriptor],
+        ['enumerate'],
+        ['ownPropertyKeys'],
+      ]);
+
+      exotic.calls.length = 0;
+      const abrupt = new RangeError('hostile abrupt');
+      /** @type {[string, () => unknown][]} */
+      const operations = [
+        ['getPrototypeOf', () => exotic.getPrototypeOf()],
+        ['setPrototypeOf', () => exotic.setPrototypeOf(nextPrototype)],
+        ['isExtensible', () => exotic.isExtensible()],
+        ['preventExtensions', () => exotic.preventExtensions()],
+        ['getOwnProperty', () => exotic.getOwnProperty('own')],
+        ['hasProperty', () => exotic.hasProperty('own')],
+        ['get', () => exotic.get('read', receiver)],
+        ['set', () => exotic.set('write', 2, receiver)],
+        ['delete', () => exotic.delete('own')],
+        [
+          'defineOwnProperty',
+          () => exotic.defineOwnProperty('defined', descriptor),
+        ],
+        ['enumerate', () => exotic.enumerate()],
+        ['ownPropertyKeys', () => exotic.ownPropertyKeys()],
+      ];
+
+      for (const [name, operation] of operations) {
+        exotic.abrupt.set(name, abrupt);
+        assertSame(assertThrows(operation, RangeError), abrupt);
+        exotic.abrupt.delete(name);
+      }
+
+      assertCallRecords(exotic.calls, [
+        ['getPrototypeOf'],
+        ['setPrototypeOf', nextPrototype],
+        ['isExtensible'],
+        ['preventExtensions'],
+        ['getOwnProperty', 'own'],
+        ['hasProperty', 'own'],
+        ['get', 'read', receiver],
+        ['set', 'write', 2, receiver],
+        ['delete', 'own'],
+        ['defineOwnProperty', 'defined', descriptor],
+        ['enumerate'],
+        ['ownPropertyKeys'],
+      ]);
+    },
+  },
+  {
+    name: 'hostile exotic preserves direct inherited primitive and super receivers',
+    run() {
+      const realm = createRealm();
+      const exotic = new HostileExotic(
+        realm.intrinsics.objectPrototype,
+        createEnumerationIterator(realm, []),
+      );
+      const directReceiver = new EngineObject(realm.intrinsics.objectPrototype);
+      const child = new EngineObject(exotic);
+      const primitiveWrapper = createPrimitiveWrapper(realm, 'primitive');
+      const superReceiver = new EngineObject(realm.intrinsics.objectPrototype);
+      const descriptor = {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      };
+      exotic.virtual.set('inherited', descriptor);
+      assertSame(primitiveWrapper.setPrototypeOf(exotic), true);
+      exotic.calls.length = 0;
+
+      assertSame(exotic.get('direct', directReceiver), 'get:direct');
+      assertSame(exotic.set('direct', 1, directReceiver), false);
+      assertSame(child.get('inherited', child), 'get:inherited');
+      assertSame(child.set('inherited', 2, child), false);
+      assertSame(child.hasProperty('inherited'), true);
+
+      assertSame(
+        getValue(
+          new Reference(primitiveWrapper, 'primitiveGet', false, 'primitive'),
+        ),
+        'get:primitiveGet',
+      );
+      assertSame(
+        putValue(
+          new Reference(primitiveWrapper, 'primitiveSet', false, 'primitive'),
+          3,
+        ),
+        3,
+      );
+
+      const superReference = new SuperReferenceBase(exotic, superReceiver);
+      assertSame(superReference.get('superGet'), 'get:superGet');
+      assertSame(superReference.set('superSet', 4), false);
+      assertCallRecords(exotic.calls, [
+        ['get', 'direct', directReceiver],
+        ['set', 'direct', 1, directReceiver],
+        ['get', 'inherited', child],
+        ['set', 'inherited', 2, child],
+        ['hasProperty', 'inherited'],
+        ['get', 'primitiveGet', 'primitive'],
+        ['set', 'primitiveSet', 3, 'primitive'],
+        ['get', 'superGet', superReceiver],
+        ['set', 'superSet', 4, superReceiver],
+      ]);
+    },
+  },
+  {
+    name: 'hostile exotic records object metadata reflection JSON in and with dispatch',
+    run() {
+      const realm = createRealm();
+      const prototype = new EngineObject(realm.intrinsics.objectPrototype);
+      const nextPrototype = new EngineObject(realm.intrinsics.objectPrototype);
+      const exotic = new HostileExotic(
+        prototype,
+        createEnumerationIterator(realm, []),
+      );
+      const symbol = Symbol('hostile');
+      exotic.virtual.set('visible', {
+        value: 11,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      exotic.virtual.set('hidden', {
+        value: 12,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      exotic.virtual.set(symbol, {
+        value: 13,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      defineGlobal(realm, 'hostile', exotic);
+      defineGlobal(realm, 'expectedPrototype', prototype);
+      defineGlobal(realm, 'nextPrototype', nextPrototype);
+
+      const reset = () => {
+        exotic.calls.length = 0;
+      };
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'Object.getPrototypeOf(hostile) === expectedPrototype;',
+        ).value,
+        true,
+      );
+      assertCallRecords(exotic.calls, [['getPrototypeOf']]);
+
+      reset();
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name; try { Object.setPrototypeOf(hostile, nextPrototype); } catch (error) { name = error.name; } name;',
+        ).value,
+        'TypeError',
+      );
+      assertCallRecords(exotic.calls, [['setPrototypeOf', nextPrototype]]);
+
+      reset();
+      assertSame(
+        evaluateScript(realm, 'Object.isExtensible(hostile);').value,
+        true,
+      );
+      assertCallRecords(exotic.calls, [['isExtensible']]);
+
+      reset();
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name; try { Object.preventExtensions(hostile); } catch (error) { name = error.name; } name;',
+        ).value,
+        'TypeError',
+      );
+      assertCallRecords(exotic.calls, [['preventExtensions']]);
+
+      reset();
+      assertSame(
+        evaluateScript(
+          realm,
+          'Object.getOwnPropertyDescriptor(hostile, "visible").value;',
+        ).value,
+        11,
+      );
+      assertCallRecords(exotic.calls, [['getOwnProperty', 'visible']]);
+
+      reset();
+      assertSame(
+        evaluateScript(
+          realm,
+          'var name; try { Object.defineProperty(hostile, "defined", { value: 3, writable: false, enumerable: true, configurable: false }); } catch (error) { name = error.name; } name;',
+        ).value,
+        'TypeError',
+      );
+      assertSame(exotic.calls.length, 1);
+      assertSame(exotic.calls[0][0], 'defineOwnProperty');
+      assertSame(exotic.calls[0][1], 'defined');
+      const definedDescriptor = /** @type {any} */ (exotic.calls[0][2]);
+      assertSame(definedDescriptor.value, 3);
+      assertSame(definedDescriptor.writable, false);
+      assertSame(definedDescriptor.enumerable, true);
+      assertSame(definedDescriptor.configurable, false);
+
+      reset();
+      assertSame(evaluateScript(realm, 'delete hostile.visible;').value, false);
+      assertCallRecords(exotic.calls, [['delete', 'visible']]);
+
+      reset();
+      assertSame(evaluateScript(realm, '"visible" in hostile;').value, true);
+      assertCallRecords(exotic.calls, [['hasProperty', 'visible']]);
+
+      reset();
+      evaluateScript(realm, 'with (hostile) { visible; }');
+      assertCallRecords(exotic.calls, [
+        ['hasProperty', 'visible'],
+        ['hasProperty', 'visible'],
+        ['get', 'visible', exotic],
+      ]);
+
+      reset();
+      assertSame(
+        evaluateScript(realm, 'Object.keys(hostile).join(",");').value,
+        'visible',
+      );
+      assertCallRecords(exotic.calls, [
+        ['ownPropertyKeys'],
+        ['getOwnProperty', 'visible'],
+        ['getOwnProperty', 'hidden'],
+      ]);
+
+      reset();
+      assertSame(
+        evaluateScript(realm, 'Object.getOwnPropertyNames(hostile).join(",");')
+          .value,
+        'visible,hidden',
+      );
+      assertCallRecords(exotic.calls, [['ownPropertyKeys']]);
+
+      reset();
+      assertSame(
+        evaluateScript(realm, 'Object.getOwnPropertySymbols(hostile).length;')
+          .value,
+        1,
+      );
+      assertCallRecords(exotic.calls, [['ownPropertyKeys']]);
+
+      reset();
+      assertSame(
+        evaluateScript(realm, 'Reflect.ownKeys(hostile).length;').value,
+        3,
+      );
+      assertCallRecords(exotic.calls, [['ownPropertyKeys']]);
+
+      reset();
+      assertSame(
+        evaluateScript(realm, 'JSON.stringify(hostile);').value,
+        '{"visible":"get:visible"}',
+      );
+      assertCallRecords(exotic.calls, [
+        ['get', 'toJSON', exotic],
+        ['ownPropertyKeys'],
+        ['getOwnProperty', 'visible'],
+        ['getOwnProperty', 'hidden'],
+        ['get', 'visible', exotic],
+      ]);
+    },
+  },
+  {
+    name: 'hostile exotic propagates every Table 5 abrupt completion through public consumers',
+    run() {
+      const realm = createRealm();
+      const nextPrototype = new EngineObject(realm.intrinsics.objectPrototype);
+      const exotic = new HostileExotic(
+        realm.intrinsics.objectPrototype,
+        createEnumerationIterator(realm, []),
+      );
+      defineGlobal(realm, 'hostile', exotic);
+      defineGlobal(realm, 'nextPrototype', nextPrototype);
+
+      /**
+       * @param {string} method
+       * @param {string} source
+       * @param {readonly unknown[]} expected
+       * @param {number} [expectedLength]
+       * @returns {unknown[]}
+       */
+      const assertPublicAbrupt = (
+        method,
+        source,
+        expected,
+        expectedLength = expected.length,
+      ) => {
+        exotic.calls.length = 0;
+        const abrupt = new GuestErrorSignal('TypeError', `${method} abrupt`);
+        exotic.abrupt.set(method, abrupt);
+        const completion = evaluateScript(
+          realm,
+          `var message; try { ${source} message = "normal"; } catch (error) { message = error.message; } message;`,
+        );
+        exotic.abrupt.delete(method);
+        assertSame(completion.type, 'normal');
+        assertSame(completion.value, `${method} abrupt`);
+        assertSame(exotic.calls.length, 1);
+        const record = exotic.calls[0];
+        assertSame(record.length, expectedLength);
+        for (let index = 0; index < expected.length; index += 1) {
+          assertSame(record[index], expected[index]);
+        }
+        return record;
+      };
+
+      assertPublicAbrupt('getPrototypeOf', 'Object.getPrototypeOf(hostile);', [
+        'getPrototypeOf',
+      ]);
+      assertPublicAbrupt(
+        'setPrototypeOf',
+        'Object.setPrototypeOf(hostile, nextPrototype);',
+        ['setPrototypeOf', nextPrototype],
+      );
+      assertPublicAbrupt('isExtensible', 'Object.isExtensible(hostile);', [
+        'isExtensible',
+      ]);
+      assertPublicAbrupt(
+        'preventExtensions',
+        'Object.preventExtensions(hostile);',
+        ['preventExtensions'],
+      );
+      assertPublicAbrupt(
+        'getOwnProperty',
+        'Object.getOwnPropertyDescriptor(hostile, "visible");',
+        ['getOwnProperty', 'visible'],
+      );
+      assertPublicAbrupt('hasProperty', '"visible" in hostile;', [
+        'hasProperty',
+        'visible',
+      ]);
+      assertPublicAbrupt('get', 'hostile.visible;', ['get', 'visible', exotic]);
+      assertPublicAbrupt('set', 'hostile.visible = 1;', [
+        'set',
+        'visible',
+        1,
+        exotic,
+      ]);
+      assertPublicAbrupt('delete', 'delete hostile.visible;', [
+        'delete',
+        'visible',
+      ]);
+      const defineRecord = assertPublicAbrupt(
+        'defineOwnProperty',
+        'Object.defineProperty(hostile, "defined", { value: 3, writable: false, enumerable: true, configurable: false });',
+        ['defineOwnProperty', 'defined'],
+        3,
+      );
+      const descriptor = /** @type {any} */ (defineRecord[2]);
+      assertSame(descriptor.value, 3);
+      assertSame(descriptor.writable, false);
+      assertSame(descriptor.enumerable, true);
+      assertSame(descriptor.configurable, false);
+      assertPublicAbrupt('enumerate', 'for (var key in hostile) {}', [
+        'enumerate',
+      ]);
+      assertPublicAbrupt('ownPropertyKeys', 'Object.keys(hostile);', [
+        'ownPropertyKeys',
+      ]);
+    },
+  },
+  {
+    name: 'hostile exotic Enumerate uses public iterator paths across Realms and Agents',
+    run() {
+      const realm = createRealm();
+      const exotic = new HostileExotic(
+        realm.intrinsics.objectPrototype,
+        createEnumerationIterator(realm, ['sync']),
+      );
+      defineGlobal(realm, 'hostile', exotic);
+      const reset = () => {
+        exotic.calls.length = 0;
+        exotic.activeRealms.length = 0;
+      };
+      const captureSyncError = () =>
+        evaluateScript(
+          realm,
+          'var message; try { for (var key in hostile) { } message = "normal"; } catch (error) { message = error.message; } message;',
+        ).value;
+      /**
+       * @param {() => unknown} next
+       * @returns {EngineObject}
+       */
+      const createIteratorWithNext = (next) => {
+        const iterator = new EngineObject(realm.intrinsics.objectPrototype);
+        iterator.defineOwnProperty('next', {
+          value: realm.createNativeFunction({
+            name: 'next',
+            length: 0,
+            call() {
+              return next();
+            },
+          }),
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        });
+        return iterator;
+      };
+
+      assertSame(
+        evaluateScript(
+          realm,
+          'var names = ""; for (var key in hostile) { names += key; } names;',
+        ).value,
+        'sync',
+      );
+      assertCallRecords(exotic.calls, [['enumerate']]);
+
+      reset();
+      exotic.iterator = createEnumerationIterator(realm, ['generator']);
+      assertSame(
+        evaluateScript(
+          realm,
+          'function* values() { for (var key in hostile) { yield key; } } var iterator = values(); var first = iterator.next(); var done = iterator.next(); [first.value, first.done, done.done].join("|");',
+        ).value,
+        'generator|false|true',
+      );
+      assertCallRecords(exotic.calls, [['enumerate']]);
+
+      const sharedAgent = createAgent();
+      const sameAgentRealm = createRealm({ agent: sharedAgent });
+      const sameAgentTargetRealm = createRealm({ agent: sharedAgent });
+      const sameAgentExotic = new HostileExotic(
+        sameAgentTargetRealm.intrinsics.objectPrototype,
+        createEnumerationIterator(sameAgentRealm, ['same-agent']),
+      );
+      defineGlobal(sameAgentRealm, 'foreignHostile', sameAgentExotic);
+      assertSame(
+        evaluateScript(
+          sameAgentRealm,
+          'var key; for (key in foreignHostile) { break; } key;',
+        ).value,
+        'same-agent',
+      );
+      assertCallRecords(sameAgentExotic.calls, [['enumerate']]);
+      assertSame(sameAgentExotic.activeRealms[0], sameAgentRealm);
+      assertSame(sharedAgent.activeExecutionRealm, null);
+
+      const evaluatingRealm = createRealm({ agent: createAgent() });
+      const targetRealm = createRealm({ agent: createAgent() });
+      const crossAgentExotic = new HostileExotic(
+        targetRealm.intrinsics.objectPrototype,
+        createEnumerationIterator(evaluatingRealm, ['cross-agent']),
+      );
+      defineGlobal(evaluatingRealm, 'foreignHostile', crossAgentExotic);
+      assertSame(
+        evaluateScript(
+          evaluatingRealm,
+          'var key; for (key in foreignHostile) { break; } key;',
+        ).value,
+        'cross-agent',
+      );
+      assertCallRecords(crossAgentExotic.calls, [['enumerate']]);
+      assertSame(crossAgentExotic.activeRealms[0], evaluatingRealm);
+      assertSame(evaluatingRealm.agent.activeExecutionRealm, null);
+      assertSame(targetRealm.agent.activeExecutionRealm, null);
+
+      reset();
+      exotic.abrupt.set(
+        'enumerate',
+        new GuestErrorSignal('TypeError', 'enumerate abrupt'),
+      );
+      assertSame(captureSyncError(), 'enumerate abrupt');
+      assertCallRecords(exotic.calls, [['enumerate']]);
+      exotic.abrupt.delete('enumerate');
+
+      reset();
+      exotic.iterator = new EngineObject(realm.intrinsics.objectPrototype);
+      assertSame(captureSyncError(), 'Enumerate iterator next is not callable');
+      assertCallRecords(exotic.calls, [['enumerate']]);
+
+      reset();
+      const getterAbruptIterator = new EngineObject(
+        realm.intrinsics.objectPrototype,
+      );
+      getterAbruptIterator.defineOwnProperty('next', {
+        get: realm.createNativeFunction({
+          name: 'get next',
+          length: 0,
+          call() {
+            throw new GuestErrorSignal('TypeError', 'next getter abrupt');
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+      exotic.iterator = getterAbruptIterator;
+      assertSame(captureSyncError(), 'next getter abrupt');
+      assertCallRecords(exotic.calls, [['enumerate']]);
+
+      reset();
+      exotic.iterator = createIteratorWithNext(() => {
+        throw new GuestErrorSignal('TypeError', 'next call abrupt');
+      });
+      assertSame(captureSyncError(), 'next call abrupt');
+      assertCallRecords(exotic.calls, [['enumerate']]);
+
+      reset();
+      exotic.iterator = createIteratorWithNext(() => 1);
+      assertSame(captureSyncError(), 'Iterator result is not an object');
+      assertCallRecords(exotic.calls, [['enumerate']]);
+
+      reset();
+      const doneAbrupt = new EngineObject(realm.intrinsics.objectPrototype);
+      doneAbrupt.defineOwnProperty('done', {
+        get: realm.createNativeFunction({
+          name: 'get done',
+          length: 0,
+          call() {
+            throw new GuestErrorSignal('TypeError', 'done abrupt');
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+      exotic.iterator = createIteratorWithNext(() => doneAbrupt);
+      assertSame(captureSyncError(), 'done abrupt');
+      assertCallRecords(exotic.calls, [['enumerate']]);
+
+      reset();
+      const valueAbrupt = new EngineObject(realm.intrinsics.objectPrototype);
+      valueAbrupt.defineOwnProperty('done', {
+        value: false,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      valueAbrupt.defineOwnProperty('value', {
+        get: realm.createNativeFunction({
+          name: 'get value',
+          length: 0,
+          call() {
+            throw new GuestErrorSignal('TypeError', 'value abrupt');
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
+      exotic.iterator = createIteratorWithNext(() => valueAbrupt);
+      assertSame(captureSyncError(), 'value abrupt');
+      assertCallRecords(exotic.calls, [['enumerate']]);
     },
   },
   {

@@ -25,6 +25,10 @@ import { EngineObject } from '../src/runtime/object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { Reference, getValue } from '../src/runtime/reference.js';
 import { SuperReferenceBase } from '../src/runtime/super-reference.js';
+import {
+  HostileExotic,
+  createEnumerationIterator,
+} from './harness/hostile-exotic.js';
 
 /**
  * @param {string} source
@@ -49,6 +53,25 @@ function defineGlobal(realm, name, value) {
     enumerable: true,
     configurable: true,
   });
+}
+
+/**
+ * @param {readonly unknown[][]} actual
+ * @param {readonly unknown[][]} expected
+ * @returns {void}
+ */
+function assertCallRecords(actual, expected) {
+  assertSame(actual.length, expected.length);
+
+  for (let index = 0; index < expected.length; index += 1) {
+    const received = actual[index];
+    const wanted = expected[index];
+    assertSame(received.length, wanted.length);
+
+    for (let entry = 0; entry < wanted.length; entry += 1) {
+      assertSame(received[entry], wanted[entry]);
+    }
+  }
 }
 
 /**
@@ -4106,94 +4129,66 @@ const tests = [
     },
   },
   {
-    name: '50,000-link Get HasProperty and Set stay iterative and dispatch a middle exotic once',
+    name: '50,000-link Get Set HasProperty and prototype traversal stop at a hostile boundary',
     run() {
       const root = new EngineObject();
-      root.defineOwnProperty('value', {
+      root.defineOwnProperty('marker', {
         value: 1,
         writable: true,
         enumerable: true,
         configurable: true,
       });
 
-      let ordinaryTop = root;
+      let tail = root;
       for (let index = 0; index < 50000; index += 1) {
-        ordinaryTop = new EngineObject(ordinaryTop);
+        tail = new EngineObject(tail);
       }
 
-      assertSame(ordinaryTop.get('value', ordinaryTop), 1);
-      assertSame(ordinaryTop.hasProperty('value'), true);
-      assertSame(ordinaryTop.set('value', 2, ordinaryTop), true);
-      assertSame(ordinaryTop.get('value', ordinaryTop), 2);
+      assertSame(tail.get('marker', tail), 1);
+      assertSame(tail.hasProperty('marker'), true);
+      assertSame(tail.set('created', 2, tail), true);
+      assertSame(tail.get('created', tail), 2);
       assertSame(
-        root.setPrototypeOf(ordinaryTop),
+        root.setPrototypeOf(tail),
         false,
         'a 50,000-link prototype cycle is rejected without recursion',
       );
 
-      let getCalls = 0;
-      let hasPropertyCalls = 0;
-      let setCalls = 0;
-      class RecordingMiddle extends EngineObject {
-        /**
-         * @param {string | symbol} key
-         * @param {unknown} receiver
-         * @returns {unknown}
-         */
-        get(key, receiver) {
-          getCalls += 1;
-          return super.get(key, receiver);
-        }
-
-        /**
-         * @param {string | symbol} key
-         * @returns {boolean}
-         */
-        hasProperty(key) {
-          hasPropertyCalls += 1;
-          return super.hasProperty(key);
-        }
-
-        /**
-         * @param {string | symbol} key
-         * @param {unknown} value
-         * @param {unknown} receiver
-         * @returns {boolean}
-         */
-        set(key, value, receiver) {
-          setCalls += 1;
-          return super.set(key, value, receiver);
-        }
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
       }
 
-      const exoticRoot = new EngineObject();
-      exoticRoot.defineOwnProperty('value', {
-        value: 3,
+      const middle = new HostileExotic(lower, new EngineObject());
+      middle.virtual.set('marker', {
+        value: 1,
         writable: true,
         enumerable: true,
         configurable: true,
       });
-      let exoticBase = exoticRoot;
-      for (let index = 0; index < 25000; index += 1) {
-        exoticBase = new EngineObject(exoticBase);
-      }
-      const middle = new RecordingMiddle(exoticBase);
-      let exoticTop = middle;
-      for (let index = 0; index < 25000; index += 1) {
-        exoticTop = new EngineObject(exoticTop);
+      /** @type {EngineObject} */
+      let top = middle;
+      for (let index = 0; index < 24999; index += 1) {
+        top = new EngineObject(top);
       }
 
-      assertSame(exoticTop.get('value', exoticTop), 3);
-      assertSame(getCalls, 1);
-      assertSame(exoticTop.hasProperty('value'), true);
-      assertSame(hasPropertyCalls, 1);
-      assertSame(exoticTop.set('value', 4, exoticTop), true);
-      assertSame(setCalls, 1);
-      assertSame(exoticTop.get('value', exoticTop), 4);
+      assertSame(top.get('marker', top), 'get:marker');
+      assertSame(top.hasProperty('marker'), true);
+      assertSame(top.set('created', 2, top), false);
+      assertSame(
+        root.setPrototypeOf(top),
+        true,
+        'an exotic prototype boundary ends the ordinary cycle walk without recursion',
+      );
+      assertCallRecords(middle.calls, [
+        ['get', 'marker', top],
+        ['hasProperty', 'marker'],
+        ['set', 'created', 2, top],
+      ]);
     },
   },
   {
-    name: '50,000-link Enumerate stays iterative and dispatches a middle exotic once',
+    name: '50,000-link Enumerate stays iterative and dispatches a middle hostile exotic once',
     run() {
       const realm = createRealm();
       const root = new EngineObject(realm.intrinsics.objectPrototype);
@@ -4204,34 +4199,15 @@ const tests = [
         configurable: true,
       });
 
-      let ownPropertyKeysCalls = 0;
-      let getOwnPropertyCalls = 0;
-      let getPrototypeOfCalls = 0;
-      class RecordingMiddle extends EngineObject {
-        ownPropertyKeys() {
-          ownPropertyKeysCalls += 1;
-          return super.ownPropertyKeys();
-        }
-
-        /**
-         * @param {import('../src/runtime/descriptors.js').PropertyKey} key
-         */
-        getOwnProperty(key) {
-          getOwnPropertyCalls += 1;
-          return super.getOwnProperty(key);
-        }
-
-        getPrototypeOf() {
-          getPrototypeOfCalls += 1;
-          return super.getPrototypeOf();
-        }
-      }
-
       let lower = root;
       for (let index = 0; index < 25000; index += 1) {
         lower = new EngineObject(lower);
       }
-      const middle = new RecordingMiddle(lower);
+      const middle = new HostileExotic(
+        lower,
+        createEnumerationIterator(realm, ['value']),
+      );
+      /** @type {EngineObject} */
       let top = middle;
       for (let index = 0; index < 24999; index += 1) {
         top = new EngineObject(top);
@@ -4250,9 +4226,7 @@ const tests = [
 
       assertSame(first.get('value', first), 'value');
       assertSame(first.get('done', first), false);
-      assertSame(ownPropertyKeysCalls, 1);
-      assertSame(getOwnPropertyCalls, 1);
-      assertSame(getPrototypeOfCalls, 2);
+      assertCallRecords(middle.calls, [['enumerate']]);
 
       const done = /** @type {EngineObject} */ (
         next.callFunction(iterator, [], realm)
@@ -4261,7 +4235,7 @@ const tests = [
     },
   },
   {
-    name: 'synchronous for-in consumes a 50,000-link Enumerate iterator with one exotic middle iteratively',
+    name: 'synchronous for-in consumes a 50,000-link hostile Enumerate iterator iteratively',
     run() {
       const realm = createRealm();
       const root = new EngineObject(realm.intrinsics.objectPrototype);
@@ -4272,34 +4246,15 @@ const tests = [
         configurable: true,
       });
 
-      let ownPropertyKeysCalls = 0;
-      let getOwnPropertyCalls = 0;
-      let getPrototypeOfCalls = 0;
-      class RecordingMiddle extends EngineObject {
-        ownPropertyKeys() {
-          ownPropertyKeysCalls += 1;
-          return super.ownPropertyKeys();
-        }
-
-        /**
-         * @param {import('../src/runtime/descriptors.js').PropertyKey} key
-         */
-        getOwnProperty(key) {
-          getOwnPropertyCalls += 1;
-          return super.getOwnProperty(key);
-        }
-
-        getPrototypeOf() {
-          getPrototypeOfCalls += 1;
-          return super.getPrototypeOf();
-        }
-      }
-
       let lower = root;
       for (let index = 0; index < 25000; index += 1) {
         lower = new EngineObject(lower);
       }
-      const middle = new RecordingMiddle(lower);
+      const middle = new HostileExotic(
+        lower,
+        createEnumerationIterator(realm, ['value']),
+      );
+      /** @type {EngineObject} */
       let source = middle;
       for (let index = 0; index < 24999; index += 1) {
         source = new EngineObject(source);
@@ -4312,13 +4267,11 @@ const tests = [
       );
       assertSame(completion.type, 'normal');
       assertSame(completion.value, 'value');
-      assertSame(ownPropertyKeysCalls, 1);
-      assertSame(getOwnPropertyCalls, 1);
-      assertSame(getPrototypeOfCalls, 2);
+      assertCallRecords(middle.calls, [['enumerate']]);
     },
   },
   {
-    name: 'generator for-in consumes a 50,000-link Enumerate iterator with one exotic middle iteratively',
+    name: 'generator for-in consumes a 50,000-link hostile Enumerate iterator iteratively',
     run() {
       const realm = createRealm();
       const root = new EngineObject(realm.intrinsics.objectPrototype);
@@ -4329,34 +4282,15 @@ const tests = [
         configurable: true,
       });
 
-      let ownPropertyKeysCalls = 0;
-      let getOwnPropertyCalls = 0;
-      let getPrototypeOfCalls = 0;
-      class RecordingMiddle extends EngineObject {
-        ownPropertyKeys() {
-          ownPropertyKeysCalls += 1;
-          return super.ownPropertyKeys();
-        }
-
-        /**
-         * @param {import('../src/runtime/descriptors.js').PropertyKey} key
-         */
-        getOwnProperty(key) {
-          getOwnPropertyCalls += 1;
-          return super.getOwnProperty(key);
-        }
-
-        getPrototypeOf() {
-          getPrototypeOfCalls += 1;
-          return super.getPrototypeOf();
-        }
-      }
-
       let lower = root;
       for (let index = 0; index < 25000; index += 1) {
         lower = new EngineObject(lower);
       }
-      const middle = new RecordingMiddle(lower);
+      const middle = new HostileExotic(
+        lower,
+        createEnumerationIterator(realm, ['value']),
+      );
+      /** @type {EngineObject} */
       let source = middle;
       for (let index = 0; index < 24999; index += 1) {
         source = new EngineObject(source);
@@ -4371,9 +4305,7 @@ const tests = [
       );
       assertSame(completion.type, 'normal');
       assertSame(completion.value, 'value|false|true');
-      assertSame(ownPropertyKeysCalls, 1);
-      assertSame(getOwnPropertyCalls, 1);
-      assertSame(getPrototypeOfCalls, 2);
+      assertCallRecords(middle.calls, [['enumerate']]);
     },
   },
   {

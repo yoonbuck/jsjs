@@ -37,7 +37,11 @@ import {
   ES2015_PROVENANCE_FILE,
   PROVENANCE_RANGE_GATE_OWNER_PATHS,
 } from '../../tools/test262/es2015-provenance.js';
-import { checkObjectContractSources } from '../../tools/invariants/object-contract.js';
+import {
+  OBJECT_CONTRACT_ALLOWLIST,
+  checkObjectContractSources,
+  findObjectContractBypasses,
+} from '../../tools/invariants/object-contract.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
@@ -128,25 +132,6 @@ function importSpecifiers(source) {
  */
 function escapeForRegExp(literal) {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * True when `code` *defines* `name` as a member rather than calling it.
- *
- * A definition is a class-body or object-literal method (`name(` at the start
- * of a line) or a prototype assignment (`.prototype.name =`). A call always
- * has a receiver expression in front of the dot, so it never starts a line
- * with the bare member name.
- *
- * @param {string} code Source with comments already stripped.
- * @param {string} name
- * @returns {boolean}
- */
-function definesMember(code, name) {
-  return (
-    new RegExp(String.raw`^\s*${name}\s*\(`, 'mu').test(code) ||
-    new RegExp(String.raw`\.prototype\.${name}\s*=`, 'u').test(code)
-  );
 }
 
 /**
@@ -1260,6 +1245,575 @@ export default [
     },
   },
   {
+    name: 'object contract bypass finder reports exact slot legacy tag identity and callability violations',
+    run() {
+      const bypasses = findObjectContractBypasses(
+        'src/runtime/rogue.js',
+        [
+          'export function rogue(value) {',
+          '  value._prototype;',
+          '  value._extensible = false;',
+          '  value._properties.get("key");',
+          '  value.getPrototype();',
+          '  value.getProperty("key");',
+          '  value.canPut("key");',
+          '  value.put("key", 1);',
+          '  if (value.getClassName() === "Array") {}',
+          '  if (value.get === EngineObject.prototype.get) {}',
+          "  if (typeof value.callFunction === 'function') {}",
+          '  return value.callFunction(value, []);',
+          '  const { _properties } = value;',
+          '  return Object.is(value.get, EngineObject.prototype.get);',
+          '}',
+        ].join('\n'),
+      );
+
+      assertSame(
+        JSON.stringify(
+          bypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/rogue.js',
+            line: 2,
+            token: '_prototype',
+            rule: 'ordinary storage slot _prototype is only allowed in src/runtime/object.js ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 3,
+            token: '_extensible',
+            rule: 'ordinary storage slot _extensible is only allowed in src/runtime/object.js ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 4,
+            token: '_properties',
+            rule: 'ordinary storage slot _properties is only allowed in src/runtime/object.js ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 5,
+            token: 'getPrototype',
+            rule: 'legacy object method getPrototype is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 6,
+            token: 'getProperty',
+            rule: 'legacy object method getProperty is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 7,
+            token: 'canPut',
+            rule: 'legacy object method canPut is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 8,
+            token: 'put',
+            rule: 'legacy object method put is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 9,
+            token: 'getClassName',
+            rule: 'diagnostic getClassName() is only allowed for Object.prototype.toString fallback tagging',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 10,
+            token: 'EngineObject.prototype.get',
+            rule: 'EngineObject.prototype method identity dispatch is only allowed in audited ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 11,
+            token: 'callFunction',
+            rule: 'callFunction capability duck typing is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 12,
+            token: 'callFunction',
+            rule: 'Table 6 callFunction dispatch is only allowed at audited terminals',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 13,
+            token: '_properties',
+            rule: 'ordinary storage slot _properties is only allowed in src/runtime/object.js ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue.js',
+            line: 14,
+            token: 'EngineObject.prototype.get',
+            rule: 'EngineObject.prototype method identity dispatch is only allowed in audited ordinary helpers',
+          },
+        ]),
+      );
+
+      const exoticBypasses = findObjectContractBypasses(
+        'src/runtime/object.js',
+        [
+          'export class HostileExotic extends EngineObject {',
+          '  get(key) { return this._properties.get(key); }',
+          '}',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          exoticBypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/object.js',
+            line: 2,
+            token: '_properties',
+            rule: 'ordinary storage slot _properties is only allowed in src/runtime/object.js ordinary helpers',
+          },
+        ]),
+      );
+
+      const rawCallbackBypasses = findObjectContractBypasses(
+        'src/runtime/rogue-callback.js',
+        [
+          'export function direct(callback) {',
+          '  return callback.bind(undefined)();',
+          '}',
+          'export function captured(callback) {',
+          '  const bound = callback.bind(undefined);',
+          '  return bound();',
+          '}',
+          'export function callAlias(callback) {',
+          '  const invoke = callback.call;',
+          '  return invoke(undefined);',
+          '}',
+          'export function applyAlias(callback) {',
+          '  const invoke = callback.apply;',
+          '  return invoke(undefined, []);',
+          '}',
+          'export function bindAlias(callback) {',
+          '  const bind = callback.bind;',
+          '  return bind(undefined);',
+          '}',
+          'export function computed(callback) {',
+          "  const method = 'call';",
+          '  return callback[method](undefined);',
+          '}',
+          'export function objectDestructure(callback) {',
+          '  const { callback: invoke } = { callback };',
+          '  return invoke();',
+          '}',
+          'export function parameter({ callback }) {',
+          '  return callback();',
+          '}',
+          'export function switchComputed(callback, mode) {',
+          '  switch (mode) {',
+          '    case 0:',
+          "      const method = 'call';",
+          '      return callback[method](undefined);',
+          '  }',
+          '}',
+          'export function parameterAlias({ callback: invoke }) {',
+          '  return invoke();',
+          '}',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          rawCallbackBypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 2,
+            token: 'callback.bind()()',
+            rule: 'raw host callback callback.bind()() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 6,
+            token: 'bound()',
+            rule: 'raw host callback bound() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 10,
+            token: 'invoke()',
+            rule: 'raw host callback invoke() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 14,
+            token: 'invoke()',
+            rule: 'raw host callback invoke() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 18,
+            token: 'bind()',
+            rule: 'raw host callback bind() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 22,
+            token: 'callback.call()',
+            rule: 'raw host callback callback.call() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 26,
+            token: 'invoke()',
+            rule: 'raw host callback invoke() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 29,
+            token: 'callback()',
+            rule: 'raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 35,
+            token: 'callback.call()',
+            rule: 'raw host callback callback.call() is only allowed in src/runtime/object.js#callAccessor',
+          },
+          {
+            file: 'src/runtime/rogue-callback.js',
+            line: 39,
+            token: 'invoke()',
+            rule: 'raw host callback invoke() is only allowed in src/runtime/object.js#callAccessor',
+          },
+        ]),
+      );
+
+      const copiedClassTagBypasses = findObjectContractBypasses(
+        'src/builtins/object.js',
+        [
+          'export function unrelated(object, tag) {',
+          "  return `[object ${typeof tag === 'string' ? tag : object.getClassName()}]`;",
+          '}',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          copiedClassTagBypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/builtins/object.js',
+            line: 2,
+            token: 'getClassName',
+            rule: 'diagnostic getClassName() is only allowed for Object.prototype.toString fallback tagging',
+          },
+        ]),
+      );
+
+      const aliasedBypasses = findObjectContractBypasses(
+        'src/runtime/rogue-alias.js',
+        [
+          'export function rogue(value) {',
+          '  const legacy = value.getProperty;',
+          '  const ordinary = EngineObject.prototype.get;',
+          '  const tag = value.getClassName;',
+          '  return [legacy, ordinary, tag];',
+          '}',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          aliasedBypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/rogue-alias.js',
+            line: 2,
+            token: 'getProperty',
+            rule: 'legacy object method getProperty is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue-alias.js',
+            line: 3,
+            token: 'EngineObject.prototype.get',
+            rule: 'EngineObject.prototype method identity dispatch is only allowed in audited ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue-alias.js',
+            line: 4,
+            token: 'getClassName',
+            rule: 'diagnostic getClassName() is only allowed for Object.prototype.toString fallback tagging',
+          },
+        ]),
+      );
+
+      const shadowedTerminalBypasses = findObjectContractBypasses(
+        'src/runtime/capabilities.js',
+        [
+          'export function registerConstructor(value) {',
+          '  registerCallable(value);',
+          '}',
+          'export function callCallable(value) {',
+          '  if (true) {',
+          '    const value = {};',
+          '    return value.callFunction(undefined, []);',
+          '  }',
+          '}',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          shadowedTerminalBypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/capabilities.js',
+            line: 7,
+            token: 'callFunction',
+            rule: 'Table 6 callFunction dispatch is only allowed at audited terminals',
+          },
+        ]),
+      );
+
+      const destructuredAndPrototypeBypasses = findObjectContractBypasses(
+        'src/runtime/rogue-destructure.js',
+        [
+          'const { getProperty: legacy } = value;',
+          'const { getClassName: tag } = value;',
+          'const proto = EngineObject.prototype;',
+          'const { get } = EngineObject.prototype;',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          destructuredAndPrototypeBypasses.map(
+            ({ file, line, token, rule }) => ({
+              file,
+              line,
+              token,
+              rule,
+            }),
+          ),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/rogue-destructure.js',
+            line: 1,
+            token: 'getProperty',
+            rule: 'legacy object method getProperty is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue-destructure.js',
+            line: 2,
+            token: 'getClassName',
+            rule: 'diagnostic getClassName() is only allowed for Object.prototype.toString fallback tagging',
+          },
+          {
+            file: 'src/runtime/rogue-destructure.js',
+            line: 3,
+            token: 'EngineObject.prototype',
+            rule: 'EngineObject.prototype aliases are forbidden outside audited method identity comparisons',
+          },
+          {
+            file: 'src/runtime/rogue-destructure.js',
+            line: 4,
+            token: 'EngineObject.prototype',
+            rule: 'EngineObject.prototype aliases are forbidden outside audited method identity comparisons',
+          },
+        ]),
+      );
+
+      const computedKeyBypasses = findObjectContractBypasses(
+        'src/runtime/rogue-computed.js',
+        [
+          "const slot = '_properties';",
+          "const legacy = 'getProperty';",
+          "const tag = 'getClassName';",
+          "const call = 'callFunction';",
+          'value[slot];',
+          "value[legacy]('key');",
+          'value[tag]();',
+          'value[call](value, []);',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          computedKeyBypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/rogue-computed.js',
+            line: 5,
+            token: '_properties',
+            rule: 'ordinary storage slot _properties is only allowed in src/runtime/object.js ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue-computed.js',
+            line: 6,
+            token: 'getProperty',
+            rule: 'legacy object method getProperty is forbidden',
+          },
+          {
+            file: 'src/runtime/rogue-computed.js',
+            line: 7,
+            token: 'getClassName',
+            rule: 'diagnostic getClassName() is only allowed for Object.prototype.toString fallback tagging',
+          },
+          {
+            file: 'src/runtime/rogue-computed.js',
+            line: 8,
+            token: 'callFunction',
+            rule: 'Table 6 callFunction dispatch is only allowed at audited terminals',
+          },
+        ]),
+      );
+
+      const computedPrototypeAliases = findObjectContractBypasses(
+        'src/runtime/rogue-computed-prototype.js',
+        [
+          "const get = EngineObject['prototype'].get;",
+          'const { prototype: proto } = EngineObject;',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          computedPrototypeAliases.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/rogue-computed-prototype.js',
+            line: 1,
+            token: 'EngineObject.prototype.get',
+            rule: 'EngineObject.prototype method identity dispatch is only allowed in audited ordinary helpers',
+          },
+          {
+            file: 'src/runtime/rogue-computed-prototype.js',
+            line: 2,
+            token: 'EngineObject.prototype',
+            rule: 'EngineObject.prototype aliases are forbidden outside audited method identity comparisons',
+          },
+        ]),
+      );
+
+      const patternedTerminalBypasses = findObjectContractBypasses(
+        'src/runtime/capabilities.js',
+        [
+          'export function registerConstructor(value) {',
+          '  registerCallable(value);',
+          '}',
+          'export function callCallable({ value }, checked) {',
+          '  if (checked) return value.callFunction(undefined, []);',
+          '}',
+        ].join('\n'),
+      );
+      assertSame(
+        JSON.stringify(
+          patternedTerminalBypasses.map(({ file, line, token, rule }) => ({
+            file,
+            line,
+            token,
+            rule,
+          })),
+        ),
+        JSON.stringify([
+          {
+            file: 'src/runtime/capabilities.js',
+            line: 5,
+            token: 'callFunction',
+            rule: 'Table 6 callFunction dispatch is only allowed at audited terminals',
+          },
+        ]),
+      );
+    },
+  },
+  {
+    name: 'object contract bypass allowlists retain the three Table 6 terminals and narrow exceptions',
+    run() {
+      const rawHostAccessor = OBJECT_CONTRACT_ALLOWLIST.rawHostAccessor;
+      assertSame(rawHostAccessor.file, 'src/runtime/object.js');
+      assertSame(rawHostAccessor.functionName, 'callAccessor');
+      assertSame(
+        rawHostAccessor.reason,
+        'Engine-installed raw getters and setters must remain callable only inside the object model.',
+      );
+      assertSame(
+        OBJECT_CONTRACT_ALLOWLIST.table6Terminals
+          .map(
+            ({ file, functionIdentity, receiver, method, reason }) =>
+              `${file}|${functionIdentity}|${receiver}.${method}|${reason}`,
+          )
+          .join('\n'),
+        [
+          'src/runtime/capabilities.js|function:callCallable|value.callFunction|Branded [[Call]] dispatch is centralized after the capability check.',
+          'src/runtime/capabilities.js|function:constructCallable|value.constructFunction|Branded [[Construct]] dispatch is centralized after the capability check.',
+          'src/runtime/object.js|function:callAccessor|accessor.callFunction|Engine-installed accessor functions dispatch after the callable capability check.',
+        ].join('\n'),
+      );
+      const enumerateAllowance =
+        OBJECT_CONTRACT_ALLOWLIST.methodIdentity[
+          'src/runtime/iterator-object.js'
+        ][0];
+      assertSame(
+        enumerateAllowance.functionIdentity,
+        'function:snapshotForInCandidates',
+      );
+      assertSame(enumerateAllowance.method, 'enumerate');
+      assertSame(
+        enumerateAllowance.reason,
+        'ForInIterator detects the first overridden [[Enumerate]] boundary before consuming its public iterator protocol.',
+      );
+      assertSame(
+        OBJECT_CONTRACT_ALLOWLIST.classNameFallback.file,
+        'src/builtins/object.js',
+      );
+      assertSame(
+        OBJECT_CONTRACT_ALLOWLIST.classNameFallback.reason,
+        'Object.prototype.toString is the sole diagnostic class-tag fallback.',
+      );
+    },
+  },
+  {
     name: 'object contract invariant rejects imported registration identifier aliases',
     run() {
       const violations = checkObjectContractSources(
@@ -2362,68 +2916,6 @@ export default [
         matches.join(','),
         'src/runtime/regexp-compat.js',
         'the host RegExp constructor must stay isolated in src/runtime/regexp-compat.js, used exactly once',
-      );
-    },
-  },
-  {
-    // `EngineObject#getOwnProperty` copies the stored descriptor;
-    // `EngineObject#_peekOwnDescriptor` returns it raw, and the hot paths
-    // (`getProperty`, `canPut`, `put`, `defineOwnProperty`, `delete`,
-    // `enumerableKeysForIn`) read through the raw one. That makes the two a
-    // single protocol with two entry points: a class that synthesises or
-    // rewrites own properties in `getOwnProperty` and does not do the same in
-    // `_peekOwnDescriptor` would answer one way to `Object.getOwnPropertyDescriptor`
-    // and another way to a plain property read -- a split that no behavioural
-    // test is guaranteed to notice, because it only shows up for whichever
-    // virtual properties that subclass happens to invent.
-    //
-    // The rule is therefore enforced against the source text, in both
-    // directions, over every engine file: define one of the pair and you must
-    // define the other. `src/runtime/object.js` declares the protocol and
-    // defines both, so it satisfies the invariant rather than needing an
-    // exemption from it.
-    name: 'every class that overrides getOwnProperty also overrides _peekOwnDescriptor',
-    run: async () => {
-      const files = await listFiles('src/', (name) => name.endsWith('.js'));
-      /** @type {string[]} */
-      const definesGetOwnProperty = [];
-      /** @type {string[]} */
-      const definesPeek = [];
-
-      for (const file of files) {
-        const source = await readSource(file);
-        const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
-
-        if (definesMember(code, 'getOwnProperty')) {
-          definesGetOwnProperty.push(file);
-        }
-
-        if (definesMember(code, '_peekOwnDescriptor')) {
-          definesPeek.push(file);
-        }
-      }
-
-      assertSame(files.length > 5, true, 'engine sources were found');
-      assertSame(
-        definesGetOwnProperty.includes('src/runtime/object.js') &&
-          definesGetOwnProperty.includes('src/runtime/function-object.js') &&
-          definesGetOwnProperty.includes('src/runtime/primitive-object.js'),
-        true,
-        `the known getOwnProperty definitions must be detected, found: ${definesGetOwnProperty.join(', ')}`,
-      );
-      assertSame(
-        definesGetOwnProperty
-          .filter((file) => !definesPeek.includes(file))
-          .join('\n'),
-        '',
-        'a class that overrides getOwnProperty must also override _peekOwnDescriptor, or the raw-descriptor hot paths will disagree with it',
-      );
-      assertSame(
-        definesPeek
-          .filter((file) => !definesGetOwnProperty.includes(file))
-          .join('\n'),
-        '',
-        'a class that overrides _peekOwnDescriptor must also override getOwnProperty, or Object.getOwnPropertyDescriptor will disagree with a plain property read',
       );
     },
   },
