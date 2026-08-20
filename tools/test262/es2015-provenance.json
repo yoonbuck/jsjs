@@ -102,7 +102,6 @@
     {
       "name": "foundation",
       "baseFoundation": "absent",
-      "baseCommit": null,
       "requiredPaths": [
         ".github/workflows/ci.yml",
         ".prettierignore",
@@ -222,9 +221,63 @@
       ]
     },
     {
+      "name": "foundation-maintenance",
+      "baseFoundation": "present",
+      "requiredPaths": [],
+      "allowedPaths": [
+        ".github/workflows/ci.yml",
+        "docs/conformance.md",
+        "docs/superpowers/plans/2026-08-19-unknown-edition-provenance.md",
+        "docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md",
+        "docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md",
+        "docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md",
+        "docs/testing.md",
+        "test/node/es2015-provenance.test.js",
+        "test/node/workflow-contract.test.js",
+        "tools/ci/pipeline.js",
+        "tools/test262/es2015-provenance-check.js",
+        "tools/test262/es2015-provenance-decisions/UA.json",
+        "tools/test262/es2015-provenance-decisions/UB.json",
+        "tools/test262/es2015-provenance-decisions/UL1.json",
+        "tools/test262/es2015-provenance-decisions/UL2.json",
+        "tools/test262/es2015-provenance-decisions/UL3.json",
+        "tools/test262/es2015-provenance-decisions/UL4.json",
+        "tools/test262/es2015-provenance-decisions/US1.json",
+        "tools/test262/es2015-provenance-decisions/US2.json",
+        "tools/test262/es2015-provenance-decisions/US3.json",
+        "tools/test262/es2015-provenance-decisions/US4.json",
+        "tools/test262/es2015-provenance-decisions/US5.json",
+        "tools/test262/es2015-provenance-decisions/US6.json",
+        "tools/test262/es2015-provenance-decisions/US7.json",
+        "tools/test262/es2015-provenance.js",
+        "tools/test262/es2015-provenance.json"
+      ],
+      "requiredDeletions": [],
+      "allowedDeletions": [],
+      "emptyDecisionFragments": [
+        "tools/test262/es2015-provenance-decisions/UA.json",
+        "tools/test262/es2015-provenance-decisions/UB.json",
+        "tools/test262/es2015-provenance-decisions/UL1.json",
+        "tools/test262/es2015-provenance-decisions/UL2.json",
+        "tools/test262/es2015-provenance-decisions/UL3.json",
+        "tools/test262/es2015-provenance-decisions/UL4.json",
+        "tools/test262/es2015-provenance-decisions/US1.json",
+        "tools/test262/es2015-provenance-decisions/US2.json",
+        "tools/test262/es2015-provenance-decisions/US3.json",
+        "tools/test262/es2015-provenance-decisions/US4.json",
+        "tools/test262/es2015-provenance-decisions/US5.json",
+        "tools/test262/es2015-provenance-decisions/US6.json",
+        "tools/test262/es2015-provenance-decisions/US7.json"
+      ],
+      "decisionFragment": null,
+      "generatedPaths": [
+        ".github/workflows/ci.yml",
+        "tools/test262/es2015-provenance.json"
+      ]
+    },
+    {
       "name": "maintenance:issue77-lexical",
       "baseFoundation": "present",
-      "baseCommit": "8d75b48af2ee7ab04e7c5006980417227ec34568",
       "requiredPaths": [
         "README.md",
         "docs/architecture.md",
@@ -327,7 +380,6 @@
     {
       "name": "decision:UA",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/UA.json"
       ],
@@ -352,7 +404,6 @@
     {
       "name": "decision:UB",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/UB.json"
       ],
@@ -377,7 +428,6 @@
     {
       "name": "decision:UL1",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/UL1.json"
       ],
@@ -402,7 +452,6 @@
     {
       "name": "decision:UL2",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/UL2.json"
       ],
@@ -427,7 +476,6 @@
     {
       "name": "decision:UL3",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/UL3.json"
       ],
@@ -452,7 +500,6 @@
     {
       "name": "decision:UL4",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/UL4.json"
       ],
@@ -477,7 +524,6 @@
     {
       "name": "decision:US1",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/US1.json"
       ],
@@ -502,7 +548,6 @@
     {
       "name": "decision:US2",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/US2.json"
       ],
@@ -527,7 +572,6 @@
     {
       "name": "decision:US3",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/US3.json"
       ],
@@ -552,7 +596,6 @@
     {
       "name": "decision:US4",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/US4.json"
       ],
@@ -577,7 +620,6 @@
     {
       "name": "decision:US5",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/US5.json"
       ],
@@ -602,7 +644,6 @@
     {
       "name": "decision:US6",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/US6.json"
       ],
@@ -627,7 +668,6 @@
     {
       "name": "decision:US7",
       "baseFoundation": "present",
-      "baseCommit": null,
       "requiredPaths": [
         "tools/test262/es2015-provenance-decisions/US7.json"
       ],
