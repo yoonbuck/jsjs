@@ -1,9 +1,17 @@
 import { parse } from '../../vendor/acorn/acorn.mjs';
 
 const REGISTRATION_NAMES = new Set(['registerCallable', 'registerConstructor']);
+const RAW_HOST_CALLBACK_PARAMETERS = new Set(['accessor', 'callback']);
 
 /**
  * @typedef {{ name: string, argument: string }} RegistrationCall
+ * @typedef {{ name: string, trusted: boolean, alias: boolean }} RegistrationBinding
+ * @typedef {{
+ *   functionIdentity: string,
+ *   parameter: string,
+ *   invocation: string,
+ *   reason: string,
+ * }} InternalContinuationAllowance
  * @typedef {{
  *   reason: string,
  *   importSource: string | null,
@@ -74,6 +82,49 @@ export const OBJECT_CONTRACT_ALLOWLIST = Object.freeze({
     reason:
       'Engine-installed raw getters and setters must remain callable only inside the object model.',
   }),
+  internalContinuations: Object.freeze({
+    'src/runtime/agent.js': Object.freeze([
+      Object.freeze({
+        functionIdentity: 'class:Agent#withActiveExecutionRealm',
+        parameter: 'callback',
+        invocation: 'callback()',
+        reason:
+          'Agent execution-Realm stack management runs an engine-controlled continuation.',
+      }),
+      Object.freeze({
+        functionIdentity: 'class:Agent#withNoActiveExecutionRealm',
+        parameter: 'callback',
+        invocation: 'callback()',
+        reason:
+          'Agent execution-Realm barriers run an engine-controlled continuation.',
+      }),
+      Object.freeze({
+        functionIdentity: 'class:Agent#withLinkedActiveExecutionRealm',
+        parameter: 'callback',
+        invocation: 'callback()',
+        reason:
+          'Cross-Agent execution-Realm linking runs an engine-controlled continuation.',
+      }),
+    ]),
+    'src/runtime/reference.js': Object.freeze([
+      Object.freeze({
+        functionIdentity: 'function:withLinkedActiveExecutionRealm',
+        parameter: 'callback',
+        invocation: 'callback()',
+        reason:
+          'Reference evaluation delegates an engine-controlled continuation to its target Agent.',
+      }),
+    ]),
+    'src/builtins/date.js': Object.freeze([
+      Object.freeze({
+        functionIdentity: 'function:installDateSetters>binding:set',
+        parameter: 'callback',
+        invocation: 'callback()',
+        reason:
+          'Date intrinsic setup closes over an engine-native date operation.',
+      }),
+    ]),
+  }),
 });
 
 /**
@@ -119,10 +170,18 @@ function checkRegistrationSources(file, program, violations) {
     OBJECT_CONTRACT_ALLOWLIST.registrations
   );
   const allowance = registrations[file];
-  /** @type {Map<string, string>} */
+  /** @type {Map<string, RegistrationBinding>} */
   const bindings = new Map();
   /** @type {string[]} */
   const imported = [];
+
+  if (file === 'src/runtime/capabilities.js') {
+    bindings.set('registerCallable', {
+      name: 'registerCallable',
+      trusted: true,
+      alias: false,
+    });
+  }
 
   for (const statement of program.body) {
     if (statement.type !== 'ImportDeclaration') {
@@ -137,7 +196,11 @@ function checkRegistrationSources(file, program, violations) {
       ) {
         const name = specifier.imported.name;
         imported.push(name);
-        bindings.set(specifier.local.name, name);
+        bindings.set(specifier.local.name, {
+          name,
+          trusted: true,
+          alias: false,
+        });
 
         if (
           allowance === undefined ||
@@ -195,6 +258,17 @@ function checkRegistrationSources(file, program, violations) {
     }
 
     const key = registrationKey(registration.name, registration.argument);
+
+    if (!registration.trusted || registration.alias) {
+      addViolation(
+        violations,
+        file,
+        node,
+        `${registration.name}(${registration.argument}) is not an allowlisted registration call`,
+      );
+      return;
+    }
+
     const remaining = expected.get(key) ?? 0;
 
     if (remaining === 0) {
@@ -229,6 +303,22 @@ function checkRegistrationSources(file, program, violations) {
  */
 function checkCapabilityReads(file, program, violations) {
   walk(program, null, (node, parent) => {
+    if (node.type === 'ObjectPattern') {
+      for (const property of node.properties) {
+        if (property.type !== 'Property') {
+          continue;
+        }
+
+        addCapabilityReadViolation(
+          violations,
+          file,
+          property,
+          propertyName(property.key, property.computed),
+        );
+      }
+      return;
+    }
+
     if (
       node.type === 'BinaryExpression' &&
       node.operator === 'in' &&
@@ -237,21 +327,7 @@ function checkCapabilityReads(file, program, violations) {
     ) {
       const name = node.left.value;
 
-      if (name === '_isConstructor') {
-        addViolation(
-          violations,
-          file,
-          node,
-          'semantic _isConstructor read is forbidden',
-        );
-      } else if (name === 'callFunction' || name === 'constructFunction') {
-        addViolation(
-          violations,
-          file,
-          node,
-          `${name} capability duck typing is forbidden`,
-        );
-      }
+      addCapabilityReadViolation(violations, file, node, name, true);
       return;
     }
 
@@ -262,12 +338,7 @@ function checkCapabilityReads(file, program, violations) {
     const name = staticMemberName(node);
 
     if (name === '_isConstructor' && !isAssignmentTarget(node, parent)) {
-      addViolation(
-        violations,
-        file,
-        node,
-        'semantic _isConstructor read is forbidden',
-      );
+      addCapabilityReadViolation(violations, file, node, name);
       return;
     }
 
@@ -276,13 +347,48 @@ function checkCapabilityReads(file, program, violations) {
       !isAssignmentTarget(node, parent) &&
       !isDirectCallTarget(node, parent)
     ) {
-      const message =
-        parent?.type === 'UnaryExpression' && parent.operator === 'typeof'
-          ? `${name} capability duck typing is forbidden`
-          : `semantic ${name} capability read is forbidden`;
-      addViolation(violations, file, node, message);
+      addCapabilityReadViolation(
+        violations,
+        file,
+        node,
+        name,
+        parent?.type === 'UnaryExpression' && parent.operator === 'typeof',
+      );
     }
   });
+}
+
+/**
+ * @param {{ file: string, line: number, message: string }[]} violations
+ * @param {string} file
+ * @param {any} node
+ * @param {string | null} name
+ * @param {boolean} [duckTyping=false]
+ */
+function addCapabilityReadViolation(
+  violations,
+  file,
+  node,
+  name,
+  duckTyping = false,
+) {
+  if (name === '_isConstructor') {
+    addViolation(
+      violations,
+      file,
+      node,
+      'semantic _isConstructor read is forbidden',
+    );
+  } else if (name === 'callFunction' || name === 'constructFunction') {
+    addViolation(
+      violations,
+      file,
+      node,
+      duckTyping
+        ? `${name} capability duck typing is forbidden`
+        : `semantic ${name} capability read is forbidden`,
+    );
+  }
 }
 
 /**
@@ -292,101 +398,137 @@ function checkCapabilityReads(file, program, violations) {
  */
 function checkRawHostAccessorCalls(file, program, violations) {
   const allowed = OBJECT_CONTRACT_ALLOWLIST.rawHostAccessor;
+  /** @type {Map<any, any>} */
+  const parents = new Map();
 
-  walk(program, null, (node) => {
+  walk(program, null, (node, parent) => {
+    parents.set(node, parent);
+  });
+
+  walk(program, null, (node, parent) => {
     if (!isFunctionNode(node)) {
       return;
     }
 
-    const functionName = namedFunction(node);
-    const guarded = new Set();
+    const functionIdentity = rawHostFunctionIdentity(node, parent, parents);
+    const callbacks = rawHostCallbackParameters(node);
 
     walkFunctionBody(node, (candidate) => {
-      const parameter = rawHostFunctionGuard(candidate);
-
-      if (parameter !== null) {
-        guarded.add(parameter);
+      if (candidate.type === 'VariableDeclarator') {
+        addRawHostCallbackAlias(candidate.id, candidate.init, callbacks);
+      } else if (candidate.type === 'AssignmentExpression') {
+        addRawHostCallbackAlias(candidate.left, candidate.right, callbacks);
       }
     });
 
-    for (const parameter of guarded) {
-      /** @type {Set<any>} */
-      const seen = new Set();
+    walkFunctionBody(node, (candidate) => {
+      if (candidate.type !== 'CallExpression') {
+        return;
+      }
 
-      walkFunctionBody(node, (candidate) => {
-        if (candidate.type !== 'CallExpression' || seen.has(candidate)) {
-          return;
-        }
+      const invocation = rawHostInvocation(candidate, callbacks);
 
-        const invocation = rawHostInvocation(candidate, parameter);
+      if (invocation === null) {
+        return;
+      }
 
-        if (invocation === null) {
-          return;
-        }
+      const parameter = rawHostInvocationParameter(candidate, callbacks);
 
-        seen.add(candidate);
-
-        if (
-          file === allowed.file &&
-          functionName === allowed.functionName &&
-          parameter === allowed.parameter &&
-          invocation === allowed.invocation
-        ) {
-          return;
-        }
-
-        addViolation(
-          violations,
+      if (
+        parameter === null ||
+        isRawHostAccessorInvocation(
           file,
-          candidate,
-          `raw host callback ${invocation} is only allowed in ${allowed.file}#${allowed.functionName}`,
-        );
-      });
-    }
+          functionIdentity,
+          parameter,
+          invocation,
+          allowed,
+        ) ||
+        isInternalContinuation(file, functionIdentity, parameter, invocation)
+      ) {
+        return;
+      }
+
+      addViolation(
+        violations,
+        file,
+        candidate,
+        `raw host callback ${invocation} is only allowed in ${allowed.file}#${allowed.functionName}`,
+      );
+    });
   });
 }
 
 /**
  * @param {any} node
- * @param {Map<string, string>} bindings
- * @returns {{ name: string, argument: string } | null}
+ * @param {Map<string, RegistrationBinding>} bindings
+ * @returns {{
+ *   name: string,
+ *   argument: string,
+ *   trusted: boolean,
+ *   alias: boolean,
+ * } | null}
  */
 function registrationCall(node, bindings) {
   const callee = unwrapChain(node.callee);
-  /** @type {string | null} */
-  let name = null;
+  /** @type {RegistrationBinding | null} */
+  let binding = null;
 
   if (callee.type === 'Identifier') {
-    name = bindings.get(callee.name) ?? callee.name;
+    binding = bindings.get(callee.name) ?? null;
+
+    if (binding === null && REGISTRATION_NAMES.has(callee.name)) {
+      binding = {
+        name: callee.name,
+        trusted: false,
+        alias: false,
+      };
+    }
   } else if (callee.type === 'MemberExpression') {
-    name = staticMemberName(callee);
+    const name = staticMemberName(callee);
+
+    if (name !== null && REGISTRATION_NAMES.has(name)) {
+      binding = {
+        name,
+        trusted: false,
+        alias: false,
+      };
+    }
   }
 
-  if (name === null || !REGISTRATION_NAMES.has(name)) {
+  if (binding === null) {
     return null;
   }
 
   return {
-    name,
+    name: binding.name,
     argument: registrationArgument(node.arguments),
+    trusted: binding.trusted,
+    alias: binding.alias,
   };
 }
 
 /**
  * @param {any} target
  * @param {any} source
- * @param {Map<string, string>} bindings
+ * @param {Map<string, RegistrationBinding>} bindings
  */
 function addRegistrationAlias(target, source, bindings) {
+  const sourceBinding =
+    source?.type === 'Identifier' ? (bindings.get(source.name) ?? null) : null;
   const sourceName =
-    source?.type === 'MemberExpression' ? staticMemberName(source) : null;
+    sourceBinding?.name ??
+    (source?.type === 'MemberExpression' ? staticMemberName(source) : null);
 
   if (
     target.type === 'Identifier' &&
     sourceName !== null &&
     REGISTRATION_NAMES.has(sourceName)
   ) {
-    bindings.set(target.name, sourceName);
+    bindings.set(target.name, {
+      name: sourceName,
+      trusted: sourceBinding?.trusted ?? false,
+      alias: true,
+    });
     return;
   }
 
@@ -410,7 +552,11 @@ function addRegistrationAlias(target, source, bindings) {
       REGISTRATION_NAMES.has(name) &&
       value.type === 'Identifier'
     ) {
-      bindings.set(value.name, name);
+      bindings.set(value.name, {
+        name,
+        trusted: false,
+        alias: true,
+      });
     }
   }
 }
@@ -455,50 +601,19 @@ function registrationKey(name, argument) {
 
 /**
  * @param {any} node
+ * @param {Set<string>} callbacks
  * @returns {string | null}
  */
-function rawHostFunctionGuard(node) {
-  if (
-    node.type !== 'BinaryExpression' ||
-    !['==', '==='].includes(node.operator)
-  ) {
+function rawHostInvocation(node, callbacks) {
+  const parameter = rawHostInvocationParameter(node, callbacks);
+
+  if (parameter === null) {
     return null;
   }
 
-  return (
-    typeofFunctionIdentifier(node.left, node.right) ??
-    typeofFunctionIdentifier(node.right, node.left)
-  );
-}
-
-/**
- * @param {any} typeTest
- * @param {any} functionLiteral
- * @returns {string | null}
- */
-function typeofFunctionIdentifier(typeTest, functionLiteral) {
-  if (
-    typeTest.type !== 'UnaryExpression' ||
-    typeTest.operator !== 'typeof' ||
-    typeTest.argument.type !== 'Identifier' ||
-    functionLiteral.type !== 'Literal' ||
-    functionLiteral.value !== 'function'
-  ) {
-    return null;
-  }
-
-  return typeTest.argument.name;
-}
-
-/**
- * @param {any} node
- * @param {string} parameter
- * @returns {string | null}
- */
-function rawHostInvocation(node, parameter) {
   const callee = unwrapChain(node.callee);
 
-  if (callee.type === 'Identifier' && callee.name === parameter) {
+  if (callee.type === 'Identifier') {
     return `${parameter}()`;
   }
 
@@ -515,6 +630,124 @@ function rawHostInvocation(node, parameter) {
   }
 
   return null;
+}
+
+/**
+ * @param {any} node
+ * @param {Set<string>} callbacks
+ * @returns {string | null}
+ */
+function rawHostInvocationParameter(node, callbacks) {
+  const callee = unwrapChain(node.callee);
+
+  if (callee.type === 'Identifier' && callbacks.has(callee.name)) {
+    return callee.name;
+  }
+
+  if (
+    callee.type === 'MemberExpression' &&
+    callee.object.type === 'Identifier' &&
+    callbacks.has(callee.object.name)
+  ) {
+    const method = staticMemberName(callee);
+
+    if (method === 'call' || method === 'apply') {
+      return callee.object.name;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * @param {any} node
+ * @returns {Set<string>}
+ */
+function rawHostCallbackParameters(node) {
+  /** @type {Set<string>} */
+  const callbacks = new Set();
+
+  for (const parameter of node.params) {
+    const name = patternIdentifierName(parameter);
+
+    if (name !== null && RAW_HOST_CALLBACK_PARAMETERS.has(name)) {
+      callbacks.add(name);
+    }
+  }
+
+  return callbacks;
+}
+
+/**
+ * @param {any} target
+ * @param {any} source
+ * @param {Set<string>} callbacks
+ */
+function addRawHostCallbackAlias(target, source, callbacks) {
+  const sourceValue = source == null ? null : unwrapChain(source);
+
+  if (
+    target.type === 'Identifier' &&
+    sourceValue?.type === 'Identifier' &&
+    callbacks.has(sourceValue.name)
+  ) {
+    callbacks.add(target.name);
+  }
+}
+
+/**
+ * @param {string} file
+ * @param {string | null} functionIdentity
+ * @param {string} parameter
+ * @param {string} invocation
+ * @param {{
+ *   file: string,
+ *   functionName: string,
+ *   parameter: string,
+ *   invocation: string,
+ * }} allowed
+ * @returns {boolean}
+ */
+function isRawHostAccessorInvocation(
+  file,
+  functionIdentity,
+  parameter,
+  invocation,
+  allowed,
+) {
+  return (
+    file === allowed.file &&
+    functionIdentity === `function:${allowed.functionName}` &&
+    parameter === allowed.parameter &&
+    invocation === allowed.invocation
+  );
+}
+
+/**
+ * These continuation callbacks never hold a descriptor or guest value: their
+ * enclosing engine operation creates and consumes them synchronously. They are
+ * intentionally distinct from the raw accessor boundary above.
+ *
+ * @param {string} file
+ * @param {string | null} functionIdentity
+ * @param {string} parameter
+ * @param {string} invocation
+ * @returns {boolean}
+ */
+function isInternalContinuation(file, functionIdentity, parameter, invocation) {
+  const continuations =
+    /** @type {Record<string, readonly InternalContinuationAllowance[]>} */ (
+      OBJECT_CONTRACT_ALLOWLIST.internalContinuations
+    )[file];
+
+  return (
+    continuations?.some(
+      (continuation) =>
+        continuation.functionIdentity === functionIdentity &&
+        continuation.parameter === parameter &&
+        continuation.invocation === invocation,
+    ) ?? false
+  );
 }
 
 /**
@@ -587,8 +820,109 @@ function isFunctionNode(node) {
  * @param {any} node
  * @returns {string | null}
  */
-function namedFunction(node) {
-  return node.id?.type === 'Identifier' ? node.id.name : null;
+function patternIdentifierName(node) {
+  const pattern = node.type === 'AssignmentPattern' ? node.left : node;
+
+  return pattern.type === 'Identifier' ? pattern.name : null;
+}
+
+/**
+ * @param {any} node
+ * @param {any} parent
+ * @returns {string | null}
+ */
+function namedFunction(node, parent) {
+  if (node.id?.type === 'Identifier') {
+    return node.id.name;
+  }
+
+  if (parent?.type === 'MethodDefinition') {
+    return propertyName(parent.key, parent.computed);
+  }
+
+  return parent?.type === 'VariableDeclarator' &&
+    parent.id.type === 'Identifier'
+    ? parent.id.name
+    : null;
+}
+
+/**
+ * The allowlist is tied to a declaration's lexical owner, not merely its
+ * spelling, so another class or nested helper cannot inherit a continuation
+ * exception by reusing one of these names.
+ *
+ * @param {any} node
+ * @param {any} parent
+ * @param {Map<any, any>} parents
+ * @returns {string | null}
+ */
+function rawHostFunctionIdentity(node, parent, parents) {
+  const name = namedFunction(node, parent);
+
+  if (name === null) {
+    return null;
+  }
+
+  if (parent?.type === 'MethodDefinition') {
+    const classBody = parents.get(parent);
+    const classDeclaration = parents.get(classBody);
+
+    if (
+      classDeclaration?.type === 'ClassDeclaration' &&
+      classDeclaration.id?.type === 'Identifier' &&
+      isTopLevelDeclaration(classDeclaration, parents)
+    ) {
+      return `class:${classDeclaration.id.name}#${name}`;
+    }
+
+    return null;
+  }
+
+  if (parent?.type === 'VariableDeclarator') {
+    const owner = enclosingRawHostFunctionIdentity(parent, parents);
+    return owner === null ? null : `${owner}>binding:${name}`;
+  }
+
+  return node.type === 'FunctionDeclaration' &&
+    isTopLevelDeclaration(node, parents)
+    ? `function:${name}`
+    : null;
+}
+
+/**
+ * @param {any} node
+ * @param {Map<any, any>} parents
+ * @returns {string | null}
+ */
+function enclosingRawHostFunctionIdentity(node, parents) {
+  let current = parents.get(node);
+
+  while (current !== null && current !== undefined) {
+    if (isFunctionNode(current)) {
+      return rawHostFunctionIdentity(current, parents.get(current), parents);
+    }
+    current = parents.get(current);
+  }
+
+  return null;
+}
+
+/**
+ * @param {any} node
+ * @param {Map<any, any>} parents
+ * @returns {boolean}
+ */
+function isTopLevelDeclaration(node, parents) {
+  let parent = parents.get(node);
+
+  while (
+    parent?.type === 'ExportNamedDeclaration' ||
+    parent?.type === 'ExportDefaultDeclaration'
+  ) {
+    parent = parents.get(parent);
+  }
+
+  return parent?.type === 'Program';
 }
 
 /**

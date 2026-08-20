@@ -1260,6 +1260,30 @@ export default [
     },
   },
   {
+    name: 'object contract invariant rejects imported registration identifier aliases',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/runtime/function-object.js',
+            [
+              "import { registerCallable, registerConstructor } from './capabilities.js';",
+              'registerConstructor(this);',
+              'registerCallable(this);',
+              'const grant = registerCallable;',
+              'grant(other);',
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        'src/runtime/function-object.js:5: registerCallable(other) is not an allowlisted registration call',
+      );
+    },
+  },
+  {
     name: 'object contract invariant rejects semantic capability probes',
     run() {
       const violations = checkObjectContractSources(
@@ -1288,6 +1312,30 @@ export default [
     },
   },
   {
+    name: 'object contract invariant rejects destructured semantic capability probes',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/runtime/rogue.js',
+            [
+              'const { _isConstructor } = value;',
+              'const { callFunction } = value;',
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        [
+          'src/runtime/rogue.js:1: semantic _isConstructor read is forbidden',
+          'src/runtime/rogue.js:2: semantic callFunction capability read is forbidden',
+        ].join('\n'),
+      );
+    },
+  },
+  {
     name: 'object contract invariant reserves raw host accessor calls for callAccessor',
     run() {
       const violations = checkObjectContractSources(
@@ -1308,6 +1356,62 @@ export default [
       assertSame(
         violations.join('\n'),
         'src/runtime/rogue.js:3: raw host callback callback.call() is only allowed in src/runtime/object.js#callAccessor',
+      );
+    },
+  },
+  {
+    name: 'object contract invariant rejects unguarded and negative-guard raw host callback calls',
+    run() {
+      const violations = checkObjectContractSources(
+        new Map([
+          [
+            'src/runtime/rogue-direct.js',
+            [
+              'export function invoke(callback) {',
+              '  return callback();',
+              '}',
+            ].join('\n'),
+          ],
+          [
+            'src/runtime/rogue-negative-guard.js',
+            [
+              'export function invoke(callback) {',
+              "  if (typeof callback !== 'function') {",
+              "    throw new TypeError('callback must be callable');",
+              '  }',
+              '  return callback();',
+              '}',
+            ].join('\n'),
+          ],
+          [
+            'src/runtime/agent.js',
+            [
+              'export class Rogue {',
+              '  withActiveExecutionRealm(callback) {',
+              '    return callback();',
+              '  }',
+              '}',
+            ].join('\n'),
+          ],
+          [
+            'src/builtins/date.js',
+            [
+              'function unrelated() {',
+              '  const set = (callback) => callback();',
+              '}',
+            ].join('\n'),
+          ],
+        ]),
+      );
+
+      assertSame(
+        violations.join('\n'),
+        [
+          'src/builtins/date.js:2: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
+          'src/runtime/agent.js:3: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
+          'src/runtime/rogue-direct.js:2: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
+          'src/runtime/rogue-negative-guard.js:5: raw host callback callback() is only allowed in src/runtime/object.js#callAccessor',
+        ].join('\n'),
       );
     },
   },
