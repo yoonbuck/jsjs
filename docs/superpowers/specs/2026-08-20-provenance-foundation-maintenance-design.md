@@ -138,6 +138,12 @@ guard needed before the provenance schema-v3 correction. No workflow, checker,
 test, generated manifest, taxonomy output, conformance output, or runtime byte
 has been changed by this design phase.
 
+For this prerequisite only, the amendment supersedes the earlier statements
+that the generated workflow command and bytes remain unchanged. Those
+statements describe the already-completed schema-v2 maintenance range; the
+guard follow-up intentionally changes the generated workflow contract without
+changing schema-v2 provenance or taxonomy bytes.
+
 The guard implementation must be authored against this exact trusted base:
 
 - main commit:
@@ -190,7 +196,10 @@ pull_request_target:
 It must not add `paths`, `paths-ignore`, `branches`, or `branches-ignore`.
 `edited` is mandatory because the authoritative marker lives in the PR body.
 The lack of path filters ensures every PR reports the guard check, including a
-neutral non-provenance range that the checker permits.
+neutral non-provenance range that the checker permits. A non-main or otherwise
+noncanonical target still triggers the active guard, then fails its fixed target
+identity checks; no stacked or intermediate-branch PR may receive a passing
+active guard context.
 
 GitHub documents that `pull_request_target` loads workflow bytes and the
 default checkout from the base repository's default branch and exposes the
@@ -199,17 +208,24 @@ default-branch commit through `GITHUB_SHA`. The job must therefore ignore
 `github.event.pull_request.base.sha` and
 `github.event.pull_request.head.sha` to the checker.
 
-GitHub associates the resulting check run with the PR head even though the job
-executes in the default-branch context. The stable required job/check-run name
-is:
+Current Actions behavior associates the resulting check run with the PR head
+even though `GITHUB_SHA` and the execution ref belong to the default branch.
+This distinction is a deployment precondition, not something the workflow may
+infer from `GITHUB_SHA`. The stable required check-run/job name is:
 
 ```text
 Provenance base guard
 ```
 
-The expected Actions UI context is `CI / Provenance base guard`; repository
-protection must select the exact context reported by the first live guard run
-and, where supported, restrict it to the GitHub Actions app.
+The Actions UI may present the workflow and job together, but the check-run name
+used for protection is `Provenance base guard`. The first live post-merge probe
+must query check runs for both the event PR head SHA and the workflow's
+default-branch SHA and prove that exactly the expected active result is attached
+to the current PR head. Repository protection must select only that exact
+reported context and, where supported, restrict it to the GitHub Actions app.
+If the platform does not attach the check to the PR head, activation stops: do
+not add a write permission or status-reporting workaround, do not configure the
+context as required, and do not start the schema-v3 correction.
 
 A skipped conditional job reports success. Therefore static names plus opposite
 event conditions would be unsafe: a skipped guard in the ordinary
@@ -224,10 +240,17 @@ must assign event-distinct display names:
   receives an `(inactive on pull_request_target)` suffix in the privileged
   event.
 
+Job `name` supports the `github` context, so the generator uses a
+`github.event_name` expression to select each display name. The first live
+probe must also prove that GitHub evaluates the distinct name for a job skipped
+by its job-level `if`. No context containing `(inactive` may ever be selected
+for branch protection; those always-green skipped contexts are diagnostic only.
+
 The guard also uses job-level concurrency keyed only by the server-provided PR
 number, with `cancel-in-progress: true`. A body edit or synchronize event must
 cancel an older guard before the older run can finish after newer range or
-marker data and become the apparent current result.
+marker data and become the apparent current result. A cancelled run is
+non-satisfying; the final event's active run must complete successfully.
 
 Every existing job also receives the job-level condition
 `github.event_name != 'pull_request_target'`. The guard receives
@@ -244,24 +267,39 @@ Relevant platform contracts:
 
 ### Guard trust boundary and data flow
 
-The dedicated job has no dependencies on other jobs and performs only these
-operations:
+The dedicated job has no dependencies on other jobs, runs on explicit
+`ubuntu-24.04`, has a five-minute timeout, and performs only these operations:
 
-1. Use the repository's existing full-SHA pin for `actions/checkout`, with
+1. Pass the server event's base repository, workflow repository, base ref, base
+   SHA, head SHA, and PR number through environment variables to one fixed
+   single-line shell command. Before any checkout or fetch, require:
+
+   - base repository exactly `yoonbuck/jsjs`;
+   - `github.repository` exactly `yoonbuck/jsjs`;
+   - base ref exactly `main`;
+   - base and head identities each match `^[0-9a-f]{40}$`; and
+   - PR number matches `^[1-9][0-9]*$`.
+
+   These checks make the guard authoritative only for PRs targeting canonical
+   protected main. Retargeting to any other base repository or branch fails
+   before repository content is read.
+2. Use the repository's existing full-SHA pin for `actions/checkout`, with
    `ref` set explicitly to `github.event.pull_request.base.sha`,
    `fetch-depth: 0`, `persist-credentials: false`, and `submodules: false`.
-2. Use the existing full-SHA `actions/setup-node` pin for Node 20, without npm
+3. Use a second fixed single-line command to require
+   `git rev-parse --verify 'HEAD^{commit}'` equals the event base SHA. This proves
+   that the worktree containing the checker is the server-declared canonical
+   main base, not an action fallback or another ref.
+4. Use the existing full-SHA `actions/setup-node` pin for Node 20, without npm
    caching and without reading or installing project dependencies.
-3. Pass the server-provided PR number and head SHA through step environment
-   variables. A fixed shell command first requires the PR number to match
-   `^[1-9][0-9]*$`, then fetches the base repository's advertised PR ref with:
+5. Use a fixed single-line command to fetch the base repository's advertised PR
+   ref:
 
    ```sh
-   git fetch --no-tags --no-recurse-submodules origin \
-     "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"
+   git fetch --no-tags --no-recurse-submodules origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"
    ```
 
-   The command must then resolve both
+6. Use a separate fixed single-line command to resolve both
    `refs/remotes/pull/${PR_NUMBER}/head^{commit}` and `FETCH_HEAD^{commit}` and
    require each result to equal the explicit event `HEAD_SHA`. Any invalid
    number, missing PR ref, or SHA mismatch fails the job before the checker.
@@ -270,10 +308,10 @@ operations:
    fetch from, or derive a remote URL from
    `github.event.pull_request.head.repo`; the only remote is the base checkout's
    fixed `origin`.
-4. Keep the fetched head only in Git's object database. No checkout, reset,
+7. Keep the fetched head only in Git's object database. No checkout, reset,
    archive extraction, submodule operation, package operation, dynamic import,
    or command from that tree is permitted.
-5. Run the checked-out base
+8. Run the checked-out base
    `tools/test262/es2015-provenance-check.js` with `--check-range`, explicit
    base and head environment variables, and `--pr-body-env`. Its imports,
    including `es2015-provenance.js` and `selection.js`, resolve from the base
@@ -295,6 +333,27 @@ full-SHA validation. The checker reads the full body from the named environment
 variable and applies the exact one-marker parser. A neutral range with no
 marker and no base-owned provenance path returns success; a provenance-owned
 range without one authoritative marker fails closed.
+
+The job maps event values to environment variables exactly as follows:
+
+| Environment variable | Trusted expression |
+| --- | --- |
+| `BASE_REPOSITORY` | `${{ github.event.pull_request.base.repo.full_name }}` |
+| `WORKFLOW_REPOSITORY` | `${{ github.repository }}` |
+| `BASE_REF` | `${{ github.event.pull_request.base.ref }}` |
+| `BASE_SHA` | `${{ github.event.pull_request.base.sha }}` |
+| `HEAD_SHA` | `${{ github.event.pull_request.head.sha }}` |
+| `PR_NUMBER` | `${{ github.event.pull_request.number }}` |
+| `PR_BODY` | `${{ github.event.pull_request.body }}` |
+
+No head repository, branch name, clone URL, or other PR-controlled string is
+mapped into an action input or shell command.
+
+The unauthenticated advertised-ref fetch depends on `yoonbuck/jsjs` remaining
+public. If repository visibility changes, the guard fails closed. Restoring it
+requires a separately reviewed design for authenticated inert-object fetch;
+persisting checkout credentials or improvising a token-bearing fetch is not an
+approved fallback.
 
 ### Permissions and privileged-event exclusions
 
@@ -327,20 +386,37 @@ The data model and renderer may grow only enough to represent:
 - job-level `if`;
 - guard job concurrency;
 - job-level permissions;
+- guard runner and timeout;
 - event-distinct job display names;
 - the custom no-install guard setup; and
 - the `pull_request_target` trigger.
 
 The committed workflow must remain byte-for-byte equal to
-`renderWorkflowYaml(await loadCiPipeline())`. Existing jobs retain their current
-steps, dependencies, action pins, commands, environments, and ordinary-event
-names.
+`renderWorkflowYaml((await loadCiPipeline()).jobs)`. The guard validation,
+fetch, attestation, and checker invocations are separate single-line `run`
+steps, so the BASE renderer needs no multiline/block-scalar support. Tests must
+parse the generated YAML and require each new `run`, `with`, and `env` value to
+round-trip exactly. Existing jobs retain their current steps, dependencies,
+action pins, commands, environments, and ordinary-event names.
 
-The base checker needs only the narrow event-contract extension that accepts
-`GITHUB_EVENT_NAME` equal to `pull_request_target` in addition to
-`pull_request` when `--pr-body-env` is used. It must continue rejecting every
-other event name. No profile, allowlist, taxonomy identity, decision fragment,
-or schema-v2 manifest byte changes for this guard.
+The base checker needs exactly two narrow changes:
+
+- accept `GITHUB_EVENT_NAME` equal to `pull_request_target` in addition to
+  `pull_request` when `--pr-body-env` is used, while rejecting every other
+  event; and
+- add `tools/test262/selection.js` to
+  `PROVENANCE_RANGE_GATE_OWNER_PATHS`.
+
+`selection.js` is a transitive executable dependency of the base provenance
+module but is intentionally not allowed by `foundation-maintenance`. Owning the
+path in the checker makes any range that changes it fail closed instead of
+passing as neutral; the guard does not modify or newly allow that file. No
+profile, allowlist, taxonomy identity, decision fragment, or schema-v2 manifest
+byte changes for this guard.
+
+The existing `Check provenance PR range` step in `test262-upstream` remains
+verbatim and restricted to `pull_request`. It is defense in depth during
+ordinary unprivileged CI, never the authoritative trusted-base guard.
 
 `test/node/workflow-contract.test.js` must independently assert the committed
 YAML, not merely the generator objects:
@@ -351,16 +427,24 @@ YAML, not merely the generator objects:
 - guard ID, stable active name, inactive name, event condition, runner,
   concurrency, permissions, pinned actions, explicit base ref, non-persisted
   credentials, disabled submodules, full-history checkout, no npm command,
-  PR-number validation, advertised base-repository PR-ref fetch, fetched-ref and
-  `FETCH_HEAD` equality with the event head SHA, checker command, and exact
+  fixed canonical base/workflow repository and `main` ref validation, full-SHA
+  and PR-number validation, checked-out HEAD equality with event base SHA,
+  advertised base-repository PR-ref fetch, fetched-ref and `FETCH_HEAD`
+  equality with the event head SHA, checker command, timeout, and exact
   event-derived environment values;
 - fork-shaped event identities in which the head repository differs from the
   base repository, proving the fetch still uses only the base checkout's
   `origin` and `refs/pull/<number>/head`;
-- fail-closed behavior for a nonnumeric or zero PR number and for a fetched SHA
-  that differs from the event head SHA;
+- executable command tests against deterministic temporary Git repositories
+  for a retargeted base branch, mismatched base repository, checked-out HEAD
+  differing from event base SHA, nonnumeric or zero PR number, and fetched SHA
+  differing from event head SHA;
 - every existing job has its privileged-event exclusion and distinct inactive
   name while preserving its ordinary name and behavior;
+- the existing expectation table, per-job npm-command assumptions, inherited
+  permission assertion, and exact checker error text are deliberately amended
+  for the new custom guard rather than weakened or edited ad hoc;
+- the legacy ordinary-PR provenance step remains byte-for-byte unchanged;
 - no guard step references secrets, HEAD checkout, unsafe checkout opt-out,
   npm, artifacts, caches, unpinned actions, a head-repository URL, or untrusted
   interpolation in `run`; and
@@ -370,7 +454,9 @@ Focused provenance-checker tests must cover accepted `pull_request` and
 `pull_request_target` body-derived checks, rejection of all other event names,
 full-SHA and ancestor failures, neutral unmarked ranges, provenance-owned
 unmarked ranges, duplicate or malformed markers, and unchanged trusted-base
-profile authorization. Broad Test262 remains prohibited.
+profile authorization. They must also prove that a change to
+`tools/test262/selection.js` is provenance-owned and cannot pass as a neutral
+range. Broad Test262 remains prohibited.
 
 ### Exact BASE allowlist
 
@@ -381,8 +467,7 @@ expected implementation paths:
 - `tools/ci/pipeline.js`
 - `test/node/workflow-contract.test.js`
 - `tools/test262/es2015-provenance-check.js`
-- `test/node/es2015-provenance.test.js` only if the event-contract test belongs
-  there
+- `test/node/es2015-provenance.test.js`
 - this design
 - its existing implementation plan
 - the already allowlisted supporting conformance/testing documents only if
@@ -409,10 +494,14 @@ evidence is instead:
 The guard becomes authoritative only after squash merge, byte verification on
 the exact resulting main commit, and clean exact-main CodeQL. The first live
 post-merge PR must prove that `Provenance base guard` is attached to its current
-head, that the workflow source/default-branch SHA is the guard merge or a
-reviewed descendant, and that the logged checker inputs equal the event base and
-head SHAs without logging the PR body. Only then may repository protection
-require the exact guard context.
+head rather than only the default-branch SHA; that active and skipped job names
+evaluate distinctly; that no inactive context is selected; that the workflow
+source/default-branch SHA is the guard merge or a reviewed descendant; and that
+the logged checker inputs equal the event base and head SHAs without logging the
+PR body. Only then may repository protection require the exact guard context.
+Failure of any activation proof blocks required-check configuration and the
+schema-v3 correction; it does not authorize a permission or trust-boundary
+workaround.
 
 The schema-v3 corrective PR must be re-authored from that guarded main commit.
 It must show a fresh `pull_request_target` run sourced from BASE, pass the
