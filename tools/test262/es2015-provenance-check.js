@@ -766,10 +766,10 @@ async function markerForRange(deps, options, changes, base, head) {
       '--pr-body-env must name a trusted environment variable',
     );
   }
+  const eventName = deps.environment.GITHUB_EVENT_NAME;
   if (
-    !['pull_request', 'pull_request_target'].includes(
-      deps.environment.GITHUB_EVENT_NAME,
-    )
+    typeof eventName !== 'string' ||
+    !['pull_request', 'pull_request_target'].includes(eventName)
   ) {
     throw new Es2015ProvenanceCheckError(
       'Provenance PR range checking requires a pull_request event',
