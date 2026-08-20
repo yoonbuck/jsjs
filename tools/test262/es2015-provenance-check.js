@@ -817,6 +817,13 @@ async function provenanceOwnedRange(deps, changes, base, head) {
     baseManifestText !== null &&
     sha256(baseManifestText) === FOUNDATION_BOOTSTRAP_MANIFEST_SHA256
   ) {
+    const bootstrapFoundationProfile = JSON.parse(
+      baseManifestText,
+    ).rangeProfiles.find((profile) => profile.name === 'foundation');
+    addRangeProfileOwnership(
+      ownedPaths,
+      bootstrapFoundationProfile,
+    );
     addRangeProfileOwnership(
       ownedPaths,
       FOUNDATION_BOOTSTRAP_RANGE_PROFILE,

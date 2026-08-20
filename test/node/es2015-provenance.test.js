@@ -3696,6 +3696,37 @@ export default [
     },
   },
   {
+    name: 'ES2015 provenance CI range mode requires a marker for exact-U0 foundation-owned paths',
+    run: async () => {
+      const dependencies = rangeCheckDependencies({
+        changes: [{ status: 'M', path: 'package.json' }],
+        baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+        baseManifestText: foundationBootstrapManifestText(),
+      });
+      dependencies.environment = {
+        TZ: 'UTC',
+        GITHUB_EVENT_NAME: 'pull_request',
+        PROVENANCE_PR_BODY: 'No marker',
+      };
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              [
+                '--check-range',
+                `--base=${FOUNDATION_BOOTSTRAP_COMMIT}`,
+                `--head=${RANGE_HEAD_SHA}`,
+                '--pr-body-env=PROVENANCE_PR_BODY',
+              ],
+              dependencies,
+            ),
+          )
+        ).message,
+        'A provenance-owned PR range requires one authoritative provenance marker',
+      );
+    },
+  },
+  {
     name: 'ES2015 provenance CI range mode derives one trusted profile marker from the PR body',
     run: async () => {
       const foundationChanges = [
