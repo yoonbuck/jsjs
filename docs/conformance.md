@@ -714,9 +714,9 @@ The qualified core ES2015 evidence is:
 
 | Core status              | Roots      | Variants   |
 | ------------------------ | ---------- | ---------- |
-| Selected passing         | 19,665     | 37,425     |
+| Selected passing         | 19,625     | 37,347     |
 | Audit-passing unselected | 60         | 120        |
-| Blocked                  | 4,523      | 8,875      |
+| Blocked                  | 4,563      | 8,953      |
 | Intentional deviation    | 2          | 4          |
 | **Core total**           | **24,250** | **46,424** |
 

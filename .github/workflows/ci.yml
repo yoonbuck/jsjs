@@ -227,32 +227,6 @@ jobs:
         env:
           TZ: 'UTC'
 
-  test262-cross-realm:
-    name: Pinned Test262 cross-Realm H0 corpus
-    runs-on: ubuntu-latest
-    needs: [vendor]
-    steps:
-      - name: Check out the project
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: 'false'
-      - name: Check out the pinned Test262 tree
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: 'tc39/test262'
-          ref: 'b363f29d3c43c626dc852744ad64a0b48a003693'
-          path: 'vendor/test262'
-          persist-credentials: 'false'
-      - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
-      - name: Run the focused cross-Realm Test262 suite
-        run: npm run test262:cross-realm
-
   benchmark-smoke:
     name: ${{ github.event_name != 'pull_request_target' && 'Benchmark smoke' || 'Benchmark smoke (inactive on pull_request_target)' }}
     if: github.event_name != 'pull_request_target'

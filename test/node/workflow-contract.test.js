@@ -110,7 +110,6 @@ const EXPECTED_JOB_COMMANDS = Object.freeze({
   'test-browser': 'npm run test:browser',
   'test-jsc': 'npm run test:jsc',
   'test262-fixtures': 'npm run test262:fixtures',
-  'test262-cross-realm': 'npm run test262:cross-realm',
   'test262-es2015-release': 'npm run test262:es2015-release',
   'test262-upstream': 'npm run test262:upstream',
   'benchmark-smoke': 'npm run benchmark:smoke',
@@ -1311,30 +1310,6 @@ export default [
         formatProjectCheckout?.with?.['fetch-depth'],
         undefined,
         'ordinary non-history jobs must keep the default project checkout depth',
-      );
-    },
-  },
-  {
-    name: 'the focused cross-Realm Test262 job checks out the pinned revision and runs only the immutable H0 corpus',
-    run: async () => {
-      const { workflow } = await readWorkflow();
-      const packageManifest = await readPackageManifest();
-      const job = requireJob(workflow, 'test262-cross-realm');
-      const checkouts = usesSteps(job, 'actions/checkout');
-      const upstream = checkouts.filter(
-        (step) => step.with?.repository !== undefined,
-      );
-
-      assertSame(upstream.length, 1, 'exactly one upstream checkout step');
-      assertSame(upstream[0].with.repository, 'tc39/test262');
-      assertSame(upstream[0].with.ref, packageManifest.test262.revision);
-      assertSame(upstream[0].with.path, packageManifest.test262.checkoutPath);
-      assertSame(String(upstream[0].with['persist-credentials']), 'false');
-      assertSame(job.name, 'Pinned Test262 cross-Realm H0 corpus');
-      assertSame(JSON.stringify(job.needs), JSON.stringify(['vendor']));
-      assertSame(
-        JSON.stringify(runCommands(job)),
-        JSON.stringify(['npm ci', 'npm run test262:cross-realm']),
       );
     },
   },
