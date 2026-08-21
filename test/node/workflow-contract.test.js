@@ -2665,11 +2665,13 @@ export default [
     run: async () => {
       const { workflow } = await readWorkflow();
       const job = requireJob(workflow, GUARD_JOB_ID);
-      const render = (eventName) => ({
+      const render = (/** @type {string} */ eventName) => ({
         name: evaluateEventNameExpression(job.name, eventName),
         steps: (job.steps ?? [])
-          .filter((step) => matchesEventNameCondition(step.if, eventName))
-          .map((step) => step.name),
+          .filter((/** @type {{ if?: string }} */ step) =>
+            matchesEventNameCondition(step.if, eventName),
+          )
+          .map((/** @type {{ name: string }} */ step) => step.name),
       });
 
       const push = render('push');

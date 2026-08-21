@@ -76,6 +76,9 @@ import {
  * @typedef {{ path: string, variants: number, partition: string, finalClass: string, features: readonly string[], flags: readonly string[], includes: readonly string[] }} ClassificationRecord
  * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }} ApprovedBatchSummary
  * @typedef {readonly { type: 'test', file: string, variant: 'non-strict' | 'strict', status: 'passed' }[]} ExecutionRecords
+ * @typedef {{ file: string, variant?: string | null, [key: string]: unknown }} AuditEvidenceRecord
+ * @typedef {{ path: string, variants: number, partition: string, status: string, blocker: string | null }} TaxonomyArtifactClassification
+ * @typedef {{ subsetText: string, featuresText: string, reportText: string, auditEvidenceText: string }} TaxonomyArtifactInputs
  */
 
 const readFileSyncText =
@@ -298,12 +301,23 @@ const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
 );
+/** @param {string} revision @param {string} path */
 function readGitFixtureText(revision, path) {
   return execFileSync(
     'git',
     ['-c', 'core.pager=cat', 'show', `${revision}:${path}`],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    /** @type {any} */ ({
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    }),
   );
+}
+
+/** @param {ReadonlyMap<string, string>} files @param {string} path @returns {string} */
+function requiredFixtureText(files, path) {
+  const text = files.get(path);
+  assertSame(text !== undefined, true, path);
+  return /** @type {string} */ (text);
 }
 
 const PRESERVED_H0_SOURCE_TAXONOMY_TEXT = readGitFixtureText(
@@ -1196,7 +1210,8 @@ function driftedCrossRealmTaxonomyText(text) {
 function driftedNewTargetTaxonomyText(text) {
   const taxonomy = JSON.parse(text);
   const record = taxonomy.classifications.find(
-    (entry) => entry.path === 'test/staging/sm/class/newTargetEval.js',
+    (/** @type {{ path: string, status: string, blocker: string | null }} */ entry) =>
+      entry.path === 'test/staging/sm/class/newTargetEval.js',
   );
   assertSame(record !== undefined, true);
   record.status = 'blocked:test262-cross-realm-host';
@@ -1207,7 +1222,10 @@ function driftedNewTargetTaxonomyText(text) {
 /** @param {string} text */
 function subsetTextWithExtraPath(text) {
   const subset = JSON.parse(text);
-  const group = subset.groups.find((entry) => entry.name === 'language/statements');
+  const group = subset.groups.find(
+    (/** @type {{ name: string, paths: string[] }} */ entry) =>
+      entry.name === 'language/statements',
+  );
   assertSame(group !== undefined, true);
   group.paths = [...group.paths, 'test/language/statements/class/zzz-extra.js'].sort();
   return `${JSON.stringify(subset, null, 2)}\n`;
@@ -1216,13 +1234,16 @@ function subsetTextWithExtraPath(text) {
 /** @param {string} text */
 function subsetTextWithReplacementPath(text) {
   const subset = JSON.parse(text);
-  const group = subset.groups.find((entry) => entry.name === 'language/expressions');
+  const group = subset.groups.find(
+    (/** @type {{ name: string, paths: string[] }} */ entry) =>
+      entry.name === 'language/expressions',
+  );
   assertSame(group !== undefined, true);
   const replacementSource =
     'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js';
   assertSame(group.paths.includes(replacementSource), true);
   group.paths = group.paths
-    .filter((path) => path !== replacementSource)
+    .filter((/** @type {string} */ path) => path !== replacementSource)
     .concat('test/language/expressions/class/intruder-replacement.js')
     .sort();
   return `${JSON.stringify(subset, null, 2)}\n`;
@@ -1371,7 +1392,7 @@ function roadmapProjectionEntries(outputs) {
   }));
 }
 
-/** @param {readonly object[]} records */
+/** @param {readonly AuditEvidenceRecord[]} records */
 function auditEvidenceText(records) {
   return prettyJson({
     version: 1,
@@ -1387,8 +1408,12 @@ function auditEvidenceText(records) {
   });
 }
 
-/** @param {readonly object[]} classifications */
+/** @param {readonly TaxonomyArtifactClassification[]} classifications */
 function taxonomyStatusTables(classifications) {
+  /**
+   * @param {readonly TaxonomyArtifactClassification[]} entries
+   * @param {(entry: TaxonomyArtifactClassification) => string} keyOf
+   */
   const countTable = (entries, keyOf) => {
     const totals = new Map();
     for (const entry of entries) {
@@ -1414,12 +1439,15 @@ function taxonomyStatusTables(classifications) {
     ),
     blockers: countTable(
       classifications.filter((entry) => entry.blocker !== null),
-      (entry) => entry.blocker,
+      (entry) => /** @type {string} */ (entry.blocker),
     ),
   };
 }
 
-/** @param {readonly object[]} classifications */
+/**
+ * @param {readonly TaxonomyArtifactClassification[]} classifications
+ * @param {TaxonomyArtifactInputs} inputs
+ */
 function taxonomyArtifactText(classifications, inputs) {
   return prettyJson({
     version: 3,
@@ -1451,7 +1479,7 @@ function taxonomyArtifactText(classifications, inputs) {
 function taxonomyTextWithoutPath(text, path) {
   const taxonomy = JSON.parse(text);
   taxonomy.classifications = taxonomy.classifications.filter(
-    (entry) => entry.path !== path,
+    (/** @type {{ path: string }} */ entry) => entry.path !== path,
   );
   taxonomy.summary = summarizeEs2015Classification(taxonomy.classifications);
   taxonomy.statusTables = taxonomyStatusTables(taxonomy.classifications);
@@ -1461,7 +1489,9 @@ function taxonomyTextWithoutPath(text, path) {
 /** @param {string} text @param {string} path */
 function taxonomyTextWithDuplicatePath(text, path) {
   const taxonomy = JSON.parse(text);
-  const record = taxonomy.classifications.find((entry) => entry.path === path);
+  const record = taxonomy.classifications.find(
+    (/** @type {{ path: string }} */ entry) => entry.path === path,
+  );
   assertSame(record !== undefined, true);
   taxonomy.classifications = [
     ...taxonomy.classifications,
@@ -1474,7 +1504,8 @@ function taxonomyTextWithDuplicatePath(text, path) {
 function auditEvidenceTextWithoutRecord(text, file, variant) {
   const evidence = JSON.parse(text);
   evidence.auditRecords = evidence.auditRecords.filter(
-    (record) => !(record.file === file && record.variant === variant),
+    (/** @type {AuditEvidenceRecord} */ record) =>
+      !(record.file === file && record.variant === variant),
   );
   return `${JSON.stringify(evidence, null, 2)}\n`;
 }
@@ -1483,7 +1514,7 @@ function auditEvidenceTextWithoutRecord(text, file, variant) {
 function auditEvidenceTextWithoutPath(text, file) {
   const evidence = JSON.parse(text);
   evidence.auditRecords = evidence.auditRecords.filter(
-    (record) => record.file !== file,
+    (/** @type {AuditEvidenceRecord} */ record) => record.file !== file,
   );
   return `${JSON.stringify(evidence, null, 2)}\n`;
 }
@@ -1491,11 +1522,16 @@ function auditEvidenceTextWithoutPath(text, file) {
 /** @param {string} text @param {Readonly<Record<string, unknown>>} record */
 function auditEvidenceTextWithAddedRecord(text, record) {
   const evidence = JSON.parse(text);
-  evidence.auditRecords = [...evidence.auditRecords, record].sort((left, right) => {
-    const leftKey = `${left.file}\u0000${left.variant ?? ''}`;
-    const rightKey = `${right.file}\u0000${right.variant ?? ''}`;
-    return leftKey.localeCompare(rightKey);
-  });
+  evidence.auditRecords = [...evidence.auditRecords, record].sort(
+    (
+      /** @type {AuditEvidenceRecord} */ left,
+      /** @type {AuditEvidenceRecord} */ right,
+    ) => {
+      const leftKey = `${left.file}\u0000${left.variant ?? ''}`;
+      const rightKey = `${right.file}\u0000${right.variant ?? ''}`;
+      return leftKey.localeCompare(rightKey);
+    },
+  );
   return `${JSON.stringify(evidence, null, 2)}\n`;
 }
 
@@ -1504,11 +1540,18 @@ function coverageInventoryFromTaxonomyText(taxonomyText) {
   const taxonomy = JSON.parse(taxonomyText);
   return {
     files: Object.freeze(
-      taxonomy.classifications.map((record) => record.path),
+      taxonomy.classifications.map(
+        (/** @type {{ path: string }} */ record) => record.path,
+      ),
     ),
     malformed: Object.freeze([]),
     variants: new Map(
-      taxonomy.classifications.map((record) => [record.path, record.variants]),
+      taxonomy.classifications.map(
+        (/** @type {{ path: string, variants: number }} */ record) => [
+          record.path,
+          record.variants,
+        ],
+      ),
     ),
     totals: {
       files: taxonomy.summary.roots,
@@ -2378,10 +2421,7 @@ async function rejected(action) {
  *   decisionDirectoryEntries?: readonly string[],
  *   expectedManifestVersion?: number,
  *   expectedRoadmapAuthorities?: readonly Record<string, any>[],
- *   validateRoadmapProtectedOutputs?: (
- *     authority: Record<string, any>,
- *     changes: readonly { status: string, path: string, sourcePath: string | null }[],
- *   ) => Promise<readonly { path: string, operation: string, sha256: string | null }[]>,
+ *   validateRoadmapProtectedOutputs?: typeof validateRoadmapProtectedOutputs,
  * }} [options]
  */
 function provenanceCheckDependencies(options = {}) {
@@ -2523,10 +2563,7 @@ function rangeArguments(profile, options = {}) {
  *   headFiles?: ReadonlyMap<string, string>,
  *   headModes?: ReadonlyMap<string, string>,
  *   mergeBase?: string,
- *   validateRoadmapProtectedOutputs?: (
- *     authority: Record<string, any>,
- *     changes: readonly { status: string, path: string, sourcePath: string | null }[],
- *   ) => Promise<readonly { path: string, operation: string, sha256: string | null }[]>,
+ *   validateRoadmapProtectedOutputs?: typeof validateRoadmapProtectedOutputs,
  * }} options
  */
 function rangeCheckDependencies(options) {
@@ -2949,7 +2986,8 @@ export default [
       assertSame(parsed.rangeProfiles.length, 15);
       assertSame(
         parsed.rangeProfiles.some(
-          (profile) => profile.name === 'maintenance:issue77-lexical',
+          (/** @type {{ name: string }} */ profile) =>
+            profile.name === 'maintenance:issue77-lexical',
         ),
         false,
       );
@@ -2965,7 +3003,8 @@ export default [
         Es2015ProvenanceError,
       );
 
-      for (const mutate of [
+      /** @type {Array<(value: Record<string, any>) => void>} */
+      const mutations = [
         (value) => value.roadmapAuthorities.reverse(),
         (value) => value.roadmapAuthorities.push(value.roadmapAuthorities[0]),
         (value) => {
@@ -3012,7 +3051,8 @@ export default [
             },
           ];
         },
-      ]) {
+      ];
+      for (const mutate of mutations) {
         const bad = structuredClone(manifestV3);
         mutate(bad);
         assertThrows(
@@ -3037,11 +3077,13 @@ export default [
       assertSame(foundationV3.rangeProfiles.length, 15);
       assertSame(
         foundationV3.rangeProfiles.some(
-          (profile) => profile.name === 'maintenance:issue77-lexical',
+          (/** @type {{ name: string }} */ profile) =>
+            profile.name === 'maintenance:issue77-lexical',
         ),
         false,
       );
-      assertSame(foundationV3.roadmapAuthorities[0].code, 'H0');
+      assertSame(Array.isArray(foundationV3.roadmapAuthorities), true);
+      assertSame(foundationV3.roadmapAuthorities?.[0]?.code, 'H0');
       assertSame(
         assertThrows(
           () =>
@@ -5843,11 +5885,13 @@ export default [
       ];
       const manifest = canonicalSchemaV3ManifestValue();
       const protectedPaths = new Set([
-        ...manifest.roadmapAuthorities.flatMap((authority) =>
-          authority.evidence.map((entry) => entry.path),
+        ...manifest.roadmapAuthorities.flatMap((/** @type {Record<string, any>} */ authority) =>
+          authority.evidence.map((/** @type {{ path: string }} */ entry) => entry.path),
         ),
-        ...manifest.roadmapAuthorities.flatMap((authority) =>
-          authority.protectedOutputs.map((entry) => entry.path),
+        ...manifest.roadmapAuthorities.flatMap((/** @type {Record<string, any>} */ authority) =>
+          authority.protectedOutputs.map(
+            (/** @type {{ path: string }} */ entry) => entry.path,
+          ),
         ),
       ]);
       for (const path of protectedPaths) {
@@ -6085,7 +6129,7 @@ export default [
       );
       const missingH0Head = structuredClone(canonicalSchemaV3ManifestValue());
       missingH0Head.roadmapAuthorities = missingH0Head.roadmapAuthorities.filter(
-        (authority) => authority.code !== 'H0',
+        (/** @type {Record<string, any>} */ authority) => authority.code !== 'H0',
       );
       const profileDriftHead = structuredClone(canonicalSchemaV3ManifestValue());
       profileDriftHead.rangeProfiles = [...profileDriftHead.rangeProfiles].reverse();
@@ -6420,7 +6464,7 @@ export default [
       changedExistingHead.roadmapAuthorities[0].issue = 999;
       const deletedExistingHead = structuredClone(baseManifest);
       deletedExistingHead.roadmapAuthorities = deletedExistingHead.roadmapAuthorities.filter(
-        (authority) => authority.code !== 'P0',
+        (/** @type {Record<string, any>} */ authority) => authority.code !== 'P0',
       );
       const unsortedHead = structuredClone(baseManifest);
       unsortedHead.roadmapAuthorities.push(newAuthority);
@@ -6626,7 +6670,7 @@ export default [
 
       const headOnlyBase = structuredClone(baseManifest);
       headOnlyBase.roadmapAuthorities = headOnlyBase.roadmapAuthorities.filter(
-        (authority) => authority.code !== 'H0',
+        (/** @type {Record<string, any>} */ authority) => authority.code !== 'H0',
       );
       const baseApplied = structuredClone(baseManifest);
       baseApplied.roadmapAuthorities[0].state = 'applied';
@@ -6808,7 +6852,8 @@ export default [
     name: 'ES2015 provenance validates protected outputs by artifact and rejects foreign generated changes',
     run: async () => {
       const fixture = syntheticRoadmapProjectionFixture();
-      const marker = parseRoadmapAuthorityMarker(
+      const marker = /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+        parseRoadmapAuthorityMarker(
         roadmapConsumptionMarker({
           code: fixture.code,
           issue: fixture.authority.issue,
@@ -6817,7 +6862,7 @@ export default [
           protectedProjectionSha256:
             provenance.roadmapAggregateProjectionSha256(fixture.authority),
         }),
-      );
+      ));
       const fixtureChanges = fixture.changes.map((change) => ({
         ...change,
         sourcePath: null,
@@ -6847,34 +6892,38 @@ export default [
         json(roadmapProjectionEntries(fixture.authority.protectedOutputs)),
       );
 
+      const auditBaseText = requiredFixtureText(
+        fixture.baseFiles,
+        'tools/test262/es2015-audit-evidence.json',
+      );
       const auditAuthority = {
         ...structuredClone(fixture.authority),
         protectedOutputs: [
           {
             path: 'tools/test262/es2015-audit-evidence.json',
             operation: 'project',
-            baseSha256: sha256(
-              fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
-            ),
+            baseSha256: sha256(auditBaseText),
             headSha256: null,
             projectionSha256: 'a'.repeat(64),
           },
         ],
       };
+      const auditProtectedOutput = auditAuthority.protectedOutputs[0];
+      assertSame(auditProtectedOutput !== undefined, true);
       const missingSourceAuditRootText = auditEvidenceTextWithoutPath(
-        fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+        auditBaseText,
         'test/language/audit.js',
       );
       const incompleteSourceAuditVariantsText = auditEvidenceTextWithoutRecord(
-        fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+        auditBaseText,
         'test/language/promotion.js',
         'strict',
       );
-      const auditAuthorityWithBaseText = (baseText) => ({
+      const auditAuthorityWithBaseText = (/** @type {string} */ baseText) => ({
         ...structuredClone(auditAuthority),
         protectedOutputs: [
           {
-            ...structuredClone(auditAuthority.protectedOutputs[0]),
+            ...structuredClone(auditProtectedOutput),
             baseSha256: sha256(baseText),
           },
         ],
@@ -7064,9 +7113,13 @@ export default [
               ...fixture.headFiles,
               [
                 'tools/test262/es2015-taxonomy.json',
-                fixture.headFiles
-                  .get('tools/test262/es2015-taxonomy.json')
-                  .replace('test/language/foreign.js', 'test/language/intruder.js'),
+                requiredFixtureText(
+                  fixture.headFiles,
+                  'tools/test262/es2015-taxonomy.json',
+                ).replace(
+                  'test/language/foreign.js',
+                  'test/language/intruder.js',
+                ),
               ],
             ]),
           }),
@@ -7092,7 +7145,7 @@ export default [
               [
                 'tools/test262/es2015-audit-evidence.json',
                 auditEvidenceTextWithoutRecord(
-                  fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+                  auditBaseText,
                   'test/language/promotion.js',
                   'strict',
                 ),
@@ -7183,7 +7236,10 @@ export default [
               [
                 'tools/test262/es2015-audit-evidence.json',
                 auditEvidenceTextWithoutRecord(
-                  fixture.headFiles.get('tools/test262/es2015-audit-evidence.json'),
+                  requiredFixtureText(
+                    fixture.headFiles,
+                    'tools/test262/es2015-audit-evidence.json',
+                  ),
                   'test/language/foreign.js',
                   'non-strict',
                 ),
@@ -7212,7 +7268,10 @@ export default [
               [
                 'tools/test262/es2015-audit-evidence.json',
                 auditEvidenceTextWithAddedRecord(
-                  fixture.headFiles.get('tools/test262/es2015-audit-evidence.json'),
+                  requiredFixtureText(
+                    fixture.headFiles,
+                    'tools/test262/es2015-audit-evidence.json',
+                  ),
                   createTestRecord({
                     file: 'test/language/intruder.js',
                     variant: 'non-strict',
@@ -7324,7 +7383,10 @@ export default [
               [
                 'tools/test262/es2015-taxonomy.json',
                 taxonomyTextWithoutPath(
-                  fixture.headFiles.get('tools/test262/es2015-taxonomy.json'),
+                  requiredFixtureText(
+                    fixture.headFiles,
+                    'tools/test262/es2015-taxonomy.json',
+                  ),
                   'test/language/foreign.js',
                 ),
               ],
@@ -7352,7 +7414,10 @@ export default [
               [
                 'tools/test262/es2015-taxonomy.json',
                 taxonomyTextWithDuplicatePath(
-                  fixture.headFiles.get('tools/test262/es2015-taxonomy.json'),
+                  requiredFixtureText(
+                    fixture.headFiles,
+                    'tools/test262/es2015-taxonomy.json',
+                  ),
                   'test/language/promotion.js',
                 ),
               ],
@@ -7379,7 +7444,7 @@ export default [
               ...fixture.headFiles,
               [
                 'docs/test262-report.jsonl',
-                `${fixture.headFiles.get('docs/test262-report.jsonl').trim()}\n${formatRecordLine(
+                `${requiredFixtureText(fixture.headFiles, 'docs/test262-report.jsonl').trim()}\n${formatRecordLine(
                   createTestRecord({
                     file: 'test/language/intruder.js',
                     variant: 'non-strict',
@@ -7410,9 +7475,10 @@ export default [
               ...fixture.headFiles,
               [
                 'docs/conformance.md',
-                fixture.headFiles
-                  .get('docs/conformance.md')
-                  .replace('Manual prose outside the generated block.', 'mutated prose'),
+                requiredFixtureText(fixture.headFiles, 'docs/conformance.md').replace(
+                  'Manual prose outside the generated block.',
+                  'mutated prose',
+                ),
               ],
             ]),
           }),
@@ -7525,7 +7591,8 @@ export default [
     name: 'ES2015 provenance validates protected outputs atomically during roadmap authority consumption',
     run: async () => {
       const fixture = syntheticRoadmapProjectionFixture();
-      const marker = parseRoadmapAuthorityMarker(
+      const marker = /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+        parseRoadmapAuthorityMarker(
         roadmapConsumptionMarker({
           code: fixture.code,
           issue: fixture.authority.issue,
@@ -7534,7 +7601,7 @@ export default [
           protectedProjectionSha256:
             provenance.roadmapAggregateProjectionSha256(fixture.authority),
         }),
-      );
+      ));
       const changes = fixture.changes.map((change) => ({
         ...change,
         sourcePath: null,
