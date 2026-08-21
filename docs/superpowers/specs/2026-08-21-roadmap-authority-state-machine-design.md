@@ -234,11 +234,20 @@ bootstrap PR is opened:
 - its bootstrap requirements are appended as a labeled addendum to the already
   permitted
   `docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md`;
+- the complete approved standalone design bytes are embedded between unique
+  extraction markers in that addendum with an exact SHA-256;
+- the complete approved standalone plan bytes are embedded between unique
+  extraction markers in the already permitted
+  `docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md` with an
+  exact SHA-256;
 - this standalone path is absent from the bootstrap HEAD;
 - the bootstrap migration verifier explicitly permits this exact standalone path
   in the later migration PR, where the complete approved design becomes durable.
 
-The bootstrap HEAD therefore does not broaden its own trusted v2 path set.
+The migration restores both documents from the verified bootstrap BASE addenda and
+checks their SHA-256 identities. It does not depend on a feature-branch commit
+remaining reachable. The bootstrap HEAD therefore does not broaden its own trusted
+v2 path set.
 
 After exact-head review and checks, the bootstrap PR is squash-merged. Its squash
 SHA, manifest SHA, checker SHA, and workflow SHA become mandatory migration pins.
@@ -248,6 +257,19 @@ SHA, manifest SHA, checker SHA, and workflow SHA become mandatory migration pins
 The migration PR is fresh from the verified bootstrap squash SHA. It is the only
 schema-v2 to schema-v3 migration.
 
+Its PR body contains exactly this ordered marker:
+
+```text
+<!-- es2015-roadmap-authority-migration
+parent:70
+base:<BASE_SHA>
+base-manifest-sha256:<SHA256>
+base-checker-sha256:<SHA256>
+base-workflow-sha256:<SHA256>
+head-manifest-sha256:<SHA256>
+-->
+```
+
 The BASE bootstrap checker accepts the exact `roadmap-authority-migration` marker
 only when:
 
@@ -256,6 +278,10 @@ only when:
 - HEAD changes match the closed migration file set;
 - the old manifest is the exact expected schema-v2 document;
 - HEAD is a canonical schema-v3 document;
+- the BASE addenda each contain exactly one marked standalone-document payload
+  whose declared SHA-256 matches its bytes;
+- each HEAD standalone document is byte-identical to the corresponding verified
+  BASE addendum payload;
 - no consumer protected-output projection occurs.
 
 The migration:
@@ -293,16 +319,22 @@ record-sha256:<SHA256>
 -->
 ```
 
-The BASE checker parses the single appended record from HEAD, canonicalizes it,
+The BASE checker indexes BASE and HEAD records by code, requires every BASE record
+to retain canonical identity, identifies exactly one new HEAD record, and requires
+the full HEAD array to remain code-unit sorted. It canonicalizes that new record
 and requires `record-sha256` to equal its canonical bytes. It requires the marker
-BASE and manifest hash to equal the resolved range BASE.
+BASE and manifest hash to equal the resolved range BASE. A valid middle insertion
+such as `[H0, P0] -> [H0, M0, P0]` is accepted.
 
 The operation uses existing BASE executable code. It may:
 
-- append exactly one canonical `pending` record;
-- update directly related tests and documentation;
+- add exactly one canonical `pending` record;
 - rewrite only the canonical manifest serialization that contains that one appended
-  record.
+  record;
+- update only these optional documentation paths:
+  - `docs/testing.md`;
+  - `docs/superpowers/specs/2026-08-21-roadmap-authority-state-machine-design.md`;
+  - `docs/superpowers/plans/2026-08-21-roadmap-authority-state-machine.md`.
 
 It may not:
 
@@ -314,8 +346,10 @@ It may not:
 - select `foundation-maintenance`;
 - introduce new executable policy and consume it in the same PR.
 
-The appended record is inert until merged to main and independently verified.
+The new record is inert until merged to main and independently verified.
 Missing, duplicate, malformed, reordered, or mismatched preparation markers fail.
+The preparation path set is closed; no source, test, workflow, checker, decision
+fragment, or other documentation path is allowed.
 
 ## Consumer Marker
 
@@ -339,6 +373,22 @@ variant, or second marker. The values must equal the canonical BASE pending reco
 `source-entry-sha256` is either 64 lowercase hexadecimal characters or the literal
 `null`, exactly matching `source.entryLedgerSha256`. `base` binds the resolved range
 BASE commit; it is not duplicated inside the authority record.
+
+`protected-projection-sha256` is the SHA-256 of this canonical JSON array plus one
+final newline:
+
+```json
+[
+  {
+    "path": "code-unit-sorted protected path",
+    "operation": "add-exact | replace-exact | project",
+    "sha256": "headSha256 for exact operations, projectionSha256 for project"
+  }
+]
+```
+
+The H0 aggregate projection SHA-256 is
+`8e16b33ffdbd8a2089567e9a8bdb1c654619b8bd00021c54ac74c0ab02f2c5fd`.
 
 Missing, malformed, duplicate, stale, HEAD-defined, or mismatched markers fail.
 
@@ -369,6 +419,19 @@ protected output without a transition fails.
 Unrelated source, tests, specifications, and manual documentation are outside the
 provenance projection and remain subject to ordinary CI and review. Provenance
 neither authorizes nor rejects them unless they are a closed protected path.
+
+Before marker parsing can return neutral, provenance ownership is computed from
+canonical BASE:
+
+- every `roadmapAuthorities[].protectedOutputs[].path`;
+- every immutable `roadmapAuthorities[].evidence[].path`;
+- the manifest, checker, workflow generator, generated workflow, and decision
+  fragments;
+- the closed generated Test262 namespaces already owned by the provenance
+  foundation.
+
+Any markerless change to one of these paths fails. HEAD cannot remove a BASE-owned
+path from the ownership set.
 
 ## Protected Artifact Verifiers
 
@@ -583,7 +646,7 @@ Its destination set contains:
   `95`;
 - `blocked:symbol-protocol-dispatch` owned by issue `92`.
 
-These 17 canonical destination objects are sorted by status, blocker, and issue and
+These 16 canonical destination objects are sorted by status, blocker, and issue and
 must equal the unique pairs encoded by `tools/test262/es2015-h0-owner-map.json`.
 
 The H0 consumer changes only this entry from pending to applied. It must not add or
@@ -607,8 +670,19 @@ Before range validation, the privileged job performs an inert fetch of
 commit to equal both the event BASE SHA and the checked-out BASE SHA. A stale event
 or target-main movement fails and must rerun against the new BASE.
 
-Ordinary CI remains excluded from the privileged event. Consumer PRs must show an
-active `Provenance base guard` result at the exact reviewed head.
+GitHub does not evaluate an expression-valued job name when a job-level `if` skips
+the job. Therefore the guard job itself is unconditional so its dynamic name is
+always evaluated:
+
+- on `pull_request_target`, its name is exactly `Provenance base guard`, every
+  security/checker step runs, and the inactive step skips;
+- on every other event, its name is exactly `Provenance base guard (inactive)`,
+  every security/checker step skips, and one constant no-op inactive step succeeds.
+
+This prevents the raw expression from appearing as the check name and prevents an
+ordinary skipped job from satisfying the future required context
+`Provenance base guard`. Ordinary CI jobs remain excluded from the privileged
+event. Consumer PRs must show the active context at the exact reviewed head.
 
 ## Error Handling
 
