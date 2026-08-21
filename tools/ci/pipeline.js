@@ -391,13 +391,18 @@ function usesStep(name, action, inputs, condition) {
 /**
  * The setup every job repeats before its own work.
  *
+ * @param {Readonly<Record<string, string>>} [projectCheckoutInputs]
  * @returns {WorkflowStep[]}
  */
-function setupSteps() {
+function setupSteps(
+  projectCheckoutInputs = { 'persist-credentials': 'false' },
+) {
   return [
-    usesStep('Check out the project', 'actions/checkout', {
-      'persist-credentials': 'false',
-    }),
+    usesStep(
+      'Check out the project',
+      'actions/checkout',
+      projectCheckoutInputs,
+    ),
     usesStep('Set up Node', 'actions/setup-node', {
       'node-version': NODE_VERSION,
       cache: 'npm',
@@ -460,10 +465,16 @@ function ordinaryJob(id, name, steps, needs = []) {
  * @param {string} name
  * @param {readonly WorkflowStep[]} ownSteps
  * @param {readonly string[]} [needs]
+ * @param {Readonly<Record<string, string>>} [projectCheckoutInputs]
  * @returns {WorkflowJob}
  */
-function job(id, name, ownSteps, needs = []) {
-  return ordinaryJob(id, name, [...setupSteps(), ...ownSteps], needs);
+function job(id, name, ownSteps, needs = [], projectCheckoutInputs) {
+  return ordinaryJob(
+    id,
+    name,
+    [...setupSteps(projectCheckoutInputs), ...ownSteps],
+    needs,
+  );
 }
 
 /**
@@ -656,6 +667,10 @@ export function createCiJobs(test262) {
       'Node tests',
       [runStep('Run Node suites', 'npm run test:node')],
       ['vendor'],
+      {
+        'persist-credentials': 'false',
+        'fetch-depth': '0',
+      },
     ),
     job(
       'test-browser',
@@ -688,6 +703,7 @@ export function createCiJobs(test262) {
       [
         usesStep('Check out the project', 'actions/checkout', {
           'persist-credentials': 'false',
+          'fetch-depth': '0',
         }),
         usesStep('Check out the pinned Test262 tree', 'actions/checkout', {
           repository: upstreamSlug,

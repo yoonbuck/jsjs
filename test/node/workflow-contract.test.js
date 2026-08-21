@@ -1247,21 +1247,75 @@ export default [
     },
   },
   {
+    name: 'only the repository-history-dependent project checkouts fetch full history, so Node and focused ES2015 provenance fixtures can read their pinned commits without widening other jobs',
+    run: async () => {
+      const { workflow } = await readWorkflow();
+      /** @type {string[]} */
+      const projectCheckoutsWithFullHistory = [];
+
+      for (const id of Object.keys(EXPECTED_JOB_COMMANDS)) {
+        const job = requireJob(workflow, id);
+        const projectCheckout = usesSteps(job, 'actions/checkout').find(
+          (step) => step.with?.repository === undefined,
+        );
+
+        if (projectCheckout?.with?.['fetch-depth'] === '0') {
+          projectCheckoutsWithFullHistory.push(id);
+        }
+      }
+
+      assertSame(
+        JSON.stringify(projectCheckoutsWithFullHistory.sort()),
+        JSON.stringify(
+          ['test-node', 'test262-es2015-release', 'test262-upstream'].sort(),
+        ),
+        'only test-node, focused ES2015, and the already-history-aware upstream Test262 job may fetch full project history',
+      );
+
+      const formatProjectCheckout = usesSteps(
+        requireJob(workflow, 'format'),
+        'actions/checkout',
+      ).find((step) => step.with?.repository === undefined);
+
+      assertSame(
+        formatProjectCheckout?.with?.['fetch-depth'],
+        undefined,
+        'ordinary non-history jobs must keep the default project checkout depth',
+      );
+    },
+  },
+  {
     name: 'the focused ES2015 Test262 release job checks out the pinned revision and runs every focused suite',
     run: async () => {
       const { workflow } = await readWorkflow();
       const packageManifest = await readPackageManifest();
       const job = requireJob(workflow, 'test262-es2015-release');
       const checkouts = usesSteps(job, 'actions/checkout');
+      const projectCheckout = checkouts.find(
+        (step) => step.with?.repository === undefined,
+      );
       const upstream = checkouts.filter(
         (step) => step.with?.repository !== undefined,
       );
 
       assertSame(upstream.length, 1, 'exactly one upstream checkout step');
+      assertSame(
+        JSON.stringify(projectCheckout?.with),
+        JSON.stringify({
+          'persist-credentials': 'false',
+          'fetch-depth': '0',
+        }),
+        'the focused ES2015 job must fetch full project history because test/run-node.js imports pinned provenance fixtures at exact historical commits',
+      );
       assertSame(upstream[0].with.repository, 'tc39/test262');
       assertSame(upstream[0].with.ref, packageManifest.test262.revision);
       assertSame(upstream[0].with.path, packageManifest.test262.checkoutPath);
       assertSame(String(upstream[0].with['persist-credentials']), 'false');
+      assertSame(
+        Object.prototype.hasOwnProperty.call(upstream[0].with, 'fetch-depth'),
+        false,
+        'the pinned Test262 tree checkout must keep its existing default depth',
+      );
 
       const commands = runCommands(job);
       const runStep = job.steps.find(

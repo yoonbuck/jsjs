@@ -594,6 +594,10 @@ Each of these twelve ordinary jobs runs on `ubuntu-latest` with Node 20 (via
 `actions/setup-node` with the built-in npm cache) and `npm ci`.
 Only the broad `test262-upstream` execution step receives the 4096 MiB Node heap
 allowance; focused Test262 jobs remain unchanged.
+The project checkout in `test-node` and `test262-es2015-release` uses
+`fetch-depth: 0` because `test/run-node.js` imports the Node-only provenance
+suite, whose module initialization reads exact historical project artifacts at
+pinned commits; other ordinary project checkouts keep their existing depth.
 Inside `test262-upstream`, the generated workflow runs
 the PR-only exact range gate, then
 `TZ=UTC npm run test262:es2015:provenance:check` immediately before
