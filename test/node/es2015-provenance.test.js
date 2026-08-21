@@ -770,14 +770,301 @@ function validManifestValue() {
   return buildProvenanceFoundation(foundationClassifications());
 }
 
-function approvedInitialRoadmapAuthorities() {
-  assertSame(typeof provenance.P0_APPLIED_ROADMAP_AUTHORITY, 'object');
-  assertSame(typeof provenance.H0_PENDING_ROADMAP_AUTHORITY, 'object');
-  assertSame(
-    Array.isArray(provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES),
-    true,
-  );
-  return provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES;
+const EXPECTED_P0_APPLIED_ROADMAP_AUTHORITY = JSON.parse(`{
+  "code": "P0",
+  "issue": 77,
+  "parentIssue": 70,
+  "state": "applied",
+  "source": {
+    "baseTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
+    "rootCount": 83,
+    "variantCount": 164,
+    "pathSha256": "b2657db74331391b156f87e1e831665ef4ae3a738d48836e476c13828b1aeff4",
+    "entryLedgerSha256": "3b23ac8dbc2ae703d466d49e26d827516e4a863406a45acb4e8356c86c32d664"
+  },
+  "reconciliation": null,
+  "evidence": [],
+  "protectedOutputs": [
+    {
+      "path": "docs/conformance.md",
+      "operation": "replace-exact",
+      "baseSha256": "3799ff93e726fdd181377417b6307801dc1ae1d5e884181d0bc4c4bd68ba2466",
+      "headSha256": "22b8f8c5368e922919987f53aa273b8cc4234435e2adf72ffcba164082e01f85",
+      "projectionSha256": null
+    },
+    {
+      "path": "docs/test262-report.jsonl",
+      "operation": "replace-exact",
+      "baseSha256": "9de8674a603263d5d80d9e48d255879efa061b648cc9cb32eff399941a6927df",
+      "headSha256": "c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-audit-evidence.json",
+      "operation": "replace-exact",
+      "baseSha256": "d560df3e1a9af905115324d529a0a101943d30fa0af8a8102b2dd344121ba9e4",
+      "headSha256": "58f92e072306bfe99f8b9a57bf959469100b0e54816bef3263ec9b6c075a4990",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-taxonomy.json",
+      "operation": "replace-exact",
+      "baseSha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
+      "headSha256": "dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es5-selection.json",
+      "operation": "replace-exact",
+      "baseSha256": "20f0fc1d84bcec4efb934ef46b23a532d41502d6fcf88a307231d647a2c700f8",
+      "headSha256": "533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/upstream-subset.json",
+      "operation": "replace-exact",
+      "baseSha256": "cceaaf9807c0d32c32be5b0800a140612afddf9acf49bcdc0cf8f0102562fb39",
+      "headSha256": "e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8",
+      "projectionSha256": null
+    }
+  ],
+  "destinations": [
+    {
+      "status": "audit-passing-unselected",
+      "blocker": null,
+      "issue": 77
+    },
+    {
+      "status": "blocked",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "status": "selected-passing",
+      "blocker": null,
+      "issue": 77
+    }
+  ]
+}`);
+const EXPECTED_H0_PENDING_ROADMAP_AUTHORITY = JSON.parse(`{
+  "code": "H0",
+  "issue": 76,
+  "parentIssue": 70,
+  "state": "pending",
+  "source": {
+    "baseTaxonomySha256": "dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662",
+    "rootCount": 135,
+    "variantCount": 267,
+    "pathSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+    "entryLedgerSha256": null
+  },
+  "reconciliation": {
+    "preservedTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
+    "authorityTaxonomySha256": "dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662",
+    "selectorPathSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+    "rootCount": 135,
+    "variantCount": 267,
+    "missingCount": 0,
+    "extraCount": 0,
+    "proofSha256": "10f0381153294c2be9c764b00cfa44d535e4c2af61f26d1d8cc9650787a21ca8"
+  },
+  "evidence": [
+    {
+      "path": "tools/test262/es2015-h0-baseline.json",
+      "sha256": "01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec"
+    },
+    {
+      "path": "tools/test262/es2015-h0-disposition.json",
+      "sha256": "a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857"
+    },
+    {
+      "path": "tools/test262/es2015-h0-owner-deltas.json",
+      "sha256": "ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b"
+    },
+    {
+      "path": "tools/test262/es2015-h0-owner-map.json",
+      "sha256": "d50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b"
+    },
+    {
+      "path": "tools/test262/es2015-h0-paths.json",
+      "sha256": "bf3c2ed9c9e259bb25d3c5289a57c4daa5576b6d68d868df74f73c7a95bef893"
+    },
+    {
+      "path": "tools/test262/es2015-h0-promotion.json",
+      "sha256": "a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c"
+    }
+  ],
+  "protectedOutputs": [
+    {
+      "path": "docs/conformance.md",
+      "operation": "project",
+      "baseSha256": "22b8f8c5368e922919987f53aa273b8cc4234435e2adf72ffcba164082e01f85",
+      "headSha256": null,
+      "projectionSha256": "c44ef2d084be750bca79a574ae041c2a757d452c71f2dffaf59badc7c6a9fcb8"
+    },
+    {
+      "path": "docs/test262-report.jsonl",
+      "operation": "project",
+      "baseSha256": "c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27",
+      "headSha256": null,
+      "projectionSha256": "a13390c77ffb89cdad7b043924c2d4318e8f27dd8e4f38bab943363b5e9b73cd"
+    },
+    {
+      "path": "tools/test262/es2015-h0-baseline.json",
+      "operation": "add-exact",
+      "baseSha256": null,
+      "headSha256": "01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-h0-disposition.json",
+      "operation": "add-exact",
+      "baseSha256": null,
+      "headSha256": "a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-h0-owner-deltas.json",
+      "operation": "add-exact",
+      "baseSha256": null,
+      "headSha256": "ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-h0-owner-map.json",
+      "operation": "add-exact",
+      "baseSha256": null,
+      "headSha256": "d50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-h0-paths.json",
+      "operation": "add-exact",
+      "baseSha256": null,
+      "headSha256": "bf3c2ed9c9e259bb25d3c5289a57c4daa5576b6d68d868df74f73c7a95bef893",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-h0-promotion.json",
+      "operation": "add-exact",
+      "baseSha256": null,
+      "headSha256": "a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c",
+      "projectionSha256": null
+    },
+    {
+      "path": "tools/test262/es2015-taxonomy.json",
+      "operation": "project",
+      "baseSha256": "dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662",
+      "headSha256": null,
+      "projectionSha256": "dc96bb2a162db339d13cdb119a86e29ec0e3dbe31fee29780fc1cc1995c87c02"
+    },
+    {
+      "path": "tools/test262/upstream-subset.json",
+      "operation": "project",
+      "baseSha256": "e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8",
+      "headSha256": null,
+      "projectionSha256": "257c3e960ba14b8ebabd2ba92e7777d2a26b8a456ae6123c71e4e2349dd9ba6f"
+    }
+  ],
+  "destinations": [
+    {
+      "status": "blocked",
+      "blocker": "binary-data-and-typed-arrays",
+      "issue": 87
+    },
+    {
+      "status": "blocked",
+      "blocker": "binary-data-and-typed-arrays",
+      "issue": 88
+    },
+    {
+      "status": "blocked",
+      "blocker": "binary-data-and-typed-arrays",
+      "issue": 89
+    },
+    {
+      "status": "blocked",
+      "blocker": "early-errors-and-declaration-instantiation",
+      "issue": 78
+    },
+    {
+      "status": "blocked",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "status": "blocked",
+      "blocker": "keyed-collections",
+      "issue": 84
+    },
+    {
+      "status": "blocked",
+      "blocker": "keyed-collections",
+      "issue": 85
+    },
+    {
+      "status": "blocked",
+      "blocker": "proper-tail-calls",
+      "issue": 97
+    },
+    {
+      "status": "blocked",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 79
+    },
+    {
+      "status": "blocked",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "status": "blocked",
+      "blocker": "regexp-unicode-and-sticky",
+      "issue": 91
+    },
+    {
+      "status": "blocked",
+      "blocker": "remaining-language-runtime-semantics",
+      "issue": 96
+    },
+    {
+      "status": "blocked",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "status": "blocked",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 94
+    },
+    {
+      "status": "blocked",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "status": "blocked",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 92
+    },
+    {
+      "status": "selected-passing",
+      "blocker": null,
+      "issue": 76
+    }
+  ]
+}`);
+const EXPECTED_INITIAL_ROADMAP_AUTHORITIES = Object.freeze([
+  EXPECTED_H0_PENDING_ROADMAP_AUTHORITY,
+  EXPECTED_P0_APPLIED_ROADMAP_AUTHORITY,
+]);
+const EXPECTED_AUTHORITY_SHA256 = Object.freeze({
+  P0: '78a5c22c43ed3bbcadcb093508d89fa99c66af01fdf2e71255c61ebe919c00c9',
+  H0: '214d7f0b1f3c2a24cf440583b19dde6949d9e6d747998b1171530637ca1c35c0',
+});
+
+function expectedInitialRoadmapAuthorities() {
+  return structuredClone(EXPECTED_INITIAL_ROADMAP_AUTHORITIES);
 }
 
 function canonicalSchemaV3RangeProfiles() {
@@ -840,7 +1127,7 @@ function canonicalEmptySchemaV3ManifestValue() {
 function canonicalSchemaV3ManifestValue() {
   return {
     ...canonicalEmptySchemaV3ManifestValue(),
-    roadmapAuthorities: approvedInitialRoadmapAuthorities(),
+    roadmapAuthorities: expectedInitialRoadmapAuthorities(),
   };
 }
 
@@ -1451,41 +1738,26 @@ export default [
   {
     name: 'ES2015 provenance exports exact initial roadmap authorities and migrated schema-v3 profiles',
     run: () => {
-      const initialAuthorities = approvedInitialRoadmapAuthorities();
+      const initialAuthorities = expectedInitialRoadmapAuthorities();
       assertSame(
-        json(initialAuthorities),
-        json([
-          provenance.H0_PENDING_ROADMAP_AUTHORITY,
-          provenance.P0_APPLIED_ROADMAP_AUTHORITY,
-        ]),
-      );
-      assertSame(provenance.P0_APPLIED_ROADMAP_AUTHORITY.state, 'applied');
-      assertSame(
-        provenance.P0_APPLIED_ROADMAP_AUTHORITY.source.entryLedgerSha256,
-        '3b23ac8dbc2ae703d466d49e26d827516e4a863406a45acb4e8356c86c32d664',
-      );
-      assertSame(provenance.H0_PENDING_ROADMAP_AUTHORITY.state, 'pending');
-      assertSame(
-        provenance.H0_PENDING_ROADMAP_AUTHORITY.source.entryLedgerSha256,
-        null,
-      );
-      assertSame(provenance.H0_PENDING_ROADMAP_AUTHORITY.evidence.length, 6);
-      assertSame(
-        provenance.H0_PENDING_ROADMAP_AUTHORITY.protectedOutputs.length,
-        10,
+        json(provenance.P0_APPLIED_ROADMAP_AUTHORITY),
+        json(EXPECTED_P0_APPLIED_ROADMAP_AUTHORITY),
       );
       assertSame(
-        provenance.H0_PENDING_ROADMAP_AUTHORITY.destinations.length,
-        17,
+        json(provenance.H0_PENDING_ROADMAP_AUTHORITY),
+        json(EXPECTED_H0_PENDING_ROADMAP_AUTHORITY),
       );
       assertSame(
-        provenance.H0_PENDING_ROADMAP_AUTHORITY.destinations.some(
-          (destination) =>
-            destination.status === 'blocked' &&
-            destination.blocker === 'proper-tail-calls' &&
-            destination.issue === 97,
-        ),
-        true,
+        json(provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES),
+        json(EXPECTED_INITIAL_ROADMAP_AUTHORITIES),
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(provenance.P0_APPLIED_ROADMAP_AUTHORITY),
+        EXPECTED_AUTHORITY_SHA256.P0,
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(provenance.H0_PENDING_ROADMAP_AUTHORITY),
+        EXPECTED_AUTHORITY_SHA256.H0,
       );
 
       const migratedRangeProfiles = productionManifest().rangeProfiles.filter(
@@ -1669,7 +1941,11 @@ export default [
       );
       assertSame(
         canonicalRoadmapAuthoritySha256(manifestV3.roadmapAuthorities[0]),
-        sha256(`${JSON.stringify(manifestV3.roadmapAuthorities[0])}\n`),
+        EXPECTED_AUTHORITY_SHA256.H0,
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(manifestV3.roadmapAuthorities[1]),
+        EXPECTED_AUTHORITY_SHA256.P0,
       );
       const parsed = parseEs2015ProvenanceManifest(json(manifestV3));
       assertSame(parsed.version, 3);
@@ -1680,8 +1956,10 @@ export default [
         ),
         false,
       );
-      assertSame(parsed.roadmapAuthorities[0].code, 'H0');
-      assertSame(parsed.roadmapAuthorities[1].code, 'P0');
+      assertSame(
+        json(parsed.roadmapAuthorities),
+        json(EXPECTED_INITIAL_ROADMAP_AUTHORITIES),
+      );
 
       const missingAuthorities = structuredClone(manifestV3);
       delete missingAuthorities.roadmapAuthorities;
