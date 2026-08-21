@@ -35,6 +35,8 @@ import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
 export const ES2015_PROVENANCE_MANIFEST_VERSIONS = Object.freeze([2, 3]);
 export const ES2015_PROVENANCE_DECISION_VERSION = 2;
 export const ES2015_PROVENANCE_VERSION = ES2015_PROVENANCE_DECISION_VERSION;
+/** @type {readonly RoadmapAuthority[]} */
+export const APPROVED_INITIAL_ROADMAP_AUTHORITIES = Object.freeze([]);
 export const ES2015_PROVENANCE_FILE = 'tools/test262/es2015-provenance.json';
 export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
   'UA',

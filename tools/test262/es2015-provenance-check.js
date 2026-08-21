@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
+  APPROVED_INITIAL_ROADMAP_AUTHORITIES,
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
   ES2015_PROVENANCE_MANIFEST_VERSIONS,
@@ -260,9 +261,9 @@ export function createProvenanceCheckDependencies(options = {}) {
     ...(options.expectedManifestVersion === undefined
       ? {}
       : { expectedManifestVersion: options.expectedManifestVersion }),
-    ...(options.expectedRoadmapAuthorities === undefined
-      ? {}
-      : { expectedRoadmapAuthorities: options.expectedRoadmapAuthorities }),
+    expectedRoadmapAuthorities:
+      options.expectedRoadmapAuthorities ??
+      APPROVED_INITIAL_ROADMAP_AUTHORITIES,
   };
 }
 

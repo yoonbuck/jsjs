@@ -797,10 +797,17 @@ function minimalRoadmapAuthority(code, issue, state) {
   };
 }
 
-function canonicalSchemaV3ManifestValue() {
+function canonicalEmptySchemaV3ManifestValue() {
   return {
     ...JSON.parse(approvedProvenanceManifestText()),
     version: 3,
+    roadmapAuthorities: [],
+  };
+}
+
+function canonicalSchemaV3ManifestValue() {
+  return {
+    ...canonicalEmptySchemaV3ManifestValue(),
     roadmapAuthorities: [
       minimalRoadmapAuthority('H0', 76, 'pending'),
       minimalRoadmapAuthority('P0', 77, 'applied'),
@@ -4542,6 +4549,39 @@ export default [
           `${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`,
         ),
         emptyDecisionFragmentText(productionManifest(), 'UA'),
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance CLI check uses the trusted empty schema-v3 authority default',
+    run: async () => {
+      const emptyManifestV3 = canonicalEmptySchemaV3ManifestValue();
+      const emptyDependencies = provenanceCheckDependencies({
+        files: new Map([
+          [
+            ES2015_PROVENANCE_FILE,
+            renderEs2015ProvenanceManifest(emptyManifestV3),
+          ],
+        ]),
+      });
+      assertSame(await provenanceCheck(['--check'], emptyDependencies), 0);
+
+      const nonEmptyManifestV3 = canonicalSchemaV3ManifestValue();
+      const nonEmptyDependencies = provenanceCheckDependencies({
+        files: new Map([
+          [
+            ES2015_PROVENANCE_FILE,
+            renderEs2015ProvenanceManifest(nonEmptyManifestV3),
+          ],
+        ]),
+      });
+      const nonEmptyError = await rejected(() =>
+        provenanceCheck(['--check'], nonEmptyDependencies),
+      );
+      assertSame(nonEmptyError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(
+        nonEmptyError.message,
+        'H0 roadmap authority is unexpected in the reviewed ledger',
       );
     },
   },
