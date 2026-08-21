@@ -10,10 +10,12 @@ import {
   ES2015_PROVENANCE_VERSION,
   Es2015ProvenanceError,
   buildProvenanceFoundation,
+  canonicalRoadmapAuthoritySha256,
   parseEs2015DecisionFragment,
   parseEs2015ProvenanceManifest,
   renderBatchLedger,
   renderProvenanceIssueBody,
+  validateRoadmapAuthorityManifest,
   validateDecisionFragments,
   validateProvenanceFoundation,
 } from './es2015-provenance.js';
@@ -113,6 +115,43 @@ const ISSUE_RENDER_CODES = Object.freeze([
   'US6',
   'US7',
 ]);
+const ROADMAP_AUTHORITY_MIGRATION_PROFILE = 'roadmap-authority-migration';
+const ROADMAP_AUTHORITY_PREPARATION_PROFILE = 'roadmap-authority-prepare';
+const ROADMAP_AUTHORITY_RECLASSIFICATION_PROFILE_PREFIX =
+  'roadmap-reclassification:';
+const CHECKER_PATH = 'tools/test262/es2015-provenance-check.js';
+const WORKFLOW_PATH = '.github/workflows/ci.yml';
+const ROADMAP_AUTHORITY_DESIGN_PATH =
+  'docs/superpowers/specs/2026-08-21-roadmap-authority-state-machine-design.md';
+const ROADMAP_AUTHORITY_PLAN_PATH =
+  'docs/superpowers/plans/2026-08-21-roadmap-authority-state-machine.md';
+const ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH =
+  'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md';
+const ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH =
+  'docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md';
+const ROADMAP_AUTHORITY_MIGRATION_PATHS = Object.freeze([
+  ROADMAP_AUTHORITY_PLAN_PATH,
+  ROADMAP_AUTHORITY_DESIGN_PATH,
+  ES2015_PROVENANCE_FILE,
+]);
+const ROADMAP_AUTHORITY_PREPARATION_PATHS = Object.freeze([
+  ROADMAP_AUTHORITY_PLAN_PATH,
+  ROADMAP_AUTHORITY_DESIGN_PATH,
+  'docs/testing.md',
+  ES2015_PROVENANCE_FILE,
+]);
+const ROADMAP_STANDALONE_DOCUMENTS = Object.freeze([
+  Object.freeze({
+    label: 'DESIGN',
+    basePath: ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH,
+    headPath: ROADMAP_AUTHORITY_DESIGN_PATH,
+  }),
+  Object.freeze({
+    label: 'PLAN',
+    basePath: ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
+    headPath: ROADMAP_AUTHORITY_PLAN_PATH,
+  }),
+]);
 
 export class Es2015ProvenanceCheckError extends Error {
   /** @param {string} message */
@@ -121,6 +160,15 @@ export class Es2015ProvenanceCheckError extends Error {
     this.name = 'Es2015ProvenanceCheckError';
   }
 }
+
+/**
+ * @typedef {{ kind: 'migration', text: string, base: string, baseManifestSha256: string, baseCheckerSha256: string, baseWorkflowSha256: string, headManifestSha256: string }} RoadmapMigrationMarker
+ * @typedef {{ kind: 'prepare', text: string, code: string, issue: number, base: string, baseManifestSha256: string, recordSha256: string }} RoadmapPreparationMarker
+ * @typedef {{ kind: 'consume', text: string, code: string, issue: number, profile: string, base: string, sourcePathSha256: string, sourceEntrySha256: string | null, protectedProjectionSha256: string }} RoadmapConsumptionMarker
+ * @typedef {RoadmapMigrationMarker | RoadmapPreparationMarker | RoadmapConsumptionMarker} RoadmapMarker
+ * @typedef {{ text: string, profile: string, baseLedgerSha256: string }} LegacyRangeMarker
+ * @typedef {LegacyRangeMarker | RoadmapMarker} ProvenanceRangeMarker
+ */
 
 /**
  * @typedef {{
@@ -136,6 +184,17 @@ export class Es2015ProvenanceCheckError extends Error {
  *   stderr: (text: string) => void,
  *   expectedManifestVersion?: number,
  *   expectedRoadmapAuthorities?: readonly Record<string, any>[],
+ *   validateRoadmapProtectedOutputs?: (
+ *     authority: Record<string, any>,
+ *     changes: readonly { status: string, path: string, sourcePath: string | null }[],
+ *     context: {
+ *       base: string,
+ *       head: string,
+ *       baseManifest: ReturnType<typeof parseEs2015ProvenanceManifest>,
+ *       headManifest: ReturnType<typeof parseEs2015ProvenanceManifest>,
+ *       marker: RoadmapConsumptionMarker,
+ *     },
+ *   ) => Promise<readonly unknown[]>,
  * }} ProvenanceCheckDependencies
  */
 
@@ -206,7 +265,7 @@ export async function main(argv = [], dependencies = {}) {
   }
 }
 
-/** @param {{ repositoryRootUrl?: URL, environment?: Record<string, string | undefined>, stdout?: (text: string) => void, stderr?: (text: string) => void, expectedManifestVersion?: number, expectedRoadmapAuthorities?: readonly Record<string, any>[] }} [options] */
+/** @param {{ repositoryRootUrl?: URL, environment?: Record<string, string | undefined>, stdout?: (text: string) => void, stderr?: (text: string) => void, expectedManifestVersion?: number, expectedRoadmapAuthorities?: readonly Record<string, any>[], validateRoadmapProtectedOutputs?: ProvenanceCheckDependencies['validateRoadmapProtectedOutputs'] }} [options] */
 export function createProvenanceCheckDependencies(options = {}) {
   const repositoryRootUrl = options.repositoryRootUrl ?? REPOSITORY_ROOT_URL;
   const repositoryRootPath = fileURLToPath(repositoryRootUrl);
@@ -264,6 +323,12 @@ export function createProvenanceCheckDependencies(options = {}) {
     expectedRoadmapAuthorities:
       options.expectedRoadmapAuthorities ??
       APPROVED_INITIAL_ROADMAP_AUTHORITIES,
+    ...(options.validateRoadmapProtectedOutputs === undefined
+      ? {}
+      : {
+          validateRoadmapProtectedOutputs:
+            options.validateRoadmapProtectedOutputs,
+        }),
   };
 }
 
@@ -567,6 +632,58 @@ async function checkRange(deps, options) {
   if (marker === null) return;
 
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
+  if (isRoadmapMarker(marker)) {
+    if (marker.kind === 'migration') {
+      if (baseManifestText === null) {
+        throw new Es2015ProvenanceCheckError(
+          'roadmap-authority-migration range requires a canonical schema-v2 BASE manifest',
+        );
+      }
+      const headManifestText = await readRequiredGitFile(
+        deps,
+        head,
+        ES2015_PROVENANCE_FILE,
+      );
+      await validateRoadmapAuthorityMigration(baseManifestText, headManifestText, {
+        deps,
+        base,
+        head,
+        marker,
+        changes,
+      });
+      return;
+    }
+    if (baseManifestText === null) {
+      throw new Es2015ProvenanceCheckError(
+        `${rangeProfileForMarker(marker)} range requires a canonical schema-v3 BASE manifest`,
+      );
+    }
+    const baseManifest = parseRangeManifest(
+      baseManifestText,
+      `${rangeProfileForMarker(marker)} base`,
+    );
+    const headManifest = await readRangeManifest(
+      deps,
+      head,
+      `${rangeProfileForMarker(marker)} head`,
+    );
+    if (marker.kind === 'prepare') {
+      await validateRoadmapAuthorityPreparation(baseManifest, headManifest, marker, {
+        deps,
+        base,
+        head,
+        changes,
+      });
+      return;
+    }
+    await validateRoadmapAuthorityConsumption(baseManifest, headManifest, marker, {
+      deps,
+      base,
+      head,
+      changes,
+    });
+    return;
+  }
   /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>} */
   let manifest;
   /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>['rangeProfiles'][number]} */
@@ -661,6 +778,368 @@ async function checkRange(deps, options) {
   await validateRangeContent(deps, head, manifest, profile);
 }
 
+/** @param {ProvenanceRangeMarker} marker */
+function isRoadmapMarker(marker) {
+  return Object.prototype.hasOwnProperty.call(marker, 'kind');
+}
+
+/** @param {ProvenanceRangeMarker} marker */
+function rangeProfileForMarker(marker) {
+  if (!isRoadmapMarker(marker)) return marker.profile;
+  switch (marker.kind) {
+    case 'migration':
+      return ROADMAP_AUTHORITY_MIGRATION_PROFILE;
+    case 'prepare':
+      return ROADMAP_AUTHORITY_PREPARATION_PROFILE;
+    case 'consume':
+      return marker.profile;
+    default:
+      throw new Error(`Unhandled roadmap marker kind ${marker.kind}`);
+  }
+}
+
+/**
+ * @param {string} baseManifestText
+ * @param {string} headManifestText
+ * @param {{
+ *   deps: ProvenanceCheckDependencies,
+ *   base: string,
+ *   head: string,
+ *   marker: RoadmapMigrationMarker,
+ *   changes: readonly { status: string, path: string, sourcePath: string | null }[],
+ * }} options
+ */
+export async function validateRoadmapAuthorityMigration(
+  baseManifestText,
+  headManifestText,
+  options,
+) {
+  const { deps, base, head, marker, changes } = options;
+  assertRoadmapBasePin(
+    marker.base,
+    base,
+    'roadmap-authority-migration marker base pin does not match the resolved BASE commit',
+  );
+  assertRoadmapBasePin(
+    marker.baseManifestSha256,
+    sha256(baseManifestText),
+    'roadmap-authority-migration marker base-manifest-sha256 does not match the BASE manifest',
+  );
+  assertRoadmapBasePin(
+    marker.baseCheckerSha256,
+    sha256(await readRequiredGitFile(deps, base, CHECKER_PATH)),
+    'roadmap-authority-migration marker base-checker-sha256 does not match tools/test262/es2015-provenance-check.js in BASE',
+  );
+  assertRoadmapBasePin(
+    marker.baseWorkflowSha256,
+    sha256(await readRequiredGitFile(deps, base, WORKFLOW_PATH)),
+    'roadmap-authority-migration marker base-workflow-sha256 does not match .github/workflows/ci.yml in BASE',
+  );
+  assertRoadmapBasePin(
+    marker.headManifestSha256,
+    sha256(headManifestText),
+    'roadmap-authority-migration marker head-manifest-sha256 does not match the HEAD manifest',
+  );
+  const baseManifest = parseRangeManifest(
+    baseManifestText,
+    'roadmap-authority-migration base',
+  );
+  if (baseManifest.version !== 2) {
+    throw new Es2015ProvenanceCheckError(
+      'roadmap-authority-migration range requires a canonical schema-v2 BASE manifest',
+    );
+  }
+  const headManifest = parseRangeManifest(
+    headManifestText,
+    'roadmap-authority-migration head',
+  );
+  if (headManifest.version !== 3) {
+    throw new Es2015ProvenanceCheckError(
+      'roadmap-authority-migration range requires a canonical schema-v3 HEAD manifest',
+    );
+  }
+  validateProvenanceFoundation(headManifest, undefined, {
+    expectedRoadmapAuthorities: APPROVED_INITIAL_ROADMAP_AUTHORITIES,
+  });
+  validateRangeChanges(
+    syntheticRangeProfile(
+      ROADMAP_AUTHORITY_MIGRATION_PROFILE,
+      ROADMAP_AUTHORITY_MIGRATION_PATHS,
+      ROADMAP_AUTHORITY_MIGRATION_PATHS,
+    ),
+    changes,
+  );
+  await validateDecisionFragmentsByteIdentical(
+    deps,
+    base,
+    head,
+    ROADMAP_AUTHORITY_MIGRATION_PROFILE,
+  );
+  await validateEmbeddedRoadmapAuthorityDocuments(deps, base, head);
+  return 0;
+}
+
+/**
+ * @param {unknown} baseManifest
+ * @param {unknown} headManifest
+ * @param {RoadmapPreparationMarker} marker
+ * @param {{
+ *   deps: ProvenanceCheckDependencies,
+ *   base: string,
+ *   head: string,
+ *   changes: readonly { status: string, path: string, sourcePath: string | null }[],
+ * }} options
+ */
+export async function validateRoadmapAuthorityPreparation(
+  baseManifest,
+  headManifest,
+  marker,
+  options,
+) {
+  const { deps, base, head, changes } = options;
+  const normalizedBaseManifest = normalizeRangeManifestValue(
+    baseManifest,
+    'roadmap-authority-prepare base',
+  );
+  if (normalizedBaseManifest.version !== 3) {
+    throw new Es2015ProvenanceCheckError(
+      'roadmap-authority-prepare range requires a canonical schema-v3 BASE manifest',
+    );
+  }
+  const normalizedHeadManifest = normalizeRangeManifestValue(
+    headManifest,
+    'roadmap-authority-prepare head',
+  );
+  if (normalizedHeadManifest.version !== 3) {
+    throw new Es2015ProvenanceCheckError(
+      'roadmap-authority-prepare range requires a canonical schema-v3 HEAD manifest',
+    );
+  }
+  assertRoadmapBasePin(
+    marker.base,
+    base,
+    'roadmap-authority-prepare marker base pin does not match the resolved BASE commit',
+  );
+  assertRoadmapBasePin(
+    marker.baseManifestSha256,
+    sha256(renderJson(normalizedBaseManifest)),
+    'roadmap-authority-prepare marker base-manifest-sha256 does not match the BASE manifest',
+  );
+  validateRangeChanges(
+    syntheticRangeProfile(
+      ROADMAP_AUTHORITY_PREPARATION_PROFILE,
+      Object.freeze([ES2015_PROVENANCE_FILE]),
+      ROADMAP_AUTHORITY_PREPARATION_PATHS,
+    ),
+    changes,
+  );
+  const baseAuthorities = normalizedBaseManifest.roadmapAuthorities ?? [];
+  const headAuthorities = normalizedHeadManifest.roadmapAuthorities ?? [];
+  const baseByCode = new Map(baseAuthorities.map((authority) => [authority.code, authority]));
+  const newAuthorities = [];
+  for (const authority of headAuthorities) {
+    const baseAuthority = baseByCode.get(authority.code);
+    if (baseAuthority === undefined) {
+      newAuthorities.push(authority);
+      continue;
+    }
+    if (
+      canonicalRoadmapAuthoritySha256(authority) !==
+      canonicalRoadmapAuthoritySha256(baseAuthority)
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${authority.code} roadmap authority must remain canonical during roadmap-authority-prepare`,
+      );
+    }
+  }
+  for (const authority of baseAuthorities) {
+    if (!headAuthorities.some((candidate) => candidate.code === authority.code)) {
+      throw new Es2015ProvenanceCheckError(
+        `${authority.code} roadmap authority is missing from HEAD during roadmap-authority-prepare`,
+      );
+    }
+  }
+  if (newAuthorities.length !== 1 || headAuthorities.length !== baseAuthorities.length + 1) {
+    throw new Es2015ProvenanceCheckError(
+      'roadmap-authority-prepare must add exactly one new roadmap authority',
+    );
+  }
+  const [newAuthority] = newAuthorities;
+  if (newAuthority.state !== 'pending') {
+    throw new Es2015ProvenanceCheckError(
+      `${newAuthority.code} roadmap authority must be pending in HEAD during roadmap-authority-prepare`,
+    );
+  }
+  if (marker.code !== newAuthority.code) {
+    throw new Es2015ProvenanceCheckError(
+      'roadmap-authority-prepare marker code does not match the new roadmap authority',
+    );
+  }
+  if (marker.issue !== newAuthority.issue) {
+    throw new Es2015ProvenanceCheckError(
+      `roadmap-authority-prepare marker issue does not match ${newAuthority.code} roadmap authority`,
+    );
+  }
+  assertRoadmapBasePin(
+    marker.recordSha256,
+    canonicalRoadmapAuthoritySha256(newAuthority),
+    `roadmap-authority-prepare marker record-sha256 does not match ${newAuthority.code} roadmap authority`,
+  );
+  await validateDecisionFragmentsByteIdentical(
+    deps,
+    base,
+    head,
+    ROADMAP_AUTHORITY_PREPARATION_PROFILE,
+  );
+  return 0;
+}
+
+/**
+ * @param {unknown} baseManifest
+ * @param {unknown} headManifest
+ * @param {RoadmapConsumptionMarker} marker
+ * @param {{
+ *   deps: ProvenanceCheckDependencies,
+ *   base: string,
+ *   head: string,
+ *   changes: readonly { status: string, path: string, sourcePath: string | null }[],
+ * }} options
+ */
+export async function validateRoadmapAuthorityConsumption(
+  baseManifest,
+  headManifest,
+  marker,
+  options,
+) {
+  const { deps, base, head, changes } = options;
+  const normalizedBaseManifest = normalizeRangeManifestValue(
+    baseManifest,
+    `${marker.profile} base`,
+  );
+  if (normalizedBaseManifest.version !== 3) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} range requires a canonical schema-v3 BASE manifest`,
+    );
+  }
+  const normalizedHeadManifest = normalizeRangeManifestValue(
+    headManifest,
+    `${marker.profile} head`,
+  );
+  if (normalizedHeadManifest.version !== 3) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} range requires a canonical schema-v3 HEAD manifest`,
+    );
+  }
+  const baseAuthorities = normalizedBaseManifest.roadmapAuthorities ?? [];
+  const headAuthorities = normalizedHeadManifest.roadmapAuthorities ?? [];
+  const baseAuthority = baseAuthorities.find(
+    (authority) => authority.code === marker.code,
+  );
+  if (baseAuthority === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.code} roadmap authority must exist in BASE`,
+    );
+  }
+  if (baseAuthority.state !== 'pending') {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.code} roadmap authority must be pending in BASE`,
+    );
+  }
+  assertRoadmapBasePin(
+    marker.base,
+    base,
+    `${marker.profile} marker base pin does not match the resolved BASE commit`,
+  );
+  if (marker.issue !== baseAuthority.issue) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} marker issue does not match ${baseAuthority.code} roadmap authority`,
+    );
+  }
+  if (
+    marker.profile !==
+    `${ROADMAP_AUTHORITY_RECLASSIFICATION_PROFILE_PREFIX}${baseAuthority.code}`
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} marker profile does not match ${baseAuthority.code} roadmap authority`,
+    );
+  }
+  if (marker.sourcePathSha256 !== baseAuthority.source.pathSha256) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} marker source-path-sha256 does not match ${baseAuthority.code} roadmap authority`,
+    );
+  }
+  if (marker.sourceEntrySha256 !== baseAuthority.source.entryLedgerSha256) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} marker source-entry-sha256 does not match ${baseAuthority.code} roadmap authority`,
+    );
+  }
+  if (
+    marker.protectedProjectionSha256 !==
+    roadmapAggregateProjectionSha256(baseAuthority)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} marker protected-projection-sha256 does not match ${baseAuthority.code} roadmap authority`,
+    );
+  }
+  const headByCode = new Map(headAuthorities.map((authority) => [authority.code, authority]));
+  for (const authority of baseAuthorities) {
+    const nextAuthority = headByCode.get(authority.code);
+    if (nextAuthority === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `${authority.code} roadmap authority is missing from HEAD during ${marker.profile}`,
+      );
+    }
+    if (authority.code === marker.code) continue;
+    if (
+      canonicalRoadmapAuthoritySha256(nextAuthority) !==
+      canonicalRoadmapAuthoritySha256(authority)
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${authority.code} roadmap authority must remain canonical during ${marker.profile}`,
+      );
+    }
+  }
+  for (const authority of headAuthorities) {
+    if (!baseAuthorities.some((candidate) => candidate.code === authority.code)) {
+      throw new Es2015ProvenanceCheckError(
+        `${authority.code} roadmap authority is unexpected in HEAD during ${marker.profile}`,
+      );
+    }
+  }
+  const headAuthority = headByCode.get(marker.code);
+  if (headAuthority === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.code} roadmap authority is missing from HEAD during ${marker.profile}`,
+    );
+  }
+  const expectedHeadAuthority = {
+    ...baseAuthority,
+    state: 'applied',
+  };
+  if (
+    canonicalRoadmapAuthoritySha256(headAuthority) !==
+    canonicalRoadmapAuthoritySha256(expectedHeadAuthority)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.code} roadmap authority must transition only from pending to applied`,
+    );
+  }
+  const projectionResult =
+    (await deps.validateRoadmapProtectedOutputs?.(baseAuthority, changes, {
+      base,
+      head,
+      baseManifest: normalizedBaseManifest,
+      headManifest: normalizedHeadManifest,
+      marker,
+    })) ?? [];
+  if (!Array.isArray(projectionResult) || projectionResult.length === 0) {
+    throw new Es2015ProvenanceCheckError(
+      `${marker.profile} requires a nonempty protected projection result`,
+    );
+  }
+  return 0;
+}
+
 /**
  * @param {string} base
  * @param {string | null} baseManifestText
@@ -693,6 +1172,11 @@ function maintenanceRangeAuthority(base, baseManifestText) {
     baseManifestText,
     'foundation-maintenance base',
   );
+  if (manifest.version === 3) {
+    throw new Es2015ProvenanceCheckError(
+      'foundation-maintenance range is unavailable once the BASE provenance manifest is schema v3',
+    );
+  }
   return {
     profile: rangeProfileForManifest(manifest, FOUNDATION_MAINTENANCE_PROFILE),
     baseLedgerSha256: manifest.baseLedger.pathSha256,
@@ -742,6 +1226,140 @@ function rangeProfileForManifest(manifest, name) {
   return profile;
 }
 
+/** @param {unknown} actual @param {unknown} expected @param {string} message */
+function assertRoadmapBasePin(actual, expected, message) {
+  if (actual !== expected) {
+    throw new Es2015ProvenanceCheckError(message);
+  }
+}
+
+/**
+ * @param {string} name
+ * @param {readonly string[]} requiredPaths
+ * @param {readonly string[]} allowedPaths
+ */
+function syntheticRangeProfile(name, requiredPaths, allowedPaths) {
+  return {
+    name,
+    requiredPaths,
+    allowedPaths,
+    requiredDeletions: Object.freeze([]),
+    allowedDeletions: Object.freeze([]),
+  };
+}
+
+/**
+ * @param {unknown} manifest
+ * @param {string} _label
+ * @returns {ReturnType<typeof parseEs2015ProvenanceManifest>}
+ */
+function normalizeRangeManifestValue(manifest, _label) {
+  const normalized = validateRoadmapAuthorityManifest(manifest);
+  validateProvenanceFoundation(normalized);
+  return normalized;
+}
+
+/** @param {Record<string, any>} authority */
+function roadmapAggregateProjectionSha256(authority) {
+  const entries = authority.protectedOutputs.map((output) => ({
+    path: output.path,
+    operation: output.operation,
+    sha256:
+      output.operation === 'project'
+        ? output.projectionSha256
+        : output.headSha256,
+  }));
+  return sha256(`${JSON.stringify(entries)}\n`);
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {string} base
+ * @param {string} head
+ * @param {string} label
+ */
+async function validateDecisionFragmentsByteIdentical(deps, base, head, label) {
+  for (const code of ES2015_PROVENANCE_DECISION_CODES) {
+    const path = decisionFragmentPath(code);
+    const baseText = await readRequiredGitFile(deps, base, path);
+    const headText = await readRequiredGitFile(deps, head, path);
+    if (baseText !== headText) {
+      throw new Es2015ProvenanceCheckError(
+        `${path} must remain byte-identical across ${label}`,
+      );
+    }
+  }
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {string} base
+ * @param {string} head
+ */
+async function validateEmbeddedRoadmapAuthorityDocuments(deps, base, head) {
+  for (const document of ROADMAP_STANDALONE_DOCUMENTS) {
+    const embeddedPayload = extractEmbeddedRoadmapAuthorityPayload(
+      await readRequiredGitFile(deps, base, document.basePath),
+      document.label,
+      document.basePath,
+    );
+    const headText = await readRequiredGitFile(deps, head, document.headPath);
+    if (headText !== embeddedPayload) {
+      throw new Es2015ProvenanceCheckError(
+        `${document.headPath} must match the embedded roadmap authority ${document.label} payload from BASE`,
+      );
+    }
+  }
+}
+
+/**
+ * @param {string} text
+ * @param {string} label
+ * @param {string} path
+ */
+function extractEmbeddedRoadmapAuthorityPayload(text, label, path) {
+  const beginPattern = new RegExp(
+    `^<!-- BEGIN ROADMAP AUTHORITY ${label} sha256:([0-9a-f]{64}) -->$`,
+    'gmu',
+  );
+  const endPattern = new RegExp(
+    `^<!-- END ROADMAP AUTHORITY ${label} -->$`,
+    'gmu',
+  );
+  const beginMatches = [...text.matchAll(beginPattern)];
+  const endMatches = [...text.matchAll(endPattern)];
+  if (beginMatches.length !== 1 || endMatches.length !== 1) {
+    throw new Es2015ProvenanceCheckError(
+      `${path} must contain exactly one embedded roadmap authority ${label} payload`,
+    );
+  }
+  const [beginMatch] = beginMatches;
+  const [endMatch] = endMatches;
+  const beginIndex = beginMatch.index;
+  const endIndex = endMatch.index;
+  if (beginIndex === undefined || endIndex === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `${path} must contain exactly one embedded roadmap authority ${label} payload`,
+    );
+  }
+  const payloadStart = beginIndex + beginMatch[0].length;
+  if (
+    !text.startsWith('\n', payloadStart) ||
+    endIndex <= payloadStart + 1
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${path} must contain exactly one embedded roadmap authority ${label} payload`,
+    );
+  }
+  const payload = text.slice(payloadStart + 1, endIndex);
+  if (sha256(payload) !== beginMatch[1]) {
+    throw new Es2015ProvenanceCheckError(
+      `${path} embedded roadmap authority ${label} payload sha256 does not match its exact bytes`,
+    );
+  }
+  return payload;
+}
+
 /** @param {string | null} value @param {string} option */
 function explicitCommitSha(value, option) {
   if (typeof value !== 'string' || !/^[0-9a-f]{40}$/u.test(value)) {
@@ -761,10 +1379,11 @@ function explicitCommitSha(value, option) {
  */
 async function markerForRange(deps, options, changes, base, head) {
   if (options.prBodyEnvironment === null) {
-    const parsed = parseProvenanceRangeMarker(
-      /** @type {string} */ (options.rangeMarker),
-    );
-    if (parsed.profile !== options.rangeProfile) {
+    const markerText = /** @type {string} */ (options.rangeMarker);
+    const parsed = markerText.includes('<!-- es2015-roadmap-authority-')
+      ? parseRoadmapAuthorityMarker(markerText)
+      : parseProvenanceRangeMarker(markerText);
+    if (rangeProfileForMarker(parsed) !== options.rangeProfile) {
       throw new Es2015ProvenanceCheckError(
         `Provenance PR marker does not match ${options.rangeProfile} policy`,
       );
@@ -791,10 +1410,8 @@ async function markerForRange(deps, options, changes, base, head) {
       `Provenance PR body environment ${options.prBodyEnvironment} is missing`,
     );
   }
-  const markerLines = body
-    .split(/\r?\n/u)
-    .filter((line) => line.includes('es2015-provenance-pr'));
-  if (markerLines.length === 0) {
+  const markers = authoritativeRangeMarkers(body);
+  if (markers.length === 0) {
     if (await provenanceOwnedRange(deps, changes, base, head)) {
       throw new Es2015ProvenanceCheckError(
         'A provenance-owned PR range requires one authoritative provenance marker',
@@ -802,12 +1419,12 @@ async function markerForRange(deps, options, changes, base, head) {
     }
     return null;
   }
-  if (markerLines.length !== 1) {
+  if (markers.length !== 1) {
     throw new Es2015ProvenanceCheckError(
       'PR body must contain exactly one authoritative provenance marker',
     );
   }
-  return parseProvenanceRangeMarker(markerLines[0]);
+  return markers[0];
 }
 
 /** @param {string} text */
@@ -822,6 +1439,112 @@ function parseProvenanceRangeMarker(text) {
     );
   }
   return { text, profile: match[1], baseLedgerSha256: match[2] };
+}
+
+/** @param {string} text */
+export function parseRoadmapAuthorityMarker(text) {
+  const parsers = [
+    (candidate) => {
+      const match = roadmapMigrationMarkerPattern().exec(candidate);
+      if (match === null || match[0] !== candidate) return null;
+      return {
+        kind: 'migration',
+        text: candidate,
+        base: match[1],
+        baseManifestSha256: match[2],
+        baseCheckerSha256: match[3],
+        baseWorkflowSha256: match[4],
+        headManifestSha256: match[5],
+      };
+    },
+    (candidate) => {
+      const match = roadmapPreparationMarkerPattern().exec(candidate);
+      if (match === null || match[0] !== candidate) return null;
+      return {
+        kind: 'prepare',
+        text: candidate,
+        code: match[1],
+        issue: Number(match[2]),
+        base: match[3],
+        baseManifestSha256: match[4],
+        recordSha256: match[5],
+      };
+    },
+    (candidate) => {
+      const match = roadmapConsumptionMarkerPattern().exec(candidate);
+      if (match === null || match[0] !== candidate) return null;
+      return {
+        kind: 'consume',
+        text: candidate,
+        code: match[1],
+        issue: Number(match[2]),
+        profile: match[3],
+        base: match[4],
+        sourcePathSha256: match[5],
+        sourceEntrySha256: match[6] === 'null' ? null : match[6],
+        protectedProjectionSha256: match[7],
+      };
+    },
+  ];
+  for (const parse of parsers) {
+    const marker = parse(text);
+    if (marker !== null) return marker;
+  }
+  throw new Es2015ProvenanceCheckError(
+    'Roadmap authority marker is not authoritative',
+  );
+}
+
+/** @param {string} body */
+function authoritativeRangeMarkers(body) {
+  const markers = [];
+  for (const match of body.matchAll(
+    /(^|\n)(<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:[A-Za-z0-9:-]+ base-ledger-sha256:[0-9a-f]{64} -->)(?=\n|$)/gu,
+  )) {
+    markers.push({
+      index: match.index ?? 0,
+      marker: parseProvenanceRangeMarker(match[2]),
+    });
+  }
+  for (const matcher of [
+    roadmapMigrationBodyPattern(),
+    roadmapPreparationBodyPattern(),
+    roadmapConsumptionBodyPattern(),
+  ]) {
+    for (const match of body.matchAll(matcher)) {
+      markers.push({
+        index: match.index ?? 0,
+        marker: parseRoadmapAuthorityMarker(match[2]),
+      });
+    }
+  }
+  return markers
+    .sort((left, right) => left.index - right.index)
+    .map((entry) => entry.marker);
+}
+
+function roadmapMigrationMarkerPattern() {
+  return /^<!-- es2015-roadmap-authority-migration\nparent:70\nbase:([0-9a-f]{40})\nbase-manifest-sha256:([0-9a-f]{64})\nbase-checker-sha256:([0-9a-f]{64})\nbase-workflow-sha256:([0-9a-f]{64})\nhead-manifest-sha256:([0-9a-f]{64})\n-->$/u;
+}
+
+function roadmapPreparationMarkerPattern() {
+  return /^<!-- es2015-roadmap-authority-prepare\nparent:70\ncode:([A-Z][A-Z0-9]*)\nissue:([1-9][0-9]*)\nbase:([0-9a-f]{40})\nbase-manifest-sha256:([0-9a-f]{64})\nrecord-sha256:([0-9a-f]{64})\n-->$/u;
+}
+
+function roadmapConsumptionMarkerPattern() {
+  return /^<!-- es2015-roadmap-authority-consume\nparent:70\ncode:([A-Z][A-Z0-9]*)\nissue:([1-9][0-9]*)\nprofile:(roadmap-reclassification:[A-Z][A-Z0-9]*)\nbase:([0-9a-f]{40})\nsource-path-sha256:([0-9a-f]{64})\nsource-entry-sha256:(null|[0-9a-f]{64})\nprotected-projection-sha256:([0-9a-f]{64})\n-->$/u;
+}
+
+function roadmapMigrationBodyPattern() {
+  return /(^|\n)(<!-- es2015-roadmap-authority-migration\nparent:70\nbase:[0-9a-f]{40}\nbase-manifest-sha256:[0-9a-f]{64}\nbase-checker-sha256:[0-9a-f]{64}\nbase-workflow-sha256:[0-9a-f]{64}\nhead-manifest-sha256:[0-9a-f]{64}\n-->)(?=\n|$)/gu;
+}
+
+function roadmapPreparationBodyPattern() {
+  return /(^|\n)(<!-- es2015-roadmap-authority-prepare\nparent:70\ncode:[A-Z][A-Z0-9]*\nissue:[1-9][0-9]*\nbase:[0-9a-f]{40}\nbase-manifest-sha256:[0-9a-f]{64}\nrecord-sha256:[0-9a-f]{64}\n-->)(?=\n|$)/gu;
+}
+
+function roadmapConsumptionBodyPattern() {
+  return /(^|\n)(<!-- es2015-roadmap-authority-consume\nparent:70\ncode:[A-Z][A-Z0-9]*\nissue:[1-9][0-9]*\nprofile:roadmap-reclassification:[A-Z][A-Z0-9]*\nbase:[0-9a-f]{40}\nsource-path-sha256:[0-9a-f]{64}\nsource-entry-sha256:(?:null|[0-9a-f]{64})\nprotected-projection-sha256:[0-9a-f]{64}\n-->)(?=\n|$)/gu;
 }
 
 /** @param {string} profile @param {string} baseLedgerSha256 */
