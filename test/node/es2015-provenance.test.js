@@ -1479,6 +1479,15 @@ function auditEvidenceTextWithoutRecord(text, file, variant) {
   return `${JSON.stringify(evidence, null, 2)}\n`;
 }
 
+/** @param {string} text @param {string} file */
+function auditEvidenceTextWithoutPath(text, file) {
+  const evidence = JSON.parse(text);
+  evidence.auditRecords = evidence.auditRecords.filter(
+    (record) => record.file !== file,
+  );
+  return `${JSON.stringify(evidence, null, 2)}\n`;
+}
+
 /** @param {string} text @param {Readonly<Record<string, unknown>>} record */
 function auditEvidenceTextWithAddedRecord(text, record) {
   const evidence = JSON.parse(text);
@@ -1580,8 +1589,14 @@ function canonicalConformanceText(options) {
   );
 }
 
-/** @param {string} path @param {number} variants @param {string} status @param {string | null} blocker */
-function taxonomyRecord(path, variants, status, blocker = null) {
+/** @param {string} path @param {number} variants @param {string} status @param {string | null} blocker @param {readonly string[]} flags */
+function taxonomyRecord(
+  path,
+  variants,
+  status,
+  blocker = null,
+  flags = variants === 1 ? Object.freeze(['noStrict']) : Object.freeze([]),
+) {
   return Object.freeze({
     path,
     variants,
@@ -1589,7 +1604,7 @@ function taxonomyRecord(path, variants, status, blocker = null) {
     status,
     blocker,
     features: Object.freeze([]),
-    flags: Object.freeze([]),
+    flags: Object.freeze([...flags]),
     includes: Object.freeze([]),
     provenance: Object.freeze([]),
   });
@@ -6846,6 +6861,24 @@ export default [
           },
         ],
       };
+      const missingSourceAuditRootText = auditEvidenceTextWithoutPath(
+        fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+        'test/language/audit.js',
+      );
+      const incompleteSourceAuditVariantsText = auditEvidenceTextWithoutRecord(
+        fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+        'test/language/promotion.js',
+        'strict',
+      );
+      const auditAuthorityWithBaseText = (baseText) => ({
+        ...structuredClone(auditAuthority),
+        protectedOutputs: [
+          {
+            ...structuredClone(auditAuthority.protectedOutputs[0]),
+            baseSha256: sha256(baseText),
+          },
+        ],
+      });
       const auditDeps = rangeCheckDependencies({
         changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
         baseManifestText: fixture.baseManifestText,
@@ -7075,6 +7108,68 @@ export default [
           ],
           message:
             'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json is missing source record test/language/promotion.js (strict)',
+        },
+        {
+          authority: auditAuthorityWithBaseText(missingSourceAuditRootText),
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: new Map([
+              ...fixture.baseFiles,
+              [
+                'tools/test262/es2015-audit-evidence.json',
+                missingSourceAuditRootText,
+              ],
+            ]),
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-audit-evidence.json',
+                missingSourceAuditRootText,
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-audit-evidence.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json is missing source audit root test/language/audit.js',
+        },
+        {
+          authority: auditAuthorityWithBaseText(incompleteSourceAuditVariantsText),
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: new Map([
+              ...fixture.baseFiles,
+              [
+                'tools/test262/es2015-audit-evidence.json',
+                incompleteSourceAuditVariantsText,
+              ],
+            ]),
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-audit-evidence.json',
+                incompleteSourceAuditVariantsText,
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-audit-evidence.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json must represent exact source variants for test/language/promotion.js',
         },
         {
           authority: auditAuthority,

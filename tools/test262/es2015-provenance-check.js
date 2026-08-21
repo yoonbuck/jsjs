@@ -1956,6 +1956,12 @@ async function validateAuditEvidenceProjection(
       roadmapEvidencePath(authority, 'disposition'),
     ).map((entry) => [entry.path, entry]),
   );
+  const expectations = await sourceAuditExpectations(
+    authority,
+    context,
+    sourcePaths,
+    output.path,
+  );
   const baseAudit = parseRoadmapAuditEvidenceDocument(baseText, output.path);
   const headAudit = parseRoadmapAuditEvidenceDocument(headText, output.path);
   if (
@@ -1978,45 +1984,64 @@ async function validateAuditEvidenceProjection(
       { normalized: record, raw: headAudit.rawRecords[index] },
     ]),
   );
-  for (const [key, entry] of baseByKey) {
-    const record = entry.normalized;
-    if (!sourcePaths.has(record.file)) continue;
-    const destination = disposition.get(record.file);
+  const baseByPath = auditEntriesByPath(baseAudit);
+  const headByPath = auditEntriesByPath(headAudit);
+  for (const [path, variants] of expectations) {
+    const destination = disposition.get(path);
     if (destination === undefined) {
       throw new Es2015ProvenanceCheckError(
-        `${profile} protected output ${output.path} is missing reviewed source path ${record.file}`,
+        `${profile} protected output ${output.path} is missing reviewed source path ${path}`,
       );
     }
+    const baseEntries = baseByPath.get(path) ?? [];
+    const headEntries = headByPath.get(path) ?? [];
+    if (baseEntries.length === 0 || headEntries.length === 0) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} is missing source audit root ${path}`,
+      );
+    }
+    for (const variant of variants) {
+      const key = `${path}\u0000${variant}`;
+      const baseEntry = baseByKey.get(key);
+      if (baseEntry === undefined) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} protected output ${output.path} must represent exact source variants for ${path}`,
+        );
+      }
+      if (
+        (destination.status === 'selected-passing' ||
+          destination.status === 'audit-passing-unselected') &&
+        baseEntry.normalized.status !== 'passed'
+      ) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} protected output ${output.path} has non-passing evidence for ${path} (${String(variant)})`,
+        );
+      }
+      const headEntry = headByKey.get(key);
+      if (headEntry === undefined) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} protected output ${output.path} is missing source record ${path} (${String(variant)})`,
+        );
+      }
+      if (json(baseEntry.raw) !== json(headEntry.raw)) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} protected output ${output.path} changes audited source evidence ${path} (${String(variant)})`,
+        );
+      }
+    }
+    const expectedVariants = [...variants].sort();
     if (
-      (destination.status === 'selected-passing' ||
-        destination.status === 'audit-passing-unselected') &&
-      record.status !== 'passed'
+      !sameStringLists(
+        baseEntries.map((entry) => String(entry.normalized.variant)).sort(),
+        expectedVariants,
+      ) ||
+      !sameStringLists(
+        headEntries.map((entry) => String(entry.normalized.variant)).sort(),
+        expectedVariants,
+      )
     ) {
       throw new Es2015ProvenanceCheckError(
-        `${profile} protected output ${output.path} has non-passing evidence for ${record.file} (${String(record.variant)})`,
-      );
-    }
-    if (!headByKey.has(key)) {
-      throw new Es2015ProvenanceCheckError(
-        `${profile} protected output ${output.path} is missing source record ${record.file} (${String(record.variant)})`,
-      );
-    }
-  }
-  for (const [key, entry] of headByKey) {
-    const record = entry.normalized;
-    if (sourcePaths.has(record.file) && !baseByKey.has(key)) {
-      throw new Es2015ProvenanceCheckError(
-        `${profile} protected output ${output.path} names a foreign source record ${record.file} (${String(record.variant)})`,
-      );
-    }
-    const baseRecord = baseByKey.get(key);
-    if (
-      baseRecord !== undefined &&
-      sourcePaths.has(record.file) &&
-      json(baseRecord.raw) !== json(entry.raw)
-    ) {
-      throw new Es2015ProvenanceCheckError(
-        `${profile} protected output ${output.path} changes audited source evidence ${record.file} (${String(record.variant)})`,
+        `${profile} protected output ${output.path} must represent exact source variants for ${path}`,
       );
     }
   }
@@ -2333,6 +2358,99 @@ function auditDocumentData(document) {
   const data = { ...document };
   delete data.auditRecords;
   return data;
+}
+
+/**
+ * @param {Record<string, any>} authority
+ * @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context
+ * @param {ReadonlySet<string>} sourcePaths
+ * @param {string} outputPath
+ */
+async function sourceAuditExpectations(authority, context, sourcePaths, outputPath) {
+  const profile = context.marker.profile;
+  const sourcePathList = [...sourcePaths].sort();
+  if (sha256(`${sourcePathList.join('\n')}\n`) !== authority.source.pathSha256) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${outputPath} source paths do not match ${authority.code} roadmap authority`,
+    );
+  }
+  const baseTaxonomyText = await readRequiredRoadmapFile(
+    context.deps,
+    context.base,
+    TAXONOMY_FILE,
+    'BASE',
+    profile,
+  );
+  if (sha256(baseTaxonomyText) !== authority.source.baseTaxonomySha256) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${outputPath} BASE taxonomy does not match ${authority.code} roadmap authority`,
+    );
+  }
+  const taxonomy = taxonomyArtifact(
+    parseJsonValue(baseTaxonomyText, TAXONOMY_FILE),
+    `${profile} protected output ${outputPath} BASE taxonomy`,
+  );
+  const expectations = new Map();
+  let variantCount = 0;
+  for (const path of sourcePathList) {
+    const record = taxonomy.byPath.get(path);
+    if (record === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${outputPath} is missing reviewed source path ${path}`,
+      );
+    }
+    const variants = taxonomyExecutionVariants(record, outputPath, profile);
+    expectations.set(path, variants);
+    variantCount += variants.length;
+  }
+  if (
+    expectations.size !== authority.source.rootCount ||
+    variantCount !== authority.source.variantCount
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${outputPath} source variant expectations do not match ${authority.code} roadmap authority`,
+    );
+  }
+  return expectations;
+}
+
+/** @param {{ records: readonly any[], rawRecords: readonly Record<string, any>[] }} audit */
+function auditEntriesByPath(audit) {
+  const byPath = new Map();
+  audit.records.forEach((record, index) => {
+    const entries = byPath.get(record.file) ?? [];
+    entries.push({ normalized: record, raw: audit.rawRecords[index] });
+    byPath.set(record.file, entries);
+  });
+  return byPath;
+}
+
+/** @param {Record<string, any>} record @param {string} outputPath @param {string} profile */
+function taxonomyExecutionVariants(record, outputPath, profile) {
+  if (!Array.isArray(record.flags) || record.flags.some((flag) => typeof flag !== 'string')) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${outputPath} cannot derive exact source variants for ${record.path}`,
+    );
+  }
+  const flags = new Set(record.flags);
+  const variants = flags.has('raw')
+    ? ['raw']
+    : flags.has('onlyStrict')
+      ? ['strict']
+      : flags.has('noStrict') || flags.has('module')
+        ? ['non-strict']
+        : ['non-strict', 'strict'];
+  if (record.variants !== variants.length) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${outputPath} cannot derive exact source variants for ${record.path}`,
+    );
+  }
+  return variants;
+}
+
+/** @param {readonly string[]} left @param {readonly string[]} right */
+function sameStringLists(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 /** @param {readonly string[]} values */

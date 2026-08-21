@@ -166,3 +166,47 @@ Results:
 - focused provenance suite: PASS
 - scoped ESLint: PASS
 - `git diff --check`: PASS
+
+## Fix Round 2
+
+### Reviewer Finding Addressed
+
+- Audit-evidence projection now derives required source roots and exact
+  execution variants from the BASE taxonomy bound by the authority, instead of
+  trusting the preexisting BASE audit artifact to already be complete.
+- Source audit evidence now rejects:
+  - a source root with no audit records;
+  - a source root with fewer records than its taxonomy variants;
+  - excess source variants outside the expected execution set;
+  - any drift in non-source audit records or document metadata.
+
+### RED Evidence
+
+Focused RED command after adding the round-2 audit regressions:
+
+```text
+TZ=UTC node test/run-node.js test/node/es2015-provenance.test.js
+```
+
+Observed failure before the validator fix:
+
+- `ES2015 provenance validates protected outputs by artifact and rejects foreign generated changes`
+  failed with `Expected rejection`, which meant the new BASE+HEAD audit
+  fixtures with a missing source audit root or an incomplete source variant set
+  were still being accepted.
+
+### GREEN Verification
+
+Final focused verification for Fix Round 2:
+
+```text
+TZ=UTC node test/run-node.js test/node/es2015-provenance.test.js
+./node_modules/.bin/eslint test/node/es2015-provenance.test.js tools/test262/es2015-provenance.js tools/test262/es2015-provenance-check.js
+git --no-pager diff --check
+```
+
+Results:
+
+- focused provenance suite: PASS
+- scoped ESLint: PASS
+- `git diff --check`: PASS
