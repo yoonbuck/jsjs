@@ -1,6 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { assertSame, assertThrows } from '../harness/assert.js';
+import * as provenance from '../../tools/test262/es2015-provenance.js';
 import {
   ES2015_PROVENANCE_DECISION_VERSION,
   ES2015_PROVENANCE_DECISION_CODES,
@@ -262,6 +264,16 @@ function capturedDecisionRangeProfile(code) {
 const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
+);
+const PRESERVED_H0_SOURCE_TAXONOMY_TEXT = execFileSync(
+  'git',
+  [
+    '-c',
+    'core.pager=cat',
+    'show',
+    `${TAXONOMY_BASELINE}:${TAXONOMY_PATH}`,
+  ],
+  { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
 );
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
@@ -763,44 +775,62 @@ function validManifestValue() {
   return buildProvenanceFoundation(foundationClassifications());
 }
 
-function minimalRoadmapAuthority(code, issue, state) {
-  return {
-    code,
-    issue,
-    parentIssue: 70,
-    state,
-    source: {
-      baseTaxonomySha256: '1'.repeat(64),
-      rootCount: 1,
-      variantCount: 1,
-      pathSha256: '2'.repeat(64),
-      entryLedgerSha256: null,
-    },
-    reconciliation: null,
-    evidence: [],
-    protectedOutputs: [
-      {
-        path: `tools/test262/${code.toLowerCase()}-evidence.json`,
-        operation: 'add-exact',
-        baseSha256: null,
-        headSha256: '3'.repeat(64),
-        projectionSha256: null,
-      },
-    ],
-    destinations: [
-      {
-        status: 'selected-passing',
-        blocker: null,
-        issue,
-      },
-    ],
-  };
+function approvedInitialRoadmapAuthorities() {
+  assertSame(typeof provenance.P0_APPLIED_ROADMAP_AUTHORITY, 'object');
+  assertSame(typeof provenance.H0_PENDING_ROADMAP_AUTHORITY, 'object');
+  assertSame(Array.isArray(provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES), true);
+  return provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES;
+}
+
+function canonicalSchemaV3RangeProfiles() {
+  return JSON.parse(approvedProvenanceManifestText()).rangeProfiles.filter(
+    (/** @type {{ name: string }} */ profile) =>
+      profile.name !== 'maintenance:issue77-lexical',
+  );
+}
+
+/** @param {{ preservedTaxonomySha256: string, authorityTaxonomySha256: string, selectorPathSha256: string, rootCount: number, variantCount: number, missingCount: number, extraCount: number }} reconciliation */
+function reconciliationProofSha256(reconciliation) {
+  return sha256(
+    `${reconciliation.preservedTaxonomySha256}\u0000${reconciliation.authorityTaxonomySha256}\u0000${reconciliation.selectorPathSha256}\u0000${reconciliation.rootCount}\u0000${reconciliation.variantCount}\u0000${reconciliation.missingCount}\u0000${reconciliation.extraCount}\u0000`,
+  );
+}
+
+/** @param {string} text */
+function driftedCrossRealmTaxonomyText(text) {
+  const taxonomy = JSON.parse(text);
+  const crossRealm = taxonomy.classifications.find(
+    (/** @type {{ partition: string, status: string, blocker: string | null }} */ record) =>
+      record.partition === 'core' &&
+      record.status === 'blocked:test262-cross-realm-host' &&
+      record.blocker === 'test262-cross-realm-host',
+  );
+  const replacement = taxonomy.classifications.find(
+    (/** @type {{ path: string, variants: number, partition: string, status: string, blocker: string | null }} */ record) =>
+      record.partition === 'core' &&
+      record.blocker !== null &&
+      record.blocker !== 'test262-cross-realm-host' &&
+      record.status.startsWith('blocked:') &&
+      crossRealm !== undefined &&
+      record.path !== crossRealm.path &&
+      record.variants === crossRealm.variants,
+  );
+  assertSame(crossRealm !== undefined, true);
+  assertSame(replacement !== undefined, true);
+  const originalStatus = crossRealm.status;
+  const originalBlocker = crossRealm.blocker;
+  crossRealm.status = replacement.status;
+  crossRealm.blocker = replacement.blocker;
+  replacement.status = originalStatus;
+  replacement.blocker = originalBlocker;
+  return `${JSON.stringify(taxonomy, null, 2)}\n`;
 }
 
 function canonicalEmptySchemaV3ManifestValue() {
   return {
     ...JSON.parse(approvedProvenanceManifestText()),
     version: 3,
+    rangeProfiles: canonicalSchemaV3RangeProfiles(),
     roadmapAuthorities: [],
   };
 }
@@ -808,10 +838,7 @@ function canonicalEmptySchemaV3ManifestValue() {
 function canonicalSchemaV3ManifestValue() {
   return {
     ...canonicalEmptySchemaV3ManifestValue(),
-    roadmapAuthorities: [
-      minimalRoadmapAuthority('H0', 76, 'pending'),
-      minimalRoadmapAuthority('P0', 77, 'applied'),
-    ],
+    roadmapAuthorities: approvedInitialRoadmapAuthorities(),
   };
 }
 
@@ -1423,6 +1450,51 @@ export default [
     },
   },
   {
+    name: 'ES2015 provenance exports exact initial roadmap authorities and migrated schema-v3 profiles',
+    run: () => {
+      const initialAuthorities = approvedInitialRoadmapAuthorities();
+      assertSame(
+        json(initialAuthorities),
+        json([
+          provenance.H0_PENDING_ROADMAP_AUTHORITY,
+          provenance.P0_APPLIED_ROADMAP_AUTHORITY,
+        ]),
+      );
+      assertSame(provenance.P0_APPLIED_ROADMAP_AUTHORITY.state, 'applied');
+      assertSame(
+        provenance.P0_APPLIED_ROADMAP_AUTHORITY.source.entryLedgerSha256,
+        '3b23ac8dbc2ae703d466d49e26d827516e4a863406a45acb4e8356c86c32d664',
+      );
+      assertSame(provenance.H0_PENDING_ROADMAP_AUTHORITY.state, 'pending');
+      assertSame(
+        provenance.H0_PENDING_ROADMAP_AUTHORITY.source.entryLedgerSha256,
+        null,
+      );
+      assertSame(provenance.H0_PENDING_ROADMAP_AUTHORITY.evidence.length, 6);
+      assertSame(
+        provenance.H0_PENDING_ROADMAP_AUTHORITY.protectedOutputs.length,
+        10,
+      );
+      assertSame(provenance.H0_PENDING_ROADMAP_AUTHORITY.destinations.length, 16);
+
+      const migratedRangeProfiles = productionManifest().rangeProfiles.filter(
+        (profile) => profile.name !== 'maintenance:issue77-lexical',
+      );
+      const foundationV3 = buildProvenanceFoundation(foundationClassifications(), {
+        version: 3,
+        roadmapAuthorities: initialAuthorities,
+      });
+      assertSame(foundationV3.rangeProfiles.length, 15);
+      assertSame(
+        foundationV3.rangeProfiles.some(
+          (profile) => profile.name === 'maintenance:issue77-lexical',
+        ),
+        false,
+      );
+      assertSame(json(foundationV3.rangeProfiles), json(migratedRangeProfiles));
+    },
+  },
+  {
     name: 'ES2015 provenance rejects unreviewed manifest and decision fragment JSON',
     run: () => {
       const manifestKeysError = assertThrows(
@@ -1587,6 +1659,13 @@ export default [
       );
       const parsed = parseEs2015ProvenanceManifest(json(manifestV3));
       assertSame(parsed.version, 3);
+      assertSame(parsed.rangeProfiles.length, 15);
+      assertSame(
+        parsed.rangeProfiles.some(
+          (profile) => profile.name === 'maintenance:issue77-lexical',
+        ),
+        false,
+      );
       assertSame(parsed.roadmapAuthorities[0].code, 'H0');
       assertSame(parsed.roadmapAuthorities[1].code, 'P0');
 
@@ -1613,11 +1692,21 @@ export default [
           value.roadmapAuthorities[0].code = 'maintenance:issue77-lexical';
         },
         (value) => {
-          value.roadmapAuthorities[0].protectedOutputs[0].operation = 'project';
+          value.roadmapAuthorities[0].protectedOutputs[0].operation =
+            'add-exact';
         },
         (value) => {
           value.roadmapAuthorities[0].protectedOutputs.push(
             structuredClone(value.roadmapAuthorities[0].protectedOutputs[0]),
+          );
+        },
+        (value) => {
+          value.rangeProfiles.splice(
+            2,
+            0,
+            productionManifest().rangeProfiles.find(
+              (profile) => profile.name === 'maintenance:issue77-lexical',
+            ),
           );
         },
         (value) => {
@@ -1656,6 +1745,13 @@ export default [
         },
       );
       assertSame(foundationV3.version, 3);
+      assertSame(foundationV3.rangeProfiles.length, 15);
+      assertSame(
+        foundationV3.rangeProfiles.some(
+          (profile) => profile.name === 'maintenance:issue77-lexical',
+        ),
+        false,
+      );
       assertSame(foundationV3.roadmapAuthorities[0].code, 'H0');
       assertSame(
         assertThrows(
@@ -1673,6 +1769,49 @@ export default [
             version: 2,
             roadmapAuthorities: manifestV3.roadmapAuthorities,
           }),
+        Es2015ProvenanceError,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance semantically validates the pinned H0 reconciliation',
+    run: () => {
+      assertSame(
+        sha256(PRODUCTION_TAXONOMY_TEXT),
+        'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+      );
+      assertSame(
+        sha256(PRESERVED_H0_SOURCE_TAXONOMY_TEXT),
+        'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+      );
+      assertSame(typeof provenance.validateRoadmapReconciliation, 'function');
+      assertSame(
+        json(
+          provenance.validateRoadmapReconciliation(
+            PRODUCTION_TAXONOMY_TEXT,
+            PRESERVED_H0_SOURCE_TAXONOMY_TEXT,
+            provenance.H0_PENDING_ROADMAP_AUTHORITY,
+          ),
+        ),
+        json(provenance.H0_PENDING_ROADMAP_AUTHORITY.reconciliation),
+      );
+
+      const driftedAuthorityTaxonomy = driftedCrossRealmTaxonomyText(
+        PRESERVED_H0_SOURCE_TAXONOMY_TEXT,
+      );
+      const driftedAuthority = clone(provenance.H0_PENDING_ROADMAP_AUTHORITY);
+      driftedAuthority.reconciliation.preservedTaxonomySha256 =
+        sha256(driftedAuthorityTaxonomy);
+      driftedAuthority.reconciliation.proofSha256 = reconciliationProofSha256(
+        driftedAuthority.reconciliation,
+      );
+      assertThrows(
+        () =>
+          provenance.validateRoadmapReconciliation(
+            PRODUCTION_TAXONOMY_TEXT,
+            driftedAuthorityTaxonomy,
+            driftedAuthority,
+          ),
         Es2015ProvenanceError,
       );
     },
@@ -4553,8 +4692,19 @@ export default [
     },
   },
   {
-    name: 'ES2015 provenance CLI check uses the trusted empty schema-v3 authority default',
+    name: 'ES2015 provenance CLI check uses the trusted exact schema-v3 authority default',
     run: async () => {
+      const manifestV3 = canonicalSchemaV3ManifestValue();
+      const v3Dependencies = provenanceCheckDependencies({
+        files: new Map([
+          [
+            ES2015_PROVENANCE_FILE,
+            renderEs2015ProvenanceManifest(manifestV3),
+          ],
+        ]),
+      });
+      assertSame(await provenanceCheck(['--check'], v3Dependencies), 0);
+
       const emptyManifestV3 = canonicalEmptySchemaV3ManifestValue();
       const emptyDependencies = provenanceCheckDependencies({
         files: new Map([
@@ -4564,24 +4714,13 @@ export default [
           ],
         ]),
       });
-      assertSame(await provenanceCheck(['--check'], emptyDependencies), 0);
-
-      const nonEmptyManifestV3 = canonicalSchemaV3ManifestValue();
-      const nonEmptyDependencies = provenanceCheckDependencies({
-        files: new Map([
-          [
-            ES2015_PROVENANCE_FILE,
-            renderEs2015ProvenanceManifest(nonEmptyManifestV3),
-          ],
-        ]),
-      });
-      const nonEmptyError = await rejected(() =>
-        provenanceCheck(['--check'], nonEmptyDependencies),
+      const emptyError = await rejected(() =>
+        provenanceCheck(['--check'], emptyDependencies),
       );
-      assertSame(nonEmptyError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(emptyError instanceof Es2015ProvenanceCheckError, true);
       assertSame(
-        nonEmptyError.message,
-        'H0 roadmap authority is unexpected in the reviewed ledger',
+        emptyError.message,
+        'H0 roadmap authority is missing from the reviewed ledger',
       );
     },
   },

@@ -35,8 +35,331 @@ import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
 export const ES2015_PROVENANCE_MANIFEST_VERSIONS = Object.freeze([2, 3]);
 export const ES2015_PROVENANCE_DECISION_VERSION = 2;
 export const ES2015_PROVENANCE_VERSION = ES2015_PROVENANCE_DECISION_VERSION;
+export const P0_APPLIED_ROADMAP_AUTHORITY = deepFreeze({
+  code: 'P0',
+  issue: 77,
+  parentIssue: 70,
+  state: 'applied',
+  source: {
+    baseTaxonomySha256:
+      'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+    rootCount: 83,
+    variantCount: 164,
+    pathSha256:
+      'b2657db74331391b156f87e1e831665ef4ae3a738d48836e476c13828b1aeff4',
+    entryLedgerSha256:
+      '3b23ac8dbc2ae703d466d49e26d827516e4a863406a45acb4e8356c86c32d664',
+  },
+  reconciliation: null,
+  evidence: [],
+  protectedOutputs: [
+    {
+      path: 'docs/conformance.md',
+      operation: 'replace-exact',
+      baseSha256:
+        '3799ff93e726fdd181377417b6307801dc1ae1d5e884181d0bc4c4bd68ba2466',
+      headSha256:
+        '22b8f8c5368e922919987f53aa273b8cc4234435e2adf72ffcba164082e01f85',
+      projectionSha256: null,
+    },
+    {
+      path: 'docs/test262-report.jsonl',
+      operation: 'replace-exact',
+      baseSha256:
+        '9de8674a603263d5d80d9e48d255879efa061b648cc9cb32eff399941a6927df',
+      headSha256:
+        'c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-audit-evidence.json',
+      operation: 'replace-exact',
+      baseSha256:
+        'd560df3e1a9af905115324d529a0a101943d30fa0af8a8102b2dd344121ba9e4',
+      headSha256:
+        '58f92e072306bfe99f8b9a57bf959469100b0e54816bef3263ec9b6c075a4990',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-taxonomy.json',
+      operation: 'replace-exact',
+      baseSha256:
+        'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+      headSha256:
+        'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es5-selection.json',
+      operation: 'replace-exact',
+      baseSha256:
+        '20f0fc1d84bcec4efb934ef46b23a532d41502d6fcf88a307231d647a2c700f8',
+      headSha256:
+        '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/upstream-subset.json',
+      operation: 'replace-exact',
+      baseSha256:
+        'cceaaf9807c0d32c32be5b0800a140612afddf9acf49bcdc0cf8f0102562fb39',
+      headSha256:
+        'e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8',
+      projectionSha256: null,
+    },
+  ],
+  destinations: [
+    {
+      status: 'audit-passing-unselected',
+      blocker: null,
+      issue: 77,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 95,
+    },
+    {
+      status: 'selected-passing',
+      blocker: null,
+      issue: 77,
+    },
+  ],
+});
+export const H0_PENDING_ROADMAP_AUTHORITY = deepFreeze({
+  code: 'H0',
+  issue: 76,
+  parentIssue: 70,
+  state: 'pending',
+  source: {
+    baseTaxonomySha256:
+      'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+    rootCount: 135,
+    variantCount: 267,
+    pathSha256:
+      '3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950',
+    entryLedgerSha256: null,
+  },
+  reconciliation: {
+    preservedTaxonomySha256:
+      'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+    authorityTaxonomySha256:
+      'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+    selectorPathSha256:
+      '3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950',
+    rootCount: 135,
+    variantCount: 267,
+    missingCount: 0,
+    extraCount: 0,
+    proofSha256:
+      '10f0381153294c2be9c764b00cfa44d535e4c2af61f26d1d8cc9650787a21ca8',
+  },
+  evidence: [
+    {
+      path: 'tools/test262/es2015-h0-baseline.json',
+      sha256:
+        '01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec',
+    },
+    {
+      path: 'tools/test262/es2015-h0-disposition.json',
+      sha256:
+        'a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857',
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-deltas.json',
+      sha256:
+        'ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b',
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-map.json',
+      sha256:
+        'd50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b',
+    },
+    {
+      path: 'tools/test262/es2015-h0-paths.json',
+      sha256:
+        'bf3c2ed9c9e259bb25d3c5289a57c4daa5576b6d68d868df74f73c7a95bef893',
+    },
+    {
+      path: 'tools/test262/es2015-h0-promotion.json',
+      sha256:
+        'a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c',
+    },
+  ],
+  protectedOutputs: [
+    {
+      path: 'docs/conformance.md',
+      operation: 'project',
+      baseSha256:
+        '22b8f8c5368e922919987f53aa273b8cc4234435e2adf72ffcba164082e01f85',
+      headSha256: null,
+      projectionSha256:
+        'c44ef2d084be750bca79a574ae041c2a757d452c71f2dffaf59badc7c6a9fcb8',
+    },
+    {
+      path: 'docs/test262-report.jsonl',
+      operation: 'project',
+      baseSha256:
+        'c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27',
+      headSha256: null,
+      projectionSha256:
+        'a13390c77ffb89cdad7b043924c2d4318e8f27dd8e4f38bab943363b5e9b73cd',
+    },
+    {
+      path: 'tools/test262/es2015-h0-baseline.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        '01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-disposition.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-deltas.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-map.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'd50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-paths.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'bf3c2ed9c9e259bb25d3c5289a57c4daa5576b6d68d868df74f73c7a95bef893',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-promotion.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-taxonomy.json',
+      operation: 'project',
+      baseSha256:
+        'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+      headSha256: null,
+      projectionSha256:
+        'dc96bb2a162db339d13cdb119a86e29ec0e3dbe31fee29780fc1cc1995c87c02',
+    },
+    {
+      path: 'tools/test262/upstream-subset.json',
+      operation: 'project',
+      baseSha256:
+        'e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8',
+      headSha256: null,
+      projectionSha256:
+        '257c3e960ba14b8ebabd2ba92e7777d2a26b8a456ae6123c71e4e2349dd9ba6f',
+    },
+  ],
+  destinations: [
+    {
+      status: 'blocked',
+      blocker: 'binary-data-and-typed-arrays',
+      issue: 87,
+    },
+    {
+      status: 'blocked',
+      blocker: 'binary-data-and-typed-arrays',
+      issue: 88,
+    },
+    {
+      status: 'blocked',
+      blocker: 'binary-data-and-typed-arrays',
+      issue: 89,
+    },
+    {
+      status: 'blocked',
+      blocker: 'early-errors-and-declaration-instantiation',
+      issue: 78,
+    },
+    {
+      status: 'blocked',
+      blocker: 'keyed-collections',
+      issue: 83,
+    },
+    {
+      status: 'blocked',
+      blocker: 'keyed-collections',
+      issue: 84,
+    },
+    {
+      status: 'blocked',
+      blocker: 'keyed-collections',
+      issue: 85,
+    },
+    {
+      status: 'blocked',
+      blocker: 'proxy-and-reflect-metaobject',
+      issue: 79,
+    },
+    {
+      status: 'blocked',
+      blocker: 'proxy-and-reflect-metaobject',
+      issue: 81,
+    },
+    {
+      status: 'blocked',
+      blocker: 'regexp-unicode-and-sticky',
+      issue: 91,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-language-runtime-semantics',
+      issue: 96,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 93,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 94,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 95,
+    },
+    {
+      status: 'blocked',
+      blocker: 'symbol-protocol-dispatch',
+      issue: 92,
+    },
+    {
+      status: 'selected-passing',
+      blocker: null,
+      issue: 76,
+    },
+  ],
+});
 /** @type {readonly RoadmapAuthority[]} */
-export const APPROVED_INITIAL_ROADMAP_AUTHORITIES = Object.freeze([]);
+export const APPROVED_INITIAL_ROADMAP_AUTHORITIES = deepFreeze([
+  H0_PENDING_ROADMAP_AUTHORITY,
+  P0_APPLIED_ROADMAP_AUTHORITY,
+]);
 export const ES2015_PROVENANCE_FILE = 'tools/test262/es2015-provenance.json';
 export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
   'UA',
@@ -281,6 +604,11 @@ const APPROVED_RANGE_PROFILES = Object.freeze([
     });
   }),
 ]);
+const APPROVED_SCHEMA_V3_RANGE_PROFILES = Object.freeze(
+  APPROVED_RANGE_PROFILES.filter(
+    (profile) => profile.name !== 'maintenance:issue77-lexical',
+  ),
+);
 
 const MANIFEST_KEYS = Object.freeze([
   'version',
@@ -801,6 +1129,103 @@ export function validateRoadmapAuthorityManifest(manifest) {
   );
 }
 
+/**
+ * @param {string} baseTaxonomy
+ * @param {string} authorityTaxonomy
+ * @param {unknown} authority
+ * @returns {RoadmapReconciliation | null}
+ */
+export function validateRoadmapReconciliation(
+  baseTaxonomy,
+  authorityTaxonomy,
+  authority,
+) {
+  const normalizedAuthority = normalizeRoadmapAuthority(
+    /** @type {Record<string, any>} */ (structuredClone(authority)),
+    'roadmap authority',
+  );
+  const reconciliation = normalizedAuthority.reconciliation;
+  if (reconciliation === null) {
+    return null;
+  }
+  const baseTaxonomySha256 = sha256(baseTaxonomy);
+  if (baseTaxonomySha256 !== normalizedAuthority.source.baseTaxonomySha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority base taxonomy SHA-256 does not match authority.source.baseTaxonomySha256`,
+    );
+  }
+  if (baseTaxonomySha256 !== reconciliation.authorityTaxonomySha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation authority taxonomy SHA-256 does not match the reviewed base taxonomy`,
+    );
+  }
+  const preservedTaxonomySha256 = sha256(authorityTaxonomy);
+  if (preservedTaxonomySha256 !== reconciliation.preservedTaxonomySha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation preserved taxonomy SHA-256 does not match the reviewed source taxonomy`,
+    );
+  }
+
+  const baseSelector = summarizeRoadmapReconciliationSelector(
+    baseTaxonomy,
+    `${normalizedAuthority.code} roadmap authority base taxonomy`,
+  );
+  const preservedSelector = summarizeRoadmapReconciliationSelector(
+    authorityTaxonomy,
+    `${normalizedAuthority.code} roadmap authority preserved taxonomy`,
+  );
+  validateRoadmapReconciliationSelector(
+    baseSelector,
+    normalizedAuthority,
+    reconciliation,
+    `${normalizedAuthority.code} roadmap authority base taxonomy`,
+  );
+  validateRoadmapReconciliationSelector(
+    preservedSelector,
+    normalizedAuthority,
+    reconciliation,
+    `${normalizedAuthority.code} roadmap authority preserved taxonomy`,
+  );
+
+  const basePathSet = new Set(baseSelector.paths);
+  const preservedPathSet = new Set(preservedSelector.paths);
+  const missingCount = countRoadmapPathDifference(
+    preservedSelector.paths,
+    basePathSet,
+  );
+  const extraCount = countRoadmapPathDifference(
+    baseSelector.paths,
+    preservedPathSet,
+  );
+  if (
+    missingCount !== reconciliation.missingCount ||
+    extraCount !== reconciliation.extraCount
+  ) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation must retain exact selector membership`,
+    );
+  }
+  const actualProofSha256 = roadmapReconciliationProofSha256({
+    preservedTaxonomySha256,
+    authorityTaxonomySha256: baseTaxonomySha256,
+    selectorPathSha256: baseSelector.pathSha256,
+    rootCount: baseSelector.rootCount,
+    variantCount: baseSelector.variantCount,
+    missingCount,
+    extraCount,
+    proofSha256: reconciliation.proofSha256,
+  });
+  if (actualProofSha256 !== reconciliation.proofSha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation proof does not match the reviewed taxonomy artifacts`,
+    );
+  }
+  return deepFreeze({
+    ...reconciliation,
+    proofSha256: actualProofSha256,
+  });
+}
+
 /** @param {unknown} manifest */
 export function renderEs2015ProvenanceManifest(manifest) {
   return `${JSON.stringify(validateRoadmapAuthorityManifest(manifest), null, 2)}\n`;
@@ -922,7 +1347,10 @@ export function buildProvenanceFoundation(classifications, options = {}) {
       issue: PARENT_ISSUE,
     },
     blockerOwners: APPROVED_BLOCKER_OWNERS,
-    rangeProfiles: APPROVED_RANGE_PROFILES,
+    rangeProfiles:
+      version === 3
+        ? APPROVED_SCHEMA_V3_RANGE_PROFILES
+        : APPROVED_RANGE_PROFILES,
     baseLedger: {
       rootCount: baseEntries.length,
       variantCount: unknownRecords.reduce(
@@ -1267,6 +1695,10 @@ function validateRoadmapAuthoritiesAgainstExpected(actual, expected, ledgerLabel
 
 /** @param {ProvenanceManifest} manifest */
 function validateImmutableApprovedFoundation(manifest) {
+  const approvedRangeProfiles =
+    manifest.version === 3
+      ? APPROVED_SCHEMA_V3_RANGE_PROFILES
+      : APPROVED_RANGE_PROFILES;
   if (manifest.baseLedger.rootCount !== APPROVED_BASE_LEDGER.rootCount) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} base ledger root count does not match the approved immutable ledger`,
@@ -1320,7 +1752,7 @@ function validateImmutableApprovedFoundation(manifest) {
   }
   if (
     JSON.stringify(manifest.rangeProfiles) !==
-    JSON.stringify(APPROVED_RANGE_PROFILES)
+    JSON.stringify(approvedRangeProfiles)
   ) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} range profiles do not match the approved immutable policy`,
@@ -1659,7 +2091,7 @@ function normalizeManifestFoundationRecord(record, options, version) {
     `${ES2015_PROVENANCE_FILE} must retain parent T1 / #75`,
   );
   const blockerOwners = normalizeBlockerOwners(record.blockerOwners);
-  const rangeProfiles = normalizeRangeProfiles(record.rangeProfiles);
+  const rangeProfiles = normalizeRangeProfiles(record.rangeProfiles, version);
   const baseLedger = normalizeBaseLedger(
     object(record.baseLedger, `${ES2015_PROVENANCE_FILE} baseLedger`),
     options.exactLists,
@@ -2340,8 +2772,8 @@ function normalizeBlockerOwners(value) {
   return Object.freeze(owners);
 }
 
-/** @param {unknown} value @returns {readonly ProvenanceRangeProfile[]} */
-function normalizeRangeProfiles(value) {
+/** @param {unknown} value @param {2 | 3} version @returns {readonly ProvenanceRangeProfile[]} */
+function normalizeRangeProfiles(value, version) {
   if (!Array.isArray(value)) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} rangeProfiles must be an array`,
@@ -2442,7 +2874,9 @@ function normalizeRangeProfiles(value) {
       generatedPaths,
     });
   });
-  const expectedNames = APPROVED_RANGE_PROFILES.map((profile) => profile.name);
+  const expectedNames = (
+    version === 3 ? APPROVED_SCHEMA_V3_RANGE_PROFILES : APPROVED_RANGE_PROFILES
+  ).map((profile) => profile.name);
   if (
     profiles.map((profile) => profile.name).join('\u0000') !==
     expectedNames.join('\u0000')
@@ -2797,6 +3231,111 @@ function normalizeRoadmapRepositoryPath(value, label) {
     );
   }
   return value;
+}
+
+/**
+ * @param {string} text
+ * @param {string} label
+ * @returns {{ rootCount: number, variantCount: number, pathSha256: string, paths: readonly string[] }}
+ */
+function summarizeRoadmapReconciliationSelector(text, label) {
+  const record = parseJson(text, label);
+  if (record.version !== 3) {
+    throw new Es2015ProvenanceError(`${label} must declare version 3`);
+  }
+  if (!Array.isArray(record.classifications)) {
+    throw new Es2015ProvenanceError(
+      `${label}.classifications must be an array`,
+    );
+  }
+  const selected = [];
+  let variantCount = 0;
+  for (let index = 0; index < record.classifications.length; index += 1) {
+    const entry = object(record.classifications[index], `${label}.classifications[${index}]`);
+    const path = normalizeRoadmapRepositoryPath(
+      entry.path,
+      `${label}.classifications[${index}].path`,
+    );
+    const variants = nonNegativeInteger(
+      entry.variants,
+      `${label}.classifications[${index}].variants`,
+    );
+    const partition = nullableString(
+      entry.partition,
+      `${label}.classifications[${index}].partition`,
+    );
+    const status = nullableString(
+      entry.status,
+      `${label}.classifications[${index}].status`,
+    );
+    const blocker = nullableString(
+      entry.blocker,
+      `${label}.classifications[${index}].blocker`,
+    );
+    if (
+      partition === 'core' &&
+      status === 'blocked:test262-cross-realm-host' &&
+      blocker === 'test262-cross-realm-host'
+    ) {
+      selected.push(path);
+      variantCount += variants;
+    }
+  }
+  const paths = sortStrings(selected);
+  assertUnique(paths, `${label} selector paths`);
+  return {
+    rootCount: paths.length,
+    variantCount,
+    pathSha256: hashPaths(paths),
+    paths: Object.freeze(paths),
+  };
+}
+
+/**
+ * @param {{ rootCount: number, variantCount: number, pathSha256: string }} summary
+ * @param {RoadmapAuthority} authority
+ * @param {RoadmapReconciliation} reconciliation
+ * @param {string} label
+ */
+function validateRoadmapReconciliationSelector(
+  summary,
+  authority,
+  reconciliation,
+  label,
+) {
+  if (
+    summary.rootCount !== authority.source.rootCount ||
+    summary.rootCount !== reconciliation.rootCount
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} root count does not match the reviewed reconciliation`,
+    );
+  }
+  if (
+    summary.variantCount !== authority.source.variantCount ||
+    summary.variantCount !== reconciliation.variantCount
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} variant count does not match the reviewed reconciliation`,
+    );
+  }
+  if (
+    summary.pathSha256 !== authority.source.pathSha256 ||
+    summary.pathSha256 !== reconciliation.selectorPathSha256
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} path SHA-256 does not match the reviewed reconciliation`,
+    );
+  }
+}
+
+/** @param {readonly string[]} paths @param {ReadonlySet<string>} expected */
+function countRoadmapPathDifference(paths, expected) {
+  let count = 0;
+  for (const path of paths) {
+    if (!expected.has(path)) count += 1;
+  }
+  return count;
 }
 
 /** @param {RoadmapReconciliation} reconciliation */
