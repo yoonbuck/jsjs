@@ -2,16 +2,21 @@ import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import {
+  ES2015_PROVENANCE_DECISION_VERSION,
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
+  ES2015_PROVENANCE_MANIFEST_VERSIONS,
   ES2015_PROVENANCE_VERSION,
   Es2015ProvenanceError,
   buildProvenanceFoundation,
+  canonicalRoadmapAuthoritySha256,
   canonicalDecisionSha256,
   parseEs2015DecisionFragment,
   parseEs2015ProvenanceManifest,
   renderBatchLedger,
+  renderEs2015ProvenanceManifest,
   renderProvenanceIssueBody,
+  validateRoadmapAuthorityManifest,
   validateDecisionFragments,
   validateProvenanceFoundation,
 } from '../../tools/test262/es2015-provenance.js';
@@ -524,7 +529,7 @@ function reclassifiedTaxonomyText() {
 function emptyDecisionFragmentText(manifest, code) {
   return `${JSON.stringify(
     {
-      version: manifest.version,
+      version: ES2015_PROVENANCE_DECISION_VERSION,
       taxonomyBaseline: manifest.taxonomyBaseline,
       repository: manifest.repository,
       revision: manifest.revision,
@@ -563,7 +568,7 @@ function completePendingDecisionFragmentText(manifest, code) {
   });
   return `${JSON.stringify(
     {
-      version: manifest.version,
+      version: ES2015_PROVENANCE_DECISION_VERSION,
       taxonomyBaseline: manifest.taxonomyBaseline,
       repository: manifest.repository,
       revision: manifest.revision,
@@ -597,7 +602,7 @@ function completeReviewedDecisionFragmentText(manifest, code) {
   });
   return `${JSON.stringify(
     {
-      version: manifest.version,
+      version: ES2015_PROVENANCE_DECISION_VERSION,
       taxonomyBaseline: manifest.taxonomyBaseline,
       repository: manifest.repository,
       revision: manifest.revision,
@@ -758,6 +763,69 @@ function validManifestValue() {
   return buildProvenanceFoundation(foundationClassifications());
 }
 
+function minimalRoadmapAuthority(code, issue, state) {
+  return {
+    code,
+    issue,
+    parentIssue: 70,
+    state,
+    source: {
+      baseTaxonomySha256: '1'.repeat(64),
+      rootCount: 1,
+      variantCount: 1,
+      pathSha256: '2'.repeat(64),
+      entryLedgerSha256: null,
+    },
+    reconciliation: null,
+    evidence: [],
+    protectedOutputs: [
+      {
+        path: `tools/test262/${code.toLowerCase()}-evidence.json`,
+        operation: 'add-exact',
+        baseSha256: null,
+        headSha256: '3'.repeat(64),
+        projectionSha256: null,
+      },
+    ],
+    destinations: [
+      {
+        status: 'selected-passing',
+        blocker: null,
+        issue,
+      },
+    ],
+  };
+}
+
+function minimalRoadmapReconciliation() {
+  const value = {
+    preservedTaxonomySha256: '4'.repeat(64),
+    authorityTaxonomySha256: '5'.repeat(64),
+    selectorPathSha256: '6'.repeat(64),
+    rootCount: 1,
+    variantCount: 1,
+    missingCount: 0,
+    extraCount: 0,
+  };
+  return {
+    ...value,
+    proofSha256: sha256(
+      `${value.preservedTaxonomySha256}\u0000${value.authorityTaxonomySha256}\u0000${value.selectorPathSha256}\u0000${value.rootCount}\u0000${value.variantCount}\u0000${value.missingCount}\u0000${value.extraCount}\u0000`,
+    ),
+  };
+}
+
+function canonicalSchemaV3ManifestValue() {
+  return {
+    ...JSON.parse(approvedProvenanceManifestText()),
+    version: 3,
+    roadmapAuthorities: [
+      minimalRoadmapAuthority('H0', 76, 'pending'),
+      minimalRoadmapAuthority('P0', 77, 'applied'),
+    ],
+  };
+}
+
 function decisionWithoutHash() {
   return {
     path: 'test/language/example.js',
@@ -811,7 +879,7 @@ function validDecision() {
 
 function validDecisionFragmentValue() {
   return {
-    version: ES2015_PROVENANCE_VERSION,
+    version: ES2015_PROVENANCE_DECISION_VERSION,
     taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
@@ -1284,6 +1352,11 @@ export default [
   {
     name: 'ES2015 provenance exports the approved contract constants',
     run: () => {
+      assertSame(
+        json(ES2015_PROVENANCE_MANIFEST_VERSIONS),
+        json([2, 3]),
+      );
+      assertSame(ES2015_PROVENANCE_DECISION_VERSION, 2);
       assertSame(ES2015_PROVENANCE_VERSION, 2);
       assertSame(
         ES2015_PROVENANCE_FILE,
@@ -1374,13 +1447,13 @@ export default [
 
       const validManifest = validManifestValue();
       const badVersion = clone(validManifest);
-      badVersion.version = 3;
+      badVersion.version = 4;
       assertSame(
         assertThrows(
           () => parseEs2015ProvenanceManifest(json(badVersion)),
           Es2015ProvenanceError,
         ).message,
-        `${ES2015_PROVENANCE_FILE} must declare version ${ES2015_PROVENANCE_VERSION}`,
+        `${ES2015_PROVENANCE_FILE} must declare version 2 or 3`,
       );
 
       const badTaxonomyBaseline = clone(validManifest);
@@ -1497,6 +1570,98 @@ export default [
         ).message,
         'UL3 decision for test/language/example.js metadata.features must be code-unit sorted unique strings',
       );
+    },
+  },
+  {
+    name: 'ES2015 provenance parses canonical schema-v3 manifests and rejects noncanonical authorities',
+    run: () => {
+      const manifestV3 = canonicalSchemaV3ManifestValue();
+      assertSame(
+        renderEs2015ProvenanceManifest(manifestV3),
+        `${JSON.stringify(manifestV3, null, 2)}\n`,
+      );
+      assertSame(
+        json(validateRoadmapAuthorityManifest(manifestV3)),
+        json(manifestV3),
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(manifestV3.roadmapAuthorities[0]),
+        sha256(`${JSON.stringify(manifestV3.roadmapAuthorities[0])}\n`),
+      );
+      const parsed = parseEs2015ProvenanceManifest(json(manifestV3));
+      assertSame(parsed.version, 3);
+      assertSame(parsed.roadmapAuthorities[0].code, 'H0');
+      assertSame(parsed.roadmapAuthorities[1].code, 'P0');
+      const foundationV3 = buildProvenanceFoundation(
+        foundationClassifications(),
+        {
+          version: 3,
+          roadmapAuthorities: manifestV3.roadmapAuthorities,
+        },
+      );
+      assertSame(foundationV3.version, 3);
+      assertSame(foundationV3.roadmapAuthorities[0].code, 'H0');
+      assertThrows(
+        () =>
+          buildProvenanceFoundation(foundationClassifications(), {
+            version: 2,
+            roadmapAuthorities: manifestV3.roadmapAuthorities,
+          }),
+        Es2015ProvenanceError,
+      );
+
+      const missingAuthorities = structuredClone(manifestV3);
+      delete missingAuthorities.roadmapAuthorities;
+      assertThrows(
+        () => parseEs2015ProvenanceManifest(json(missingAuthorities)),
+        Es2015ProvenanceError,
+      );
+
+      for (const mutate of [
+        (value) => value.roadmapAuthorities.reverse(),
+        (value) => value.roadmapAuthorities.push(value.roadmapAuthorities[0]),
+        (value) => {
+          value.roadmapAuthorities[0].state = 'ready';
+        },
+        (value) => {
+          value.roadmapAuthorities[0].unknown = true;
+        },
+        (value) => {
+          value.roadmapAuthorities[0].source.entryLedgerSha256 = undefined;
+        },
+        (value) => {
+          value.roadmapAuthorities[0].code = 'maintenance:issue77-lexical';
+        },
+        (value) => {
+          value.roadmapAuthorities[0].protectedOutputs[0].operation = 'project';
+        },
+        (value) => {
+          value.roadmapAuthorities[0].protectedOutputs.push(
+            structuredClone(value.roadmapAuthorities[0].protectedOutputs[0]),
+          );
+        },
+        (value) => {
+          value.roadmapAuthorities[0].destinations = [
+            {
+              status: 'selected-passing',
+              blocker: null,
+              issue: 77,
+            },
+            {
+              status: 'audit-passing-unselected',
+              blocker: null,
+              issue: 76,
+            },
+          ];
+        },
+      ]) {
+        const bad = structuredClone(manifestV3);
+        mutate(bad);
+        assertThrows(
+          () => parseEs2015ProvenanceManifest(json(bad)),
+          Es2015ProvenanceError,
+        );
+      }
     },
   },
   {
@@ -4340,6 +4505,42 @@ export default [
         ),
         emptyDecisionFragmentText(productionManifest(), 'UA'),
       );
+    },
+  },
+  {
+    name: 'ES2015 provenance CLI check accepts canonical schema-v2 and schema-v3 manifests and rejects authority drift',
+    run: async () => {
+      assertSame(
+        await provenanceCheck(['--check'], provenanceCheckDependencies()),
+        0,
+      );
+
+      const manifestV3 = canonicalSchemaV3ManifestValue();
+      manifestV3.roadmapAuthorities[0].reconciliation =
+        minimalRoadmapReconciliation();
+      const v3Dependencies = provenanceCheckDependencies({
+        files: new Map([
+          [ES2015_PROVENANCE_FILE, renderEs2015ProvenanceManifest(manifestV3)],
+        ]),
+      });
+      assertSame(await provenanceCheck(['--check'], v3Dependencies), 0);
+
+      const driftedManifestV3 = structuredClone(manifestV3);
+      driftedManifestV3.roadmapAuthorities[0].reconciliation.proofSha256 =
+        '0'.repeat(64);
+      const driftDependencies = provenanceCheckDependencies({
+        files: new Map([
+          [
+            ES2015_PROVENANCE_FILE,
+            `${JSON.stringify(driftedManifestV3, null, 2)}\n`,
+          ],
+        ]),
+      });
+      const driftError = await rejected(() =>
+        provenanceCheck(['--check'], driftDependencies),
+      );
+      assertSame(driftError instanceof Es2015ProvenanceCheckError, true);
+      assertSame(driftError.message.includes('proofSha256'), true);
     },
   },
   {
