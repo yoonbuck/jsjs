@@ -310,6 +310,11 @@ export const H0_PENDING_ROADMAP_AUTHORITY = deepFreeze({
     },
     {
       status: 'blocked',
+      blocker: 'proper-tail-calls',
+      issue: 97,
+    },
+    {
+      status: 'blocked',
       blocker: 'proxy-and-reflect-metaobject',
       issue: 79,
     },
@@ -622,7 +627,10 @@ const MANIFEST_KEYS = Object.freeze([
   'baseLedger',
   'batches',
 ]);
-const MANIFEST_V3_KEYS = Object.freeze([...MANIFEST_KEYS, 'roadmapAuthorities']);
+const MANIFEST_V3_KEYS = Object.freeze([
+  ...MANIFEST_KEYS,
+  'roadmapAuthorities',
+]);
 const SPECIFICATION_KEYS = Object.freeze(['source', 'sourceSha256']);
 const PARENT_KEYS = Object.freeze(['code', 'issue']);
 const BASE_LEDGER_KEYS = Object.freeze([
@@ -678,11 +686,7 @@ const ROADMAP_PROTECTED_OUTPUT_KEYS = Object.freeze([
   'headSha256',
   'projectionSha256',
 ]);
-const ROADMAP_DESTINATION_KEYS = Object.freeze([
-  'status',
-  'blocker',
-  'issue',
-]);
+const ROADMAP_DESTINATION_KEYS = Object.freeze(['status', 'blocker', 'issue']);
 const FRAGMENT_KEYS = Object.freeze([
   'version',
   'taxonomyBaseline',
@@ -1273,10 +1277,7 @@ export function buildProvenanceFoundation(classifications, options = {}) {
     ? options.roadmapAuthorities
     : [];
   if (version === 2) {
-    if (
-      !Array.isArray(roadmapAuthorities) ||
-      roadmapAuthorities.length !== 0
-    ) {
+    if (!Array.isArray(roadmapAuthorities) || roadmapAuthorities.length !== 0) {
       throw new Es2015ProvenanceError(
         'ES2015 provenance foundation version 2 must not include roadmap authorities',
       );
@@ -1413,10 +1414,9 @@ export function validateProvenanceFoundation(
       version: normalizedManifest.version,
       ...(normalizedManifest.version === 3
         ? {
-            roadmapAuthorities:
-              /** @type {readonly RoadmapAuthority[]} */ (
-                expectedRoadmapAuthorities
-              ),
+            roadmapAuthorities: /** @type {readonly RoadmapAuthority[]} */ (
+              expectedRoadmapAuthorities
+            ),
           }
         : {}),
     });
@@ -1425,7 +1425,10 @@ export function validateProvenanceFoundation(
       expected,
       'reviewed ledger',
     );
-  } else if (normalizedManifest.version === 3 && hasExpectedRoadmapAuthorities) {
+  } else if (
+    normalizedManifest.version === 3 &&
+    hasExpectedRoadmapAuthorities
+  ) {
     validateRoadmapAuthoritiesAgainstExpected(
       normalizedManifest.roadmapAuthorities ?? [],
       /** @type {readonly RoadmapAuthority[]} */ (expectedRoadmapAuthorities),
@@ -1655,7 +1658,11 @@ function validateManifestAgainstExpected(manifest, expected, ledgerLabel) {
  * @param {readonly RoadmapAuthority[]} expected
  * @param {string} ledgerLabel
  */
-function validateRoadmapAuthoritiesAgainstExpected(actual, expected, ledgerLabel) {
+function validateRoadmapAuthoritiesAgainstExpected(
+  actual,
+  expected,
+  ledgerLabel,
+) {
   const actualCodes = actual.map((authority) => authority.code);
   const expectedCodes = expected.map((authority) => authority.code);
   for (const code of expectedCodes) {
@@ -2912,7 +2919,11 @@ function normalizeRoadmapAuthorities(value, label) {
 /** @param {unknown} value @param {string} label @returns {RoadmapAuthority} */
 function normalizeRoadmapAuthority(value, label) {
   const record = object(value, label);
-  requireExactKeys(record, ROADMAP_AUTHORITY_KEYS, `${label} must contain exact keys`);
+  requireExactKeys(
+    record,
+    ROADMAP_AUTHORITY_KEYS,
+    `${label} must contain exact keys`,
+  );
   const code = normalizeRoadmapAuthorityCode(record.code, `${label}.code`);
   return {
     code,
@@ -2927,7 +2938,10 @@ function normalizeRoadmapAuthority(value, label) {
             record.reconciliation,
             `${label}.reconciliation`,
           ),
-    evidence: normalizeRoadmapEvidenceList(record.evidence, `${label}.evidence`),
+    evidence: normalizeRoadmapEvidenceList(
+      record.evidence,
+      `${label}.evidence`,
+    ),
     protectedOutputs: normalizeRoadmapProtectedOutputs(
       record.protectedOutputs,
       `${label}.protectedOutputs`,
@@ -2941,7 +2955,11 @@ function normalizeRoadmapAuthority(value, label) {
 
 /** @param {unknown} value @param {string} label @returns {string} */
 function normalizeRoadmapAuthorityCode(value, label) {
-  if (typeof value !== 'string' || value.trim() === '' || value !== value.trim()) {
+  if (
+    typeof value !== 'string' ||
+    value.trim() === '' ||
+    value !== value.trim()
+  ) {
     throw new Es2015ProvenanceError(`${label} must be a non-empty string`);
   }
   if (
@@ -3053,7 +3071,11 @@ function normalizeRoadmapEvidenceList(value, label) {
 /** @param {unknown} value @param {string} label @returns {{ path: string, sha256: string }} */
 function normalizeRoadmapEvidence(value, label) {
   const record = object(value, label);
-  requireExactKeys(record, ROADMAP_EVIDENCE_KEYS, `${label} must contain exact keys`);
+  requireExactKeys(
+    record,
+    ROADMAP_EVIDENCE_KEYS,
+    `${label} must contain exact keys`,
+  );
   return {
     path: normalizeRoadmapRepositoryPath(record.path, `${label}.path`),
     sha256: sha256Hex(record.sha256, `${label}.sha256`),
@@ -3087,29 +3109,47 @@ function normalizeRoadmapProtectedOutput(value, label) {
     record.operation,
     `${label}.operation`,
   );
-  const baseSha256 = nullableSha256Hex(record.baseSha256, `${label}.baseSha256`);
-  const headSha256 = nullableSha256Hex(record.headSha256, `${label}.headSha256`);
+  const baseSha256 = nullableSha256Hex(
+    record.baseSha256,
+    `${label}.baseSha256`,
+  );
+  const headSha256 = nullableSha256Hex(
+    record.headSha256,
+    `${label}.headSha256`,
+  );
   const projectionSha256 = nullableSha256Hex(
     record.projectionSha256,
     `${label}.projectionSha256`,
   );
   switch (operation) {
     case 'add-exact':
-      if (baseSha256 !== null || headSha256 === null || projectionSha256 !== null) {
+      if (
+        baseSha256 !== null ||
+        headSha256 === null ||
+        projectionSha256 !== null
+      ) {
         throw new Es2015ProvenanceError(
           `${label} add-exact outputs must use baseSha256:null, headSha256:sha256, projectionSha256:null`,
         );
       }
       break;
     case 'replace-exact':
-      if (baseSha256 === null || headSha256 === null || projectionSha256 !== null) {
+      if (
+        baseSha256 === null ||
+        headSha256 === null ||
+        projectionSha256 !== null
+      ) {
         throw new Es2015ProvenanceError(
           `${label} replace-exact outputs must use baseSha256:sha256, headSha256:sha256, projectionSha256:null`,
         );
       }
       break;
     case 'project':
-      if (baseSha256 === null || headSha256 !== null || projectionSha256 === null) {
+      if (
+        baseSha256 === null ||
+        headSha256 !== null ||
+        projectionSha256 === null
+      ) {
         throw new Es2015ProvenanceError(
           `${label} project outputs must use baseSha256:sha256, headSha256:null, projectionSha256:sha256`,
         );
@@ -3149,8 +3189,10 @@ function normalizeRoadmapDestinations(value, label) {
   );
   for (let index = 1; index < destinations.length; index += 1) {
     if (
-      compareRoadmapDestinations(destinations[index - 1], destinations[index]) >=
-      0
+      compareRoadmapDestinations(
+        destinations[index - 1],
+        destinations[index],
+      ) >= 0
     ) {
       throw new Es2015ProvenanceError(
         `${label} must be sorted unique by status, blocker, and issue`,
@@ -3251,7 +3293,10 @@ function summarizeRoadmapReconciliationSelector(text, label) {
   const selected = [];
   let variantCount = 0;
   for (let index = 0; index < record.classifications.length; index += 1) {
-    const entry = object(record.classifications[index], `${label}.classifications[${index}]`);
+    const entry = object(
+      record.classifications[index],
+      `${label}.classifications[${index}]`,
+    );
     const path = normalizeRoadmapRepositoryPath(
       entry.path,
       `${label}.classifications[${index}].path`,

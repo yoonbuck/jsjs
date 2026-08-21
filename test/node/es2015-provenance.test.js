@@ -267,12 +267,7 @@ const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
 );
 const PRESERVED_H0_SOURCE_TAXONOMY_TEXT = execFileSync(
   'git',
-  [
-    '-c',
-    'core.pager=cat',
-    'show',
-    `${TAXONOMY_BASELINE}:${TAXONOMY_PATH}`,
-  ],
+  ['-c', 'core.pager=cat', 'show', `${TAXONOMY_BASELINE}:${TAXONOMY_PATH}`],
   { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
 );
 const PRODUCTION_UL3_PATH =
@@ -778,7 +773,10 @@ function validManifestValue() {
 function approvedInitialRoadmapAuthorities() {
   assertSame(typeof provenance.P0_APPLIED_ROADMAP_AUTHORITY, 'object');
   assertSame(typeof provenance.H0_PENDING_ROADMAP_AUTHORITY, 'object');
-  assertSame(Array.isArray(provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES), true);
+  assertSame(
+    Array.isArray(provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES),
+    true,
+  );
   return provenance.APPROVED_INITIAL_ROADMAP_AUTHORITIES;
 }
 
@@ -800,13 +798,17 @@ function reconciliationProofSha256(reconciliation) {
 function driftedCrossRealmTaxonomyText(text) {
   const taxonomy = JSON.parse(text);
   const crossRealm = taxonomy.classifications.find(
-    (/** @type {{ partition: string, status: string, blocker: string | null }} */ record) =>
+    (
+      /** @type {{ partition: string, status: string, blocker: string | null }} */ record,
+    ) =>
       record.partition === 'core' &&
       record.status === 'blocked:test262-cross-realm-host' &&
       record.blocker === 'test262-cross-realm-host',
   );
   const replacement = taxonomy.classifications.find(
-    (/** @type {{ path: string, variants: number, partition: string, status: string, blocker: string | null }} */ record) =>
+    (
+      /** @type {{ path: string, variants: number, partition: string, status: string, blocker: string | null }} */ record,
+    ) =>
       record.partition === 'core' &&
       record.blocker !== null &&
       record.blocker !== 'test262-cross-realm-host' &&
@@ -1376,10 +1378,7 @@ export default [
   {
     name: 'ES2015 provenance exports the approved contract constants',
     run: () => {
-      assertSame(
-        json(ES2015_PROVENANCE_MANIFEST_VERSIONS),
-        json([2, 3]),
-      );
+      assertSame(json(ES2015_PROVENANCE_MANIFEST_VERSIONS), json([2, 3]));
       assertSame(ES2015_PROVENANCE_DECISION_VERSION, 2);
       assertSame(ES2015_PROVENANCE_VERSION, 2);
       assertSame(
@@ -1475,15 +1474,30 @@ export default [
         provenance.H0_PENDING_ROADMAP_AUTHORITY.protectedOutputs.length,
         10,
       );
-      assertSame(provenance.H0_PENDING_ROADMAP_AUTHORITY.destinations.length, 16);
+      assertSame(
+        provenance.H0_PENDING_ROADMAP_AUTHORITY.destinations.length,
+        17,
+      );
+      assertSame(
+        provenance.H0_PENDING_ROADMAP_AUTHORITY.destinations.some(
+          (destination) =>
+            destination.status === 'blocked' &&
+            destination.blocker === 'proper-tail-calls' &&
+            destination.issue === 97,
+        ),
+        true,
+      );
 
       const migratedRangeProfiles = productionManifest().rangeProfiles.filter(
         (profile) => profile.name !== 'maintenance:issue77-lexical',
       );
-      const foundationV3 = buildProvenanceFoundation(foundationClassifications(), {
-        version: 3,
-        roadmapAuthorities: initialAuthorities,
-      });
+      const foundationV3 = buildProvenanceFoundation(
+        foundationClassifications(),
+        {
+          version: 3,
+          roadmapAuthorities: initialAuthorities,
+        },
+      );
       assertSame(foundationV3.rangeProfiles.length, 15);
       assertSame(
         foundationV3.rangeProfiles.some(
@@ -1800,8 +1814,9 @@ export default [
         PRESERVED_H0_SOURCE_TAXONOMY_TEXT,
       );
       const driftedAuthority = clone(provenance.H0_PENDING_ROADMAP_AUTHORITY);
-      driftedAuthority.reconciliation.preservedTaxonomySha256 =
-        sha256(driftedAuthorityTaxonomy);
+      driftedAuthority.reconciliation.preservedTaxonomySha256 = sha256(
+        driftedAuthorityTaxonomy,
+      );
       driftedAuthority.reconciliation.proofSha256 = reconciliationProofSha256(
         driftedAuthority.reconciliation,
       );
@@ -4697,10 +4712,7 @@ export default [
       const manifestV3 = canonicalSchemaV3ManifestValue();
       const v3Dependencies = provenanceCheckDependencies({
         files: new Map([
-          [
-            ES2015_PROVENANCE_FILE,
-            renderEs2015ProvenanceManifest(manifestV3),
-          ],
+          [ES2015_PROVENANCE_FILE, renderEs2015ProvenanceManifest(manifestV3)],
         ]),
       });
       assertSame(await provenanceCheck(['--check'], v3Dependencies), 0);
@@ -4758,7 +4770,10 @@ export default [
         provenanceCheck(['--check'], driftDependencies),
       );
       assertSame(driftError instanceof Es2015ProvenanceCheckError, true);
-      assertSame(driftError.message, 'H0 roadmap authority does not match the reviewed ledger');
+      assertSame(
+        driftError.message,
+        'H0 roadmap authority does not match the reviewed ledger',
+      );
     },
   },
   {

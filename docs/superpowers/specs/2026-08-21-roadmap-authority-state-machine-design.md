@@ -646,8 +646,10 @@ Its destination set contains:
   `95`;
 - `blocked:symbol-protocol-dispatch` owned by issue `92`.
 
-These 16 canonical destination objects are sorted by status, blocker, and issue and
-must equal the unique pairs encoded by `tools/test262/es2015-h0-owner-map.json`.
+These 17 canonical destination objects — 16 blocked owner pairs plus one
+`selected-passing` entry — are sorted by status, blocker, and issue and must
+equal the unique pairs encoded by `tools/test262/es2015-h0-owner-map.json`
+plus the single selected destination.
 
 The H0 consumer changes only this entry from pending to applied. It must not add or
 modify authority records, profiles, fragments, or checker policy.

@@ -405,7 +405,16 @@ assertSame(H0_PENDING_ROADMAP_AUTHORITY.state, 'pending');
 assertSame(H0_PENDING_ROADMAP_AUTHORITY.source.entryLedgerSha256, null);
 assertSame(H0_PENDING_ROADMAP_AUTHORITY.evidence.length, 6);
 assertSame(H0_PENDING_ROADMAP_AUTHORITY.protectedOutputs.length, 10);
-assertSame(H0_PENDING_ROADMAP_AUTHORITY.destinations.length, 16);
+assertSame(H0_PENDING_ROADMAP_AUTHORITY.destinations.length, 17);
+assertSame(
+  H0_PENDING_ROADMAP_AUTHORITY.destinations.some(
+    (destination) =>
+      destination.status === 'blocked' &&
+      destination.blocker === 'proper-tail-calls' &&
+      destination.issue === 97,
+  ),
+  true,
+);
 ```
 
 Assert the 15 legitimate profile objects equal the production v2 objects after
@@ -429,7 +438,7 @@ Copy:
 - reconciliation proof `10f03811...`;
 - six evidence hashes;
 - four project projection hashes;
-- all 16 destination objects.
+- all 17 destination objects (16 blocked pairs plus selected-passing).
 
 - [ ] **Step 5: Add semantic reconciliation validation**
 
