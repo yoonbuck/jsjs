@@ -120,6 +120,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: 'false'
+          fetch-depth: '0'
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -206,6 +207,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: 'false'
+          fetch-depth: '0'
       - name: Check out the pinned Test262 tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -309,17 +311,17 @@ jobs:
 
   provenance-base-guard:
     name: ${{ github.event_name == 'pull_request_target' && 'Provenance base guard' || 'Provenance base guard (inactive)' }}
-    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
     concurrency:
-      group: provenance-base-guard-${{ github.event.pull_request.number }}
+      group: provenance-base-guard-${{ github.event_name }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     steps:
       - name: Validate the canonical guard target
+        if: github.event_name == 'pull_request_target'
         run: printf '%s' "$BASE_REPOSITORY" | grep -Eq '^yoonbuck/jsjs$' && printf '%s' "$WORKFLOW_REPOSITORY" | grep -Eq '^yoonbuck/jsjs$' && printf '%s' "$BASE_REF" | grep -Eq '^main$' && printf '%s' "$BASE_SHA" | grep -Eq '^[0-9a-f]{40}$' && printf '%s' "$HEAD_SHA" | grep -Eq '^[0-9a-f]{40}$' && printf '%s' "$PR_NUMBER" | grep -Eq '^[1-9][0-9]*$'
         env:
           BASE_REPOSITORY: '${{ github.event.pull_request.base.repo.full_name }}'
@@ -329,6 +331,7 @@ jobs:
           HEAD_SHA: '${{ github.event.pull_request.head.sha }}'
           PR_NUMBER: '${{ github.event.pull_request.number }}'
       - name: Check out the event base commit
+        if: github.event_name == 'pull_request_target'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: '${{ github.event.pull_request.base.sha }}'
@@ -336,26 +339,42 @@ jobs:
           persist-credentials: 'false'
           submodules: 'false'
       - name: Attest the checked-out base commit
+        if: github.event_name == 'pull_request_target'
         run: test "$(git rev-parse --verify 'HEAD^{commit}')" = "$BASE_SHA"
         env:
           BASE_SHA: '${{ github.event.pull_request.base.sha }}'
       - name: Set up Node
+        if: github.event_name == 'pull_request_target'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
+      - name: Fetch the current target branch
+        if: github.event_name == 'pull_request_target'
+        run: git fetch --no-tags --no-recurse-submodules origin +refs/heads/main:refs/remotes/origin/provenance-target-main
+      - name: Attest the live target branch
+        if: github.event_name == 'pull_request_target'
+        run: test "$(git rev-parse --verify 'refs/remotes/origin/provenance-target-main^{commit}')" = "$BASE_SHA" && test "$(git rev-parse --verify 'HEAD^{commit}')" = "$BASE_SHA"
+        env:
+          BASE_SHA: '${{ github.event.pull_request.base.sha }}'
       - name: Fetch the advertised pull request ref
+        if: github.event_name == 'pull_request_target'
         run: git fetch --no-tags --no-recurse-submodules origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"
         env:
           PR_NUMBER: '${{ github.event.pull_request.number }}'
       - name: Attest the fetched head commit
+        if: github.event_name == 'pull_request_target'
         run: test "$(git rev-parse --verify "refs/remotes/pull/${PR_NUMBER}/head^{commit}")" = "$HEAD_SHA" && test "$(git rev-parse --verify 'FETCH_HEAD^{commit}')" = "$HEAD_SHA"
         env:
           PR_NUMBER: '${{ github.event.pull_request.number }}'
           HEAD_SHA: '${{ github.event.pull_request.head.sha }}'
       - name: Check the trusted-base provenance range
+        if: github.event_name == 'pull_request_target'
         run: node tools/test262/es2015-provenance-check.js --check-range --base="$BASE_SHA" --head="$HEAD_SHA" --pr-body-env=PR_BODY
         env:
           BASE_SHA: '${{ github.event.pull_request.base.sha }}'
           HEAD_SHA: '${{ github.event.pull_request.head.sha }}'
           PR_BODY: '${{ github.event.pull_request.body }}'
           TZ: 'UTC'
+      - name: Keep the inactive guard context distinct
+        if: github.event_name != 'pull_request_target'
+        run: test "$GITHUB_EVENT_NAME" != pull_request_target

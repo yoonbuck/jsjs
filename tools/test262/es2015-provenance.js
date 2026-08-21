@@ -5,6 +5,10 @@
 import { createHash } from 'node:crypto';
 import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
 
+const { structuredClone } = globalThis;
+const PROVENANCE_DECISION_FRAGMENT_DIRECTORY =
+  'tools/test262/es2015-provenance-decisions';
+
 /**
  * @typedef {{ source: string, sourceSha256: string }} IdentitySpecification
  * @typedef {{ code: string, issue: number }} ProvenanceParent
@@ -13,7 +17,13 @@ import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
  * @typedef {{ code: string, selector: string, scope: string, rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string, entries: readonly ProvenanceBatchEntry[] }} ProvenanceBatch
  * @typedef {{ blocker: string, issues: readonly number[] }} ProvenanceBlockerOwner
  * @typedef {{ name: string, baseFoundation: 'absent' | 'present', requiredPaths: readonly string[], allowedPaths: readonly string[], requiredDeletions: readonly string[], allowedDeletions: readonly string[], emptyDecisionFragments: readonly string[], decisionFragment: string | null, generatedPaths: readonly string[] }} ProvenanceRangeProfile
- * @typedef {{ version: number, taxonomyBaseline: string, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, blockerOwners: readonly ProvenanceBlockerOwner[], rangeProfiles: readonly ProvenanceRangeProfile[], baseLedger: ProvenanceBaseLedger, batches: readonly ProvenanceBatch[] }} ProvenanceManifest
+ * @typedef {'pending' | 'applied'} RoadmapAuthorityState
+ * @typedef {'add-exact' | 'replace-exact' | 'project'} RoadmapOutputOperation
+ * @typedef {{ path: string, operation: RoadmapOutputOperation, baseSha256: string | null, headSha256: string | null, projectionSha256: string | null }} RoadmapProtectedOutput
+ * @typedef {{ status: 'selected-passing' | 'audit-passing-unselected' | 'blocked', blocker: string | null, issue: number }} RoadmapDestination
+ * @typedef {{ preservedTaxonomySha256: string, authorityTaxonomySha256: string, selectorPathSha256: string, rootCount: number, variantCount: number, missingCount: number, extraCount: number, proofSha256: string }} RoadmapReconciliation
+ * @typedef {{ code: string, issue: number, parentIssue: number, state: RoadmapAuthorityState, source: { baseTaxonomySha256: string, rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string | null }, reconciliation: RoadmapReconciliation | null, evidence: readonly { path: string, sha256: string }[], protectedOutputs: readonly RoadmapProtectedOutput[], destinations: readonly RoadmapDestination[] }} RoadmapAuthority
+ * @typedef {{ version: number, taxonomyBaseline: string, repository: string, revision: string, specification: IdentitySpecification, parent: ProvenanceParent, blockerOwners: readonly ProvenanceBlockerOwner[], rangeProfiles: readonly ProvenanceRangeProfile[], baseLedger: ProvenanceBaseLedger, batches: readonly ProvenanceBatch[], roadmapAuthorities?: readonly RoadmapAuthority[] }} ProvenanceManifest
  * @typedef {{ repository: string, commit: string, note: string }} ReviewedDecisionHistoryEntry
  * @typedef {{ reviewer: string, reviewedAt: string, artifact: string }} ReviewedDecisionReview
  * @typedef {{ blocker: string | null, issue: number | null }} ReviewedDecisionDestination
@@ -26,7 +36,339 @@ import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
  * @typedef {{ rootCount: number, variantCount: number, pathSha256: string, entryLedgerSha256: string }} ApprovedBatchLedger
  */
 
-export const ES2015_PROVENANCE_VERSION = 2;
+export const ES2015_PROVENANCE_MANIFEST_VERSIONS = Object.freeze([2, 3]);
+export const ES2015_PROVENANCE_DECISION_VERSION = 2;
+export const ES2015_PROVENANCE_VERSION = ES2015_PROVENANCE_DECISION_VERSION;
+export const P0_APPLIED_ROADMAP_AUTHORITY = deepFreeze({
+  code: 'P0',
+  issue: 77,
+  parentIssue: 70,
+  state: 'applied',
+  source: {
+    baseTaxonomySha256:
+      'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+    rootCount: 83,
+    variantCount: 164,
+    pathSha256:
+      'b2657db74331391b156f87e1e831665ef4ae3a738d48836e476c13828b1aeff4',
+    entryLedgerSha256:
+      '3b23ac8dbc2ae703d466d49e26d827516e4a863406a45acb4e8356c86c32d664',
+  },
+  reconciliation: null,
+  evidence: [],
+  protectedOutputs: [
+    {
+      path: 'docs/conformance.md',
+      operation: 'replace-exact',
+      baseSha256:
+        '3799ff93e726fdd181377417b6307801dc1ae1d5e884181d0bc4c4bd68ba2466',
+      headSha256:
+        '22b8f8c5368e922919987f53aa273b8cc4234435e2adf72ffcba164082e01f85',
+      projectionSha256: null,
+    },
+    {
+      path: 'docs/test262-report.jsonl',
+      operation: 'replace-exact',
+      baseSha256:
+        '9de8674a603263d5d80d9e48d255879efa061b648cc9cb32eff399941a6927df',
+      headSha256:
+        'c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-audit-evidence.json',
+      operation: 'replace-exact',
+      baseSha256:
+        'd560df3e1a9af905115324d529a0a101943d30fa0af8a8102b2dd344121ba9e4',
+      headSha256:
+        '58f92e072306bfe99f8b9a57bf959469100b0e54816bef3263ec9b6c075a4990',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-taxonomy.json',
+      operation: 'replace-exact',
+      baseSha256:
+        'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+      headSha256:
+        'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es5-selection.json',
+      operation: 'replace-exact',
+      baseSha256:
+        '20f0fc1d84bcec4efb934ef46b23a532d41502d6fcf88a307231d647a2c700f8',
+      headSha256:
+        '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/upstream-subset.json',
+      operation: 'replace-exact',
+      baseSha256:
+        'cceaaf9807c0d32c32be5b0800a140612afddf9acf49bcdc0cf8f0102562fb39',
+      headSha256:
+        'e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8',
+      projectionSha256: null,
+    },
+  ],
+  destinations: [
+    {
+      status: 'audit-passing-unselected',
+      blocker: null,
+      issue: 77,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 95,
+    },
+    {
+      status: 'selected-passing',
+      blocker: null,
+      issue: 77,
+    },
+  ],
+});
+export const H0_PENDING_ROADMAP_AUTHORITY = deepFreeze({
+  code: 'H0',
+  issue: 76,
+  parentIssue: 70,
+  state: 'pending',
+  source: {
+    baseTaxonomySha256:
+      'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+    rootCount: 135,
+    variantCount: 267,
+    pathSha256:
+      '3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950',
+    entryLedgerSha256: null,
+  },
+  reconciliation: {
+    preservedTaxonomySha256:
+      'e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953',
+    authorityTaxonomySha256:
+      'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+    selectorPathSha256:
+      '3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950',
+    rootCount: 135,
+    variantCount: 267,
+    missingCount: 0,
+    extraCount: 0,
+    proofSha256:
+      '10f0381153294c2be9c764b00cfa44d535e4c2af61f26d1d8cc9650787a21ca8',
+  },
+  evidence: [
+    {
+      path: 'tools/test262/es2015-h0-baseline.json',
+      sha256:
+        '01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec',
+    },
+    {
+      path: 'tools/test262/es2015-h0-disposition.json',
+      sha256:
+        'a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857',
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-deltas.json',
+      sha256:
+        'ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b',
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-map.json',
+      sha256:
+        'd50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b',
+    },
+    {
+      path: 'tools/test262/es2015-h0-paths.json',
+      sha256:
+        'bf3c2ed9c9e259bb25d3c5289a57c4daa5576b6d68d868df74f73c7a95bef893',
+    },
+    {
+      path: 'tools/test262/es2015-h0-promotion.json',
+      sha256:
+        'a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c',
+    },
+  ],
+  protectedOutputs: [
+    {
+      path: 'docs/conformance.md',
+      operation: 'project',
+      baseSha256:
+        '22b8f8c5368e922919987f53aa273b8cc4234435e2adf72ffcba164082e01f85',
+      headSha256: null,
+      projectionSha256:
+        'c44ef2d084be750bca79a574ae041c2a757d452c71f2dffaf59badc7c6a9fcb8',
+    },
+    {
+      path: 'docs/test262-report.jsonl',
+      operation: 'project',
+      baseSha256:
+        'c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27',
+      headSha256: null,
+      projectionSha256:
+        'a13390c77ffb89cdad7b043924c2d4318e8f27dd8e4f38bab943363b5e9b73cd',
+    },
+    {
+      path: 'tools/test262/es2015-h0-baseline.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        '01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-disposition.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-deltas.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'ddb0001ef1ba607e785ba63560305144b8cd39c95c76b85c2375c38562b1618b',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-owner-map.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'd50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-paths.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'bf3c2ed9c9e259bb25d3c5289a57c4daa5576b6d68d868df74f73c7a95bef893',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-h0-promotion.json',
+      operation: 'add-exact',
+      baseSha256: null,
+      headSha256:
+        'a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c',
+      projectionSha256: null,
+    },
+    {
+      path: 'tools/test262/es2015-taxonomy.json',
+      operation: 'project',
+      baseSha256:
+        'dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662',
+      headSha256: null,
+      projectionSha256:
+        'dc96bb2a162db339d13cdb119a86e29ec0e3dbe31fee29780fc1cc1995c87c02',
+    },
+    {
+      path: 'tools/test262/upstream-subset.json',
+      operation: 'project',
+      baseSha256:
+        'e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8',
+      headSha256: null,
+      projectionSha256:
+        '257c3e960ba14b8ebabd2ba92e7777d2a26b8a456ae6123c71e4e2349dd9ba6f',
+    },
+  ],
+  destinations: [
+    {
+      status: 'blocked',
+      blocker: 'binary-data-and-typed-arrays',
+      issue: 87,
+    },
+    {
+      status: 'blocked',
+      blocker: 'binary-data-and-typed-arrays',
+      issue: 88,
+    },
+    {
+      status: 'blocked',
+      blocker: 'binary-data-and-typed-arrays',
+      issue: 89,
+    },
+    {
+      status: 'blocked',
+      blocker: 'early-errors-and-declaration-instantiation',
+      issue: 78,
+    },
+    {
+      status: 'blocked',
+      blocker: 'keyed-collections',
+      issue: 83,
+    },
+    {
+      status: 'blocked',
+      blocker: 'keyed-collections',
+      issue: 84,
+    },
+    {
+      status: 'blocked',
+      blocker: 'keyed-collections',
+      issue: 85,
+    },
+    {
+      status: 'blocked',
+      blocker: 'proper-tail-calls',
+      issue: 97,
+    },
+    {
+      status: 'blocked',
+      blocker: 'proxy-and-reflect-metaobject',
+      issue: 79,
+    },
+    {
+      status: 'blocked',
+      blocker: 'proxy-and-reflect-metaobject',
+      issue: 81,
+    },
+    {
+      status: 'blocked',
+      blocker: 'regexp-unicode-and-sticky',
+      issue: 91,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-language-runtime-semantics',
+      issue: 96,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 93,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 94,
+    },
+    {
+      status: 'blocked',
+      blocker: 'remaining-standard-library-additions',
+      issue: 95,
+    },
+    {
+      status: 'blocked',
+      blocker: 'symbol-protocol-dispatch',
+      issue: 92,
+    },
+    {
+      status: 'selected-passing',
+      blocker: null,
+      issue: 76,
+    },
+  ],
+});
+/** @type {readonly RoadmapAuthority[]} */
+export const APPROVED_INITIAL_ROADMAP_AUTHORITIES = deepFreeze([
+  H0_PENDING_ROADMAP_AUTHORITY,
+  P0_APPLIED_ROADMAP_AUTHORITY,
+]);
 export const ES2015_PROVENANCE_FILE = 'tools/test262/es2015-provenance.json';
 export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
   'UA',
@@ -42,6 +384,24 @@ export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
   'US5',
   'US6',
   'US7',
+]);
+export const PROVENANCE_RANGE_GATE_OWNER_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/selection.js',
+  ES2015_PROVENANCE_FILE,
+  ...ES2015_PROVENANCE_DECISION_CODES.map(
+    (code) => `tools/test262/es2015-provenance-decisions/${code}.json`,
+  ),
+]);
+export const CLOSED_PROVENANCE_GENERATED_PATHS = Object.freeze([
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/upstream-subset.json',
 ]);
 
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
@@ -271,6 +631,11 @@ const APPROVED_RANGE_PROFILES = Object.freeze([
     });
   }),
 ]);
+const APPROVED_SCHEMA_V3_RANGE_PROFILES = Object.freeze(
+  APPROVED_RANGE_PROFILES.filter(
+    (profile) => profile.name !== 'maintenance:issue77-lexical',
+  ),
+);
 
 const MANIFEST_KEYS = Object.freeze([
   'version',
@@ -283,6 +648,10 @@ const MANIFEST_KEYS = Object.freeze([
   'rangeProfiles',
   'baseLedger',
   'batches',
+]);
+const MANIFEST_V3_KEYS = Object.freeze([
+  ...MANIFEST_KEYS,
+  'roadmapAuthorities',
 ]);
 const SPECIFICATION_KEYS = Object.freeze(['source', 'sourceSha256']);
 const PARENT_KEYS = Object.freeze(['code', 'issue']);
@@ -303,6 +672,43 @@ const BATCH_KEYS = Object.freeze([
   'entries',
 ]);
 const BATCH_ENTRY_KEYS = Object.freeze(['path', 'variants', 'priorClass']);
+const ROADMAP_AUTHORITY_KEYS = Object.freeze([
+  'code',
+  'issue',
+  'parentIssue',
+  'state',
+  'source',
+  'reconciliation',
+  'evidence',
+  'protectedOutputs',
+  'destinations',
+]);
+const ROADMAP_AUTHORITY_SOURCE_KEYS = Object.freeze([
+  'baseTaxonomySha256',
+  'rootCount',
+  'variantCount',
+  'pathSha256',
+  'entryLedgerSha256',
+]);
+const ROADMAP_RECONCILIATION_KEYS = Object.freeze([
+  'preservedTaxonomySha256',
+  'authorityTaxonomySha256',
+  'selectorPathSha256',
+  'rootCount',
+  'variantCount',
+  'missingCount',
+  'extraCount',
+  'proofSha256',
+]);
+const ROADMAP_EVIDENCE_KEYS = Object.freeze(['path', 'sha256']);
+const ROADMAP_PROTECTED_OUTPUT_KEYS = Object.freeze([
+  'path',
+  'operation',
+  'baseSha256',
+  'headSha256',
+  'projectionSha256',
+]);
+const ROADMAP_DESTINATION_KEYS = Object.freeze(['status', 'blocker', 'issue']);
 const FRAGMENT_KEYS = Object.freeze([
   'version',
   'taxonomyBaseline',
@@ -725,12 +1131,187 @@ export class Es2015ProvenanceError extends Error {
 
 /** @param {string} text */
 export function parseEs2015ProvenanceManifest(text) {
+  return validateRoadmapAuthorityManifest(
+    parseJson(text, ES2015_PROVENANCE_FILE),
+  );
+}
+
+/** @param {unknown} authority */
+export function canonicalRoadmapAuthoritySha256(authority) {
+  const normalized = normalizeRoadmapAuthority(
+    /** @type {Record<string, any>} */ (structuredClone(authority)),
+    'roadmap authority',
+  );
+  return sha256(`${JSON.stringify(normalized)}\n`);
+}
+
+/**
+ * @param {string} path
+ * @param {unknown} authority
+ */
+export function roadmapProjectionSha256(path, authority) {
+  const normalized = normalizeRoadmapAuthority(
+    /** @type {Record<string, any>} */ (structuredClone(authority)),
+    'roadmap authority',
+  );
+  const output = normalized.protectedOutputs.find(
+    (entry) => entry.path === path,
+  );
+  if (output === undefined) {
+    throw new Es2015ProvenanceError(
+      `${normalized.code} roadmap authority does not protect ${path}`,
+    );
+  }
+  return output.operation === 'project'
+    ? output.projectionSha256
+    : output.headSha256;
+}
+
+/** @param {unknown} authority */
+export function roadmapAggregateProjectionSha256(authority) {
+  const normalized = normalizeRoadmapAuthority(
+    /** @type {Record<string, any>} */ (structuredClone(authority)),
+    'roadmap authority',
+  );
+  const entries = normalized.protectedOutputs.map((output) => ({
+    path: output.path,
+    operation: output.operation,
+    sha256: roadmapProjectionSha256(output.path, normalized),
+  }));
+  return sha256(`${JSON.stringify(entries)}\n`);
+}
+
+/** @param {unknown} manifest */
+export function roadmapOwnedPathsFromBaseManifest(manifest) {
+  const normalized =
+    typeof manifest === 'object' && manifest !== null
+      ? /** @type {Record<string, any>} */ (structuredClone(manifest))
+      : manifest;
+  const record = object(normalized, ES2015_PROVENANCE_FILE);
+  const owned = new Set(PROVENANCE_RANGE_GATE_OWNER_PATHS);
+  if (Array.isArray(record.roadmapAuthorities)) {
+    for (const authority of normalizeRoadmapAuthorities(
+      record.roadmapAuthorities,
+      `${ES2015_PROVENANCE_FILE}.roadmapAuthorities`,
+    )) {
+      for (const evidence of authority.evidence) owned.add(evidence.path);
+      for (const output of authority.protectedOutputs) owned.add(output.path);
+    }
+  }
+  for (const path of CLOSED_PROVENANCE_GENERATED_PATHS) owned.add(path);
+  return owned;
+}
+
+/** @param {unknown} manifest */
+export function validateRoadmapAuthorityManifest(manifest) {
   return deepFreeze(
-    normalizeManifestRecord(parseJson(text, ES2015_PROVENANCE_FILE), {
+    normalizeManifestRecord(object(manifest, ES2015_PROVENANCE_FILE), {
       exactLists: true,
       exactTopLevelMessage: `${ES2015_PROVENANCE_FILE} must contain exact keys`,
     }),
   );
+}
+
+/**
+ * @param {string} baseTaxonomy
+ * @param {string} authorityTaxonomy
+ * @param {unknown} authority
+ * @returns {RoadmapReconciliation | null}
+ */
+export function validateRoadmapReconciliation(
+  baseTaxonomy,
+  authorityTaxonomy,
+  authority,
+) {
+  const normalizedAuthority = normalizeRoadmapAuthority(
+    /** @type {Record<string, any>} */ (structuredClone(authority)),
+    'roadmap authority',
+  );
+  const reconciliation = normalizedAuthority.reconciliation;
+  if (reconciliation === null) {
+    return null;
+  }
+  const baseTaxonomySha256 = sha256(baseTaxonomy);
+  if (baseTaxonomySha256 !== normalizedAuthority.source.baseTaxonomySha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority base taxonomy SHA-256 does not match authority.source.baseTaxonomySha256`,
+    );
+  }
+  if (baseTaxonomySha256 !== reconciliation.authorityTaxonomySha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation authority taxonomy SHA-256 does not match the reviewed base taxonomy`,
+    );
+  }
+  const preservedTaxonomySha256 = sha256(authorityTaxonomy);
+  if (preservedTaxonomySha256 !== reconciliation.preservedTaxonomySha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation preserved taxonomy SHA-256 does not match the reviewed source taxonomy`,
+    );
+  }
+
+  const baseSelector = summarizeRoadmapReconciliationSelector(
+    baseTaxonomy,
+    `${normalizedAuthority.code} roadmap authority base taxonomy`,
+  );
+  const preservedSelector = summarizeRoadmapReconciliationSelector(
+    authorityTaxonomy,
+    `${normalizedAuthority.code} roadmap authority preserved taxonomy`,
+  );
+  validateRoadmapReconciliationSelector(
+    baseSelector,
+    normalizedAuthority,
+    reconciliation,
+    `${normalizedAuthority.code} roadmap authority base taxonomy`,
+  );
+  validateRoadmapReconciliationSelector(
+    preservedSelector,
+    normalizedAuthority,
+    reconciliation,
+    `${normalizedAuthority.code} roadmap authority preserved taxonomy`,
+  );
+
+  const basePathSet = new Set(baseSelector.paths);
+  const preservedPathSet = new Set(preservedSelector.paths);
+  const missingCount = countRoadmapPathDifference(
+    preservedSelector.paths,
+    basePathSet,
+  );
+  const extraCount = countRoadmapPathDifference(
+    baseSelector.paths,
+    preservedPathSet,
+  );
+  if (
+    missingCount !== reconciliation.missingCount ||
+    extraCount !== reconciliation.extraCount
+  ) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation must retain exact selector membership`,
+    );
+  }
+  const actualProofSha256 = roadmapReconciliationProofSha256({
+    preservedTaxonomySha256,
+    authorityTaxonomySha256: baseTaxonomySha256,
+    selectorPathSha256: baseSelector.pathSha256,
+    rootCount: baseSelector.rootCount,
+    variantCount: baseSelector.variantCount,
+    missingCount,
+    extraCount,
+    proofSha256: reconciliation.proofSha256,
+  });
+  if (actualProofSha256 !== reconciliation.proofSha256) {
+    throw new Es2015ProvenanceError(
+      `${normalizedAuthority.code} roadmap authority reconciliation proof does not match the reviewed taxonomy artifacts`,
+    );
+  }
+  return deepFreeze({
+    ...reconciliation,
+    proofSha256: actualProofSha256,
+  });
+}
+
+/** @param {unknown} manifest */
+export function renderEs2015ProvenanceManifest(manifest) {
+  return `${JSON.stringify(validateRoadmapAuthorityManifest(manifest), null, 2)}\n`;
 }
 
 /** @param {string} text @param {string} expectedCode */
@@ -747,14 +1328,47 @@ export function parseEs2015DecisionFragment(text, expectedCode) {
 
 /**
  * @param {readonly ClassificationRecord[]} classifications
+ * @param {{ version?: number, roadmapAuthorities?: readonly RoadmapAuthority[] }} [options]
  * @returns {ProvenanceManifest}
  */
-export function buildProvenanceFoundation(classifications) {
+export function buildProvenanceFoundation(classifications, options = {}) {
   if (!Array.isArray(classifications)) {
     throw new Es2015ProvenanceError(
       'ES2015 provenance foundation requires classifications',
     );
   }
+  const version = options.version ?? 2;
+  if (!ES2015_PROVENANCE_MANIFEST_VERSIONS.includes(version)) {
+    throw new Es2015ProvenanceError(
+      `ES2015 provenance foundation must declare manifest version ${ES2015_PROVENANCE_MANIFEST_VERSIONS.join(' or ')}`,
+    );
+  }
+  const hasRoadmapAuthorities = Object.prototype.hasOwnProperty.call(
+    options,
+    'roadmapAuthorities',
+  );
+  if (version === 3 && !hasRoadmapAuthorities) {
+    throw new Es2015ProvenanceError(
+      'ES2015 provenance foundation version 3 requires roadmapAuthorities option',
+    );
+  }
+  const roadmapAuthorities = hasRoadmapAuthorities
+    ? options.roadmapAuthorities
+    : [];
+  if (version === 2) {
+    if (!Array.isArray(roadmapAuthorities) || roadmapAuthorities.length !== 0) {
+      throw new Es2015ProvenanceError(
+        'ES2015 provenance foundation version 2 must not include roadmap authorities',
+      );
+    }
+  }
+  const normalizedRoadmapAuthorities =
+    version === 3
+      ? normalizeRoadmapAuthorities(
+          roadmapAuthorities,
+          `${ES2015_PROVENANCE_FILE} roadmapAuthorities`,
+        )
+      : undefined;
 
   const unknownRecords = classifications
     .filter((record) => {
@@ -799,8 +1413,8 @@ export function buildProvenanceFoundation(classifications) {
     });
   });
 
-  return deepFreeze({
-    version: ES2015_PROVENANCE_VERSION,
+  const foundation = {
+    version,
     taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
@@ -813,7 +1427,10 @@ export function buildProvenanceFoundation(classifications) {
       issue: PARENT_ISSUE,
     },
     blockerOwners: APPROVED_BLOCKER_OWNERS,
-    rangeProfiles: APPROVED_RANGE_PROFILES,
+    rangeProfiles:
+      version === 3
+        ? APPROVED_SCHEMA_V3_RANGE_PROFILES
+        : APPROVED_RANGE_PROFILES,
     baseLedger: {
       rootCount: baseEntries.length,
       variantCount: unknownRecords.reduce(
@@ -824,11 +1441,30 @@ export function buildProvenanceFoundation(classifications) {
       paths: baseEntries,
     },
     batches,
-  });
+  };
+
+  return deepFreeze(
+    version === 3
+      ? {
+          ...foundation,
+          roadmapAuthorities: /** @type {readonly RoadmapAuthority[]} */ (
+            normalizedRoadmapAuthorities
+          ),
+        }
+      : foundation,
+  );
 }
 
-/** @param {unknown} manifest @param {readonly ClassificationRecord[]} [classifications] */
-export function validateProvenanceFoundation(manifest, classifications) {
+/**
+ * @param {unknown} manifest
+ * @param {readonly ClassificationRecord[]} [classifications]
+ * @param {{ expectedRoadmapAuthorities?: readonly RoadmapAuthority[] }} [options]
+ */
+export function validateProvenanceFoundation(
+  manifest,
+  classifications,
+  options = {},
+) {
   const normalizedManifest = normalizeManifestRecord(
     object(manifest, ES2015_PROVENANCE_FILE),
     {
@@ -837,11 +1473,44 @@ export function validateProvenanceFoundation(manifest, classifications) {
     },
   );
   validateManifestStructure(normalizedManifest);
+  const hasExpectedRoadmapAuthorities = Object.prototype.hasOwnProperty.call(
+    options,
+    'expectedRoadmapAuthorities',
+  );
+  const expectedRoadmapAuthorities = hasExpectedRoadmapAuthorities
+    ? normalizeRoadmapAuthorities(
+        options.expectedRoadmapAuthorities,
+        `${ES2015_PROVENANCE_FILE} expected roadmapAuthorities`,
+      )
+    : undefined;
   if (classifications !== undefined) {
-    const expected = buildProvenanceFoundation(classifications);
+    if (normalizedManifest.version === 3 && !hasExpectedRoadmapAuthorities) {
+      throw new Es2015ProvenanceError(
+        `${ES2015_PROVENANCE_FILE} version 3 validation requires expected roadmapAuthorities`,
+      );
+    }
+    const expected = buildProvenanceFoundation(classifications, {
+      version: normalizedManifest.version,
+      ...(normalizedManifest.version === 3
+        ? {
+            roadmapAuthorities: /** @type {readonly RoadmapAuthority[]} */ (
+              expectedRoadmapAuthorities
+            ),
+          }
+        : {}),
+    });
     validateManifestAgainstExpected(
       normalizedManifest,
       expected,
+      'reviewed ledger',
+    );
+  } else if (
+    normalizedManifest.version === 3 &&
+    hasExpectedRoadmapAuthorities
+  ) {
+    validateRoadmapAuthoritiesAgainstExpected(
+      normalizedManifest.roadmapAuthorities ?? [],
+      /** @type {readonly RoadmapAuthority[]} */ (expectedRoadmapAuthorities),
       'reviewed ledger',
     );
   }
@@ -1049,10 +1718,73 @@ function validateManifestAgainstExpected(manifest, expected, ledgerLabel) {
       `${ES2015_PROVENANCE_FILE} base ledger SHA-256 does not match the ${ledgerLabel}`,
     );
   }
+  if (manifest.version !== expected.version) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} version does not match the ${ledgerLabel}`,
+    );
+  }
+  if (manifest.version === 3) {
+    validateRoadmapAuthoritiesAgainstExpected(
+      manifest.roadmapAuthorities ?? [],
+      expected.roadmapAuthorities ?? [],
+      ledgerLabel,
+    );
+  }
+}
+
+/**
+ * @param {readonly RoadmapAuthority[]} actual
+ * @param {readonly RoadmapAuthority[]} expected
+ * @param {string} ledgerLabel
+ */
+function validateRoadmapAuthoritiesAgainstExpected(
+  actual,
+  expected,
+  ledgerLabel,
+) {
+  const actualCodes = actual.map((authority) => authority.code);
+  const expectedCodes = expected.map((authority) => authority.code);
+  for (const code of expectedCodes) {
+    if (!actualCodes.includes(code)) {
+      throw new Es2015ProvenanceError(
+        `${code} roadmap authority is missing from the ${ledgerLabel}`,
+      );
+    }
+  }
+  for (const code of actualCodes) {
+    if (!expectedCodes.includes(code)) {
+      throw new Es2015ProvenanceError(
+        `${code} roadmap authority is unexpected in the ${ledgerLabel}`,
+      );
+    }
+  }
+  const expectedByCode = new Map(
+    expected.map((authority) => [authority.code, authority]),
+  );
+  for (const authority of actual) {
+    const expectedAuthority = expectedByCode.get(authority.code);
+    if (expectedAuthority === undefined) {
+      throw new Es2015ProvenanceError(
+        `${authority.code} roadmap authority is unexpected in the ${ledgerLabel}`,
+      );
+    }
+    if (
+      canonicalRoadmapAuthoritySha256(authority) !==
+      canonicalRoadmapAuthoritySha256(expectedAuthority)
+    ) {
+      throw new Es2015ProvenanceError(
+        `${authority.code} roadmap authority does not match the ${ledgerLabel}`,
+      );
+    }
+  }
 }
 
 /** @param {ProvenanceManifest} manifest */
 function validateImmutableApprovedFoundation(manifest) {
+  const approvedRangeProfiles =
+    manifest.version === 3
+      ? APPROVED_SCHEMA_V3_RANGE_PROFILES
+      : APPROVED_RANGE_PROFILES;
   if (manifest.baseLedger.rootCount !== APPROVED_BASE_LEDGER.rootCount) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} base ledger root count does not match the approved immutable ledger`,
@@ -1106,7 +1838,7 @@ function validateImmutableApprovedFoundation(manifest) {
   }
   if (
     JSON.stringify(manifest.rangeProfiles) !==
-    JSON.stringify(APPROVED_RANGE_PROFILES)
+    JSON.stringify(approvedRangeProfiles)
   ) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} range profiles do not match the approved immutable policy`,
@@ -1398,10 +2130,30 @@ function requireExactKeys(record, expectedKeys, message) {
  * @returns {ProvenanceManifest}
  */
 function normalizeManifestRecord(record, options) {
+  if (record.version === 3) {
+    requireExactKeys(record, MANIFEST_V3_KEYS, options.exactTopLevelMessage);
+    return {
+      ...normalizeManifestFoundationRecord(record, options, 3),
+      roadmapAuthorities: normalizeRoadmapAuthorities(
+        record.roadmapAuthorities,
+        `${ES2015_PROVENANCE_FILE} roadmapAuthorities`,
+      ),
+    };
+  }
   requireExactKeys(record, MANIFEST_KEYS, options.exactTopLevelMessage);
-  if (record.version !== ES2015_PROVENANCE_VERSION) {
+  return normalizeManifestFoundationRecord(record, options, 2);
+}
+
+/**
+ * @param {Record<string, any>} record
+ * @param {{ exactLists: boolean }} options
+ * @param {2 | 3} version
+ * @returns {ProvenanceManifest}
+ */
+function normalizeManifestFoundationRecord(record, options, version) {
+  if (record.version !== version) {
     throw new Es2015ProvenanceError(
-      `${ES2015_PROVENANCE_FILE} must declare version ${ES2015_PROVENANCE_VERSION}`,
+      `${ES2015_PROVENANCE_FILE} must declare version ${ES2015_PROVENANCE_MANIFEST_VERSIONS.join(' or ')}`,
     );
   }
   if (record.taxonomyBaseline !== TAXONOMY_BASELINE) {
@@ -1425,7 +2177,7 @@ function normalizeManifestRecord(record, options) {
     `${ES2015_PROVENANCE_FILE} must retain parent T1 / #75`,
   );
   const blockerOwners = normalizeBlockerOwners(record.blockerOwners);
-  const rangeProfiles = normalizeRangeProfiles(record.rangeProfiles);
+  const rangeProfiles = normalizeRangeProfiles(record.rangeProfiles, version);
   const baseLedger = normalizeBaseLedger(
     object(record.baseLedger, `${ES2015_PROVENANCE_FILE} baseLedger`),
     options.exactLists,
@@ -1450,7 +2202,7 @@ function normalizeManifestRecord(record, options) {
     );
   }
   return {
-    version: ES2015_PROVENANCE_VERSION,
+    version,
     taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
@@ -1475,9 +2227,9 @@ function normalizeDecisionFragmentRecord(record, expectedCode, options) {
     FRAGMENT_KEYS,
     `${expectedCode} decision fragment must contain exact keys`,
   );
-  if (record.version !== ES2015_PROVENANCE_VERSION) {
+  if (record.version !== ES2015_PROVENANCE_DECISION_VERSION) {
     throw new Es2015ProvenanceError(
-      `${expectedCode} decision fragment must declare version ${ES2015_PROVENANCE_VERSION}`,
+      `${expectedCode} decision fragment must declare version ${ES2015_PROVENANCE_DECISION_VERSION}`,
     );
   }
   if (record.taxonomyBaseline !== TAXONOMY_BASELINE) {
@@ -1530,7 +2282,7 @@ function normalizeDecisionFragmentRecord(record, expectedCode, options) {
     );
   }
   return {
-    version: ES2015_PROVENANCE_VERSION,
+    version: ES2015_PROVENANCE_DECISION_VERSION,
     taxonomyBaseline: TAXONOMY_BASELINE,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
@@ -2106,8 +2858,8 @@ function normalizeBlockerOwners(value) {
   return Object.freeze(owners);
 }
 
-/** @param {unknown} value @returns {readonly ProvenanceRangeProfile[]} */
-function normalizeRangeProfiles(value) {
+/** @param {unknown} value @param {2 | 3} version @returns {readonly ProvenanceRangeProfile[]} */
+function normalizeRangeProfiles(value, version) {
   if (!Array.isArray(value)) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} rangeProfiles must be an array`,
@@ -2208,7 +2960,9 @@ function normalizeRangeProfiles(value) {
       generatedPaths,
     });
   });
-  const expectedNames = APPROVED_RANGE_PROFILES.map((profile) => profile.name);
+  const expectedNames = (
+    version === 3 ? APPROVED_SCHEMA_V3_RANGE_PROFILES : APPROVED_RANGE_PROFILES
+  ).map((profile) => profile.name);
   if (
     profiles.map((profile) => profile.name).join('\u0000') !==
     expectedNames.join('\u0000')
@@ -2218,6 +2972,515 @@ function normalizeRangeProfiles(value) {
     );
   }
   return Object.freeze(profiles);
+}
+
+/** @param {unknown} value @param {string} label @returns {readonly RoadmapAuthority[]} */
+function normalizeRoadmapAuthorities(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceError(`${label} must be an array`);
+  }
+  const authorities = value.map((entry, index) =>
+    normalizeRoadmapAuthority(entry, `${label}[${index}]`),
+  );
+  const codes = authorities.map((authority) => authority.code);
+  if (!isSorted(codes) || new Set(codes).size !== codes.length) {
+    throw new Es2015ProvenanceError(
+      `${label} must be code-unit sorted unique by code`,
+    );
+  }
+  const issues = authorities.map((authority) => authority.issue);
+  if (new Set(issues).size !== issues.length) {
+    throw new Es2015ProvenanceError(`${label} must not reuse issue numbers`);
+  }
+  return Object.freeze(authorities);
+}
+
+/** @param {unknown} value @param {string} label @returns {RoadmapAuthority} */
+function normalizeRoadmapAuthority(value, label) {
+  const record = object(value, label);
+  requireExactKeys(
+    record,
+    ROADMAP_AUTHORITY_KEYS,
+    `${label} must contain exact keys`,
+  );
+  const code = normalizeRoadmapAuthorityCode(record.code, `${label}.code`);
+  return {
+    code,
+    issue: positiveInteger(record.issue, `${label}.issue`),
+    parentIssue: positiveInteger(record.parentIssue, `${label}.parentIssue`),
+    state: normalizeRoadmapAuthorityState(record.state, `${label}.state`),
+    source: normalizeRoadmapAuthoritySource(record.source, `${label}.source`),
+    reconciliation:
+      record.reconciliation === null
+        ? null
+        : normalizeRoadmapReconciliation(
+            record.reconciliation,
+            `${label}.reconciliation`,
+          ),
+    evidence: normalizeRoadmapEvidenceList(
+      record.evidence,
+      `${label}.evidence`,
+    ),
+    protectedOutputs: normalizeRoadmapProtectedOutputs(
+      record.protectedOutputs,
+      `${label}.protectedOutputs`,
+    ),
+    destinations: normalizeRoadmapDestinations(
+      record.destinations,
+      `${label}.destinations`,
+    ),
+  };
+}
+
+/** @param {unknown} value @param {string} label @returns {string} */
+function normalizeRoadmapAuthorityCode(value, label) {
+  if (
+    typeof value !== 'string' ||
+    value.trim() === '' ||
+    value !== value.trim()
+  ) {
+    throw new Es2015ProvenanceError(`${label} must be a non-empty string`);
+  }
+  if (
+    value === 'foundation' ||
+    value.startsWith('decision:') ||
+    value.startsWith('maintenance:')
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} must not use reserved authority code ${value}`,
+    );
+  }
+  return value;
+}
+
+/** @param {unknown} value @param {string} label @returns {RoadmapAuthorityState} */
+function normalizeRoadmapAuthorityState(value, label) {
+  if (value !== 'pending' && value !== 'applied') {
+    throw new Es2015ProvenanceError(`${label} must be pending or applied`);
+  }
+  return value;
+}
+
+/** @param {unknown} value @param {string} label @returns {RoadmapAuthority['source']} */
+function normalizeRoadmapAuthoritySource(value, label) {
+  const record = object(value, label);
+  requireExactKeys(
+    record,
+    ROADMAP_AUTHORITY_SOURCE_KEYS,
+    `${label} must contain exact keys`,
+  );
+  return {
+    baseTaxonomySha256: sha256Hex(
+      record.baseTaxonomySha256,
+      `${label}.baseTaxonomySha256`,
+    ),
+    rootCount: nonNegativeInteger(record.rootCount, `${label}.rootCount`),
+    variantCount: nonNegativeInteger(
+      record.variantCount,
+      `${label}.variantCount`,
+    ),
+    pathSha256: sha256Hex(record.pathSha256, `${label}.pathSha256`),
+    entryLedgerSha256: nullableSha256Hex(
+      record.entryLedgerSha256,
+      `${label}.entryLedgerSha256`,
+    ),
+  };
+}
+
+/** @param {unknown} value @param {string} label @returns {RoadmapReconciliation} */
+function normalizeRoadmapReconciliation(value, label) {
+  const record = object(value, label);
+  requireExactKeys(
+    record,
+    ROADMAP_RECONCILIATION_KEYS,
+    `${label} must contain exact keys`,
+  );
+  const reconciliation = {
+    preservedTaxonomySha256: sha256Hex(
+      record.preservedTaxonomySha256,
+      `${label}.preservedTaxonomySha256`,
+    ),
+    authorityTaxonomySha256: sha256Hex(
+      record.authorityTaxonomySha256,
+      `${label}.authorityTaxonomySha256`,
+    ),
+    selectorPathSha256: sha256Hex(
+      record.selectorPathSha256,
+      `${label}.selectorPathSha256`,
+    ),
+    rootCount: nonNegativeInteger(record.rootCount, `${label}.rootCount`),
+    variantCount: nonNegativeInteger(
+      record.variantCount,
+      `${label}.variantCount`,
+    ),
+    missingCount: nonNegativeInteger(
+      record.missingCount,
+      `${label}.missingCount`,
+    ),
+    extraCount: nonNegativeInteger(record.extraCount, `${label}.extraCount`),
+    proofSha256: sha256Hex(record.proofSha256, `${label}.proofSha256`),
+  };
+  const expectedProofSha256 = roadmapReconciliationProofSha256(reconciliation);
+  if (reconciliation.proofSha256 !== expectedProofSha256) {
+    throw new Es2015ProvenanceError(
+      `${label}.proofSha256 must match the canonical reconciliation proof`,
+    );
+  }
+  return {
+    ...reconciliation,
+    proofSha256: expectedProofSha256,
+  };
+}
+
+/** @param {unknown} value @param {string} label @returns {readonly { path: string, sha256: string }[]} */
+function normalizeRoadmapEvidenceList(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceError(`${label} must be an array`);
+  }
+  const evidence = value.map((entry, index) =>
+    normalizeRoadmapEvidence(entry, `${label}[${index}]`),
+  );
+  assertSortedUniquePaths(
+    evidence.map((entry) => entry.path),
+    label,
+  );
+  return Object.freeze(evidence);
+}
+
+/** @param {unknown} value @param {string} label @returns {{ path: string, sha256: string }} */
+function normalizeRoadmapEvidence(value, label) {
+  const record = object(value, label);
+  requireExactKeys(
+    record,
+    ROADMAP_EVIDENCE_KEYS,
+    `${label} must contain exact keys`,
+  );
+  return {
+    path: normalizeRoadmapAuthorityArtifactPath(record.path, `${label}.path`),
+    sha256: sha256Hex(record.sha256, `${label}.sha256`),
+  };
+}
+
+/** @param {unknown} value @param {string} label @returns {readonly RoadmapProtectedOutput[]} */
+function normalizeRoadmapProtectedOutputs(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceError(`${label} must be an array`);
+  }
+  const protectedOutputs = value.map((entry, index) =>
+    normalizeRoadmapProtectedOutput(entry, `${label}[${index}]`),
+  );
+  assertSortedUniquePaths(
+    protectedOutputs.map((entry) => entry.path),
+    label,
+  );
+  return Object.freeze(protectedOutputs);
+}
+
+/** @param {unknown} value @param {string} label @returns {RoadmapProtectedOutput} */
+function normalizeRoadmapProtectedOutput(value, label) {
+  const record = object(value, label);
+  requireExactKeys(
+    record,
+    ROADMAP_PROTECTED_OUTPUT_KEYS,
+    `${label} must contain exact keys`,
+  );
+  const operation = normalizeRoadmapOutputOperation(
+    record.operation,
+    `${label}.operation`,
+  );
+  const baseSha256 = nullableSha256Hex(
+    record.baseSha256,
+    `${label}.baseSha256`,
+  );
+  const headSha256 = nullableSha256Hex(
+    record.headSha256,
+    `${label}.headSha256`,
+  );
+  const projectionSha256 = nullableSha256Hex(
+    record.projectionSha256,
+    `${label}.projectionSha256`,
+  );
+  switch (operation) {
+    case 'add-exact':
+      if (
+        baseSha256 !== null ||
+        headSha256 === null ||
+        projectionSha256 !== null
+      ) {
+        throw new Es2015ProvenanceError(
+          `${label} add-exact outputs must use baseSha256:null, headSha256:sha256, projectionSha256:null`,
+        );
+      }
+      break;
+    case 'replace-exact':
+      if (
+        baseSha256 === null ||
+        headSha256 === null ||
+        projectionSha256 !== null
+      ) {
+        throw new Es2015ProvenanceError(
+          `${label} replace-exact outputs must use baseSha256:sha256, headSha256:sha256, projectionSha256:null`,
+        );
+      }
+      break;
+    case 'project':
+      if (
+        baseSha256 === null ||
+        headSha256 !== null ||
+        projectionSha256 === null
+      ) {
+        throw new Es2015ProvenanceError(
+          `${label} project outputs must use baseSha256:sha256, headSha256:null, projectionSha256:sha256`,
+        );
+      }
+      break;
+  }
+  return {
+    path: normalizeRoadmapAuthorityArtifactPath(record.path, `${label}.path`),
+    operation,
+    baseSha256,
+    headSha256,
+    projectionSha256,
+  };
+}
+
+/** @param {unknown} value @param {string} label @returns {RoadmapOutputOperation} */
+function normalizeRoadmapOutputOperation(value, label) {
+  if (
+    value !== 'add-exact' &&
+    value !== 'replace-exact' &&
+    value !== 'project'
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} must be add-exact, replace-exact, or project`,
+    );
+  }
+  return value;
+}
+
+/** @param {unknown} value @param {string} label @returns {readonly RoadmapDestination[]} */
+function normalizeRoadmapDestinations(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceError(`${label} must be an array`);
+  }
+  const destinations = value.map((entry, index) =>
+    normalizeRoadmapDestination(entry, `${label}[${index}]`),
+  );
+  for (let index = 1; index < destinations.length; index += 1) {
+    if (
+      compareRoadmapDestinations(
+        destinations[index - 1],
+        destinations[index],
+      ) >= 0
+    ) {
+      throw new Es2015ProvenanceError(
+        `${label} must be sorted unique by status, blocker, and issue`,
+      );
+    }
+  }
+  return Object.freeze(destinations);
+}
+
+/** @param {unknown} value @param {string} label @returns {RoadmapDestination} */
+function normalizeRoadmapDestination(value, label) {
+  const record = object(value, label);
+  requireExactKeys(
+    record,
+    ROADMAP_DESTINATION_KEYS,
+    `${label} must contain exact keys`,
+  );
+  const status = normalizeRoadmapDestinationStatus(
+    record.status,
+    `${label}.status`,
+  );
+  const blocker = nullableString(record.blocker, `${label}.blocker`);
+  const issue = positiveInteger(record.issue, `${label}.issue`);
+  if (status === 'blocked') {
+    if (blocker === null || blocker.trim() === '') {
+      throw new Es2015ProvenanceError(
+        `${label}.blocker must name an approved blocker`,
+      );
+    }
+    const issues = BLOCKER_ISSUES.get(blocker);
+    if (issues === undefined || !issues.has(issue)) {
+      throw new Es2015ProvenanceError(
+        `${label}.blocker must map to the exact approved issue`,
+      );
+    }
+  } else if (blocker !== null) {
+    throw new Es2015ProvenanceError(`${label}.blocker must be null`);
+  }
+  return {
+    status,
+    blocker,
+    issue,
+  };
+}
+
+/** @param {unknown} value @param {string} label @returns {'selected-passing' | 'audit-passing-unselected' | 'blocked'} */
+function normalizeRoadmapDestinationStatus(value, label) {
+  if (
+    value !== 'selected-passing' &&
+    value !== 'audit-passing-unselected' &&
+    value !== 'blocked'
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} must be selected-passing, audit-passing-unselected, or blocked`,
+    );
+  }
+  return value;
+}
+
+/** @param {RoadmapDestination} left @param {RoadmapDestination} right */
+function compareRoadmapDestinations(left, right) {
+  if (left.status !== right.status) {
+    return left.status < right.status ? -1 : 1;
+  }
+  const leftBlocker = left.blocker ?? '';
+  const rightBlocker = right.blocker ?? '';
+  if (leftBlocker !== rightBlocker) {
+    return leftBlocker < rightBlocker ? -1 : 1;
+  }
+  return left.issue - right.issue;
+}
+
+/** @param {unknown} value @param {string} label @returns {string} */
+function normalizeRoadmapRepositoryPath(value, label) {
+  if (typeof value !== 'string' || !validRepositoryPath(value)) {
+    throw new Es2015ProvenanceError(
+      `${label} must be a repository-relative path`,
+    );
+  }
+  return value;
+}
+
+/** @param {unknown} value @param {string} label @returns {string} */
+function normalizeRoadmapAuthorityArtifactPath(value, label) {
+  const path = normalizeRoadmapRepositoryPath(value, label);
+  if (
+    PROVENANCE_RANGE_GATE_OWNER_PATHS.includes(path) ||
+    path.startsWith(`${PROVENANCE_DECISION_FRAGMENT_DIRECTORY}/`)
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} must not claim provenance range gate-owner path ${path}`,
+    );
+  }
+  return path;
+}
+
+/**
+ * @param {string} text
+ * @param {string} label
+ * @returns {{ rootCount: number, variantCount: number, pathSha256: string, paths: readonly string[] }}
+ */
+function summarizeRoadmapReconciliationSelector(text, label) {
+  const record = parseJson(text, label);
+  if (record.version !== 3) {
+    throw new Es2015ProvenanceError(`${label} must declare version 3`);
+  }
+  if (!Array.isArray(record.classifications)) {
+    throw new Es2015ProvenanceError(
+      `${label}.classifications must be an array`,
+    );
+  }
+  const selected = [];
+  let variantCount = 0;
+  for (let index = 0; index < record.classifications.length; index += 1) {
+    const entry = object(
+      record.classifications[index],
+      `${label}.classifications[${index}]`,
+    );
+    const path = normalizeRoadmapRepositoryPath(
+      entry.path,
+      `${label}.classifications[${index}].path`,
+    );
+    const variants = nonNegativeInteger(
+      entry.variants,
+      `${label}.classifications[${index}].variants`,
+    );
+    const partition = nullableString(
+      entry.partition,
+      `${label}.classifications[${index}].partition`,
+    );
+    const status = nullableString(
+      entry.status,
+      `${label}.classifications[${index}].status`,
+    );
+    const blocker = nullableString(
+      entry.blocker,
+      `${label}.classifications[${index}].blocker`,
+    );
+    if (
+      partition === 'core' &&
+      status === 'blocked:test262-cross-realm-host' &&
+      blocker === 'test262-cross-realm-host'
+    ) {
+      selected.push(path);
+      variantCount += variants;
+    }
+  }
+  const paths = sortStrings(selected);
+  assertUnique(paths, `${label} selector paths`);
+  return {
+    rootCount: paths.length,
+    variantCount,
+    pathSha256: hashPaths(paths),
+    paths: Object.freeze(paths),
+  };
+}
+
+/**
+ * @param {{ rootCount: number, variantCount: number, pathSha256: string }} summary
+ * @param {RoadmapAuthority} authority
+ * @param {RoadmapReconciliation} reconciliation
+ * @param {string} label
+ */
+function validateRoadmapReconciliationSelector(
+  summary,
+  authority,
+  reconciliation,
+  label,
+) {
+  if (
+    summary.rootCount !== authority.source.rootCount ||
+    summary.rootCount !== reconciliation.rootCount
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} root count does not match the reviewed reconciliation`,
+    );
+  }
+  if (
+    summary.variantCount !== authority.source.variantCount ||
+    summary.variantCount !== reconciliation.variantCount
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} variant count does not match the reviewed reconciliation`,
+    );
+  }
+  if (
+    summary.pathSha256 !== authority.source.pathSha256 ||
+    summary.pathSha256 !== reconciliation.selectorPathSha256
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} path SHA-256 does not match the reviewed reconciliation`,
+    );
+  }
+}
+
+/** @param {readonly string[]} paths @param {ReadonlySet<string>} expected */
+function countRoadmapPathDifference(paths, expected) {
+  let count = 0;
+  for (const path of paths) {
+    if (!expected.has(path)) count += 1;
+  }
+  return count;
+}
+
+/** @param {RoadmapReconciliation} reconciliation */
+function roadmapReconciliationProofSha256(reconciliation) {
+  return sha256(
+    `${reconciliation.preservedTaxonomySha256}\u0000${reconciliation.authorityTaxonomySha256}\u0000${reconciliation.selectorPathSha256}\u0000${reconciliation.rootCount}\u0000${reconciliation.variantCount}\u0000${reconciliation.missingCount}\u0000${reconciliation.extraCount}\u0000`,
+  );
 }
 
 /** @param {unknown} value @param {string} label */
@@ -2369,6 +3632,14 @@ function nullableInteger(value, label) {
 }
 
 /** @param {unknown} value @param {string} label @returns {number} */
+function positiveInteger(value, label) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw new Es2015ProvenanceError(`${label} must be a positive integer`);
+  }
+  return /** @type {number} */ (value);
+}
+
+/** @param {unknown} value @param {string} label @returns {number} */
 function nonNegativeInteger(value, label) {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     throw new Es2015ProvenanceError(`${label} must be a non-negative integer`);
@@ -2382,6 +3653,12 @@ function sha256Hex(value, label) {
     throw new Es2015ProvenanceError(`${label} must be a SHA-256 hex string`);
   }
   return value;
+}
+
+/** @param {unknown} value @param {string} label @returns {string | null} */
+function nullableSha256Hex(value, label) {
+  if (value === null) return null;
+  return sha256Hex(value, label);
 }
 
 /** @param {unknown} path @param {string} label */

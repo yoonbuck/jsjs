@@ -594,6 +594,10 @@ Each of these twelve ordinary jobs runs on `ubuntu-latest` with Node 20 (via
 `actions/setup-node` with the built-in npm cache) and `npm ci`.
 Only the broad `test262-upstream` execution step receives the 4096 MiB Node heap
 allowance; focused Test262 jobs remain unchanged.
+The project checkout in `test-node` and `test262-es2015-release` uses
+`fetch-depth: 0` because `test/run-node.js` imports the Node-only provenance
+suite, whose module initialization reads exact historical project artifacts at
+pinned commits; other ordinary project checkouts keep their existing depth.
 Inside `test262-upstream`, the generated workflow runs
 the PR-only exact range gate, then
 `TZ=UTC npm run test262:es2015:provenance:check` immediately before
@@ -612,31 +616,44 @@ run can never satisfy a required-check name that a real run also uses.
 
 ### The trusted provenance base guard (13th job)
 
-A thirteenth job, `provenance-base-guard`, runs only on the
-`pull_request_target` event (`opened`, `synchronize`, `reopened`, `edited`;
-no path/branch filters) and is skipped on `push` and `pull_request`. Its
-required check-run name is exactly `Provenance base guard`; when inactive it
-reports the distinct name `Provenance base guard (inactive)`.
+A thirteenth job, `provenance-base-guard`, is unconditional so GitHub always
+evaluates its event-keyed name expression. On the `pull_request_target` event
+(`opened`, `synchronize`, `reopened`, `edited`; no path/branch filters) it
+reports the exact required check-run name `Provenance base guard` and runs
+every guard step. On `push` and `pull_request` it reports the distinct
+informational name `Provenance base guard (inactive)` and runs only one no-op
+inactive step. GitHub does not evaluate expression-valued job names when a
+job-level `if` skips the job, so this unconditional job plus mutually
+exclusive step conditions is what preserves the exact active required context
+and the distinct inactive context.
 
 Unlike the twelve ordinary jobs, this job does not run `npm ci` or install any
 dependency, does not use the npm cache, and never checks out the pull
 request's head. It differs from the ordinary jobs in every one of these ways:
 
 - it runs on `ubuntu-24.04`, not `ubuntu-latest`;
-- it has a 5-minute timeout and a `provenance-base-guard-<PR number>`
-  concurrency group with `cancel-in-progress: true`;
+- it has a 5-minute timeout and an event-qualified
+  `provenance-base-guard-<event>-<PR number>` concurrency group with
+  `cancel-in-progress: true`, so `pull_request` and `pull_request_target` do
+  not cancel each other while repeated runs of the same event/PR still do;
 - its permissions are exactly `contents: read` and `pull-requests: read`
   (still no write access);
 - because `pull_request_target` loads the workflow and default checkout from
   the base repository's default branch, the job explicitly checks out
   `github.event.pull_request.base.sha`, asserts the checked-out `HEAD` equals
-  that SHA, sets up Node 20 with no cache and no install, fetches only the
-  base repository's advertised `refs/pull/<number>/head` as inert objects
-  (never the head repository, never a raw head-SHA fetch), asserts both the
-  fetched ref and `FETCH_HEAD` equal `github.event.pull_request.head.sha`, and
-  only then runs the checked-out base's
+  that SHA, sets up Node 20 with no cache and no install, fetches the live
+  `refs/heads/main` target branch into
+  `refs/remotes/origin/provenance-target-main`, asserts both that ref and the
+  checked-out `HEAD` still equal `github.event.pull_request.base.sha`, fetches
+  only the base repository's advertised `refs/pull/<number>/head` as inert
+  objects (never the head repository, never a raw head-SHA fetch), asserts
+  both the fetched ref and `FETCH_HEAD` equal
+  `github.event.pull_request.head.sha`, and only then runs the checked-out
+  base's
   `tools/test262/es2015-provenance-check.js` with the event base/head SHAs and
-  the full PR body passed through `PR_BODY`, under fixed `TZ=UTC`.
+  the full PR body passed through `PR_BODY`, under fixed `TZ=UTC`. If `main`
+  moved after the event or the checkout no longer matches the event base, the
+  guard fails and must be rerun against the new event BASE.
 
 The ordinary, PR-only `test262-upstream` provenance-range step is unaffected by
 this job: it is retained verbatim as defense-in-depth, and this guard does not
