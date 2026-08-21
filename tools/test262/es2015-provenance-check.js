@@ -1180,15 +1180,101 @@ const HISTORICAL_P0_SUBSET_DELTA_SHA256 =
   '88d2521688bf3f036d2d94977914580d218fbc442bf38ef11e2cf9b8ce529a5f';
 const HISTORICAL_P0_ES5_SELECTION_DELTA_SHA256 =
   '2b0654600cf2159c828be9489826e85f3565a32b82019e2dfc2c41ec80870b38';
+const HISTORICAL_P0_SUBSET_ADDITIONS = Object.freeze([
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-extends-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-inst/literal-numeric-binary.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-inst/literal-numeric-octal.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-inst/literal-string-default-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-inst/literal-string-unicode-escape.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-static/literal-numeric-binary.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-static/literal-numeric-octal.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-static/literal-string-default-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/accessor-name-static/literal-string-unicode-escape.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/ident-name-method-def-default-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/expressions',
+    path: 'test/language/expressions/class/ident-name-method-def-extends-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-inst/literal-numeric-binary.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-inst/literal-numeric-octal.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-inst/literal-string-default-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-inst/literal-string-unicode-escape.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-static/literal-numeric-binary.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-static/literal-numeric-octal.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-static/literal-string-default-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/accessor-name-static/literal-string-unicode-escape.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/ident-name-method-def-default-escaped-ext.js',
+  }),
+  Object.freeze({
+    group: 'language/statements',
+    path: 'test/language/statements/class/ident-name-method-def-extends-escaped-ext.js',
+  }),
+]);
 const HISTORICAL_P0_ES5_SELECTION_REMOVAL = Object.freeze({
   path: 'test/staging/sm/class/newTargetEval.js',
   category: 'post-es5-syntax',
   reason:
     'Exercises `new.target`, which remains outside this ES2015 syntax subset.',
-});
-const HISTORICAL_P0_SUBSET_GROUPS = Object.freeze({
-  'language/expressions': 12,
-  'language/statements': 10,
 });
 
 /**
@@ -1457,6 +1543,11 @@ function parseRoadmapOwnerMap(text, label) {
 
 /** @param {string} text @param {string} label */
 function parseRoadmapAuditEvidence(text, label) {
+  return parseRoadmapAuditEvidenceDocument(text, label).records;
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapAuditEvidenceDocument(text, label) {
   const value = parseJsonValue(text, label);
   if (
     typeof value !== 'object' ||
@@ -1466,9 +1557,9 @@ function parseRoadmapAuditEvidence(text, label) {
   ) {
     throw new Es2015ProvenanceCheckError(`${label} must contain auditRecords`);
   }
-  const records = /** @type {any[]} */ (
-    /** @type {Record<string, unknown>} */ (value).auditRecords
-  ).map((record) =>
+  const document = /** @type {Record<string, any>} */ (value);
+  const rawRecords = /** @type {Record<string, any>[]} */ (document.auditRecords);
+  const records = rawRecords.map((record) =>
     createTestRecord({
       file: record.file,
       variant: record.variant,
@@ -1479,7 +1570,7 @@ function parseRoadmapAuditEvidence(text, label) {
     records.map((record) => `${record.file}\u0000${record.variant ?? ''}`),
     `${label} audit records`,
   );
-  return records;
+  return { document, rawRecords, records };
 }
 
 /** @param {readonly string[]} values @param {string} label */
@@ -1693,11 +1784,23 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
   );
   const baseTaxonomy = parseJsonValue(baseText, output.path);
   const headTaxonomy = parseJsonValue(headText, output.path);
-  const baseRecords = taxonomyRecordMap(baseTaxonomy, output.path);
-  const headRecords = taxonomyRecordMap(headTaxonomy, output.path);
+  const taxonomyLabel = `${profile} protected output ${output.path}`;
+  const baseArtifact = taxonomyArtifact(baseTaxonomy, taxonomyLabel);
+  const headArtifact = taxonomyArtifact(headTaxonomy, taxonomyLabel);
+  const baseRecords = baseArtifact.byPath;
+  const headRecords = headArtifact.byPath;
+  const sourcePathSet = new Set(sourcePaths);
   if (sha256(`${sourcePaths.join('\n')}\n`) !== authority.source.pathSha256) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} source paths do not match ${authority.code} roadmap authority`,
+    );
+  }
+  if (
+    renderJson(taxonomyStaticData(baseArtifact.artifact)) !==
+    renderJson(taxonomyStaticData(headArtifact.artifact))
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must preserve non-projected taxonomy metadata`,
     );
   }
   const baselinePaths = baseline.map((entry) => entry.path);
@@ -1748,6 +1851,28 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
       `${profile} protected output ${output.path} destinations do not match ${authority.code} roadmap authority`,
     );
   }
+  for (const path of headArtifact.classifications.map((record) => record.path)) {
+    if (baseRecords.has(path)) continue;
+    if (sourcePathSet.has(path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} names an unexpected reviewed source path ${path}`,
+      );
+    }
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} changes a foreign classification ${path}`,
+    );
+  }
+  for (const path of baseArtifact.classifications.map((record) => record.path)) {
+    if (headRecords.has(path)) continue;
+    if (sourcePathSet.has(path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} is missing reviewed source path ${path}`,
+      );
+    }
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must preserve foreign classification ${path}`,
+    );
+  }
   for (const path of sourcePaths) {
     const baseRecord = baseRecords.get(path);
     const headRecord = headRecords.get(path);
@@ -1783,7 +1908,7 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
     }
   }
   for (const [path, headRecord] of headRecords) {
-    if (sourcePaths.includes(path)) continue;
+    if (sourcePathSet.has(path)) continue;
     const baseRecord = baseRecords.get(path);
     if (json(baseRecord) !== json(headRecord)) {
       throw new Es2015ProvenanceCheckError(
@@ -1792,11 +1917,19 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
     }
   }
   if (
-    json(summarizeEs2015Classification(headTaxonomy.classifications)) !==
-    json(headTaxonomy.summary)
+    json(summarizeEs2015Classification(headArtifact.classifications)) !==
+    json(headArtifact.artifact.summary)
   ) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} must preserve whole-tree summary balance`,
+    );
+  }
+  if (
+    json(taxonomyStatusTables(headArtifact.classifications)) !==
+    json(headArtifact.artifact.statusTables)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must preserve whole-tree status table balance`,
     );
   }
 }
@@ -1823,15 +1956,30 @@ async function validateAuditEvidenceProjection(
       roadmapEvidencePath(authority, 'disposition'),
     ).map((entry) => [entry.path, entry]),
   );
-  const baseRecords = parseRoadmapAuditEvidence(baseText, output.path);
-  const headRecords = parseRoadmapAuditEvidence(headText, output.path);
+  const baseAudit = parseRoadmapAuditEvidenceDocument(baseText, output.path);
+  const headAudit = parseRoadmapAuditEvidenceDocument(headText, output.path);
+  if (
+    renderJson(auditDocumentData(baseAudit.document)) !==
+    renderJson(auditDocumentData(headAudit.document))
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must preserve audit document metadata`,
+    );
+  }
   const baseByKey = new Map(
-    baseRecords.map((record) => [auditRecordKey(record), record]),
+    baseAudit.records.map((record, index) => [
+      auditRecordKey(record),
+      { normalized: record, raw: baseAudit.rawRecords[index] },
+    ]),
   );
   const headByKey = new Map(
-    headRecords.map((record) => [auditRecordKey(record), record]),
+    headAudit.records.map((record, index) => [
+      auditRecordKey(record),
+      { normalized: record, raw: headAudit.rawRecords[index] },
+    ]),
   );
-  for (const [key, record] of baseByKey) {
+  for (const [key, entry] of baseByKey) {
+    const record = entry.normalized;
     if (!sourcePaths.has(record.file)) continue;
     const destination = disposition.get(record.file);
     if (destination === undefined) {
@@ -1854,18 +2002,40 @@ async function validateAuditEvidenceProjection(
       );
     }
   }
-  for (const [key, record] of headByKey) {
+  for (const [key, entry] of headByKey) {
+    const record = entry.normalized;
     if (sourcePaths.has(record.file) && !baseByKey.has(key)) {
       throw new Es2015ProvenanceCheckError(
         `${profile} protected output ${output.path} names a foreign source record ${record.file} (${String(record.variant)})`,
       );
     }
     const baseRecord = baseByKey.get(key);
-    if (baseRecord !== undefined && json(baseRecord) !== json(record)) {
+    if (
+      baseRecord !== undefined &&
+      sourcePaths.has(record.file) &&
+      json(baseRecord.raw) !== json(entry.raw)
+    ) {
       throw new Es2015ProvenanceCheckError(
         `${profile} protected output ${output.path} changes audited source evidence ${record.file} (${String(record.variant)})`,
       );
     }
+  }
+  for (const [key, entry] of baseByKey) {
+    const record = entry.normalized;
+    if (sourcePaths.has(record.file)) continue;
+    const headRecord = headByKey.get(key);
+    if (headRecord === undefined || json(headRecord.raw) !== json(entry.raw)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} must preserve foreign audit record ${record.file} (${String(record.variant)})`,
+      );
+    }
+  }
+  for (const [key, entry] of headByKey) {
+    const record = entry.normalized;
+    if (sourcePaths.has(record.file) || baseByKey.has(key)) continue;
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must preserve foreign audit record ${record.file} (${String(record.variant)})`,
+    );
   }
 }
 
@@ -1875,11 +2045,10 @@ async function validateSubsetProjection(output, authority, context, baseText, he
   const baseSubset = parseUpstreamSubset(baseText);
   const headSubset = parseUpstreamSubset(headText);
   if (authority.code === 'P0' && authority.evidence.length === 0) {
-    const deltas = subsetDeltas(baseSubset, headSubset);
+    const deltas = subsetDeltaTuples(baseSubset, headSubset);
     if (
-      json(Object.fromEntries(deltas.map((entry) => [entry.name, entry.added.length]))) !==
-      json(HISTORICAL_P0_SUBSET_GROUPS) ||
-      deltas.some((entry) => entry.removed.length !== 0) ||
+      json(deltas.added) !== json(HISTORICAL_P0_SUBSET_ADDITIONS) ||
+      deltas.removed.length !== 0 ||
       output.projectionSha256 !== HISTORICAL_P0_SUBSET_DELTA_SHA256
     ) {
       throw new Es2015ProvenanceCheckError(
@@ -1943,8 +2112,8 @@ async function validateEs5SelectionProjection(
     TAXONOMY_FILE,
   );
   const path = HISTORICAL_P0_ES5_SELECTION_REMOVAL.path;
-  const baseRecord = taxonomyRecordMap(baseTaxonomy, TAXONOMY_FILE).get(path);
-  const headRecord = taxonomyRecordMap(headTaxonomy, TAXONOMY_FILE).get(path);
+  const baseRecord = taxonomyArtifact(baseTaxonomy, TAXONOMY_FILE).byPath.get(path);
+  const headRecord = taxonomyArtifact(headTaxonomy, TAXONOMY_FILE).byPath.get(path);
   if (json(baseRecord) !== json(headRecord)) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} must retain the taxonomy classification for ${path}`,
@@ -2087,7 +2256,7 @@ function requiredEvidenceText(evidence, suffix, authority, profile) {
 }
 
 /** @param {unknown} value @param {string} label */
-function taxonomyRecordMap(value, label) {
+function taxonomyArtifact(value, label) {
   if (
     typeof value !== 'object' ||
     value === null ||
@@ -2096,11 +2265,84 @@ function taxonomyRecordMap(value, label) {
   ) {
     throw new Es2015ProvenanceCheckError(`${label} must contain classifications`);
   }
-  return new Map(
-    /** @type {any[]} */ (/** @type {Record<string, unknown>} */ (value).classifications).map(
-      (record) => [record.path, record],
-    ),
+  const artifact = /** @type {Record<string, any>} */ (value);
+  const classifications = /** @type {Record<string, any>[]} */ (
+    artifact.classifications
   );
+  const duplicate = firstDuplicate(
+    classifications.map((record) => String(record?.path ?? '')),
+  );
+  if (duplicate !== null) {
+    throw new Es2015ProvenanceCheckError(
+      `${label} contains duplicate classification key ${duplicate}`,
+    );
+  }
+  return {
+    artifact,
+    classifications,
+    byPath: new Map(classifications.map((record) => [record.path, record])),
+  };
+}
+
+/** @param {readonly Record<string, any>[]} classifications */
+function taxonomyStatusTables(classifications) {
+  return {
+    core: countTable(
+      classifications.filter((entry) => entry.partition === 'core'),
+      (entry) => entry.status,
+    ),
+    annexB: countTable(
+      classifications.filter((entry) => entry.partition === 'annex-b'),
+      (entry) => entry.status,
+    ),
+    blockers: countTable(
+      classifications.filter((entry) => entry.blocker !== null),
+      (entry) => entry.blocker,
+    ),
+  };
+}
+
+/** @param {readonly Record<string, any>[]} entries @param {(entry: Record<string, any>) => string} keyOf */
+function countTable(entries, keyOf) {
+  const totals = new Map();
+  for (const entry of entries) {
+    const key = keyOf(entry);
+    const total = totals.get(key) ?? { roots: 0, variants: 0 };
+    total.roots += 1;
+    total.variants += entry.variants;
+    totals.set(key, total);
+  }
+  return [...totals.keys()].sort().map((key) => ({
+    name: key,
+    ...totals.get(key),
+  }));
+}
+
+/** @param {Record<string, any>} artifact */
+function taxonomyStaticData(artifact) {
+  const staticData = { ...artifact };
+  delete staticData.inputs;
+  delete staticData.summary;
+  delete staticData.statusTables;
+  delete staticData.classifications;
+  return staticData;
+}
+
+/** @param {Record<string, any>} document */
+function auditDocumentData(document) {
+  const data = { ...document };
+  delete data.auditRecords;
+  return data;
+}
+
+/** @param {readonly string[]} values */
+function firstDuplicate(values) {
+  const seen = new Set();
+  for (const value of values) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
+  return null;
 }
 
 /** @param {any} entry */
@@ -2138,19 +2380,26 @@ function ownerMapFromDestinations(destinations) {
   );
 }
 
-/** @param {any} subset */
-function subsetDeltas(baseSubset, headSubset) {
+/** @param {any} baseSubset @param {any} headSubset */
+function subsetDeltaTuples(baseSubset, headSubset) {
   const baseGroups = new Map(baseSubset.groups.map((group) => [group.name, group]));
-  return headSubset.groups
-    .map((group) => {
-      const baseGroup = baseGroups.get(group.name) ?? { paths: [] };
-      return {
-        name: group.name,
-        added: group.paths.filter((path) => !baseGroup.paths.includes(path)),
-        removed: baseGroup.paths.filter((path) => !group.paths.includes(path)),
-      };
-    })
-    .filter((entry) => entry.added.length > 0 || entry.removed.length > 0);
+  const headGroups = new Map(headSubset.groups.map((group) => [group.name, group]));
+  const groupNames = [...new Set([...baseGroups.keys(), ...headGroups.keys()])].sort();
+  const added = [];
+  const removed = [];
+  for (const name of groupNames) {
+    const baseGroup = baseGroups.get(name) ?? { paths: [] };
+    const headGroup = headGroups.get(name) ?? { paths: [] };
+    const basePaths = new Set(baseGroup.paths);
+    const headPaths = new Set(headGroup.paths);
+    for (const path of [...headPaths].filter((path) => !basePaths.has(path)).sort()) {
+      added.push({ group: name, path });
+    }
+    for (const path of [...basePaths].filter((path) => !headPaths.has(path)).sort()) {
+      removed.push({ group: name, path });
+    }
+  }
+  return { added, removed };
 }
 
 /** @param {string} text @param {string} label */
@@ -2669,7 +2918,7 @@ function provenanceRangeMarker(profile, baseLedgerSha256) {
  * @param {string} base
  * @param {string} head
  */
-async function provenanceOwnedRange(deps, changes, base, head) {
+async function provenanceOwnedRange(deps, changes, base, _head) {
   const changedPaths = changes.flatMap((change) =>
     change.sourcePath === null
       ? [change.path]
@@ -2699,20 +2948,7 @@ async function provenanceOwnedRange(deps, changes, base, head) {
     return changedPaths.some((path) => pathMatchesOwned(path, ownedPaths, new Set()));
   }
   if (baseManifestText === null) {
-    const headManifestText = await deps.readGitFile(head, ES2015_PROVENANCE_FILE);
-    if (headManifestText === null) return false;
-    const headManifest = parseRangeManifest(
-      headManifestText,
-      'provenance ownership head',
-    );
-    if (headManifest.version === 3) return false;
-    for (const profile of headManifest.rangeProfiles) {
-      if (profile.name === ISSUE_77_MAINTENANCE_PROFILE) continue;
-      addRangeProfileOwnership(ownedPaths, profile);
-    }
-    return changedPaths.some((path) =>
-      pathMatchesOwned(path, ownedPaths, new Set()),
-    );
+    return false;
   }
   const manifest = parseRangeManifest(baseManifestText, 'provenance ownership base');
   if (manifest.version === 3) {

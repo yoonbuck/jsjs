@@ -1213,6 +1213,21 @@ function subsetTextWithExtraPath(text) {
   return `${JSON.stringify(subset, null, 2)}\n`;
 }
 
+/** @param {string} text */
+function subsetTextWithReplacementPath(text) {
+  const subset = JSON.parse(text);
+  const group = subset.groups.find((entry) => entry.name === 'language/expressions');
+  assertSame(group !== undefined, true);
+  const replacementSource =
+    'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js';
+  assertSame(group.paths.includes(replacementSource), true);
+  group.paths = group.paths
+    .filter((path) => path !== replacementSource)
+    .concat('test/language/expressions/class/intruder-replacement.js')
+    .sort();
+  return `${JSON.stringify(subset, null, 2)}\n`;
+}
+
 function canonicalEmptySchemaV3ManifestValue() {
   return {
     ...JSON.parse(approvedProvenanceManifestText()),
@@ -1362,10 +1377,46 @@ function auditEvidenceText(records) {
     version: 1,
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
-    auditRecords: records,
+    auditRecords: [...records].sort((left, right) => {
+      const leftKey = `${left.file}\u0000${left.variant ?? ''}`;
+      const rightKey = `${right.file}\u0000${right.variant ?? ''}`;
+      return leftKey.localeCompare(rightKey);
+    }),
     blockers: {},
     intentionalDeviations: [],
   });
+}
+
+/** @param {readonly object[]} classifications */
+function taxonomyStatusTables(classifications) {
+  const countTable = (entries, keyOf) => {
+    const totals = new Map();
+    for (const entry of entries) {
+      const key = keyOf(entry);
+      const total = totals.get(key) ?? { roots: 0, variants: 0 };
+      total.roots += 1;
+      total.variants += entry.variants;
+      totals.set(key, total);
+    }
+    return [...totals.keys()].sort().map((key) => ({
+      name: key,
+      ...totals.get(key),
+    }));
+  };
+  return {
+    core: countTable(
+      classifications.filter((entry) => entry.partition === 'core'),
+      (entry) => entry.status,
+    ),
+    annexB: countTable(
+      classifications.filter((entry) => entry.partition === 'annex-b'),
+      (entry) => entry.status,
+    ),
+    blockers: countTable(
+      classifications.filter((entry) => entry.blocker !== null),
+      (entry) => entry.blocker,
+    ),
+  };
 }
 
 /** @param {readonly object[]} classifications */
@@ -1391,13 +1442,52 @@ function taxonomyArtifactText(classifications, inputs) {
       auditEvidenceSha256: sha256(inputs.auditEvidenceText),
     },
     summary: summarizeEs2015Classification(classifications),
-    statusTables: {
-      core: [],
-      annexB: [],
-      blockers: [],
-    },
+    statusTables: taxonomyStatusTables(classifications),
     classifications,
   });
+}
+
+/** @param {string} text @param {string} path */
+function taxonomyTextWithoutPath(text, path) {
+  const taxonomy = JSON.parse(text);
+  taxonomy.classifications = taxonomy.classifications.filter(
+    (entry) => entry.path !== path,
+  );
+  taxonomy.summary = summarizeEs2015Classification(taxonomy.classifications);
+  taxonomy.statusTables = taxonomyStatusTables(taxonomy.classifications);
+  return `${JSON.stringify(taxonomy, null, 2)}\n`;
+}
+
+/** @param {string} text @param {string} path */
+function taxonomyTextWithDuplicatePath(text, path) {
+  const taxonomy = JSON.parse(text);
+  const record = taxonomy.classifications.find((entry) => entry.path === path);
+  assertSame(record !== undefined, true);
+  taxonomy.classifications = [
+    ...taxonomy.classifications,
+    structuredClone(record),
+  ].sort((left, right) => left.path.localeCompare(right.path));
+  return `${JSON.stringify(taxonomy, null, 2)}\n`;
+}
+
+/** @param {string} text @param {string} file @param {string | null} variant */
+function auditEvidenceTextWithoutRecord(text, file, variant) {
+  const evidence = JSON.parse(text);
+  evidence.auditRecords = evidence.auditRecords.filter(
+    (record) => !(record.file === file && record.variant === variant),
+  );
+  return `${JSON.stringify(evidence, null, 2)}\n`;
+}
+
+/** @param {string} text @param {Readonly<Record<string, unknown>>} record */
+function auditEvidenceTextWithAddedRecord(text, record) {
+  const evidence = JSON.parse(text);
+  evidence.auditRecords = [...evidence.auditRecords, record].sort((left, right) => {
+    const leftKey = `${left.file}\u0000${left.variant ?? ''}`;
+    const rightKey = `${right.file}\u0000${right.variant ?? ''}`;
+    return leftKey.localeCompare(rightKey);
+  });
+  return `${JSON.stringify(evidence, null, 2)}\n`;
 }
 
 /** @param {string} taxonomyText */
@@ -1588,6 +1678,11 @@ function syntheticRoadmapProjectionFixture() {
     createTestRecord({
       file: promotedPath,
       variant: 'strict',
+      status: 'passed',
+    }),
+    createTestRecord({
+      file: foreignPath,
+      variant: 'non-strict',
       status: 'passed',
     }),
   ]);
@@ -5465,9 +5560,7 @@ export default [
         'A provenance-owned PR range requires one authoritative provenance marker',
       );
 
-      for (const path of [
-        ...new Set([...FOUNDATION_ALLOWED_PATHS, ...DECISION_GENERATED_PATHS]),
-      ]) {
+      for (const path of provenance.PROVENANCE_RANGE_GATE_OWNER_PATHS) {
         const unmarked = rangeCheckDependencies({
           changes: [{ status: 'M', path }],
         });
@@ -5487,29 +5580,6 @@ export default [
         [
           { status: 'M', path: '.github/workflows/ci.yml' },
           { status: 'M', path: 'tools/ci/pipeline.js' },
-        ],
-        [{ status: 'M', path: 'tools/test262/es2015-audit.js' }],
-        [
-          {
-            status: 'R100',
-            sourcePath:
-              'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
-            path: 'docs/renamed-design.md',
-          },
-        ],
-        [
-          {
-            status: 'R100',
-            sourcePath: 'docs/unowned.md',
-            path: 'docs/testing.md',
-          },
-        ],
-        [
-          {
-            status: 'C100',
-            sourcePath: 'tools/test262/es2015-taxonomy.js',
-            path: 'docs/copied-taxonomy.js',
-          },
         ],
       ]) {
         const unmarked = rangeCheckDependencies({ changes });
@@ -5688,6 +5758,59 @@ export default [
             profile.name,
           );
         }
+      }
+    },
+  },
+  {
+    name: 'ES2015 provenance CI range mode does not derive markerless ownership from HEAD when BASE has no manifest',
+    run: async () => {
+      const ciArgs = [
+        '--check-range',
+        `--base=${RANGE_BASE_SHA}`,
+        `--head=${RANGE_HEAD_SHA}`,
+        '--pr-body-env=PROVENANCE_PR_BODY',
+      ];
+      for (const changes of [
+        [
+          {
+            status: 'M',
+            path: 'docs/superpowers/plans/2026-08-20-provenance-foundation-maintenance.md',
+          },
+        ],
+        [{ status: 'M', path: 'tools/test262/es2015-audit.js' }],
+        [
+          {
+            status: 'R100',
+            sourcePath:
+              'docs/superpowers/specs/2026-08-19-unknown-edition-provenance-design.md',
+            path: 'docs/renamed-design.md',
+          },
+        ],
+        [
+          {
+            status: 'R100',
+            sourcePath: 'docs/unowned.md',
+            path: 'docs/testing.md',
+          },
+        ],
+        [
+          {
+            status: 'C100',
+            sourcePath: 'tools/test262/es2015-taxonomy.js',
+            path: 'docs/copied-taxonomy.js',
+          },
+        ],
+      ]) {
+        const dependencies = rangeCheckDependencies({
+          changes,
+          headManifestText: approvedProvenanceManifestText(),
+        });
+        dependencies.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: 'No marker',
+        };
+        assertSame(await provenanceCheck(ciArgs, dependencies), 0, json(changes));
       }
     },
   },
@@ -6935,10 +7058,10 @@ export default [
               ...fixture.headFiles,
               [
                 'tools/test262/es2015-audit-evidence.json',
-                auditEvidenceText(
-                  JSON.parse(
-                    fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
-                  ).auditRecords.slice(0, 3),
+                auditEvidenceTextWithoutRecord(
+                  fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+                  'test/language/promotion.js',
+                  'strict',
                 ),
               ],
             ]),
@@ -6954,6 +7077,67 @@ export default [
             'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json is missing source record test/language/promotion.js (strict)',
         },
         {
+          authority: auditAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-audit-evidence.json',
+                auditEvidenceTextWithoutRecord(
+                  fixture.headFiles.get('tools/test262/es2015-audit-evidence.json'),
+                  'test/language/foreign.js',
+                  'non-strict',
+                ),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-audit-evidence.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json must preserve foreign audit record test/language/foreign.js (non-strict)',
+        },
+        {
+          authority: auditAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-audit-evidence.json',
+                auditEvidenceTextWithAddedRecord(
+                  fixture.headFiles.get('tools/test262/es2015-audit-evidence.json'),
+                  createTestRecord({
+                    file: 'test/language/intruder.js',
+                    variant: 'non-strict',
+                    status: 'passed',
+                  }),
+                ),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-audit-evidence.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json must preserve foreign audit record test/language/intruder.js (non-strict)',
+        },
+        {
           authority: p0SubsetAuthority,
           deps: rangeCheckDependencies({
             changes: [{ status: 'M', path: 'tools/test262/upstream-subset.json' }],
@@ -6966,6 +7150,32 @@ export default [
               [
                 'tools/test262/upstream-subset.json',
                 subsetTextWithExtraPath(PRODUCTION_UPSTREAM_SUBSET_TEXT),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/upstream-subset.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/upstream-subset.json must apply exactly the approved P0 subset delta',
+        },
+        {
+          authority: p0SubsetAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/upstream-subset.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: new Map([
+              ['tools/test262/upstream-subset.json', P0_BASE_UPSTREAM_SUBSET_TEXT],
+            ]),
+            headFiles: new Map([
+              [
+                'tools/test262/upstream-subset.json',
+                subsetTextWithReplacementPath(PRODUCTION_UPSTREAM_SUBSET_TEXT),
               ],
             ]),
           }),
@@ -7006,6 +7216,62 @@ export default [
           ],
           message:
             'roadmap-reclassification:H1 protected output tools/test262/es5-selection.json must retain the taxonomy classification for test/staging/sm/class/newTargetEval.js',
+        },
+        {
+          authority: fixtureTaxonomyAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-taxonomy.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-taxonomy.json',
+                taxonomyTextWithoutPath(
+                  fixture.headFiles.get('tools/test262/es2015-taxonomy.json'),
+                  'test/language/foreign.js',
+                ),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-taxonomy.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-taxonomy.json must preserve foreign classification test/language/foreign.js',
+        },
+        {
+          authority: fixtureTaxonomyAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-taxonomy.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-taxonomy.json',
+                taxonomyTextWithDuplicatePath(
+                  fixture.headFiles.get('tools/test262/es2015-taxonomy.json'),
+                  'test/language/promotion.js',
+                ),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-taxonomy.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-taxonomy.json contains duplicate classification key test/language/promotion.js',
         },
         {
           authority: fixtureReportAuthority,

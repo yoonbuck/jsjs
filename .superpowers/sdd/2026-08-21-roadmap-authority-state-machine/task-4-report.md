@@ -115,3 +115,54 @@ Results:
 ## Concerns
 
 None.
+
+## Fix Round 1
+
+### Reviewer Findings Addressed
+
+1. Markerless CI ownership no longer derives from HEAD when BASE has no
+   provenance manifest. Unmarked ownership now comes only from fixed
+   gate-owner paths plus canonical BASE state.
+2. Historical P0 subset validation now pins the exact approved 22
+   `group/path` additions instead of only per-group counts, so same-count
+   replacement paths fail.
+3. Taxonomy projection now rejects duplicate classification keys, preserves
+   the exact BASE/HEAD root key set outside the reviewed source ledger,
+   preserves non-projected taxonomy metadata, and revalidates status-table
+   balance.
+4. Audit-evidence projection now preserves audit document metadata plus the
+   full foreign record set exactly, while still requiring the exact reviewed
+   source variant/evidence set.
+
+### RED Evidence
+
+Focused RED command after adding the new fix-round regressions:
+
+```text
+TZ=UTC node test/run-node.js test/node/es2015-provenance.test.js
+```
+
+Observed failures before the checker changes landed:
+
+- `ES2015 provenance CI range mode does not derive markerless ownership from HEAD when BASE has no manifest`
+  failed with
+  `A provenance-owned PR range requires one authoritative provenance marker`.
+- The protected-output regression block remained red under the new subset,
+  taxonomy, and audit scenarios until the checker gained exact tuple-key
+  validation, duplicate-key rejection, and foreign-record preservation.
+
+### GREEN Verification
+
+Final focused verification for Fix Round 1:
+
+```text
+TZ=UTC node test/run-node.js test/node/es2015-provenance.test.js
+./node_modules/.bin/eslint test/node/es2015-provenance.test.js tools/test262/es2015-provenance.js tools/test262/es2015-provenance-check.js
+git --no-pager diff --check
+```
+
+Results:
+
+- focused provenance suite: PASS
+- scoped ESLint: PASS
+- `git diff --check`: PASS
