@@ -23,10 +23,13 @@
  *   default checkout of the base branch with the base repository's token, so no
  *   ordinary job — every one of which checks out, installs, and executes PR
  *   content — may run in it. Each ordinary job is excluded from that event and
- *   only the trusted provenance base guard runs in it. Because a skipped job
- *   reports success, the display names are event-keyed too: a job skipped in the
- *   wrong event reports a distinct `(inactive...)` name that no required check
- *   context can match.
+ *   the trusted provenance base guard keeps its active steps gated to it.
+ *   Because skipped jobs report success — and GitHub leaves an
+ *   expression-valued job name raw when a job-level `if` skips the job — the
+ *   display names are event-keyed too: a job skipped in the wrong event reports
+ *   a distinct `(inactive...)` name that no required check context can match,
+ *   and the guard job itself stays unconditional so that dynamic name is always
+ *   evaluated.
  *
  * The upstream Test262 pin is not duplicated here: `loadCiPipeline` reads it
  * from `package.json`, so the workflow checks out exactly the revision the local
@@ -264,6 +267,24 @@ export const GUARD_CHECKOUT_ATTEST_COMMAND =
   'test "$(git rev-parse --verify \'HEAD^{commit}\')" = "$BASE_SHA"';
 
 /**
+ * Fetches the live canonical target branch through the checked-out base
+ * repository's own `origin`, into a dedicated remote-tracking ref. The guard
+ * never checks out this ref; it remains inert data for attestation only.
+ */
+export const GUARD_FETCH_BASE_COMMAND =
+  `git fetch --no-tags --no-recurse-submodules origin +refs/heads/${GUARD_CANONICAL_BASE_REF}:refs/remotes/origin/provenance-target-main`;
+
+/**
+ * Requires the live target branch and the checked-out base checkout to both
+ * still equal the event BASE SHA. If main advanced after the event, or if the
+ * checkout drifted off the event base commit, the guard fails and must rerun.
+ */
+export const GUARD_ATTEST_BASE_COMMAND = [
+  'test "$(git rev-parse --verify \'refs/remotes/origin/provenance-target-main^{commit}\')" = "$BASE_SHA"',
+  'test "$(git rev-parse --verify \'HEAD^{commit}\')" = "$BASE_SHA"',
+].join(' && ');
+
+/**
  * The only fetch the guard performs, through the base checkout's own `origin`.
  * An unadvertised object-id fetch (`git fetch origin "$HEAD_SHA"`) is not
  * reliable for fork PRs, and adding the head repository as a remote would hand
@@ -289,6 +310,10 @@ export const GUARD_FETCH_ATTEST_COMMAND = [
  */
 export const GUARD_CHECKER_COMMAND =
   'node tools/test262/es2015-provenance-check.js --check-range --base="$BASE_SHA" --head="$HEAD_SHA" --pr-body-env=PR_BODY';
+
+const GUARD_INACTIVE_STEP_NAME = 'Keep the inactive guard context distinct';
+const GUARD_INACTIVE_COMMAND =
+  'test "$GITHUB_EVENT_NAME" != pull_request_target';
 
 /**
  * Every action the workflow uses, pinned to an immutable commit SHA. The
@@ -441,17 +466,19 @@ function job(id, name, ownSteps, needs = []) {
 }
 
 /**
- * The trusted provenance base guard: the only job that runs in the privileged
- * event, and the only place the provenance range is checked by code the PR
- * cannot edit.
+ * The trusted provenance base guard: the only place the provenance range is
+ * checked by code the PR cannot edit.
  *
  * `pull_request_target` runs the base branch's workflow bytes, so this job's
  * checker, its imports, and its command line all come from the base checkout.
- * The PR head is fetched only as inert Git objects through the base checkout's
- * own `origin`, and is never checked out, extracted, installed, or executed.
- * Every server value reaches a step as a quoted environment variable, never as
- * an action input or a command-line fragment, and the untrusted PR body reaches
- * only the checker.
+ * The job stays unconditional so GitHub always evaluates its event-keyed name;
+ * the active steps are gated individually to `pull_request_target`, and the
+ * inactive path is one constant no-op step on other events. The live target
+ * branch and the PR head are fetched only as inert Git objects through the base
+ * checkout's own `origin`, and are never checked out, extracted, installed, or
+ * executed. Every server value reaches a step as a quoted environment variable,
+ * never as an action input or a command-line fragment, and the untrusted PR
+ * body reaches only the checker.
  *
  * @returns {WorkflowJob}
  */
@@ -463,42 +490,69 @@ function createProvenanceBaseGuardJob() {
       GUARD_ACTIVE_NAME,
       `${GUARD_ACTIVE_NAME} (inactive)`,
     ),
-    if: GUARD_EVENT_CONDITION,
     runsOn: GUARD_RUNNER,
     timeoutMinutes: GUARD_TIMEOUT_MINUTES,
     permissions: GUARD_PERMISSIONS,
     concurrency: GUARD_CONCURRENCY,
     needs: Object.freeze([]),
     steps: Object.freeze([
-      runStep('Validate the canonical guard target', GUARD_VALIDATE_COMMAND, {
-        BASE_REPOSITORY: GUARD_BASE_REPOSITORY_VALUE,
-        WORKFLOW_REPOSITORY: GUARD_WORKFLOW_REPOSITORY_VALUE,
-        BASE_REF: GUARD_BASE_REF_VALUE,
-        BASE_SHA: GUARD_BASE_SHA_VALUE,
-        HEAD_SHA: GUARD_HEAD_SHA_VALUE,
-        PR_NUMBER: GUARD_PR_NUMBER_VALUE,
-      }),
+      runStep(
+        'Validate the canonical guard target',
+        GUARD_VALIDATE_COMMAND,
+        {
+          BASE_REPOSITORY: GUARD_BASE_REPOSITORY_VALUE,
+          WORKFLOW_REPOSITORY: GUARD_WORKFLOW_REPOSITORY_VALUE,
+          BASE_REF: GUARD_BASE_REF_VALUE,
+          BASE_SHA: GUARD_BASE_SHA_VALUE,
+          HEAD_SHA: GUARD_HEAD_SHA_VALUE,
+          PR_NUMBER: GUARD_PR_NUMBER_VALUE,
+        },
+        GUARD_EVENT_CONDITION,
+      ),
       usesStep('Check out the event base commit', 'actions/checkout', {
         ref: GUARD_BASE_SHA_VALUE,
         'fetch-depth': '0',
         'persist-credentials': 'false',
         submodules: 'false',
-      }),
+      }, GUARD_EVENT_CONDITION),
       runStep(
         'Attest the checked-out base commit',
         GUARD_CHECKOUT_ATTEST_COMMAND,
         { BASE_SHA: GUARD_BASE_SHA_VALUE },
+        GUARD_EVENT_CONDITION,
       ),
-      usesStep('Set up Node', 'actions/setup-node', {
-        'node-version': NODE_VERSION,
-      }),
-      runStep('Fetch the advertised pull request ref', GUARD_FETCH_COMMAND, {
-        PR_NUMBER: GUARD_PR_NUMBER_VALUE,
-      }),
+      usesStep(
+        'Set up Node',
+        'actions/setup-node',
+        {
+          'node-version': NODE_VERSION,
+        },
+        GUARD_EVENT_CONDITION,
+      ),
+      runStep(
+        'Fetch the current target branch',
+        GUARD_FETCH_BASE_COMMAND,
+        undefined,
+        GUARD_EVENT_CONDITION,
+      ),
+      runStep(
+        'Attest the live target branch',
+        GUARD_ATTEST_BASE_COMMAND,
+        { BASE_SHA: GUARD_BASE_SHA_VALUE },
+        GUARD_EVENT_CONDITION,
+      ),
+      runStep(
+        'Fetch the advertised pull request ref',
+        GUARD_FETCH_COMMAND,
+        {
+          PR_NUMBER: GUARD_PR_NUMBER_VALUE,
+        },
+        GUARD_EVENT_CONDITION,
+      ),
       runStep('Attest the fetched head commit', GUARD_FETCH_ATTEST_COMMAND, {
         PR_NUMBER: GUARD_PR_NUMBER_VALUE,
         HEAD_SHA: GUARD_HEAD_SHA_VALUE,
-      }),
+      }, GUARD_EVENT_CONDITION),
       runStep(
         'Check the trusted-base provenance range',
         GUARD_CHECKER_COMMAND,
@@ -508,6 +562,13 @@ function createProvenanceBaseGuardJob() {
           PR_BODY: GUARD_PR_BODY_VALUE,
           TZ: 'UTC',
         },
+        GUARD_EVENT_CONDITION,
+      ),
+      runStep(
+        GUARD_INACTIVE_STEP_NAME,
+        GUARD_INACTIVE_COMMAND,
+        undefined,
+        ORDINARY_EVENT_CONDITION,
       ),
     ]),
   });
@@ -532,7 +593,7 @@ export function toGithubSlug(repository) {
 
 /**
  * The twelve ordinary checks CI runs as distinct jobs, plus the trusted
- * provenance base guard that runs only in the privileged event.
+ * provenance base guard whose active steps run only in the privileged event.
  *
  * `ci-drift` runs `ci:check`, which is what makes this module the source of
  * truth rather than a convention: a hand-edited workflow fails CI. `vendor`
