@@ -4053,6 +4053,116 @@ export default [
     },
   },
   {
+    name: 'ES2015 provenance CI range mode accepts pull_request_target alongside pull_request and rejects every other event',
+    run: async () => {
+      const foundationChanges = [
+        ...FOUNDATION_ALLOWED_PATHS.map((path) => ({ status: 'A', path })),
+        ...FOUNDATION_DELETIONS.map((path) => ({ status: 'D', path })),
+      ];
+      const ciArgs = [
+        '--check-range',
+        `--base=${RANGE_BASE_SHA}`,
+        `--head=${RANGE_HEAD_SHA}`,
+        '--pr-body-env=PROVENANCE_PR_BODY',
+      ];
+      const markedBody = `U0\n\n${rangeMarker('foundation')}\n`;
+
+      for (const eventName of ['pull_request', 'pull_request_target']) {
+        const accepted = rangeCheckDependencies({ changes: foundationChanges });
+        accepted.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: eventName,
+          PROVENANCE_PR_BODY: markedBody,
+        };
+        assertSame(await provenanceCheck(ciArgs, accepted), 0, eventName);
+      }
+
+      for (const eventName of [
+        'push',
+        '',
+        'issue_comment',
+        'pull_request_review',
+      ]) {
+        const rejectedRange = rangeCheckDependencies({
+          changes: foundationChanges,
+        });
+        rejectedRange.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: eventName,
+          PROVENANCE_PR_BODY: markedBody,
+        };
+        assertSame(
+          (await rejected(() => provenanceCheck(ciArgs, rejectedRange)))
+            .message,
+          'Provenance PR range checking requires a pull_request event',
+          JSON.stringify(eventName),
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 provenance CI range mode owns the test262 selection dependency against unmarked ranges',
+    run: async () => {
+      const selectionChange = [
+        { status: 'M', path: 'tools/test262/selection.js' },
+      ];
+      for (const { baseSha, baseManifestText } of [
+        {
+          baseSha: FOUNDATION_BOOTSTRAP_COMMIT,
+          baseManifestText: foundationBootstrapManifestText(),
+        },
+        {
+          baseSha: RANGE_BASE_SHA,
+          baseManifestText: approvedProvenanceManifestText(),
+        },
+      ]) {
+        const unmarkedSelection = rangeCheckDependencies({
+          changes: selectionChange,
+          baseSha,
+          baseManifestText,
+        });
+        unmarkedSelection.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: 'No marker',
+        };
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                [
+                  '--check-range',
+                  `--base=${baseSha}`,
+                  `--head=${RANGE_HEAD_SHA}`,
+                  '--pr-body-env=PROVENANCE_PR_BODY',
+                ],
+                unmarkedSelection,
+              ),
+            )
+          ).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+          baseSha,
+        );
+      }
+
+      const manifest = productionManifest();
+      for (const profile of manifest.rangeProfiles) {
+        for (const pathList of [
+          profile.requiredPaths,
+          profile.allowedPaths,
+          profile.requiredDeletions,
+          profile.allowedDeletions,
+        ]) {
+          assertSame(
+            pathList.includes('tools/test262/selection.js'),
+            false,
+            profile.name,
+          );
+        }
+      }
+    },
+  },
+  {
     name: 'ES2015 provenance CLI permits pending review only for an exact complete check',
     run: async () => {
       for (const args of [

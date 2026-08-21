@@ -25,6 +25,7 @@ const PROVENANCE_RANGE_GATE_OWNER_PATHS = Object.freeze([
   'tools/ci/pipeline.js',
   'tools/test262/es2015-provenance-check.js',
   'tools/test262/es2015-provenance.js',
+  'tools/test262/selection.js',
   ES2015_PROVENANCE_FILE,
 ]);
 const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
@@ -765,7 +766,11 @@ async function markerForRange(deps, options, changes, base, head) {
       '--pr-body-env must name a trusted environment variable',
     );
   }
-  if (deps.environment.GITHUB_EVENT_NAME !== 'pull_request') {
+  const eventName = deps.environment.GITHUB_EVENT_NAME;
+  if (
+    typeof eventName !== 'string' ||
+    !['pull_request', 'pull_request_target'].includes(eventName)
+  ) {
     throw new Es2015ProvenanceCheckError(
       'Provenance PR range checking requires a pull_request event',
     );

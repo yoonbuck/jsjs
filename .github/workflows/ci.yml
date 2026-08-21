@@ -7,6 +7,8 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, edited]
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
 
 # Least privilege: no job in this workflow writes to the repository.
 permissions:
@@ -14,7 +16,8 @@ permissions:
 
 jobs:
   ci-drift:
-    name: Workflow drift
+    name: ${{ github.event_name != 'pull_request_target' && 'Workflow drift' || 'Workflow drift (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the project
@@ -32,7 +35,8 @@ jobs:
         run: npm run ci:check
 
   vendor:
-    name: Vendor integrity
+    name: ${{ github.event_name != 'pull_request_target' && 'Vendor integrity' || 'Vendor integrity (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the project
@@ -50,7 +54,8 @@ jobs:
         run: npm run vendor:check
 
   format:
-    name: Formatting
+    name: ${{ github.event_name != 'pull_request_target' && 'Formatting' || 'Formatting (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the project
@@ -68,7 +73,8 @@ jobs:
         run: npm run format
 
   lint:
-    name: Lint
+    name: ${{ github.event_name != 'pull_request_target' && 'Lint' || 'Lint (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the project
@@ -86,7 +92,8 @@ jobs:
         run: npm run lint
 
   typecheck:
-    name: Type check
+    name: ${{ github.event_name != 'pull_request_target' && 'Type check' || 'Type check (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the project
@@ -104,7 +111,8 @@ jobs:
         run: npm run typecheck
 
   test-node:
-    name: Node tests
+    name: ${{ github.event_name != 'pull_request_target' && 'Node tests' || 'Node tests (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -123,7 +131,8 @@ jobs:
         run: npm run test:node
 
   test-browser:
-    name: Browser tests
+    name: ${{ github.event_name != 'pull_request_target' && 'Browser tests' || 'Browser tests (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -144,7 +153,8 @@ jobs:
         run: npm run test:browser
 
   test-jsc:
-    name: JavaScriptCore tests
+    name: ${{ github.event_name != 'pull_request_target' && 'JavaScriptCore tests' || 'JavaScriptCore tests (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -167,7 +177,8 @@ jobs:
         run: npm run test:jsc
 
   test262-fixtures:
-    name: Test262 fixtures
+    name: ${{ github.event_name != 'pull_request_target' && 'Test262 fixtures' || 'Test262 fixtures (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -186,7 +197,8 @@ jobs:
         run: npm run test262:fixtures
 
   test262-es2015-release:
-    name: Pinned Test262 ES2015 focused suites
+    name: ${{ github.event_name != 'pull_request_target' && 'Pinned Test262 ES2015 focused suites' || 'Pinned Test262 ES2015 focused suites (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -214,7 +226,8 @@ jobs:
           TZ: 'UTC'
 
   benchmark-smoke:
-    name: Benchmark smoke
+    name: ${{ github.event_name != 'pull_request_target' && 'Benchmark smoke' || 'Benchmark smoke (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -233,7 +246,8 @@ jobs:
         run: npm run benchmark:smoke
 
   test262-upstream:
-    name: Pinned Test262 subset
+    name: ${{ github.event_name != 'pull_request_target' && 'Pinned Test262 subset' || 'Pinned Test262 subset (inactive on pull_request_target)' }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     needs: [vendor]
     steps:
@@ -292,3 +306,56 @@ jobs:
           name: 'test262-upstream-report'
           path: 'docs/test262-report.jsonl'
           if-no-files-found: 'error'
+
+  provenance-base-guard:
+    name: ${{ github.event_name == 'pull_request_target' && 'Provenance base guard' || 'Provenance base guard (inactive)' }}
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    concurrency:
+      group: provenance-base-guard-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Validate the canonical guard target
+        run: printf '%s' "$BASE_REPOSITORY" | grep -Eq '^yoonbuck/jsjs$' && printf '%s' "$WORKFLOW_REPOSITORY" | grep -Eq '^yoonbuck/jsjs$' && printf '%s' "$BASE_REF" | grep -Eq '^main$' && printf '%s' "$BASE_SHA" | grep -Eq '^[0-9a-f]{40}$' && printf '%s' "$HEAD_SHA" | grep -Eq '^[0-9a-f]{40}$' && printf '%s' "$PR_NUMBER" | grep -Eq '^[1-9][0-9]*$'
+        env:
+          BASE_REPOSITORY: '${{ github.event.pull_request.base.repo.full_name }}'
+          WORKFLOW_REPOSITORY: '${{ github.repository }}'
+          BASE_REF: '${{ github.event.pull_request.base.ref }}'
+          BASE_SHA: '${{ github.event.pull_request.base.sha }}'
+          HEAD_SHA: '${{ github.event.pull_request.head.sha }}'
+          PR_NUMBER: '${{ github.event.pull_request.number }}'
+      - name: Check out the event base commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: '${{ github.event.pull_request.base.sha }}'
+          fetch-depth: '0'
+          persist-credentials: 'false'
+          submodules: 'false'
+      - name: Attest the checked-out base commit
+        run: test "$(git rev-parse --verify 'HEAD^{commit}')" = "$BASE_SHA"
+        env:
+          BASE_SHA: '${{ github.event.pull_request.base.sha }}'
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '20'
+      - name: Fetch the advertised pull request ref
+        run: git fetch --no-tags --no-recurse-submodules origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"
+        env:
+          PR_NUMBER: '${{ github.event.pull_request.number }}'
+      - name: Attest the fetched head commit
+        run: test "$(git rev-parse --verify "refs/remotes/pull/${PR_NUMBER}/head^{commit}")" = "$HEAD_SHA" && test "$(git rev-parse --verify 'FETCH_HEAD^{commit}')" = "$HEAD_SHA"
+        env:
+          PR_NUMBER: '${{ github.event.pull_request.number }}'
+          HEAD_SHA: '${{ github.event.pull_request.head.sha }}'
+      - name: Check the trusted-base provenance range
+        run: node tools/test262/es2015-provenance-check.js --check-range --base="$BASE_SHA" --head="$HEAD_SHA" --pr-body-env=PR_BODY
+        env:
+          BASE_SHA: '${{ github.event.pull_request.base.sha }}'
+          HEAD_SHA: '${{ github.event.pull_request.head.sha }}'
+          PR_BODY: '${{ github.event.pull_request.body }}'
+          TZ: 'UTC'

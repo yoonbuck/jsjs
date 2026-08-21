@@ -573,7 +573,7 @@ Adapters are thin — they supply file access, CLI parsing, and printing:
 `npm run ci:generate` rewrites the committed file; `npm run ci:check` fails
 (without writing) if the two have drifted.
 
-Every push and pull request against `main` runs twelve jobs:
+Every push and pull request against `main` runs twelve ordinary jobs:
 
 | Job                      | What it runs                                                                                           | Depends on |
 | ------------------------ | ------------------------------------------------------------------------------------------------------ | ---------- |
@@ -590,8 +590,8 @@ Every push and pull request against `main` runs twelve jobs:
 | `benchmark-smoke`        | `npm run benchmark:smoke` (correctness-only smoke run)                                                 | `vendor`   |
 | `test262-upstream`       | `NODE_OPTIONS=--max-old-space-size=4096 TZ=UTC npm run test262:upstream`                               | `vendor`   |
 
-Each job runs on `ubuntu-latest` with Node 20 (via `actions/setup-node` with the
-built-in npm cache) and `npm ci`.
+Each of these twelve ordinary jobs runs on `ubuntu-latest` with Node 20 (via
+`actions/setup-node` with the built-in npm cache) and `npm ci`.
 Only the broad `test262-upstream` execution step receives the 4096 MiB Node heap
 allowance; focused Test262 jobs remain unchanged.
 Inside `test262-upstream`, the generated workflow runs
@@ -604,14 +604,56 @@ check and only then runs the broad subset.
 thresholds, baselines, or regression decisions; those semantics are intentionally
 out of CI scope. See [`docs/benchmarking.md`](benchmarking.md).
 
+Each of the twelve ordinary jobs above is inactive-but-reporting on the
+`pull_request_target` event described next: its `if:` condition is
+`github.event_name != 'pull_request_target'`, and its display name switches to
+a distinct `<Job name> (inactive on pull_request_target)` string so a skipped
+run can never satisfy a required-check name that a real run also uses.
+
+### The trusted provenance base guard (13th job)
+
+A thirteenth job, `provenance-base-guard`, runs only on the
+`pull_request_target` event (`opened`, `synchronize`, `reopened`, `edited`;
+no path/branch filters) and is skipped on `push` and `pull_request`. Its
+required check-run name is exactly `Provenance base guard`; when inactive it
+reports the distinct name `Provenance base guard (inactive)`.
+
+Unlike the twelve ordinary jobs, this job does not run `npm ci` or install any
+dependency, does not use the npm cache, and never checks out the pull
+request's head. It differs from the ordinary jobs in every one of these ways:
+
+- it runs on `ubuntu-24.04`, not `ubuntu-latest`;
+- it has a 5-minute timeout and a `provenance-base-guard-<PR number>`
+  concurrency group with `cancel-in-progress: true`;
+- its permissions are exactly `contents: read` and `pull-requests: read`
+  (still no write access);
+- because `pull_request_target` loads the workflow and default checkout from
+  the base repository's default branch, the job explicitly checks out
+  `github.event.pull_request.base.sha`, asserts the checked-out `HEAD` equals
+  that SHA, sets up Node 20 with no cache and no install, fetches only the
+  base repository's advertised `refs/pull/<number>/head` as inert objects
+  (never the head repository, never a raw head-SHA fetch), asserts both the
+  fetched ref and `FETCH_HEAD` equal `github.event.pull_request.head.sha`, and
+  only then runs the checked-out base's
+  `tools/test262/es2015-provenance-check.js` with the event base/head SHAs and
+  the full PR body passed through `PR_BODY`, under fixed `TZ=UTC`.
+
+The ordinary, PR-only `test262-upstream` provenance-range step is unaffected by
+this job: it is retained verbatim as defense-in-depth, and this guard does not
+replace it.
+
 ### Security properties
 
-Two properties are asserted by `test/node/workflow-contract.test.js`:
+Three properties are asserted by `test/node/workflow-contract.test.js`:
 
-- The workflow grants `permissions: contents: read` at the top level and no job
-  widens it.
+- The workflow grants `permissions: contents: read` at the top level and no
+  ordinary job widens it; the guard job's explicit, read-only
+  `contents: read`/`pull-requests: read` permissions are asserted separately.
 - Every `uses:` names a full 40-character commit SHA; release versions follow in
-  trailing comments. Both checkout steps pass `persist-credentials: false`.
+  trailing comments. Every checkout step passes `persist-credentials: false`.
+- The guard job never checks out, fetches raw, or executes the pull request
+  head; fetched head objects stay inert, and no event-derived value is used as
+  a remote URL or interpolated into a `run:` command.
 
 ### JSC in CI
 
