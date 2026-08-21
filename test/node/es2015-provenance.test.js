@@ -27,10 +27,27 @@ import {
   Es2015ProvenanceCheckError,
   main as provenanceCheck,
   parseRoadmapAuthorityMarker,
+  validateRoadmapProtectedOutputs,
   validateRoadmapAuthorityConsumption,
   validateRoadmapAuthorityMigration,
   validateRoadmapAuthorityPreparation,
 } from '../../tools/test262/es2015-provenance-check.js';
+import {
+  formatCoverageLines,
+  renderCoverageSummary,
+  replaceGeneratedBlock,
+  summarizeTest262Coverage,
+} from '../../tools/test262/coverage.js';
+import {
+  featureNames,
+  parseFeatureManifest,
+} from '../../tools/test262/features.js';
+import {
+  createSummaryRecord,
+  createTestRecord,
+  formatRecordLine,
+  formatReportLines,
+} from '../../tools/test262/report.js';
 import {
   Es2015TaxonomyError,
   buildEs2015Inventory,
@@ -40,6 +57,17 @@ import {
   renderEs2015Taxonomy,
   summarizeEs2015Classification,
 } from '../../tools/test262/es2015-taxonomy.js';
+import {
+  mergePromotionSubset,
+  parseEs2015Promotion,
+} from '../../tools/test262/es2015-promotion.js';
+import { serializeUpstreamSubset } from '../../tools/test262/es5-selection.js';
+import {
+  formatUpstreamSummaryLines,
+  parseUpstreamSubset,
+  summarizeUpstreamRun,
+  upstreamSubsetPaths,
+} from '../../tools/test262/upstream.js';
 
 /**
  * @typedef {ReturnType<typeof buildProvenanceFoundation>} ProvenanceManifest
@@ -270,10 +298,37 @@ const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
   new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
   'utf8',
 );
-const PRESERVED_H0_SOURCE_TAXONOMY_TEXT = execFileSync(
-  'git',
-  ['-c', 'core.pager=cat', 'show', `${TAXONOMY_BASELINE}:${TAXONOMY_PATH}`],
-  { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+function readGitFixtureText(revision, path) {
+  return execFileSync(
+    'git',
+    ['-c', 'core.pager=cat', 'show', `${revision}:${path}`],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  );
+}
+
+const PRESERVED_H0_SOURCE_TAXONOMY_TEXT = readGitFixtureText(
+  TAXONOMY_BASELINE,
+  TAXONOMY_PATH,
+);
+const P0_BASE_TAXONOMY_TEXT = readGitFixtureText(
+  ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+  'tools/test262/es2015-taxonomy.json',
+);
+const P0_BASE_UPSTREAM_SUBSET_TEXT = readGitFixtureText(
+  ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+  'tools/test262/upstream-subset.json',
+);
+const P0_BASE_ES5_SELECTION_TEXT = readGitFixtureText(
+  ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+  'tools/test262/es5-selection.json',
+);
+const PRODUCTION_UPSTREAM_SUBSET_TEXT = readFileSyncText(
+  new URL('../../tools/test262/upstream-subset.json', import.meta.url),
+  'utf8',
+);
+const PRODUCTION_ES5_SELECTION_TEXT = readFileSyncText(
+  new URL('../../tools/test262/es5-selection.json', import.meta.url),
+  'utf8',
 );
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
@@ -1137,6 +1192,27 @@ function driftedCrossRealmTaxonomyText(text) {
   return `${JSON.stringify(taxonomy, null, 2)}\n`;
 }
 
+/** @param {string} text */
+function driftedNewTargetTaxonomyText(text) {
+  const taxonomy = JSON.parse(text);
+  const record = taxonomy.classifications.find(
+    (entry) => entry.path === 'test/staging/sm/class/newTargetEval.js',
+  );
+  assertSame(record !== undefined, true);
+  record.status = 'blocked:test262-cross-realm-host';
+  record.blocker = 'test262-cross-realm-host';
+  return `${JSON.stringify(taxonomy, null, 2)}\n`;
+}
+
+/** @param {string} text */
+function subsetTextWithExtraPath(text) {
+  const subset = JSON.parse(text);
+  const group = subset.groups.find((entry) => entry.name === 'language/statements');
+  assertSame(group !== undefined, true);
+  group.paths = [...group.paths, 'test/language/statements/class/zzz-extra.js'].sort();
+  return `${JSON.stringify(subset, null, 2)}\n`;
+}
+
 function canonicalEmptySchemaV3ManifestValue() {
   return {
     ...JSON.parse(approvedProvenanceManifestText()),
@@ -1278,6 +1354,588 @@ function roadmapProjectionEntries(outputs) {
         ? output.projectionSha256
         : output.headSha256,
   }));
+}
+
+/** @param {readonly object[]} records */
+function auditEvidenceText(records) {
+  return prettyJson({
+    version: 1,
+    repository: TEST262_REPOSITORY,
+    revision: TEST262_REVISION,
+    auditRecords: records,
+    blockers: {},
+    intentionalDeviations: [],
+  });
+}
+
+/** @param {readonly object[]} classifications */
+function taxonomyArtifactText(classifications, inputs) {
+  return prettyJson({
+    version: 3,
+    pin: {
+      repository: TEST262_REPOSITORY,
+      revision: TEST262_REVISION,
+    },
+    policy: {
+      version: 1,
+      source: SPECIFICATION_SOURCE,
+      sourceSha256: SPECIFICATION_SHA256,
+      anchors: 1,
+    },
+    inputs: {
+      policySha256: '1'.repeat(64),
+      anchorsSha256: '2'.repeat(64),
+      subsetSha256: sha256(inputs.subsetText),
+      featuresSha256: sha256(inputs.featuresText),
+      selectedEvidenceSha256: sha256(inputs.reportText),
+      auditEvidenceSha256: sha256(inputs.auditEvidenceText),
+    },
+    summary: summarizeEs2015Classification(classifications),
+    statusTables: {
+      core: [],
+      annexB: [],
+      blockers: [],
+    },
+    classifications,
+  });
+}
+
+/** @param {string} taxonomyText */
+function coverageInventoryFromTaxonomyText(taxonomyText) {
+  const taxonomy = JSON.parse(taxonomyText);
+  return {
+    files: Object.freeze(
+      taxonomy.classifications.map((record) => record.path),
+    ),
+    malformed: Object.freeze([]),
+    variants: new Map(
+      taxonomy.classifications.map((record) => [record.path, record.variants]),
+    ),
+    totals: {
+      files: taxonomy.summary.roots,
+      records: taxonomy.summary.variants,
+      malformed: 0,
+    },
+  };
+}
+
+/**
+ * @param {{
+ *   subsetText: string,
+ *   taxonomyText: string,
+ *   featuresText: string,
+ *   records: readonly import('../../tools/test262/report.js').Test262TestRecord[],
+ * }} options
+ */
+function canonicalReportText(options) {
+  const subset = parseUpstreamSubset(options.subsetText);
+  const coverage = summarizeTest262Coverage({
+    inventory: coverageInventoryFromTaxonomyText(options.taxonomyText),
+    records: options.records,
+    selected: upstreamSubsetPaths(subset),
+  });
+  const features = parseFeatureManifest(options.featuresText);
+  const summary = createSummaryRecord(options.records);
+  return `${[
+    ...formatReportLines(options.records),
+    ...formatUpstreamSummaryLines(
+      summarizeUpstreamRun({
+        subset,
+        records: options.records,
+        supportedFeatures: featureNames(features),
+      }),
+    ),
+    ...formatCoverageLines(coverage),
+    formatRecordLine(summary),
+  ].join('\n')}\n`;
+}
+
+/**
+ * @param {{
+ *   baseDocument: string,
+ *   subsetText: string,
+ *   taxonomyText: string,
+ *   reportText: string,
+ * }} options
+ */
+function canonicalConformanceText(options) {
+  const reportRecords = options.reportText
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+    .filter((record) => record.type === 'test')
+    .map((record) =>
+      createTestRecord({
+        file: record.file,
+        variant: record.variant,
+        status: record.status,
+        ...(record.features === undefined
+          ? {}
+          : { features: record.features }),
+      }),
+    );
+  const subset = parseUpstreamSubset(options.subsetText);
+  const coverage = summarizeTest262Coverage({
+    inventory: coverageInventoryFromTaxonomyText(options.taxonomyText),
+    records: reportRecords,
+    selected: upstreamSubsetPaths(subset),
+  });
+  return replaceGeneratedBlock(
+    options.baseDocument,
+    renderCoverageSummary({
+      coverage,
+      reportPath: 'docs/test262-report.jsonl',
+      reportLinkPath: 'test262-report.jsonl',
+    }),
+  );
+}
+
+/** @param {string} path @param {number} variants @param {string} status @param {string | null} blocker */
+function taxonomyRecord(path, variants, status, blocker = null) {
+  return Object.freeze({
+    path,
+    variants,
+    partition: 'core',
+    status,
+    blocker,
+    features: Object.freeze([]),
+    flags: Object.freeze([]),
+    includes: Object.freeze([]),
+    provenance: Object.freeze([]),
+  });
+}
+
+/** @param {string} code */
+function roadmapEvidencePrefix(code) {
+  return `tools/test262/es2015-${code.toLowerCase()}-`;
+}
+
+/** @param {string} path @param {string} sourcePathSha256 @param {string} promotionText @param {string} ownerDeltasText */
+function roadmapDerivedProjectionSha256(
+  path,
+  sourcePathSha256,
+  promotionText,
+  ownerDeltasText,
+) {
+  return sha256(
+    `${path}\u0000${sourcePathSha256}\u0000${sha256(promotionText)}\u0000${sha256(
+      ownerDeltasText,
+    )}\u0000`,
+  );
+}
+
+function syntheticCoverageDocument() {
+  return [
+    '# Synthetic conformance',
+    '',
+    '<!-- test262-coverage:begin -->',
+    '',
+    'stale coverage block',
+    '',
+    '<!-- test262-coverage:end -->',
+    '',
+    'Manual prose outside the generated block.',
+    '',
+  ].join('\n');
+}
+
+function syntheticRoadmapProjectionFixture() {
+  const code = 'H1';
+  const issue = 120;
+  const prefix = roadmapEvidencePrefix(code);
+  const promotedPath = 'test/language/promotion.js';
+  const auditPassingPath = 'test/language/audit.js';
+  const blockedPath = 'test/language/blocked.js';
+  const foreignPath = 'test/language/foreign.js';
+  const sourcePaths = Object.freeze([
+    auditPassingPath,
+    blockedPath,
+    promotedPath,
+  ]);
+  const baseClassifications = Object.freeze([
+    taxonomyRecord(auditPassingPath, 1, 'blocked:source-blocker', 'source-blocker'),
+    taxonomyRecord(blockedPath, 1, 'blocked:source-blocker', 'source-blocker'),
+    taxonomyRecord(foreignPath, 1, 'selected-passing'),
+    taxonomyRecord(promotedPath, 2, 'blocked:source-blocker', 'source-blocker'),
+  ]);
+  const headClassifications = Object.freeze([
+    taxonomyRecord(auditPassingPath, 1, 'audit-passing-unselected'),
+    taxonomyRecord(
+      blockedPath,
+      1,
+      'blocked:remaining-language-runtime-semantics',
+      'remaining-language-runtime-semantics',
+    ),
+    taxonomyRecord(foreignPath, 1, 'selected-passing'),
+    taxonomyRecord(promotedPath, 2, 'selected-passing'),
+  ]);
+  const baseAuditRecords = Object.freeze([
+    createTestRecord({
+      file: auditPassingPath,
+      variant: 'non-strict',
+      status: 'passed',
+    }),
+    createTestRecord({
+      file: blockedPath,
+      variant: 'non-strict',
+      status: 'failed',
+    }),
+    createTestRecord({
+      file: promotedPath,
+      variant: 'non-strict',
+      status: 'passed',
+    }),
+    createTestRecord({
+      file: promotedPath,
+      variant: 'strict',
+      status: 'passed',
+    }),
+  ]);
+  const unchangedAuditEvidenceText = auditEvidenceText(baseAuditRecords);
+  const featuresText = prettyJson({ version: 1, features: [] });
+  const baseSubsetText = prettyJson({
+    version: 1,
+    repository: TEST262_REPOSITORY,
+    revision: TEST262_REVISION,
+    groups: [
+      {
+        name: 'fixture',
+        summary: 'Synthetic selected roots.',
+        paths: [foreignPath],
+      },
+    ],
+  });
+  const sourcePathSha256 = sha256(`${sourcePaths.join('\n')}\n`);
+  const promotionText = prettyJson({
+    version: 1,
+    repository: TEST262_REPOSITORY,
+    revision: TEST262_REVISION,
+    sourceTaxonomySha256: '0'.repeat(64),
+    ledgerSha256: sha256(`${promotedPath}\n`),
+    rootCount: 1,
+    variantCount: 2,
+    entries: [
+      {
+        path: promotedPath,
+        variants: 2,
+        features: [],
+        includeFeatures: [],
+      },
+    ],
+  });
+  const headSubsetText = serializeUpstreamSubset(
+    mergePromotionSubset(
+      parseUpstreamSubset(baseSubsetText),
+      parseEs2015Promotion(
+        promotionText.replace('0'.repeat(64), sha256('placeholder\n')),
+      ),
+    ),
+  );
+  const baseReportRecords = Object.freeze([
+    createTestRecord({
+      file: foreignPath,
+      variant: 'non-strict',
+      status: 'passed',
+    }),
+  ]);
+  const promotionRecords = baseAuditRecords.filter(
+    (record) => record.file === promotedPath,
+  );
+  const headReportRecords = Object.freeze([
+    ...baseReportRecords,
+    ...promotionRecords,
+  ]);
+  const baseTaxonomyPlaceholder = taxonomyArtifactText(baseClassifications, {
+    subsetText: baseSubsetText,
+    featuresText,
+    reportText: 'base placeholder report\n',
+    auditEvidenceText: unchangedAuditEvidenceText,
+  });
+  const headTaxonomyPlaceholder = taxonomyArtifactText(headClassifications, {
+    subsetText: headSubsetText,
+    featuresText,
+    reportText: 'head placeholder report\n',
+    auditEvidenceText: unchangedAuditEvidenceText,
+  });
+  const baseReportText = canonicalReportText({
+    subsetText: baseSubsetText,
+    taxonomyText: baseTaxonomyPlaceholder,
+    featuresText,
+    records: baseReportRecords,
+  });
+  const headReportText = canonicalReportText({
+    subsetText: headSubsetText,
+    taxonomyText: headTaxonomyPlaceholder,
+    featuresText,
+    records: headReportRecords,
+  });
+  const baseTaxonomyText = taxonomyArtifactText(baseClassifications, {
+    subsetText: baseSubsetText,
+    featuresText,
+    reportText: baseReportText,
+    auditEvidenceText: unchangedAuditEvidenceText,
+  });
+  const headTaxonomyText = taxonomyArtifactText(headClassifications, {
+    subsetText: headSubsetText,
+    featuresText,
+    reportText: headReportText,
+    auditEvidenceText: unchangedAuditEvidenceText,
+  });
+  const baseConformanceText = canonicalConformanceText({
+    baseDocument: syntheticCoverageDocument(),
+    subsetText: baseSubsetText,
+    taxonomyText: baseTaxonomyText,
+    reportText: baseReportText,
+  });
+  const headConformanceText = canonicalConformanceText({
+    baseDocument: baseConformanceText,
+    subsetText: headSubsetText,
+    taxonomyText: headTaxonomyText,
+    reportText: headReportText,
+  });
+  const pathsText = prettyJson(sourcePaths);
+  const baselineText = prettyJson(
+    baseClassifications.filter((record) => sourcePaths.includes(record.path)),
+  );
+  const dispositionText = prettyJson({
+    destinations: [
+      {
+        path: auditPassingPath,
+        status: 'audit-passing-unselected',
+        blocker: null,
+        issue: issue,
+      },
+      {
+        path: blockedPath,
+        status: 'blocked:remaining-language-runtime-semantics',
+        blocker: 'remaining-language-runtime-semantics',
+        issue: 96,
+      },
+      {
+        path: promotedPath,
+        status: 'selected-passing',
+        blocker: null,
+        issue,
+      },
+    ],
+  });
+  const ownerDeltasText = prettyJson([
+    {
+      path: auditPassingPath,
+      status: 'audit-passing-unselected',
+      blocker: null,
+      issue,
+    },
+    {
+      path: blockedPath,
+      status: 'blocked:remaining-language-runtime-semantics',
+      blocker: 'remaining-language-runtime-semantics',
+      issue: 96,
+    },
+  ]);
+  const ownerMapText = prettyJson([
+    {
+      status: 'audit-passing-unselected',
+      blocker: null,
+      issue,
+    },
+    {
+      status: 'blocked:remaining-language-runtime-semantics',
+      blocker: 'remaining-language-runtime-semantics',
+      issue: 96,
+    },
+  ]);
+  const fixedPromotionText = promotionText.replace(
+    '0'.repeat(64),
+    sha256(baseTaxonomyText),
+  );
+  const authority = {
+    code,
+    issue,
+    parentIssue: 70,
+    state: 'pending',
+    source: {
+      baseTaxonomySha256: sha256(baseTaxonomyText),
+      rootCount: sourcePaths.length,
+      variantCount: 4,
+      pathSha256: sourcePathSha256,
+      entryLedgerSha256: null,
+    },
+    reconciliation: null,
+    evidence: [
+      { path: `${prefix}baseline.json`, sha256: sha256(baselineText) },
+      { path: `${prefix}disposition.json`, sha256: sha256(dispositionText) },
+      { path: `${prefix}owner-deltas.json`, sha256: sha256(ownerDeltasText) },
+      { path: `${prefix}owner-map.json`, sha256: sha256(ownerMapText) },
+      { path: `${prefix}paths.json`, sha256: sha256(pathsText) },
+      { path: `${prefix}promotion.json`, sha256: sha256(fixedPromotionText) },
+    ],
+    protectedOutputs: [
+      {
+        path: 'docs/conformance.md',
+        operation: 'project',
+        baseSha256: sha256(baseConformanceText),
+        headSha256: null,
+        projectionSha256: roadmapDerivedProjectionSha256(
+          'docs/conformance.md',
+          sourcePathSha256,
+          fixedPromotionText,
+          ownerDeltasText,
+        ),
+      },
+      {
+        path: 'docs/test262-report.jsonl',
+        operation: 'project',
+        baseSha256: sha256(baseReportText),
+        headSha256: null,
+        projectionSha256: roadmapDerivedProjectionSha256(
+          'docs/test262-report.jsonl',
+          sourcePathSha256,
+          fixedPromotionText,
+          ownerDeltasText,
+        ),
+      },
+      {
+        path: `${prefix}baseline.json`,
+        operation: 'add-exact',
+        baseSha256: null,
+        headSha256: sha256(baselineText),
+        projectionSha256: null,
+      },
+      {
+        path: `${prefix}disposition.json`,
+        operation: 'add-exact',
+        baseSha256: null,
+        headSha256: sha256(dispositionText),
+        projectionSha256: null,
+      },
+      {
+        path: `${prefix}owner-deltas.json`,
+        operation: 'add-exact',
+        baseSha256: null,
+        headSha256: sha256(ownerDeltasText),
+        projectionSha256: null,
+      },
+      {
+        path: `${prefix}owner-map.json`,
+        operation: 'add-exact',
+        baseSha256: null,
+        headSha256: sha256(ownerMapText),
+        projectionSha256: null,
+      },
+      {
+        path: `${prefix}paths.json`,
+        operation: 'add-exact',
+        baseSha256: null,
+        headSha256: sha256(pathsText),
+        projectionSha256: null,
+      },
+      {
+        path: `${prefix}promotion.json`,
+        operation: 'add-exact',
+        baseSha256: null,
+        headSha256: sha256(fixedPromotionText),
+        projectionSha256: null,
+      },
+      {
+        path: 'tools/test262/es2015-taxonomy.json',
+        operation: 'project',
+        baseSha256: sha256(baseTaxonomyText),
+        headSha256: null,
+        projectionSha256: roadmapDerivedProjectionSha256(
+          'tools/test262/es2015-taxonomy.json',
+          sourcePathSha256,
+          fixedPromotionText,
+          ownerDeltasText,
+        ),
+      },
+      {
+        path: 'tools/test262/upstream-subset.json',
+        operation: 'project',
+        baseSha256: sha256(baseSubsetText),
+        headSha256: null,
+        projectionSha256: roadmapDerivedProjectionSha256(
+          'tools/test262/upstream-subset.json',
+          sourcePathSha256,
+          fixedPromotionText,
+          ownerDeltasText,
+        ),
+      },
+    ],
+    destinations: [
+      {
+        status: 'audit-passing-unselected',
+        blocker: null,
+        issue,
+      },
+      {
+        status: 'blocked',
+        blocker: 'remaining-language-runtime-semantics',
+        issue: 96,
+      },
+      {
+        status: 'selected-passing',
+        blocker: null,
+        issue,
+      },
+    ],
+  };
+  const baseManifestValue = {
+    ...canonicalEmptySchemaV3ManifestValue(),
+    roadmapAuthorities: [
+      authority,
+      structuredClone(provenance.P0_APPLIED_ROADMAP_AUTHORITY),
+    ],
+  };
+  const headManifestValue = structuredClone(baseManifestValue);
+  headManifestValue.roadmapAuthorities[0].state = 'applied';
+  const baseManifestText = renderEs2015ProvenanceManifest(baseManifestValue);
+  const headManifestText = renderEs2015ProvenanceManifest(headManifestValue);
+  const baseFiles = new Map([
+    [ES2015_PROVENANCE_FILE, baseManifestText],
+    ['docs/conformance.md', baseConformanceText],
+    ['docs/test262-report.jsonl', baseReportText],
+    ['docs/test262-report.jsonl', baseReportText],
+    ['tools/test262/es2015-audit-evidence.json', unchangedAuditEvidenceText],
+    ['tools/test262/es2015-taxonomy.json', baseTaxonomyText],
+    ['tools/test262/features.json', featuresText],
+    ['tools/test262/upstream-subset.json', baseSubsetText],
+  ]);
+  const headFiles = new Map([
+    [ES2015_PROVENANCE_FILE, headManifestText],
+    ['docs/conformance.md', headConformanceText],
+    ['docs/test262-report.jsonl', headReportText],
+    ['tools/test262/es2015-audit-evidence.json', unchangedAuditEvidenceText],
+    ['tools/test262/es2015-taxonomy.json', headTaxonomyText],
+    ['tools/test262/features.json', featuresText],
+    ['tools/test262/upstream-subset.json', headSubsetText],
+    [`${prefix}baseline.json`, baselineText],
+    [`${prefix}disposition.json`, dispositionText],
+    [`${prefix}owner-deltas.json`, ownerDeltasText],
+    [`${prefix}owner-map.json`, ownerMapText],
+    [`${prefix}paths.json`, pathsText],
+    [`${prefix}promotion.json`, fixedPromotionText],
+  ]);
+  const changes = [
+    { status: 'M', path: ES2015_PROVENANCE_FILE },
+    ...authority.protectedOutputs.map((output) => ({
+      status: output.operation === 'add-exact' ? 'A' : 'M',
+      path: output.path,
+    })),
+  ];
+  return {
+    authority,
+    baseManifestValue,
+    baseManifestText,
+    baseFiles,
+    baseTaxonomyText,
+    changes,
+    code,
+    headFiles,
+    headManifestText,
+    headManifestValue,
+    prefix,
+  };
 }
 
 function decisionWithoutHash() {
@@ -1682,12 +2340,8 @@ function provenanceCheckDependencies(options = {}) {
     ...(options.expectedRoadmapAuthorities === undefined
       ? {}
       : { expectedRoadmapAuthorities: options.expectedRoadmapAuthorities }),
-    ...(options.validateRoadmapProtectedOutputs === undefined
-      ? {}
-      : {
-          validateRoadmapProtectedOutputs:
-            options.validateRoadmapProtectedOutputs,
-        }),
+    validateRoadmapProtectedOutputs:
+      options.validateRoadmapProtectedOutputs ?? validateRoadmapProtectedOutputs,
     files,
     writes,
     outputs: { stdout, stderr },
@@ -1751,11 +2405,13 @@ function rangeArguments(profile, options = {}) {
  *   changes: readonly { status: string, path: string, sourcePath?: string }[],
  *   baseHasFoundation?: boolean,
  *   baseFiles?: ReadonlyMap<string, string>,
+ *   baseModes?: ReadonlyMap<string, string>,
  *   baseManifestText?: string | null,
  *   baseSha?: string,
  *   headManifestText?: string,
  *   headSha?: string,
  *   headFiles?: ReadonlyMap<string, string>,
+ *   headModes?: ReadonlyMap<string, string>,
  *   mergeBase?: string,
  *   validateRoadmapProtectedOutputs?: (
  *     authority: Record<string, any>,
@@ -1786,6 +2442,7 @@ function rangeCheckDependencies(options) {
         : null
       : options.baseManifestText;
   const baseFiles = new Map(dependencies.files);
+  const baseModes = new Map();
   if (baseManifestText !== null) {
     baseFiles.set(ES2015_PROVENANCE_FILE, baseManifestText);
   } else {
@@ -1794,8 +2451,22 @@ function rangeCheckDependencies(options) {
   for (const [path, text] of options.baseFiles ?? []) {
     baseFiles.set(path, text);
   }
+  for (const path of baseFiles.keys()) {
+    baseModes.set(path, '100644');
+  }
+  for (const [path, mode] of options.baseModes ?? []) {
+    baseModes.set(path, mode);
+  }
+  const headModes = new Map();
+  for (const path of headFiles.keys()) {
+    headModes.set(path, '100644');
+  }
+  for (const [path, mode] of options.headModes ?? []) {
+    headModes.set(path, mode);
+  }
   for (const path of FOUNDATION_DELETIONS) {
     baseFiles.set(path, `removed fixture ${path}\n`);
+    baseModes.set(path, '100644');
   }
   return {
     ...dependencies,
@@ -1827,6 +2498,14 @@ function rangeCheckDependencies(options) {
     ) => {
       if (revision === baseSha) return baseFiles.get(path) ?? null;
       if (revision === headSha) return headFiles.get(path) ?? null;
+      throw new Error(`unexpected fixture commit ${revision}`);
+    },
+    readGitMode: async (
+      /** @type {string} */ revision,
+      /** @type {string} */ path,
+    ) => {
+      if (revision === baseSha) return baseModes.get(path) ?? null;
+      if (revision === headSha) return headModes.get(path) ?? null;
       throw new Error(`unexpected fixture commit ${revision}`);
     },
   };
@@ -1949,6 +2628,43 @@ export default [
         false,
       );
       assertSame(json(foundationV3.rangeProfiles), json(migratedRangeProfiles));
+    },
+  },
+  {
+    name: 'ES2015 provenance exports roadmap projection helpers and BASE-owned protected paths',
+    run: () => {
+      const manifest = canonicalSchemaV3ManifestValue();
+      const h0 = manifest.roadmapAuthorities[0];
+      if (h0 === undefined || h0.code !== 'H0') {
+        throw new Error('expected canonical H0 roadmap authority');
+      }
+      assertSame(
+        provenance.roadmapProjectionSha256('docs/conformance.md', h0),
+        'c44ef2d084be750bca79a574ae041c2a757d452c71f2dffaf59badc7c6a9fcb8',
+      );
+      assertSame(
+        provenance.roadmapProjectionSha256(
+          'tools/test262/es2015-h0-baseline.json',
+          h0,
+        ),
+        '01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec',
+      );
+      assertSame(
+        provenance.roadmapAggregateProjectionSha256(h0),
+        '8e16b33ffdbd8a2089567e9a8bdb1c654619b8bd00021c54ac74c0ab02f2c5fd',
+      );
+
+      const owned = provenance.roadmapOwnedPathsFromBaseManifest(manifest);
+      for (const path of [
+        '.github/workflows/ci.yml',
+        'tools/test262/es2015-h0-promotion.json',
+        'tools/test262/es5-selection.json',
+        'docs/test262-report.jsonl',
+        'docs/conformance.md',
+      ]) {
+        assertSame(owned.has(path), true, path);
+      }
+      assertSame(owned.has('docs/testing.md'), false);
     },
   },
   {
@@ -4976,6 +5692,97 @@ export default [
     },
   },
   {
+    name: 'ES2015 provenance schema-v3 markerless ranges reject roadmap protected paths and closed generated namespaces',
+    run: async () => {
+      const baseManifestText = renderEs2015ProvenanceManifest(
+        canonicalSchemaV3ManifestValue(),
+      );
+      const ciArgs = [
+        '--check-range',
+        `--base=${RANGE_BASE_SHA}`,
+        `--head=${RANGE_HEAD_SHA}`,
+        '--pr-body-env=PROVENANCE_PR_BODY',
+      ];
+      const manifest = canonicalSchemaV3ManifestValue();
+      const protectedPaths = new Set([
+        ...manifest.roadmapAuthorities.flatMap((authority) =>
+          authority.evidence.map((entry) => entry.path),
+        ),
+        ...manifest.roadmapAuthorities.flatMap((authority) =>
+          authority.protectedOutputs.map((entry) => entry.path),
+        ),
+      ]);
+      for (const path of protectedPaths) {
+        const unmarked = rangeCheckDependencies({
+          changes: [{ status: 'M', path }],
+          baseManifestText,
+          headManifestText: baseManifestText,
+        });
+        unmarked.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: 'No marker',
+        };
+        assertSame(
+          (await rejected(() => provenanceCheck(ciArgs, unmarked))).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+          path,
+        );
+      }
+      for (const changes of [
+        [{ status: 'M', path: 'tools/test262/es2015-h0-unknown.json' }],
+        [
+          {
+            status: 'M',
+            path: 'tools/test262/es2015-h0-promotion.json/../unknown.json',
+          },
+        ],
+        [
+          {
+            status: 'M',
+            path: 'tools%2ftest262%2fes2015-h0-promotion.json',
+          },
+        ],
+        [
+          {
+            status: 'D',
+            path: 'tools/test262/es2015-h0-promotion.json',
+          },
+        ],
+        [
+          {
+            status: 'R100',
+            sourcePath: 'tools/test262/es2015-h0-promotion.json',
+            path: 'docs/renamed-roadmap-evidence.json',
+          },
+        ],
+        [
+          {
+            status: 'C100',
+            sourcePath: 'tools/test262/es2015-h0-promotion.json',
+            path: 'docs/copied-roadmap-evidence.json',
+          },
+        ],
+      ]) {
+        const unmarked = rangeCheckDependencies({
+          changes,
+          baseManifestText,
+          headManifestText: baseManifestText,
+        });
+        unmarked.environment = {
+          TZ: 'UTC',
+          GITHUB_EVENT_NAME: 'pull_request',
+          PROVENANCE_PR_BODY: 'No marker',
+        };
+        assertSame(
+          (await rejected(() => provenanceCheck(ciArgs, unmarked))).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+          json(changes),
+        );
+      }
+    },
+  },
+  {
     name: 'ES2015 provenance roadmap authority markers require exact full-block parsing',
     run: () => {
       const migrationMarker = roadmapMigrationMarker({
@@ -5857,6 +6664,596 @@ export default [
         emptyProjectionError.message,
         'roadmap-reclassification:H0 requires a nonempty protected projection result',
       );
+    },
+  },
+  {
+    name: 'ES2015 provenance validates protected outputs by artifact and rejects foreign generated changes',
+    run: async () => {
+      const fixture = syntheticRoadmapProjectionFixture();
+      const marker = parseRoadmapAuthorityMarker(
+        roadmapConsumptionMarker({
+          code: fixture.code,
+          issue: fixture.authority.issue,
+          sourcePathSha256: fixture.authority.source.pathSha256,
+          sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
+          protectedProjectionSha256:
+            provenance.roadmapAggregateProjectionSha256(fixture.authority),
+        }),
+      );
+      const fixtureChanges = fixture.changes.map((change) => ({
+        ...change,
+        sourcePath: null,
+      }));
+      const deps = rangeCheckDependencies({
+        changes: fixture.changes,
+        baseManifestText: fixture.baseManifestText,
+        headManifestText: fixture.headManifestText,
+        baseFiles: fixture.baseFiles,
+        headFiles: fixture.headFiles,
+      });
+      assertSame(
+        json(
+          await validateRoadmapProtectedOutputs(
+            fixture.authority,
+            fixtureChanges,
+            {
+              deps,
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              baseManifest: fixture.baseManifestValue,
+              headManifest: fixture.headManifestValue,
+              marker,
+            },
+          ),
+        ),
+        json(roadmapProjectionEntries(fixture.authority.protectedOutputs)),
+      );
+
+      const auditAuthority = {
+        ...structuredClone(fixture.authority),
+        protectedOutputs: [
+          {
+            path: 'tools/test262/es2015-audit-evidence.json',
+            operation: 'project',
+            baseSha256: sha256(
+              fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+            ),
+            headSha256: null,
+            projectionSha256: 'a'.repeat(64),
+          },
+        ],
+      };
+      const auditDeps = rangeCheckDependencies({
+        changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+        baseManifestText: fixture.baseManifestText,
+        headManifestText: fixture.headManifestText,
+        baseFiles: fixture.baseFiles,
+        headFiles: fixture.headFiles,
+      });
+      assertSame(
+        json(
+          await validateRoadmapProtectedOutputs(
+            auditAuthority,
+            [
+              {
+                status: 'M',
+                path: 'tools/test262/es2015-audit-evidence.json',
+                sourcePath: null,
+              },
+            ],
+            {
+              deps: auditDeps,
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              baseManifest: fixture.baseManifestValue,
+              headManifest: fixture.headManifestValue,
+              marker,
+            },
+          ),
+        ),
+        json([
+          {
+            path: 'tools/test262/es2015-audit-evidence.json',
+            operation: 'project',
+            sha256: 'a'.repeat(64),
+          },
+        ]),
+      );
+
+      const p0SubsetAuthority = {
+        ...minimalRoadmapAuthority('P0', 77, 'pending'),
+        protectedOutputs: [
+          {
+            path: 'tools/test262/upstream-subset.json',
+            operation: 'project',
+            baseSha256: sha256(P0_BASE_UPSTREAM_SUBSET_TEXT),
+            headSha256: null,
+            projectionSha256:
+              '88d2521688bf3f036d2d94977914580d218fbc442bf38ef11e2cf9b8ce529a5f',
+          },
+        ],
+      };
+      const p0SubsetDeps = rangeCheckDependencies({
+        changes: [{ status: 'M', path: 'tools/test262/upstream-subset.json' }],
+        baseManifestText: fixture.baseManifestText,
+        headManifestText: fixture.headManifestText,
+        baseFiles: new Map([
+          ['tools/test262/upstream-subset.json', P0_BASE_UPSTREAM_SUBSET_TEXT],
+        ]),
+        headFiles: new Map([
+          ['tools/test262/upstream-subset.json', PRODUCTION_UPSTREAM_SUBSET_TEXT],
+        ]),
+      });
+      assertSame(
+        json(
+          await validateRoadmapProtectedOutputs(
+            p0SubsetAuthority,
+            [
+              {
+                status: 'M',
+                path: 'tools/test262/upstream-subset.json',
+                sourcePath: null,
+              },
+            ],
+            {
+              deps: p0SubsetDeps,
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              baseManifest: fixture.baseManifestValue,
+              headManifest: fixture.headManifestValue,
+              marker,
+            },
+          ),
+        ),
+        json([
+          {
+            path: 'tools/test262/upstream-subset.json',
+            operation: 'project',
+            sha256:
+              '88d2521688bf3f036d2d94977914580d218fbc442bf38ef11e2cf9b8ce529a5f',
+          },
+        ]),
+      );
+
+      const p0SelectionAuthority = {
+        ...minimalRoadmapAuthority('P0', 77, 'pending'),
+        protectedOutputs: [
+          {
+            path: 'tools/test262/es5-selection.json',
+            operation: 'project',
+            baseSha256: sha256(P0_BASE_ES5_SELECTION_TEXT),
+            headSha256: null,
+            projectionSha256:
+              '2b0654600cf2159c828be9489826e85f3565a32b82019e2dfc2c41ec80870b38',
+          },
+        ],
+      };
+      const p0SelectionDeps = rangeCheckDependencies({
+        changes: [{ status: 'M', path: 'tools/test262/es5-selection.json' }],
+        baseManifestText: fixture.baseManifestText,
+        headManifestText: fixture.headManifestText,
+        baseFiles: new Map([
+          ['tools/test262/es5-selection.json', P0_BASE_ES5_SELECTION_TEXT],
+          ['tools/test262/es2015-taxonomy.json', P0_BASE_TAXONOMY_TEXT],
+        ]),
+        headFiles: new Map([
+          ['tools/test262/es5-selection.json', PRODUCTION_ES5_SELECTION_TEXT],
+          ['tools/test262/es2015-taxonomy.json', PRODUCTION_TAXONOMY_TEXT],
+        ]),
+      });
+      assertSame(
+        json(
+          await validateRoadmapProtectedOutputs(
+            p0SelectionAuthority,
+            [
+              {
+                status: 'M',
+                path: 'tools/test262/es5-selection.json',
+                sourcePath: null,
+              },
+            ],
+            {
+              deps: p0SelectionDeps,
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              baseManifest: fixture.baseManifestValue,
+              headManifest: fixture.headManifestValue,
+              marker,
+            },
+          ),
+        ),
+        json([
+          {
+            path: 'tools/test262/es5-selection.json',
+            operation: 'project',
+            sha256:
+              '2b0654600cf2159c828be9489826e85f3565a32b82019e2dfc2c41ec80870b38',
+          },
+        ]),
+      );
+      const fixtureTaxonomyAuthority = {
+        ...structuredClone(fixture.authority),
+        protectedOutputs: fixture.authority.protectedOutputs.filter(
+          (entry) => entry.path === 'tools/test262/es2015-taxonomy.json',
+        ),
+      };
+      const fixtureReportAuthority = {
+        ...structuredClone(fixture.authority),
+        protectedOutputs: fixture.authority.protectedOutputs.filter(
+          (entry) => entry.path === 'docs/test262-report.jsonl',
+        ),
+      };
+      const fixtureConformanceAuthority = {
+        ...structuredClone(fixture.authority),
+        protectedOutputs: fixture.authority.protectedOutputs.filter(
+          (entry) => entry.path === 'docs/conformance.md',
+        ),
+      };
+      const fixturePromotionAuthority = {
+        ...structuredClone(fixture.authority),
+        protectedOutputs: fixture.authority.protectedOutputs.filter(
+          (entry) => entry.path === 'tools/test262/es2015-h1-promotion.json',
+        ),
+      };
+
+      for (const scenario of [
+        {
+          authority: fixtureTaxonomyAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-taxonomy.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-taxonomy.json',
+                fixture.headFiles
+                  .get('tools/test262/es2015-taxonomy.json')
+                  .replace('test/language/foreign.js', 'test/language/intruder.js'),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-taxonomy.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-taxonomy.json changes a foreign classification test/language/intruder.js',
+        },
+        {
+          authority: auditAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'tools/test262/es2015-audit-evidence.json',
+                auditEvidenceText(
+                  JSON.parse(
+                    fixture.baseFiles.get('tools/test262/es2015-audit-evidence.json'),
+                  ).auditRecords.slice(0, 3),
+                ),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-audit-evidence.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json is missing source record test/language/promotion.js (strict)',
+        },
+        {
+          authority: p0SubsetAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/upstream-subset.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: new Map([
+              ['tools/test262/upstream-subset.json', P0_BASE_UPSTREAM_SUBSET_TEXT],
+            ]),
+            headFiles: new Map([
+              [
+                'tools/test262/upstream-subset.json',
+                subsetTextWithExtraPath(PRODUCTION_UPSTREAM_SUBSET_TEXT),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/upstream-subset.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/upstream-subset.json must apply exactly the approved P0 subset delta',
+        },
+        {
+          authority: p0SelectionAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'tools/test262/es5-selection.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: new Map([
+              ['tools/test262/es5-selection.json', P0_BASE_ES5_SELECTION_TEXT],
+              ['tools/test262/es2015-taxonomy.json', P0_BASE_TAXONOMY_TEXT],
+            ]),
+            headFiles: new Map([
+              ['tools/test262/es5-selection.json', PRODUCTION_ES5_SELECTION_TEXT],
+              [
+                'tools/test262/es2015-taxonomy.json',
+                driftedNewTargetTaxonomyText(PRODUCTION_TAXONOMY_TEXT),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'tools/test262/es5-selection.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es5-selection.json must retain the taxonomy classification for test/staging/sm/class/newTargetEval.js',
+        },
+        {
+          authority: fixtureReportAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'docs/test262-report.jsonl' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'docs/test262-report.jsonl',
+                `${fixture.headFiles.get('docs/test262-report.jsonl').trim()}\n${formatRecordLine(
+                  createTestRecord({
+                    file: 'test/language/intruder.js',
+                    variant: 'non-strict',
+                    status: 'passed',
+                  }),
+                )}\n`,
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'docs/test262-report.jsonl',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output docs/test262-report.jsonl names a foreign selected record test/language/intruder.js',
+        },
+        {
+          authority: fixtureConformanceAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'M', path: 'docs/conformance.md' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              [
+                'docs/conformance.md',
+                fixture.headFiles
+                  .get('docs/conformance.md')
+                  .replace('Manual prose outside the generated block.', 'mutated prose'),
+              ],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'M',
+              path: 'docs/conformance.md',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output docs/conformance.md must preserve manual prose outside the generated block',
+        },
+        {
+          authority: fixture.authority,
+          deps: rangeCheckDependencies({
+            changes: [
+              ...fixture.changes,
+              { status: 'M', path: 'tools/test262/es2015-h1-unknown.json' },
+            ],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              ['tools/test262/es2015-h1-unknown.json', '{}\n'],
+            ]),
+          }),
+          changes: [
+            ...fixtureChanges,
+            {
+              status: 'M',
+              path: 'tools/test262/es2015-h1-unknown.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected outputs include unexpected generated path tools/test262/es2015-h1-unknown.json',
+        },
+        {
+          authority: fixture.authority,
+          deps: rangeCheckDependencies({
+            changes: [
+              ...fixture.changes,
+              { status: 'M', path: 'tools/test262/es5-selection.json' },
+            ],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: new Map([
+              ...fixture.baseFiles,
+              ['tools/test262/es5-selection.json', P0_BASE_ES5_SELECTION_TEXT],
+            ]),
+            headFiles: new Map([
+              ...fixture.headFiles,
+              ['tools/test262/es5-selection.json', PRODUCTION_ES5_SELECTION_TEXT],
+            ]),
+          }),
+          changes: [
+            ...fixtureChanges,
+            {
+              status: 'M',
+              path: 'tools/test262/es5-selection.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected outputs include unexpected protected path tools/test262/es5-selection.json',
+        },
+        {
+          authority: fixturePromotionAuthority,
+          deps: rangeCheckDependencies({
+            changes: [{ status: 'A', path: 'tools/test262/es2015-h1-promotion.json' }],
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: new Map([
+              ...fixture.headFiles,
+              ['tools/test262/es2015-h1-promotion.json', '../../outside\n'],
+            ]),
+            headModes: new Map([
+              ['tools/test262/es2015-h1-promotion.json', '120000'],
+            ]),
+          }),
+          changes: [
+            {
+              status: 'A',
+              path: 'tools/test262/es2015-h1-promotion.json',
+              sourcePath: null,
+            },
+          ],
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-h1-promotion.json must be a regular file in HEAD',
+        },
+      ]) {
+        const error = await rejected(() =>
+          validateRoadmapProtectedOutputs(scenario.authority, scenario.changes, {
+            deps: scenario.deps,
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            baseManifest: fixture.baseManifestValue,
+            headManifest: fixture.headManifestValue,
+            marker,
+          }),
+        );
+        assertSame(error.message, scenario.message);
+      }
+    },
+  },
+  {
+    name: 'ES2015 provenance validates protected outputs atomically during roadmap authority consumption',
+    run: async () => {
+      const fixture = syntheticRoadmapProjectionFixture();
+      const marker = parseRoadmapAuthorityMarker(
+        roadmapConsumptionMarker({
+          code: fixture.code,
+          issue: fixture.authority.issue,
+          sourcePathSha256: fixture.authority.source.pathSha256,
+          sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
+          protectedProjectionSha256:
+            provenance.roadmapAggregateProjectionSha256(fixture.authority),
+        }),
+      );
+      const changes = fixture.changes.map((change) => ({
+        ...change,
+        sourcePath: null,
+      }));
+      assertSame(
+        await validateRoadmapAuthorityConsumption(
+          fixture.baseManifestValue,
+          fixture.headManifestValue,
+          marker,
+          {
+            deps: rangeCheckDependencies({
+              changes: fixture.changes,
+              baseManifestText: fixture.baseManifestText,
+              headManifestText: fixture.headManifestText,
+              baseFiles: fixture.baseFiles,
+              headFiles: fixture.headFiles,
+            }),
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            changes,
+          },
+        ),
+        0,
+      );
+
+      for (const scenario of [
+        {
+          changes: fixture.changes.filter(
+            (change) => change.path !== 'docs/test262-report.jsonl',
+          ),
+          message:
+            'roadmap-reclassification:H1 protected output docs/test262-report.jsonl must change exactly once',
+        },
+        {
+          changes: [
+            ...fixture.changes,
+            { status: 'M', path: 'tools/test262/es2015-h1-unknown.json' },
+          ],
+          headFiles: new Map([
+            ...fixture.headFiles,
+            ['tools/test262/es2015-h1-unknown.json', '{}\n'],
+          ]),
+          message:
+            'roadmap-reclassification:H1 protected outputs include unexpected generated path tools/test262/es2015-h1-unknown.json',
+        },
+        {
+          changes: fixture.changes,
+          headFiles: new Map(
+            [...fixture.headFiles].filter(
+              ([path]) => path !== 'tools/test262/es2015-h1-promotion.json',
+            ),
+          ),
+          message:
+            'roadmap-reclassification:H1 protected output tools/test262/es2015-h1-promotion.json must be added in HEAD',
+        },
+      ]) {
+        const error = await rejected(() =>
+          validateRoadmapAuthorityConsumption(
+            fixture.baseManifestValue,
+            fixture.headManifestValue,
+            marker,
+            {
+              deps: rangeCheckDependencies({
+                changes: scenario.changes,
+                baseManifestText: fixture.baseManifestText,
+                headManifestText: fixture.headManifestText,
+                baseFiles: fixture.baseFiles,
+                headFiles: scenario.headFiles ?? fixture.headFiles,
+              }),
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              changes: scenario.changes.map((change) => ({
+                ...change,
+                sourcePath: null,
+              })),
+            },
+          ),
+        );
+        assertSame(error.message, scenario.message);
+      }
     },
   },
   {

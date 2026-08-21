@@ -5,6 +5,8 @@
 import { createHash } from 'node:crypto';
 import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
 
+const { structuredClone } = globalThis;
+
 /**
  * @typedef {{ source: string, sourceSha256: string }} IdentitySpecification
  * @typedef {{ code: string, issue: number }} ProvenanceParent
@@ -380,6 +382,24 @@ export const ES2015_PROVENANCE_DECISION_CODES = Object.freeze([
   'US5',
   'US6',
   'US7',
+]);
+export const PROVENANCE_RANGE_GATE_OWNER_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  'tools/ci/pipeline.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+  'tools/test262/selection.js',
+  ES2015_PROVENANCE_FILE,
+  ...ES2015_PROVENANCE_DECISION_CODES.map(
+    (code) => `tools/test262/es2015-provenance-decisions/${code}.json`,
+  ),
+]);
+export const CLOSED_PROVENANCE_GENERATED_PATHS = Object.freeze([
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/upstream-subset.json',
 ]);
 
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
@@ -1121,6 +1141,61 @@ export function canonicalRoadmapAuthoritySha256(authority) {
     'roadmap authority',
   );
   return sha256(`${JSON.stringify(normalized)}\n`);
+}
+
+/**
+ * @param {string} path
+ * @param {unknown} authority
+ */
+export function roadmapProjectionSha256(path, authority) {
+  const normalized = normalizeRoadmapAuthority(
+    /** @type {Record<string, any>} */ (structuredClone(authority)),
+    'roadmap authority',
+  );
+  const output = normalized.protectedOutputs.find((entry) => entry.path === path);
+  if (output === undefined) {
+    throw new Es2015ProvenanceError(
+      `${normalized.code} roadmap authority does not protect ${path}`,
+    );
+  }
+  return output.operation === 'project'
+    ? output.projectionSha256
+    : output.headSha256;
+}
+
+/** @param {unknown} authority */
+export function roadmapAggregateProjectionSha256(authority) {
+  const normalized = normalizeRoadmapAuthority(
+    /** @type {Record<string, any>} */ (structuredClone(authority)),
+    'roadmap authority',
+  );
+  const entries = normalized.protectedOutputs.map((output) => ({
+    path: output.path,
+    operation: output.operation,
+    sha256: roadmapProjectionSha256(output.path, normalized),
+  }));
+  return sha256(`${JSON.stringify(entries)}\n`);
+}
+
+/** @param {unknown} manifest */
+export function roadmapOwnedPathsFromBaseManifest(manifest) {
+  const normalized =
+    typeof manifest === 'object' && manifest !== null
+      ? /** @type {Record<string, any>} */ (structuredClone(manifest))
+      : manifest;
+  const record = object(normalized, ES2015_PROVENANCE_FILE);
+  const owned = new Set(PROVENANCE_RANGE_GATE_OWNER_PATHS);
+  if (Array.isArray(record.roadmapAuthorities)) {
+    for (const authority of normalizeRoadmapAuthorities(
+      record.roadmapAuthorities,
+      `${ES2015_PROVENANCE_FILE}.roadmapAuthorities`,
+    )) {
+      for (const evidence of authority.evidence) owned.add(evidence.path);
+      for (const output of authority.protectedOutputs) owned.add(output.path);
+    }
+  }
+  for (const path of CLOSED_PROVENANCE_GENERATED_PATHS) owned.add(path);
+  return owned;
 }
 
 /** @param {unknown} manifest */

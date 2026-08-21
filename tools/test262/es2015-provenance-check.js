@@ -9,29 +9,56 @@ import {
   ES2015_PROVENANCE_MANIFEST_VERSIONS,
   ES2015_PROVENANCE_VERSION,
   Es2015ProvenanceError,
+  PROVENANCE_RANGE_GATE_OWNER_PATHS,
   buildProvenanceFoundation,
   canonicalRoadmapAuthoritySha256,
   parseEs2015DecisionFragment,
   parseEs2015ProvenanceManifest,
+  roadmapAggregateProjectionSha256,
+  roadmapOwnedPathsFromBaseManifest,
+  roadmapProjectionSha256,
   renderBatchLedger,
   renderProvenanceIssueBody,
   validateRoadmapAuthorityManifest,
   validateDecisionFragments,
   validateProvenanceFoundation,
 } from './es2015-provenance.js';
+import {
+  formatCoverageLines,
+  renderCoverageSummary,
+  replaceGeneratedBlock,
+  summarizeTest262Coverage,
+} from './coverage.js';
+import { featureNames, parseFeatureManifest } from './features.js';
+import {
+  mergePromotionSubset,
+  parseEs2015Promotion,
+  promotionPaths,
+} from './es2015-promotion.js';
+import { serializeUpstreamSubset, parseEs5Selection } from './es5-selection.js';
+import {
+  createSummaryRecord,
+  createTestRecord,
+  formatRecordLine,
+  formatReportLines,
+} from './report.js';
+import { summarizeEs2015Classification } from './es2015-taxonomy.js';
+import {
+  formatUpstreamSummaryLines,
+  parseUpstreamSubset,
+  summarizeUpstreamRun,
+  upstreamSubsetPaths,
+} from './upstream.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
-const PROVENANCE_RANGE_GATE_OWNER_PATHS = Object.freeze([
-  '.github/workflows/ci.yml',
-  'tools/ci/pipeline.js',
-  'tools/test262/es2015-provenance-check.js',
-  'tools/test262/es2015-provenance.js',
-  'tools/test262/selection.js',
-  ES2015_PROVENANCE_FILE,
-]);
+const AUDIT_EVIDENCE_FILE = 'tools/test262/es2015-audit-evidence.json';
+const ES5_SELECTION_FILE = 'tools/test262/es5-selection.json';
+const FEATURES_FILE = 'tools/test262/features.json';
+const REPORT_FILE = 'docs/test262-report.jsonl';
+const CONFORMANCE_FILE = 'docs/conformance.md';
 const FOUNDATION_BOOTSTRAP_COMMIT = '8d75b48af2ee7ab04e7c5006980417227ec34568';
 const FOUNDATION_BOOTSTRAP_MANIFEST_SHA256 =
   'ad3e55a061f1156fc267655ac8cb977f6a54f934cc56a5efa5689c7fc620ae04';
@@ -180,6 +207,7 @@ export class Es2015ProvenanceCheckError extends Error {
  *   mergeBase: (base: string, head: string) => Promise<string>,
  *   gitDiff: (base: string, head: string) => Promise<string>,
  *   readGitFile: (revision: string, path: string) => Promise<string | null>,
+ *   readGitMode?: (revision: string, path: string) => Promise<string | null>,
  *   stdout: (text: string) => void,
  *   stderr: (text: string) => void,
  *   expectedManifestVersion?: number,
@@ -315,6 +343,14 @@ export function createProvenanceCheckDependencies(options = {}) {
         throw error;
       }
     },
+    readGitMode: async (
+      /** @type {string} */ revision,
+      /** @type {string} */ path,
+    ) => {
+      const entry = (await runGit(['ls-tree', revision, '--', path])).trim();
+      if (entry === '') return null;
+      return entry.split(/\s+/u, 1)[0] ?? null;
+    },
     stdout: options.stdout ?? ((text) => process.stdout.write(text)),
     stderr: options.stderr ?? ((text) => process.stderr.write(text)),
     ...(options.expectedManifestVersion === undefined
@@ -325,12 +361,8 @@ export function createProvenanceCheckDependencies(options = {}) {
       : {
           expectedRoadmapAuthorities: options.expectedRoadmapAuthorities,
         }),
-    ...(options.validateRoadmapProtectedOutputs === undefined
-      ? {}
-      : {
-          validateRoadmapProtectedOutputs:
-            options.validateRoadmapProtectedOutputs,
-        }),
+    validateRoadmapProtectedOutputs:
+      options.validateRoadmapProtectedOutputs ?? validateRoadmapProtectedOutputs,
   };
 }
 
@@ -1128,6 +1160,7 @@ export async function validateRoadmapAuthorityConsumption(
   }
   const projectionResult =
     (await deps.validateRoadmapProtectedOutputs?.(baseAuthority, changes, {
+      deps,
       base,
       head,
       baseManifest: normalizedBaseManifest,
@@ -1141,6 +1174,1095 @@ export async function validateRoadmapAuthorityConsumption(
   }
   return 0;
 }
+
+const REGULAR_GIT_FILE_MODES = new Set(['100644', '100755']);
+const HISTORICAL_P0_SUBSET_DELTA_SHA256 =
+  '88d2521688bf3f036d2d94977914580d218fbc442bf38ef11e2cf9b8ce529a5f';
+const HISTORICAL_P0_ES5_SELECTION_DELTA_SHA256 =
+  '2b0654600cf2159c828be9489826e85f3565a32b82019e2dfc2c41ec80870b38';
+const HISTORICAL_P0_ES5_SELECTION_REMOVAL = Object.freeze({
+  path: 'test/staging/sm/class/newTargetEval.js',
+  category: 'post-es5-syntax',
+  reason:
+    'Exercises `new.target`, which remains outside this ES2015 syntax subset.',
+});
+const HISTORICAL_P0_SUBSET_GROUPS = Object.freeze({
+  'language/expressions': 12,
+  'language/statements': 10,
+});
+
+/**
+ * @param {Record<string, any>} authority
+ * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ * @param {{
+ *   deps: ProvenanceCheckDependencies,
+ *   base: string,
+ *   head: string,
+ *   baseManifest: ReturnType<typeof parseEs2015ProvenanceManifest>,
+ *   headManifest: ReturnType<typeof parseEs2015ProvenanceManifest>,
+ *   marker: RoadmapConsumptionMarker,
+ * }} context
+ */
+export async function validateRoadmapProtectedOutputs(
+  authority,
+  changes,
+  context,
+) {
+  const profile = context.marker.profile;
+  /** @type {Map<string, any>} */
+  const protectedByPath = new Map(
+    authority.protectedOutputs.map((output) => [output.path, output]),
+  );
+  const ownedPaths = roadmapOwnedPathsFromBaseManifest(context.baseManifest);
+  const generatedPrefixes = roadmapGeneratedNamespacePrefixes(authority);
+  /** @type {Map<string, { status: string, path: string, sourcePath: string | null }[]>} */
+  const changesByPath = new Map();
+
+  for (const change of changes) {
+    if (change.path === ES2015_PROVENANCE_FILE) continue;
+    const sourcePath =
+      change.sourcePath === null ? null : canonicalRepositoryPath(change.sourcePath);
+    const path = canonicalRepositoryPath(change.path);
+    const aliasedOwnedPath =
+      path !== null &&
+      path !== change.path &&
+      (protectedByPath.has(path) ||
+        ownedPaths.has(path) ||
+        generatedPathMatchesNamespace(path, generatedPrefixes));
+    if (aliasedOwnedPath) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected outputs include unexpected generated path ${change.path}`,
+      );
+    }
+    if (change.status.startsWith('R') || change.status.startsWith('C')) {
+      if (
+        (sourcePath !== null &&
+          (ownedPaths.has(sourcePath) ||
+            generatedPathMatchesNamespace(sourcePath, generatedPrefixes))) ||
+        (path !== null &&
+          (ownedPaths.has(path) ||
+            generatedPathMatchesNamespace(path, generatedPrefixes)))
+      ) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} protected outputs forbid ${
+            change.status.startsWith('R') ? 'rename' : 'copy'
+          } ${change.sourcePath} -> ${change.path}`,
+        );
+      }
+      continue;
+    }
+    if (change.status === 'D') {
+      if (
+        path !== null &&
+        (ownedPaths.has(path) || generatedPathMatchesNamespace(path, generatedPrefixes))
+      ) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} protected outputs forbid deleted path ${change.path}`,
+        );
+      }
+      continue;
+    }
+    if (path === null) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected outputs include unexpected generated path ${change.path}`,
+      );
+    }
+    const output = protectedByPath.get(path);
+    if (output !== undefined) {
+      const entries = changesByPath.get(path) ?? [];
+      entries.push(change);
+      changesByPath.set(path, entries);
+      continue;
+    }
+    if (ownedPaths.has(path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected outputs include unexpected protected path ${path}`,
+      );
+    }
+    if (generatedPathMatchesNamespace(path, generatedPrefixes)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected outputs include unexpected generated path ${path}`,
+      );
+    }
+  }
+
+  for (const output of authority.protectedOutputs) {
+    const matchedChanges = changesByPath.get(output.path) ?? [];
+    if (matchedChanges.length !== 1) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} must change exactly once`,
+      );
+    }
+    const [change] = matchedChanges;
+    if (output.operation === 'add-exact' && change.status !== 'A') {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} must be added in HEAD`,
+      );
+    }
+    if (output.operation !== 'add-exact' && change.status !== 'M') {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} must modify the reviewed path in HEAD`,
+      );
+    }
+    await validateProtectedOutputBytes(output, authority, context);
+  }
+
+  return authority.protectedOutputs.map((output) => ({
+    path: output.path,
+    operation: output.operation,
+    sha256: roadmapProjectionSha256(output.path, authority),
+  }));
+}
+
+/** @param {string} path */
+function canonicalRepositoryPath(path) {
+  if (typeof path !== 'string' || path === '') return null;
+  let decoded = path;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {}
+  const segments = [];
+  for (const segment of decoded.replace(/\\/gu, '/').split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length === 0) return null;
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.join('/');
+}
+
+/** @param {Record<string, any>} authority */
+function roadmapGeneratedNamespacePrefixes(authority) {
+  const prefixes = new Set();
+  for (const path of [
+    ...authority.evidence.map((entry) => entry.path),
+    ...authority.protectedOutputs.map((entry) => entry.path),
+  ]) {
+    const match = /^(tools\/test262\/es2015-[a-z0-9]+-).+\.json$/u.exec(path);
+    if (match !== null) prefixes.add(match[1]);
+  }
+  return prefixes;
+}
+
+/** @param {string} path @param {Set<string>} prefixes */
+function generatedPathMatchesNamespace(path, prefixes) {
+  for (const prefix of prefixes) {
+    if (path.startsWith(prefix) && path.endsWith('.json')) return true;
+  }
+  return false;
+}
+
+/** @param {Record<string, any>} authority @param {string} suffix */
+function roadmapEvidencePath(authority, suffix) {
+  return `tools/test262/es2015-${String(authority.code).toLowerCase()}-${suffix}.json`;
+}
+
+/** @param {string} text @param {string} label */
+function parseJsonValue(text, label) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Es2015ProvenanceCheckError(
+      `${label} is not valid JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
+/** @param {unknown} value */
+function json(value) {
+  return JSON.stringify(value);
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapPathList(text, label) {
+  const value = parseJsonValue(text, label);
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== 'string' || entry === '')
+  ) {
+    throw new Es2015ProvenanceCheckError(`${label} must be a sorted path array`);
+  }
+  const paths = /** @type {string[]} */ (value);
+  assertSortedUniqueStrings(paths, `${label} paths`);
+  return paths;
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapBaseline(text, label) {
+  const value = parseJsonValue(text, label);
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceCheckError(`${label} must be an array`);
+  }
+  const entries = /** @type {any[]} */ (value);
+  assertSortedUniqueStrings(
+    entries.map((entry) => entry.path),
+    `${label} paths`,
+  );
+  return entries;
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapDisposition(text, label) {
+  const value = parseJsonValue(text, label);
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    !Array.isArray(/** @type {Record<string, unknown>} */ (value).destinations)
+  ) {
+    throw new Es2015ProvenanceCheckError(`${label} must contain destinations`);
+  }
+  const destinations = /** @type {any[]} */ (
+    /** @type {Record<string, unknown>} */ (value).destinations
+  );
+  assertSortedUniqueStrings(
+    destinations.map((entry) => entry.path),
+    `${label} destinations`,
+  );
+  return destinations;
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapOwnerDeltas(text, label) {
+  const value = parseJsonValue(text, label);
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceCheckError(`${label} must be an array`);
+  }
+  const entries = /** @type {any[]} */ (value);
+  assertSortedUniqueStrings(
+    entries.map((entry) => entry.path),
+    `${label} paths`,
+  );
+  return entries;
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapOwnerMap(text, label) {
+  const value = parseJsonValue(text, label);
+  if (!Array.isArray(value)) {
+    throw new Es2015ProvenanceCheckError(`${label} must be an array`);
+  }
+  const entries = /** @type {any[]} */ (value);
+  assertSortedUniqueStrings(
+    entries.map((entry) => `${entry.status}\u0000${entry.blocker ?? ''}\u0000${entry.issue}`),
+    `${label} destinations`,
+  );
+  return entries;
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapAuditEvidence(text, label) {
+  const value = parseJsonValue(text, label);
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    !Array.isArray(/** @type {Record<string, unknown>} */ (value).auditRecords)
+  ) {
+    throw new Es2015ProvenanceCheckError(`${label} must contain auditRecords`);
+  }
+  const records = /** @type {any[]} */ (
+    /** @type {Record<string, unknown>} */ (value).auditRecords
+  ).map((record) =>
+    createTestRecord({
+      file: record.file,
+      variant: record.variant,
+      status: record.status,
+    }),
+  );
+  assertSortedUniqueStrings(
+    records.map((record) => `${record.file}\u0000${record.variant ?? ''}`),
+    `${label} audit records`,
+  );
+  return records;
+}
+
+/** @param {readonly string[]} values @param {string} label */
+function assertSortedUniqueStrings(values, label) {
+  const sorted = [...values].sort();
+  if (new Set(values).size !== values.length || values.join('\u0000') !== sorted.join('\u0000')) {
+    throw new Es2015ProvenanceCheckError(`${label} must be sorted and unique`);
+  }
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context */
+async function validateProtectedOutputBytes(output, authority, context) {
+  const profile = context.marker.profile;
+  const baseText =
+    output.operation === 'add-exact'
+      ? null
+      : await readRequiredRoadmapFile(
+          context.deps,
+          context.base,
+          output.path,
+          'BASE',
+          profile,
+        );
+  const headText = await readRequiredRoadmapFile(
+    context.deps,
+    context.head,
+    output.path,
+    'HEAD',
+    profile,
+  );
+  if (output.operation === 'add-exact') {
+    if ((await context.deps.readGitFile(context.base, output.path)) !== null) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} must be absent from BASE`,
+      );
+    }
+    if (sha256(headText) !== output.headSha256) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} HEAD bytes do not match ${authority.code} roadmap authority`,
+      );
+    }
+    return;
+  }
+  if (baseText === null) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must exist in BASE`,
+    );
+  }
+  if (sha256(baseText) !== output.baseSha256) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} BASE bytes do not match ${authority.code} roadmap authority`,
+    );
+  }
+  if (output.operation === 'replace-exact') {
+    if (sha256(headText) !== output.headSha256) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} HEAD bytes do not match ${authority.code} roadmap authority`,
+      );
+    }
+    return;
+  }
+  await validateProjectedOutput(output, authority, context, baseText, headText);
+}
+
+/** @param {ProvenanceCheckDependencies} deps @param {string} revision @param {string} path @param {'BASE' | 'HEAD'} side @param {string} profile */
+async function readRequiredRoadmapFile(deps, revision, path, side, profile) {
+  const mode = await deps.readGitMode?.(revision, path);
+  if (mode !== null && mode !== undefined && !REGULAR_GIT_FILE_MODES.has(mode)) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${path} must be a regular file in ${side}`,
+    );
+  }
+  const text = await deps.readGitFile(revision, path);
+  if (text === null) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${path} must ${
+        side === 'HEAD' ? 'be added in HEAD' : 'exist in BASE'
+      }`,
+    );
+  }
+  return text;
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
+async function validateProjectedOutput(output, authority, context, baseText, headText) {
+  const profile = context.marker.profile;
+  switch (output.path) {
+    case TAXONOMY_FILE:
+      await validateTaxonomyProjection(output, authority, context, baseText, headText);
+      break;
+    case AUDIT_EVIDENCE_FILE:
+      await validateAuditEvidenceProjection(
+        output,
+        authority,
+        context,
+        baseText,
+        headText,
+      );
+      break;
+    case 'tools/test262/upstream-subset.json':
+      await validateSubsetProjection(output, authority, context, baseText, headText);
+      break;
+    case ES5_SELECTION_FILE:
+      await validateEs5SelectionProjection(
+        output,
+        authority,
+        context,
+        baseText,
+        headText,
+      );
+      break;
+    case REPORT_FILE:
+      await validateReportProjection(output, authority, context, baseText, headText);
+      break;
+    case CONFORMANCE_FILE:
+      await validateConformanceProjection(
+        output,
+        authority,
+        context,
+        baseText,
+        headText,
+      );
+      break;
+    default:
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} has no roadmap projection validator`,
+      );
+  }
+  const derivedProjectionSha256 = await derivedRoadmapProjectionSha256(
+    output.path,
+    authority,
+    context,
+  );
+  if (
+    derivedProjectionSha256 !== null &&
+    output.projectionSha256 !== derivedProjectionSha256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} projection sha256 does not match the roadmap evidence`,
+    );
+  }
+}
+
+/** @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context */
+async function loadRoadmapEvidence(authority, context) {
+  const texts = new Map();
+  for (const suffix of [
+    'baseline',
+    'disposition',
+    'owner-deltas',
+    'owner-map',
+    'paths',
+    'promotion',
+  ]) {
+    const path = roadmapEvidencePath(authority, suffix);
+    const text = await context.deps.readGitFile(context.head, path);
+    if (text !== null) texts.set(suffix, text);
+  }
+  return texts;
+}
+
+/** @param {string} path @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context */
+async function derivedRoadmapProjectionSha256(path, authority, context) {
+  if (
+    ![
+      CONFORMANCE_FILE,
+      REPORT_FILE,
+      TAXONOMY_FILE,
+      'tools/test262/upstream-subset.json',
+    ].includes(path)
+  ) {
+    return null;
+  }
+  const evidence = await loadRoadmapEvidence(authority, context);
+  const promotionText = evidence.get('promotion');
+  const ownerDeltasText = evidence.get('owner-deltas');
+  if (promotionText === undefined || ownerDeltasText === undefined) return null;
+  return sha256(
+    `${path}\u0000${authority.source.pathSha256}\u0000${sha256(
+      promotionText,
+    )}\u0000${sha256(ownerDeltasText)}\u0000`,
+  );
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
+async function validateTaxonomyProjection(output, authority, context, baseText, headText) {
+  const profile = context.marker.profile;
+  const evidence = await loadRoadmapEvidence(authority, context);
+  const sourcePaths = parseRoadmapPathList(
+    requiredEvidenceText(evidence, 'paths', authority, profile),
+    roadmapEvidencePath(authority, 'paths'),
+  );
+  const baseline = parseRoadmapBaseline(
+    requiredEvidenceText(evidence, 'baseline', authority, profile),
+    roadmapEvidencePath(authority, 'baseline'),
+  );
+  const disposition = parseRoadmapDisposition(
+    requiredEvidenceText(evidence, 'disposition', authority, profile),
+    roadmapEvidencePath(authority, 'disposition'),
+  );
+  const ownerDeltas = parseRoadmapOwnerDeltas(
+    requiredEvidenceText(evidence, 'owner-deltas', authority, profile),
+    roadmapEvidencePath(authority, 'owner-deltas'),
+  );
+  const ownerMap = parseRoadmapOwnerMap(
+    requiredEvidenceText(evidence, 'owner-map', authority, profile),
+    roadmapEvidencePath(authority, 'owner-map'),
+  );
+  const promotion = parseEs2015Promotion(
+    requiredEvidenceText(evidence, 'promotion', authority, profile),
+  );
+  const baseTaxonomy = parseJsonValue(baseText, output.path);
+  const headTaxonomy = parseJsonValue(headText, output.path);
+  const baseRecords = taxonomyRecordMap(baseTaxonomy, output.path);
+  const headRecords = taxonomyRecordMap(headTaxonomy, output.path);
+  if (sha256(`${sourcePaths.join('\n')}\n`) !== authority.source.pathSha256) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} source paths do not match ${authority.code} roadmap authority`,
+    );
+  }
+  const baselinePaths = baseline.map((entry) => entry.path);
+  if (baselinePaths.join('\u0000') !== sourcePaths.join('\u0000')) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} baseline does not cover the exact source ledger`,
+    );
+  }
+  const sourceVariants = baseline.reduce((total, entry) => total + entry.variants, 0);
+  if (
+    baseline.length !== authority.source.rootCount ||
+    sourceVariants !== authority.source.variantCount
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} baseline does not match the reviewed source counts`,
+    );
+  }
+  const promoted = new Set(promotionPaths(promotion));
+  const dispositionMap = new Map(disposition.map((entry) => [entry.path, entry]));
+  if (dispositionMap.size !== sourcePaths.length) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} disposition does not cover the exact source ledger`,
+    );
+  }
+  const ownerDeltaPaths = ownerDeltas.map((entry) => entry.path);
+  const expectedOwnerDeltaPaths = sourcePaths.filter((path) => !promoted.has(path));
+  if (ownerDeltaPaths.join('\u0000') !== expectedOwnerDeltaPaths.join('\u0000')) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} owner deltas do not cover the non-promoted source ledger`,
+    );
+  }
+  const expectedOwnerMap = ownerMapFromDestinations(
+    ownerDeltas.map((entry) => entryToDestination(entry)),
+  );
+  if (
+    json(expectedOwnerMap) !==
+    json(ownerMapFromDestinations(ownerMap.map((entry) => entryToDestination(entry))))
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} owner map does not match the exact non-selected destinations`,
+    );
+  }
+  const expectedAuthorityDestinations = ownerMapFromDestinations(
+    sourcePaths.map((path) => entryToDestination(dispositionMap.get(path))),
+  );
+  if (json(expectedAuthorityDestinations) !== json(authority.destinations)) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} destinations do not match ${authority.code} roadmap authority`,
+    );
+  }
+  for (const path of sourcePaths) {
+    const baseRecord = baseRecords.get(path);
+    const headRecord = headRecords.get(path);
+    const baselineRecord = baseline.find((entry) => entry.path === path);
+    const destination = dispositionMap.get(path);
+    if (
+      baseRecord === undefined ||
+      headRecord === undefined ||
+      baselineRecord === undefined ||
+      destination === undefined
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} is missing reviewed source path ${path}`,
+      );
+    }
+    if (json(baseRecord) !== json(baselineRecord)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} baseline does not match BASE classification ${path}`,
+      );
+    }
+    const expectedStatus = /** @type {string} */ (destination.status);
+    const expectedBlocker =
+      expectedStatus.startsWith('blocked:') ? destination.blocker : null;
+    if (
+      headRecord.variants !== baseRecord.variants ||
+      headRecord.partition !== baseRecord.partition ||
+      headRecord.status !== expectedStatus ||
+      headRecord.blocker !== expectedBlocker
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} does not apply the reviewed destination for ${path}`,
+      );
+    }
+  }
+  for (const [path, headRecord] of headRecords) {
+    if (sourcePaths.includes(path)) continue;
+    const baseRecord = baseRecords.get(path);
+    if (json(baseRecord) !== json(headRecord)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} changes a foreign classification ${path}`,
+      );
+    }
+  }
+  if (
+    json(summarizeEs2015Classification(headTaxonomy.classifications)) !==
+    json(headTaxonomy.summary)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must preserve whole-tree summary balance`,
+    );
+  }
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
+async function validateAuditEvidenceProjection(
+  output,
+  authority,
+  context,
+  baseText,
+  headText,
+) {
+  const profile = context.marker.profile;
+  const evidence = await loadRoadmapEvidence(authority, context);
+  const sourcePaths = new Set(
+    parseRoadmapPathList(
+      requiredEvidenceText(evidence, 'paths', authority, profile),
+      roadmapEvidencePath(authority, 'paths'),
+    ),
+  );
+  const disposition = new Map(
+    parseRoadmapDisposition(
+      requiredEvidenceText(evidence, 'disposition', authority, profile),
+      roadmapEvidencePath(authority, 'disposition'),
+    ).map((entry) => [entry.path, entry]),
+  );
+  const baseRecords = parseRoadmapAuditEvidence(baseText, output.path);
+  const headRecords = parseRoadmapAuditEvidence(headText, output.path);
+  const baseByKey = new Map(
+    baseRecords.map((record) => [auditRecordKey(record), record]),
+  );
+  const headByKey = new Map(
+    headRecords.map((record) => [auditRecordKey(record), record]),
+  );
+  for (const [key, record] of baseByKey) {
+    if (!sourcePaths.has(record.file)) continue;
+    const destination = disposition.get(record.file);
+    if (destination === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} is missing reviewed source path ${record.file}`,
+      );
+    }
+    if (
+      (destination.status === 'selected-passing' ||
+        destination.status === 'audit-passing-unselected') &&
+      record.status !== 'passed'
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} has non-passing evidence for ${record.file} (${String(record.variant)})`,
+      );
+    }
+    if (!headByKey.has(key)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} is missing source record ${record.file} (${String(record.variant)})`,
+      );
+    }
+  }
+  for (const [key, record] of headByKey) {
+    if (sourcePaths.has(record.file) && !baseByKey.has(key)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} names a foreign source record ${record.file} (${String(record.variant)})`,
+      );
+    }
+    const baseRecord = baseByKey.get(key);
+    if (baseRecord !== undefined && json(baseRecord) !== json(record)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} changes audited source evidence ${record.file} (${String(record.variant)})`,
+      );
+    }
+  }
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
+async function validateSubsetProjection(output, authority, context, baseText, headText) {
+  const profile = context.marker.profile;
+  const baseSubset = parseUpstreamSubset(baseText);
+  const headSubset = parseUpstreamSubset(headText);
+  if (authority.code === 'P0' && authority.evidence.length === 0) {
+    const deltas = subsetDeltas(baseSubset, headSubset);
+    if (
+      json(Object.fromEntries(deltas.map((entry) => [entry.name, entry.added.length]))) !==
+      json(HISTORICAL_P0_SUBSET_GROUPS) ||
+      deltas.some((entry) => entry.removed.length !== 0) ||
+      output.projectionSha256 !== HISTORICAL_P0_SUBSET_DELTA_SHA256
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} must apply exactly the approved P0 subset delta`,
+      );
+    }
+    return;
+  }
+  const evidence = await loadRoadmapEvidence(authority, context);
+  const promotion = parseEs2015Promotion(
+    requiredEvidenceText(evidence, 'promotion', authority, profile),
+  );
+  const expected = serializeUpstreamSubset(mergePromotionSubset(baseSubset, promotion));
+  if (headText !== expected) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must match the canonical promoted subset`,
+    );
+  }
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
+async function validateEs5SelectionProjection(
+  output,
+  authority,
+  context,
+  baseText,
+  headText,
+) {
+  const profile = context.marker.profile;
+  parseEs5Selection(baseText);
+  parseEs5Selection(headText);
+  const baseSelection = parseJsonValue(baseText, output.path);
+  const headSelection = parseJsonValue(headText, output.path);
+  const baseExclusions = baseSelection.exclusions ?? [];
+  const headExclusions = headSelection.exclusions ?? [];
+  const removed = baseExclusions.filter(
+    (entry) =>
+      !headExclusions.some((candidate) => json(candidate) === json(entry)),
+  );
+  const added = headExclusions.filter(
+    (entry) =>
+      !baseExclusions.some((candidate) => json(candidate) === json(entry)),
+  );
+  if (
+    authority.code !== 'P0' ||
+    added.length !== 0 ||
+    removed.length !== 1 ||
+    json(removed[0]) !== json(HISTORICAL_P0_ES5_SELECTION_REMOVAL) ||
+    output.projectionSha256 !== HISTORICAL_P0_ES5_SELECTION_DELTA_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must apply exactly the approved P0 ES5 selection delta`,
+    );
+  }
+  const baseTaxonomy = parseJsonValue(
+    await readRequiredRoadmapFile(context.deps, context.base, TAXONOMY_FILE, 'BASE', profile),
+    TAXONOMY_FILE,
+  );
+  const headTaxonomy = parseJsonValue(
+    await readRequiredRoadmapFile(context.deps, context.head, TAXONOMY_FILE, 'HEAD', profile),
+    TAXONOMY_FILE,
+  );
+  const path = HISTORICAL_P0_ES5_SELECTION_REMOVAL.path;
+  const baseRecord = taxonomyRecordMap(baseTaxonomy, TAXONOMY_FILE).get(path);
+  const headRecord = taxonomyRecordMap(headTaxonomy, TAXONOMY_FILE).get(path);
+  if (json(baseRecord) !== json(headRecord)) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must retain the taxonomy classification for ${path}`,
+    );
+  }
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
+async function validateReportProjection(output, authority, context, baseText, headText) {
+  const profile = context.marker.profile;
+  const evidence = await loadRoadmapEvidence(authority, context);
+  const promotion = parseEs2015Promotion(
+    requiredEvidenceText(evidence, 'promotion', authority, profile),
+  );
+  const promoted = new Set(promotionPaths(promotion));
+  const headSubsetText = await readRequiredRoadmapFile(
+    context.deps,
+    context.head,
+    'tools/test262/upstream-subset.json',
+    'HEAD',
+    profile,
+  );
+  const headSubset = parseUpstreamSubset(headSubsetText);
+  const selectedPaths = upstreamSubsetPaths(headSubset);
+  const headTestRecords = parseRoadmapReportTestRecords(headText, output.path);
+  for (const record of headTestRecords) {
+    if (!selectedPaths.includes(record.file)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} names a foreign selected record ${record.file}`,
+      );
+    }
+  }
+  const baseTestRecords = parseRoadmapReportTestRecords(baseText, output.path);
+  const auditEvidenceText = await readRequiredRoadmapFile(
+    context.deps,
+    context.head,
+    AUDIT_EVIDENCE_FILE,
+    'HEAD',
+    profile,
+  );
+  const promotionRecords = parseRoadmapAuditEvidence(auditEvidenceText, AUDIT_EVIDENCE_FILE)
+    .filter((record) => promoted.has(record.file))
+    .map((record) => {
+      if (record.status !== 'passed') {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} protected output ${output.path} requires passing audit evidence for promoted path ${record.file}`,
+        );
+      }
+      return createTestRecord({
+        file: record.file,
+        variant: record.variant,
+        status: record.status,
+      });
+    });
+  const expectedRecords = orderReportRecords(
+    selectedPaths,
+    baseTestRecords.filter((record) => !promoted.has(record.file)),
+    promotionRecords,
+  );
+  const expectedText = await canonicalRoadmapReportText({
+    featuresText: await readRequiredRoadmapFile(
+      context.deps,
+      context.head,
+      FEATURES_FILE,
+      'HEAD',
+      profile,
+    ),
+    records: expectedRecords,
+    subsetText: headSubsetText,
+    taxonomyText: await readRequiredRoadmapFile(
+      context.deps,
+      context.head,
+      TAXONOMY_FILE,
+      'HEAD',
+      profile,
+    ),
+  });
+  if (headText !== expectedText) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must match the canonical selected report`,
+    );
+  }
+}
+
+/** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
+async function validateConformanceProjection(
+  output,
+  authority,
+  context,
+  baseText,
+  headText,
+) {
+  const profile = context.marker.profile;
+  const reportText = await readRequiredRoadmapFile(
+    context.deps,
+    context.head,
+    REPORT_FILE,
+    'HEAD',
+    profile,
+  );
+  const subsetText = await readRequiredRoadmapFile(
+    context.deps,
+    context.head,
+    'tools/test262/upstream-subset.json',
+    'HEAD',
+    profile,
+  );
+  const taxonomyText = await readRequiredRoadmapFile(
+    context.deps,
+    context.head,
+    TAXONOMY_FILE,
+    'HEAD',
+    profile,
+  );
+  const expected = replaceGeneratedBlock(
+    baseText,
+    roadmapCoverageBlock(reportText, subsetText, taxonomyText),
+  );
+  if (headText !== expected) {
+    if (stripGeneratedCoverageBlock(baseText) !== stripGeneratedCoverageBlock(headText)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected output ${output.path} must preserve manual prose outside the generated block`,
+      );
+    }
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${output.path} must match the canonical coverage block`,
+    );
+  }
+}
+
+/** @param {Map<string, string>} evidence @param {string} suffix @param {Record<string, any>} authority @param {string} profile */
+function requiredEvidenceText(evidence, suffix, authority, profile) {
+  const text = evidence.get(suffix);
+  if (text === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `${profile} protected output ${roadmapEvidencePath(authority, suffix)} must be added in HEAD`,
+    );
+  }
+  return text;
+}
+
+/** @param {unknown} value @param {string} label */
+function taxonomyRecordMap(value, label) {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    !Array.isArray(/** @type {Record<string, unknown>} */ (value).classifications)
+  ) {
+    throw new Es2015ProvenanceCheckError(`${label} must contain classifications`);
+  }
+  return new Map(
+    /** @type {any[]} */ (/** @type {Record<string, unknown>} */ (value).classifications).map(
+      (record) => [record.path, record],
+    ),
+  );
+}
+
+/** @param {any} entry */
+function entryToDestination(entry) {
+  if (entry === undefined) {
+    throw new Es2015ProvenanceCheckError('Roadmap destination is missing');
+  }
+  return {
+    status:
+      typeof entry.status === 'string' && entry.status.startsWith('blocked:')
+        ? 'blocked'
+        : entry.status,
+    blocker:
+      typeof entry.status === 'string' && entry.status.startsWith('blocked:')
+        ? entry.blocker
+        : entry.blocker ?? null,
+    issue: entry.issue,
+  };
+}
+
+/** @param {readonly { status: string, blocker: string | null, issue: number }[]} destinations */
+function ownerMapFromDestinations(destinations) {
+  const seen = new Map();
+  for (const destination of destinations) {
+    const key = `${destination.status}\u0000${destination.blocker ?? ''}\u0000${destination.issue}`;
+    if (!seen.has(key)) {
+      seen.set(key, destination);
+    }
+  }
+  return [...seen.values()].sort((left, right) =>
+    `${left.status}\u0000${left.blocker ?? ''}\u0000${left.issue}` <
+    `${right.status}\u0000${right.blocker ?? ''}\u0000${right.issue}`
+      ? -1
+      : 1,
+  );
+}
+
+/** @param {any} subset */
+function subsetDeltas(baseSubset, headSubset) {
+  const baseGroups = new Map(baseSubset.groups.map((group) => [group.name, group]));
+  return headSubset.groups
+    .map((group) => {
+      const baseGroup = baseGroups.get(group.name) ?? { paths: [] };
+      return {
+        name: group.name,
+        added: group.paths.filter((path) => !baseGroup.paths.includes(path)),
+        removed: baseGroup.paths.filter((path) => !group.paths.includes(path)),
+      };
+    })
+    .filter((entry) => entry.added.length > 0 || entry.removed.length > 0);
+}
+
+/** @param {string} text @param {string} label */
+function parseRoadmapReportTestRecords(text, label) {
+  /** @type {ReturnType<typeof createTestRecord>[]} */
+  const records = [];
+  for (const [index, line] of text.trim().split('\n').entries()) {
+    if (line === '') continue;
+    const value = parseJsonValue(line, `${label} line ${index + 1}`);
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      Array.isArray(value) ||
+      /** @type {Record<string, unknown>} */ (value).type !== 'test'
+    ) {
+      continue;
+    }
+    const record = /** @type {Record<string, any>} */ (value);
+    records.push(
+      createTestRecord({
+        file: record.file,
+        variant: record.variant,
+        status: record.status,
+        ...(record.features === undefined ? {} : { features: record.features }),
+      }),
+    );
+  }
+  return records;
+}
+
+/** @param {readonly ReturnType<typeof createTestRecord>[]} baseRecords @param {readonly ReturnType<typeof createTestRecord>[]} promotionRecords */
+function orderReportRecords(selectedPaths, baseRecords, promotionRecords) {
+  const byFile = new Map();
+  for (const record of [...baseRecords, ...promotionRecords]) {
+    const list = byFile.get(record.file) ?? [];
+    list.push(record);
+    byFile.set(record.file, list);
+  }
+  return selectedPaths.flatMap((path) =>
+    (byFile.get(path) ?? []).sort((left, right) =>
+      String(left.variant).localeCompare(String(right.variant)),
+    ),
+  );
+}
+
+/** @param {{ subsetText: string, taxonomyText: string, featuresText: string, records: readonly ReturnType<typeof createTestRecord>[] }} options */
+async function canonicalRoadmapReportText(options) {
+  const subset = parseUpstreamSubset(options.subsetText);
+  const features = parseFeatureManifest(options.featuresText);
+  const coverage = summarizeTest262Coverage({
+    inventory: coverageInventoryFromTaxonomy(options.taxonomyText),
+    records: options.records,
+    selected: upstreamSubsetPaths(subset),
+  });
+  const summary = createSummaryRecord(options.records);
+  return `${[
+    ...formatReportLines(options.records),
+    ...formatUpstreamSummaryLines(
+      summarizeUpstreamRun({
+        subset,
+        records: options.records,
+        supportedFeatures: featureNames(features),
+      }),
+    ),
+    ...formatCoverageLines(coverage),
+    formatRecordLine(summary),
+  ].join('\n')}\n`;
+}
+
+/** @param {string} taxonomyText */
+function coverageInventoryFromTaxonomy(taxonomyText) {
+  const taxonomy = parseJsonValue(taxonomyText, TAXONOMY_FILE);
+  return {
+    files: Object.freeze(taxonomy.classifications.map((record) => record.path)),
+    malformed: Object.freeze([]),
+    variants: new Map(
+      taxonomy.classifications.map((record) => [record.path, record.variants]),
+    ),
+    totals: {
+      files: taxonomy.summary.roots,
+      records: taxonomy.summary.variants,
+      malformed: 0,
+    },
+  };
+}
+
+/** @param {string} reportText @param {string} subsetText @param {string} taxonomyText */
+function roadmapCoverageBlock(reportText, subsetText, taxonomyText) {
+  const records = parseRoadmapReportTestRecords(reportText, REPORT_FILE);
+  const subset = parseUpstreamSubset(subsetText);
+  const coverage = summarizeTest262Coverage({
+    inventory: coverageInventoryFromTaxonomy(taxonomyText),
+    records,
+    selected: upstreamSubsetPaths(subset),
+  });
+  return renderCoverageSummary({
+    coverage,
+    reportPath: REPORT_FILE,
+    reportLinkPath: REPORT_FILE.slice(REPORT_FILE.lastIndexOf('/') + 1),
+  });
+}
+
+/** @param {string} document */
+function stripGeneratedCoverageBlock(document) {
+  return replaceGeneratedBlock(document, '').trim();
+}
+
+/** @param {ReturnType<typeof createTestRecord>} record */
+function auditRecordKey(record) {
+  return `${record.file}\u0000${record.variant ?? ''}`;
+}
+
 
 /**
  * @param {string} base
@@ -1259,19 +2381,6 @@ function normalizeRangeManifestValue(manifest, _label) {
   const normalized = validateRoadmapAuthorityManifest(manifest);
   validateProvenanceFoundation(normalized);
   return normalized;
-}
-
-/** @param {Record<string, any>} authority */
-function roadmapAggregateProjectionSha256(authority) {
-  const entries = authority.protectedOutputs.map((output) => ({
-    path: output.path,
-    operation: output.operation,
-    sha256:
-      output.operation === 'project'
-        ? output.projectionSha256
-        : output.headSha256,
-  }));
-  return sha256(`${JSON.stringify(entries)}\n`);
 }
 
 /**
@@ -1567,7 +2676,9 @@ async function provenanceOwnedRange(deps, changes, base, head) {
       : [change.sourcePath, change.path],
   );
   const gateOwnerPaths = new Set(PROVENANCE_RANGE_GATE_OWNER_PATHS);
-  if (changedPaths.some((path) => gateOwnerPaths.has(path))) return true;
+  if (changedPaths.some((path) => pathMatchesOwned(path, gateOwnerPaths, new Set()))) {
+    return true;
+  }
 
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
   const ownedPaths = new Set(gateOwnerPaths);
@@ -1585,22 +2696,42 @@ async function provenanceOwnedRange(deps, changes, base, head) {
     );
     addRangeProfileOwnership(ownedPaths, bootstrapFoundationProfile);
     addRangeProfileOwnership(ownedPaths, FOUNDATION_BOOTSTRAP_RANGE_PROFILE);
-    return changedPaths.some((path) => ownedPaths.has(path));
+    return changedPaths.some((path) => pathMatchesOwned(path, ownedPaths, new Set()));
   }
-  const manifestText =
-    baseManifestText ?? (await deps.readGitFile(head, ES2015_PROVENANCE_FILE));
-  if (manifestText === null) return false;
-  const manifest = parseRangeManifest(
-    manifestText,
-    baseManifestText === null
-      ? 'provenance ownership head'
-      : 'provenance ownership base',
-  );
+  if (baseManifestText === null) {
+    const headManifestText = await deps.readGitFile(head, ES2015_PROVENANCE_FILE);
+    if (headManifestText === null) return false;
+    const headManifest = parseRangeManifest(
+      headManifestText,
+      'provenance ownership head',
+    );
+    if (headManifest.version === 3) return false;
+    for (const profile of headManifest.rangeProfiles) {
+      if (profile.name === ISSUE_77_MAINTENANCE_PROFILE) continue;
+      addRangeProfileOwnership(ownedPaths, profile);
+    }
+    return changedPaths.some((path) =>
+      pathMatchesOwned(path, ownedPaths, new Set()),
+    );
+  }
+  const manifest = parseRangeManifest(baseManifestText, 'provenance ownership base');
+  if (manifest.version === 3) {
+    const roadmapOwnedPaths = roadmapOwnedPathsFromBaseManifest(manifest);
+    const namespaces = new Set();
+    for (const authority of manifest.roadmapAuthorities ?? []) {
+      for (const prefix of roadmapGeneratedNamespacePrefixes(authority)) {
+        namespaces.add(prefix);
+      }
+    }
+    return changedPaths.some((path) =>
+      pathMatchesOwned(path, roadmapOwnedPaths, namespaces),
+    );
+  }
   for (const profile of manifest.rangeProfiles) {
     if (profile.name === ISSUE_77_MAINTENANCE_PROFILE) continue;
     addRangeProfileOwnership(ownedPaths, profile);
   }
-  return changedPaths.some((path) => ownedPaths.has(path));
+  return changedPaths.some((path) => pathMatchesOwned(path, ownedPaths, new Set()));
 }
 
 /**
@@ -1610,6 +2741,23 @@ async function provenanceOwnedRange(deps, changes, base, head) {
 function addRangeProfileOwnership(ownedPaths, profile) {
   for (const path of profile.allowedPaths) ownedPaths.add(path);
   for (const path of profile.allowedDeletions) ownedPaths.add(path);
+}
+
+/** @param {string} candidate @param {Set<string>} exactPaths @param {Set<string>} namespaces */
+function pathMatchesOwned(candidate, exactPaths, namespaces) {
+  let decoded = candidate;
+  try {
+    decoded = decodeURIComponent(candidate);
+  } catch {}
+  decoded = decoded.replace(/\\/gu, '/');
+  if (exactPaths.has(decoded) || generatedPathMatchesNamespace(decoded, namespaces)) {
+    return true;
+  }
+  const canonical = canonicalRepositoryPath(candidate);
+  return (
+    canonical !== null &&
+    (exactPaths.has(canonical) || generatedPathMatchesNamespace(canonical, namespaces))
+  );
 }
 
 /** @param {string} text */
