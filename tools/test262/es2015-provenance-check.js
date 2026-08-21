@@ -320,9 +320,11 @@ export function createProvenanceCheckDependencies(options = {}) {
     ...(options.expectedManifestVersion === undefined
       ? {}
       : { expectedManifestVersion: options.expectedManifestVersion }),
-    expectedRoadmapAuthorities:
-      options.expectedRoadmapAuthorities ??
-      APPROVED_INITIAL_ROADMAP_AUTHORITIES,
+    ...(options.expectedRoadmapAuthorities === undefined
+      ? {}
+      : {
+          expectedRoadmapAuthorities: options.expectedRoadmapAuthorities,
+        }),
     ...(options.validateRoadmapProtectedOutputs === undefined
       ? {}
       : {
@@ -1864,14 +1866,10 @@ function trustedManifestValidationOptions(deps, version) {
       `${ES2015_PROVENANCE_FILE} must declare version ${expectedManifestVersion}`,
     );
   }
-  if (expectedManifestVersion === 3) {
-    if (
-      !Object.prototype.hasOwnProperty.call(deps, 'expectedRoadmapAuthorities')
-    ) {
-      throw new Es2015ProvenanceCheckError(
-        `${ES2015_PROVENANCE_FILE} version 3 check requires expected roadmapAuthorities`,
-      );
-    }
+  if (
+    expectedManifestVersion === 3 &&
+    Object.prototype.hasOwnProperty.call(deps, 'expectedRoadmapAuthorities')
+  ) {
     return {
       expectedRoadmapAuthorities: deps.expectedRoadmapAuthorities,
     };

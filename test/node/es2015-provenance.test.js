@@ -1153,6 +1153,22 @@ function canonicalSchemaV3ManifestValue() {
   };
 }
 
+function canonicalPreparedSchemaV3ManifestValue() {
+  const manifest = structuredClone(canonicalSchemaV3ManifestValue());
+  manifest.roadmapAuthorities.splice(
+    1,
+    0,
+    minimalRoadmapAuthority('M0', 79, 'pending'),
+  );
+  return manifest;
+}
+
+function canonicalConsumedSchemaV3ManifestValue() {
+  const manifest = structuredClone(canonicalSchemaV3ManifestValue());
+  manifest.roadmapAuthorities[0].state = 'applied';
+  return manifest;
+}
+
 /** @param {string} code @param {number} issue @param {'pending' | 'applied'} state */
 function minimalRoadmapAuthority(code, issue, state) {
   return {
@@ -6150,37 +6166,25 @@ export default [
     },
   },
   {
-    name: 'ES2015 provenance CLI check uses the trusted exact schema-v3 authority default',
+    name: 'ES2015 provenance CLI check accepts canonical schema-v3 manifests without a static authority expectation',
     run: async () => {
-      const manifestV3 = canonicalSchemaV3ManifestValue();
-      const v3Dependencies = provenanceCheckDependencies({
-        files: new Map([
-          [ES2015_PROVENANCE_FILE, renderEs2015ProvenanceManifest(manifestV3)],
-        ]),
-      });
-      assertSame(await provenanceCheck(['--check'], v3Dependencies), 0);
-
-      const emptyManifestV3 = canonicalEmptySchemaV3ManifestValue();
-      const emptyDependencies = provenanceCheckDependencies({
-        files: new Map([
-          [
-            ES2015_PROVENANCE_FILE,
-            renderEs2015ProvenanceManifest(emptyManifestV3),
-          ],
-        ]),
-      });
-      const emptyError = await rejected(() =>
-        provenanceCheck(['--check'], emptyDependencies),
-      );
-      assertSame(emptyError instanceof Es2015ProvenanceCheckError, true);
-      assertSame(
-        emptyError.message,
-        'H0 roadmap authority is missing from the reviewed ledger',
-      );
+      for (const manifestV3 of [
+        canonicalEmptySchemaV3ManifestValue(),
+        canonicalSchemaV3ManifestValue(),
+        canonicalPreparedSchemaV3ManifestValue(),
+        canonicalConsumedSchemaV3ManifestValue(),
+      ]) {
+        const dependencies = provenanceCheckDependencies({
+          files: new Map([
+            [ES2015_PROVENANCE_FILE, renderEs2015ProvenanceManifest(manifestV3)],
+          ]),
+        });
+        assertSame(await provenanceCheck(['--check'], dependencies), 0);
+      }
     },
   },
   {
-    name: 'ES2015 provenance CLI check accepts canonical schema-v2 and schema-v3 manifests and rejects authority drift',
+    name: 'ES2015 provenance CLI check uses explicit expected roadmap authorities when provided',
     run: async () => {
       assertSame(
         await provenanceCheck(['--check'], provenanceCheckDependencies()),
@@ -6216,6 +6220,100 @@ export default [
       assertSame(
         driftError.message,
         'H0 roadmap authority does not match the reviewed ledger',
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance canonical prepared and consumed schema-v3 HEADs pass ordinary check but still require authorized range transitions',
+    run: async () => {
+      const baseManifest = canonicalSchemaV3ManifestValue();
+      const baseManifestText = renderEs2015ProvenanceManifest(baseManifest);
+      const preparedManifest = canonicalPreparedSchemaV3ManifestValue();
+      const preparedManifestText = renderEs2015ProvenanceManifest(
+        preparedManifest,
+      );
+      const consumedManifest = canonicalConsumedSchemaV3ManifestValue();
+      const consumedManifestText = renderEs2015ProvenanceManifest(
+        consumedManifest,
+      );
+
+      assertSame(
+        await provenanceCheck(
+          ['--check'],
+          provenanceCheckDependencies({
+            files: new Map([[ES2015_PROVENANCE_FILE, preparedManifestText]]),
+          }),
+        ),
+        0,
+      );
+      assertSame(
+        await provenanceCheck(
+          ['--check'],
+          provenanceCheckDependencies({
+            files: new Map([[ES2015_PROVENANCE_FILE, consumedManifestText]]),
+          }),
+        ),
+        0,
+      );
+
+      const preparedRangeError = await rejected(() =>
+        provenanceCheck(
+          [
+            '--check-range',
+            `--base=${RANGE_BASE_SHA}`,
+            `--head=${RANGE_HEAD_SHA}`,
+            '--profile=roadmap-authority-prepare',
+            `--marker=${roadmapPreparationMarker({
+              baseManifestText,
+              recordSha256: 'f'.repeat(64),
+            })}`,
+          ],
+          rangeCheckDependencies({
+            changes: [{ status: 'M', path: ES2015_PROVENANCE_FILE }],
+            baseManifestText,
+            headManifestText: preparedManifestText,
+          }),
+        ),
+      );
+      assertSame(
+        preparedRangeError.message,
+        'roadmap-authority-prepare marker record-sha256 does not match M0 roadmap authority',
+      );
+
+      const baseAuthority = baseManifest.roadmapAuthorities[0];
+      if (baseAuthority === undefined || baseAuthority.code !== 'H0') {
+        throw new Error('expected canonical H0 roadmap authority');
+      }
+      const consumedRangeError = await rejected(() =>
+        provenanceCheck(
+          [
+            '--check-range',
+            `--base=${RANGE_BASE_SHA}`,
+            `--head=${RANGE_HEAD_SHA}`,
+            '--profile=roadmap-reclassification:H0',
+            `--marker=${roadmapConsumptionMarker({
+              code: 'H0',
+              issue: baseAuthority.issue,
+              sourcePathSha256: baseAuthority.source.pathSha256,
+              sourceEntrySha256: baseAuthority.source.entryLedgerSha256,
+              protectedProjectionSha256: 'f'.repeat(64),
+            })}`,
+          ],
+          rangeCheckDependencies({
+            changes: [
+              { status: 'M', path: ES2015_PROVENANCE_FILE },
+              { status: 'M', path: 'docs/conformance.md' },
+            ],
+            baseManifestText,
+            headManifestText: consumedManifestText,
+            validateRoadmapProtectedOutputs: async () =>
+              roadmapProjectionEntries(baseAuthority.protectedOutputs),
+          }),
+        ),
+      );
+      assertSame(
+        consumedRangeError.message,
+        'roadmap-reclassification:H0 marker protected-projection-sha256 does not match H0 roadmap authority',
       );
     },
   },
