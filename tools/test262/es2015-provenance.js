@@ -6,6 +6,8 @@ import { createHash } from 'node:crypto';
 import { isTest262FixtureDependencyPath, sortStrings } from './selection.js';
 
 const { structuredClone } = globalThis;
+const PROVENANCE_DECISION_FRAGMENT_DIRECTORY =
+  'tools/test262/es2015-provenance-decisions';
 
 /**
  * @typedef {{ source: string, sourceSha256: string }} IdentitySpecification
@@ -3154,7 +3156,7 @@ function normalizeRoadmapEvidence(value, label) {
     `${label} must contain exact keys`,
   );
   return {
-    path: normalizeRoadmapRepositoryPath(record.path, `${label}.path`),
+    path: normalizeRoadmapAuthorityArtifactPath(record.path, `${label}.path`),
     sha256: sha256Hex(record.sha256, `${label}.sha256`),
   };
 }
@@ -3234,7 +3236,7 @@ function normalizeRoadmapProtectedOutput(value, label) {
       break;
   }
   return {
-    path: normalizeRoadmapRepositoryPath(record.path, `${label}.path`),
+    path: normalizeRoadmapAuthorityArtifactPath(record.path, `${label}.path`),
     operation,
     baseSha256,
     headSha256,
@@ -3350,6 +3352,20 @@ function normalizeRoadmapRepositoryPath(value, label) {
     );
   }
   return value;
+}
+
+/** @param {unknown} value @param {string} label @returns {string} */
+function normalizeRoadmapAuthorityArtifactPath(value, label) {
+  const path = normalizeRoadmapRepositoryPath(value, label);
+  if (
+    PROVENANCE_RANGE_GATE_OWNER_PATHS.includes(path) ||
+    path.startsWith(`${PROVENANCE_DECISION_FRAGMENT_DIRECTORY}/`)
+  ) {
+    throw new Es2015ProvenanceError(
+      `${label} must not claim provenance range gate-owner path ${path}`,
+    );
+  }
+  return path;
 }
 
 /**

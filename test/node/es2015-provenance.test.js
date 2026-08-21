@@ -344,6 +344,18 @@ const PRODUCTION_ES5_SELECTION_TEXT = readFileSyncText(
   new URL('../../tools/test262/es5-selection.json', import.meta.url),
   'utf8',
 );
+const PRODUCTION_AUDIT_EVIDENCE_TEXT = readFileSyncText(
+  new URL('../../tools/test262/es2015-audit-evidence.json', import.meta.url),
+  'utf8',
+);
+const PRODUCTION_REPORT_TEXT = readFileSyncText(
+  new URL('../../docs/test262-report.jsonl', import.meta.url),
+  'utf8',
+);
+const PRODUCTION_CONFORMANCE_TEXT = readFileSyncText(
+  new URL('../../docs/conformance.md', import.meta.url),
+  'utf8',
+);
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
 /** @type {Readonly<{ baseLedger: { rootCount: number, variantCount: number, pathSha256: string }, batches: Record<string, ApprovedBatchSummary> }>} */
@@ -1267,6 +1279,20 @@ function canonicalSchemaV3ManifestValue() {
     ...canonicalEmptySchemaV3ManifestValue(),
     roadmapAuthorities: expectedInitialRoadmapAuthorities(),
   };
+}
+
+function initialRoadmapMigrationArtifactFiles() {
+  return new Map([
+    ['docs/conformance.md', PRODUCTION_CONFORMANCE_TEXT],
+    ['docs/test262-report.jsonl', PRODUCTION_REPORT_TEXT],
+    [
+      'tools/test262/es2015-audit-evidence.json',
+      PRODUCTION_AUDIT_EVIDENCE_TEXT,
+    ],
+    ['tools/test262/es2015-taxonomy.json', PRODUCTION_TAXONOMY_TEXT],
+    ['tools/test262/es5-selection.json', PRODUCTION_ES5_SELECTION_TEXT],
+    ['tools/test262/upstream-subset.json', PRODUCTION_UPSTREAM_SUBSET_TEXT],
+  ]);
 }
 
 function canonicalPreparedSchemaV3ManifestValue() {
@@ -6100,6 +6126,25 @@ export default [
       const workflowText = 'base workflow fixture\n';
       const designText = '# Roadmap Authority Design\n';
       const planText = '# Roadmap Authority Plan\n';
+      const migrationArtifactFiles = initialRoadmapMigrationArtifactFiles();
+      const migrationBaseFiles = new Map([
+        ...migrationArtifactFiles,
+        [CHECKER_PATH, checkerText],
+        [WORKFLOW_PATH, workflowText],
+        [
+          ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH,
+          embeddedRoadmapAuthorityPayload('DESIGN', designText),
+        ],
+        [
+          ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
+          embeddedRoadmapAuthorityPayload('PLAN', planText),
+        ],
+      ]);
+      const migrationHeadFiles = new Map([
+        ...migrationArtifactFiles,
+        [ROADMAP_AUTHORITY_DESIGN_PATH, designText],
+        [ROADMAP_AUTHORITY_PLAN_PATH, planText],
+      ]);
       const marker = parseRoadmapAuthorityMarker(
         roadmapMigrationMarker({
           baseManifestText,
@@ -6116,22 +6161,8 @@ export default [
         ],
         baseManifestText,
         headManifestText,
-        baseFiles: new Map([
-          [CHECKER_PATH, checkerText],
-          [WORKFLOW_PATH, workflowText],
-          [
-            ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH,
-            embeddedRoadmapAuthorityPayload('DESIGN', designText),
-          ],
-          [
-            ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
-            embeddedRoadmapAuthorityPayload('PLAN', planText),
-          ],
-        ]),
-        headFiles: new Map([
-          [ROADMAP_AUTHORITY_DESIGN_PATH, designText],
-          [ROADMAP_AUTHORITY_PLAN_PATH, planText],
-        ]),
+        baseFiles: migrationBaseFiles,
+        headFiles: migrationHeadFiles,
       });
       assertSame(
         await validateRoadmapAuthorityMigration(
@@ -6161,6 +6192,7 @@ export default [
       );
 
       const changedFragment = new Map([
+        ...migrationHeadFiles,
         [`${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`, 'drift\n'],
       ]);
       const changedP0Head = structuredClone(canonicalSchemaV3ManifestValue());
@@ -6197,6 +6229,10 @@ export default [
         'DESIGN',
         designText,
       ).replace(sha256(designText), 'f'.repeat(64));
+      const missingProjectHeadFiles = new Map(migrationHeadFiles);
+      missingProjectHeadFiles.delete('tools/test262/upstream-subset.json');
+      const h0AddExactPath =
+        EXPECTED_H0_PENDING_ROADMAP_AUTHORITY.evidence[0].path;
 
       for (const scenario of [
         {
@@ -6320,21 +6356,79 @@ export default [
         },
         {
           baseFiles: new Map([
-            [CHECKER_PATH, checkerText],
-            [WORKFLOW_PATH, workflowText],
-            [ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH, 'missing payload\n'],
+            ...migrationBaseFiles,
             [
-              ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
-              embeddedRoadmapAuthorityPayload('PLAN', planText),
+              'tools/test262/es2015-audit-evidence.json',
+              `${PRODUCTION_AUDIT_EVIDENCE_TEXT}drift`,
             ],
+          ]),
+          message:
+            'P0 replace-exact protected output tools/test262/es2015-audit-evidence.json BASE bytes do not match its reviewed headSha256',
+        },
+        {
+          headFiles: new Map([
+            ...migrationHeadFiles,
+            [
+              'tools/test262/es2015-audit-evidence.json',
+              `${PRODUCTION_AUDIT_EVIDENCE_TEXT}drift`,
+            ],
+          ]),
+          message:
+            'P0 replace-exact protected output tools/test262/es2015-audit-evidence.json must remain byte-identical across roadmap-authority-migration',
+        },
+        {
+          baseModes: new Map([
+            ['tools/test262/es2015-audit-evidence.json', '120000'],
+          ]),
+          message:
+            'P0 replace-exact protected output tools/test262/es2015-audit-evidence.json must be a regular file in migration BASE',
+        },
+        {
+          headFiles: missingProjectHeadFiles,
+          message:
+            'H0 project protected output tools/test262/upstream-subset.json is missing from migration HEAD',
+        },
+        {
+          headFiles: new Map([
+            ...migrationHeadFiles,
+            [
+              'tools/test262/upstream-subset.json',
+              `${PRODUCTION_UPSTREAM_SUBSET_TEXT}drift`,
+            ],
+          ]),
+          message:
+            'H0 project protected output tools/test262/upstream-subset.json must remain byte-identical across roadmap-authority-migration',
+        },
+        {
+          baseFiles: new Map([
+            ...migrationBaseFiles,
+            [
+              'tools/test262/es2015-taxonomy.json',
+              `${PRODUCTION_TAXONOMY_TEXT}drift`,
+            ],
+          ]),
+          message:
+            'H0 source.baseTaxonomySha256 does not match tools/test262/es2015-taxonomy.json in migration BASE',
+        },
+        {
+          baseFiles: new Map([...migrationBaseFiles, [h0AddExactPath, '{}\n']]),
+          message: `H0 add-exact evidence/output path ${h0AddExactPath} must be absent from migration BASE`,
+        },
+        {
+          headFiles: new Map([...migrationHeadFiles, [h0AddExactPath, '{}\n']]),
+          message: `H0 add-exact evidence/output path ${h0AddExactPath} must be absent from migration HEAD`,
+        },
+        {
+          baseFiles: new Map([
+            ...migrationBaseFiles,
+            [ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH, 'missing payload\n'],
           ]),
           message:
             'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md must contain exactly one embedded roadmap authority DESIGN payload',
         },
         {
           baseFiles: new Map([
-            [CHECKER_PATH, checkerText],
-            [WORKFLOW_PATH, workflowText],
+            ...migrationBaseFiles,
             [
               ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH,
               repeatedDesignPayload,
@@ -6346,30 +6440,20 @@ export default [
         },
         {
           baseFiles: new Map([
-            [CHECKER_PATH, checkerText],
-            [WORKFLOW_PATH, workflowText],
+            ...migrationBaseFiles,
             [ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH, badDesignSha],
-            [
-              ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
-              embeddedRoadmapAuthorityPayload('PLAN', planText),
-            ],
           ]),
           message:
             'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md embedded roadmap authority DESIGN payload sha256 does not match its exact bytes',
         },
         {
           baseFiles: new Map([
-            [CHECKER_PATH, checkerText],
-            [WORKFLOW_PATH, workflowText],
+            ...migrationBaseFiles,
             [
               ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH,
               `Fixture heading\n<!-- BEGIN ROADMAP AUTHORITY DESIGN sha256:${sha256(
                 designText,
               )} -->\n${designText}`,
-            ],
-            [
-              ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
-              embeddedRoadmapAuthorityPayload('PLAN', planText),
             ],
           ]),
           message:
@@ -6377,6 +6461,7 @@ export default [
         },
         {
           headFiles: new Map([
+            ...migrationHeadFiles,
             [ROADMAP_AUTHORITY_DESIGN_PATH, '# altered design\n'],
           ]),
           message:
@@ -6402,25 +6487,9 @@ export default [
           ],
           baseManifestText: scenario.baseManifestText ?? baseManifestText,
           headManifestText: scenarioHeadManifestText,
-          baseFiles:
-            scenario.baseFiles ??
-            new Map([
-              [CHECKER_PATH, checkerText],
-              [WORKFLOW_PATH, workflowText],
-              [
-                ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH,
-                embeddedRoadmapAuthorityPayload('DESIGN', designText),
-              ],
-              [
-                ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
-                embeddedRoadmapAuthorityPayload('PLAN', planText),
-              ],
-            ]),
-          headFiles: new Map([
-            [ROADMAP_AUTHORITY_DESIGN_PATH, designText],
-            [ROADMAP_AUTHORITY_PLAN_PATH, planText],
-            ...[...(scenario.headFiles ?? new Map()).entries()],
-          ]),
+          baseFiles: scenario.baseFiles ?? migrationBaseFiles,
+          baseModes: scenario.baseModes,
+          headFiles: scenario.headFiles ?? migrationHeadFiles,
         });
         const error = await rejected(() =>
           validateRoadmapAuthorityMigration(
@@ -6687,6 +6756,68 @@ export default [
           `roadmap-authority-prepare range forbids changed path ${path}`,
         );
       }
+
+      const forbiddenAuthorityPaths = [
+        ...new Set([
+          ...provenance.PROVENANCE_RANGE_GATE_OWNER_PATHS,
+          `${PROVENANCE_DECISIONS_DIRECTORY}/UX.json`,
+        ]),
+      ];
+      for (const field of ['evidence', 'protectedOutputs']) {
+        for (const path of forbiddenAuthorityPaths) {
+          const forbiddenAuthority = /** @type {Record<string, any>} */ (
+            minimalRoadmapAuthority('M0', 79, 'pending')
+          );
+          if (field === 'evidence') {
+            forbiddenAuthority.evidence = [
+              {
+                path,
+                sha256: '4'.repeat(64),
+              },
+            ];
+          } else {
+            forbiddenAuthority.protectedOutputs = [
+              {
+                path,
+                operation: 'add-exact',
+                baseSha256: null,
+                headSha256: '3'.repeat(64),
+                projectionSha256: null,
+              },
+            ];
+          }
+          const forbiddenHead = structuredClone(baseManifest);
+          forbiddenHead.roadmapAuthorities.splice(1, 0, forbiddenAuthority);
+          const forbiddenHeadText = prettyJson(forbiddenHead);
+          const error = await rejected(() =>
+            validateRoadmapAuthorityPreparation(
+              baseManifest,
+              forbiddenHead,
+              marker,
+              {
+                deps: rangeCheckDependencies({
+                  changes: [{ status: 'M', path: ES2015_PROVENANCE_FILE }],
+                  baseManifestText,
+                  headManifestText: forbiddenHeadText,
+                }),
+                base: RANGE_BASE_SHA,
+                head: RANGE_HEAD_SHA,
+                changes: [
+                  {
+                    status: 'M',
+                    path: ES2015_PROVENANCE_FILE,
+                    sourcePath: null,
+                  },
+                ],
+              },
+            ),
+          );
+          assertSame(
+            error.message,
+            `${ES2015_PROVENANCE_FILE} roadmapAuthorities[1].${field}[0].path must not claim provenance range gate-owner path ${path}`,
+          );
+        }
+      }
     },
   },
   {
@@ -6924,6 +7055,80 @@ export default [
         emptyProjectionError.message,
         'roadmap-reclassification:H0 requires a nonempty protected projection result',
       );
+    },
+  },
+  {
+    name: 'ES2015 provenance consumption rejects gate-owner paths before malformed authority lookup',
+    run: async () => {
+      const baseManifest = canonicalSchemaV3ManifestValue();
+      const headManifest = canonicalConsumedSchemaV3ManifestValue();
+      const marker =
+        /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: 'M0',
+              issue: 79,
+              profile: 'roadmap-reclassification:M0',
+              sourcePathSha256: '2'.repeat(64),
+              protectedProjectionSha256: '5'.repeat(64),
+            }),
+          )
+        );
+      const forbiddenAuthorityPaths = [
+        ...new Set([
+          ...provenance.PROVENANCE_RANGE_GATE_OWNER_PATHS,
+          `${PROVENANCE_DECISIONS_DIRECTORY}/UX.json`,
+        ]),
+      ];
+      for (const path of forbiddenAuthorityPaths) {
+        const baseText = `malformed BASE ${path}\n`;
+        const headText = `malformed HEAD ${path}\n`;
+        const authority = /** @type {Record<string, any>} */ (
+          minimalRoadmapAuthority('M0', 79, 'pending')
+        );
+        authority.protectedOutputs = [
+          {
+            path,
+            operation: 'replace-exact',
+            baseSha256: sha256(baseText),
+            headSha256: sha256(headText),
+            projectionSha256: null,
+          },
+        ];
+        const changes = [
+          {
+            status: 'M',
+            path: ES2015_PROVENANCE_FILE,
+            sourcePath: null,
+          },
+          ...(path === ES2015_PROVENANCE_FILE
+            ? []
+            : [{ status: 'M', path, sourcePath: null }]),
+        ];
+        const error = await rejected(() =>
+          validateRoadmapProtectedOutputs(authority, changes, {
+            deps: rangeCheckDependencies({
+              changes: changes.map(({ status, path: changedPath }) => ({
+                status,
+                path: changedPath,
+              })),
+              baseManifestText: renderEs2015ProvenanceManifest(baseManifest),
+              headManifestText: renderEs2015ProvenanceManifest(headManifest),
+              baseFiles: new Map([[path, baseText]]),
+              headFiles: new Map([[path, headText]]),
+            }),
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            baseManifest,
+            headManifest,
+            marker,
+          }),
+        );
+        assertSame(
+          error.message,
+          `roadmap-reclassification:M0 roadmap authority protectedOutputs must not claim provenance range gate-owner path ${path}`,
+        );
+      }
     },
   },
   {
@@ -7827,6 +8032,7 @@ export default [
       const workflowText = 'base workflow fixture\n';
       const designText = '# Roadmap Authority Design\n';
       const planText = '# Roadmap Authority Plan\n';
+      const migrationArtifactFiles = initialRoadmapMigrationArtifactFiles();
       const ciArgs = [
         '--check-range',
         `--base=${RANGE_BASE_SHA}`,
@@ -7842,6 +8048,7 @@ export default [
         baseManifestText,
         headManifestText,
         baseFiles: new Map([
+          ...migrationArtifactFiles,
           [CHECKER_PATH, checkerText],
           [WORKFLOW_PATH, workflowText],
           [
@@ -7854,6 +8061,7 @@ export default [
           ],
         ]),
         headFiles: new Map([
+          ...migrationArtifactFiles,
           [ROADMAP_AUTHORITY_DESIGN_PATH, designText],
           [ROADMAP_AUTHORITY_PLAN_PATH, planText],
         ]),

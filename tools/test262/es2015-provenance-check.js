@@ -916,6 +916,7 @@ export async function validateRoadmapAuthorityMigration(
   validateProvenanceFoundation(headManifest, undefined, {
     expectedRoadmapAuthorities: APPROVED_INITIAL_ROADMAP_AUTHORITIES,
   });
+  await validateInitialRoadmapAuthorityMigrationArtifacts(deps, base, head);
   validateRangeChanges(
     syntheticRangeProfile(
       ROADMAP_AUTHORITY_MIGRATION_PROFILE,
@@ -932,6 +933,200 @@ export async function validateRoadmapAuthorityMigration(
   );
   await validateEmbeddedRoadmapAuthorityDocuments(deps, base, head);
   return 0;
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {string} base
+ * @param {string} head
+ */
+async function validateInitialRoadmapAuthorityMigrationArtifacts(
+  deps,
+  base,
+  head,
+) {
+  const h0 = approvedInitialRoadmapAuthority('H0');
+  const p0 = approvedInitialRoadmapAuthority('P0');
+  const baseTaxonomyText = await readRequiredMigrationArtifact(
+    deps,
+    base,
+    TAXONOMY_FILE,
+    'BASE',
+    'H0 source taxonomy',
+  );
+  const baseTaxonomySha256 = sha256(baseTaxonomyText);
+  if (baseTaxonomySha256 !== h0.source.baseTaxonomySha256) {
+    throw new Es2015ProvenanceCheckError(
+      `H0 source.baseTaxonomySha256 does not match ${TAXONOMY_FILE} in migration BASE`,
+    );
+  }
+  if (
+    h0.reconciliation === null ||
+    baseTaxonomySha256 !== h0.reconciliation.authorityTaxonomySha256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `H0 reconciliation.authorityTaxonomySha256 does not match ${TAXONOMY_FILE} in migration BASE`,
+    );
+  }
+
+  for (const output of h0.protectedOutputs) {
+    if (output.operation === 'add-exact') continue;
+    if (output.operation !== 'project') {
+      throw new Es2015ProvenanceCheckError(
+        `H0 initial roadmap authority has unsupported ${output.operation} protected output ${output.path}`,
+      );
+    }
+    const baseText =
+      output.path === TAXONOMY_FILE
+        ? baseTaxonomyText
+        : await readRequiredMigrationArtifact(
+            deps,
+            base,
+            output.path,
+            'BASE',
+            'H0 project protected output',
+          );
+    if (sha256(baseText) !== output.baseSha256) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 project protected output ${output.path} BASE bytes do not match its reviewed baseSha256`,
+      );
+    }
+    const headText = await readRequiredMigrationArtifact(
+      deps,
+      head,
+      output.path,
+      'HEAD',
+      'H0 project protected output',
+    );
+    if (headText !== baseText) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 project protected output ${output.path} must remain byte-identical across roadmap-authority-migration`,
+      );
+    }
+  }
+
+  const h0AddExactPaths = new Set([
+    ...h0.evidence.map(
+      (/** @type {{ path: string }} */ evidence) => evidence.path,
+    ),
+    ...h0.protectedOutputs
+      .filter(
+        (/** @type {{ operation: string }} */ output) =>
+          output.operation === 'add-exact',
+      )
+      .map((/** @type {{ path: string }} */ output) => output.path),
+  ]);
+  for (const path of h0AddExactPaths) {
+    await assertMigrationPathAbsent(deps, base, path, 'BASE');
+    await assertMigrationPathAbsent(deps, head, path, 'HEAD');
+  }
+
+  for (const output of p0.protectedOutputs) {
+    if (output.operation !== 'replace-exact') {
+      throw new Es2015ProvenanceCheckError(
+        `P0 initial roadmap authority has unsupported ${output.operation} protected output ${output.path}`,
+      );
+    }
+    const baseText = await readRequiredMigrationArtifact(
+      deps,
+      base,
+      output.path,
+      'BASE',
+      'P0 replace-exact protected output',
+    );
+    if (sha256(baseText) !== output.headSha256) {
+      throw new Es2015ProvenanceCheckError(
+        `P0 replace-exact protected output ${output.path} BASE bytes do not match its reviewed headSha256`,
+      );
+    }
+    const headText = await readRequiredMigrationArtifact(
+      deps,
+      head,
+      output.path,
+      'HEAD',
+      'P0 replace-exact protected output',
+    );
+    if (headText !== baseText) {
+      throw new Es2015ProvenanceCheckError(
+        `P0 replace-exact protected output ${output.path} must remain byte-identical across roadmap-authority-migration`,
+      );
+    }
+  }
+}
+
+/** @param {string} code */
+function approvedInitialRoadmapAuthority(code) {
+  const authority = APPROVED_INITIAL_ROADMAP_AUTHORITIES.find(
+    (candidate) => candidate.code === code,
+  );
+  if (authority === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `${code} initial roadmap authority is missing from the reviewed ledger`,
+    );
+  }
+  return authority;
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {string} revision
+ * @param {string} path
+ * @param {'BASE' | 'HEAD'} side
+ * @param {string} label
+ */
+async function readRequiredMigrationArtifact(
+  deps,
+  revision,
+  path,
+  side,
+  label,
+) {
+  if (deps.readGitMode === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `${label} ${path} cannot attest a regular file in migration ${side}`,
+    );
+  }
+  const mode = await deps.readGitMode(revision, path);
+  if (mode === null) {
+    throw new Es2015ProvenanceCheckError(
+      `${label} ${path} is missing from migration ${side}`,
+    );
+  }
+  if (!REGULAR_GIT_FILE_MODES.has(mode)) {
+    throw new Es2015ProvenanceCheckError(
+      `${label} ${path} must be a regular file in migration ${side}`,
+    );
+  }
+  const text = await deps.readGitFile(revision, path);
+  if (text === null) {
+    throw new Es2015ProvenanceCheckError(
+      `${label} ${path} is missing from migration ${side}`,
+    );
+  }
+  return text;
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {string} revision
+ * @param {string} path
+ * @param {'BASE' | 'HEAD'} side
+ */
+async function assertMigrationPathAbsent(deps, revision, path, side) {
+  if (deps.readGitMode === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      `H0 add-exact evidence/output path ${path} cannot attest absence from migration ${side}`,
+    );
+  }
+  const [mode, text] = await Promise.all([
+    deps.readGitMode(revision, path),
+    deps.readGitFile(revision, path),
+  ]);
+  if (mode !== null || text !== null) {
+    throw new Es2015ProvenanceCheckError(
+      `H0 add-exact evidence/output path ${path} must be absent from migration ${side}`,
+    );
+  }
 }
 
 /**
@@ -1355,6 +1550,7 @@ export async function validateRoadmapProtectedOutputs(
     );
   }
   const profile = context.marker.profile;
+  assertRoadmapAuthorityDoesNotClaimGateOwnerPaths(authority, profile);
   /** @type {Map<string, any>} */
   const protectedByPath = new Map(
     authority.protectedOutputs.map(
@@ -1373,6 +1569,15 @@ export async function validateRoadmapProtectedOutputs(
         ? null
         : canonicalRepositoryPath(change.sourcePath);
     const path = canonicalRepositoryPath(change.path);
+    const aliasedGateOwnerPath =
+      path !== null &&
+      path !== change.path &&
+      roadmapAuthorityGateOwnerPath(path);
+    if (aliasedGateOwnerPath) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected outputs include unexpected protected path ${change.path}`,
+      );
+    }
     const aliasedOwnedPath =
       path !== null &&
       path !== change.path &&
@@ -1416,6 +1621,11 @@ export async function validateRoadmapProtectedOutputs(
     if (path === null) {
       throw new Es2015ProvenanceCheckError(
         `${profile} protected outputs include unexpected generated path ${change.path}`,
+      );
+    }
+    if (roadmapAuthorityGateOwnerPath(path)) {
+      throw new Es2015ProvenanceCheckError(
+        `${profile} protected outputs include unexpected protected path ${path}`,
       );
     }
     const output = protectedByPath.get(path);
@@ -1464,6 +1674,30 @@ export async function validateRoadmapProtectedOutputs(
       operation: output.operation,
       sha256: roadmapProjectionSha256(output.path, authority),
     }),
+  );
+}
+
+/**
+ * @param {Record<string, any>} authority
+ * @param {string} profile
+ */
+function assertRoadmapAuthorityDoesNotClaimGateOwnerPaths(authority, profile) {
+  for (const field of ['evidence', 'protectedOutputs']) {
+    for (const entry of authority[field] ?? []) {
+      if (roadmapAuthorityGateOwnerPath(entry.path)) {
+        throw new Es2015ProvenanceCheckError(
+          `${profile} roadmap authority ${field} must not claim provenance range gate-owner path ${entry.path}`,
+        );
+      }
+    }
+  }
+}
+
+/** @param {string} path */
+function roadmapAuthorityGateOwnerPath(path) {
+  return (
+    PROVENANCE_RANGE_GATE_OWNER_PATHS.includes(path) ||
+    path.startsWith(`${PROVENANCE_DECISIONS_DIRECTORY}/`)
   );
 }
 
