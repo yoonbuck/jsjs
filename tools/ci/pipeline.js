@@ -222,10 +222,12 @@ export const GUARD_PERMISSIONS = Object.freeze({
 /**
  * A body edit or a new push must cancel the older guard, or a run started
  * against stale range/marker data could finish last and look like the current
- * result. The group is the fixed prefix plus the server-provided PR number.
+ * result. The group is the fixed prefix plus the event name and the
+ * server-provided PR number, so `pull_request` and `pull_request_target` do
+ * not cancel each other while repeated runs of the same event/PR still do.
  */
 export const GUARD_CONCURRENCY = Object.freeze({
-  group: `${GUARD_JOB_ID}-\${{ github.event.pull_request.number }}`,
+  group: `${GUARD_JOB_ID}-\${{ github.event_name }}-\${{ github.event.pull_request.number }}`,
   cancelInProgress: true,
 });
 

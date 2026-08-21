@@ -206,7 +206,8 @@ const GUARD_PERMISSIONS = Object.freeze({
 });
 
 const GUARD_CONCURRENCY = Object.freeze({
-  group: 'provenance-base-guard-${{ github.event.pull_request.number }}',
+  group:
+    'provenance-base-guard-${{ github.event_name }}-${{ github.event.pull_request.number }}',
   'cancel-in-progress': true,
 });
 
@@ -571,6 +572,18 @@ function evaluateEventNameExpression(expression, eventName) {
       : eventName !== expectedEventName;
 
   return condition ? whenTrue : whenFalse;
+}
+
+/**
+ * @param {string} group
+ * @param {string} eventName
+ * @param {string} pullRequestNumber
+ * @returns {string}
+ */
+function renderGuardConcurrencyGroup(group, eventName, pullRequestNumber) {
+  return group
+    .replace('${{ github.event_name }}', eventName)
+    .replace('${{ github.event.pull_request.number }}', pullRequestNumber);
 }
 
 /**
@@ -2602,7 +2615,7 @@ export default [
     },
   },
   {
-    name: 'the unconditional provenance base guard job stays on its explicit runner with a five-minute timeout and no dependencies',
+    name: 'the unconditional provenance base guard job stays on its explicit runner with an event-qualified concurrency group, a five-minute timeout, and no dependencies',
     run: async () => {
       const { workflow } = await readWorkflow();
       const job = requireJob(workflow, GUARD_JOB_ID);
@@ -2622,7 +2635,33 @@ export default [
       assertSame(
         JSON.stringify(job.concurrency),
         JSON.stringify(GUARD_CONCURRENCY),
-        'the guard concurrency group must be keyed by the server PR number with cancel-in-progress',
+        'the guard concurrency group must be keyed by github.event_name plus the server PR number with cancel-in-progress',
+      );
+      const pullRequestGroup = renderGuardConcurrencyGroup(
+        job.concurrency.group,
+        'pull_request',
+        '106',
+      );
+      const pullRequestTargetGroup = renderGuardConcurrencyGroup(
+        job.concurrency.group,
+        'pull_request_target',
+        '106',
+      );
+      const repeatedPullRequestTargetGroup = renderGuardConcurrencyGroup(
+        job.concurrency.group,
+        'pull_request_target',
+        '106',
+      );
+
+      assertSame(
+        pullRequestGroup === pullRequestTargetGroup,
+        false,
+        'pull_request and pull_request_target must use distinct concurrency groups for the same PR number',
+      );
+      assertSame(
+        repeatedPullRequestTargetGroup,
+        pullRequestTargetGroup,
+        'repeated runs of the same event and PR number must keep the same concurrency group so stale runs are cancelled',
       );
     },
   },

@@ -628,8 +628,10 @@ dependency, does not use the npm cache, and never checks out the pull
 request's head. It differs from the ordinary jobs in every one of these ways:
 
 - it runs on `ubuntu-24.04`, not `ubuntu-latest`;
-- it has a 5-minute timeout and a `provenance-base-guard-<PR number>`
-  concurrency group with `cancel-in-progress: true`;
+- it has a 5-minute timeout and an event-qualified
+  `provenance-base-guard-<event>-<PR number>` concurrency group with
+  `cancel-in-progress: true`, so `pull_request` and `pull_request_target` do
+  not cancel each other while repeated runs of the same event/PR still do;
 - its permissions are exactly `contents: read` and `pull-requests: read`
   (still no write access);
 - because `pull_request_target` loads the workflow and default checkout from
