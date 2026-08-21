@@ -1152,7 +1152,9 @@ export function roadmapProjectionSha256(path, authority) {
     /** @type {Record<string, any>} */ (structuredClone(authority)),
     'roadmap authority',
   );
-  const output = normalized.protectedOutputs.find((entry) => entry.path === path);
+  const output = normalized.protectedOutputs.find(
+    (entry) => entry.path === path,
+  );
   if (output === undefined) {
     throw new Es2015ProvenanceError(
       `${normalized.code} roadmap authority does not protect ${path}`,

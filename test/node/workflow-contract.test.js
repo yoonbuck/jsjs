@@ -81,7 +81,10 @@ const { join } = nodePath;
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const GUARD_FIXTURE_ROOT = fileURLToPath(
-  new URL('../../.superpowers/workflow-contract-guard-fixtures/', import.meta.url),
+  new URL(
+    '../../.superpowers/workflow-contract-guard-fixtures/',
+    import.meta.url,
+  ),
 );
 const NON_UTC_UPSTREAM_DIAGNOSTIC_ENV = Object.freeze({ TZ: 'Etc/GMT+1' });
 const UTC_GUARD_MODULE_URL = new URL(
@@ -3491,7 +3494,12 @@ export default [
           `the fixture clone must fetch base main before checkout: ${seedFetch.stderr}`,
         );
 
-        const checkoutBase = runGit(clone, ['checkout', '--quiet', '--detach', baseSha]);
+        const checkoutBase = runGit(clone, [
+          'checkout',
+          '--quiet',
+          '--detach',
+          baseSha,
+        ]);
 
         assertSame(
           checkoutBase.status,

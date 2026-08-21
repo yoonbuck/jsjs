@@ -271,8 +271,7 @@ export const GUARD_CHECKOUT_ATTEST_COMMAND =
  * repository's own `origin`, into a dedicated remote-tracking ref. The guard
  * never checks out this ref; it remains inert data for attestation only.
  */
-export const GUARD_FETCH_BASE_COMMAND =
-  `git fetch --no-tags --no-recurse-submodules origin +refs/heads/${GUARD_CANONICAL_BASE_REF}:refs/remotes/origin/provenance-target-main`;
+export const GUARD_FETCH_BASE_COMMAND = `git fetch --no-tags --no-recurse-submodules origin +refs/heads/${GUARD_CANONICAL_BASE_REF}:refs/remotes/origin/provenance-target-main`;
 
 /**
  * Requires the live target branch and the checked-out base checkout to both
@@ -509,12 +508,17 @@ function createProvenanceBaseGuardJob() {
         },
         GUARD_EVENT_CONDITION,
       ),
-      usesStep('Check out the event base commit', 'actions/checkout', {
-        ref: GUARD_BASE_SHA_VALUE,
-        'fetch-depth': '0',
-        'persist-credentials': 'false',
-        submodules: 'false',
-      }, GUARD_EVENT_CONDITION),
+      usesStep(
+        'Check out the event base commit',
+        'actions/checkout',
+        {
+          ref: GUARD_BASE_SHA_VALUE,
+          'fetch-depth': '0',
+          'persist-credentials': 'false',
+          submodules: 'false',
+        },
+        GUARD_EVENT_CONDITION,
+      ),
       runStep(
         'Attest the checked-out base commit',
         GUARD_CHECKOUT_ATTEST_COMMAND,
@@ -549,10 +553,15 @@ function createProvenanceBaseGuardJob() {
         },
         GUARD_EVENT_CONDITION,
       ),
-      runStep('Attest the fetched head commit', GUARD_FETCH_ATTEST_COMMAND, {
-        PR_NUMBER: GUARD_PR_NUMBER_VALUE,
-        HEAD_SHA: GUARD_HEAD_SHA_VALUE,
-      }, GUARD_EVENT_CONDITION),
+      runStep(
+        'Attest the fetched head commit',
+        GUARD_FETCH_ATTEST_COMMAND,
+        {
+          PR_NUMBER: GUARD_PR_NUMBER_VALUE,
+          HEAD_SHA: GUARD_HEAD_SHA_VALUE,
+        },
+        GUARD_EVENT_CONDITION,
+      ),
       runStep(
         'Check the trusted-base provenance range',
         GUARD_CHECKER_COMMAND,

@@ -1210,8 +1210,9 @@ function driftedCrossRealmTaxonomyText(text) {
 function driftedNewTargetTaxonomyText(text) {
   const taxonomy = JSON.parse(text);
   const record = taxonomy.classifications.find(
-    (/** @type {{ path: string, status: string, blocker: string | null }} */ entry) =>
-      entry.path === 'test/staging/sm/class/newTargetEval.js',
+    (
+      /** @type {{ path: string, status: string, blocker: string | null }} */ entry,
+    ) => entry.path === 'test/staging/sm/class/newTargetEval.js',
   );
   assertSame(record !== undefined, true);
   record.status = 'blocked:test262-cross-realm-host';
@@ -1227,7 +1228,10 @@ function subsetTextWithExtraPath(text) {
       entry.name === 'language/statements',
   );
   assertSame(group !== undefined, true);
-  group.paths = [...group.paths, 'test/language/statements/class/zzz-extra.js'].sort();
+  group.paths = [
+    ...group.paths,
+    'test/language/statements/class/zzz-extra.js',
+  ].sort();
   return `${JSON.stringify(subset, null, 2)}\n`;
 }
 
@@ -1611,9 +1615,7 @@ function canonicalConformanceText(options) {
         file: record.file,
         variant: record.variant,
         status: record.status,
-        ...(record.features === undefined
-          ? {}
-          : { features: record.features }),
+        ...(record.features === undefined ? {} : { features: record.features }),
       }),
     );
   const subset = parseUpstreamSubset(options.subsetText);
@@ -1701,7 +1703,12 @@ function syntheticRoadmapProjectionFixture() {
     promotedPath,
   ]);
   const baseClassifications = Object.freeze([
-    taxonomyRecord(auditPassingPath, 1, 'blocked:source-blocker', 'source-blocker'),
+    taxonomyRecord(
+      auditPassingPath,
+      1,
+      'blocked:source-blocker',
+      'source-blocker',
+    ),
     taxonomyRecord(blockedPath, 1, 'blocked:source-blocker', 'source-blocker'),
     taxonomyRecord(foreignPath, 1, 'selected-passing'),
     taxonomyRecord(promotedPath, 2, 'blocked:source-blocker', 'source-blocker'),
@@ -2491,7 +2498,8 @@ function provenanceCheckDependencies(options = {}) {
       ? {}
       : { expectedRoadmapAuthorities: options.expectedRoadmapAuthorities }),
     validateRoadmapProtectedOutputs:
-      options.validateRoadmapProtectedOutputs ?? validateRoadmapProtectedOutputs,
+      options.validateRoadmapProtectedOutputs ??
+      validateRoadmapProtectedOutputs,
     files,
     writes,
     outputs: { stdout, stderr },
@@ -2749,11 +2757,15 @@ export default [
         json(EXPECTED_INITIAL_ROADMAP_AUTHORITIES),
       );
       assertSame(
-        canonicalRoadmapAuthoritySha256(provenance.P0_APPLIED_ROADMAP_AUTHORITY),
+        canonicalRoadmapAuthoritySha256(
+          provenance.P0_APPLIED_ROADMAP_AUTHORITY,
+        ),
         EXPECTED_AUTHORITY_SHA256.P0,
       );
       assertSame(
-        canonicalRoadmapAuthoritySha256(provenance.H0_PENDING_ROADMAP_AUTHORITY),
+        canonicalRoadmapAuthoritySha256(
+          provenance.H0_PENDING_ROADMAP_AUTHORITY,
+        ),
         EXPECTED_AUTHORITY_SHA256.H0,
       );
 
@@ -5867,7 +5879,11 @@ export default [
           GITHUB_EVENT_NAME: 'pull_request',
           PROVENANCE_PR_BODY: 'No marker',
         };
-        assertSame(await provenanceCheck(ciArgs, dependencies), 0, json(changes));
+        assertSame(
+          await provenanceCheck(ciArgs, dependencies),
+          0,
+          json(changes),
+        );
       }
     },
   },
@@ -5885,13 +5901,17 @@ export default [
       ];
       const manifest = canonicalSchemaV3ManifestValue();
       const protectedPaths = new Set([
-        ...manifest.roadmapAuthorities.flatMap((/** @type {Record<string, any>} */ authority) =>
-          authority.evidence.map((/** @type {{ path: string }} */ entry) => entry.path),
+        ...manifest.roadmapAuthorities.flatMap(
+          (/** @type {Record<string, any>} */ authority) =>
+            authority.evidence.map(
+              (/** @type {{ path: string }} */ entry) => entry.path,
+            ),
         ),
-        ...manifest.roadmapAuthorities.flatMap((/** @type {Record<string, any>} */ authority) =>
-          authority.protectedOutputs.map(
-            (/** @type {{ path: string }} */ entry) => entry.path,
-          ),
+        ...manifest.roadmapAuthorities.flatMap(
+          (/** @type {Record<string, any>} */ authority) =>
+            authority.protectedOutputs.map(
+              (/** @type {{ path: string }} */ entry) => entry.path,
+            ),
         ),
       ]);
       for (const path of protectedPaths) {
@@ -5972,10 +5992,23 @@ export default [
         checkerText: 'c'.repeat(64),
         workflowText: 'd'.repeat(64),
         headManifestText: 'e'.repeat(64),
-      }).replace(`base-manifest-sha256:${sha256('b'.repeat(64))}`, `base-manifest-sha256:${'b'.repeat(64)}`)
-        .replace(`base-checker-sha256:${sha256('c'.repeat(64))}`, `base-checker-sha256:${'c'.repeat(64)}`)
-        .replace(`base-workflow-sha256:${sha256('d'.repeat(64))}`, `base-workflow-sha256:${'d'.repeat(64)}`)
-        .replace(`head-manifest-sha256:${sha256('e'.repeat(64))}`, `head-manifest-sha256:${'e'.repeat(64)}`);
+      })
+        .replace(
+          `base-manifest-sha256:${sha256('b'.repeat(64))}`,
+          `base-manifest-sha256:${'b'.repeat(64)}`,
+        )
+        .replace(
+          `base-checker-sha256:${sha256('c'.repeat(64))}`,
+          `base-checker-sha256:${'c'.repeat(64)}`,
+        )
+        .replace(
+          `base-workflow-sha256:${sha256('d'.repeat(64))}`,
+          `base-workflow-sha256:${'d'.repeat(64)}`,
+        )
+        .replace(
+          `head-manifest-sha256:${sha256('e'.repeat(64))}`,
+          `head-manifest-sha256:${'e'.repeat(64)}`,
+        );
       const preparationMarker = roadmapPreparationMarker({
         baseManifestText: 'b'.repeat(64),
         recordSha256: 'c'.repeat(64),
@@ -6029,7 +6062,10 @@ export default [
       for (const text of [
         migrationMarker.replace(/\n/gu, '\r\n'),
         migrationMarker.replace('parent:70', 'parent: 70'),
-        migrationMarker.replace('base-manifest-sha256', 'base-manifest-sha256 '),
+        migrationMarker.replace(
+          'base-manifest-sha256',
+          'base-manifest-sha256 ',
+        ),
         migrationMarker.replace(
           'base-workflow-sha256',
           'head-manifest-sha256\nbase-workflow-sha256',
@@ -6098,21 +6134,29 @@ export default [
         ]),
       });
       assertSame(
-        await validateRoadmapAuthorityMigration(baseManifestText, headManifestText, {
-          deps: dependencies,
-          base: RANGE_BASE_SHA,
-          head: RANGE_HEAD_SHA,
-          marker,
-          changes: [
-            { status: 'M', path: ES2015_PROVENANCE_FILE, sourcePath: null },
-            {
-              status: 'A',
-              path: ROADMAP_AUTHORITY_DESIGN_PATH,
-              sourcePath: null,
-            },
-            { status: 'A', path: ROADMAP_AUTHORITY_PLAN_PATH, sourcePath: null },
-          ],
-        }),
+        await validateRoadmapAuthorityMigration(
+          baseManifestText,
+          headManifestText,
+          {
+            deps: dependencies,
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            marker,
+            changes: [
+              { status: 'M', path: ES2015_PROVENANCE_FILE, sourcePath: null },
+              {
+                status: 'A',
+                path: ROADMAP_AUTHORITY_DESIGN_PATH,
+                sourcePath: null,
+              },
+              {
+                status: 'A',
+                path: ROADMAP_AUTHORITY_PLAN_PATH,
+                sourcePath: null,
+              },
+            ],
+          },
+        ),
         0,
       );
 
@@ -6121,18 +6165,26 @@ export default [
       ]);
       const changedP0Head = structuredClone(canonicalSchemaV3ManifestValue());
       changedP0Head.roadmapAuthorities[1].issue = 170;
-      const extraAuthorityHead = structuredClone(canonicalSchemaV3ManifestValue());
+      const extraAuthorityHead = structuredClone(
+        canonicalSchemaV3ManifestValue(),
+      );
       extraAuthorityHead.roadmapAuthorities.splice(
         1,
         0,
         minimalRoadmapAuthority('M0', 79, 'pending'),
       );
       const missingH0Head = structuredClone(canonicalSchemaV3ManifestValue());
-      missingH0Head.roadmapAuthorities = missingH0Head.roadmapAuthorities.filter(
-        (/** @type {Record<string, any>} */ authority) => authority.code !== 'H0',
+      missingH0Head.roadmapAuthorities =
+        missingH0Head.roadmapAuthorities.filter(
+          (/** @type {Record<string, any>} */ authority) =>
+            authority.code !== 'H0',
+        );
+      const profileDriftHead = structuredClone(
+        canonicalSchemaV3ManifestValue(),
       );
-      const profileDriftHead = structuredClone(canonicalSchemaV3ManifestValue());
-      profileDriftHead.rangeProfiles = [...profileDriftHead.rangeProfiles].reverse();
+      profileDriftHead.rangeProfiles = [
+        ...profileDriftHead.rangeProfiles,
+      ].reverse();
       const repeatedDesignPayload = `${embeddedRoadmapAuthorityPayload(
         'DESIGN',
         designText,
@@ -6287,10 +6339,7 @@ export default [
               ROADMAP_AUTHORITY_BASE_DESIGN_ADDENDUM_PATH,
               repeatedDesignPayload,
             ],
-            [
-              ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH,
-              repeatedPlanPayload,
-            ],
+            [ROADMAP_AUTHORITY_BASE_PLAN_ADDENDUM_PATH, repeatedPlanPayload],
           ]),
           message:
             'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md must contain exactly one embedded roadmap authority DESIGN payload',
@@ -6327,12 +6376,15 @@ export default [
             'docs/superpowers/specs/2026-08-20-provenance-foundation-maintenance-design.md must contain exactly one embedded roadmap authority DESIGN payload',
         },
         {
-          headFiles: new Map([[ROADMAP_AUTHORITY_DESIGN_PATH, '# altered design\n']]),
+          headFiles: new Map([
+            [ROADMAP_AUTHORITY_DESIGN_PATH, '# altered design\n'],
+          ]),
           message:
             'docs/superpowers/specs/2026-08-21-roadmap-authority-state-machine-design.md must match the embedded roadmap authority DESIGN payload from BASE',
         },
       ]) {
-        const scenarioHeadManifestText = scenario.headManifestText ?? headManifestText;
+        const scenarioHeadManifestText =
+          scenario.headManifestText ?? headManifestText;
         const scenarioMarker = parseRoadmapAuthorityMarker(
           scenario.markerText ??
             roadmapMigrationMarker({
@@ -6364,12 +6416,11 @@ export default [
                 embeddedRoadmapAuthorityPayload('PLAN', planText),
               ],
             ]),
-          headFiles:
-            new Map([
-              [ROADMAP_AUTHORITY_DESIGN_PATH, designText],
-              [ROADMAP_AUTHORITY_PLAN_PATH, planText],
-              ...[...(scenario.headFiles ?? new Map()).entries()],
-            ]),
+          headFiles: new Map([
+            [ROADMAP_AUTHORITY_DESIGN_PATH, designText],
+            [ROADMAP_AUTHORITY_PLAN_PATH, planText],
+            ...[...(scenario.headFiles ?? new Map()).entries()],
+          ]),
         });
         const error = await rejected(() =>
           validateRoadmapAuthorityMigration(
@@ -6439,16 +6490,21 @@ export default [
         { status: 'M', path: 'docs/testing.md', sourcePath: null },
       ];
       assertSame(
-        await validateRoadmapAuthorityPreparation(baseManifest, headManifest, marker, {
-          deps: rangeCheckDependencies({
-            changes: changes.map(({ status, path }) => ({ status, path })),
-            baseManifestText,
-            headManifestText,
-          }),
-          base: RANGE_BASE_SHA,
-          head: RANGE_HEAD_SHA,
-          changes,
-        }),
+        await validateRoadmapAuthorityPreparation(
+          baseManifest,
+          headManifest,
+          marker,
+          {
+            deps: rangeCheckDependencies({
+              changes: changes.map(({ status, path }) => ({ status, path })),
+              baseManifestText,
+              headManifestText,
+            }),
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            changes,
+          },
+        ),
         0,
       );
 
@@ -6463,13 +6519,17 @@ export default [
       const changedExistingHead = structuredClone(headManifest);
       changedExistingHead.roadmapAuthorities[0].issue = 999;
       const deletedExistingHead = structuredClone(baseManifest);
-      deletedExistingHead.roadmapAuthorities = deletedExistingHead.roadmapAuthorities.filter(
-        (/** @type {Record<string, any>} */ authority) => authority.code !== 'P0',
-      );
+      deletedExistingHead.roadmapAuthorities =
+        deletedExistingHead.roadmapAuthorities.filter(
+          (/** @type {Record<string, any>} */ authority) =>
+            authority.code !== 'P0',
+        );
       const unsortedHead = structuredClone(baseManifest);
       unsortedHead.roadmapAuthorities.push(newAuthority);
       const profileDriftHead = structuredClone(headManifest);
-      profileDriftHead.rangeProfiles = [...profileDriftHead.rangeProfiles].reverse();
+      profileDriftHead.rangeProfiles = [
+        ...profileDriftHead.rangeProfiles,
+      ].reverse();
 
       for (const scenario of [
         {
@@ -6531,25 +6591,30 @@ export default [
       }
 
       const fragmentDriftError = await rejected(() =>
-        validateRoadmapAuthorityPreparation(baseManifest, headManifest, marker, {
-          deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: ES2015_PROVENANCE_FILE }],
-            baseManifestText,
-            headManifestText,
-            headFiles: new Map([
-              [`${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`, 'drift\n'],
-            ]),
-          }),
-          base: RANGE_BASE_SHA,
-          head: RANGE_HEAD_SHA,
-          changes: [
-            {
-              status: 'M',
-              path: ES2015_PROVENANCE_FILE,
-              sourcePath: null,
-            },
-          ],
-        }),
+        validateRoadmapAuthorityPreparation(
+          baseManifest,
+          headManifest,
+          marker,
+          {
+            deps: rangeCheckDependencies({
+              changes: [{ status: 'M', path: ES2015_PROVENANCE_FILE }],
+              baseManifestText,
+              headManifestText,
+              headFiles: new Map([
+                [`${PROVENANCE_DECISIONS_DIRECTORY}/UA.json`, 'drift\n'],
+              ]),
+            }),
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            changes: [
+              {
+                status: 'M',
+                path: ES2015_PROVENANCE_FILE,
+                sourcePath: null,
+              },
+            ],
+          },
+        ),
       );
       assertSame(
         fragmentDriftError.message,
@@ -6589,31 +6654,33 @@ export default [
         'roadmap-authority-prepare marker record-sha256 does not match M0 roadmap authority',
       );
 
-      for (const path of [
-        CHECKER_PATH,
-        'docs/conformance.md',
-      ]) {
+      for (const path of [CHECKER_PATH, 'docs/conformance.md']) {
         const error = await rejected(() =>
-          validateRoadmapAuthorityPreparation(baseManifest, headManifest, marker, {
-            deps: rangeCheckDependencies({
+          validateRoadmapAuthorityPreparation(
+            baseManifest,
+            headManifest,
+            marker,
+            {
+              deps: rangeCheckDependencies({
+                changes: [
+                  { status: 'M', path: ES2015_PROVENANCE_FILE },
+                  { status: 'M', path },
+                ],
+                baseManifestText,
+                headManifestText,
+              }),
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
               changes: [
-                { status: 'M', path: ES2015_PROVENANCE_FILE },
-                { status: 'M', path },
+                {
+                  status: 'M',
+                  path: ES2015_PROVENANCE_FILE,
+                  sourcePath: null,
+                },
+                { status: 'M', path, sourcePath: null },
               ],
-              baseManifestText,
-              headManifestText,
-            }),
-            base: RANGE_BASE_SHA,
-            head: RANGE_HEAD_SHA,
-            changes: [
-              {
-                status: 'M',
-                path: ES2015_PROVENANCE_FILE,
-                sourcePath: null,
-              },
-              { status: 'M', path, sourcePath: null },
-            ],
-          }),
+            },
+          ),
         );
         assertSame(
           error.message,
@@ -6643,34 +6710,40 @@ export default [
         }),
       );
       assertSame(
-        await validateRoadmapAuthorityConsumption(baseManifest, headManifest, marker, {
-          deps: rangeCheckDependencies({
+        await validateRoadmapAuthorityConsumption(
+          baseManifest,
+          headManifest,
+          marker,
+          {
+            deps: rangeCheckDependencies({
+              changes: [
+                { status: 'M', path: ES2015_PROVENANCE_FILE },
+                { status: 'M', path: 'docs/conformance.md' },
+              ],
+              baseManifestText,
+              headManifestText,
+              validateRoadmapProtectedOutputs: async () =>
+                roadmapProjectionEntries(baseAuthority.protectedOutputs),
+            }),
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
             changes: [
-              { status: 'M', path: ES2015_PROVENANCE_FILE },
-              { status: 'M', path: 'docs/conformance.md' },
+              {
+                status: 'M',
+                path: ES2015_PROVENANCE_FILE,
+                sourcePath: null,
+              },
+              { status: 'M', path: 'docs/conformance.md', sourcePath: null },
             ],
-            baseManifestText,
-            headManifestText,
-            validateRoadmapProtectedOutputs: async () =>
-              roadmapProjectionEntries(baseAuthority.protectedOutputs),
-          }),
-          base: RANGE_BASE_SHA,
-          head: RANGE_HEAD_SHA,
-          changes: [
-            {
-              status: 'M',
-              path: ES2015_PROVENANCE_FILE,
-              sourcePath: null,
-            },
-            { status: 'M', path: 'docs/conformance.md', sourcePath: null },
-          ],
-        }),
+          },
+        ),
         0,
       );
 
       const headOnlyBase = structuredClone(baseManifest);
       headOnlyBase.roadmapAuthorities = headOnlyBase.roadmapAuthorities.filter(
-        (/** @type {Record<string, any>} */ authority) => authority.code !== 'H0',
+        (/** @type {Record<string, any>} */ authority) =>
+          authority.code !== 'H0',
       );
       const baseApplied = structuredClone(baseManifest);
       baseApplied.roadmapAuthorities[0].state = 'applied';
@@ -6824,23 +6897,28 @@ export default [
       }
 
       const emptyProjectionError = await rejected(() =>
-        validateRoadmapAuthorityConsumption(baseManifest, headManifest, marker, {
-          deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: ES2015_PROVENANCE_FILE }],
-            baseManifestText,
-            headManifestText,
-            validateRoadmapProtectedOutputs: async () => [],
-          }),
-          base: RANGE_BASE_SHA,
-          head: RANGE_HEAD_SHA,
-          changes: [
-            {
-              status: 'M',
-              path: ES2015_PROVENANCE_FILE,
-              sourcePath: null,
-            },
-          ],
-        }),
+        validateRoadmapAuthorityConsumption(
+          baseManifest,
+          headManifest,
+          marker,
+          {
+            deps: rangeCheckDependencies({
+              changes: [{ status: 'M', path: ES2015_PROVENANCE_FILE }],
+              baseManifestText,
+              headManifestText,
+              validateRoadmapProtectedOutputs: async () => [],
+            }),
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            changes: [
+              {
+                status: 'M',
+                path: ES2015_PROVENANCE_FILE,
+                sourcePath: null,
+              },
+            ],
+          },
+        ),
       );
       assertSame(
         emptyProjectionError.message,
@@ -6852,17 +6930,19 @@ export default [
     name: 'ES2015 provenance validates protected outputs by artifact and rejects foreign generated changes',
     run: async () => {
       const fixture = syntheticRoadmapProjectionFixture();
-      const marker = /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
-        parseRoadmapAuthorityMarker(
-        roadmapConsumptionMarker({
-          code: fixture.code,
-          issue: fixture.authority.issue,
-          sourcePathSha256: fixture.authority.source.pathSha256,
-          sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
-          protectedProjectionSha256:
-            provenance.roadmapAggregateProjectionSha256(fixture.authority),
-        }),
-      ));
+      const marker =
+        /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: fixture.code,
+              issue: fixture.authority.issue,
+              sourcePathSha256: fixture.authority.source.pathSha256,
+              sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
+              protectedProjectionSha256:
+                provenance.roadmapAggregateProjectionSha256(fixture.authority),
+            }),
+          )
+        );
       const fixtureChanges = fixture.changes.map((change) => ({
         ...change,
         sourcePath: null,
@@ -6929,7 +7009,9 @@ export default [
         ],
       });
       const auditDeps = rangeCheckDependencies({
-        changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+        changes: [
+          { status: 'M', path: 'tools/test262/es2015-audit-evidence.json' },
+        ],
         baseManifestText: fixture.baseManifestText,
         headManifestText: fixture.headManifestText,
         baseFiles: fixture.baseFiles,
@@ -6986,7 +7068,10 @@ export default [
           ['tools/test262/upstream-subset.json', P0_BASE_UPSTREAM_SUBSET_TEXT],
         ]),
         headFiles: new Map([
-          ['tools/test262/upstream-subset.json', PRODUCTION_UPSTREAM_SUBSET_TEXT],
+          [
+            'tools/test262/upstream-subset.json',
+            PRODUCTION_UPSTREAM_SUBSET_TEXT,
+          ],
         ]),
       });
       assertSame(
@@ -7105,7 +7190,9 @@ export default [
         {
           authority: fixtureTaxonomyAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-taxonomy.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-taxonomy.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: fixture.baseFiles,
@@ -7136,7 +7223,9 @@ export default [
         {
           authority: auditAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-audit-evidence.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: fixture.baseFiles,
@@ -7165,7 +7254,9 @@ export default [
         {
           authority: auditAuthorityWithBaseText(missingSourceAuditRootText),
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-audit-evidence.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: new Map([
@@ -7194,9 +7285,13 @@ export default [
             'roadmap-reclassification:H1 protected output tools/test262/es2015-audit-evidence.json is missing source audit root test/language/audit.js',
         },
         {
-          authority: auditAuthorityWithBaseText(incompleteSourceAuditVariantsText),
+          authority: auditAuthorityWithBaseText(
+            incompleteSourceAuditVariantsText,
+          ),
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-audit-evidence.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: new Map([
@@ -7227,7 +7322,9 @@ export default [
         {
           authority: auditAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-audit-evidence.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: fixture.baseFiles,
@@ -7259,7 +7356,9 @@ export default [
         {
           authority: auditAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-audit-evidence.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-audit-evidence.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: fixture.baseFiles,
@@ -7294,11 +7393,16 @@ export default [
         {
           authority: p0SubsetAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/upstream-subset.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/upstream-subset.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: new Map([
-              ['tools/test262/upstream-subset.json', P0_BASE_UPSTREAM_SUBSET_TEXT],
+              [
+                'tools/test262/upstream-subset.json',
+                P0_BASE_UPSTREAM_SUBSET_TEXT,
+              ],
             ]),
             headFiles: new Map([
               [
@@ -7320,11 +7424,16 @@ export default [
         {
           authority: p0SubsetAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/upstream-subset.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/upstream-subset.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: new Map([
-              ['tools/test262/upstream-subset.json', P0_BASE_UPSTREAM_SUBSET_TEXT],
+              [
+                'tools/test262/upstream-subset.json',
+                P0_BASE_UPSTREAM_SUBSET_TEXT,
+              ],
             ]),
             headFiles: new Map([
               [
@@ -7346,7 +7455,9 @@ export default [
         {
           authority: p0SelectionAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es5-selection.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es5-selection.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: new Map([
@@ -7354,7 +7465,10 @@ export default [
               ['tools/test262/es2015-taxonomy.json', P0_BASE_TAXONOMY_TEXT],
             ]),
             headFiles: new Map([
-              ['tools/test262/es5-selection.json', PRODUCTION_ES5_SELECTION_TEXT],
+              [
+                'tools/test262/es5-selection.json',
+                PRODUCTION_ES5_SELECTION_TEXT,
+              ],
               [
                 'tools/test262/es2015-taxonomy.json',
                 driftedNewTargetTaxonomyText(PRODUCTION_TAXONOMY_TEXT),
@@ -7374,7 +7488,9 @@ export default [
         {
           authority: fixtureTaxonomyAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-taxonomy.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-taxonomy.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: fixture.baseFiles,
@@ -7405,7 +7521,9 @@ export default [
         {
           authority: fixtureTaxonomyAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'M', path: 'tools/test262/es2015-taxonomy.json' }],
+            changes: [
+              { status: 'M', path: 'tools/test262/es2015-taxonomy.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: fixture.baseFiles,
@@ -7475,7 +7593,10 @@ export default [
               ...fixture.headFiles,
               [
                 'docs/conformance.md',
-                requiredFixtureText(fixture.headFiles, 'docs/conformance.md').replace(
+                requiredFixtureText(
+                  fixture.headFiles,
+                  'docs/conformance.md',
+                ).replace(
                   'Manual prose outside the generated block.',
                   'mutated prose',
                 ),
@@ -7533,7 +7654,10 @@ export default [
             ]),
             headFiles: new Map([
               ...fixture.headFiles,
-              ['tools/test262/es5-selection.json', PRODUCTION_ES5_SELECTION_TEXT],
+              [
+                'tools/test262/es5-selection.json',
+                PRODUCTION_ES5_SELECTION_TEXT,
+              ],
             ]),
           }),
           changes: [
@@ -7550,7 +7674,9 @@ export default [
         {
           authority: fixturePromotionAuthority,
           deps: rangeCheckDependencies({
-            changes: [{ status: 'A', path: 'tools/test262/es2015-h1-promotion.json' }],
+            changes: [
+              { status: 'A', path: 'tools/test262/es2015-h1-promotion.json' },
+            ],
             baseManifestText: fixture.baseManifestText,
             headManifestText: fixture.headManifestText,
             baseFiles: fixture.baseFiles,
@@ -7574,14 +7700,18 @@ export default [
         },
       ]) {
         const error = await rejected(() =>
-          validateRoadmapProtectedOutputs(scenario.authority, scenario.changes, {
-            deps: scenario.deps,
-            base: RANGE_BASE_SHA,
-            head: RANGE_HEAD_SHA,
-            baseManifest: fixture.baseManifestValue,
-            headManifest: fixture.headManifestValue,
-            marker,
-          }),
+          validateRoadmapProtectedOutputs(
+            scenario.authority,
+            scenario.changes,
+            {
+              deps: scenario.deps,
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              baseManifest: fixture.baseManifestValue,
+              headManifest: fixture.headManifestValue,
+              marker,
+            },
+          ),
         );
         assertSame(error.message, scenario.message);
       }
@@ -7591,17 +7721,19 @@ export default [
     name: 'ES2015 provenance validates protected outputs atomically during roadmap authority consumption',
     run: async () => {
       const fixture = syntheticRoadmapProjectionFixture();
-      const marker = /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
-        parseRoadmapAuthorityMarker(
-        roadmapConsumptionMarker({
-          code: fixture.code,
-          issue: fixture.authority.issue,
-          sourcePathSha256: fixture.authority.source.pathSha256,
-          sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
-          protectedProjectionSha256:
-            provenance.roadmapAggregateProjectionSha256(fixture.authority),
-        }),
-      ));
+      const marker =
+        /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: fixture.code,
+              issue: fixture.authority.issue,
+              sourcePathSha256: fixture.authority.source.pathSha256,
+              sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
+              protectedProjectionSha256:
+                provenance.roadmapAggregateProjectionSha256(fixture.authority),
+            }),
+          )
+        );
       const changes = fixture.changes.map((change) => ({
         ...change,
         sourcePath: null,
@@ -8001,7 +8133,10 @@ export default [
       ]) {
         const dependencies = provenanceCheckDependencies({
           files: new Map([
-            [ES2015_PROVENANCE_FILE, renderEs2015ProvenanceManifest(manifestV3)],
+            [
+              ES2015_PROVENANCE_FILE,
+              renderEs2015ProvenanceManifest(manifestV3),
+            ],
           ]),
         });
         assertSame(await provenanceCheck(['--check'], dependencies), 0);
@@ -8054,13 +8189,11 @@ export default [
       const baseManifest = canonicalSchemaV3ManifestValue();
       const baseManifestText = renderEs2015ProvenanceManifest(baseManifest);
       const preparedManifest = canonicalPreparedSchemaV3ManifestValue();
-      const preparedManifestText = renderEs2015ProvenanceManifest(
-        preparedManifest,
-      );
+      const preparedManifestText =
+        renderEs2015ProvenanceManifest(preparedManifest);
       const consumedManifest = canonicalConsumedSchemaV3ManifestValue();
-      const consumedManifestText = renderEs2015ProvenanceManifest(
-        consumedManifest,
-      );
+      const consumedManifestText =
+        renderEs2015ProvenanceManifest(consumedManifest);
 
       assertSame(
         await provenanceCheck(

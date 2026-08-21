@@ -827,6 +827,7 @@ schema-v3 migration.
    task; later controller steps own remote review and delivery after the local
    bootstrap commit.
 
+<!-- prettier-ignore-start -->
 <!-- BEGIN ROADMAP AUTHORITY PLAN sha256:28ccfa8dae11e824651ce6c6ad3747f7b693a6881ba047600eeac1704f66a618 -->
 # Roadmap Authority State Machine Implementation Plan
 
@@ -2247,3 +2248,4 @@ Update issues #75, #76, #79, and #70 with:
 The authority migration task is complete. Resume #76, prepare M0 authority for #79,
 and continue #75 hierarchy as separate reviewed execution tasks.
 <!-- END ROADMAP AUTHORITY PLAN -->
+<!-- prettier-ignore-end -->

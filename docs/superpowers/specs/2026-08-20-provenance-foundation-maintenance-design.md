@@ -634,6 +634,7 @@ byte-identical to exact BASE. The later migration may change only the schema-v3
 manifest data and durable standalone documentation under the bootstrap-installed
 BASE verifier.
 
+<!-- prettier-ignore-start -->
 <!-- BEGIN ROADMAP AUTHORITY DESIGN sha256:150841bf7d745a3c7d5b5566e1031028283d269aed2ebe1505d8a7b24c6b63bf -->
 # Roadmap Authority State Machine Design
 
@@ -1422,3 +1423,4 @@ the implementation plan explicitly requires them.
     verification.
 11. Only then resume #76, #79, and the #75 hierarchy.
 <!-- END ROADMAP AUTHORITY DESIGN -->
+<!-- prettier-ignore-end -->

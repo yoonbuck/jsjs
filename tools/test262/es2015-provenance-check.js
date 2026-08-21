@@ -363,7 +363,8 @@ export function createProvenanceCheckDependencies(options = {}) {
           expectedRoadmapAuthorities: options.expectedRoadmapAuthorities,
         }),
     validateRoadmapProtectedOutputs:
-      options.validateRoadmapProtectedOutputs ?? validateRoadmapProtectedOutputs,
+      options.validateRoadmapProtectedOutputs ??
+      validateRoadmapProtectedOutputs,
   };
 }
 
@@ -679,13 +680,17 @@ async function checkRange(deps, options) {
         head,
         ES2015_PROVENANCE_FILE,
       );
-      await validateRoadmapAuthorityMigration(baseManifestText, headManifestText, {
-        deps,
-        base,
-        head,
-        marker,
-        changes,
-      });
+      await validateRoadmapAuthorityMigration(
+        baseManifestText,
+        headManifestText,
+        {
+          deps,
+          base,
+          head,
+          marker,
+          changes,
+        },
+      );
       return;
     }
     if (baseManifestText === null) {
@@ -703,20 +708,30 @@ async function checkRange(deps, options) {
       `${rangeProfileForMarker(marker)} head`,
     );
     if (marker.kind === 'prepare') {
-      await validateRoadmapAuthorityPreparation(baseManifest, headManifest, marker, {
+      await validateRoadmapAuthorityPreparation(
+        baseManifest,
+        headManifest,
+        marker,
+        {
+          deps,
+          base,
+          head,
+          changes,
+        },
+      );
+      return;
+    }
+    await validateRoadmapAuthorityConsumption(
+      baseManifest,
+      headManifest,
+      marker,
+      {
         deps,
         base,
         head,
         changes,
-      });
-      return;
-    }
-    await validateRoadmapAuthorityConsumption(baseManifest, headManifest, marker, {
-      deps,
-      base,
-      head,
-      changes,
-    });
+      },
+    );
     return;
   }
   /** @type {ReturnType<typeof parseEs2015ProvenanceManifest>} */
@@ -1014,7 +1029,10 @@ export async function validateRoadmapAuthorityPreparation(
       );
     }
   }
-  if (newAuthorities.length !== 1 || headAuthorities.length !== baseAuthorities.length + 1) {
+  if (
+    newAuthorities.length !== 1 ||
+    headAuthorities.length !== baseAuthorities.length + 1
+  ) {
     throw new Es2015ProvenanceCheckError(
       'roadmap-authority-prepare must add exactly one new roadmap authority',
     );
@@ -1339,10 +1357,9 @@ export async function validateRoadmapProtectedOutputs(
   const profile = context.marker.profile;
   /** @type {Map<string, any>} */
   const protectedByPath = new Map(
-    authority.protectedOutputs.map((/** @type {Record<string, any>} */ output) => [
-      output.path,
-      output,
-    ]),
+    authority.protectedOutputs.map(
+      (/** @type {Record<string, any>} */ output) => [output.path, output],
+    ),
   );
   const ownedPaths = roadmapOwnedPathsFromBaseManifest(context.baseManifest);
   const generatedPrefixes = roadmapGeneratedNamespacePrefixes(authority);
@@ -1352,7 +1369,9 @@ export async function validateRoadmapProtectedOutputs(
   for (const change of changes) {
     if (change.path === ES2015_PROVENANCE_FILE) continue;
     const sourcePath =
-      change.sourcePath === null ? null : canonicalRepositoryPath(change.sourcePath);
+      change.sourcePath === null
+        ? null
+        : canonicalRepositoryPath(change.sourcePath);
     const path = canonicalRepositoryPath(change.path);
     const aliasedOwnedPath =
       path !== null &&
@@ -1385,7 +1404,8 @@ export async function validateRoadmapProtectedOutputs(
     if (change.status === 'D') {
       if (
         path !== null &&
-        (ownedPaths.has(path) || generatedPathMatchesNamespace(path, generatedPrefixes))
+        (ownedPaths.has(path) ||
+          generatedPathMatchesNamespace(path, generatedPrefixes))
       ) {
         throw new Es2015ProvenanceCheckError(
           `${profile} protected outputs forbid deleted path ${change.path}`,
@@ -1471,7 +1491,9 @@ function canonicalRepositoryPath(path) {
 function roadmapGeneratedNamespacePrefixes(authority) {
   const prefixes = new Set();
   for (const path of [
-    ...authority.evidence.map((/** @type {{ path: string }} */ entry) => entry.path),
+    ...authority.evidence.map(
+      (/** @type {{ path: string }} */ entry) => entry.path,
+    ),
     ...authority.protectedOutputs.map(
       (/** @type {{ path: string }} */ entry) => entry.path,
     ),
@@ -1520,7 +1542,9 @@ function parseRoadmapPathList(text, label) {
     !Array.isArray(value) ||
     value.some((entry) => typeof entry !== 'string' || entry === '')
   ) {
-    throw new Es2015ProvenanceCheckError(`${label} must be a sorted path array`);
+    throw new Es2015ProvenanceCheckError(
+      `${label} must be a sorted path array`,
+    );
   }
   const paths = /** @type {string[]} */ (value);
   assertSortedUniqueStrings(paths, `${label} paths`);
@@ -1584,7 +1608,10 @@ function parseRoadmapOwnerMap(text, label) {
   }
   const entries = /** @type {any[]} */ (value);
   assertSortedUniqueStrings(
-    entries.map((entry) => `${entry.status}\u0000${entry.blocker ?? ''}\u0000${entry.issue}`),
+    entries.map(
+      (entry) =>
+        `${entry.status}\u0000${entry.blocker ?? ''}\u0000${entry.issue}`,
+    ),
     `${label} destinations`,
   );
   return entries;
@@ -1607,7 +1634,9 @@ function parseRoadmapAuditEvidenceDocument(text, label) {
     throw new Es2015ProvenanceCheckError(`${label} must contain auditRecords`);
   }
   const document = /** @type {Record<string, any>} */ (value);
-  const rawRecords = /** @type {Record<string, any>[]} */ (document.auditRecords);
+  const rawRecords = /** @type {Record<string, any>[]} */ (
+    document.auditRecords
+  );
   const records = rawRecords.map((record) =>
     createTestRecord({
       file: record.file,
@@ -1625,7 +1654,10 @@ function parseRoadmapAuditEvidenceDocument(text, label) {
 /** @param {readonly string[]} values @param {string} label */
 function assertSortedUniqueStrings(values, label) {
   const sorted = [...values].sort();
-  if (new Set(values).size !== values.length || values.join('\u0000') !== sorted.join('\u0000')) {
+  if (
+    new Set(values).size !== values.length ||
+    values.join('\u0000') !== sorted.join('\u0000')
+  ) {
     throw new Es2015ProvenanceCheckError(`${label} must be sorted and unique`);
   }
 }
@@ -1687,7 +1719,11 @@ async function validateProtectedOutputBytes(output, authority, context) {
 /** @param {ProvenanceCheckDependencies} deps @param {string} revision @param {string} path @param {'BASE' | 'HEAD'} side @param {string} profile */
 async function readRequiredRoadmapFile(deps, revision, path, side, profile) {
   const mode = await deps.readGitMode?.(revision, path);
-  if (mode !== null && mode !== undefined && !REGULAR_GIT_FILE_MODES.has(mode)) {
+  if (
+    mode !== null &&
+    mode !== undefined &&
+    !REGULAR_GIT_FILE_MODES.has(mode)
+  ) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${path} must be a regular file in ${side}`,
     );
@@ -1704,11 +1740,23 @@ async function readRequiredRoadmapFile(deps, revision, path, side, profile) {
 }
 
 /** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
-async function validateProjectedOutput(output, authority, context, baseText, headText) {
+async function validateProjectedOutput(
+  output,
+  authority,
+  context,
+  baseText,
+  headText,
+) {
   const profile = context.marker.profile;
   switch (output.path) {
     case TAXONOMY_FILE:
-      await validateTaxonomyProjection(output, authority, context, baseText, headText);
+      await validateTaxonomyProjection(
+        output,
+        authority,
+        context,
+        baseText,
+        headText,
+      );
       break;
     case AUDIT_EVIDENCE_FILE:
       await validateAuditEvidenceProjection(
@@ -1720,7 +1768,13 @@ async function validateProjectedOutput(output, authority, context, baseText, hea
       );
       break;
     case 'tools/test262/upstream-subset.json':
-      await validateSubsetProjection(output, authority, context, baseText, headText);
+      await validateSubsetProjection(
+        output,
+        authority,
+        context,
+        baseText,
+        headText,
+      );
       break;
     case ES5_SELECTION_FILE:
       await validateEs5SelectionProjection(
@@ -1732,7 +1786,13 @@ async function validateProjectedOutput(output, authority, context, baseText, hea
       );
       break;
     case REPORT_FILE:
-      await validateReportProjection(output, authority, context, baseText, headText);
+      await validateReportProjection(
+        output,
+        authority,
+        context,
+        baseText,
+        headText,
+      );
       break;
     case CONFORMANCE_FILE:
       await validateConformanceProjection(
@@ -1805,7 +1865,13 @@ async function derivedRoadmapProjectionSha256(path, authority, context) {
 }
 
 /** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
-async function validateTaxonomyProjection(output, authority, context, baseText, headText) {
+async function validateTaxonomyProjection(
+  output,
+  authority,
+  context,
+  baseText,
+  headText,
+) {
   const profile = context.marker.profile;
   const evidence = await loadRoadmapEvidence(authority, context);
   const sourcePaths = parseRoadmapPathList(
@@ -1858,7 +1924,10 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
       `${profile} protected output ${output.path} baseline does not cover the exact source ledger`,
     );
   }
-  const sourceVariants = baseline.reduce((total, entry) => total + entry.variants, 0);
+  const sourceVariants = baseline.reduce(
+    (total, entry) => total + entry.variants,
+    0,
+  );
   if (
     baseline.length !== authority.source.rootCount ||
     sourceVariants !== authority.source.variantCount
@@ -1868,15 +1937,21 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
     );
   }
   const promoted = new Set(promotionPaths(promotion));
-  const dispositionMap = new Map(disposition.map((entry) => [entry.path, entry]));
+  const dispositionMap = new Map(
+    disposition.map((entry) => [entry.path, entry]),
+  );
   if (dispositionMap.size !== sourcePaths.length) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} disposition does not cover the exact source ledger`,
     );
   }
   const ownerDeltaPaths = ownerDeltas.map((entry) => entry.path);
-  const expectedOwnerDeltaPaths = sourcePaths.filter((path) => !promoted.has(path));
-  if (ownerDeltaPaths.join('\u0000') !== expectedOwnerDeltaPaths.join('\u0000')) {
+  const expectedOwnerDeltaPaths = sourcePaths.filter(
+    (path) => !promoted.has(path),
+  );
+  if (
+    ownerDeltaPaths.join('\u0000') !== expectedOwnerDeltaPaths.join('\u0000')
+  ) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} owner deltas do not cover the non-promoted source ledger`,
     );
@@ -1886,7 +1961,11 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
   );
   if (
     json(expectedOwnerMap) !==
-    json(ownerMapFromDestinations(ownerMap.map((entry) => entryToDestination(entry))))
+    json(
+      ownerMapFromDestinations(
+        ownerMap.map((entry) => entryToDestination(entry)),
+      ),
+    )
   ) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} owner map does not match the exact non-selected destinations`,
@@ -1900,7 +1979,9 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
       `${profile} protected output ${output.path} destinations do not match ${authority.code} roadmap authority`,
     );
   }
-  for (const path of headArtifact.classifications.map((record) => record.path)) {
+  for (const path of headArtifact.classifications.map(
+    (record) => record.path,
+  )) {
     if (baseRecords.has(path)) continue;
     if (sourcePathSet.has(path)) {
       throw new Es2015ProvenanceCheckError(
@@ -1911,7 +1992,9 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
       `${profile} protected output ${output.path} changes a foreign classification ${path}`,
     );
   }
-  for (const path of baseArtifact.classifications.map((record) => record.path)) {
+  for (const path of baseArtifact.classifications.map(
+    (record) => record.path,
+  )) {
     if (headRecords.has(path)) continue;
     if (sourcePathSet.has(path)) {
       throw new Es2015ProvenanceCheckError(
@@ -1943,8 +2026,9 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
       );
     }
     const expectedStatus = /** @type {string} */ (destination.status);
-    const expectedBlocker =
-      expectedStatus.startsWith('blocked:') ? destination.blocker : null;
+    const expectedBlocker = expectedStatus.startsWith('blocked:')
+      ? destination.blocker
+      : null;
     if (
       headRecord.variants !== baseRecord.variants ||
       headRecord.partition !== baseRecord.partition ||
@@ -1972,8 +2056,7 @@ async function validateTaxonomyProjection(output, authority, context, baseText, 
           /** @type {unknown} */ (headArtifact.classifications)
         ),
       ),
-    ) !==
-    json(headArtifact.artifact.summary)
+    ) !== json(headArtifact.artifact.summary)
   ) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} must preserve whole-tree summary balance`,
@@ -2130,7 +2213,13 @@ async function validateAuditEvidenceProjection(
 }
 
 /** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
-async function validateSubsetProjection(output, authority, context, baseText, headText) {
+async function validateSubsetProjection(
+  output,
+  authority,
+  context,
+  baseText,
+  headText,
+) {
   const profile = context.marker.profile;
   const baseSubset = parseUpstreamSubset(baseText);
   const headSubset = parseUpstreamSubset(headText);
@@ -2151,7 +2240,9 @@ async function validateSubsetProjection(output, authority, context, baseText, he
   const promotion = parseEs2015Promotion(
     requiredEvidenceText(evidence, 'promotion', authority, profile),
   );
-  const expected = serializeUpstreamSubset(mergePromotionSubset(baseSubset, promotion));
+  const expected = serializeUpstreamSubset(
+    mergePromotionSubset(baseSubset, promotion),
+  );
   if (headText !== expected) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} must match the canonical promoted subset`,
@@ -2200,16 +2291,32 @@ async function validateEs5SelectionProjection(
     );
   }
   const baseTaxonomy = parseJsonValue(
-    await readRequiredRoadmapFile(context.deps, context.base, TAXONOMY_FILE, 'BASE', profile),
+    await readRequiredRoadmapFile(
+      context.deps,
+      context.base,
+      TAXONOMY_FILE,
+      'BASE',
+      profile,
+    ),
     TAXONOMY_FILE,
   );
   const headTaxonomy = parseJsonValue(
-    await readRequiredRoadmapFile(context.deps, context.head, TAXONOMY_FILE, 'HEAD', profile),
+    await readRequiredRoadmapFile(
+      context.deps,
+      context.head,
+      TAXONOMY_FILE,
+      'HEAD',
+      profile,
+    ),
     TAXONOMY_FILE,
   );
   const path = HISTORICAL_P0_ES5_SELECTION_REMOVAL.path;
-  const baseRecord = taxonomyArtifact(baseTaxonomy, TAXONOMY_FILE).byPath.get(path);
-  const headRecord = taxonomyArtifact(headTaxonomy, TAXONOMY_FILE).byPath.get(path);
+  const baseRecord = taxonomyArtifact(baseTaxonomy, TAXONOMY_FILE).byPath.get(
+    path,
+  );
+  const headRecord = taxonomyArtifact(headTaxonomy, TAXONOMY_FILE).byPath.get(
+    path,
+  );
   if (json(baseRecord) !== json(headRecord)) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${output.path} must retain the taxonomy classification for ${path}`,
@@ -2218,7 +2325,13 @@ async function validateEs5SelectionProjection(
 }
 
 /** @param {Record<string, any>} output @param {Record<string, any>} authority @param {Parameters<typeof validateRoadmapProtectedOutputs>[2]} context @param {string} baseText @param {string} headText */
-async function validateReportProjection(output, authority, context, baseText, headText) {
+async function validateReportProjection(
+  output,
+  authority,
+  context,
+  baseText,
+  headText,
+) {
   const profile = context.marker.profile;
   const evidence = await loadRoadmapEvidence(authority, context);
   const promotion = parseEs2015Promotion(
@@ -2250,7 +2363,10 @@ async function validateReportProjection(output, authority, context, baseText, he
     'HEAD',
     profile,
   );
-  const promotionRecords = parseRoadmapAuditEvidence(auditEvidenceText, AUDIT_EVIDENCE_FILE)
+  const promotionRecords = parseRoadmapAuditEvidence(
+    auditEvidenceText,
+    AUDIT_EVIDENCE_FILE,
+  )
     .filter((record) => promoted.has(record.file))
     .map((record) => {
       if (record.status !== 'passed') {
@@ -2329,7 +2445,10 @@ async function validateConformanceProjection(
     roadmapCoverageBlock(reportText, subsetText, taxonomyText),
   );
   if (headText !== expected) {
-    if (stripGeneratedCoverageBlock(baseText) !== stripGeneratedCoverageBlock(headText)) {
+    if (
+      stripGeneratedCoverageBlock(baseText) !==
+      stripGeneratedCoverageBlock(headText)
+    ) {
       throw new Es2015ProvenanceCheckError(
         `${profile} protected output ${output.path} must preserve manual prose outside the generated block`,
       );
@@ -2357,9 +2476,13 @@ function taxonomyArtifact(value, label) {
     typeof value !== 'object' ||
     value === null ||
     Array.isArray(value) ||
-    !Array.isArray(/** @type {Record<string, unknown>} */ (value).classifications)
+    !Array.isArray(
+      /** @type {Record<string, unknown>} */ (value).classifications,
+    )
   ) {
-    throw new Es2015ProvenanceCheckError(`${label} must contain classifications`);
+    throw new Es2015ProvenanceCheckError(
+      `${label} must contain classifications`,
+    );
   }
   const artifact = /** @type {Record<string, any>} */ (value);
   const classifications = /** @type {Record<string, any>[]} */ (
@@ -2437,10 +2560,17 @@ function auditDocumentData(document) {
  * @param {ReadonlySet<string>} sourcePaths
  * @param {string} outputPath
  */
-async function sourceAuditExpectations(authority, context, sourcePaths, outputPath) {
+async function sourceAuditExpectations(
+  authority,
+  context,
+  sourcePaths,
+  outputPath,
+) {
   const profile = context.marker.profile;
   const sourcePathList = [...sourcePaths].sort();
-  if (sha256(`${sourcePathList.join('\n')}\n`) !== authority.source.pathSha256) {
+  if (
+    sha256(`${sourcePathList.join('\n')}\n`) !== authority.source.pathSha256
+  ) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${outputPath} source paths do not match ${authority.code} roadmap authority`,
     );
@@ -2498,7 +2628,10 @@ function auditEntriesByPath(audit) {
 
 /** @param {Record<string, any>} record @param {string} outputPath @param {string} profile */
 function taxonomyExecutionVariants(record, outputPath, profile) {
-  if (!Array.isArray(record.flags) || record.flags.some((flag) => typeof flag !== 'string')) {
+  if (
+    !Array.isArray(record.flags) ||
+    record.flags.some((flag) => typeof flag !== 'string')
+  ) {
     throw new Es2015ProvenanceCheckError(
       `${profile} protected output ${outputPath} cannot derive exact source variants for ${record.path}`,
     );
@@ -2521,7 +2654,10 @@ function taxonomyExecutionVariants(record, outputPath, profile) {
 
 /** @param {readonly string[]} left @param {readonly string[]} right */
 function sameStringLists(left, right) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 /** @param {readonly string[]} values */
@@ -2547,7 +2683,7 @@ function entryToDestination(entry) {
     blocker:
       typeof entry.status === 'string' && entry.status.startsWith('blocked:')
         ? entry.blocker
-        : entry.blocker ?? null,
+        : (entry.blocker ?? null),
     issue: entry.issue,
   };
 }
@@ -2583,7 +2719,9 @@ function subsetDeltaTuples(baseSubset, headSubset) {
       group,
     ]),
   );
-  const groupNames = [...new Set([...baseGroups.keys(), ...headGroups.keys()])].sort();
+  const groupNames = [
+    ...new Set([...baseGroups.keys(), ...headGroups.keys()]),
+  ].sort();
   const added = [];
   const removed = [];
   for (const name of groupNames) {
@@ -2734,7 +2872,6 @@ function stripGeneratedCoverageBlock(document) {
 function auditRecordKey(record) {
   return `${record.file}\u0000${record.variant ?? ''}`;
 }
-
 
 /**
  * @param {string} base
@@ -2926,10 +3063,7 @@ function extractEmbeddedRoadmapAuthorityPayload(text, label, path) {
     );
   }
   const payloadStart = beginIndex + beginMatch[0].length;
-  if (
-    !text.startsWith('\n', payloadStart) ||
-    endIndex <= payloadStart + 1
-  ) {
+  if (!text.startsWith('\n', payloadStart) || endIndex <= payloadStart + 1) {
     throw new Es2015ProvenanceCheckError(
       `${path} must contain exactly one embedded roadmap authority ${label} payload`,
     );
@@ -3149,7 +3283,11 @@ async function provenanceOwnedRange(deps, changes, base, _head) {
       : [change.sourcePath, change.path],
   );
   const gateOwnerPaths = new Set(PROVENANCE_RANGE_GATE_OWNER_PATHS);
-  if (changedPaths.some((path) => pathMatchesOwned(path, gateOwnerPaths, new Set()))) {
+  if (
+    changedPaths.some((path) =>
+      pathMatchesOwned(path, gateOwnerPaths, new Set()),
+    )
+  ) {
     return true;
   }
 
@@ -3169,12 +3307,17 @@ async function provenanceOwnedRange(deps, changes, base, _head) {
     );
     addRangeProfileOwnership(ownedPaths, bootstrapFoundationProfile);
     addRangeProfileOwnership(ownedPaths, FOUNDATION_BOOTSTRAP_RANGE_PROFILE);
-    return changedPaths.some((path) => pathMatchesOwned(path, ownedPaths, new Set()));
+    return changedPaths.some((path) =>
+      pathMatchesOwned(path, ownedPaths, new Set()),
+    );
   }
   if (baseManifestText === null) {
     return false;
   }
-  const manifest = parseRangeManifest(baseManifestText, 'provenance ownership base');
+  const manifest = parseRangeManifest(
+    baseManifestText,
+    'provenance ownership base',
+  );
   if (manifest.version === 3) {
     const roadmapOwnedPaths = roadmapOwnedPathsFromBaseManifest(manifest);
     const namespaces = new Set();
@@ -3191,7 +3334,9 @@ async function provenanceOwnedRange(deps, changes, base, _head) {
     if (profile.name === ISSUE_77_MAINTENANCE_PROFILE) continue;
     addRangeProfileOwnership(ownedPaths, profile);
   }
-  return changedPaths.some((path) => pathMatchesOwned(path, ownedPaths, new Set()));
+  return changedPaths.some((path) =>
+    pathMatchesOwned(path, ownedPaths, new Set()),
+  );
 }
 
 /**
@@ -3210,13 +3355,17 @@ function pathMatchesOwned(candidate, exactPaths, namespaces) {
     decoded = decodeURIComponent(candidate);
   } catch {}
   decoded = decoded.replace(/\\/gu, '/');
-  if (exactPaths.has(decoded) || generatedPathMatchesNamespace(decoded, namespaces)) {
+  if (
+    exactPaths.has(decoded) ||
+    generatedPathMatchesNamespace(decoded, namespaces)
+  ) {
     return true;
   }
   const canonical = canonicalRepositoryPath(candidate);
   return (
     canonical !== null &&
-    (exactPaths.has(canonical) || generatedPathMatchesNamespace(canonical, namespaces))
+    (exactPaths.has(canonical) ||
+      generatedPathMatchesNamespace(canonical, namespaces))
   );
 }
 
@@ -3430,7 +3579,9 @@ async function checkFoundation(deps, completeCode, allowPendingReview) {
   validateProvenanceFoundation(
     manifest,
     undefined,
-    /** @type {any} */ (trustedManifestValidationOptions(deps, manifest.version)),
+    /** @type {any} */ (
+      trustedManifestValidationOptions(deps, manifest.version)
+    ),
   );
 
   await verifyDecisionDirectory(deps);
