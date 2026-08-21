@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
+  ES2015_PROVENANCE_MANIFEST_VERSIONS,
   ES2015_PROVENANCE_VERSION,
   Es2015ProvenanceError,
   buildProvenanceFoundation,
@@ -132,6 +133,8 @@ export class Es2015ProvenanceCheckError extends Error {
  *   readGitFile: (revision: string, path: string) => Promise<string | null>,
  *   stdout: (text: string) => void,
  *   stderr: (text: string) => void,
+ *   expectedManifestVersion?: number,
+ *   expectedRoadmapAuthorities?: readonly Record<string, any>[],
  * }} ProvenanceCheckDependencies
  */
 
@@ -202,7 +205,7 @@ export async function main(argv = [], dependencies = {}) {
   }
 }
 
-/** @param {{ repositoryRootUrl?: URL, environment?: Record<string, string | undefined>, stdout?: (text: string) => void, stderr?: (text: string) => void }} [options] */
+/** @param {{ repositoryRootUrl?: URL, environment?: Record<string, string | undefined>, stdout?: (text: string) => void, stderr?: (text: string) => void, expectedManifestVersion?: number, expectedRoadmapAuthorities?: readonly Record<string, any>[] }} [options] */
 export function createProvenanceCheckDependencies(options = {}) {
   const repositoryRootUrl = options.repositoryRootUrl ?? REPOSITORY_ROOT_URL;
   const repositoryRootPath = fileURLToPath(repositoryRootUrl);
@@ -254,6 +257,12 @@ export function createProvenanceCheckDependencies(options = {}) {
     },
     stdout: options.stdout ?? ((text) => process.stdout.write(text)),
     stderr: options.stderr ?? ((text) => process.stderr.write(text)),
+    ...(options.expectedManifestVersion === undefined
+      ? {}
+      : { expectedManifestVersion: options.expectedManifestVersion }),
+    ...(options.expectedRoadmapAuthorities === undefined
+      ? {}
+      : { expectedRoadmapAuthorities: options.expectedRoadmapAuthorities }),
   };
 }
 
@@ -1084,7 +1093,11 @@ async function checkFoundation(deps, completeCode, allowPendingReview) {
       `${ES2015_PROVENANCE_FILE} does not match generated provenance bytes`,
     );
   }
-  validateProvenanceFoundation(manifest);
+  validateProvenanceFoundation(
+    manifest,
+    undefined,
+    trustedManifestValidationOptions(deps, manifest.version),
+  );
 
   await verifyDecisionDirectory(deps);
   const fragments = new Map();
@@ -1105,6 +1118,41 @@ async function checkFoundation(deps, completeCode, allowPendingReview) {
     allowPendingReview,
     ...(completeCode === null ? {} : { requireCompleteCodes: [completeCode] }),
   });
+}
+
+/**
+ * @param {ProvenanceCheckDependencies} deps
+ * @param {number} version
+ * @returns {{ expectedRoadmapAuthorities?: readonly Record<string, any>[] }}
+ */
+function trustedManifestValidationOptions(deps, version) {
+  if (
+    deps.expectedManifestVersion !== undefined &&
+    !ES2015_PROVENANCE_MANIFEST_VERSIONS.includes(deps.expectedManifestVersion)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `${ES2015_PROVENANCE_FILE} expected manifest version must be ${ES2015_PROVENANCE_MANIFEST_VERSIONS.join(' or ')}`,
+    );
+  }
+  const expectedManifestVersion = deps.expectedManifestVersion ?? version;
+  if (version !== expectedManifestVersion) {
+    throw new Es2015ProvenanceCheckError(
+      `${ES2015_PROVENANCE_FILE} must declare version ${expectedManifestVersion}`,
+    );
+  }
+  if (expectedManifestVersion === 3) {
+    if (
+      !Object.prototype.hasOwnProperty.call(deps, 'expectedRoadmapAuthorities')
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${ES2015_PROVENANCE_FILE} version 3 check requires expected roadmapAuthorities`,
+      );
+    }
+    return {
+      expectedRoadmapAuthorities: deps.expectedRoadmapAuthorities,
+    };
+  }
+  return {};
 }
 
 /** @param {ProvenanceCheckDependencies} deps */

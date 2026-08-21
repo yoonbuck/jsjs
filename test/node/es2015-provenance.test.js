@@ -797,24 +797,6 @@ function minimalRoadmapAuthority(code, issue, state) {
   };
 }
 
-function minimalRoadmapReconciliation() {
-  const value = {
-    preservedTaxonomySha256: '4'.repeat(64),
-    authorityTaxonomySha256: '5'.repeat(64),
-    selectorPathSha256: '6'.repeat(64),
-    rootCount: 1,
-    variantCount: 1,
-    missingCount: 0,
-    extraCount: 0,
-  };
-  return {
-    ...value,
-    proofSha256: sha256(
-      `${value.preservedTaxonomySha256}\u0000${value.authorityTaxonomySha256}\u0000${value.selectorPathSha256}\u0000${value.rootCount}\u0000${value.variantCount}\u0000${value.missingCount}\u0000${value.extraCount}\u0000`,
-    ),
-  };
-}
-
 function canonicalSchemaV3ManifestValue() {
   return {
     ...JSON.parse(approvedProvenanceManifestText()),
@@ -1154,6 +1136,8 @@ async function rejected(action) {
  *   timezone?: string,
  *   files?: ReadonlyMap<string, string>,
  *   decisionDirectoryEntries?: readonly string[],
+ *   expectedManifestVersion?: number,
+ *   expectedRoadmapAuthorities?: readonly Record<string, any>[],
  * }} [options]
  */
 function provenanceCheckDependencies(options = {}) {
@@ -1216,6 +1200,12 @@ function provenanceCheckDependencies(options = {}) {
     },
     stdout: (/** @type {string} */ text) => stdout.push(text),
     stderr: (/** @type {string} */ text) => stderr.push(text),
+    ...(options.expectedManifestVersion === undefined
+      ? {}
+      : { expectedManifestVersion: options.expectedManifestVersion }),
+    ...(options.expectedRoadmapAuthorities === undefined
+      ? {}
+      : { expectedRoadmapAuthorities: options.expectedRoadmapAuthorities }),
     files,
     writes,
     outputs: { stdout, stderr },
@@ -1592,23 +1582,6 @@ export default [
       assertSame(parsed.version, 3);
       assertSame(parsed.roadmapAuthorities[0].code, 'H0');
       assertSame(parsed.roadmapAuthorities[1].code, 'P0');
-      const foundationV3 = buildProvenanceFoundation(
-        foundationClassifications(),
-        {
-          version: 3,
-          roadmapAuthorities: manifestV3.roadmapAuthorities,
-        },
-      );
-      assertSame(foundationV3.version, 3);
-      assertSame(foundationV3.roadmapAuthorities[0].code, 'H0');
-      assertThrows(
-        () =>
-          buildProvenanceFoundation(foundationClassifications(), {
-            version: 2,
-            roadmapAuthorities: manifestV3.roadmapAuthorities,
-          }),
-        Es2015ProvenanceError,
-      );
 
       const missingAuthorities = structuredClone(manifestV3);
       delete missingAuthorities.roadmapAuthorities;
@@ -1662,6 +1635,71 @@ export default [
           Es2015ProvenanceError,
         );
       }
+    },
+  },
+  {
+    name: 'ES2015 provenance schema-v3 foundation building requires explicit roadmapAuthorities',
+    run: () => {
+      const manifestV3 = canonicalSchemaV3ManifestValue();
+      const foundationV3 = buildProvenanceFoundation(
+        foundationClassifications(),
+        {
+          version: 3,
+          roadmapAuthorities: manifestV3.roadmapAuthorities,
+        },
+      );
+      assertSame(foundationV3.version, 3);
+      assertSame(foundationV3.roadmapAuthorities[0].code, 'H0');
+      assertSame(
+        assertThrows(
+          () =>
+            buildProvenanceFoundation(foundationClassifications(), {
+              version: 3,
+            }),
+          Es2015ProvenanceError,
+        ).message,
+        'ES2015 provenance foundation version 3 requires roadmapAuthorities option',
+      );
+      assertThrows(
+        () =>
+          buildProvenanceFoundation(foundationClassifications(), {
+            version: 2,
+            roadmapAuthorities: manifestV3.roadmapAuthorities,
+          }),
+        Es2015ProvenanceError,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance schema-v3 foundation validation compares trusted roadmap authorities',
+    run: () => {
+      const manifestV3 = canonicalSchemaV3ManifestValue();
+      assertSame(
+        assertThrows(
+          () =>
+            validateProvenanceFoundation(
+              manifestV3,
+              productionClassifications(),
+            ),
+          Es2015ProvenanceError,
+        ).message,
+        'tools/test262/es2015-provenance.json version 3 validation requires expected roadmapAuthorities',
+      );
+      validateProvenanceFoundation(manifestV3, productionClassifications(), {
+        expectedRoadmapAuthorities: manifestV3.roadmapAuthorities,
+      });
+      const drifted = structuredClone(manifestV3);
+      drifted.roadmapAuthorities[0].state = 'applied';
+      assertSame(
+        assertThrows(
+          () =>
+            validateProvenanceFoundation(drifted, productionClassifications(), {
+              expectedRoadmapAuthorities: manifestV3.roadmapAuthorities,
+            }),
+          Es2015ProvenanceError,
+        ).message,
+        'H0 roadmap authority does not match the reviewed ledger',
+      );
     },
   },
   {
@@ -4516,31 +4554,32 @@ export default [
       );
 
       const manifestV3 = canonicalSchemaV3ManifestValue();
-      manifestV3.roadmapAuthorities[0].reconciliation =
-        minimalRoadmapReconciliation();
       const v3Dependencies = provenanceCheckDependencies({
         files: new Map([
           [ES2015_PROVENANCE_FILE, renderEs2015ProvenanceManifest(manifestV3)],
         ]),
+        expectedManifestVersion: 3,
+        expectedRoadmapAuthorities: manifestV3.roadmapAuthorities,
       });
       assertSame(await provenanceCheck(['--check'], v3Dependencies), 0);
 
       const driftedManifestV3 = structuredClone(manifestV3);
-      driftedManifestV3.roadmapAuthorities[0].reconciliation.proofSha256 =
-        '0'.repeat(64);
+      driftedManifestV3.roadmapAuthorities[0].state = 'applied';
       const driftDependencies = provenanceCheckDependencies({
         files: new Map([
           [
             ES2015_PROVENANCE_FILE,
-            `${JSON.stringify(driftedManifestV3, null, 2)}\n`,
+            renderEs2015ProvenanceManifest(driftedManifestV3),
           ],
         ]),
+        expectedManifestVersion: 3,
+        expectedRoadmapAuthorities: manifestV3.roadmapAuthorities,
       });
       const driftError = await rejected(() =>
         provenanceCheck(['--check'], driftDependencies),
       );
       assertSame(driftError instanceof Es2015ProvenanceCheckError, true);
-      assertSame(driftError.message.includes('proofSha256'), true);
+      assertSame(driftError.message, 'H0 roadmap authority does not match the reviewed ledger');
     },
   },
   {

@@ -833,7 +833,18 @@ export function buildProvenanceFoundation(classifications, options = {}) {
       `ES2015 provenance foundation must declare manifest version ${ES2015_PROVENANCE_MANIFEST_VERSIONS.join(' or ')}`,
     );
   }
-  const roadmapAuthorities = options.roadmapAuthorities ?? [];
+  const hasRoadmapAuthorities = Object.prototype.hasOwnProperty.call(
+    options,
+    'roadmapAuthorities',
+  );
+  if (version === 3 && !hasRoadmapAuthorities) {
+    throw new Es2015ProvenanceError(
+      'ES2015 provenance foundation version 3 requires roadmapAuthorities option',
+    );
+  }
+  const roadmapAuthorities = hasRoadmapAuthorities
+    ? options.roadmapAuthorities
+    : [];
   if (version === 2) {
     if (
       !Array.isArray(roadmapAuthorities) ||
@@ -934,8 +945,16 @@ export function buildProvenanceFoundation(classifications, options = {}) {
   );
 }
 
-/** @param {unknown} manifest @param {readonly ClassificationRecord[]} [classifications] */
-export function validateProvenanceFoundation(manifest, classifications) {
+/**
+ * @param {unknown} manifest
+ * @param {readonly ClassificationRecord[]} [classifications]
+ * @param {{ expectedRoadmapAuthorities?: readonly RoadmapAuthority[] }} [options]
+ */
+export function validateProvenanceFoundation(
+  manifest,
+  classifications,
+  options = {},
+) {
   const normalizedManifest = normalizeManifestRecord(
     object(manifest, ES2015_PROVENANCE_FILE),
     {
@@ -944,14 +963,42 @@ export function validateProvenanceFoundation(manifest, classifications) {
     },
   );
   validateManifestStructure(normalizedManifest);
+  const hasExpectedRoadmapAuthorities = Object.prototype.hasOwnProperty.call(
+    options,
+    'expectedRoadmapAuthorities',
+  );
+  const expectedRoadmapAuthorities = hasExpectedRoadmapAuthorities
+    ? normalizeRoadmapAuthorities(
+        options.expectedRoadmapAuthorities,
+        `${ES2015_PROVENANCE_FILE} expected roadmapAuthorities`,
+      )
+    : undefined;
   if (classifications !== undefined) {
+    if (normalizedManifest.version === 3 && !hasExpectedRoadmapAuthorities) {
+      throw new Es2015ProvenanceError(
+        `${ES2015_PROVENANCE_FILE} version 3 validation requires expected roadmapAuthorities`,
+      );
+    }
     const expected = buildProvenanceFoundation(classifications, {
       version: normalizedManifest.version,
-      roadmapAuthorities: normalizedManifest.roadmapAuthorities ?? [],
+      ...(normalizedManifest.version === 3
+        ? {
+            roadmapAuthorities:
+              /** @type {readonly RoadmapAuthority[]} */ (
+                expectedRoadmapAuthorities
+              ),
+          }
+        : {}),
     });
     validateManifestAgainstExpected(
       normalizedManifest,
       expected,
+      'reviewed ledger',
+    );
+  } else if (normalizedManifest.version === 3 && hasExpectedRoadmapAuthorities) {
+    validateRoadmapAuthoritiesAgainstExpected(
+      normalizedManifest.roadmapAuthorities ?? [],
+      /** @type {readonly RoadmapAuthority[]} */ (expectedRoadmapAuthorities),
       'reviewed ledger',
     );
   }
@@ -1158,6 +1205,61 @@ function validateManifestAgainstExpected(manifest, expected, ledgerLabel) {
     throw new Es2015ProvenanceError(
       `${ES2015_PROVENANCE_FILE} base ledger SHA-256 does not match the ${ledgerLabel}`,
     );
+  }
+  if (manifest.version !== expected.version) {
+    throw new Es2015ProvenanceError(
+      `${ES2015_PROVENANCE_FILE} version does not match the ${ledgerLabel}`,
+    );
+  }
+  if (manifest.version === 3) {
+    validateRoadmapAuthoritiesAgainstExpected(
+      manifest.roadmapAuthorities ?? [],
+      expected.roadmapAuthorities ?? [],
+      ledgerLabel,
+    );
+  }
+}
+
+/**
+ * @param {readonly RoadmapAuthority[]} actual
+ * @param {readonly RoadmapAuthority[]} expected
+ * @param {string} ledgerLabel
+ */
+function validateRoadmapAuthoritiesAgainstExpected(actual, expected, ledgerLabel) {
+  const actualCodes = actual.map((authority) => authority.code);
+  const expectedCodes = expected.map((authority) => authority.code);
+  for (const code of expectedCodes) {
+    if (!actualCodes.includes(code)) {
+      throw new Es2015ProvenanceError(
+        `${code} roadmap authority is missing from the ${ledgerLabel}`,
+      );
+    }
+  }
+  for (const code of actualCodes) {
+    if (!expectedCodes.includes(code)) {
+      throw new Es2015ProvenanceError(
+        `${code} roadmap authority is unexpected in the ${ledgerLabel}`,
+      );
+    }
+  }
+  const expectedByCode = new Map(
+    expected.map((authority) => [authority.code, authority]),
+  );
+  for (const authority of actual) {
+    const expectedAuthority = expectedByCode.get(authority.code);
+    if (expectedAuthority === undefined) {
+      throw new Es2015ProvenanceError(
+        `${authority.code} roadmap authority is unexpected in the ${ledgerLabel}`,
+      );
+    }
+    if (
+      canonicalRoadmapAuthoritySha256(authority) !==
+      canonicalRoadmapAuthoritySha256(expectedAuthority)
+    ) {
+      throw new Es2015ProvenanceError(
+        `${authority.code} roadmap authority does not match the ${ledgerLabel}`,
+      );
+    }
   }
 }
 
