@@ -13,7 +13,12 @@ import {
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
-import { isCallable, isConstructor } from '../runtime/descriptors.js';
+import {
+  callCallable,
+  constructCallable,
+  isCallable,
+  isConstructor,
+} from '../runtime/capabilities.js';
 import {
   checkObjectCoercible,
   toBoolean,
@@ -2654,9 +2659,12 @@ function invokeCall(execution, frame) {
       return performEval(frame.args[0], frame.context);
     }
 
-    return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
-      frame.callee
-    ).callFunction(frame.thisValue, frame.args, frame.context.realm);
+    return callCallable(
+      frame.callee,
+      frame.thisValue,
+      frame.args,
+      frame.context.realm,
+    );
   });
 }
 
@@ -2763,18 +2771,12 @@ function constructNew(execution, frame) {
       );
     }
 
-    const constructed =
-      /** @type {{
-       *   constructFunction(
-       *     args?: readonly unknown[],
-       *     newTarget?: unknown,
-       *     callerRealm?: import('../runtime/realm.js').Realm,
-       *   ): unknown,
-       * }} */ (frame.callee).constructFunction(
-        frame.args,
-        frame.callee,
-        frame.context.realm,
-      );
+    const constructed = constructCallable(
+      frame.callee,
+      frame.args,
+      frame.callee,
+      frame.context.realm,
+    );
     return constructed;
   });
 }
@@ -3368,9 +3370,12 @@ function invokeTag(execution, frame) {
       );
     }
 
-    return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
-      frame.tag
-    ).callFunction(frame.thisValue, frame.args, frame.context.realm);
+    return callCallable(
+      frame.tag,
+      frame.thisValue,
+      frame.args,
+      frame.context.realm,
+    );
   });
 }
 
@@ -3511,10 +3516,18 @@ function applyUnaryOperator(operator, result, realm) {
       );
     }
 
-    return /** @type {any} */ (result.reference.base).delete(
+    const deleted = /** @type {any} */ (result.reference.base).delete(
       result.reference.referencedName,
-      result.reference.strict,
     );
+
+    if (!deleted && result.reference.strict) {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Cannot delete a non-configurable property',
+      );
+    }
+
+    return deleted;
   }
 
   if (operator === 'typeof') {

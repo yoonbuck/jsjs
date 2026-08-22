@@ -1,17 +1,14 @@
-import { EngineObject, callAccessor } from './object.js';
-import { isDataDescriptor } from './descriptors.js';
 import { GuestErrorSignal } from './completion.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
+ * @typedef {import('./object.js').EngineObject} EngineObject
  */
 
 /**
  * A `Reference` base (ECMA-262 8.7) for `super.prop`/`super[expr]`,
- * satisfying the duck-typed `isPropertyReferenceBase` interface
- * `src/runtime/reference.js`'s `getValue`/`putValue` already dispatch to
- * (`getReferencedValue`/`setReferencedValue`). It implements
- * `MakeSuperPropertyReference` (ECMA-262 12.3.5.1): the property lookup
+ * satisfying `src/runtime/reference.js`'s property-reference dispatch. It
+ * implements `MakeSuperPropertyReference` (ECMA-262 12.3.5.1): the lookup
  * starts at the method's `[[HomeObject]]`'s prototype, but accessors are
  * invoked with the method's `this` (the `receiver`) rather than with the
  * object the lookup happened to find the property on — the one way a
@@ -32,10 +29,9 @@ export class SuperReferenceBase {
 
   /**
    * @param {PropertyKey} name
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {unknown}
    */
-  getReferencedValue(name, callerRealm) {
+  get(name) {
     const superBase = this.superBase;
 
     if (superBase === null) {
@@ -45,31 +41,15 @@ export class SuperReferenceBase {
       );
     }
 
-    linkSuperTargetToGeneratorHostChain(callerRealm, superBase);
-    linkSuperTargetToGeneratorHostChain(callerRealm, this.receiver);
-    const descriptor = superBase.getProperty(name);
-
-    if (descriptor === undefined) {
-      return undefined;
-    }
-
-    if (isDataDescriptor(descriptor)) {
-      return descriptor.value;
-    }
-
-    return descriptor.get === undefined
-      ? undefined
-      : callAccessor(descriptor.get, this.receiver, [], callerRealm);
+    return superBase.get(name, this.receiver);
   }
 
   /**
    * @param {PropertyKey} name
    * @param {unknown} value
-   * @param {boolean} [strict=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
-   * @returns {void}
+   * @returns {boolean}
    */
-  setReferencedValue(name, value, strict = false, callerRealm) {
+  set(name, value) {
     const superBase = this.superBase;
 
     if (superBase === null) {
@@ -79,9 +59,7 @@ export class SuperReferenceBase {
       );
     }
 
-    linkSuperTargetToGeneratorHostChain(callerRealm, superBase);
-    linkSuperTargetToGeneratorHostChain(callerRealm, this.receiver);
-    superBase.set(name, value, this.receiver, strict, callerRealm);
+    return superBase.set(name, value, this.receiver);
   }
 
   /**
@@ -93,20 +71,5 @@ export class SuperReferenceBase {
       'ReferenceError',
       'Unsupported reference to a super property',
     );
-  }
-}
-
-/**
- * @param {import('./realm.js').Realm | undefined} callerRealm
- * @param {unknown} value
- * @returns {void}
- */
-function linkSuperTargetToGeneratorHostChain(callerRealm, value) {
-  if (
-    callerRealm !== undefined &&
-    value instanceof EngineObject &&
-    value.agent !== null
-  ) {
-    callerRealm.agent.linkGeneratorHostChain(value.agent);
   }
 }

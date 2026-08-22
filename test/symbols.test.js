@@ -130,9 +130,9 @@ function assertGuestThrow(source, constructorName) {
   const prototype = /** @type {EngineObject} */ (constructor.get('prototype'));
 
   for (
-    let current = completion.value.getPrototype();
+    let current = completion.value.getPrototypeOf();
     current !== null;
-    current = current.getPrototype()
+    current = current.getPrototypeOf()
   ) {
     if (current === prototype) {
       return;
@@ -448,7 +448,7 @@ const tests = [
         symbol,
       );
       assertSame(wrapper.getClassName(), 'Symbol');
-      assertSame(wrapper.getPrototype(), realm.intrinsics.symbolPrototype);
+      assertSame(wrapper.getPrototypeOf(), realm.intrinsics.symbolPrototype);
       assertSame(toObject(realm, symbol) === wrapper, false);
     },
   },
@@ -460,7 +460,7 @@ const tests = [
 
       assertSame(prototype instanceof EngineObject, true);
       assertSame(prototype instanceof EnginePrimitiveObject, false);
-      assertSame(prototype.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(prototype.getPrototypeOf(), realm.intrinsics.objectPrototype);
     },
   },
   {

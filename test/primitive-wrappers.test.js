@@ -48,9 +48,9 @@ function assertGuestThrow(source, constructorName) {
   const prototype = /** @type {EngineObject} */ (constructor.get('prototype'));
 
   for (
-    let current = completion.value.getPrototype();
+    let current = completion.value.getPrototypeOf();
     current !== null;
-    current = current.getPrototype()
+    current = current.getPrototypeOf()
   ) {
     if (current === prototype) {
       return;
@@ -75,7 +75,7 @@ const tests = [
       ]) {
         assertSame(prototype instanceof EnginePrimitiveObject, true);
         assertSame(
-          /** @type {EngineObject} */ (prototype).getPrototype(),
+          /** @type {EngineObject} */ (prototype).getPrototypeOf(),
           realm.intrinsics.objectPrototype,
         );
       }
@@ -122,15 +122,15 @@ const tests = [
       const realm = createRealm();
 
       assertSame(
-        toObject(realm, 'text').getPrototype(),
+        toObject(realm, 'text').getPrototypeOf(),
         realm.intrinsics.stringPrototype,
       );
       assertSame(
-        toObject(realm, 7).getPrototype(),
+        toObject(realm, 7).getPrototypeOf(),
         realm.intrinsics.numberPrototype,
       );
       assertSame(
-        toObject(realm, false).getPrototype(),
+        toObject(realm, false).getPrototypeOf(),
         realm.intrinsics.booleanPrototype,
       );
       assertSame(

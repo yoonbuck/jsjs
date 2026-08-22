@@ -24,6 +24,7 @@ import {
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
   buildProvenanceFoundation,
+  parseEs2015ProvenanceManifest,
 } from '../../tools/test262/es2015-provenance.js';
 import {
   ES2015_H0_BASELINE_FILE,
@@ -199,7 +200,12 @@ function readRepositoryGitFile(revision, path) {
 function productionH0AuditReconciliationFixture() {
   const readRepositoryText = (/** @type {string} */ path) =>
     readFileSyncText(new URL(`../../${path}`, import.meta.url), 'utf8');
+  const manifest = parseEs2015ProvenanceManifest(
+    readRepositoryText(ES2015_PROVENANCE_FILE),
+  );
   return {
+    readFile: async (/** @type {string} */ path) => readRepositoryText(path),
+    roadmapAuthorities: manifest.roadmapAuthorities,
     baselineIdentityText: readRepositoryText(
       'tools/test262/es2015-h0-baseline.json',
     ),

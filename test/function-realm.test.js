@@ -1,8 +1,13 @@
-import { createRealm, evaluateScript } from '../src/index.js';
+import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import {
   createAbruptRealmCallable,
   getFunctionRealm,
 } from '../src/runtime/function-realm.js';
+import {
+  callCallable,
+  isCallable,
+  isConstructor,
+} from '../src/runtime/capabilities.js';
 import { createGuestError } from '../src/builtins/errors.js';
 import { assertSame } from './harness/assert.js';
 
@@ -38,6 +43,44 @@ export default [
         getFunctionRealm(callable(realm.intrinsics.functionPrototype)).value,
         realm,
       );
+    },
+  },
+  {
+    name: 'cross-Agent guest calls restore both active execution Realms',
+    run: () => {
+      const callerRealm = createRealm({ agent: createAgent() });
+      const functionRealm = createRealm({ agent: createAgent() });
+      const observe = functionRealm.createNativeFunction({
+        name: 'observe',
+        length: 0,
+        call() {
+          assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
+          assertSame(functionRealm.agent.activeExecutionRealm, functionRealm);
+          return 1;
+        },
+      });
+
+      functionRealm.globalObject.defineOwnProperty('observe', {
+        value: observe,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const foreign =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          evaluateScript(
+            functionRealm,
+            '(function foreign() { return observe(); })',
+          ).value
+        );
+
+      callerRealm.agent.withActiveExecutionRealm(callerRealm, () => {
+        assertSame(callCallable(foreign, undefined, [], callerRealm), 1);
+        assertSame(callerRealm.agent.activeExecutionRealm, callerRealm);
+      });
+
+      assertSame(callerRealm.agent.activeExecutionRealm, null);
+      assertSame(functionRealm.agent.activeExecutionRealm, null);
     },
   },
   {
@@ -120,7 +163,7 @@ export default [
       let bound = target;
 
       for (let index = 0; index < 30000; index += 1) {
-        bound = callable(bind.callFunction(bound, [null]));
+        bound = callable(callCallable(bind, bound, [null]));
       }
 
       assertSame(getFunctionRealm(bound).value, realm);
@@ -131,7 +174,10 @@ export default [
     run: () => {
       const realm = createRealm();
       const thrown = createGuestError(realm, 'TypeError', 'revoked');
-      const lookup = getFunctionRealm(createAbruptRealmCallable(realm, thrown));
+      const abrupt = createAbruptRealmCallable(realm, thrown);
+      const lookup = getFunctionRealm(abrupt);
+      assertSame(isCallable(abrupt), true);
+      assertSame(isConstructor(abrupt), false);
       assertSame(lookup.type, 'throw');
       assertSame(lookup.value, thrown);
     },

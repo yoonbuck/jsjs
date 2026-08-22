@@ -1,6 +1,10 @@
 import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
-import { ArrayIterator, StringIterator } from '../runtime/iterator-object.js';
+import {
+  ArrayIterator,
+  ForInIterator,
+  StringIterator,
+} from '../runtime/iterator-object.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { createIterResultObject } from '../runtime/iterator.js';
 import {
@@ -34,6 +38,7 @@ import { charCodeOfCodeUnit, codeUnitsBetween } from '../runtime/code-units.js';
  *   arrayIteratorPrototype: EngineObject,
  *   stringIteratorPrototype: EngineObject,
  *   arrayValuesFunction: NativeFunction,
+ *   forInIteratorFactory: (target: EngineObject) => EngineObject,
  * }} IteratorIntrinsics
  */
 
@@ -114,12 +119,15 @@ export function createIteratorIntrinsics(realm) {
     toStringTagSymbol,
     'String Iterator',
   );
+  /** @type {(target: EngineObject) => EngineObject} */
+  const forInIteratorFactory = (target) => new ForInIterator(realm, target);
 
   return {
     iteratorPrototype,
     arrayIteratorPrototype,
     stringIteratorPrototype,
     arrayValuesFunction,
+    forInIteratorFactory,
   };
 }
 
@@ -211,7 +219,7 @@ function arrayIteratorNext(realm, thisValue) {
   }
 
   const index = thisValue.nextIndex;
-  const length = toLength(array.get('length', realm), realm);
+  const length = toLength(array.get('length', array), realm);
 
   if (index >= length) {
     thisValue.iteratedObject = undefined;
@@ -224,7 +232,7 @@ function arrayIteratorNext(realm, thisValue) {
     return createIterResultObject(realm, index, false);
   }
 
-  const elementValue = array.get(String(index), realm);
+  const elementValue = array.get(String(index), array);
 
   if (thisValue.kind === 'value') {
     return createIterResultObject(realm, elementValue, false);

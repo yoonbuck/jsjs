@@ -3,6 +3,85 @@ import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { toObject } from '../src/runtime/conversion.js';
+import { createAgent } from '../src/runtime/agent.js';
+
+class RefusingDefineObject extends EngineObject {
+  /**
+   * @returns {(string | symbol)[]}
+   */
+  ownPropertyKeys() {
+    return ['existing'];
+  }
+
+  /**
+   * @param {import('../src/runtime/descriptors.js').PropertyKey} _name
+   * @returns {import('../src/runtime/descriptors.js').CompletePropertyDescriptor}
+   */
+  getOwnProperty(_name) {
+    return {
+      value: 1,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    };
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  defineOwnProperty() {
+    return false;
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  preventExtensions() {
+    return true;
+  }
+}
+
+class RefusingPreventExtensionsObject extends EngineObject {
+  /**
+   * @param {EngineObject} prototype
+   */
+  constructor(prototype) {
+    super(prototype);
+    this.defineOwnPropertyCalls = 0;
+  }
+
+  /**
+   * @param {import('../src/runtime/descriptors.js').PropertyKey} name
+   * @param {import('../src/runtime/descriptors.js').PropertyDescriptorRecord} descriptor
+   * @returns {boolean}
+   */
+  defineOwnProperty(name, descriptor) {
+    this.defineOwnPropertyCalls += 1;
+    return super.defineOwnProperty(name, descriptor);
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  preventExtensions() {
+    return false;
+  }
+}
+
+/**
+ * @param {import('../src/runtime/realm.js').Realm} realm
+ * @param {string} name
+ * @param {EngineObject} value
+ * @returns {void}
+ */
+function defineGlobal(realm, name, value) {
+  realm.globalObject.defineOwnProperty(name, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
 
 /**
  * @param {string} source
@@ -30,11 +109,11 @@ const tests = [
       assertSame(called instanceof EngineObject, true);
       assertSame(constructed instanceof EngineObject, true);
       assertSame(
-        /** @type {EngineObject} */ (called).getPrototype(),
+        /** @type {EngineObject} */ (called).getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
       assertSame(
-        /** @type {EngineObject} */ (constructed).getPrototype(),
+        /** @type {EngineObject} */ (constructed).getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
     },
@@ -389,6 +468,105 @@ const tests = [
       );
       assertSame(run('Object.isSealed({});'), false);
       assertSame(run('Object.isFrozen({});'), false);
+    },
+  },
+  {
+    name: 'Object define and integrity APIs own exotic false results',
+    run() {
+      const realm = createRealm();
+      defineGlobal(
+        realm,
+        'rejectDefine',
+        new RefusingDefineObject(realm.intrinsics.objectPrototype),
+      );
+      defineGlobal(
+        realm,
+        'rejectPreventExtensions',
+        new RefusingPreventExtensionsObject(realm.intrinsics.objectPrototype),
+      );
+
+      for (const expression of [
+        'Object.defineProperty(rejectDefine, "new", {value: 1});',
+        'Object.seal(rejectDefine);',
+        'Object.freeze(rejectDefine);',
+        'Object.preventExtensions(rejectPreventExtensions);',
+      ]) {
+        assertSame(
+          evaluateScript(
+            realm,
+            `var name; try { ${expression} } catch (error) { name = error.name; } name;`,
+          ).value,
+          'TypeError',
+        );
+      }
+    },
+  },
+  {
+    name: 'Object seal and freeze reject preventExtensions before descriptor mutation',
+    run() {
+      const realm = createRealm();
+
+      for (const method of ['seal', 'freeze']) {
+        const target = new RefusingPreventExtensionsObject(
+          realm.intrinsics.objectPrototype,
+        );
+        EngineObject.prototype.defineOwnProperty.call(target, 'existing', {
+          value: 1,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+        defineGlobal(realm, 'target', target);
+
+        assertSame(
+          evaluateScript(
+            realm,
+            `var name; try { Object.${method}(target); } ` +
+              'catch (error) { name = error.name; } name;',
+          ).value,
+          'TypeError',
+        );
+        const descriptor = target.getOwnProperty('existing');
+
+        if (descriptor === undefined) {
+          throw new Error('Expected the original descriptor to remain');
+        }
+
+        assertSame(descriptor.configurable, true);
+        assertSame(descriptor.writable, true);
+        assertSame(target.defineOwnPropertyCalls, 0);
+      }
+    },
+  },
+  {
+    name: 'Object define failure belongs to the native function Realm',
+    run() {
+      const agent = createAgent();
+      const callerRealm = createRealm({ agent });
+      const functionRealm = createRealm({ agent });
+      const foreignDefine = /** @type {EngineObject} */ (
+        /** @type {EngineObject} */ (
+          functionRealm.globalObject.get('Object')
+        ).get('defineProperty')
+      );
+
+      defineGlobal(
+        callerRealm,
+        'target',
+        new RefusingDefineObject(callerRealm.intrinsics.objectPrototype),
+      );
+      defineGlobal(callerRealm, 'foreignDefine', foreignDefine);
+
+      const caught = evaluateScript(
+        callerRealm,
+        'var error; try { foreignDefine(target, "x", {value: 1}); } ' +
+          'catch (caughtError) { error = caughtError; } error;',
+      ).value;
+
+      assertSame(
+        /** @type {EngineObject} */ (caught).getPrototypeOf(),
+        functionRealm.intrinsics.typeErrorPrototype,
+      );
     },
   },
   {

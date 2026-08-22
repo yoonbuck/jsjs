@@ -53,12 +53,12 @@ function assertGuestThrow(completion, constructorName, realm) {
   const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
   const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
   let cur = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
 
   while (cur !== null) {
     if (cur === proto) return;
-    cur = cur.getPrototype();
+    cur = cur.getPrototypeOf();
   }
 
   throw new Error(`Thrown value is not an instance of ${constructorName}`);
@@ -508,7 +508,7 @@ const tests = [
       const completion = runIn(realmB, 'foreignEvalParseFailure();');
       assertGuestThrow(completion, 'SyntaxError', realmA);
       assertSame(
-        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+        /** @type {EngineObject} */ (completion.value).getPrototypeOf() ===
           realmB.intrinsics.syntaxErrorPrototype,
         false,
       );
@@ -935,7 +935,7 @@ const tests = [
       if (!(result.value instanceof EngineObject)) {
         throw new Error('Expected an EngineObject eval result');
       }
-      const proto = /** @type {EngineObject} */ (result.value).getPrototype();
+      const proto = /** @type {EngineObject} */ (result.value).getPrototypeOf();
       assertSame(proto, realmA.intrinsics.objectPrototype);
       assertSame(proto === realmB.intrinsics.objectPrototype, false);
 

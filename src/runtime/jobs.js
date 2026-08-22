@@ -108,7 +108,13 @@ export class AgentJobQueue {
 
         try {
           this.jobRealm = job.realm;
-          const completion = job.callback(job.arguments);
+          const runJob = () => job.callback(job.arguments);
+          const completion =
+            this.agent === undefined
+              ? runJob()
+              : job.realm === null
+                ? this.agent.withNoActiveExecutionRealm(runJob)
+                : this.agent.withActiveExecutionRealm(job.realm, runJob);
 
           if (!isJobCompletion(completion)) {
             throw new TypeError(

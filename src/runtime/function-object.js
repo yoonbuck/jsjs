@@ -1,12 +1,26 @@
-import { EngineObject } from './object.js';
-import { isAccessorDescriptor, isConstructor } from './descriptors.js';
+import {
+  EngineObject,
+  ordinaryDefineOwnProperty,
+  ordinaryDelete,
+  ordinaryGetOwnProperty,
+} from './object.js';
+import { isAccessorDescriptor } from './descriptors.js';
+import {
+  constructCallable,
+  isConstructor,
+  registerCallable,
+  registerConstructor,
+} from './capabilities.js';
 import { ThrowSignal, GuestErrorSignal } from './completion.js';
 import { toObject } from './conversion.js';
 import {
   bindThisValue,
   createFunctionExecutionEnvironment,
 } from './environment.js';
-import { linkValueToGeneratorHostChain } from './reference.js';
+import {
+  linkValueToGeneratorHostChain,
+  withLinkedActiveExecutionRealm,
+} from './reference.js';
 
 /**
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
@@ -137,6 +151,12 @@ export class EngineFunction extends EngineObject {
     /** @type {boolean} */
     this.defaultDerivedConstructor = defaultDerivedConstructor;
 
+    if (constructible) {
+      registerConstructor(this);
+    } else {
+      registerCallable(this);
+    }
+
     if (methodHomeObject !== undefined && functionKind !== 'arrow') {
       this.methodHomeObject = methodHomeObject;
     }
@@ -222,12 +242,14 @@ export class EngineFunction extends EngineObject {
    */
   callFunction(thisValue, args = [], callerRealm) {
     if (this.functionKind === 'classConstructor') {
-      throw new ThrowSignal(
-        this.realm.createGuestError(
-          'TypeError',
-          "Class constructor cannot be invoked without 'new'",
-        ),
-      );
+      return this.realm.agent.withActiveExecutionRealm(this.realm, () => {
+        throw new ThrowSignal(
+          this.realm.createGuestError(
+            'TypeError',
+            "Class constructor cannot be invoked without 'new'",
+          ),
+        );
+      });
     }
 
     const callChain = this.realm.agent.enterSynchronousCallChain(
@@ -236,18 +258,22 @@ export class EngineFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, this.realm.agent, () =>
+        this.realm.agent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      linkValueToGeneratorHostChain(activeRealm, thisValue);
-      for (const argument of args) {
-        linkValueToGeneratorHostChain(activeRealm, argument);
-      }
+          linkValueToGeneratorHostChain(activeRealm, thisValue);
+          for (const argument of args) {
+            linkValueToGeneratorHostChain(activeRealm, argument);
+          }
 
-      return this.executeInvocation(
-        args,
-        this.functionExecutionEnvironment(thisValue, undefined),
-        activeRealm,
+          return this.executeInvocation(
+            args,
+            this.functionExecutionEnvironment(thisValue, undefined),
+            activeRealm,
+          );
+        }),
       );
     } finally {
       this.realm.agent.exitSynchronousCallChain(callChain);
@@ -273,7 +299,7 @@ export class EngineFunction extends EngineObject {
    * @returns {EngineObject}
    */
   constructFunction(args = [], newTarget = this, callerRealm) {
-    if (!this._isConstructor) {
+    if (!isConstructor(this)) {
       throw new GuestErrorSignal('TypeError', 'Function is not a constructor');
     }
 
@@ -283,43 +309,47 @@ export class EngineFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, this.realm.agent, () =>
+        this.realm.agent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(this.realm.agent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      for (const argument of args) {
-        linkValueToGeneratorHostChain(activeRealm, argument);
-      }
-      linkValueToGeneratorHostChain(activeRealm, newTarget);
+          for (const argument of args) {
+            linkValueToGeneratorHostChain(activeRealm, argument);
+          }
+          linkValueToGeneratorHostChain(activeRealm, newTarget);
 
-      if (this.functionKind === 'classConstructor') {
-        return /** @type {EngineObject} */ (
-          linkValueToGeneratorHostChain(
+          if (this.functionKind === 'classConstructor') {
+            return /** @type {EngineObject} */ (
+              linkValueToGeneratorHostChain(
+                activeRealm,
+                this.constructClass(args, newTarget),
+              )
+            );
+          }
+
+          const instance = ordinaryCreateFromConstructor(
+            newTarget,
+            this.realm.intrinsics.objectPrototype,
+            this.realm.agent,
+          );
+          const functionEnvironment = this.functionExecutionEnvironment(
+            instance,
+            newTarget,
+          );
+          const result = this.executeInvocation(
+            args,
+            functionEnvironment,
             activeRealm,
-            this.constructClass(args, newTarget),
-          )
-        );
-      }
+          );
 
-      const instance = ordinaryCreateFromConstructor(
-        newTarget,
-        this.realm.intrinsics.objectPrototype,
-        this.realm.agent,
-      );
-      const functionEnvironment = this.functionExecutionEnvironment(
-        instance,
-        newTarget,
-      );
-      const result = this.executeInvocation(
-        args,
-        functionEnvironment,
-        activeRealm,
-      );
-
-      return /** @type {EngineObject} */ (
-        linkValueToGeneratorHostChain(
-          activeRealm,
-          result instanceof EngineObject ? result : instance,
-        )
+          return /** @type {EngineObject} */ (
+            linkValueToGeneratorHostChain(
+              activeRealm,
+              result instanceof EngineObject ? result : instance,
+            )
+          );
+        }),
       );
     } finally {
       this.realm.agent.exitSynchronousCallChain(callChain);
@@ -556,7 +586,7 @@ export class EngineFunction extends EngineObject {
       return false;
     }
 
-    const proto = this.get('prototype');
+    const proto = this.get('prototype', this);
 
     if (!(proto instanceof EngineObject)) {
       throw new GuestErrorSignal(
@@ -565,14 +595,14 @@ export class EngineFunction extends EngineObject {
       );
     }
 
-    let current = /** @type {EngineObject | null} */ (value.getPrototype());
+    let current = /** @type {EngineObject | null} */ (value.getPrototypeOf());
 
     while (current !== null) {
       if (current === proto) {
         return true;
       }
 
-      current = current.getPrototype();
+      current = current.getPrototypeOf();
     }
 
     return false;
@@ -618,7 +648,9 @@ export class EngineFunction extends EngineObject {
  */
 function ordinaryCreateFromConstructor(newTarget, fallbackPrototype, agent) {
   const candidate =
-    newTarget instanceof EngineObject ? newTarget.get('prototype') : undefined;
+    newTarget instanceof EngineObject
+      ? newTarget.get('prototype', newTarget)
+      : undefined;
   const prototype =
     candidate instanceof EngineObject ? candidate : fallbackPrototype;
   return new EngineObject(prototype, 'Object', agent);
@@ -636,7 +668,7 @@ function ordinaryCreateFromConstructor(newTarget, fallbackPrototype, agent) {
  */
 export function constructSuper(args, functionEnvironment) {
   const superConstructor =
-    functionEnvironment.activeConstructor?.getPrototype();
+    functionEnvironment.activeConstructor?.getPrototypeOf();
 
   if (!isConstructor(superConstructor)) {
     throw new GuestErrorSignal(
@@ -645,7 +677,8 @@ export function constructSuper(args, functionEnvironment) {
     );
   }
 
-  const value = superConstructor.constructFunction(
+  const value = constructCallable(
+    superConstructor,
     args,
     functionEnvironment.newTarget,
     functionEnvironment.activeConstructor?.realm,
@@ -665,8 +698,8 @@ export function constructSuper(args, functionEnvironment) {
  * writable data properties exactly as the specification requires.
  *
  * ES5 10.6 also unmaps an index on `delete arguments[i]`. This is implemented
- * in `ArgumentsObject.delete()` below: the override calls `super.delete()` to
- * remove the own property, then removes the corresponding entry from the
+ * in `ArgumentsObject.delete()` below: the override removes the ordinary own
+ * property, then removes the corresponding entry from the
  * parameter map so the alias to the formal-parameter binding is severed.
  */
 export class ArgumentsObject extends EngineObject {
@@ -693,37 +726,11 @@ export class ArgumentsObject extends EngineObject {
   }
 
   /**
-   * Overrides `_peekOwnDescriptor` to inject the live parameter-binding value
-   * for mapped argument indices. When no mapping exists the raw stored
-   * descriptor is returned without any copy (the common case). When a mapping
-   * exists a new object is created so the stored descriptor is not mutated with
-   * the live value — callers of `_peekOwnDescriptor` must not retain the
-   * returned object across mutations regardless.
-   *
-   * @param {import('./descriptors.js').PropertyKey} name
-   * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
-   */
-  _peekOwnDescriptor(name) {
-    const raw = this._properties.get(name);
-    if (raw === undefined) {
-      return undefined;
-    }
-    const parameterName = this._parameterMap.get(name);
-    if (parameterName === undefined) {
-      return raw;
-    }
-    return {
-      ...raw,
-      value: this._environment.getBindingValue(parameterName, false),
-    };
-  }
-
-  /**
    * @param {import('./descriptors.js').PropertyKey} name
    * @returns {import('./descriptors.js').CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
-    const descriptor = super.getOwnProperty(name);
+    const descriptor = ordinaryGetOwnProperty(this, name);
     const parameterName = this._parameterMap.get(name);
 
     if (descriptor === undefined || parameterName === undefined) {
@@ -745,11 +752,10 @@ export class ArgumentsObject extends EngineObject {
    * present.
    *
    * @param {PropertyKey} name
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  delete(name, throwOnError = false) {
-    const deleted = super.delete(name, throwOnError);
+  delete(name) {
+    const deleted = ordinaryDelete(this, name);
 
     if (deleted) {
       this._parameterMap.delete(name);
@@ -761,18 +767,11 @@ export class ArgumentsObject extends EngineObject {
   /**
    * @param {PropertyKey} name
    * @param {import('./descriptors.js').PropertyDescriptorRecord} descriptor
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false, callerRealm) {
+  defineOwnProperty(name, descriptor) {
     const parameterName = this._parameterMap.get(name);
-    const defined = super.defineOwnProperty(
-      name,
-      descriptor,
-      throwOnError,
-      callerRealm,
-    );
+    const defined = ordinaryDefineOwnProperty(this, name, descriptor);
 
     if (!defined || parameterName === undefined) {
       return defined;

@@ -32,6 +32,7 @@ import {
   toString,
 } from '../runtime/conversion.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
+import { callCallable } from '../runtime/capabilities.js';
 import { isCallable } from '../runtime/descriptors.js';
 
 /**
@@ -188,12 +189,12 @@ function installDatePrototypeMethods(realm, datePrototype) {
       return null;
     }
 
-    const toISOString = object.get('toISOString', realm);
+    const toISOString = object.get('toISOString', object);
     if (!isCallable(toISOString)) {
       throw new GuestErrorSignal('TypeError', 'toISOString is not callable');
     }
 
-    return toISOString.callFunction(object, [], realm);
+    return callCallable(toISOString, object, [], realm);
   });
   defineMethod(
     realm,

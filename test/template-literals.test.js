@@ -145,11 +145,11 @@ const tests = [
       assertSame(first === second, false);
       assertSame(first instanceof EngineArray, true);
       assertSame(
-        /** @type {EngineArray} */ (first).getPrototype(),
+        /** @type {EngineArray} */ (first).getPrototypeOf(),
         firstRealm.intrinsics.arrayPrototype,
       );
       assertSame(
-        /** @type {EngineArray} */ (second).getPrototype(),
+        /** @type {EngineArray} */ (second).getPrototypeOf(),
         secondRealm.intrinsics.arrayPrototype,
       );
     },

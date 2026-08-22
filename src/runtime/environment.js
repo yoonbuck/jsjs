@@ -1,4 +1,9 @@
-import { EngineObject } from './object.js';
+import {
+  EngineObject,
+  defineOwnPropertyOrThrow,
+  enterObjectOperationRealm,
+  exitObjectOperationRealm,
+} from './object.js';
 import { Reference, UnresolvableReference } from './reference.js';
 import { GuestErrorSignal } from './completion.js';
 import { isDataDescriptor } from './descriptors.js';
@@ -410,16 +415,12 @@ export class ObjectEnvironmentRecord {
    * @returns {void}
    */
   createMutableBinding(name, deletable = true) {
-    this.bindingObject.defineOwnProperty(
-      name,
-      {
-        value: undefined,
-        writable: true,
-        enumerable: true,
-        configurable: deletable,
-      },
-      true,
-    );
+    defineOwnPropertyOrThrow(this.bindingObject, name, {
+      value: undefined,
+      writable: true,
+      enumerable: true,
+      configurable: deletable,
+    });
   }
 
   /**
@@ -434,7 +435,19 @@ export class ObjectEnvironmentRecord {
       callerRealm.agent.linkGeneratorHostChain(this.bindingObject.agent);
     }
 
-    this.bindingObject.put(name, value, strict, callerRealm);
+    enterObjectOperationRealm(callerRealm);
+    /** @type {boolean} */
+    let succeeded;
+
+    try {
+      succeeded = this.bindingObject.set(name, value, this.bindingObject);
+    } finally {
+      exitObjectOperationRealm(callerRealm);
+    }
+
+    if (!succeeded && strict) {
+      throw new GuestErrorSignal('TypeError', 'Cannot assign to property');
+    }
   }
 
   /**
@@ -459,7 +472,13 @@ export class ObjectEnvironmentRecord {
       return undefined;
     }
 
-    return this.bindingObject.get(name, callerRealm);
+    enterObjectOperationRealm(callerRealm);
+
+    try {
+      return this.bindingObject.get(name, this.bindingObject);
+    } finally {
+      exitObjectOperationRealm(callerRealm);
+    }
   }
 
   /**
@@ -550,8 +569,8 @@ export class GlobalEnvironmentRecord {
    * semantics.
    *
    * When the name is not already an own property, creation goes through
-   * `CreateMutableBinding`, whose `[[DefineOwnProperty]]` runs with the Throw
-   * flag set (ECMA-262 10.2.1.2.2). On a non-extensible global object that
+   * `CreateMutableBinding`, whose `[[DefineOwnProperty]]` must succeed
+   * (ECMA-262 10.2.1.2.2). On a non-extensible global object that
    * raises a guest `TypeError`, which is the ES5.1 10.5 behavior for declaring
    * a new global `var` (or function) when the global can no longer grow —
    * this method no longer silently no-ops in that case.
@@ -585,8 +604,7 @@ export class GlobalEnvironmentRecord {
    * - non-configurable own property that is a writable *and* enumerable data
    *   property: only its value is updated;
    * - any other non-configurable own property (an accessor, or a data
-   *   property that is not both writable and enumerable): a guest `TypeError`,
-   *   raised by `[[DefineOwnProperty]]` running with the Throw flag.
+   *   property that is not both writable and enumerable): a guest `TypeError`.
    *
    * @param {PropertyKey} name
    * @param {unknown} value
@@ -612,24 +630,20 @@ export class GlobalEnvironmentRecord {
     if (keepAttributesUpdateValue) {
       // Non-configurable but writable+enumerable: leave the attributes, update
       // the value only (10.5 step 5.e falls through to SetMutableBinding).
-      this.globalObject.defineOwnProperty(name, { value }, true);
+      defineOwnPropertyOrThrow(this.globalObject, name, { value });
     } else {
       // Fresh name, a configurable property (redefined), or an illegal target.
-      // `[[DefineOwnProperty]]` with the Throw flag turns an illegal target
+      // The owning global-binding algorithm turns an illegal target
       // (a non-configurable accessor / non-writable / non-enumerable property,
       // or a new property on a non-extensible global) into a guest TypeError,
       // matching 10.5 step 5.e.iv and the CreateMutableBinding extensibility
       // check.
-      this.globalObject.defineOwnProperty(
-        name,
-        {
-          value,
-          writable: true,
-          enumerable: true,
-          configurable: deletable,
-        },
-        true,
-      );
+      defineOwnPropertyOrThrow(this.globalObject, name, {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: deletable,
+      });
     }
 
     this.varNames.add(name);
@@ -925,7 +939,7 @@ export function bindThisValue(functionEnvironment, value) {
  */
 export function getSuperBase(functionEnvironment) {
   if (functionEnvironment?.homeObject instanceof EngineObject) {
-    return functionEnvironment.homeObject.getPrototype();
+    return functionEnvironment.homeObject.getPrototypeOf();
   }
 
   throw new GuestErrorSignal(
@@ -1020,15 +1034,31 @@ function globalObjectOf(env) {
  * @param {string | symbol} name
  * @param {boolean} strict
  * @param {import('./realm.js').Realm} [callerRealm]
+ * @param {{ withObjectOperationStackGuard?: boolean }} [options]
  * @returns {unknown}
  */
-export function getIdentifierBindingValue(env, name, strict, callerRealm) {
+export function getIdentifierBindingValue(
+  env,
+  name,
+  strict,
+  callerRealm,
+  options = {},
+) {
   /** @type {EnvironmentRecordLike | null} */
   let record = env;
 
   while (record !== null) {
     if (record.hasBinding(name)) {
-      return record.getBindingValue(name, strict, callerRealm);
+      return record.getBindingValue(
+        name,
+        strict,
+        identifierBindingCallerRealm(
+          record,
+          name,
+          callerRealm,
+          options.withObjectOperationStackGuard !== false,
+        ),
+      );
     }
 
     record = record.outer;
@@ -1038,4 +1068,43 @@ export function getIdentifierBindingValue(env, name, strict, callerRealm) {
     'ReferenceError',
     `${String(name)} is not defined`,
   );
+}
+
+/**
+ * Fused reads may omit the same-Agent object-operation guard while still
+ * carrying the evaluating Realm across an Agent boundary. Other environment
+ * records keep the caller Realm because they do not add that object guard.
+ *
+ * @param {EnvironmentRecordLike} record
+ * @param {string | symbol} name
+ * @param {import('./realm.js').Realm | undefined} callerRealm
+ * @param {boolean} withObjectOperationStackGuard
+ * @returns {import('./realm.js').Realm | undefined}
+ */
+function identifierBindingCallerRealm(
+  record,
+  name,
+  callerRealm,
+  withObjectOperationStackGuard,
+) {
+  if (callerRealm === undefined || withObjectOperationStackGuard) {
+    return callerRealm;
+  }
+
+  if (record instanceof ObjectEnvironmentRecord) {
+    return record.bindingObject.agent === callerRealm.agent
+      ? undefined
+      : callerRealm;
+  }
+
+  if (
+    record instanceof GlobalEnvironmentRecord &&
+    !record.declarativeRecord.hasBinding(name)
+  ) {
+    return record.globalObject.agent === callerRealm.agent
+      ? undefined
+      : callerRealm;
+  }
+
+  return callerRealm;
 }

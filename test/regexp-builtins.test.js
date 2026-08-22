@@ -5,6 +5,7 @@ import { EngineObject } from '../src/runtime/object.js';
 import {
   EngineRegExp,
   escapePatternSource,
+  isRegExpObject,
 } from '../src/runtime/regexp-object.js';
 import { compilePattern } from '../src/runtime/regexp-compat.js';
 import { UnsupportedOperationError } from '../src/runtime/errors.js';
@@ -38,7 +39,7 @@ function assertGuestThrow(completion, constructorName, realm) {
   }
 
   let current = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
 
   while (current !== null) {
@@ -46,7 +47,7 @@ function assertGuestThrow(completion, constructorName, realm) {
       return /** @type {EngineObject} */ (completion.value);
     }
 
-    current = current.getPrototype();
+    current = current.getPrototypeOf();
   }
 
   throw new Error(
@@ -310,6 +311,15 @@ const tests = [
       assertSame(engineRegExp.getClassName(), 'RegExp');
       assertSame(engineRegExp.matchAt('abc', 0) !== null, true);
       assertSame(engineRegExp.matchAt('xyz', 0), null);
+    },
+  },
+  {
+    name: 'RegExp identity does not follow a diagnostic class name',
+    run() {
+      const fake = new EngineObject();
+      fake.getClassName = () => 'RegExp';
+
+      assertSame(isRegExpObject(fake), false);
     },
   },
   {

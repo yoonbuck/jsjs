@@ -3,6 +3,7 @@ import {
   createNormalCompletion,
   createReturnCompletion,
   createThrowCompletion,
+  GuestErrorSignal,
   updateEmpty,
 } from '../runtime/completion.js';
 import { toBoolean, toObject } from '../runtime/conversion.js';
@@ -12,9 +13,9 @@ import {
   newObjectEnvironment,
 } from '../runtime/environment.js';
 import { createUnsupportedNodeError } from '../runtime/errors.js';
-import { enumerableKeysForIn, isEnumerableForIn } from '../runtime/object.js';
 import {
   getIterator,
+  getEnumerateIteratorRecord,
   iteratorClose,
   iteratorStep,
   iteratorValue,
@@ -160,10 +161,7 @@ import {
  *   labelSet: string[],
  *   phase: 'start' | 'right' | 'next' | 'target' | 'body',
  *   value: unknown,
- *   object: EngineObject | null,
- *   keys: string[],
- *   index: number,
- *   key: string | null,
+ *   record: IteratorRecord | null,
  *   lexical: boolean,
  *   constant: boolean,
  * }} ForInFrame
@@ -347,10 +345,7 @@ export function createGeneratorStatementFrame(node, context, labelSet = []) {
         labelSet,
         phase: 'start',
         value: EMPTY,
-        object: null,
-        keys: [],
-        index: 0,
-        key: null,
+        record: null,
         lexical,
         constant: lexical && isConstantDeclaration(node.left),
       };
@@ -1095,7 +1090,7 @@ function dispatchForIn(execution, frame) {
 
     const prepared = captureGeneratorOperation(execution.realm, () => {
       const object = toObject(execution.realm, result.value);
-      return { object, keys: enumerableKeysForIn(object) };
+      return getEnumerateIteratorRecord(execution.realm, object);
     });
 
     if (prepared.type === 'completion') {
@@ -1103,23 +1098,23 @@ function dispatchForIn(execution, frame) {
     }
 
     if (prepared.type !== 'value') {
-      throw new TypeError('For-in right side expected enumerable state');
+      throw new TypeError('For-in right side expected an iterator record');
     }
 
-    const state = /** @type {{ object: EngineObject, keys: string[] }} */ (
-      prepared.value
-    );
-    frame.object = state.object;
-    frame.keys = state.keys;
+    frame.record = /** @type {IteratorRecord} */ (prepared.value);
     frame.phase = 'next';
-    return startForInIteration(frame);
+    return startForInIteration(execution, frame);
   }
 
   if (frame.phase === 'target') {
     const targetResult = takeGeneratorOutput(execution);
 
     if (targetResult.type === 'completion') {
-      return { type: 'pop', result: targetResult };
+      return closeForInWithCompletion(
+        execution,
+        frame,
+        targetResult.completion,
+      );
     }
 
     if (targetResult.type !== 'value') {
@@ -1146,46 +1141,78 @@ function dispatchForIn(execution, frame) {
     frame.value = outcome.completion.value;
 
     if (outcome.action === 'break') {
-      return completionAction(createNormalCompletion(frame.value));
+      return closeForInWithCompletion(
+        execution,
+        frame,
+        createNormalCompletion(frame.value),
+      );
     }
 
     if (outcome.action === 'propagate') {
-      return completionAction(outcome.completion);
+      return closeForInWithCompletion(execution, frame, outcome.completion);
     }
 
     frame.phase = 'next';
   }
 
-  return startForInIteration(frame);
+  return startForInIteration(execution, frame);
 }
 
 /**
+ * @param {GeneratorExecution} execution
  * @param {ForInFrame} frame
  * @returns {GeneratorFrameAction}
  */
-function startForInIteration(frame) {
-  const object = frame.object;
+function startForInIteration(execution, frame) {
+  const record = frame.record;
 
-  if (object === null) {
-    throw new TypeError('For-in frame lost its enumerated object');
+  if (record === null) {
+    throw new TypeError('For-in frame lost its iterator record');
   }
 
-  let key = null;
-  while (frame.index < frame.keys.length) {
-    const candidate = frame.keys[frame.index];
-    frame.index += 1;
+  const stepResult = captureGeneratorOperation(execution.realm, () =>
+    iteratorStep(record),
+  );
 
-    if (isEnumerableForIn(object, candidate)) {
-      key = candidate;
-      break;
-    }
+  if (stepResult.type === 'completion') {
+    return { type: 'pop', result: stepResult };
   }
 
-  if (key === null) {
+  if (stepResult.type !== 'value') {
+    throw new TypeError('For-in iterator step returned an invalid result');
+  }
+
+  if (stepResult.value === false) {
+    record.done = true;
     return completionAction(createNormalCompletion(frame.value));
   }
 
-  frame.key = key;
+  const valueResult = captureGeneratorOperation(execution.realm, () => {
+    const key = iteratorValue(
+      /** @type {EngineObject} */ (stepResult.value),
+      execution.realm,
+    );
+
+    if (typeof key !== 'string') {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Enumerate iterator value is not a string',
+      );
+    }
+
+    return key;
+  });
+
+  if (valueResult.type === 'completion') {
+    return { type: 'pop', result: valueResult };
+  }
+
+  if (valueResult.type !== 'value') {
+    throw new TypeError('For-in iterator value returned an invalid result');
+  }
+
+  const key = /** @type {string} */ (valueResult.value);
+
   frame.iterationContext = createForInOfIterationContext(
     frame.node.left,
     frame.context,
@@ -1207,6 +1234,37 @@ function startForInIteration(frame) {
       binding.targetMode,
     ),
   };
+}
+
+/**
+ * @param {GeneratorExecution} execution
+ * @param {ForInFrame} frame
+ * @param {Completion} completion
+ * @returns {GeneratorFrameAction}
+ */
+function closeForInWithCompletion(execution, frame, completion) {
+  const record = requireForInIterator(frame);
+  const closeResult = captureGeneratorOperation(execution.realm, () =>
+    iteratorClose(execution.realm, record, completion.type === 'throw'),
+  );
+
+  if (closeResult.type === 'completion') {
+    return { type: 'pop', result: closeResult };
+  }
+
+  return completionAction(completion);
+}
+
+/**
+ * @param {ForInFrame} frame
+ * @returns {IteratorRecord}
+ */
+function requireForInIterator(frame) {
+  if (frame.record === null) {
+    throw new TypeError('For-in frame lost its iterator record');
+  }
+
+  return frame.record;
 }
 
 /**

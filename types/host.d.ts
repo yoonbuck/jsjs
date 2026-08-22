@@ -11,6 +11,7 @@ declare module 'node:fs/promises' {
   }
 
   export interface Stats {
+    isFile(): boolean;
     isSymbolicLink(): boolean;
   }
 

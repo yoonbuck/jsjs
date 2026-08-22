@@ -13,6 +13,7 @@ import {
   getValue,
   putValue,
 } from '../src/runtime/reference.js';
+import { EngineObject } from '../src/runtime/object.js';
 
 const tests = [
   {
@@ -39,33 +40,20 @@ const tests = [
     },
   },
   {
-    name: 'references resolve and assign through the property-base protocol',
+    name: 'references resolve and assign through EngineObject Get and Set',
     run() {
-      /** @type {Record<string, number>} */
-      const values = { count: 2 };
-      const propertyBase = {
-        values,
-        /**
-         * @param {string} name
-         * @returns {number}
-         */
-        getReferencedValue(name) {
-          return this.values[name];
-        },
-        /**
-         * @param {string} name
-         * @param {number} value
-         * @returns {void}
-         */
-        setReferencedValue(name, value) {
-          this.values[name] = value;
-        },
-      };
-      const reference = new Reference(propertyBase, 'count', false);
+      const object = new EngineObject();
+      object.defineOwnProperty('count', {
+        value: 2,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const reference = new Reference(object, 'count', false, object);
 
       assertSame(getValue(reference), 2);
       putValue(reference, 3);
-      assertSame(propertyBase.values.count, 3);
+      assertSame(object.get('count', object), 3);
     },
   },
   {
@@ -126,57 +114,33 @@ const tests = [
     },
   },
   {
-    name: 'a sloppy unresolvable reference creates the property on the global object it carries',
+    name: 'a sloppy unresolvable reference creates the property on its global object',
     run() {
-      /** @type {Array<[string, unknown, boolean]>} */
-      const puts = [];
-      const globalObject = {
-        /**
-         * @param {string} name
-         * @param {unknown} value
-         * @param {boolean} throwOnError
-         * @returns {boolean}
-         */
-        put(name, value, throwOnError) {
-          puts.push([name, value, throwOnError]);
-          return true;
-        },
-      };
+      const globalObject = new EngineObject();
       const reference = new UnresolvableReference(
         'created',
         false,
-        /** @type {any} */ (globalObject),
+        globalObject,
       );
 
       assertSame(reference.base, undefined);
       assertSame(putValue(reference, 5), 5);
-      assertSame(JSON.stringify(puts), JSON.stringify([['created', 5, false]]));
+      assertSame(globalObject.get('created', globalObject), 5);
       assertThrows(() => getValue(reference), GuestErrorSignal);
     },
   },
   {
     name: 'a strict unresolvable reference throws even when it carries a global object',
     run() {
-      /** @type {string[]} */
-      const puts = [];
-      const globalObject = {
-        /**
-         * @param {string} name
-         * @returns {boolean}
-         */
-        put(name) {
-          puts.push(name);
-          return true;
-        },
-      };
+      const globalObject = new EngineObject();
       const reference = new UnresolvableReference(
         'created',
         true,
-        /** @type {any} */ (globalObject),
+        globalObject,
       );
 
       assertThrows(() => putValue(reference, 5), GuestErrorSignal);
-      assertSame(puts.join(','), '');
+      assertSame(globalObject.hasProperty('created'), false);
     },
   },
 ];

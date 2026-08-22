@@ -15,7 +15,12 @@ import {
 } from '../runtime/environment.js';
 import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
-import { isCallable, isConstructor } from '../runtime/descriptors.js';
+import {
+  callCallable,
+  constructCallable,
+  isCallable,
+  isConstructor,
+} from '../runtime/capabilities.js';
 import {
   checkObjectCoercible,
   toBoolean,
@@ -264,6 +269,10 @@ export function evaluateExpressionValue(node, context) {
         node.name,
         context.strict,
         context.realm,
+        // Keep the caller Realm for foreign Agent linking, but omit the
+        // redundant same-Agent object-operation guard that the reference path
+        // does not hold around an accessor invocation.
+        { withObjectOperationStackGuard: false },
       ),
     );
   }
@@ -466,10 +475,18 @@ function evaluateDeleteExpression(argument, context) {
     return ref.base.deleteBinding(ref.referencedName);
   }
 
-  // Property reference: delegate to [[Delete]], which already throws a
-  // GuestErrorSignal('TypeError') when strict is true and the property is
-  // non-configurable.
-  return /** @type {any} */ (ref.base).delete(ref.referencedName, ref.strict);
+  // Property reference: Table 5 [[Delete]] returns only a Boolean. The
+  // evaluator owns strict-mode translation in this evaluating Realm.
+  const deleted = /** @type {any} */ (ref.base).delete(ref.referencedName);
+
+  if (!deleted && ref.strict) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Cannot delete a non-configurable property',
+    );
+  }
+
+  return deleted;
 }
 
 /**
@@ -772,9 +789,7 @@ function evaluateCallExpression(node, context) {
     return performEval(args[0], context);
   }
 
-  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
-    callee
-  ).callFunction(thisValue, args, context.realm);
+  return callCallable(callee, thisValue, args, context.realm);
 }
 
 /**
@@ -907,9 +922,7 @@ function evaluateTaggedTemplateExpression(node, context) {
     );
   }
 
-  return /** @type {import('../runtime/descriptors.js').CallableLike} */ (
-    tag
-  ).callFunction(thisValue, args, context.realm);
+  return callCallable(tag, thisValue, args, context.realm);
 }
 
 /**
@@ -949,11 +962,7 @@ function evaluateNewExpression(node, context) {
     );
   }
 
-  return /** @type {any} */ (callee).constructFunction(
-    args,
-    callee,
-    context.realm,
-  );
+  return constructCallable(callee, args, callee, context.realm);
 }
 
 /**

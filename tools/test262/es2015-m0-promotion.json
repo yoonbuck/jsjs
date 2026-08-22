@@ -1,0 +1,11 @@
+{
+  "groupName": "es2015/m0-object-internal-methods",
+  "version": 2,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "sourceTaxonomySha256": "6f60af3b4416b537257cc7c3d418ed918978b7e14b1e5fc6567db9e379dc5908",
+  "ledgerSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "rootCount": 0,
+  "variantCount": 0,
+  "entries": []
+}

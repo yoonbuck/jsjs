@@ -25,6 +25,11 @@ import { EngineObject } from '../src/runtime/object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { Reference, getValue } from '../src/runtime/reference.js';
 import { SuperReferenceBase } from '../src/runtime/super-reference.js';
+import { iteratorNextWithMethod } from '../src/runtime/iterator.js';
+import {
+  HostileExotic,
+  createEnumerationIterator,
+} from './harness/hostile-exotic.js';
 
 /**
  * @param {string} source
@@ -49,6 +54,25 @@ function defineGlobal(realm, name, value) {
     enumerable: true,
     configurable: true,
   });
+}
+
+/**
+ * @param {readonly unknown[][]} actual
+ * @param {readonly unknown[][]} expected
+ * @returns {void}
+ */
+function assertCallRecords(actual, expected) {
+  assertSame(actual.length, expected.length);
+
+  for (let index = 0; index < expected.length; index += 1) {
+    const received = actual[index];
+    const wanted = expected[index];
+    assertSame(received.length, wanted.length);
+
+    for (let entry = 0; entry < wanted.length; entry += 1) {
+      assertSame(received[entry], wanted[entry]);
+    }
+  }
 }
 
 /**
@@ -155,7 +179,8 @@ function assertRealmRangeError(completion, realms) {
   assertSame(error.get('message'), 'Maximum call stack size exceeded');
   assertSame(
     realms.some(
-      (realm) => error.getPrototype() === realm.intrinsics.rangeErrorPrototype,
+      (realm) =>
+        error.getPrototypeOf() === realm.intrinsics.rangeErrorPrototype,
     ),
     true,
   );
@@ -418,7 +443,7 @@ function assertInvalidForeignGeneratorReceiverPreflights(
     `Generator.prototype.${method} called on incompatible receiver`,
   );
   assertSame(
-    error.getPrototype(),
+    error.getPrototypeOf(),
     methodRealm.intrinsics.typeErrorPrototype,
     `${method} must materialize its receiver error in the method Realm`,
   );
@@ -704,7 +729,7 @@ function assertExecutingForeignGeneratorReceiverPreflights(shareAgent, method) {
   assertSame(error.get('name'), 'TypeError');
   assertSame(error.get('message'), 'Generator is already running');
   assertSame(
-    error.getPrototype(),
+    error.getPrototypeOf(),
     methodRealm.intrinsics.typeErrorPrototype,
     `${method} must materialize its executing-state error in the method Realm`,
   );
@@ -1170,7 +1195,7 @@ function assertGeneratorMethodParticipantsLinked(
     if (throughCall) {
       defineGlobal(callerRealm, 'borrowedNext', borrowedNext);
     } else {
-      generator.put('next', borrowedNext, true);
+      assertSame(generator.set('next', borrowedNext, generator), true);
     }
   }
 
@@ -1257,16 +1282,15 @@ function assertCachedComputedTargetRelinked(form, superTarget) {
      * @param {string | symbol} name
      * @param {unknown} value
      * @param {unknown} receiver
-     * @param {boolean} throwOnError
-     * @param {import('../src/runtime/realm.js').Realm} [callerRealm]
      * @returns {boolean}
      */
-    set(name, value, receiver, throwOnError, callerRealm) {
+    set(name, value, receiver) {
       setCalls += 1;
       assertLinked('put', form === 'assignment' ? 140 : 70);
+      const callerRealm = this.agent?.activeExecutionRealm ?? undefined;
       inspectPut.callFunction(undefined, [], callerRealm);
       overflow.callFunction(undefined, [], callerRealm);
-      return super.set(name, value, receiver, throwOnError, callerRealm);
+      return super.set(name, value, receiver);
     }
   }
 
@@ -1346,7 +1370,7 @@ function assertCachedComputedTargetRelinked(form, superTarget) {
 
   assertRealmRangeError(second, realms);
   assertSame(
-    /** @type {EngineObject} */ (second.value).getPrototype(),
+    /** @type {EngineObject} */ (second.value).getPrototypeOf(),
     realmB.intrinsics.rangeErrorPrototype,
   );
   assertSame(keyCoercions, 1);
@@ -1538,7 +1562,7 @@ const tests = [
       const error = /** @type {EngineObject} */ (completion.value);
 
       assertSame(
-        error.getPrototype(),
+        error.getPrototypeOf(),
         realm.intrinsics.rangeErrorPrototype,
         'the error must inherit from this realm\u2019s %RangeError.prototype%',
       );
@@ -1896,8 +1920,8 @@ const tests = [
       assertSame(error.get('name'), 'RangeError');
       assertSame(error.get('message'), 'Maximum call stack size exceeded');
       assertSame(
-        error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
-          error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+        error.getPrototypeOf() === realmA.intrinsics.rangeErrorPrototype ||
+          error.getPrototypeOf() === realmB.intrinsics.rangeErrorPrototype,
         true,
       );
       assertSame(realmA.stackGuard.depth, 0);
@@ -1923,12 +1947,50 @@ const tests = [
       assertSame(error.get('name'), 'RangeError');
       assertSame(error.get('message'), 'Maximum call stack size exceeded');
       assertSame(
-        error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
-          error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+        error.getPrototypeOf() === realmA.intrinsics.rangeErrorPrototype ||
+          error.getPrototypeOf() === realmB.intrinsics.rangeErrorPrototype,
         true,
       );
       assertSame(realmA.stackGuard.depth, 0);
       assertSame(realmB.stackGuard.depth, 0);
+    },
+  },
+  {
+    name: 'iterator Table 6 dispatch accounts for its helper frame on an active generator chain',
+    run() {
+      const realm = createRealm({ maxStackDepth: 2 });
+      const iterator = new EngineObject(realm.intrinsics.objectPrototype);
+      const result = new EngineObject(realm.intrinsics.objectPrototype);
+      const next = realm.createNativeFunction({
+        name: 'next',
+        length: 0,
+        call() {
+          return result;
+        },
+      });
+      const hostChain = realm.agent.enterGeneratorHostChain(
+        realm.stackGuard.maxDepth,
+      );
+
+      realm.stackGuard.enter();
+
+      try {
+        const error = /** @type {GuestErrorSignal} */ (
+          assertThrows(
+            () => iteratorNextWithMethod(iterator, next, undefined, realm),
+            GuestErrorSignal,
+          )
+        );
+
+        assertSame(error.typeName, 'RangeError');
+        assertSame(error.guestMessage, 'Maximum call stack size exceeded');
+        assertSame(generatorHostChainRoot(realm.agent).depth, 1);
+      } finally {
+        realm.stackGuard.exit();
+        realm.agent.exitGeneratorHostChain(hostChain);
+      }
+
+      assertGeneratorAccountingCleared([realm]);
     },
   },
   {
@@ -2137,8 +2199,8 @@ const tests = [
         assertSame(error instanceof EngineObject, true);
         assertSame(error.get('name'), 'RangeError');
         assertSame(
-          error.getPrototype() === realmA.intrinsics.rangeErrorPrototype ||
-            error.getPrototype() === realmB.intrinsics.rangeErrorPrototype,
+          error.getPrototypeOf() === realmA.intrinsics.rangeErrorPrototype ||
+            error.getPrototypeOf() === realmB.intrinsics.rangeErrorPrototype,
           true,
         );
         assertSame(realmA.stackGuard.depth, 0);
@@ -3386,9 +3448,10 @@ const tests = [
       class InspectingSuperBase extends EngineObject {
         /**
          * @param {string | symbol} name
-         * @returns {import('../src/runtime/descriptors.js').PropertyDescriptorRecord | undefined}
+         * @param {unknown} receiver
+         * @returns {unknown}
          */
-        getProperty(name) {
+        get(name, receiver) {
           lookupCalls += 1;
           const roots = [realmA, realmB, realmD].map((realm) =>
             generatorHostChainRoot(realm.agent),
@@ -3398,7 +3461,7 @@ const tests = [
             roots[0] !== null &&
             roots.every((root) => root === roots[0]) &&
             roots[0].maxDepth === 120;
-          return super.getProperty(name);
+          return super.get(name, receiver);
         }
       }
 
@@ -4102,6 +4165,186 @@ const tests = [
         ),
         'RangeError',
       );
+    },
+  },
+  {
+    name: '50,000-link Get Set HasProperty and prototype traversal stop at a hostile boundary',
+    run() {
+      const root = new EngineObject();
+      root.defineOwnProperty('marker', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let tail = root;
+      for (let index = 0; index < 50000; index += 1) {
+        tail = new EngineObject(tail);
+      }
+
+      assertSame(tail.get('marker', tail), 1);
+      assertSame(tail.hasProperty('marker'), true);
+      assertSame(tail.set('created', 2, tail), true);
+      assertSame(tail.get('created', tail), 2);
+      assertSame(
+        root.setPrototypeOf(tail),
+        false,
+        'a 50,000-link prototype cycle is rejected without recursion',
+      );
+
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
+      }
+
+      const middle = new HostileExotic(lower, new EngineObject());
+      middle.virtual.set('marker', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      /** @type {EngineObject} */
+      let top = middle;
+      for (let index = 0; index < 24999; index += 1) {
+        top = new EngineObject(top);
+      }
+
+      assertSame(top.get('marker', top), 'get:marker');
+      assertSame(top.hasProperty('marker'), true);
+      assertSame(top.set('created', 2, top), false);
+      assertSame(
+        root.setPrototypeOf(top),
+        true,
+        'an exotic prototype boundary ends the ordinary cycle walk without recursion',
+      );
+      assertCallRecords(middle.calls, [
+        ['get', 'marker', top],
+        ['hasProperty', 'marker'],
+        ['set', 'created', 2, top],
+      ]);
+    },
+  },
+  {
+    name: '50,000-link Enumerate stays iterative and dispatches a middle hostile exotic once',
+    run() {
+      const realm = createRealm();
+      const root = new EngineObject(realm.intrinsics.objectPrototype);
+      root.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
+      }
+      const middle = new HostileExotic(
+        lower,
+        createEnumerationIterator(realm, ['value']),
+      );
+      /** @type {EngineObject} */
+      let top = middle;
+      for (let index = 0; index < 24999; index += 1) {
+        top = new EngineObject(top);
+      }
+
+      const iterator = realm.agent.withActiveExecutionRealm(realm, () =>
+        top.enumerate(),
+      );
+      const next =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          iterator.get('next', iterator)
+        );
+      const first = /** @type {EngineObject} */ (
+        next.callFunction(iterator, [], realm)
+      );
+
+      assertSame(first.get('value', first), 'value');
+      assertSame(first.get('done', first), false);
+      assertCallRecords(middle.calls, [['enumerate']]);
+
+      const done = /** @type {EngineObject} */ (
+        next.callFunction(iterator, [], realm)
+      );
+      assertSame(done.get('done', done), true);
+    },
+  },
+  {
+    name: 'synchronous for-in consumes a 50,000-link hostile Enumerate iterator iteratively',
+    run() {
+      const realm = createRealm();
+      const root = new EngineObject(realm.intrinsics.objectPrototype);
+      root.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
+      }
+      const middle = new HostileExotic(
+        lower,
+        createEnumerationIterator(realm, ['value']),
+      );
+      /** @type {EngineObject} */
+      let source = middle;
+      for (let index = 0; index < 24999; index += 1) {
+        source = new EngineObject(source);
+      }
+      defineGlobal(realm, 'source', source);
+
+      const completion = evaluateScript(
+        realm,
+        'var key; for (key in source) { break; } key;',
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'value');
+      assertCallRecords(middle.calls, [['enumerate']]);
+    },
+  },
+  {
+    name: 'generator for-in consumes a 50,000-link hostile Enumerate iterator iteratively',
+    run() {
+      const realm = createRealm();
+      const root = new EngineObject(realm.intrinsics.objectPrototype);
+      root.defineOwnProperty('value', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      let lower = root;
+      for (let index = 0; index < 25000; index += 1) {
+        lower = new EngineObject(lower);
+      }
+      const middle = new HostileExotic(
+        lower,
+        createEnumerationIterator(realm, ['value']),
+      );
+      /** @type {EngineObject} */
+      let source = middle;
+      for (let index = 0; index < 24999; index += 1) {
+        source = new EngineObject(source);
+      }
+      defineGlobal(realm, 'source', source);
+
+      const completion = evaluateScript(
+        realm,
+        'function* values() { for (var key in source) { yield key; } } ' +
+          'var iterator = values(); var first = iterator.next(); var closed = iterator.return(); ' +
+          '[first.value, first.done, closed.done].join("|");',
+      );
+      assertSame(completion.type, 'normal');
+      assertSame(completion.value, 'value|false|true');
+      assertCallRecords(middle.calls, [['enumerate']]);
     },
   },
   {

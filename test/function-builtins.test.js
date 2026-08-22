@@ -35,7 +35,7 @@ const tests = [
         true,
       );
       assertSame(
-        realm.intrinsics.functionPrototype.getPrototype(),
+        realm.intrinsics.functionPrototype.getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
       assertSame(

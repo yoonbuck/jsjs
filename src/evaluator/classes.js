@@ -1,5 +1,5 @@
 import { EngineObject } from '../runtime/object.js';
-import { isConstructor } from '../runtime/descriptors.js';
+import { isConstructor } from '../runtime/capabilities.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { newDeclarativeEnvironment } from '../runtime/environment.js';
 import { createFunctionObject } from './declarations.js';
@@ -140,7 +140,7 @@ export function applyClassHeritage(state, heritage) {
         );
       }
 
-      const parentPrototype = heritage.get('prototype');
+      const parentPrototype = heritage.get('prototype', heritage);
 
       if (
         parentPrototype !== null &&
@@ -325,7 +325,7 @@ function findConstructorDefinition(definitions) {
  * @returns {void}
  */
 function defineClassProperty(object, key, descriptor) {
-  if (!object.defineOwnProperty(key, descriptor, false)) {
+  if (!object.defineOwnProperty(key, descriptor)) {
     throw new GuestErrorSignal('TypeError', 'Cannot define class property');
   }
 }

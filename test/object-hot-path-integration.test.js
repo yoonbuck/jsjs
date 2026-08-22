@@ -4,7 +4,10 @@ import { EngineArray } from '../src/runtime/array-object.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { DeclarativeEnvironmentRecord } from '../src/runtime/environment.js';
 import { ArgumentsObject } from '../src/runtime/function-object.js';
-import { EngineObject } from '../src/runtime/object.js';
+import {
+  EngineObject,
+  defineOwnPropertyOrThrow,
+} from '../src/runtime/object.js';
 import { EnginePrimitiveObject } from '../src/runtime/primitive-object.js';
 import { createRealm } from '../src/runtime/realm.js';
 
@@ -35,34 +38,6 @@ function assertGuestTypeError(body) {
 }
 
 /**
- * @param {object} target
- * @param {import('../src/runtime/descriptors.js').PropertyKey} name
- * @param {string} message
- * @returns {import('../src/runtime/descriptors.js').CompletePropertyDescriptor}
- */
-function peekOwnDescriptor(target, name, message) {
-  // Raw descriptors must be reacquired after mutation; do not retain them.
-  const peek =
-    /** @type {{ _peekOwnDescriptor?: (name: import('../src/runtime/descriptors.js').PropertyKey) => import('../src/runtime/descriptors.js').CompletePropertyDescriptor | undefined }} */ (
-      target
-    )._peekOwnDescriptor;
-  if (typeof peek !== 'function') {
-    assertSame(typeof peek, 'function', message);
-    throw new Error('unreachable');
-  }
-  const descriptor = peek.call(target, name);
-  if (descriptor === undefined) {
-    assertSame(
-      descriptor === undefined,
-      false,
-      `${message}: missing ${String(name)}`,
-    );
-    throw new Error('unreachable');
-  }
-  return descriptor;
-}
-
-/**
  * @param {import('../src/runtime/realm.js').Realm} realm
  * @param {string} source
  * @returns {unknown}
@@ -81,18 +56,14 @@ const tests = [
     run() {
       const key = Symbol('hot');
       const object = new EngineObject();
-      object.defineOwnProperty(
-        key,
-        {
-          value: 1,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      object.defineOwnProperty(key, {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
 
-      object.put(key, 2, true);
+      assertSame(object.set(key, 2, object), true);
 
       const descriptor = publicDescriptor(
         object,
@@ -110,14 +81,7 @@ const tests = [
         2,
       );
       assertSame(object.ownPropertyKeys()[0], key);
-      assertSame(
-        peekOwnDescriptor(
-          object,
-          key,
-          'the raw symbol-key descriptor should keep the stored value after public descriptor mutation',
-        ).value,
-        2,
-      );
+      assertSame(object.get(key, object), 2);
     },
   },
   {
@@ -126,45 +90,24 @@ const tests = [
       const first = Symbol('first');
       const second = Symbol('second');
       const object = new EngineObject();
-      object.put('name', 1, true);
-      object.put(first, 2, true);
-      object.put('2', 3, true);
-      object.put(second, 4, true);
+      assertSame(object.set('name', 1, object), true);
+      assertSame(object.set(first, 2, object), true);
+      assertSame(object.set('2', 3, object), true);
+      assertSame(object.set(second, 4, object), true);
 
       assertSame(
         JSON.stringify(object.ownPropertyKeys().map(String)),
         '["2","name","Symbol(first)","Symbol(second)"]',
       );
-      assertSame(
-        peekOwnDescriptor(
-          object,
-          first,
-          'EngineObject should expose mixed-order symbol descriptors to the hot-path protocol',
-        ).value,
-        2,
-      );
-      assertSame(
-        peekOwnDescriptor(
-          object,
-          second,
-          'EngineObject should preserve later symbol descriptors in mixed own-key order',
-        ).value,
-        4,
-      );
+      assertSame(object.get(first, object), 2);
+      assertSame(object.get(second, object), 4);
 
       const array = new EngineArray();
-      array.put(first, 1, true);
+      assertSame(array.set(first, 1, array), true);
 
       assertSame(array.get('length'), 0);
       assertSame(array.get(first), 1);
-      assertSame(
-        peekOwnDescriptor(
-          array,
-          first,
-          'EngineArray should keep symbol writes on the non-index descriptor path',
-        ).value,
-        1,
-      );
+      assertSame(array.get(first, array), 1);
     },
   },
   {
@@ -190,16 +133,12 @@ const tests = [
         },
       });
       const prototype = new EngineObject(realm.intrinsics.objectPrototype);
-      prototype.defineOwnProperty(
-        'x',
-        {
-          get: liveGetter,
-          set: undefined,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      prototype.defineOwnProperty('x', {
+        get: liveGetter,
+        set: undefined,
+        enumerable: true,
+        configurable: true,
+      });
       const object = /** @type {EngineObject} */ (
         runScript(realm, '({ get value() { return super.x; } });')
       );
@@ -215,14 +154,6 @@ const tests = [
       assertSame(object.get('value'), 17);
       assertSame(liveCalls, 1);
       assertSame(detachedCalls, 0);
-      assertSame(
-        peekOwnDescriptor(
-          prototype,
-          'x',
-          'super reads should still use the stored prototype accessor',
-        ).get,
-        liveGetter,
-      );
     },
   },
   {
@@ -238,16 +169,12 @@ const tests = [
       );
 
       argumentsObject.mapParameter('0', 'value');
-      argumentsObject.defineOwnProperty(
-        '0',
-        {
-          value: 7,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      argumentsObject.defineOwnProperty('0', {
+        value: 7,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       assertSame(environment.getBindingValue('value', false), 7);
 
       environment.setMutableBinding('value', 8, false);
@@ -268,14 +195,7 @@ const tests = [
         ).value,
         8,
       );
-      assertSame(
-        peekOwnDescriptor(
-          argumentsObject,
-          '0',
-          'ArgumentsObject should expose mapped indices through the hot-path descriptor protocol',
-        ).value,
-        8,
-      );
+      assertSame(argumentsObject.get('0', argumentsObject), 8);
     },
   },
   {
@@ -300,16 +220,12 @@ const tests = [
           return 'detached';
         },
       });
-      realm.globalObject.defineOwnProperty(
-        'probe',
-        {
-          get: liveGetter,
-          set: undefined,
-          enumerable: true,
-          configurable: true,
-        },
-        true,
-      );
+      realm.globalObject.defineOwnProperty('probe', {
+        get: liveGetter,
+        set: undefined,
+        enumerable: true,
+        configurable: true,
+      });
 
       const descriptor = publicDescriptor(
         realm.globalObject,
@@ -321,14 +237,6 @@ const tests = [
       assertSame(runScript(realm, 'probe;'), 'live');
       assertSame(liveCalls, 1);
       assertSame(detachedCalls, 0);
-      assertSame(
-        peekOwnDescriptor(
-          realm.globalObject,
-          'probe',
-          'identifier fast-path reads should still use the stored global accessor',
-        ).get,
-        liveGetter,
-      );
     },
   },
   {
@@ -342,7 +250,7 @@ const tests = [
 
       assertSame(stringObject.defineOwnProperty('0', { value: 'x' }), false);
       assertGuestTypeError(() =>
-        stringObject.defineOwnProperty('0', { value: 'x' }, true),
+        defineOwnPropertyOrThrow(stringObject, '0', { value: 'x' }),
       );
 
       const descriptor = publicDescriptor(
@@ -361,14 +269,7 @@ const tests = [
         ).value,
         'a',
       );
-      assertSame(
-        peekOwnDescriptor(
-          stringObject,
-          '0',
-          'EnginePrimitiveObject should expose virtual string indices through the hot-path descriptor protocol',
-        ).value,
-        'a',
-      );
+      assertSame(stringObject.get('0', stringObject), 'a');
     },
   },
 ];

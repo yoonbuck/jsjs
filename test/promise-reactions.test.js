@@ -1,5 +1,6 @@
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { GuestErrorSignal, ThrowSignal } from '../src/runtime/completion.js';
+import { registerCallable } from '../src/runtime/capabilities.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { createAbruptRealmCallable } from '../src/runtime/function-realm.js';
 import { PromiseObject } from '../src/runtime/promise.js';
@@ -23,7 +24,7 @@ function assertNormalValue(completion, expected) {
 function assertGuestTypeError(realm, completion) {
   assertSame(completion.type, 'throw');
   assertSame(
-    /** @type {EngineObject} */ (completion.value).getPrototype(),
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf(),
     realm.intrinsics.typeErrorPrototype,
   );
 }
@@ -572,15 +573,11 @@ export default [
         },
       });
 
-      constructor.defineOwnProperty(
-        speciesSymbol,
-        {
-          get: getter,
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      constructor.defineOwnProperty(speciesSymbol, {
+        get: getter,
+        enumerable: false,
+        configurable: true,
+      });
 
       const child = promiseObject(
         then.callFunction(source, [undefined, undefined], callerRealm),
@@ -590,25 +587,21 @@ export default [
       assertSame(observedCallerRealm, callerRealm);
       assertSame(child.realm, constructorRealm);
       assertSame(child.agent, constructorRealm.agent);
-      assertSame(child.getPrototype(), speciesPrototype);
+      assertSame(child.getPrototypeOf(), speciesPrototype);
 
       let invalidGetterCalls = 0;
-      constructor.defineOwnProperty(
-        speciesSymbol,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              invalidGetterCalls += 1;
-              return 1;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      constructor.defineOwnProperty(speciesSymbol, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            invalidGetterCalls += 1;
+            return 1;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const invalid = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], callerRealm),
@@ -618,7 +611,7 @@ export default [
 
       assertSame(invalidGetterCalls, 1);
       assertSame(
-        /** @type {EngineObject} */ (invalid).getPrototype(),
+        /** @type {EngineObject} */ (invalid).getPrototypeOf(),
         callerRealm.intrinsics.typeErrorPrototype,
       );
 
@@ -627,22 +620,18 @@ export default [
         'TypeError',
         'foreign species getter failure',
       );
-      constructor.defineOwnProperty(
-        speciesSymbol,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              abruptGetterCalls += 1;
-              throw new ThrowSignal(accessorError);
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      constructor.defineOwnProperty(speciesSymbol, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            abruptGetterCalls += 1;
+            throw new ThrowSignal(accessorError);
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const abrupt = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], callerRealm),
@@ -714,7 +703,7 @@ export default [
       );
       assertSame(child.realm, subclassRealm);
       assertSame(child.agent, subclassRealm.agent);
-      assertSame(child.getPrototype(), subclassPrototype);
+      assertSame(child.getPrototypeOf(), subclassPrototype);
     },
   },
   {
@@ -796,7 +785,6 @@ export default [
           enumerable: false,
           configurable: true,
         },
-        true,
       );
       intermediate.defineOwnProperty(
         intermediateRealm.agent.wellKnownSymbols.species,
@@ -814,7 +802,6 @@ export default [
           enumerable: false,
           configurable: true,
         },
-        true,
       );
 
       const intermediateChild = promiseObject(
@@ -825,44 +812,36 @@ export default [
       assertSame(baseGetterCalls, 0);
       assertSame(intermediateReceiver, subclass);
       assertSame(intermediateCallerRealm, methodRealm);
-      assertSame(intermediateChild.getPrototype(), subclass.get('prototype'));
+      assertSame(intermediateChild.getPrototypeOf(), subclass.get('prototype'));
 
-      subclass.defineOwnProperty(
-        subclassRealm.agent.wellKnownSymbols.species,
-        {
-          value: ownSpecies,
-          writable: true,
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      subclass.defineOwnProperty(subclassRealm.agent.wellKnownSymbols.species, {
+        value: ownSpecies,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
       const ownDataChild = promiseObject(
         then.callFunction(source, [], methodRealm),
       );
 
-      assertSame(ownDataChild.getPrototype(), ownSpecies.get('prototype'));
+      assertSame(ownDataChild.getPrototypeOf(), ownSpecies.get('prototype'));
       assertSame(intermediateGetterCalls, 1);
       assertSame(baseGetterCalls, 0);
 
-      subclass.defineOwnProperty(
-        subclassRealm.agent.wellKnownSymbols.species,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call(thisValue, _args, _functionObject, callerRealmArgument) {
-              ownGetterCalls += 1;
-              ownReceiver = thisValue;
-              ownCallerRealm = callerRealmArgument;
-              return thisValue;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      subclass.defineOwnProperty(subclassRealm.agent.wellKnownSymbols.species, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call(thisValue, _args, _functionObject, callerRealmArgument) {
+            ownGetterCalls += 1;
+            ownReceiver = thisValue;
+            ownCallerRealm = callerRealmArgument;
+            return thisValue;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const ownAccessorChild = promiseObject(
         then.callFunction(source, [], methodRealm),
       );
@@ -870,7 +849,7 @@ export default [
       assertSame(ownGetterCalls, 1);
       assertSame(ownReceiver, subclass);
       assertSame(ownCallerRealm, methodRealm);
-      assertSame(ownAccessorChild.getPrototype(), subclass.get('prototype'));
+      assertSame(ownAccessorChild.getPrototypeOf(), subclass.get('prototype'));
       assertSame(intermediateGetterCalls, 1);
       assertSame(baseGetterCalls, 0);
     },
@@ -912,22 +891,18 @@ export default [
       const foreignSpecies = baseRealm.agent.wellKnownSymbols.species;
       let nullGetterCalls = 0;
 
-      foreignPromise.defineOwnProperty(
-        foreignSpecies,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              nullGetterCalls += 1;
-              return null;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      foreignPromise.defineOwnProperty(foreignSpecies, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            nullGetterCalls += 1;
+            return null;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const fallbackChild = promiseObject(
         then.callFunction(source, [], methodRealm),
       );
@@ -936,31 +911,27 @@ export default [
       assertSame(fallbackChild.realm, methodRealm);
       assertSame(fallbackChild.agent, methodRealm.agent);
       assertSame(
-        fallbackChild.getPrototype(),
+        fallbackChild.getPrototypeOf(),
         methodRealm.intrinsics.promisePrototype,
       );
       assertSame(
-        fallbackChild.getPrototype() === subclass.get('prototype'),
+        fallbackChild.getPrototypeOf() === subclass.get('prototype'),
         false,
       );
 
       let invalidGetterCalls = 0;
-      foreignPromise.defineOwnProperty(
-        foreignSpecies,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              invalidGetterCalls += 1;
-              return 1;
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      foreignPromise.defineOwnProperty(foreignSpecies, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            invalidGetterCalls += 1;
+            return 1;
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const invalid = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], methodRealm),
@@ -970,7 +941,7 @@ export default [
 
       assertSame(invalidGetterCalls, 1);
       assertSame(
-        /** @type {EngineObject} */ (invalid).getPrototype(),
+        /** @type {EngineObject} */ (invalid).getPrototypeOf(),
         methodRealm.intrinsics.typeErrorPrototype,
       );
 
@@ -979,22 +950,18 @@ export default [
         'TypeError',
         'inherited foreign species getter failure',
       );
-      foreignPromise.defineOwnProperty(
-        foreignSpecies,
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get [Symbol.species]',
-            length: 0,
-            call() {
-              abruptGetterCalls += 1;
-              throw new ThrowSignal(accessorError);
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      foreignPromise.defineOwnProperty(foreignSpecies, {
+        get: accessorRealm.createNativeFunction({
+          name: 'get [Symbol.species]',
+          length: 0,
+          call() {
+            abruptGetterCalls += 1;
+            throw new ThrowSignal(accessorError);
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const abrupt = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], methodRealm),
@@ -1092,25 +1059,21 @@ export default [
         'TypeError',
         'then constructor getter failure',
       );
-      source.defineOwnProperty(
-        'constructor',
-        {
-          get: accessorRealm.createNativeFunction({
-            name: 'get constructor',
-            length: 0,
-            call(thisValue, _args, _functionObject, callerRealmArgument) {
-              constructorGetterCalls += 1;
-              constructorReceiver = thisValue;
-              constructorCallerRealm = callerRealmArgument;
-              order.push('constructor-error');
-              throw new ThrowSignal(constructorError);
-            },
-          }),
-          enumerable: false,
-          configurable: true,
-        },
-        true,
-      );
+      source.defineOwnProperty('constructor', {
+        get: accessorRealm.createNativeFunction({
+          name: 'get constructor',
+          length: 0,
+          call(thisValue, _args, _functionObject, callerRealmArgument) {
+            constructorGetterCalls += 1;
+            constructorReceiver = thisValue;
+            constructorCallerRealm = callerRealmArgument;
+            order.push('constructor-error');
+            throw new ThrowSignal(constructorError);
+          },
+        }),
+        enumerable: false,
+        configurable: true,
+      });
       const abrupt = /** @type {ThrowSignal} */ (
         assertThrows(
           () => then.callFunction(source, [], outerRealm),
@@ -1279,7 +1242,7 @@ export default [
       ]) {
         assertSame(promise.realm, subclassRealm);
         assertSame(promise.agent, subclassAgent);
-        assertSame(promise.getPrototype(), subPrototype);
+        assertSame(promise.getPrototypeOf(), subPrototype);
       }
       assertSame(capturedResolve.getFunctionRealm().value, baseRealm);
       assertSame(capturedReject.getFunctionRealm().value, baseRealm);
@@ -1446,7 +1409,9 @@ export default [
       assertSame(rejectedChild.promiseResult, 'rejected-recovered');
       assertSame(abruptChild.promiseState, 'rejected');
       assertSame(
-        /** @type {EngineObject} */ (abruptChild.promiseResult).getPrototype(),
+        /** @type {EngineObject} */ (
+          abruptChild.promiseResult
+        ).getPrototypeOf(),
         handlerRealm.intrinsics.typeErrorPrototype,
       );
       assertSame(hostFailureChild.promiseState, 'pending');
@@ -1606,7 +1571,7 @@ export default [
       assertSame(
         /** @type {EngineObject} */ (
           rejected.promise.promiseResult
-        ).getPrototype(),
+        ).getPrototypeOf(),
         thenRealm.intrinsics.typeErrorPrototype,
       );
       assertSame(failed.promise.promiseState, 'pending');
@@ -1707,6 +1672,7 @@ export default [
           };
         },
       };
+      registerCallable(abruptHandler);
       const child = promiseObject(
         registrationThen.callFunction(pending.promise, [abruptHandler]),
       );
@@ -1718,16 +1684,16 @@ export default [
       assertSame(handlerContext, settlementRealm);
       assertSame(child.promiseState, 'rejected');
       assertSame(
-        /** @type {EngineObject} */ (child.promiseResult).getPrototype(),
+        /** @type {EngineObject} */ (child.promiseResult).getPrototypeOf(),
         settlementRealm.intrinsics.typeErrorPrototype,
       );
       assertSame(
-        /** @type {EngineObject} */ (child.promiseResult).getPrototype() ===
+        /** @type {EngineObject} */ (child.promiseResult).getPrototypeOf() ===
           registrationRealm.intrinsics.typeErrorPrototype,
         false,
       );
       assertSame(
-        /** @type {EngineObject} */ (child.promiseResult).getPrototype() ===
+        /** @type {EngineObject} */ (child.promiseResult).getPrototypeOf() ===
           lookupErrorRealm.intrinsics.typeErrorPrototype,
         false,
       );

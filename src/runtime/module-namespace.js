@@ -9,7 +9,15 @@ import {
   MODULE_NAMESPACE_BINDING,
   SourceTextModuleRecord,
 } from './module-record.js';
-import { EngineObject } from './object.js';
+import {
+  EngineObject,
+  ordinaryDefineOwnProperty,
+  ordinaryDelete,
+  ordinaryGetOwnProperty,
+  ordinaryHasProperty,
+  ordinaryOwnPropertyKeys,
+  ordinaryPreventExtensions,
+} from './object.js';
 
 /**
  * @typedef {import('./descriptors.js').CompletePropertyDescriptor} CompletePropertyDescriptor
@@ -45,24 +53,13 @@ export class ModuleNamespaceObject extends EngineObject {
     this._exportNames = Object.freeze([...this._resolvedExports.keys()].sort());
     this._toStringTag = record.realm.agent.wellKnownSymbols.toStringTag;
 
-    super.defineOwnProperty(this._toStringTag, {
+    ordinaryDefineOwnProperty(this, this._toStringTag, {
       value: 'Module',
       writable: false,
       enumerable: false,
       configurable: false,
     });
-    this.preventExtensions();
-  }
-
-  /**
-   * @param {PropertyKey} key
-   * @returns {CompletePropertyDescriptor | undefined}
-   */
-  _peekOwnDescriptor(key) {
-    const resolved = this._resolvedExports.get(/** @type {string} */ (key));
-    return resolved === undefined
-      ? super._peekOwnDescriptor(key)
-      : exportDescriptor(resolved);
+    ordinaryPreventExtensions(this);
   }
 
   /**
@@ -72,19 +69,22 @@ export class ModuleNamespaceObject extends EngineObject {
   getOwnProperty(key) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
     return resolved === undefined
-      ? super.getOwnProperty(key)
+      ? ordinaryGetOwnProperty(this, key)
       : exportDescriptor(resolved);
   }
 
   /**
+   * Export existence must not read a live binding: a linked namespace can be
+   * queried before its module's declarations are initialized.
+   *
    * @param {PropertyKey} key
    * @returns {boolean}
    */
   hasProperty(key) {
-    if (typeof key === 'string' && this._resolvedExports.has(key)) {
-      return true;
-    }
-    return super.hasProperty(key);
+    return (
+      (typeof key === 'string' && this._resolvedExports.has(key)) ||
+      ordinaryHasProperty(this, key)
+    );
   }
 
   /**
@@ -98,20 +98,13 @@ export class ModuleNamespaceObject extends EngineObject {
   /**
    * @param {PropertyKey} key
    * @param {PropertyDescriptorRecord} descriptor
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(key, descriptor, throwOnError = false, callerRealm) {
+  defineOwnProperty(key, descriptor) {
     const resolved = this._resolvedExports.get(/** @type {string} */ (key));
 
     if (resolved === undefined) {
-      return super.defineOwnProperty(
-        key,
-        descriptor,
-        throwOnError,
-        callerRealm,
-      );
+      return ordinaryDefineOwnProperty(this, key, descriptor);
     }
 
     const candidate = validatePropertyDescriptor(descriptor);
@@ -127,10 +120,7 @@ export class ModuleNamespaceObject extends EngineObject {
       return true;
     }
 
-    return rejectOperation(
-      throwOnError,
-      'Cannot redefine a module namespace export',
-    );
+    return false;
   }
 
   /**
@@ -139,45 +129,37 @@ export class ModuleNamespaceObject extends EngineObject {
    * this-side binding, and any other key is an own property this exotic
    * object refuses to create (its `[[Extensible]]` is `false` and it has no
    * writable data properties). Overriding the polymorphic `set` (rather than
-   * only `put`) is what makes this rejection reach `super.prop = value`
-   * assignments too: `SuperReferenceBase#setReferencedValue` and ordinary
+   * only the Set operation) is what makes this rejection reach `super.prop = value`
+   * assignments too: `SuperReferenceBase#set` and ordinary
    * `EngineObject#set`'s prototype walk both dispatch to whichever object's
    * `set` governs the lookup, receiver and all.
    *
    * @param {PropertyKey} _key
    * @param {unknown} _value
    * @param {unknown} _receiver
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  set(_key, _value, _receiver, throwOnError = false) {
-    return rejectOperation(
-      throwOnError,
-      'Cannot assign to a module namespace object',
-    );
+  set(_key, _value, _receiver) {
+    return false;
   }
 
   /**
    * @param {PropertyKey} key
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  delete(key, throwOnError = false) {
+  delete(key) {
     if (this._resolvedExports.has(/** @type {string} */ (key))) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot delete a module namespace export',
-      );
+      return false;
     }
 
-    return super.delete(key, throwOnError);
+    return ordinaryDelete(this, key);
   }
 
   /**
    * @returns {PropertyKey[]}
    */
   ownPropertyKeys() {
-    return [...this._exportNames, ...super.ownPropertyKeys()];
+    return [...this._exportNames, ...ordinaryOwnPropertyKeys(this)];
   }
 }
 
@@ -299,17 +281,4 @@ function exportDescriptor(resolved) {
     enumerable: true,
     configurable: false,
   };
-}
-
-/**
- * @param {boolean} throwOnError
- * @param {string} message
- * @returns {false}
- */
-function rejectOperation(throwOnError, message) {
-  if (throwOnError) {
-    throw new GuestErrorSignal('TypeError', message);
-  }
-
-  return false;
 }

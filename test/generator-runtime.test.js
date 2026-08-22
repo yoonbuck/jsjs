@@ -97,7 +97,7 @@ const tests = [
       );
       const generatorFunction =
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
-          g.getPrototype()
+          g.getPrototypeOf()
         ).get('constructor');
       const generatorFunctionPrototype =
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
@@ -118,7 +118,7 @@ const tests = [
       assertSame(
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
           generatorFunction
-        ).getPrototype(),
+        ).getPrototypeOf(),
         realm.intrinsics.functionConstructor,
       );
       assertDataDescriptor(
@@ -148,7 +148,7 @@ const tests = [
         true,
       );
       assertSame(
-        generatorFunctionPrototype.getPrototype(),
+        generatorFunctionPrototype.getPrototypeOf(),
         realm.intrinsics.functionPrototype,
       );
       assertDataDescriptor(
@@ -193,7 +193,7 @@ const tests = [
         generatorFunctionPrototype,
       );
       assertSame(
-        generatorPrototype.getPrototype(),
+        generatorPrototype.getPrototypeOf(),
         realm.intrinsics.iteratorPrototype,
       );
     },
@@ -376,10 +376,28 @@ const tests = [
     run() {
       const generatorRealm = createRealm();
       const methodRealm = createRealm();
+      /** @type {(import('../src/runtime/realm.js').Realm | null)[]} */
+      const observed = [];
+      const observe = generatorRealm.createNativeFunction({
+        name: 'observe',
+        length: 0,
+        call() {
+          observed.push(generatorRealm.agent.activeExecutionRealm);
+          observed.push(methodRealm.agent.activeExecutionRealm);
+          return 1;
+        },
+      });
+
+      generatorRealm.globalObject.defineOwnProperty('observe', {
+        value: observe,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
       evalValue(
         generatorRealm,
         `
-          function* values() { yield 1; return 2; }
+          function* values() { yield observe(); return 2; }
           function* catches() {
             try { yield 3; } catch (error) { return error; }
           }
@@ -428,17 +446,21 @@ const tests = [
       );
 
       assertSame(
-        yielded.getPrototype(),
+        yielded.getPrototypeOf(),
         generatorRealm.intrinsics.objectPrototype,
       );
+      assertSame(observed[0], generatorRealm);
+      assertSame(observed[1], methodRealm);
+      assertSame(generatorRealm.agent.activeExecutionRealm, null);
+      assertSame(methodRealm.agent.activeExecutionRealm, null);
       assertSame(
-        throwYield.getPrototype(),
+        throwYield.getPrototypeOf(),
         generatorRealm.intrinsics.objectPrototype,
       );
       for (const result of [completed, alreadyCompleted, returned, thrown]) {
         assertSame(result.get('done'), true);
         assertSame(
-          result.getPrototype(),
+          result.getPrototypeOf(),
           methodRealm.intrinsics.objectPrototype,
         );
       }
@@ -610,7 +632,7 @@ const tests = [
       assertSame(
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
           declaration.get('prototype')
-        ).getPrototype(),
+        ).getPrototypeOf(),
         realm.intrinsics.generatorPrototype,
       );
     },
@@ -702,7 +724,7 @@ const tests = [
       assertSame(generator.state, 'suspendedYield');
       assertSame(yielded.get('value'), 'pause');
       assertSame(yielded.get('done'), false);
-      assertSame(yielded.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(yielded.getPrototypeOf(), realm.intrinsics.objectPrototype);
 
       const returned = new GeneratorObject(realm, generatorPrototype, {
         resume() {

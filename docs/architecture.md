@@ -108,6 +108,14 @@ global object/environment, keeping every script execution isolated from the host
 and from other realms. The global object is a plain `EngineObject` whose
 properties are installed during construction, never from host globals.
 
+Each `Agent` also owns a stack of active execution Realms. Script and module
+evaluation, guest/native calls, generator resumption, and Realm-bearing jobs
+push the applicable Realm and restore it in `finally`; Realm-less jobs push an
+explicit no-Realm frame. Object operations do not take a Realm parameter.
+Wrappers that may need to create a guest error consult this dynamic execution
+context, and a direct host call with no valid active Realm fails rather than
+guessing from the receiver.
+
 Construction order in the `Realm` constructor:
 
 0. The agent — `options.agent`, or a fresh one
@@ -147,22 +155,33 @@ with a global binding publish it through an `install*` path;
 
 ### EngineObject (`src/runtime/object.js`)
 
-Every guest object is an `EngineObject`. It implements the ES5 internal methods
-(`[[Get]]`, `[[Put]]`, `[[GetOwnProperty]]`, `[[DefineOwnProperty]]`,
-`[[Delete]]`, `[[HasProperty]]`, `[[Enumerate]]`, `[[DefaultValue]]`) and
-tracks `[[Prototype]]`, `[[Class]]`, `[[Extensible]]`, and own properties as a
-`Map` of property descriptors keyed by a String **or** a Symbol.
+Every guest object is an `EngineObject` exposing the twelve Sixth Edition
+Table 5 operations: `getPrototypeOf`, `setPrototypeOf`, `isExtensible`,
+`preventExtensions`, `getOwnProperty`, `defineOwnProperty`, `hasProperty`,
+`get`, `set`, `delete`, `enumerate`, and `ownPropertyKeys`. Their signatures
+carry only semantic operands: no strictness flag, throw-on-failure flag,
+caller Realm, or receiver-derived Realm fallback. Boolean operations report
+semantic success; evaluator, reference, declaration, integrity, and native
+built-in wrappers decide when `false` becomes a Realm-correct guest `TypeError`.
 
-Its receiver-aware `[[Set]]` seam is `set(name, value, receiver, throwOnError =
-false)`: ordinary prototype chains are walked iteratively, the original
-receiver is preserved for inherited data properties and accessors, and exotic
-prototypes can override `set` to supply their own semantics. `put(name, value,
-throwOnError = false)` remains the direct-assignment compatibility wrapper and
-calls `set(name, value, this, throwOnError)`. The existing `throwOnError` flag
-still controls sloppy-vs-strict rejection: `false` returns `false`, while `true`
-routes the failure through the existing guest `TypeError`/`GuestErrorSignal`
-boundary. This is the engine's internal `[[Set]]` boundary, not a Proxy or other
-future meta-object layer.
+The exported `ordinary*` helpers implement the ordinary-object algorithms and
+the iterative hot paths. They may read `_prototype`, `_extensible`, and
+`_properties` only inside `src/runtime/object.js`; repository invariants reject
+raw-slot access or public-method identity tests elsewhere. An overridden public
+operation is an exotic boundary, so an ordinary helper dispatches to that
+override instead of reading the exotic object's representation. Arrays,
+primitive wrappers, functions/arguments, generators, module namespaces, and
+RegExp objects retain only their reviewed overrides.
+
+### Table 6 callable capabilities (`src/runtime/capabilities.js`)
+
+Table 6 `[[Call]]` and `[[Construct]]` are private capabilities, not
+duck-typed method names or `_isConstructor` flags. Trusted function creation
+registers objects in private `WeakSet` brands; `isCallable`/`isConstructor`
+query those brands and `callCallable`/`constructCallable` are the guarded
+dispatch terminals. Direct `callFunction`/`constructFunction` calls outside
+those terminals are rejected by the object-contract invariant, apart from
+explicitly audited engine-internal continuation paths.
 
 ### Symbols (`src/runtime/symbol.js`)
 
@@ -182,36 +201,13 @@ Property descriptors are plain objects with the four ES5 fields (`value`,
 `configurable` for accessor). `isDataDescriptor`, `isAccessorDescriptor`, and
 the conversion/validation helpers live here.
 
-### Raw own-descriptor reads (`src/runtime/object.js`)
+### Ordinary representation boundary (`src/runtime/object.js`)
 
-`EngineObject` exposes own descriptors through two paired methods:
-
-- `getOwnProperty(name)` is the spec-visible `[[GetOwnProperty]]`. It returns a
-  **copy**, so a caller may keep it, hand it to guest code, or mutate it.
-- `_peekOwnDescriptor(name)` returns the **stored** descriptor with no copy. The
-  hot paths (`getProperty`, `canPut`, `put`, `defineOwnProperty`, `delete`,
-  `enumerableKeysForIn`) read through it, which is what keeps an ordinary
-  property read from allocating a descriptor object per access.
-
-Two rules come with that:
-
-1. **Paired override.** A subclass that synthesises or rewrites own properties
-   must override _both_ or neither: `ArgumentsObject`
-   (`src/runtime/function-object.js`) injects the live parameter binding in
-   each, and `EnginePrimitiveObject` (`src/runtime/primitive-object.js`)
-   synthesises string-index characters in each. Overriding only one makes
-   `Object.getOwnPropertyDescriptor` and a plain property read disagree for
-   exactly that subclass's virtual properties, which no behavioural test is
-   guaranteed to notice, so the pairing is enforced as a source-text invariant
-   in `test/node/repository-invariants.test.js`.
-2. **Do not retain across mutation.** The object `_peekOwnDescriptor` returns is
-   the engine's own storage. Treat it as read-only and never hold it across
-   anything that can mutate `_properties` — a define, a delete, or a put —
-   because the next write can change the fields under it. `getProperty` copies
-   immediately for this reason, and `defineOwnProperty`'s `{value}`-only fast
-   path deliberately reads `_properties` directly rather than through
-   `_peekOwnDescriptor`: it is about to _write_ the stored descriptor, so it
-   needs the real one and must not see a subclass's synthesised stand-in.
+The public `getOwnProperty` operation returns a descriptor copy. The ordinary
+helpers use a module-private raw descriptor read only while they remain inside
+the ordinary representation boundary, and never retain it across a mutation.
+This preserves allocation-free reads and the value-only define fast path
+without giving callers or exotics access to stored descriptors.
 
 `ModuleNamespaceObject` (`src/runtime/module-namespace.js`) overrides `set(...)`
 to reject every write. That closes the namespace-as-prototype bypass too: both
@@ -224,9 +220,24 @@ boundary, so an inherited namespace still cannot absorb or forward a write.
 `OrdinaryOwnPropertyKeys` order: array-index string keys first in ascending
 numeric order, then other string keys in creation order, then symbol keys in
 creation order.
-`Object.keys`, `Object.getOwnPropertyNames`, `for-in` (`enumerableKeysForIn`),
-and `JSON.stringify` all read through this one method, so they share the
-order automatically.
+`Object.keys`, `Object.getOwnPropertyNames`, `enumerate()`, and
+`JSON.stringify` all read through this one method, so they share the order
+automatically.
+
+### Public `[[Enumerate]]` iterator (`src/runtime/iterator-object.js`)
+
+`enumerate()` returns a public `ForInIterator`, not a host iterator or raw key
+array. It inherits the evaluating Realm's `%IteratorPrototype%`, so inherited
+`@@iterator` is callable and returns the iterator itself. Its own callable
+`next` returns ordinary IteratorResult objects, and its own `return` closes any
+unfinished delegated prototype enumerator exactly once before clearing retained
+state. `for-in` consumes it through the same
+`IteratorStep`/`IteratorValue`/`IteratorClose` protocol used elsewhere.
+Ordinary chains snapshot candidate string keys but recheck live descriptors
+before yielding; duplicate suppression, deletion,
+reconfiguration, and prototype replacement remain observable. Encountering an
+exotic `enumerate` override forms a boundary and the iterator delegates the
+remainder through that public protocol.
 
 ### Method `[[HomeObject]]` and `super` (`src/runtime/function-object.js`, `src/runtime/super-reference.js`)
 

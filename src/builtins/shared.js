@@ -1,7 +1,17 @@
-import { isCallable, isConstructor } from '../runtime/descriptors.js';
+import {
+  isCallable,
+  isConstructor,
+  registerCallable,
+  registerConstructor,
+} from '../runtime/capabilities.js';
 import { GuestErrorSignal, ThrowSignal } from '../runtime/completion.js';
-import { EngineObject } from '../runtime/object.js';
+import {
+  EngineObject,
+  enterObjectOperationRealm,
+  exitObjectOperationRealm,
+} from '../runtime/object.js';
 import { GeneratorObject } from '../runtime/generator-object.js';
+import { withLinkedActiveExecutionRealm } from '../runtime/reference.js';
 import { toBoolean, toUint32 } from '../runtime/conversion.js';
 
 /**
@@ -68,6 +78,13 @@ export class NativeFunction extends EngineObject {
     this._retargetConstructionResult = retargetConstructionResult;
     /** @type {NativeFunctionOptions['callPreflight']} */
     this._callPreflight = callPreflight;
+
+    if (construct !== undefined) {
+      registerConstructor(this);
+    } else {
+      registerCallable(this);
+    }
+
     this.defineOwnProperty('length', {
       value: length,
       writable: false,
@@ -98,11 +115,13 @@ export class NativeFunction extends EngineObject {
    * @returns {unknown}
    */
   callFunction(thisValue, args = [], callerRealm) {
-    runNativeCallPreflight(
-      this.realm,
-      this._callPreflight,
-      thisValue,
-      this._nativeName,
+    this.realm.agent.withActiveExecutionRealm(this.realm, () =>
+      runNativeCallPreflight(
+        this.realm,
+        this._callPreflight,
+        thisValue,
+        this._nativeName,
+      ),
     );
 
     const guard = this.realm.stackGuard;
@@ -113,29 +132,41 @@ export class NativeFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(methodAgent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, methodAgent, () =>
+        methodAgent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(methodAgent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      linkCallResult(activeRealm, thisValue);
-      for (const argument of args) {
-        linkCallResult(activeRealm, argument);
-      }
+          linkCallResult(activeRealm, thisValue);
+          for (const argument of args) {
+            linkCallResult(activeRealm, argument);
+          }
 
-      // Built-ins enter the realm's stack budget exactly like guest functions
-      // do, so a recursion that threads through `[].map`, a getter, or a
-      // coercion is measured by the host frames it really spends.
-      guard.enter();
+          // Built-ins enter the realm's stack budget exactly like guest functions
+          // do, so a recursion that threads through `[].map`, a getter, or a
+          // coercion is measured by the host frames it really spends.
+          guard.enter();
 
-      try {
-        const result = runNativeBody(this.realm, () =>
-          this._call(thisValue, args, this, callerRealm),
-        );
+          try {
+            enterObjectOperationRealm(this.realm);
+            /** @type {unknown} */
+            let result;
 
-        linkCallResult(callerRealm ?? this.realm, result);
-        return result;
-      } finally {
-        guard.exit();
-      }
+            try {
+              result = runNativeBody(this.realm, () =>
+                this._call(thisValue, args, this, callerRealm),
+              );
+            } finally {
+              exitObjectOperationRealm(this.realm);
+            }
+
+            linkCallResult(callerRealm ?? this.realm, result);
+            return result;
+          } finally {
+            guard.exit();
+          }
+        }),
+      );
     } finally {
       methodAgent.exitSynchronousCallChain(callChain);
     }
@@ -162,50 +193,60 @@ export class NativeFunction extends EngineObject {
     );
 
     try {
-      callerRealm?.agent.linkGeneratorHostChain(methodAgent);
-      const activeRealm = callerRealm ?? this.realm;
+      return withLinkedActiveExecutionRealm(callerRealm, methodAgent, () =>
+        methodAgent.withActiveExecutionRealm(this.realm, () => {
+          callerRealm?.agent.linkGeneratorHostChain(methodAgent);
+          const activeRealm = callerRealm ?? this.realm;
 
-      for (const argument of args) {
-        linkCallResult(activeRealm, argument);
-      }
-      linkCallResult(activeRealm, newTarget);
+          for (const argument of args) {
+            linkCallResult(activeRealm, argument);
+          }
+          linkCallResult(activeRealm, newTarget);
 
-      const construct = this._construct;
+          const construct = this._construct;
 
-      if (construct === undefined) {
-        throw new ThrowSignal(
-          this.realm.createGuestError(
-            'TypeError',
-            `${this._nativeName || 'Function'} is not a constructor`,
-          ),
-        );
-      }
+          if (construct === undefined) {
+            throw new ThrowSignal(
+              this.realm.createGuestError(
+                'TypeError',
+                `${this._nativeName || 'Function'} is not a constructor`,
+              ),
+            );
+          }
 
-      const guard = this.realm.stackGuard;
+          const guard = this.realm.stackGuard;
 
-      guard.enter();
+          guard.enter();
 
-      /** @type {unknown} */
-      let result;
+          /** @type {unknown} */
+          let result;
 
-      try {
-        result = runNativeBody(this.realm, () =>
-          construct(args, this, newTarget, callerRealm),
-        );
-      } finally {
-        guard.exit();
-      }
+          try {
+            enterObjectOperationRealm(this.realm);
 
-      if (!(result instanceof EngineObject)) {
-        throw new TypeError('Native constructor must return an object');
-      }
+            try {
+              result = runNativeBody(this.realm, () =>
+                construct(args, this, newTarget, callerRealm),
+              );
+            } finally {
+              exitObjectOperationRealm(this.realm);
+            }
+          } finally {
+            guard.exit();
+          }
 
-      if (this._retargetConstructionResult) {
-        setNativeConstructionPrototype(result, this, newTarget);
-      }
+          if (!(result instanceof EngineObject)) {
+            throw new TypeError('Native constructor must return an object');
+          }
 
-      linkCallResult(activeRealm, result);
-      return result;
+          if (this._retargetConstructionResult) {
+            setNativeConstructionPrototype(result, this, newTarget);
+          }
+
+          linkCallResult(activeRealm, result);
+          return result;
+        }),
+      );
     } finally {
       methodAgent.exitSynchronousCallChain(callChain);
     }
@@ -220,7 +261,7 @@ export class NativeFunction extends EngineObject {
       return false;
     }
 
-    const prototype = this.get('prototype');
+    const prototype = this.get('prototype', this);
 
     if (!(prototype instanceof EngineObject)) {
       throw new GuestErrorSignal(
@@ -229,14 +270,14 @@ export class NativeFunction extends EngineObject {
       );
     }
 
-    let current = /** @type {EngineObject | null} */ (value.getPrototype());
+    let current = /** @type {EngineObject | null} */ (value.getPrototypeOf());
 
     while (current !== null) {
       if (current === prototype) {
         return true;
       }
 
-      current = current.getPrototype();
+      current = current.getPrototypeOf();
     }
 
     return false;
@@ -301,12 +342,12 @@ function setNativeConstructionPrototype(result, constructor, newTarget) {
   if (
     newTarget === constructor ||
     !(newTarget instanceof EngineObject) ||
-    result.getPrototype() !== constructor.get('prototype')
+    result.getPrototypeOf() !== constructor.get('prototype', constructor)
   ) {
     return;
   }
 
-  const prototype = newTarget.get('prototype');
+  const prototype = newTarget.get('prototype', newTarget);
 
   if (prototype instanceof EngineObject) {
     result.setPrototypeOf(prototype);
@@ -367,10 +408,9 @@ export function requireObjectReceiver(value, message) {
  * Implements ES5 8.10.5 `ToPropertyDescriptor`.
  *
  * @param {unknown} value
- * @param {Realm} [callerRealm]
  * @returns {PropertyDescriptorRecord}
  */
-export function toPropertyDescriptor(value, callerRealm) {
+export function toPropertyDescriptor(value) {
   const object = requireObjectReceiver(
     value,
     'Property description must be an object',
@@ -379,25 +419,23 @@ export function toPropertyDescriptor(value, callerRealm) {
   const descriptor = {};
 
   if (object.hasProperty('enumerable')) {
-    descriptor.enumerable = toBoolean(object.get('enumerable', callerRealm));
+    descriptor.enumerable = toBoolean(object.get('enumerable', object));
   }
 
   if (object.hasProperty('configurable')) {
-    descriptor.configurable = toBoolean(
-      object.get('configurable', callerRealm),
-    );
+    descriptor.configurable = toBoolean(object.get('configurable', object));
   }
 
   if (object.hasProperty('value')) {
-    descriptor.value = object.get('value', callerRealm);
+    descriptor.value = object.get('value', object);
   }
 
   if (object.hasProperty('writable')) {
-    descriptor.writable = toBoolean(object.get('writable', callerRealm));
+    descriptor.writable = toBoolean(object.get('writable', object));
   }
 
   if (object.hasProperty('get')) {
-    const getter = object.get('get', callerRealm);
+    const getter = object.get('get', object);
 
     if (getter !== undefined) {
       requireCallable(getter, 'Getter must be callable or undefined');
@@ -407,7 +445,7 @@ export function toPropertyDescriptor(value, callerRealm) {
   }
 
   if (object.hasProperty('set')) {
-    const setter = object.get('set', callerRealm);
+    const setter = object.get('set', object);
 
     if (setter !== undefined) {
       requireCallable(setter, 'Setter must be callable or undefined');
@@ -473,7 +511,7 @@ export function createListFromArrayLike(value, options = {}, callerRealm) {
     'Array-like value must be an object',
   );
   const preserveHoles = options.preserveHoles === true;
-  const length = toUint32(object.get('length', callerRealm), callerRealm);
+  const length = toUint32(object.get('length', object), callerRealm);
   const list = new Array(length);
 
   for (let index = 0; index < length; index += 1) {
@@ -483,7 +521,7 @@ export function createListFromArrayLike(value, options = {}, callerRealm) {
       continue;
     }
 
-    list[index] = object.get(name, callerRealm);
+    list[index] = object.get(name, object);
   }
 
   return list;

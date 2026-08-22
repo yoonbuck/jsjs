@@ -8,11 +8,311 @@ import {
 } from './descriptors.js';
 import { GuestErrorSignal } from './completion.js';
 
+/** @type {import('./realm.js').Realm[]} */
+const OBJECT_OPERATION_REALMS = [];
+
+/**
+ * @param {import('./realm.js').Realm | undefined} realm
+ * @returns {void}
+ */
+export function enterObjectOperationRealm(realm) {
+  if (realm !== undefined) {
+    OBJECT_OPERATION_REALMS.push(realm);
+  }
+}
+
+/**
+ * @param {import('./realm.js').Realm | undefined} realm
+ * @returns {void}
+ */
+export function exitObjectOperationRealm(realm) {
+  if (realm !== undefined && OBJECT_OPERATION_REALMS.pop() !== realm) {
+    throw new TypeError('Object operation Realm stack corruption');
+  }
+}
+
+/**
+ * @returns {import('./realm.js').Realm | undefined}
+ */
+export function currentObjectOperationRealm() {
+  return OBJECT_OPERATION_REALMS[OBJECT_OPERATION_REALMS.length - 1];
+}
+
+/**
+ * Performs one public Get while exposing its supplied caller Realm to an
+ * accessor reached by that operation.
+ *
+ * @param {import('./realm.js').Realm | undefined} realm
+ * @param {EngineObject} object
+ * @param {PropertyKey} name
+ * @param {unknown} receiver
+ * @returns {unknown}
+ */
+export function getWithObjectOperationRealm(realm, object, name, receiver) {
+  enterObjectOperationRealm(realm);
+
+  try {
+    return object.get(name, receiver);
+  } finally {
+    exitObjectOperationRealm(realm);
+  }
+}
+
 /**
  * @typedef {import('./descriptors.js').CompletePropertyDescriptor} CompletePropertyDescriptor
  * @typedef {import('./descriptors.js').PropertyDescriptorRecord} PropertyDescriptorRecord
  * @typedef {import('./descriptors.js').PropertyKey} PropertyKey
  */
+
+/**
+ * @param {EngineObject} target
+ * @returns {EngineObject | null}
+ */
+export function ordinaryGetPrototypeOf(target) {
+  return target._prototype;
+}
+
+/**
+ * @param {EngineObject} target
+ * @returns {boolean}
+ */
+export function ordinaryIsExtensible(target) {
+  return target._extensible;
+}
+
+/**
+ * @param {EngineObject} target
+ * @returns {boolean}
+ */
+export function ordinaryPreventExtensions(target) {
+  target._extensible = false;
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {EngineObject | null} value
+ * @returns {boolean}
+ */
+export function ordinarySetPrototypeOf(target, value) {
+  if (value === ordinaryGetPrototypeOf(target)) {
+    return true;
+  }
+
+  if (value !== null && !(value instanceof EngineObject)) {
+    return false;
+  }
+
+  if (!ordinaryIsExtensible(target)) {
+    return false;
+  }
+
+  let current = /** @type {EngineObject | null} */ (value);
+  while (current !== null) {
+    if (current === target) {
+      return false;
+    }
+
+    if (current.getPrototypeOf !== EngineObject.prototype.getPrototypeOf) {
+      break;
+    }
+
+    current = ordinaryGetPrototypeOf(current);
+  }
+
+  target._prototype = value;
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @returns {PropertyKey[]}
+ */
+export function ordinaryOwnPropertyKeys(target) {
+  /** @type {string[]} */
+  const indexKeys = [];
+  /** @type {string[]} */
+  const stringKeys = [];
+  /** @type {symbol[]} */
+  const symbolKeys = [];
+
+  for (const key of target._properties.keys()) {
+    if (typeof key === 'symbol') {
+      symbolKeys.push(key);
+    } else if (isArrayIndexKey(key)) {
+      indexKeys.push(key);
+    } else {
+      stringKeys.push(key);
+    }
+  }
+
+  indexKeys.sort((left, right) => Number(left) - Number(right));
+
+  return [...indexKeys, ...stringKeys, ...symbolKeys];
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {CompletePropertyDescriptor | undefined}
+ */
+export function ordinaryGetOwnProperty(target, name) {
+  const descriptor = ordinaryPeekOwnDescriptor(target, name);
+  return descriptor === undefined
+    ? undefined
+    : /** @type {CompletePropertyDescriptor} */ (
+        copyPropertyDescriptor(descriptor)
+      );
+}
+
+/**
+ * Implements ECMA-262 `OrdinaryGet` with an iterative ordinary-chain fast
+ * path. An overridden public operation is an exotic boundary: dispatch to it
+ * once instead of reading its representation through an ordinary helper.
+ *
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @param {unknown} receiver
+ * @returns {unknown}
+ */
+export function ordinaryGet(target, name, receiver) {
+  /** @type {EngineObject | null} */
+  let current = target;
+
+  while (current !== null) {
+    if (current !== target && current.get !== EngineObject.prototype.get) {
+      return current.get(name, receiver);
+    }
+
+    const ordinaryOwn =
+      current.getOwnProperty === EngineObject.prototype.getOwnProperty;
+    /** @type {boolean} */
+    const ordinaryPrototype =
+      current.getPrototypeOf === EngineObject.prototype.getPrototypeOf;
+    const descriptor = ordinaryOwn
+      ? ordinaryPeekOwnDescriptor(current, name)
+      : current.getOwnProperty(name);
+
+    if (descriptor !== undefined) {
+      const value = isDataDescriptor(descriptor)
+        ? descriptor.value
+        : descriptor.get === undefined
+          ? undefined
+          : callObjectAccessor(target, descriptor.get, receiver, []);
+
+      return linkObjectValueAgent(target.agent, value);
+    }
+
+    current = ordinaryPrototype
+      ? ordinaryGetPrototypeOf(current)
+      : current.getPrototypeOf();
+  }
+
+  return undefined;
+}
+
+/**
+ * Implements ECMA-262 `OrdinaryHasProperty` with the same exotic boundaries
+ * as `ordinaryGet`.
+ *
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {boolean}
+ */
+export function ordinaryHasProperty(target, name) {
+  /** @type {EngineObject | null} */
+  let current = target;
+
+  while (current !== null) {
+    if (
+      current !== target &&
+      current.hasProperty !== EngineObject.prototype.hasProperty
+    ) {
+      return current.hasProperty(name);
+    }
+
+    const ordinaryOwn =
+      current.getOwnProperty === EngineObject.prototype.getOwnProperty;
+    /** @type {boolean} */
+    const ordinaryPrototype =
+      current.getPrototypeOf === EngineObject.prototype.getPrototypeOf;
+    const descriptor = ordinaryOwn
+      ? ordinaryPeekOwnDescriptor(current, name)
+      : current.getOwnProperty(name);
+
+    if (descriptor !== undefined) {
+      return true;
+    }
+
+    current = ordinaryPrototype
+      ? ordinaryGetPrototypeOf(current)
+      : current.getPrototypeOf();
+  }
+
+  return false;
+}
+
+/**
+ * Implements ECMA-262 `OrdinarySet` with an iterative ordinary-chain fast
+ * path. False is the complete rejection channel; strictness belongs to the
+ * Reference wrapper that owns the assignment operation.
+ *
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @param {unknown} value
+ * @param {unknown} [receiver]
+ * @returns {boolean}
+ */
+export function ordinarySet(target, name, value, receiver) {
+  /** @type {EngineObject | null} */
+  let current = target;
+
+  while (current !== null) {
+    if (current !== target && current.set !== EngineObject.prototype.set) {
+      return current.set(name, value, receiver);
+    }
+
+    const ordinaryOwn =
+      current.getOwnProperty === EngineObject.prototype.getOwnProperty;
+    /** @type {boolean} */
+    const ordinaryPrototype =
+      current.getPrototypeOf === EngineObject.prototype.getPrototypeOf;
+    const descriptor = ordinaryOwn
+      ? ordinaryPeekOwnDescriptor(current, name)
+      : current.getOwnProperty(name);
+
+    if (descriptor !== undefined) {
+      return setWithOwnDescriptor(
+        name,
+        descriptor,
+        current === receiver,
+        value,
+        receiver,
+        target,
+      );
+    }
+
+    /** @type {EngineObject | null} */
+    const prototype = ordinaryPrototype
+      ? ordinaryGetPrototypeOf(current)
+      : current.getPrototypeOf();
+
+    if (prototype === null) {
+      return setWithOwnDescriptor(
+        name,
+        IMPLICIT_DATA_DESCRIPTOR,
+        false,
+        value,
+        receiver,
+        target,
+      );
+    }
+
+    current = prototype;
+  }
+
+  return false;
+}
 
 export class EngineObject {
   /**
@@ -51,23 +351,22 @@ export class EngineObject {
   /**
    * @returns {EngineObject | null}
    */
-  getPrototype() {
-    return this._prototype;
+  getPrototypeOf() {
+    return ordinaryGetPrototypeOf(this);
   }
 
   /**
    * @returns {boolean}
    */
   isExtensible() {
-    return this._extensible;
+    return ordinaryIsExtensible(this);
   }
 
   /**
-   * @returns {EngineObject}
+   * @returns {boolean}
    */
   preventExtensions() {
-    this._extensible = false;
-    return this;
+    return ordinaryPreventExtensions(this);
   }
 
   /**
@@ -81,30 +380,7 @@ export class EngineObject {
    * @returns {boolean}
    */
   setPrototypeOf(value) {
-    if (value === this._prototype) {
-      return true;
-    }
-
-    if (value !== null && !(value instanceof EngineObject)) {
-      return false;
-    }
-
-    if (!this._extensible) {
-      return false;
-    }
-
-    for (
-      let current = /** @type {EngineObject | null} */ (value);
-      current !== null;
-      current = current.getPrototype()
-    ) {
-      if (current === this) {
-        return false;
-      }
-    }
-
-    this._prototype = value;
-    return true;
+    return ordinarySetPrototypeOf(this, value);
   }
 
   /**
@@ -120,41 +396,7 @@ export class EngineObject {
    * @returns {PropertyKey[]}
    */
   ownPropertyKeys() {
-    /** @type {string[]} */
-    const indexKeys = [];
-    /** @type {string[]} */
-    const stringKeys = [];
-    /** @type {symbol[]} */
-    const symbolKeys = [];
-
-    for (const key of this._properties.keys()) {
-      if (typeof key === 'symbol') {
-        symbolKeys.push(key);
-      } else if (isArrayIndexKey(key)) {
-        indexKeys.push(key);
-      } else {
-        stringKeys.push(key);
-      }
-    }
-
-    indexKeys.sort((left, right) => Number(left) - Number(right));
-
-    return [...indexKeys, ...stringKeys, ...symbolKeys];
-  }
-
-  /**
-   * Returns the stored `CompletePropertyDescriptor` directly — no copy.
-   * Callers must treat the returned object as read-only and must not retain
-   * it across any operation that could mutate `_properties` (define, delete,
-   * put). Subclasses that synthesise virtual properties (e.g. `ArgumentsObject`)
-   * override this to match their `getOwnProperty` semantics while still
-   * avoiding the copy on the common case.
-   *
-   * @param {PropertyKey} name
-   * @returns {CompletePropertyDescriptor | undefined}
-   */
-  _peekOwnDescriptor(name) {
-    return this._properties.get(name);
+    return ordinaryOwnPropertyKeys(this);
   }
 
   /**
@@ -162,39 +404,7 @@ export class EngineObject {
    * @returns {CompletePropertyDescriptor | undefined}
    */
   getOwnProperty(name) {
-    const descriptor = this._peekOwnDescriptor(name);
-    return descriptor === undefined
-      ? undefined
-      : /** @type {CompletePropertyDescriptor} */ (
-          copyPropertyDescriptor(descriptor)
-        );
-  }
-
-  /**
-   * Walks the prototype chain iteratively rather than recursively: guest code
-   * can lengthen a chain at runtime (`o = Object.create(o)` in a loop), so a
-   * frame per link would let an ordinary property read exhaust the host stack.
-   * Chain length is not recursion, and it does not spend the realm's stack
-   * budget (`src/runtime/stack-guard.js`).
-   *
-   * @param {PropertyKey} name
-   * @returns {PropertyDescriptorRecord | undefined}
-   */
-  getProperty(name) {
-    /** @type {EngineObject | null} */
-    let current = this;
-
-    while (current !== null) {
-      const own = current._peekOwnDescriptor(name);
-
-      if (own !== undefined) {
-        return copyPropertyDescriptor(own);
-      }
-
-      current = current._prototype;
-    }
-
-    return undefined;
+    return ordinaryGetOwnProperty(this, name);
   }
 
   /**
@@ -202,53 +412,23 @@ export class EngineObject {
    * @returns {boolean}
    */
   hasProperty(name) {
-    /** @type {EngineObject | null} */
-    let current = this;
-
-    while (current !== null) {
-      if (current._peekOwnDescriptor(name) !== undefined) {
-        return true;
-      }
-
-      /** @type {EngineObject | null} */
-      const proto = current._prototype;
-
-      if (proto === null) {
-        return false;
-      }
-
-      if (proto.hasProperty !== EngineObject.prototype.hasProperty) {
-        return proto.hasProperty(name);
-      }
-
-      current = proto;
-    }
-
-    return false;
+    return ordinaryHasProperty(this, name);
   }
 
   /**
    * @param {PropertyKey} name
-   * @param {import('./realm.js').Realm} [callerRealm]
+   * @param {unknown} [receiver]
    * @returns {unknown}
    */
-  get(name, callerRealm) {
-    const descriptor = this.getProperty(name);
+  get(name, receiver) {
+    return ordinaryGet(this, name, arguments.length < 2 ? this : receiver);
+  }
 
-    if (descriptor === undefined) {
-      return undefined;
-    }
-
-    if (isDataDescriptor(descriptor)) {
-      return linkObjectValueAgent(this.agent, descriptor.value);
-    }
-
-    const value =
-      descriptor.get === undefined
-        ? undefined
-        : callAccessor(descriptor.get, this, [], callerRealm);
-
-    return linkObjectValueAgent(this.agent, value);
+  /**
+   * @returns {EngineObject}
+   */
+  enumerate() {
+    return ordinaryEnumerate(this);
   }
 
   /**
@@ -267,7 +447,7 @@ export class EngineObject {
     while (current !== null) {
       const key = current.agent?.wellKnownSymbols[name];
       const descriptor =
-        key === undefined ? undefined : current._peekOwnDescriptor(key);
+        key === undefined ? undefined : current.getOwnProperty(key);
 
       if (descriptor !== undefined) {
         if (isDataDescriptor(descriptor)) {
@@ -282,40 +462,10 @@ export class EngineObject {
         return linkObjectValueAgent(this.agent, value);
       }
 
-      current = current._prototype;
+      current = current.getPrototypeOf();
     }
 
     return undefined;
-  }
-
-  /**
-   * @param {PropertyKey} name
-   * @returns {boolean}
-   */
-  canPut(name) {
-    const own = this._peekOwnDescriptor(name);
-
-    if (own !== undefined) {
-      return isAccessorDescriptor(own)
-        ? own.set !== undefined
-        : Boolean(own.writable);
-    }
-
-    if (this._prototype === null) {
-      return this._extensible;
-    }
-
-    const inherited = this._prototype.getProperty(name);
-
-    if (inherited === undefined) {
-      return this._extensible;
-    }
-
-    if (isAccessorDescriptor(inherited)) {
-      return inherited.set !== undefined;
-    }
-
-    return this._extensible && Boolean(inherited.writable);
   }
 
   /**
@@ -329,7 +479,7 @@ export class EngineObject {
    * still runs against that original receiver instead of the object partway
    * up the chain where the setter happens to be defined.
    *
-   * The prototype walk is iterative for the same reason `getProperty` is:
+   * The prototype walk is iterative for the same reason `ordinaryGet` is:
    * guest code can lengthen an ordinary prototype chain at runtime, and a
    * host frame per link would let a long enough chain exhaust the host stack
    * on a plain assignment. Recursion is reserved for the boundary where an
@@ -340,266 +490,33 @@ export class EngineObject {
    *
    * @param {PropertyKey} name
    * @param {unknown} value
-   * @param {unknown} receiver
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
+   * @param {unknown} [receiver]
    * @returns {boolean}
    */
-  set(name, value, receiver, throwOnError = false, callerRealm) {
-    /** @type {EngineObject | null} */
-    let current = this;
-
-    while (current !== null) {
-      const own = current._peekOwnDescriptor(name);
-
-      if (own !== undefined) {
-        return setWithOwnDescriptor(
-          name,
-          own,
-          current === receiver,
-          value,
-          receiver,
-          throwOnError,
-          callerRealm,
-        );
-      }
-
-      /** @type {EngineObject | null} */
-      const proto = current._prototype;
-
-      if (proto === null) {
-        return setWithOwnDescriptor(
-          name,
-          IMPLICIT_DATA_DESCRIPTOR,
-          false,
-          value,
-          receiver,
-          throwOnError,
-          callerRealm,
-        );
-      }
-
-      if (proto.set !== EngineObject.prototype.set) {
-        // `proto` overrides `set` with exotic semantics (for example
-        // `ModuleNamespaceObject`): defer to it rather than assuming its
-        // own-property lookup is ordinary.
-        return proto.set(name, value, receiver, throwOnError, callerRealm);
-      }
-
-      current = proto;
-    }
-
-    // Unreachable: the loop above always returns before `current` becomes
-    // null without first taking the `proto === null` branch.
-    return false;
-  }
-
-  /**
-   * @param {PropertyKey} name
-   * @param {unknown} value
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
-   * @returns {boolean}
-   */
-  put(name, value, throwOnError = false, callerRealm) {
-    return this.set(name, value, this, throwOnError, callerRealm);
+  set(name, value, receiver) {
+    return ordinarySet(
+      this,
+      name,
+      value,
+      arguments.length < 3 ? this : receiver,
+    );
   }
 
   /**
    * @param {PropertyKey} name
    * @param {PropertyDescriptorRecord} descriptor
-   * @param {boolean} [throwOnError=false]
-   * @param {import('./realm.js').Realm} [_callerRealm]
    * @returns {boolean}
    */
-  defineOwnProperty(name, descriptor, throwOnError = false, _callerRealm) {
-    // Fast path: a {value}-only update on an existing writable data descriptor
-    // avoids validatePropertyDescriptor, completePropertyDescriptor, and the
-    // full branching logic below. This is the hottest path from `put`.
-    // Guard: only enter fast-path if descriptor is a non-null object, so that
-    // invalid inputs (null, numbers, etc.) still reach validatePropertyDescriptor
-    // with its canonical error message.
-    // The `_properties` read is deliberately direct rather than through the
-    // virtual `_peekOwnDescriptor`: this branch is about to *write* the stored
-    // descriptor, so it needs the real stored object, not a subclass's
-    // synthesised stand-in (`ArgumentsObject` returns a fresh object for a
-    // mapped parameter, and mutating that would update nothing).
-    if (
-      descriptor !== null &&
-      typeof descriptor === 'object' &&
-      isValueOnlyDescriptor(descriptor)
-    ) {
-      const stored = this._properties.get(name);
-      if (stored !== undefined && 'value' in stored) {
-        if (stored.writable === true) {
-          stored.value = descriptor.value;
-          return true;
-        }
-        if (!stored.configurable) {
-          if (!Object.is(descriptor.value, stored.value)) {
-            return rejectOperation(
-              throwOnError,
-              'Cannot change value of a non-configurable non-writable property',
-            );
-          }
-          return true;
-        }
-      }
-    }
-
-    const candidate = validatePropertyDescriptor(descriptor);
-    const current = this._peekOwnDescriptor(name);
-
-    if (current === undefined) {
-      if (!this._extensible) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot define property on non-extensible object',
-        );
-      }
-
-      this._properties.set(name, completePropertyDescriptor(candidate));
-      return true;
-    }
-
-    if (
-      isEmptyDescriptor(candidate) ||
-      isDescriptorSubsetEqual(current, candidate)
-    ) {
-      return true;
-    }
-
-    if (!current.configurable) {
-      if (candidate.configurable === true) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot make a non-configurable property configurable',
-        );
-      }
-
-      if (
-        'enumerable' in candidate &&
-        candidate.enumerable !== current.enumerable
-      ) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change enumerable on a non-configurable property',
-        );
-      }
-    }
-
-    const currentIsData = isDataDescriptor(current);
-    const candidateIsData = isDataDescriptor(candidate);
-    const candidateIsAccessor = isAccessorDescriptor(candidate);
-
-    if (
-      (candidateIsData || candidateIsAccessor) &&
-      currentIsData !== candidateIsData
-    ) {
-      if (!current.configurable) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change descriptor kind of a non-configurable property',
-        );
-      }
-
-      const converted = candidateIsAccessor
-        ? completePropertyDescriptor({
-            get: undefined,
-            set: undefined,
-            enumerable: current.enumerable,
-            configurable: current.configurable,
-            ...candidate,
-          })
-        : completePropertyDescriptor({
-            value: undefined,
-            writable: false,
-            enumerable: current.enumerable,
-            configurable: current.configurable,
-            ...candidate,
-          });
-
-      this._properties.set(name, converted);
-      return true;
-    }
-
-    if (currentIsData) {
-      if (!current.configurable && !current.writable) {
-        if (candidate.writable === true) {
-          return rejectOperation(
-            throwOnError,
-            'Cannot make a non-configurable non-writable property writable',
-          );
-        }
-
-        if (
-          'value' in candidate &&
-          !Object.is(candidate.value, current.value)
-        ) {
-          return rejectOperation(
-            throwOnError,
-            'Cannot change value of a non-configurable non-writable property',
-          );
-        }
-      }
-
-      this._properties.set(
-        name,
-        completePropertyDescriptor({
-          ...current,
-          ...candidate,
-        }),
-      );
-      return true;
-    }
-
-    if (!current.configurable) {
-      if ('get' in candidate && candidate.get !== current.get) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change getter of a non-configurable property',
-        );
-      }
-
-      if ('set' in candidate && candidate.set !== current.set) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot change setter of a non-configurable property',
-        );
-      }
-    }
-
-    this._properties.set(
-      name,
-      completePropertyDescriptor({
-        ...current,
-        ...candidate,
-      }),
-    );
-    return true;
+  defineOwnProperty(name, descriptor) {
+    return ordinaryDefineOwnProperty(this, name, descriptor);
   }
 
   /**
    * @param {PropertyKey} name
-   * @param {boolean} [throwOnError=false]
    * @returns {boolean}
    */
-  delete(name, throwOnError = false) {
-    const descriptor = this._peekOwnDescriptor(name);
-
-    if (descriptor === undefined) {
-      return true;
-    }
-
-    if (!descriptor.configurable) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot delete a non-configurable property',
-      );
-    }
-
-    this._properties.delete(name);
-    return true;
+  delete(name) {
+    return ordinaryDelete(this, name);
   }
 
   /**
@@ -612,7 +529,7 @@ export class EngineObject {
       hint === 'string' ? ['toString', 'valueOf'] : ['valueOf', 'toString'];
 
     for (const name of methodNames) {
-      const method = this.get(name, callerRealm);
+      const method = getWithObjectOperationRealm(callerRealm, this, name, this);
 
       if (typeof method !== 'function' && !isCallable(method)) {
         continue;
@@ -635,25 +552,280 @@ export class EngineObject {
       'Cannot convert object to primitive value',
     );
   }
+}
 
-  /**
-   * @param {PropertyKey} name
-   * @param {import('./realm.js').Realm} [callerRealm]
-   * @returns {unknown}
-   */
-  getReferencedValue(name, callerRealm) {
-    return this.get(name, callerRealm);
+/**
+ * Creates the ordinary public iterator for ES2015 `[[Enumerate]]`. Its
+ * allocation Realm is dynamic execution state rather than a property of the
+ * target object, so cross-Realm `for-in` follows the evaluating Realm.
+ *
+ * @param {EngineObject} target
+ * @returns {EngineObject}
+ */
+export function ordinaryEnumerate(target) {
+  const realm = target.agent?.activeExecutionRealm;
+
+  if (realm === null || realm === undefined) {
+    throw new TypeError(
+      'Ordinary Enumerate requires an active execution Realm',
+    );
   }
 
-  /**
-   * @param {PropertyKey} name
-   * @param {unknown} value
-   * @param {boolean} [strict=false]
-   * @param {import('./realm.js').Realm} [callerRealm]
-   * @returns {void}
-   */
-  setReferencedValue(name, value, strict = false, callerRealm) {
-    this.put(name, value, strict, callerRealm);
+  const factory = realm.intrinsics.forInIteratorFactory;
+
+  if (typeof factory !== 'function') {
+    throw new TypeError(
+      'Realm is missing the ordinary for-in iterator factory',
+    );
+  }
+
+  const iterator = factory(target);
+
+  if (!(iterator instanceof EngineObject)) {
+    throw new TypeError(
+      'Ordinary for-in iterator factory returned a non-object',
+    );
+  }
+
+  return iterator;
+}
+
+/**
+ * Defines an ordinary own property while retaining the value-only data-property
+ * update fast path. False is the complete rejection channel for descriptor
+ * incompatibility and non-extensibility; callers that require success own the
+ * guest error translation.
+ *
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @param {PropertyDescriptorRecord} descriptor
+ * @returns {boolean}
+ */
+export function ordinaryDefineOwnProperty(target, name, descriptor) {
+  if (
+    target.getOwnProperty === EngineObject.prototype.getOwnProperty &&
+    descriptor !== null &&
+    typeof descriptor === 'object' &&
+    isValueOnlyDescriptor(descriptor)
+  ) {
+    const stored = ordinaryPeekOwnDescriptor(target, name);
+    if (stored !== undefined && 'value' in stored) {
+      if (stored.writable === true) {
+        stored.value = descriptor.value;
+        return true;
+      }
+      if (!stored.configurable && !Object.is(descriptor.value, stored.value)) {
+        return false;
+      }
+      if (!stored.configurable) {
+        return true;
+      }
+    }
+  }
+
+  const candidate = validatePropertyDescriptor(descriptor);
+  const current = target.getOwnProperty(name);
+
+  if (current === undefined) {
+    if (!ordinaryIsExtensible(target)) {
+      return false;
+    }
+
+    ordinarySetOwnDescriptor(
+      target,
+      name,
+      completePropertyDescriptor(candidate),
+    );
+    return true;
+  }
+
+  if (
+    isEmptyDescriptor(candidate) ||
+    isDescriptorSubsetEqual(current, candidate)
+  ) {
+    return true;
+  }
+
+  if (!current.configurable) {
+    if (candidate.configurable === true) {
+      return false;
+    }
+
+    if (
+      'enumerable' in candidate &&
+      candidate.enumerable !== current.enumerable
+    ) {
+      return false;
+    }
+  }
+
+  const currentIsData = isDataDescriptor(current);
+  const candidateIsData = isDataDescriptor(candidate);
+  const candidateIsAccessor = isAccessorDescriptor(candidate);
+
+  if (
+    (candidateIsData || candidateIsAccessor) &&
+    currentIsData !== candidateIsData
+  ) {
+    if (!current.configurable) {
+      return false;
+    }
+
+    const converted = candidateIsAccessor
+      ? completePropertyDescriptor({
+          get: undefined,
+          set: undefined,
+          enumerable: current.enumerable,
+          configurable: current.configurable,
+          ...candidate,
+        })
+      : completePropertyDescriptor({
+          value: undefined,
+          writable: false,
+          enumerable: current.enumerable,
+          configurable: current.configurable,
+          ...candidate,
+        });
+
+    ordinarySetOwnDescriptor(target, name, converted);
+    return true;
+  }
+
+  if (currentIsData) {
+    if (!current.configurable && !current.writable) {
+      if (candidate.writable === true) {
+        return false;
+      }
+
+      if ('value' in candidate && !Object.is(candidate.value, current.value)) {
+        return false;
+      }
+    }
+
+    ordinarySetOwnDescriptor(
+      target,
+      name,
+      completePropertyDescriptor({
+        ...current,
+        ...candidate,
+      }),
+    );
+    return true;
+  }
+
+  if (!current.configurable) {
+    if ('get' in candidate && candidate.get !== current.get) {
+      return false;
+    }
+
+    if ('set' in candidate && candidate.set !== current.set) {
+      return false;
+    }
+  }
+
+  ordinarySetOwnDescriptor(
+    target,
+    name,
+    completePropertyDescriptor({
+      ...current,
+      ...candidate,
+    }),
+  );
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {boolean}
+ */
+export function ordinaryDelete(target, name) {
+  const descriptor = target.getOwnProperty(name);
+
+  if (descriptor === undefined) {
+    return true;
+  }
+
+  if (!descriptor.configurable) {
+    return false;
+  }
+
+  ordinaryDeleteStoredProperty(target, name);
+  return true;
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {CompletePropertyDescriptor | undefined}
+ */
+function ordinaryPeekOwnDescriptor(target, name) {
+  return target._properties.get(name);
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @param {CompletePropertyDescriptor} descriptor
+ * @returns {void}
+ */
+function ordinarySetOwnDescriptor(target, name, descriptor) {
+  target._properties.set(name, descriptor);
+}
+
+/**
+ * @param {EngineObject} target
+ * @param {PropertyKey} name
+ * @returns {void}
+ */
+function ordinaryDeleteStoredProperty(target, name) {
+  target._properties.delete(name);
+}
+
+/**
+ * @param {EngineObject} object
+ * @param {PropertyKey} name
+ * @param {PropertyDescriptorRecord} descriptor
+ * @returns {void}
+ */
+export function defineOwnPropertyOrThrow(object, name, descriptor) {
+  if (!object.defineOwnProperty(name, descriptor)) {
+    throw new GuestErrorSignal('TypeError', 'Cannot define requested property');
+  }
+}
+
+/**
+ * @param {EngineObject} object
+ * @param {PropertyKey} name
+ * @returns {void}
+ */
+export function deletePropertyOrThrow(object, name) {
+  if (!object.delete(name)) {
+    throw new GuestErrorSignal('TypeError', 'Cannot delete requested property');
+  }
+}
+
+/**
+ * @param {EngineObject} object
+ * @param {EngineObject | null} prototype
+ * @returns {void}
+ */
+export function setPrototypeOfOrThrow(object, prototype) {
+  if (!object.setPrototypeOf(prototype)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Cannot set the requested object prototype',
+    );
+  }
+}
+
+/**
+ * @param {EngineObject} object
+ * @returns {void}
+ */
+export function preventExtensionsOrThrow(object) {
+  if (!object.preventExtensions()) {
+    throw new GuestErrorSignal('TypeError', 'Cannot prevent extensions');
   }
 }
 
@@ -670,109 +842,20 @@ export function setIntegrityLevel(object, level) {
     throw new TypeError(`Unsupported integrity level ${level}`);
   }
 
+  preventExtensionsOrThrow(object);
+
   for (const name of object.ownPropertyKeys()) {
     const descriptor = object.getOwnProperty(name);
-    object.defineOwnProperty(
+    defineOwnPropertyOrThrow(
+      object,
       name,
       level === 'frozen' && isDataDescriptor(descriptor)
         ? { writable: false, configurable: false }
         : { configurable: false },
-      true,
     );
   }
 
-  object.preventExtensions();
   return object;
-}
-
-/**
- * Computes the `ForInStatement` enumeration order (ECMA-262 12.6.4): every
- * enumerable string-keyed own property across `object`'s prototype chain,
- * each name visited at most once. A name already seen anywhere earlier in
- * the chain is never revisited later even when it isn't enumerable there —
- * that's exactly the spec's shadowing rule ("a property of a prototype is
- * not enumerated if it is 'shadowed' because some previous object in the
- * prototype chain has a property with the same name", regardless of that
- * earlier property's own enumerability). Symbol keys are skipped outright:
- * ES5 has no symbols, and later editions exclude them from `for-in` too.
- * Order within one object follows `ownPropertyKeys()` (insertion order),
- * matching `Object.keys`.
- *
- * @param {EngineObject} object
- * @returns {string[]}
- */
-export function enumerableKeysForIn(object) {
-  const seen = new Set();
-  /** @type {string[]} */
-  const result = [];
-
-  for (
-    let current = /** @type {EngineObject | null} */ (object);
-    current !== null;
-    current = current.getPrototype()
-  ) {
-    for (const key of current.ownPropertyKeys()) {
-      if (typeof key !== 'string' || seen.has(key)) {
-        continue;
-      }
-
-      seen.add(key);
-
-      const descriptor = current._peekOwnDescriptor(key);
-      if (descriptor !== undefined && descriptor.enumerable === true) {
-        result.push(key);
-      }
-    }
-  }
-
-  return result;
-}
-
-/**
- * Re-checks one enumerated name against the live object graph, which
- * `evaluateForInStatement` does immediately before running the body for
- * that name (ECMA-262 12.6.4: "If a property that has not yet been visited
- * during enumeration is deleted, then it will not be visited").
- *
- * The check repeats exactly the lookup `enumerableKeysForIn` used to
- * decide the name in the first place — walk the prototype chain, stop at
- * the first object with an own property of that name, and answer with that
- * property's enumerability — so the shadowing rule stays consistent
- * between the snapshot and the re-check. Deleting an own property that
- * shadowed an enumerable inherited one therefore leaves the name live (the
- * inherited property is what the body now sees), while deleting one that
- * shadowed a *non-enumerable* inherited property drops the name, and so
- * does making the property non-enumerable mid-loop: 12.6.4 step 6 asks for
- * the next property "whose [[Enumerable]] attribute is true" each time
- * round, not for the attribute it had at loop entry.
- *
- * Those last two cases are where real engines disagree — JavaScriptCore
- * answers as this does, V8 keeps such a name because its re-check is a
- * bare `HasProperty` — which is the spec telling us it left the choice
- * open: 12.6.4 fixes only the deletion rule and leaves "the mechanics and
- * order of enumerating the properties" implementation-defined. Answering
- * with the same walk the snapshot used is the self-consistent choice: a
- * name whose first own occurrence is non-enumerable never enters the
- * snapshot, so it should not survive in it either.
- *
- * @param {EngineObject} object
- * @param {string} key
- * @returns {boolean}
- */
-export function isEnumerableForIn(object, key) {
-  for (
-    let current = /** @type {EngineObject | null} */ (object);
-    current !== null;
-    current = current.getPrototype()
-  ) {
-    const descriptor = current._peekOwnDescriptor(key);
-
-    if (descriptor !== undefined) {
-      return descriptor.enumerable === true;
-    }
-  }
-
-  return false;
 }
 
 /**
@@ -820,27 +903,6 @@ export function callAccessor(accessor, thisValue, args, callerRealm) {
 }
 
 /**
- * Signals a guest-visible property-operation rejection. When `throwOnError`
- * is true, throws a `GuestErrorSignal` so the nearest realm-aware boundary
- * (`EngineFunction#callFunction`, `evaluateScript`, or the `runToCompletion`
- * helper in `evaluateTryStatement`) can convert it into a proper guest
- * `TypeError` throw completion. When false, returns `false` so
- * callers that propagate boolean success flags (e.g. non-strict `[[Put]]`)
- * can continue without an exception.
- *
- * @param {boolean} throwOnError
- * @param {string} message
- * @returns {false}
- */
-function rejectOperation(throwOnError, message) {
-  if (throwOnError) {
-    throw new GuestErrorSignal('TypeError', message);
-  }
-
-  return false;
-}
-
-/**
  * @param {import('./agent.js').Agent | null} sourceAgent
  * @param {unknown} value
  * @returns {unknown}
@@ -855,6 +917,36 @@ function linkObjectValueAgent(sourceAgent, value) {
   }
 
   return value;
+}
+
+/**
+ * Resolves the active execution Realm from an object operation's participating
+ * objects rather than exposing it as a Get or Set parameter.
+ *
+ * @param {EngineObject} target
+ * @param {unknown} receiver
+ * @param {((...args: any[]) => unknown) | import('./descriptors.js').CallableLike} accessor
+ * @param {unknown[]} args
+ * @returns {unknown}
+ */
+function callObjectAccessor(target, accessor, receiver, args) {
+  const receiverRealm =
+    receiver instanceof EngineObject
+      ? receiver.agent?.activeExecutionRealm
+      : null;
+  const targetRealm = target.agent?.activeExecutionRealm;
+  const operationRealm = currentObjectOperationRealm();
+  const callerRealm =
+    receiverRealm ?? targetRealm ?? operationRealm ?? undefined;
+  const guard = callerRealm?.stackGuard;
+
+  guard?.enter();
+
+  try {
+    return callAccessor(accessor, receiver, args, callerRealm);
+  } finally {
+    guard?.exit();
+  }
 }
 
 /**
@@ -898,8 +990,7 @@ const IMPLICIT_DATA_DESCRIPTOR = {
  *   property, so it is worth skipping.
  * @param {unknown} value
  * @param {unknown} receiver
- * @param {boolean} throwOnError
- * @param {import('./realm.js').Realm} [callerRealm]
+ * @param {EngineObject} target
  * @returns {boolean}
  */
 function setWithOwnDescriptor(
@@ -908,67 +999,47 @@ function setWithOwnDescriptor(
   ownerIsReceiver,
   value,
   receiver,
-  throwOnError,
-  callerRealm,
+  target,
 ) {
   if (isDataDescriptor(ownDesc)) {
     if (!ownDesc.writable) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot assign to read only property',
-      );
+      return false;
     }
 
     if (!(receiver instanceof EngineObject)) {
-      return rejectOperation(
-        throwOnError,
-        'Cannot create property on non-object receiver',
-      );
+      return false;
     }
 
     if (ownerIsReceiver) {
-      return receiver.defineOwnProperty(
-        name,
-        { value },
-        throwOnError,
-        callerRealm,
-      );
+      return receiver.defineOwnProperty(name, { value });
     }
 
     const existing = receiver.getOwnProperty(name);
 
     if (existing !== undefined) {
       if (isAccessorDescriptor(existing) || !existing.writable) {
-        return rejectOperation(
-          throwOnError,
-          'Cannot assign to read only property',
-        );
+        return false;
       }
 
-      return receiver.defineOwnProperty(
-        name,
-        { value },
-        throwOnError,
-        callerRealm,
-      );
+      return receiver.defineOwnProperty(name, { value });
     }
 
-    return receiver.defineOwnProperty(
-      name,
-      { value, writable: true, enumerable: true, configurable: true },
-      throwOnError,
-      callerRealm,
-    );
+    return receiver.defineOwnProperty(name, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   }
 
   // ownDesc is an accessor descriptor (OrdinarySetWithOwnDescriptor asserts
   // IsAccessorDescriptor here, since ownDesc is always either a data or an
   // accessor descriptor by construction).
   if (ownDesc.set === undefined) {
-    return rejectOperation(throwOnError, 'Cannot assign to accessor property');
+    return false;
   }
 
-  callAccessor(ownDesc.set, receiver, [value], callerRealm);
+  callObjectAccessor(target, ownDesc.set, receiver, [value]);
   return true;
 }
 
@@ -1021,7 +1092,7 @@ function isEmptyDescriptor(descriptor) {
 
 /**
  * True when `descriptor` carries exactly a `value` field and nothing else.
- * This identifies the fast path from `put` that only needs to update the
+ * This identifies the fast path from `ordinarySet` that only needs to update the
  * stored value without touching writable/enumerable/configurable.
  *
  * @param {PropertyDescriptorRecord} descriptor

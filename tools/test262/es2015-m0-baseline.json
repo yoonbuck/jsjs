@@ -1,0 +1,4523 @@
+[
+  {
+    "path": "test/built-ins/Array/from/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/isArray/proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.isarray",
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/isArray/proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.isarray",
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/length/define-own-prop-length-coercion-order-set.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Reflect.set",
+      "Symbol",
+      "Symbol.toPrimitive"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-arraysetlength",
+      "feature:Reflect",
+      "feature:Reflect.set",
+      "feature:Symbol",
+      "feature:Symbol.toPrimitive"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/length/define-own-prop-length-coercion-order.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-arraysetlength",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/length/define-own-prop-length-no-value-order.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-arraysetlength",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/of/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/of/return-abrupt-from-data-property-using-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.of",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/concat/arg-length-exceeding-integer-limit.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.isConcatSpreadable"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.concat",
+      "feature:Proxy",
+      "feature:Symbol.isConcatSpreadable"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/concat/create-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.concat",
+      "feature:Proxy",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/concat/create-revoked-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.concat",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/concat/create-species-non-ctor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.concat",
+      "feature:Reflect.construct",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/concat/is-concat-spreadable-is-array-proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.isConcatSpreadable"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-isconcatspreadable",
+      "feature:Proxy",
+      "feature:Symbol.isConcatSpreadable"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/concat/is-concat-spreadable-proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-isconcatspreadable",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/concat/is-concat-spreadable-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.isConcatSpreadable"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-isconcatspreadable",
+      "feature:Proxy",
+      "feature:Symbol.isConcatSpreadable"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/copyWithin/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-proxy-target.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.copywithin",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/copyWithin/return-abrupt-from-has-start.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.copywithin",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/fill/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/filter/create-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.filter",
+      "feature:Proxy",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/filter/create-revoked-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.filter",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/filter/create-species-non-ctor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.filter",
+      "feature:Reflect.construct",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/find/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/findIndex/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/indexOf/calls-only-has-on-prototype-after-length-zeroed.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.indexof",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/lastIndexOf/calls-only-has-on-prototype-after-length-zeroed.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.lastindexof",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/map/create-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.map",
+      "feature:Proxy",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/map/create-revoked-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.map",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/map/create-species-non-ctor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.map",
+      "feature:Reflect.construct",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/map/create-species-undef-invalid-len.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.map",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/slice/create-proxied-array-invalid-len.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.slice",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/slice/create-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.slice",
+      "feature:Proxy",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/slice/create-revoked-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.slice",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/slice/create-species-non-ctor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.slice",
+      "feature:Reflect.construct",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/splice/create-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.splice",
+      "feature:Proxy",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/splice/create-revoked-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.splice",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/splice/create-species-non-ctor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.splice",
+      "feature:Reflect.construct",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/splice/create-species-undef-invalid-len.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-array.prototype.splice",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Array/prototype/splice/property-traps-order-with-species.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.species"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-array.prototype.splice",
+      "feature:Proxy",
+      "feature:Symbol.species"
+    ]
+  },
+  {
+    "path": "test/built-ins/Boolean/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Date/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Date/subclassing.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-date-value",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/built-ins/Error/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/internals/Construct/base-ctor-revoked-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-ecmascript-function-objects-construct-argumentslist-newtarget",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/Symbol.hasInstance/value-get-prototype-of-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.hasInstance"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Proxy",
+      "feature:Symbol.hasInstance"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-boundtarget-bound.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "new.target"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-bound-function-exotic-objects-construct-argumentslist-newtarget",
+      "feature:Reflect",
+      "feature:new.target"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-boundtarget.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "new.target"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-bound-function-exotic-objects-construct-argumentslist-newtarget",
+      "feature:Reflect",
+      "feature:new.target"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-reflect.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "new.target"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-bound-function-exotic-objects-construct-argumentslist-newtarget",
+      "feature:Reflect",
+      "feature:new.target"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/toString/proxy-arrow-function.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "nativeFunctionMatcher.js"
+    ],
+    "provenance": [
+      "anchor:sec-function.prototype.tostring",
+      "feature:Proxy",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/toString/proxy-bound-function.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [
+      "nativeFunctionMatcher.js"
+    ],
+    "provenance": [
+      "anchor:sec-function.prototype.tostring",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/toString/proxy-class.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "class"
+    ],
+    "flags": [],
+    "includes": [
+      "nativeFunctionMatcher.js"
+    ],
+    "provenance": [
+      "anchor:sec-function.prototype.tostring",
+      "feature:Proxy",
+      "feature:class"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/toString/proxy-function-expression.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [
+      "nativeFunctionMatcher.js"
+    ],
+    "provenance": [
+      "anchor:sec-function.prototype.tostring",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/toString/proxy-generator-function.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "generators"
+    ],
+    "flags": [],
+    "includes": [
+      "nativeFunctionMatcher.js"
+    ],
+    "provenance": [
+      "anchor:sec-function.prototype.tostring",
+      "feature:Proxy",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/toString/proxy-method-definition.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [
+      "nativeFunctionMatcher.js"
+    ],
+    "provenance": [
+      "anchor:sec-function.prototype.tostring",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Function/prototype/toString/proxy-non-callable-throws.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-function.prototype.tostring",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/GeneratorFunction/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js",
+      "wellKnownIntrinsicObjects.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/revived-proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-json.parse",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/revived-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-json.parse",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/reviver-array-define-prop-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-internalizejsonproperty",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/reviver-array-delete-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-internalizejsonproperty",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/reviver-array-length-coerce-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-internalizejsonproperty",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/reviver-array-length-get-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-internalizejsonproperty",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/reviver-object-define-prop-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-internalizejsonproperty",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/reviver-object-delete-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-internalizejsonproperty",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/parse/reviver-object-own-keys-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-internalizejsonproperty",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/replacer-array-abrupt.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-json.stringify",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/replacer-array-proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-json.stringify",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/replacer-array-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-json.stringify",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/replacer-array-wrong-type.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-json.stringify",
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/value-array-abrupt.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-serializejsonarray",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/value-array-proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-json.stringify",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/value-array-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-serializejsonarray",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/value-object-proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-serializejsonobject",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/JSON/stringify/value-object-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-serializejsonobject",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/Symbol.iterator/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "Symbol",
+      "Symbol.iterator",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:Symbol",
+      "feature:Symbol.iterator",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/clear/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/delete/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/entries/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/forEach/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/get/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/has/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/keys/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/set/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Map/prototype/values/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Map",
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Map",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/acosh/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/asinh/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/atanh/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/cbrt/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/clz32/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/cosh/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/expm1/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/fround/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/hypot/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/imul/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/log10/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/log1p/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/log2/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/sign/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/sinh/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/tanh/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Math/trunc/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/NativeErrors/EvalError/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/NativeErrors/RangeError/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/NativeErrors/ReferenceError/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/NativeErrors/SyntaxError/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/NativeErrors/TypeError/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/NativeErrors/URIError/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Number/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Number/isFinite/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Number/isInteger/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Number/isNaN/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Number/isSafeInteger/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Number/parseFloat/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Number/parseInt/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/assign/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/assign/source-own-prop-desc-missing.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/assign/source-own-prop-error.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/assign/source-own-prop-keys-error.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/assign/strings-and-symbol-order-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-object.assign",
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/defineProperties/proxy-no-ownkeys-returned-keys-order.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/freeze/abrupt-completion.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.freeze",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/freeze/proxy-no-ownkeys-returned-keys-order.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-object.freeze",
+      "feature:Proxy",
+      "feature:Reflect",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/freeze/proxy-with-defineProperty-handler.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.freeze",
+      "feature:Proxy",
+      "feature:Reflect",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/freeze/throws-when-false.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.freeze"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-absent-not-configurable-symbol-key.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertynames",
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-duplicate-symbol-entry.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertynames",
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-not-extensible-absent-symbol-key.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertynames",
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-not-extensible-extra-symbol-key.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertynames",
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-absent-not-configurable-string-key.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertysymbols",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-duplicate-string-entry.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertysymbols",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-not-extensible-absent-string-key.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertysymbols",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-not-extensible-extra-string-key.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.getownpropertysymbols",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/isFrozen/proxy-no-ownkeys-returned-keys-order.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-object.isfrozen",
+      "feature:Proxy",
+      "feature:Reflect",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/isSealed/proxy-no-ownkeys-returned-keys-order.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-object.issealed",
+      "feature:Proxy",
+      "feature:Reflect",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/keys/property-traps-order-with-proxied-array.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-object.keys",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/keys/proxy-keys.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.keys",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/keys/proxy-non-enumerable-prop-invariant-1.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.keys",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/keys/proxy-non-enumerable-prop-invariant-2.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.keys",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/keys/proxy-non-enumerable-prop-invariant-3.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.keys",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/preventExtensions/abrupt-completion.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.preventextensions",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/preventExtensions/throws-when-false.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.preventextensions"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__defineGetter__/define-abrupt.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__getter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__getter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__defineSetter__/define-abrupt.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__setter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__setter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-own-get-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__getter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__getter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-own-proto-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__getter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__getter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-proto-get-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__getter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__getter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-proto-proto-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__getter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__getter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-own-get-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__setter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__setter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-own-proto-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__setter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__setter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-proto-get-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__setter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__setter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-proto-proto-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__setter__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-additional-properties-of-the-object.prototype-object",
+      "feature:Proxy",
+      "feature:__setter__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__proto__/get-abrupt.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__proto__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.prototype.__proto__",
+      "es6id",
+      "feature:Proxy",
+      "feature:__proto__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__proto__/set-abrupt.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "__proto__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.prototype.__proto__",
+      "es6id",
+      "feature:Proxy",
+      "feature:__proto__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/__proto__/set-cycle-shadowed.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "__proto__"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.prototype.__proto__",
+      "es6id",
+      "feature:__proto__"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/isPrototypeOf/arg-is-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-object.prototype.isprototypeof",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/setPrototypeOf-with-different-values.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.setPrototypeOf"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "feature:Reflect.setPrototypeOf"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.setPrototypeOf"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "feature:Reflect.setPrototypeOf"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.setPrototypeOf"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "feature:Reflect.setPrototypeOf"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/setPrototypeOf-with-same-value.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.setPrototypeOf"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "feature:Reflect.setPrototypeOf"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/toString/proxy-array.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.prototype.tostring",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/toString/proxy-revoked-during-get-call.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.prototype.tostring",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/prototype/toString/proxy-revoked.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.prototype.tostring",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/seal/abrupt-completion.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.seal",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/seal/proxy-no-ownkeys-returned-keys-order.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-object.seal",
+      "feature:Proxy",
+      "feature:Reflect",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/seal/proxy-with-defineProperty-handler.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.seal",
+      "feature:Proxy",
+      "feature:Reflect",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/seal/seal-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.seal"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/seal/throws-when-false.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object.seal"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/setPrototypeOf/set-error.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/built-ins/Object/subclass-object-arg.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Reflect.construct",
+      "class"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-object-value",
+      "feature:Reflect",
+      "feature:Reflect.construct",
+      "feature:class"
+    ]
+  },
+  {
+    "path": "test/built-ins/Promise/get-prototype-abrupt.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-promise-executor",
+      "feature:Reflect",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/Promise/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/RegExp/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/RegExp/prototype/Symbol.match/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol",
+      "Symbol.match",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Symbol",
+      "feature:Symbol.match",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/RegExp/prototype/Symbol.replace/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol",
+      "Symbol.replace",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Symbol",
+      "feature:Symbol.replace",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/RegExp/prototype/Symbol.search/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol",
+      "Symbol.search",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Symbol",
+      "feature:Symbol.search",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/RegExp/prototype/Symbol.split/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol",
+      "Symbol.split",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Symbol",
+      "feature:Symbol.split",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/Symbol.iterator/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "Symbol",
+      "Symbol.iterator",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:Symbol",
+      "feature:Symbol.iterator",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/add/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/clear/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/delete/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/entries/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/forEach/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/has/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Set/prototype/values/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Set",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:Set",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/fromCodePoint/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/prototype/codePointAt/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/prototype/endsWith/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "String.prototype.endsWith",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:String.prototype.endsWith",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/prototype/includes/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/prototype/normalize/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/prototype/repeat/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/prototype/replaceAll/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/prototype/startsWith/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/String/raw/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/Symbol/is-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-symbol-constructor",
+      "feature:Reflect.construct",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakMap/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakMap"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakMap"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakMap/prototype/delete/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakMap",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakMap",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakMap/prototype/get/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakMap",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakMap",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakMap/prototype/has/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakMap",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakMap",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakMap/prototype/set/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakMap",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakMap",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakSet/is-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakSet"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakSet"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakSet/prototype/add/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakSet",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakSet",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakSet/prototype/delete/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakSet",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakSet",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/built-ins/WeakSet/prototype/has/not-a-constructor.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect.construct",
+      "WeakSet",
+      "arrow-function"
+    ],
+    "flags": [],
+    "includes": [
+      "isConstructor.js"
+    ],
+    "provenance": [
+      "anchor:sec-ecmascript-standard-built-in-objects",
+      "feature:Reflect.construct",
+      "feature:WeakSet",
+      "feature:arrow-function"
+    ]
+  },
+  {
+    "path": "test/language/destructuring/binding/keyed-destructuring-property-reference-target-evaluation-order-with-bindings.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/language/expressions/assignment/destructuring/keyed-destructuring-property-reference-target-evaluation-order-with-bindings.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/language/expressions/new.target/value-via-reflect-apply.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "new.target"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-reflect.apply",
+      "es6id",
+      "feature:Reflect",
+      "feature:new.target"
+    ]
+  },
+  {
+    "path": "test/language/expressions/new.target/value-via-reflect-construct.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Reflect.construct",
+      "new.target"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-reflect.construct",
+      "es6id",
+      "feature:Reflect",
+      "feature:Reflect.construct",
+      "feature:new.target"
+    ]
+  },
+  {
+    "path": "test/language/expressions/object/prop-def-id-eval-error-2.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/language/expressions/super/call-construct-invocation.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Reflect.construct",
+      "class",
+      "new.target"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-super-keyword",
+      "es6id",
+      "feature:Reflect",
+      "feature:Reflect.construct",
+      "feature:class",
+      "feature:new.target"
+    ]
+  },
+  {
+    "path": "test/language/expressions/typeof/proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-typeof-operator",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/define-own-property.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Symbol",
+      "Symbol.iterator",
+      "Symbol.toStringTag"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-defineownproperty-p-desc",
+      "feature:Reflect",
+      "feature:Symbol",
+      "feature:Symbol.iterator",
+      "feature:Symbol.toStringTag"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/delete-exported-init.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-delete-p",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/delete-exported-uninit.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "let"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-delete-p",
+      "feature:Reflect",
+      "feature:let"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/delete-non-exported.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Symbol",
+      "Symbol.toStringTag"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-delete-p",
+      "feature:Reflect",
+      "feature:Symbol",
+      "feature:Symbol.toStringTag"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/has-property-str-found-init.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-hasproperty-p",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/has-property-str-found-uninit.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "let"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-hasproperty-p",
+      "feature:Reflect",
+      "feature:let"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/has-property-str-not-found.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-hasproperty-p",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/has-property-sym-found.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Symbol.toStringTag"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-hasproperty-p",
+      "feature:Reflect",
+      "feature:Symbol.toStringTag"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/has-property-sym-not-found.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Symbol"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-hasproperty-p",
+      "feature:Reflect",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/prevent-extensions.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-preventextensions",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/module-code/namespace/internals/set.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Reflect",
+      "Symbol",
+      "Symbol.toStringTag"
+    ],
+    "flags": [
+      "module"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-module-namespace-exotic-objects-set-p-v-receiver",
+      "feature:Reflect",
+      "feature:Symbol",
+      "feature:Symbol.toStringTag"
+    ]
+  },
+  {
+    "path": "test/language/statements/class/subclass/superclass-arrow-function.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "arrow-function",
+      "class"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-classdefinitionevaluation",
+      "feature:Proxy",
+      "feature:arrow-function",
+      "feature:class"
+    ]
+  },
+  {
+    "path": "test/language/statements/class/subclass/superclass-generator-function.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "class",
+      "generators"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-classdefinitionevaluation",
+      "feature:Proxy",
+      "feature:class",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/for-of/iterator-as-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol.iterator"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Proxy",
+      "feature:Symbol.iterator"
+    ]
+  },
+  {
+    "path": "test/language/statements/for-of/iterator-next-result-type.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Symbol.iterator"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "es6id",
+      "feature:Symbol.iterator"
+    ]
+  },
+  {
+    "path": "test/language/statements/with/get-binding-value-call-with-proxy-env.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js",
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-object-environment-records-getbindingvalue-n-s",
+      "feature:Proxy",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/statements/with/get-binding-value-idref-with-proxy-env.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js",
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-object-environment-records-getbindingvalue-n-s",
+      "feature:Proxy",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/statements/with/has-binding-call-with-proxy-env.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js",
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-object-environment-records-hasbinding-n",
+      "feature:Proxy",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/statements/with/has-binding-idref-with-proxy-env.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js",
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-object-environment-records-hasbinding-n",
+      "feature:Proxy",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/statements/with/has-property-err.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-getidentifierreference",
+      "es6id",
+      "feature:Proxy"
+    ]
+  },
+  {
+    "path": "test/language/statements/with/set-mutable-binding-idref-compound-assign-with-proxy-env.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js",
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-object-environment-records-setmutablebinding-n-v-s",
+      "feature:Proxy",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/statements/with/set-mutable-binding-idref-with-proxy-env.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Reflect"
+    ],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [
+      "compareArray.js",
+      "proxyTrapsHelper.js"
+    ],
+    "provenance": [
+      "anchor:sec-object-environment-records-setmutablebinding-n-v-s",
+      "feature:Proxy",
+      "feature:Reflect"
+    ]
+  },
+  {
+    "path": "test/language/types/reference/put-value-prop-base-primitive.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Proxy",
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-putvalue",
+      "es6id",
+      "feature:Proxy",
+      "feature:Symbol"
+    ]
+  },
+  {
+    "path": "test/staging/sm/object/propertyIsEnumerable-proxy.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "features": [
+      "Symbol"
+    ],
+    "flags": [],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "feature:Symbol"
+    ]
+  }
+]

@@ -3,6 +3,7 @@ import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { EngineFunction } from '../src/runtime/function-object.js';
+import { callCallable } from '../src/runtime/capabilities.js';
 
 /**
  * @param {string} source
@@ -249,7 +250,7 @@ const tests = [
       evaluateScript(realm, 'function f() {}');
 
       const f = /** @type {any} */ (realm.globalObject.get('f'));
-      assertSame(f.getPrototype(), realm.intrinsics.functionPrototype);
+      assertSame(f.getPrototypeOf(), realm.intrinsics.functionPrototype);
     },
   },
   {
@@ -462,7 +463,7 @@ const tests = [
       evaluateScript(realm, 'function f() { return this; }');
 
       const f = /** @type {any} */ (realm.globalObject.get('f'));
-      const result = f.callFunction(5, []);
+      const result = /** @type {any} */ (callCallable(f, 5, []));
       assertSame(result instanceof EngineObject, true);
       assertSame(result.getClassName(), 'Number');
       assertSame(result.primitiveValue, 5);
@@ -577,7 +578,7 @@ const tests = [
       const constructor = /** @type {any} */ (realm.globalObject.get('P'));
       const instance = /** @type {any} */ (realm.globalObject.get('p'));
 
-      assertSame(instance.getPrototype(), constructor.get('prototype'));
+      assertSame(instance.getPrototypeOf(), constructor.get('prototype'));
       assertSame(evaluateScript(realm, 'p.constructor === P;').value, true);
     },
   },
@@ -653,7 +654,7 @@ const tests = [
       );
 
       const instance = /** @type {any} */ (realm.globalObject.get('p'));
-      assertSame(instance.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(instance.getPrototypeOf(), realm.intrinsics.objectPrototype);
     },
   },
   {

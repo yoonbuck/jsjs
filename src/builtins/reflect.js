@@ -1,5 +1,5 @@
 import { EngineArray } from '../runtime/array-object.js';
-import { EngineObject } from '../runtime/object.js';
+import { EngineObject, defineOwnPropertyOrThrow } from '../runtime/object.js';
 import { requireObjectReceiver } from './shared.js';
 
 /**
@@ -24,16 +24,12 @@ export function createReflectIntrinsics(realm) {
       const result = new EngineArray(realm.intrinsics.arrayPrototype);
 
       for (let index = 0; index < keys.length; index += 1) {
-        result.defineOwnProperty(
-          String(index),
-          {
-            value: keys[index],
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          },
-          true,
-        );
+        defineOwnPropertyOrThrow(result, String(index), {
+          value: keys[index],
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
       }
 
       return result;

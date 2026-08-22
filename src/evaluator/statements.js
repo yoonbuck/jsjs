@@ -17,9 +17,9 @@ import {
   newObjectEnvironment,
 } from '../runtime/environment.js';
 import { putValue, getValue } from '../runtime/reference.js';
-import { enumerableKeysForIn, isEnumerableForIn } from '../runtime/object.js';
 import {
   getIterator,
+  getEnumerateIteratorRecord,
   iteratorClose,
   iteratorStep,
   iteratorValue,
@@ -591,20 +591,10 @@ function createPerIterationEnvironment(perIterationBindings, context) {
  * semantics. `right` is evaluated once; a `null`/`undefined` result
  * short-circuits to a no-op loop (12.6.4 step 2) rather than throwing,
  * matching `for (var k in null) {}` doing nothing. Otherwise `right` is
- * autoboxed via `ToObject` and the full enumeration order is computed
- * upfront by `enumerableKeysForIn` (own-then-inherited enumerable
- * string-keyed properties, each name visited once) before the body runs
- * for each name in turn, reusing the same `applyLoopBodyResult`
- * break/continue/return/throw handling every other loop here uses.
- *
- * The snapshot fixes the *order*, not the *membership*: 12.6.4 requires
- * that a property deleted before enumeration reaches it is never visited,
- * so each name is re-checked with `isEnumerableForIn` right before it
- * would be assigned to the loop target, and a name that is no longer a
- * live enumerable property is skipped without assigning it. Properties
- * added during enumeration are the case the same paragraph leaves
- * unguaranteed; they stay outside the snapshot, which is what keeps an
- * enumeration that grows its own object finite.
+ * autoboxed via `ToObject`, then its public `[[Enumerate]]` iterator is
+ * created exactly once. The shared iterator abstract operations observe
+ * `next`, each result's `done`, and each result's `value`; ordinary and
+ * exotic objects therefore use the same public protocol.
  *
  * A `let`/`const` left-hand side (ES2015 §13.7.5.11, §13.7.5.13) additionally
  * scopes its binding to the loop. The head's bound names get *uninitialized*
@@ -644,40 +634,58 @@ function evaluateForInStatement(node, context, labelSet) {
   }
 
   const object = toObject(context.realm, rightValue);
-  const keys = enumerableKeysForIn(object);
+  const record = getEnumerateIteratorRecord(context.realm, object);
 
   const isConst = isLexical && isConstantDeclaration(node.left);
 
   /** @type {unknown} */
   let value = EMPTY;
 
-  for (const key of keys) {
-    if (!isEnumerableForIn(object, key)) {
-      continue;
+  for (;;) {
+    const step = iteratorStep(record);
+    if (step === false) {
+      record.done = true;
+      return createNormalCompletion(value);
     }
 
-    let iterationContext = context;
-    if (isLexical) {
-      const iterationEnv = newDeclarativeEnvironment(context.env);
-      for (const name of boundNames(node.left)) {
-        if (isConst) {
-          iterationEnv.createImmutableBinding(name, true);
-        } else {
-          iterationEnv.createMutableBinding(name, false);
-        }
-      }
-      iterationContext = { ...context, env: iterationEnv };
-      initializeBindingPattern(
-        node.left.declarations[0].id,
-        key,
-        iterationEnv,
-        iterationContext,
+    const key = iteratorValue(step, context.realm);
+    if (typeof key !== 'string') {
+      throw new GuestErrorSignal(
+        'TypeError',
+        'Enumerate iterator value is not a string',
       );
-    } else {
-      assignForInTarget(node.left, key, context);
     }
 
-    const bodyResult = evaluateStatement(node.body, iterationContext);
+    /** @type {Completion} */
+    let bodyResult;
+    try {
+      let iterationContext = context;
+      if (isLexical) {
+        const iterationEnv = newDeclarativeEnvironment(context.env);
+        for (const name of boundNames(node.left)) {
+          if (isConst) {
+            iterationEnv.createImmutableBinding(name, true);
+          } else {
+            iterationEnv.createMutableBinding(name, false);
+          }
+        }
+        iterationContext = { ...context, env: iterationEnv };
+        initializeBindingPattern(
+          node.left.declarations[0].id,
+          key,
+          iterationEnv,
+          iterationContext,
+        );
+      } else {
+        assignForInTarget(node.left, key, context);
+      }
+
+      bodyResult = evaluateStatement(node.body, iterationContext);
+    } catch (error) {
+      iteratorClose(context.realm, record, true);
+      throw error;
+    }
+
     const { value: nextValue, action } = applyLoopBodyResult(
       bodyResult,
       value,
@@ -686,15 +694,15 @@ function evaluateForInStatement(node, context, labelSet) {
     value = nextValue;
 
     if (action === 'break') {
+      iteratorClose(context.realm, record, false);
       return createNormalCompletion(value);
     }
 
     if (action === 'propagate') {
+      iteratorClose(context.realm, record, bodyResult.type === 'throw');
       return { ...bodyResult, value };
     }
   }
-
-  return createNormalCompletion(value);
 }
 
 /**

@@ -155,19 +155,19 @@ export default [
       assertSame(
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
           handlerRealm.globalObject.get('callbackArray')
-        ).getPrototype(),
+        ).getPrototypeOf(),
         handlerRealm.intrinsics.arrayPrototype,
       );
       assertSame(
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
           derived
-        ).getPrototype(),
+        ).getPrototypeOf(),
         constructorRealm.intrinsics.promisePrototype,
       );
       assertSame(
         /** @type {import('../src/runtime/object.js').EngineObject} */ (
           derived
-        ).getPrototype() === handlerRealm.intrinsics.promisePrototype,
+        ).getPrototypeOf() === handlerRealm.intrinsics.promisePrototype,
         false,
       );
     },
@@ -194,20 +194,20 @@ export default [
       const promise = namespace.get('promise');
 
       assertSame(
-        generatorFunction.getPrototype(),
+        generatorFunction.getPrototypeOf(),
         realm.intrinsics.generatorFunctionPrototype,
       );
       assertSame(
-        iterator.getPrototype().getPrototype(),
+        iterator.getPrototypeOf().getPrototypeOf(),
         realm.intrinsics.generatorPrototype,
       );
-      assertSame(promise.getPrototype(), realm.intrinsics.promisePrototype);
+      assertSame(promise.getPrototypeOf(), realm.intrinsics.promisePrototype);
       assertSame(promise.promiseResult, 3);
 
       const firstStep = iterator.get('next').callFunction(iterator, []);
       assertSame(firstStep.get('value'), 1);
       assertSame(firstStep.get('done'), false);
-      assertSame(firstStep.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(firstStep.getPrototypeOf(), realm.intrinsics.objectPrototype);
       const finalStep = iterator.get('next').callFunction(iterator, []);
       assertSame(finalStep.get('value'), 2);
       assertSame(finalStep.get('done'), true);
@@ -240,7 +240,7 @@ export default [
           realm.globalObject.get('observedPromiseArray')
         );
       assertSame(
-        observedPromiseArray.getPrototype(),
+        observedPromiseArray.getPrototypeOf(),
         realm.intrinsics.arrayPrototype,
       );
       assertSame(observedPromiseArray.get('0'), 3);

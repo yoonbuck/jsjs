@@ -7,6 +7,7 @@ import {
   createReturnCompletion,
   createThrowCompletion,
 } from '../runtime/completion.js';
+import { withLinkedActiveExecutionRealm } from '../runtime/reference.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -189,7 +190,11 @@ function resumeGenerator(generator, completion, methodRealm, callerRealm) {
 
   try {
     methodAgent.linkGeneratorHostChain(generator.realm.agent);
-    return generator.resume(completion, methodRealm);
+    return withLinkedActiveExecutionRealm(
+      methodRealm,
+      generator.realm.agent,
+      () => generator.resume(completion, methodRealm),
+    );
   } finally {
     methodAgent.exitGeneratorHostChainReference(hostChainReference);
   }

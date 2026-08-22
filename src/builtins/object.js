@@ -1,5 +1,12 @@
-import { EngineObject, setIntegrityLevel } from '../runtime/object.js';
+import {
+  EngineObject,
+  defineOwnPropertyOrThrow,
+  preventExtensionsOrThrow,
+  setIntegrityLevel,
+  setPrototypeOfOrThrow,
+} from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
+import { callCallable } from '../runtime/capabilities.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { isDataDescriptor } from '../runtime/descriptors.js';
 import { toObject, toPropertyKey } from '../runtime/conversion.js';
@@ -52,7 +59,7 @@ export function createObjectIntrinsics(realm) {
 
     const candidate =
       newTarget instanceof EngineObject
-        ? newTarget.get('prototype', realm)
+        ? newTarget.get('prototype', newTarget)
         : undefined;
     return new EngineObject(
       candidate instanceof EngineObject ? candidate : objectPrototype,
@@ -122,10 +129,10 @@ export function createObjectIntrinsics(realm) {
       call(thisValue) {
         const object = toObject(realm, thisValue);
         const method = requireCallable(
-          object.get('toString', realm),
+          object.get('toString', object),
           'toString is not callable',
         );
-        return method.callFunction(object, [], realm);
+        return callCallable(method, object, [], realm);
       },
     }),
   );
@@ -172,14 +179,14 @@ export function createObjectIntrinsics(realm) {
         }
 
         const object = toObject(realm, thisValue);
-        let current = value.getPrototype();
+        let current = value.getPrototypeOf();
 
         while (current !== null) {
           if (current === object) {
             return true;
           }
 
-          current = current.getPrototype();
+          current = current.getPrototypeOf();
         }
 
         return false;
@@ -249,7 +256,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     objectConstructor,
     'getPrototypeOf',
     1,
-    (_this, args) => requireObjectArgument(args[0]).getPrototype(),
+    (_this, args) => requireObjectArgument(args[0]).getPrototypeOf(),
   );
   defineNativeMethod(
     realm,
@@ -278,12 +285,7 @@ function installObjectReflectionMethods(realm, objectConstructor) {
         return target;
       }
 
-      if (!target.setPrototypeOf(proto)) {
-        throw new GuestErrorSignal(
-          'TypeError',
-          'Object.setPrototypeOf could not set the requested prototype',
-        );
-      }
+      setPrototypeOfOrThrow(target, proto);
 
       return target;
     },
@@ -362,8 +364,8 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     (_this, args) => {
       const object = requireObjectArgument(args[0]);
       const name = toPropertyKey(args[1], realm);
-      const descriptor = toPropertyDescriptor(args[2], realm);
-      object.defineOwnProperty(name, descriptor, true, realm);
+      const descriptor = toPropertyDescriptor(args[2]);
+      defineOwnPropertyOrThrow(object, name, descriptor);
       return object;
     },
   );
@@ -390,7 +392,11 @@ function installObjectReflectionMethods(realm, objectConstructor) {
     objectConstructor,
     'preventExtensions',
     1,
-    (_this, args) => requireObjectArgument(args[0]).preventExtensions(),
+    (_this, args) => {
+      const object = requireObjectArgument(args[0]);
+      preventExtensionsOrThrow(object);
+      return object;
+    },
   );
   defineNativeMethod(realm, objectConstructor, 'isSealed', 1, (_this, args) => {
     const object = requireObjectArgument(args[0]);
@@ -471,12 +477,12 @@ function defineProperties(realm, object, propertiesValue) {
 
     definitions.push({
       name,
-      descriptor: toPropertyDescriptor(properties.get(name, realm), realm),
+      descriptor: toPropertyDescriptor(properties.get(name, properties)),
     });
   }
 
   for (const { name, descriptor } of definitions) {
-    object.defineOwnProperty(name, descriptor, true, realm);
+    defineOwnPropertyOrThrow(object, name, descriptor);
   }
 
   return object;

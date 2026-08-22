@@ -2,6 +2,7 @@ import { assertSame, assertThrows } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
+import { defineOwnPropertyOrThrow } from '../src/runtime/object.js';
 
 /**
  * @param {string} source
@@ -84,7 +85,7 @@ const tests = [
       evaluateScript(realm, 'var o = {};');
 
       const o = /** @type {any} */ (realm.globalObject.get('o'));
-      assertSame(o.getPrototype(), realm.intrinsics.objectPrototype);
+      assertSame(o.getPrototypeOf(), realm.intrinsics.objectPrototype);
     },
   },
   {
@@ -240,9 +241,9 @@ const tests = [
       evaluateScript(realm, 'var a = [];');
 
       const a = /** @type {any} */ (realm.globalObject.get('a'));
-      assertSame(a.getPrototype(), realm.intrinsics.arrayPrototype);
+      assertSame(a.getPrototypeOf(), realm.intrinsics.arrayPrototype);
       assertSame(
-        realm.intrinsics.arrayPrototype.getPrototype(),
+        realm.intrinsics.arrayPrototype.getPrototypeOf(),
         realm.intrinsics.objectPrototype,
       );
     },
@@ -351,23 +352,17 @@ const tests = [
 
       assertSame(array.value.defineOwnProperty('length', { value: 1 }), false);
       const lengthError = assertThrows(
-        () => array.value.defineOwnProperty('length', { value: 1 }, true),
+        () => defineOwnPropertyOrThrow(array.value, 'length', { value: 1 }),
         GuestErrorSignal,
       );
-      assertSame(
-        lengthError.message,
-        'Cannot change the length of a non-writable array length',
-      );
+      assertSame(lengthError.message, 'Cannot define requested property');
 
       assertSame(array.value.defineOwnProperty('5', dataDescriptor(6)), false);
       const indexError = assertThrows(
-        () => array.value.defineOwnProperty('5', dataDescriptor(6), true),
+        () => defineOwnPropertyOrThrow(array.value, '5', dataDescriptor(6)),
         GuestErrorSignal,
       );
-      assertSame(
-        indexError.message,
-        'Cannot add an element beyond a non-writable array length',
-      );
+      assertSame(indexError.message, 'Cannot define requested property');
 
       assertSame(array.value.getOwnProperty('5'), undefined);
       assertSame(array.value.getOwnProperty('length').value, 3);
@@ -411,13 +406,10 @@ const tests = [
       assertSame(a.getOwnProperty('0').value, 1);
 
       const error = assertThrows(
-        () => a.defineOwnProperty('length', { value: 0 }, true),
+        () => defineOwnPropertyOrThrow(a, 'length', { value: 0 }),
         GuestErrorSignal,
       );
-      assertSame(
-        error.message,
-        'Cannot delete a non-configurable array element',
-      );
+      assertSame(error.message, 'Cannot define requested property');
       assertSame(a.getOwnProperty('length').value, 2);
       assertSame(a.getOwnProperty('0').value, 1);
     },

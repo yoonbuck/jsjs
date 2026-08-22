@@ -263,7 +263,10 @@ const tests = [
       const reference = new Reference(env, 'value', true);
       assertSame(getValue(reference), 'from-global');
 
-      globalObject.put('value', 'mutated-directly', true);
+      assertSame(
+        globalObject.set('value', 'mutated-directly', globalObject),
+        true,
+      );
       assertSame(env.getBindingValue('value', true), 'mutated-directly');
     },
   },

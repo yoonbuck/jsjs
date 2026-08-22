@@ -1,5 +1,6 @@
 import { createAgent, createRealm, evaluateScript } from '../src/index.js';
 import { ThrowSignal } from '../src/runtime/completion.js';
+import { registerCallable } from '../src/runtime/capabilities.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { newPromiseCapability } from '../src/runtime/promise.js';
 import { assertSame, assertThrows } from './harness/assert.js';
@@ -22,7 +23,7 @@ function assertNormalValue(completion, expected) {
 function assertGuestTypeError(realm, completion) {
   assertSame(completion.type, 'throw');
   assertSame(
-    /** @type {EngineObject} */ (completion.value).getPrototype(),
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf(),
     realm.intrinsics.typeErrorPrototype,
   );
 }
@@ -245,11 +246,11 @@ export default [
         );
 
         assertSame(
-          promise.getPrototype(),
+          promise.getPrototypeOf(),
           newTargetRealm.intrinsics.promisePrototype,
         );
         assertSame(
-          promise.getPrototype() ===
+          promise.getPrototypeOf() ===
             constructorRealm.intrinsics.promisePrototype,
           false,
         );
@@ -311,12 +312,7 @@ export default [
         },
       });
 
-      newTarget.defineOwnProperty(
-        'prototype',
-        { value: foreignPrototype },
-        true,
-        allocationRealm,
-      );
+      newTarget.defineOwnProperty('prototype', { value: foreignPrototype });
       const promise = assertPromiseObject(
         promiseConstructor.constructFunction(
           [executor],
@@ -327,7 +323,7 @@ export default [
 
       assertSame(promise.realm, allocationRealm);
       assertSame(promise.agent, allocationRealm.agent);
-      assertSame(promise.getPrototype(), foreignPrototype);
+      assertSame(promise.getPrototypeOf(), foreignPrototype);
       assertSame(promise.agent === prototypeRealm.agent, false);
     },
   },
@@ -378,8 +374,8 @@ export default [
       );
 
       assertSame(prototypeReads, 1);
-      assertSame(promise.getPrototype(), realm.intrinsics.promisePrototype);
-      assertSame(promise.getPrototype() === secondPrototype, false);
+      assertSame(promise.getPrototypeOf(), realm.intrinsics.promisePrototype);
+      assertSame(promise.getPrototypeOf() === secondPrototype, false);
     },
   },
   {
@@ -498,7 +494,7 @@ export default [
       assertSame(resolve.callFunction(undefined, [promise]), undefined);
       assertSame(promise.promiseState, 'rejected');
       assertSame(
-        /** @type {EngineObject} */ (promise.promiseResult).getPrototype(),
+        /** @type {EngineObject} */ (promise.promiseResult).getPrototypeOf(),
         realm.intrinsics.typeErrorPrototype,
       );
     },
@@ -746,6 +742,7 @@ export default [
           };
         },
       };
+      registerCallable(abruptThen);
       const thenable = new EngineObject(realm.intrinsics.objectPrototype);
       thenable.defineOwnProperty('then', {
         value: abruptThen,
@@ -784,6 +781,7 @@ export default [
           return { type: 'normal', value: null };
         },
       };
+      registerCallable(malformedThen);
       const thenable = new EngineObject(realm.intrinsics.objectPrototype);
       thenable.defineOwnProperty('then', {
         value: malformedThen,

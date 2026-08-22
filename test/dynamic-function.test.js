@@ -53,12 +53,12 @@ function assertGuestThrow(completion, constructorName, realm) {
   const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
   const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
   let cur = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
 
   while (cur !== null) {
     if (cur === proto) return;
-    cur = cur.getPrototype();
+    cur = cur.getPrototypeOf();
   }
 
   throw new Error(`Thrown value is not an instance of ${constructorName}`);
@@ -663,9 +663,9 @@ const tests = [
       assertSame(result.type, 'normal');
 
       const created = /** @type {EngineObject} */ (result.value);
-      assertSame(created.getPrototype(), realmA.intrinsics.functionPrototype);
+      assertSame(created.getPrototypeOf(), realmA.intrinsics.functionPrototype);
       assertSame(
-        created.getPrototype() === realmB.intrinsics.functionPrototype,
+        created.getPrototypeOf() === realmB.intrinsics.functionPrototype,
         false,
       );
     },
@@ -715,7 +715,7 @@ const tests = [
       const completion = runIn(realmB, 'Function("return }");');
       assertGuestThrow(completion, 'SyntaxError', realmA);
       assertSame(
-        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+        /** @type {EngineObject} */ (completion.value).getPrototypeOf() ===
           realmB.intrinsics.syntaxErrorPrototype,
         false,
       );
@@ -740,7 +740,7 @@ const tests = [
       );
       assertGuestThrow(completion, 'ReferenceError', realmA);
       assertSame(
-        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+        /** @type {EngineObject} */ (completion.value).getPrototypeOf() ===
           realmB.intrinsics.referenceErrorPrototype,
         false,
       );

@@ -36,11 +36,11 @@ function assertThrows(source, constructorName) {
   const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
   const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
   let cur = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
   while (cur !== null) {
     if (cur === proto) return;
-    cur = cur.getPrototype();
+    cur = cur.getPrototypeOf();
   }
   throw new Error(`Thrown value is not an instance of ${constructorName}`);
 }
@@ -62,7 +62,7 @@ function assertThrowsMessage(source, constructorName, message) {
   const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
   const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
   let cur = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
   let isInstance = false;
   while (cur !== null) {
@@ -70,7 +70,7 @@ function assertThrowsMessage(source, constructorName, message) {
       isInstance = true;
       break;
     }
-    cur = cur.getPrototype();
+    cur = cur.getPrototypeOf();
   }
   if (!isInstance) {
     throw new Error(`Thrown value is not an instance of ${constructorName}`);
@@ -111,11 +111,11 @@ function assertCompletionThrows(realm, completion, constructorName) {
   const ctor = /** @type {any} */ (realm.globalObject.get(constructorName));
   const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
   let cur = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
   while (cur !== null) {
     if (cur === proto) return;
-    cur = cur.getPrototype();
+    cur = cur.getPrototypeOf();
   }
   throw new Error(`Thrown value is not an instance of ${constructorName}`);
 }

@@ -20,14 +20,14 @@ function assertGuestErrorUsesPrototype(value, constructorName, realm) {
   );
   const prototype = /** @type {EngineObject} */ (ctor.get('prototype'));
 
-  let current = /** @type {EngineObject | null} */ (value.getPrototype());
+  let current = /** @type {EngineObject | null} */ (value.getPrototypeOf());
 
   while (current !== null) {
     if (current === prototype) {
       return;
     }
 
-    current = current.getPrototype();
+    current = current.getPrototypeOf();
   }
 
   throw new Error(
@@ -62,7 +62,7 @@ const tests = [
         },
       });
 
-      assertSame(fn.getPrototype(), realm.intrinsics.functionPrototype);
+      assertSame(fn.getPrototypeOf(), realm.intrinsics.functionPrototype);
       assertSame(fn.callFunction('receiver', [1, 2, 3]), 'receiver:3');
 
       const nameDescriptor = expectDefined(
@@ -124,7 +124,7 @@ const tests = [
         fn.constructFunction(['y'])
       );
       assertSame(JSON.stringify(trace), '["call:1","construct:1"]');
-      assertSame(instance.getPrototype(), prototype);
+      assertSame(instance.getPrototypeOf(), prototype);
       assertSame(instance.get('createdWith'), 'y');
 
       const prototypeDescriptor = expectDefined(

@@ -1,6 +1,9 @@
 import { WELL_KNOWN_SYMBOL_NAMES, createSymbol, isSymbol } from './symbol.js';
 import { AgentJobQueue } from './jobs.js';
 import { GuestErrorSignal } from './completion.js';
+import { isRealm } from './realm.js';
+
+const NO_ACTIVE_EXECUTION_REALM = Symbol('no active execution Realm');
 
 /**
  * @typedef {import('./symbol.js').WellKnownSymbolName} WellKnownSymbolName
@@ -98,6 +101,8 @@ export class Agent {
     this._synchronousCallChain = null;
     /** @type {Set<import('./stack-guard.js').StackGuard>} */
     this._activeStackGuards = new Set();
+    /** @type {(import('./realm.js').Realm | typeof NO_ACTIVE_EXECUTION_REALM)[]} */
+    this._executionRealmFrames = [];
   }
 
   /**
@@ -217,6 +222,94 @@ export class Agent {
   }
 
   /**
+   * @template T
+   * @param {import('./realm.js').Realm} realm
+   * @param {() => T} callback
+   * @returns {T}
+   */
+  withActiveExecutionRealm(realm, callback) {
+    if (!isCurrentOwnedRealm(this, realm)) {
+      throw new TypeError('Execution Realm must belong to this Agent');
+    }
+
+    this._executionRealmFrames.push(realm);
+
+    try {
+      return callback();
+    } finally {
+      if (this._executionRealmFrames.pop() !== realm) {
+        throw new TypeError('Execution Realm stack corruption');
+      }
+    }
+  }
+
+  /**
+   * @template T
+   * @param {() => T} callback
+   * @returns {T}
+   */
+  withNoActiveExecutionRealm(callback) {
+    this._executionRealmFrames.push(NO_ACTIVE_EXECUTION_REALM);
+
+    try {
+      return callback();
+    } finally {
+      if (this._executionRealmFrames.pop() !== NO_ACTIVE_EXECUTION_REALM) {
+        throw new TypeError('Execution Realm stack corruption');
+      }
+    }
+  }
+
+  /**
+   * @returns {import('./realm.js').Realm | null}
+   */
+  get activeExecutionRealm() {
+    const frame =
+      this._executionRealmFrames[this._executionRealmFrames.length - 1];
+    return frame === NO_ACTIVE_EXECUTION_REALM || frame === undefined
+      ? null
+      : frame;
+  }
+
+  /**
+   * @template T
+   * Makes a source Agent's active execution Realm visible only while invoking
+   * `callback` on this Agent's existing cross-Agent call path.
+   *
+   * @param {Agent} sourceAgent
+   * @param {() => T} callback
+   * @returns {T}
+   */
+  withLinkedActiveExecutionRealm(sourceAgent, callback) {
+    if (
+      !(sourceAgent instanceof Agent) ||
+      (sourceAgent !== this && !hasLinkedExecutionRealm(this, sourceAgent))
+    ) {
+      throw new TypeError('Execution Realm Agents must be linked');
+    }
+
+    const sourceFrame =
+      sourceAgent._executionRealmFrames[
+        sourceAgent._executionRealmFrames.length - 1
+      ] ?? NO_ACTIVE_EXECUTION_REALM;
+    if (
+      sourceFrame !== NO_ACTIVE_EXECUTION_REALM &&
+      !isCurrentOwnedRealm(sourceAgent, sourceFrame)
+    ) {
+      throw new TypeError('Execution Realm must belong to its source Agent');
+    }
+    this._executionRealmFrames.push(sourceFrame);
+
+    try {
+      return callback();
+    } finally {
+      if (this._executionRealmFrames.pop() !== sourceFrame) {
+        throw new TypeError('Execution Realm stack corruption');
+      }
+    }
+  }
+
+  /**
    * Keeps the Agents on one synchronous cross-Realm call path discoverable and
    * adopts every participant's active guarded frames into an aggregate
    * host-safety budget. If a generator starts before the calls unwind, its host
@@ -231,7 +324,23 @@ export class Agent {
       return null;
     }
 
-    const callerAgent = callerRealm.agent;
+    return this.enterSynchronousAgentLink(callerRealm.agent);
+  }
+
+  /**
+   * Temporarily puts this Agent and a caller Agent on one synchronous execution
+   * path without selecting a callee Realm. Internal object operations use this
+   * when they must expose the caller's active Realm before an object chooses
+   * its Realm-sensitive implementation.
+   *
+   * @param {Agent} callerAgent
+   * @returns {SynchronousCallChain}
+   */
+  enterSynchronousAgentLink(callerAgent) {
+    if (!(callerAgent instanceof Agent)) {
+      throw new TypeError('Synchronous caller must be an Agent');
+    }
+
     let thisChain = this.synchronousCallChainRoot();
     let callerChain = callerAgent.synchronousCallChainRoot();
 
@@ -584,6 +693,37 @@ export class Agent {
       guard.adoptGeneratorHostChain(chain);
     }
   }
+}
+
+/**
+ * @param {Agent} agent
+ * @param {unknown} realm
+ * @returns {boolean}
+ */
+function isCurrentOwnedRealm(agent, realm) {
+  return isRealm(realm) && realm.agent === agent && agent.ownsRealm(realm);
+}
+
+/**
+ * @param {Agent} targetAgent
+ * @param {Agent} sourceAgent
+ * @returns {boolean}
+ */
+function hasLinkedExecutionRealm(targetAgent, sourceAgent) {
+  const generatorChain = targetAgent.generatorHostChainRoot();
+
+  if (
+    generatorChain !== null &&
+    generatorChain === sourceAgent.generatorHostChainRoot()
+  ) {
+    return true;
+  }
+
+  const synchronousChain = targetAgent.synchronousCallChainRoot();
+  return (
+    synchronousChain !== null &&
+    synchronousChain === sourceAgent.synchronousCallChainRoot()
+  );
 }
 
 /**

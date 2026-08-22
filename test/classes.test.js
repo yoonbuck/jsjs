@@ -256,7 +256,7 @@ const tests = [
 
       assertSame(crossRealmCompletion.type, 'throw');
       assertSame(
-        /** @type {any} */ (crossRealmCompletion.value).getPrototype(),
+        /** @type {any} */ (crossRealmCompletion.value).getPrototypeOf(),
         calleeRealm.intrinsics.typeErrorPrototype,
       );
     },
@@ -285,7 +285,7 @@ const tests = [
 
       assertSame(crossRealmCompletion.type, 'throw');
       assertSame(
-        /** @type {any} */ (crossRealmCompletion.value).getPrototype(),
+        /** @type {any} */ (crossRealmCompletion.value).getPrototypeOf(),
         calleeRealm.intrinsics.referenceErrorPrototype,
       );
     },
@@ -307,7 +307,7 @@ const tests = [
       );
       assertSame(sameRealmCompletion.type, 'throw');
       assertSame(
-        /** @type {any} */ (sameRealmCompletion.value).getPrototype(),
+        /** @type {any} */ (sameRealmCompletion.value).getPrototypeOf(),
         calleeRealm.intrinsics.typeErrorPrototype,
       );
 
@@ -323,7 +323,7 @@ const tests = [
       );
       assertSame(crossRealmCompletion.type, 'throw');
       assertSame(
-        /** @type {any} */ (crossRealmCompletion.value).getPrototype(),
+        /** @type {any} */ (crossRealmCompletion.value).getPrototypeOf(),
         calleeRealm.intrinsics.typeErrorPrototype,
       );
     },

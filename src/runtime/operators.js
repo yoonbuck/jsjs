@@ -5,7 +5,7 @@ import {
   toInt32,
   toUint32,
 } from './conversion.js';
-import { isCallable } from './descriptors.js';
+import { isCallable } from './capabilities.js';
 
 /**
  * @param {unknown} left
@@ -314,8 +314,6 @@ export function typeOf(value) {
       return 'string';
     case 'symbol':
       return 'symbol';
-    case 'function':
-      return 'function';
     default:
       return isCallable(value) ? 'function' : 'object';
   }

@@ -14,7 +14,7 @@
  * synchronous generator chain.
  *
  * Nothing in this module reaches into the host: it calls guest functions
- * through `callFunction`, reads guest properties through `[[Get]]`, and reports
+ * through `callCallable`, reads guest properties through `[[Get]]`, and reports
  * failures as `GuestErrorSignal`s the nearest realm-aware boundary materialises
  * into guest errors, exactly like the rest of the runtime. The one realm the
  * operations carry is for `CreateIterResultObject`'s prototype and for wrapping
@@ -23,10 +23,12 @@
  * are wrapped.
  */
 
-import { EngineObject } from './object.js';
+import { EngineObject, getWithObjectOperationRealm } from './object.js';
+import { callCallable } from './capabilities.js';
 import { GuestErrorSignal } from './completion.js';
 import { isCallable } from './descriptors.js';
 import { toBoolean, toObject } from './conversion.js';
+import { withLinkedActiveExecutionRealm } from './reference.js';
 
 /**
  * @typedef {import('./realm.js').Realm} Realm
@@ -59,7 +61,7 @@ export function getMethod(realm, value, key) {
     value instanceof EngineObject ? value : toObject(realm, value);
 
   linkGeneratorHostChainToAgent(realm.agent, receiver.agent);
-  const func = receiver.get(key, realm);
+  const func = getWithObjectOperationRealm(realm, receiver, key, value);
   linkGeneratorHostChainToValue(realm.agent, func);
 
   if (func === undefined || func === null) {
@@ -107,6 +109,99 @@ export function createIterResultObject(realm, value, done) {
 }
 
 /**
+ * Captures the public iterator protocol operations for an already-created
+ * iterator. `[[Enumerate]]` returns an iterator directly, unlike `@@iterator`,
+ * but both consumers must observe and validate `next` the same way.
+ *
+ * @param {unknown} iterator
+ * @param {Realm} [realm]
+ * @returns {IteratorRecord}
+ */
+export function getIteratorRecord(iterator, realm) {
+  if (!(iterator instanceof EngineObject)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Enumerate result is not an object',
+    );
+  }
+
+  const record = createIteratorRecord(iterator, realm);
+
+  if (!isCallable(record.nextMethod)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Enumerate iterator next is not callable',
+    );
+  }
+
+  return record;
+}
+
+/**
+ * Captures `next` without eagerly validating callability. `GetIterator`
+ * performs only `Get(iterator, "next")`; `IteratorNext` owns the later
+ * callable check. This distinction lets an abrupt destructuring target close
+ * an iterator through `return` before any `next` call is required.
+ *
+ * @param {EngineObject} iterator
+ * @param {Realm} [realm]
+ * @returns {IteratorRecord}
+ */
+function createIteratorRecord(iterator, realm) {
+  if (realm !== undefined) {
+    linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
+  }
+
+  const nextMethod = getWithObjectOperationRealm(
+    realm,
+    iterator,
+    'next',
+    iterator,
+  );
+
+  if (realm !== undefined) {
+    linkGeneratorHostChainToValue(realm.agent, nextMethod);
+  }
+
+  return {
+    iterator,
+    nextMethod,
+    done: false,
+    realm,
+  };
+}
+
+/**
+ * Dispatches the public ES2015 `[[Enumerate]]` operation while making the
+ * evaluating Realm visible to a separately owned target Agent. The target can
+ * therefore allocate its public iterator and iterator results in the Realm
+ * that evaluates the `for-in` statement. A direct context-free
+ * `EngineObject#enumerate()` call remains responsible for rejecting its lack
+ * of an active Realm.
+ *
+ * @param {Realm} realm
+ * @param {EngineObject} object
+ * @returns {IteratorRecord}
+ */
+export function getEnumerateIteratorRecord(realm, object) {
+  const targetAgent = object.agent;
+
+  if (targetAgent === null || targetAgent === realm.agent) {
+    return getIteratorRecord(object.enumerate(), realm);
+  }
+
+  const link = targetAgent.enterSynchronousAgentLink(realm.agent);
+
+  try {
+    return withLinkedActiveExecutionRealm(realm, targetAgent, () =>
+      getIteratorRecord(object.enumerate(), realm),
+    );
+  } finally {
+    targetAgent.exitSynchronousCallChain(link);
+  }
+}
+
+/**
  * ECMA-262 §7.4.1 `GetIterator ( obj [ , hint [ , method ] ] )`, sync hint. When
  * no `method` is supplied it is resolved via `GetMethod` on the `@@iterator`
  * key; an `obj` with no such method is not iterable and is a `TypeError`. The
@@ -144,7 +239,7 @@ export function getIterator(realm, obj, method) {
   }
 
   linkGeneratorHostChainToValue(realm.agent, iteratorMethod);
-  const iterator = iteratorMethod.callFunction(obj, [], realm);
+  const iterator = callCallable(iteratorMethod, obj, [], realm);
 
   if (!(iterator instanceof EngineObject)) {
     throw new GuestErrorSignal(
@@ -153,16 +248,7 @@ export function getIterator(realm, obj, method) {
     );
   }
 
-  linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
-  const nextMethod = iterator.get('next', realm);
-
-  linkGeneratorHostChainToValue(realm.agent, nextMethod);
-  return {
-    iterator,
-    nextMethod,
-    done: false,
-    realm,
-  };
+  return createIteratorRecord(iterator, realm);
 }
 
 /**
@@ -190,11 +276,28 @@ export function iteratorNextWithMethod(iterator, method, sent, callerRealm) {
     linkGeneratorHostChainToValue(activeAgent, iteratorMethod);
   }
 
-  const result = iteratorMethod.callFunction(
-    iterator,
-    sent === undefined ? [] : [sent.value],
-    callerRealm,
-  );
+  // `callCallable` is a Table 6 terminal, but its helper frame remains on the
+  // host stack until the iterator method returns. Account for that frame on an
+  // already-active generator chain before dispatching recursively.
+  const callFrame =
+    activeAgent?.enterGeneratorHostFrame(
+      callerRealm?.stackGuard.maxDepth ?? Number.POSITIVE_INFINITY,
+    ) ?? null;
+  /** @type {unknown} */
+  let result;
+
+  try {
+    result = callCallable(
+      iteratorMethod,
+      iterator,
+      sent === undefined ? [] : [sent.value],
+      callerRealm,
+    );
+  } finally {
+    if (callFrame !== null) {
+      activeAgent?.exitGeneratorHostFrame(callFrame);
+    }
+  }
 
   if (!(result instanceof EngineObject)) {
     throw new GuestErrorSignal('TypeError', 'Iterator result is not an object');
@@ -233,7 +336,7 @@ export function iteratorNext(record, sent) {
  * @returns {boolean}
  */
 export function iteratorComplete(result, realm) {
-  return toBoolean(result.get('done', realm));
+  return toBoolean(getWithObjectOperationRealm(realm, result, 'done', result));
 }
 
 /**
@@ -244,7 +347,7 @@ export function iteratorComplete(result, realm) {
  * @returns {unknown}
  */
 export function iteratorValue(result, realm) {
-  const value = result.get('value', realm);
+  const value = getWithObjectOperationRealm(realm, result, 'value', result);
 
   if (realm !== undefined) {
     linkGeneratorHostChainToValue(realm.agent, value);
@@ -305,7 +408,7 @@ export function iteratorClose(realm, record, completionIsThrow) {
     }
 
     linkGeneratorHostChainToValue(realm.agent, returnMethod);
-    innerValue = returnMethod.callFunction(iterator, [], realm);
+    innerValue = callCallable(returnMethod, iterator, [], realm);
   } catch (error) {
     innerThrew = true;
     innerError = error;

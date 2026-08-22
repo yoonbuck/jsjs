@@ -1,6 +1,5 @@
-import { EngineObject } from '../runtime/object.js';
 import { EngineArray } from '../runtime/array-object.js';
-import { EngineRegExp } from '../runtime/regexp-object.js';
+import { EngineRegExp, isRegExpObject } from '../runtime/regexp-object.js';
 import { compilePattern } from '../runtime/regexp-compat.js';
 import { parseFlags, RegExpSyntaxError } from '../runtime/regexp-syntax.js';
 import { toBoolean, toInteger, toString } from '../runtime/conversion.js';
@@ -8,6 +7,7 @@ import { GuestErrorSignal } from '../runtime/completion.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
+ * @typedef {import('../runtime/object.js').EngineObject} EngineObject
  *
  * @typedef {{
  *   regExpConstructor: import('./shared.js').NativeFunction,
@@ -103,11 +103,11 @@ export function installRegExpConstructor(globalObject, intrinsics) {
  * `String.prototype.match`/`replace`/`search`/`split`.
  *
  * Steps 4/6/9.a/11 read/write `lastIndex`/`global` through `R`'s own
- * `[[Get]]`/`[[Put]]` (`EngineObject.get`/`put`), not the constructor's
+ * `[[Get]]`/`[[Set]]` (`EngineObject.get`/`set`), not the constructor's
  * internal `flags` field, so a guest rewrite of `lastIndex` (or, in
  * principle, an own `global` — though that property is non-configurable
  * per 15.10.7.2) is honoured exactly as ES5 specifies. `[[Put]]` is called
- * with `throwOnError = true`, so a guest-frozen `lastIndex` makes `exec`
+ * with an owning failure check, so a guest-frozen `lastIndex` makes `exec`
  * throw a guest `TypeError` instead of silently failing to update it.
  *
  * @param {Realm} realm
@@ -129,8 +129,8 @@ export function regExpExec(realm, thisValue, string) {
   const S = toString(string, realm);
   const length = S.length;
 
-  let i = toInteger(R.get('lastIndex', realm), realm);
-  const global = toBoolean(R.get('global', realm));
+  let i = toInteger(R.get('lastIndex', R), realm);
+  const global = toBoolean(R.get('global', R));
 
   if (!global) {
     i = 0;
@@ -145,7 +145,7 @@ export function regExpExec(realm, thisValue, string) {
       // total match failure; this reset is not gated on `global` — the
       // `global` check only guards the *success* path's `lastIndex` update
       // to the match end position (step 11, below).
-      R.put('lastIndex', 0, true, realm);
+      setRegExpPropertyOrThrow(R, 'lastIndex', 0);
       return null;
     }
 
@@ -159,7 +159,7 @@ export function regExpExec(realm, thisValue, string) {
   const e = matchResult.endIndex;
 
   if (global) {
-    R.put('lastIndex', e, true, realm);
+    setRegExpPropertyOrThrow(R, 'lastIndex', e);
   }
 
   const n = R.capturingGroups;
@@ -186,6 +186,18 @@ export function regExpExec(realm, thisValue, string) {
   defineResultProperty(result, 'input', S);
 
   return result;
+}
+
+/**
+ * @param {EngineRegExp} object
+ * @param {string} name
+ * @param {unknown} value
+ * @returns {void}
+ */
+function setRegExpPropertyOrThrow(object, name, value) {
+  if (!object.set(name, value, object)) {
+    throw new GuestErrorSignal('TypeError', 'Cannot assign to property');
+  }
 }
 
 /**
@@ -280,18 +292,18 @@ function installToStringMethod(realm, regExpPrototype) {
         }
 
         const R = /** @type {EngineRegExp} */ (thisValue);
-        const source = toString(R.get('source', realm), realm);
+        const source = toString(R.get('source', R), realm);
         let flagsText = '';
 
-        if (toBoolean(R.get('global', realm))) {
+        if (toBoolean(R.get('global', R))) {
           flagsText += 'g';
         }
 
-        if (toBoolean(R.get('ignoreCase', realm))) {
+        if (toBoolean(R.get('ignoreCase', R))) {
           flagsText += 'i';
         }
 
-        if (toBoolean(R.get('multiline', realm))) {
+        if (toBoolean(R.get('multiline', R))) {
           flagsText += 'm';
         }
 
@@ -345,7 +357,7 @@ export function createRegExpFromPattern(realm, patternSource, flagsText) {
       intrinsics.regExpConstructor
     );
   const regExpPrototype = /** @type {EngineObject} */ (
-    regExpConstructor.get('prototype', realm)
+    regExpConstructor.get('prototype', regExpConstructor)
   );
 
   return buildRegExp(realm, regExpPrototype, patternSource, flagsText);
@@ -437,14 +449,6 @@ function convertSyntaxError(error) {
   }
 
   return error;
-}
-
-/**
- * @param {unknown} value
- * @returns {boolean}
- */
-function isRegExpObject(value) {
-  return value instanceof EngineObject && value.getClassName() === 'RegExp';
 }
 
 /**

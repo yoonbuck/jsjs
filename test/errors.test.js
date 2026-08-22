@@ -2,6 +2,7 @@ import { assertSame, assertThrows } from './harness/assert.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 import { EngineObject } from '../src/runtime/object.js';
+import { Reference, putValue } from '../src/runtime/reference.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 
 /**
@@ -32,7 +33,7 @@ function assertGuestThrow(completion, constructorName, realm) {
   }
 
   let current = /** @type {EngineObject | null} */ (
-    /** @type {EngineObject} */ (completion.value).getPrototype()
+    /** @type {EngineObject} */ (completion.value).getPrototypeOf()
   );
 
   while (current !== null) {
@@ -40,7 +41,7 @@ function assertGuestThrow(completion, constructorName, realm) {
       return /** @type {EngineObject} */ (completion.value);
     }
 
-    current = current.getPrototype();
+    current = current.getPrototypeOf();
   }
 
   throw new Error(
@@ -201,7 +202,7 @@ const tests = [
       const e = /** @type {EngineObject} */ (result.value);
       const errorCtor = /** @type {any} */ (realm.globalObject.get('Error'));
       const proto = /** @type {EngineObject} */ (errorCtor.get('prototype'));
-      assertSame(e.getPrototype(), proto);
+      assertSame(e.getPrototypeOf(), proto);
     },
   },
 
@@ -227,8 +228,8 @@ const tests = [
         errorCtor.get('prototype')
       );
 
-      assertSame(e.getPrototype(), typeErrorProto);
-      assertSame(typeErrorProto.getPrototype(), errorProto);
+      assertSame(e.getPrototypeOf(), typeErrorProto);
+      assertSame(typeErrorProto.getPrototypeOf(), errorProto);
       assertSame(typeErrorProto.get('name'), 'TypeError');
       assertSame(e.get('message'), 'nope');
     },
@@ -252,8 +253,8 @@ const tests = [
         errorCtor.get('prototype')
       );
 
-      assertSame(e.getPrototype(), proto);
-      assertSame(proto.getPrototype(), errorProto);
+      assertSame(e.getPrototypeOf(), proto);
+      assertSame(proto.getPrototypeOf(), errorProto);
       assertSame(proto.get('name'), 'ReferenceError');
     },
   },
@@ -323,7 +324,7 @@ const tests = [
         errorCtor.get('prototype')
       );
 
-      assertSame(typeErrorProto.getPrototype(), errorProto);
+      assertSame(typeErrorProto.getPrototypeOf(), errorProto);
     },
   },
 
@@ -361,10 +362,10 @@ const tests = [
   },
 
   // ---------------------------------------------------------------------------
-  // Runtime throw conversion: object put rejection → guest TypeError signal
+  // Runtime throw conversion: strict Reference rejection → guest TypeError
   // ---------------------------------------------------------------------------
   {
-    name: 'put with throwOnError on a non-writable property throws GuestErrorSignal',
+    name: 'strict property Reference on a non-writable property throws GuestErrorSignal',
     run() {
       const o = new EngineObject(null);
       o.defineOwnProperty('x', {
@@ -374,9 +375,10 @@ const tests = [
         configurable: false,
       });
 
-      // Direct call with throwOnError=true; the signal bubbles as a host
-      // GuestErrorSignal before any realm-aware boundary can convert it.
-      assertThrows(() => o.put('x', 2, true), GuestErrorSignal);
+      assertThrows(
+        () => putValue(new Reference(o, 'x', true, o), 2),
+        GuestErrorSignal,
+      );
     },
   },
 
@@ -420,8 +422,8 @@ const tests = [
         errorCtor.get('prototype')
       );
 
-      assertSame(e.getPrototype(), proto);
-      assertSame(proto.getPrototype(), errorProto);
+      assertSame(e.getPrototypeOf(), proto);
+      assertSame(proto.getPrototypeOf(), errorProto);
       assertSame(proto.get('name'), 'EvalError');
       assertSame(proto.get('message'), '');
       assertSame(e.get('message'), 'boom');
@@ -466,7 +468,7 @@ const tests = [
       const instance = realm.createGuestError('EvalError', 'boom');
       const ctor = /** @type {any} */ (realm.globalObject.get('EvalError'));
       const proto = /** @type {EngineObject} */ (ctor.get('prototype'));
-      assertSame(instance.getPrototype(), proto);
+      assertSame(instance.getPrototypeOf(), proto);
       assertSame(instance.get('message'), 'boom');
     },
   },
