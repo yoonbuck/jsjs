@@ -59,6 +59,7 @@ import {
 } from '../../tools/test262/es2015-taxonomy.js';
 import {
   assertExactH0DispositionDelta,
+  assertEs2015H0BaselineMatchesTaxonomy,
   buildEs2015H0Baseline,
   buildEs2015H0Disposition,
   buildEs2015H0OwnerDeltas,
@@ -94,6 +95,97 @@ const { structuredClone } = globalThis;
 
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
+const REVIEWED_P0_PATH_SHA256 =
+  'b2657db74331391b156f87e1e831665ef4ae3a738d48836e476c13828b1aeff4';
+const REVIEWED_P0_PATHS = Object.freeze([
+  'test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-new.js',
+  'test/built-ins/Function/prototype/toString/unicode.js',
+  'test/language/eval-code/direct/new.target-fn.js',
+  'test/language/expressions/arrow-function/lexical-new.target-closure-returned.js',
+  'test/language/expressions/arrow-function/lexical-new.target.js',
+  'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js',
+  'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-extends-escaped-ext.js',
+  'test/language/expressions/class/accessor-name-inst/literal-numeric-binary.js',
+  'test/language/expressions/class/accessor-name-inst/literal-numeric-octal.js',
+  'test/language/expressions/class/accessor-name-inst/literal-string-default-escaped-ext.js',
+  'test/language/expressions/class/accessor-name-inst/literal-string-unicode-escape.js',
+  'test/language/expressions/class/accessor-name-static/literal-numeric-binary.js',
+  'test/language/expressions/class/accessor-name-static/literal-numeric-octal.js',
+  'test/language/expressions/class/accessor-name-static/literal-string-default-escaped-ext.js',
+  'test/language/expressions/class/accessor-name-static/literal-string-unicode-escape.js',
+  'test/language/expressions/class/ident-name-method-def-default-escaped-ext.js',
+  'test/language/expressions/class/ident-name-method-def-extends-escaped-ext.js',
+  'test/language/expressions/greater-than-or-equal/S11.8.4_A4.12_T1.js',
+  'test/language/expressions/greater-than/S11.8.2_A4.12_T1.js',
+  'test/language/expressions/less-than-or-equal/S11.8.3_A4.12_T1.js',
+  'test/language/expressions/less-than/S11.8.1_A4.12_T1.js',
+  'test/language/expressions/new.target/asi.js',
+  'test/language/expressions/new.target/value-via-call.js',
+  'test/language/expressions/new.target/value-via-fpapply.js',
+  'test/language/expressions/new.target/value-via-fpcall.js',
+  'test/language/expressions/new.target/value-via-member.js',
+  'test/language/expressions/new.target/value-via-new.js',
+  'test/language/expressions/new.target/value-via-super-call.js',
+  'test/language/expressions/new.target/value-via-super-property.js',
+  'test/language/expressions/new.target/value-via-tagged-template.js',
+  'test/language/expressions/object/accessor-name-literal-numeric-binary.js',
+  'test/language/expressions/object/accessor-name-literal-numeric-octal.js',
+  'test/language/expressions/object/accessor-name-literal-string-default-escaped-ext.js',
+  'test/language/expressions/object/accessor-name-literal-string-unicode-escape.js',
+  'test/language/expressions/template-literal/tv-utf16-escape-sequence.js',
+  'test/language/identifiers/part-digits-via-escape-hex.js',
+  'test/language/identifiers/part-unicode-10.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-11.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-12.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-13.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-14.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-15.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-16.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-17.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-5.2.0-escaped.js',
+  'test/language/identifiers/part-unicode-6.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-6.1.0-escaped.js',
+  'test/language/identifiers/part-unicode-7.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-8.0.0-escaped.js',
+  'test/language/identifiers/part-unicode-9.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-10.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-11.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-12.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-13.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-14.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-15.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-15.1.0-escaped.js',
+  'test/language/identifiers/start-unicode-16.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-17.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-5.2.0-escaped.js',
+  'test/language/identifiers/start-unicode-6.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-6.1.0-escaped.js',
+  'test/language/identifiers/start-unicode-7.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-8.0.0-escaped.js',
+  'test/language/identifiers/start-unicode-9.0.0-escaped.js',
+  'test/language/identifiers/val-dollar-sign-via-escape-hex.js',
+  'test/language/identifiers/val-underscore-via-escape-hex.js',
+  'test/language/identifiers/vals-eng-alpha-lower-via-escape-hex.js',
+  'test/language/identifiers/vals-eng-alpha-upper-via-escape-hex.js',
+  'test/language/identifiers/vals-rus-alpha-lower-via-escape-hex.js',
+  'test/language/identifiers/vals-rus-alpha-upper-via-escape-hex.js',
+  'test/language/literals/numeric/binary.js',
+  'test/language/literals/numeric/octal.js',
+  'test/language/statements/class/accessor-name-inst/literal-numeric-binary.js',
+  'test/language/statements/class/accessor-name-inst/literal-numeric-octal.js',
+  'test/language/statements/class/accessor-name-inst/literal-string-default-escaped-ext.js',
+  'test/language/statements/class/accessor-name-inst/literal-string-unicode-escape.js',
+  'test/language/statements/class/accessor-name-static/literal-numeric-binary.js',
+  'test/language/statements/class/accessor-name-static/literal-numeric-octal.js',
+  'test/language/statements/class/accessor-name-static/literal-string-default-escaped-ext.js',
+  'test/language/statements/class/accessor-name-static/literal-string-unicode-escape.js',
+  'test/language/statements/class/ident-name-method-def-default-escaped-ext.js',
+  'test/language/statements/class/ident-name-method-def-extends-escaped-ext.js',
+]);
+const REVIEWED_P0_SINGLE_VARIANT_PATHS = new Set([
+  'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-default-escaped-ext.js',
+  'test/language/expressions/assignment/dstr/ident-name-prop-name-literal-extends-escaped-ext.js',
+]);
 const TAXONOMY_BASELINE = '54010d4e4cb7f97ef2c6539fab6a5b2f33c33db7';
 const SPECIFICATION_SOURCE = 'https://262.ecma-international.org/6.0/';
 const SPECIFICATION_SHA256 =
@@ -2129,6 +2221,199 @@ function syntheticRoadmapProjectionFixture() {
   };
 }
 
+function syntheticReviewedP0H0Fixture() {
+  const pin = {
+    repository: TEST262_REPOSITORY,
+    revision: TEST262_REVISION,
+  };
+  const h0Path = 'test/annexB/h0-compact.js';
+  const unchangedPath = 'test/staging/unchanged.js';
+  const h0Classification = {
+    path: h0Path,
+    variants: 1,
+    partition: 'core',
+    status: 'blocked:test262-cross-realm-host',
+    blocker: 'test262-cross-realm-host',
+    features: ['cross-realm'],
+    flags: ['noStrict'],
+    includes: [],
+    provenance: ['feature:cross-realm'],
+  };
+  const p0Classifications = REVIEWED_P0_PATHS.map((path) => {
+    const variants = REVIEWED_P0_SINGLE_VARIANT_PATHS.has(path) ? 1 : 2;
+    return {
+      path,
+      variants,
+      partition: 'core',
+      status: 'blocked:lexical-grammar-and-new-target',
+      blocker: 'lexical-grammar-and-new-target',
+      features: [],
+      flags: variants === 1 ? ['noStrict'] : [],
+      includes: [],
+      provenance: ['es6id'],
+    };
+  });
+  const unchangedClassification = {
+    path: unchangedPath,
+    variants: 2,
+    partition: 'core',
+    status: 'blocked:proxy-and-reflect-metaobject',
+    blocker: 'proxy-and-reflect-metaobject',
+    features: [],
+    flags: [],
+    includes: [],
+    provenance: ['es6id'],
+  };
+  const preservedTaxonomy = {
+    version: 3,
+    pin,
+    classifications: [
+      h0Classification,
+      ...p0Classifications,
+      unchangedClassification,
+    ],
+  };
+  const preservedTaxonomyText = prettyJson(preservedTaxonomy);
+  const currentTaxonomy = /** @type {any} */ (
+    structuredClone(preservedTaxonomy)
+  );
+  currentTaxonomy.classifications = currentTaxonomy.classifications.map(
+    (/** @type {any} */ entry, /** @type {number} */ index) => {
+      if (!REVIEWED_P0_PATHS.includes(entry.path)) return entry;
+      const p0Index = index - 1;
+      if (p0Index === 0) {
+        return {
+          ...entry,
+          status: 'blocked:remaining-standard-library-additions',
+          blocker: 'remaining-standard-library-additions',
+        };
+      }
+      if (p0Index <= 22) {
+        return { ...entry, status: 'selected-passing', blocker: null };
+      }
+      return { ...entry, status: 'audit-passing-unselected', blocker: null };
+    },
+  );
+  const currentTaxonomyText = prettyJson(currentTaxonomy);
+  const pathsManifestText = prettyJson({
+    version: 1,
+    repository: pin.repository,
+    revision: pin.revision,
+    sourceTaxonomySha256: sha256(preservedTaxonomyText),
+    ledgerSha256: sha256(`${h0Path}\n`),
+    rootCount: 1,
+    variantCount: 1,
+    paths: [h0Path],
+  });
+  const ownerMapText = prettyJson({
+    version: 1,
+    repository: pin.repository,
+    revision: pin.revision,
+    owners: [
+      {
+        code: 'M2',
+        issue: 81,
+        blocker: 'proxy-and-reflect-metaobject',
+        title: 'Implement ES2015 Proxy traps, revocation, and invariants',
+      },
+    ],
+    rules: [
+      {
+        name: 'unused-proxy-rule',
+        primaryOwner: 'M2',
+        pathPrefix: 'test/built-ins/Proxy/',
+        failureSignatures: ['unexpected-throw:Object'],
+        secondaryEvidence: [],
+      },
+    ],
+  });
+  const inventory = [
+    {
+      path: h0Path,
+      variants: 1,
+      executionVariants: ['default'],
+      metadata: {
+        features: ['cross-realm'],
+        flags: ['noStrict'],
+        includes: [],
+      },
+      includeFeatures: [],
+    },
+  ];
+  const baselineText = prettyJson(
+    buildEs2015H0Baseline({
+      finalBaseCommit: '1'.repeat(40),
+      taxonomyText: preservedTaxonomyText,
+      pathsManifestText,
+    }),
+  );
+  const disposition = buildEs2015H0Disposition({
+    pathsManifestText,
+    baselineTaxonomyText: preservedTaxonomyText,
+    executionEvidenceText: prettyJson({
+      version: 1,
+      repository: pin.repository,
+      revision: pin.revision,
+      records: [
+        {
+          type: 'test',
+          file: h0Path,
+          variant: 'default',
+          status: 'passed',
+        },
+      ],
+    }),
+    ownerMapText,
+    pin,
+    inventory,
+  });
+  const dispositionText = prettyJson(disposition);
+  const promotionText = prettyJson(
+    buildEs2015Promotion({
+      sourceTaxonomyText: preservedTaxonomyText,
+      dispositionText,
+      pin,
+      inventory,
+    }),
+  );
+  const afterTaxonomy = /** @type {any} */ (structuredClone(currentTaxonomy));
+  afterTaxonomy.classifications[0] = {
+    ...afterTaxonomy.classifications[0],
+    status: 'selected-passing',
+    blocker: null,
+  };
+  const afterText = prettyJson(afterTaxonomy);
+  const ownerDeltas = buildEs2015H0OwnerDeltas({
+    beforeTaxonomyText: currentTaxonomyText,
+    afterTaxonomyText: afterText,
+    dispositionText,
+    promotionText,
+    sourceTaxonomySha256: sha256(preservedTaxonomyText),
+  });
+  return {
+    afterTaxonomy,
+    baselineOptions: {
+      baselineText,
+      taxonomyText: currentTaxonomyText,
+      preservedTaxonomyText,
+      pathsManifestText,
+      pin,
+    },
+    compactOptions: {
+      baseline: baselineText,
+      preservedTaxonomyText,
+      after: afterText,
+      disposition: dispositionText,
+      promotion: promotionText,
+      ownerDeltas,
+      pathsManifest: pathsManifestText,
+      ownerMap: ownerMapText,
+    },
+    currentTaxonomy,
+    preservedTaxonomy,
+  };
+}
+
 function decisionWithoutHash() {
   return {
     path: 'test/language/example.js',
@@ -3192,159 +3477,26 @@ export default [
     },
   },
   {
-    name: 'ES2015 compact H0 baseline permits reviewed non-H0 movement without weakening H0 membership or balance',
+    name: 'ES2015 compact H0 baseline accepts only the exact reviewed P0 transition',
     run: () => {
-      const pin = {
-        repository: TEST262_REPOSITORY,
-        revision: TEST262_REVISION,
-      };
-      const h0Path = 'test/language/h0-compact.js';
-      const nonH0Path = 'test/language/p0-reviewed.js';
-      const preservedTaxonomy = {
-        version: 3,
-        pin,
-        classifications: [
-          {
-            path: h0Path,
-            variants: 1,
-            partition: 'core',
-            status: 'blocked:test262-cross-realm-host',
-            blocker: 'test262-cross-realm-host',
-            features: ['cross-realm'],
-            flags: ['noStrict'],
-            includes: [],
-            provenance: ['feature:cross-realm'],
-          },
-          {
-            path: nonH0Path,
-            variants: 1,
-            partition: 'core',
-            status: 'blocked:lexical-grammar-and-new-target',
-            blocker: 'lexical-grammar-and-new-target',
-            features: [],
-            flags: ['noStrict'],
-            includes: [],
-            provenance: ['es6id'],
-          },
-        ],
-      };
-      const preservedTaxonomyText = prettyJson(preservedTaxonomy);
-      const pathsManifestText = prettyJson({
-        version: 1,
-        repository: pin.repository,
-        revision: pin.revision,
-        sourceTaxonomySha256: sha256(preservedTaxonomyText),
-        ledgerSha256: sha256(`${h0Path}\n`),
-        rootCount: 1,
-        variantCount: 1,
-        paths: [h0Path],
-      });
-      const ownerMapText = prettyJson({
-        version: 1,
-        repository: pin.repository,
-        revision: pin.revision,
-        owners: [
-          {
-            code: 'M2',
-            issue: 81,
-            blocker: 'proxy-and-reflect-metaobject',
-            title: 'Implement ES2015 Proxy traps, revocation, and invariants',
-          },
-        ],
-        rules: [
-          {
-            name: 'unused-proxy-rule',
-            primaryOwner: 'M2',
-            pathPrefix: 'test/built-ins/Proxy/',
-            failureSignatures: ['unexpected-throw:Object'],
-            secondaryEvidence: [],
-          },
-        ],
-      });
-      const inventory = [
-        {
-          path: h0Path,
-          variants: 1,
-          executionVariants: ['default'],
-          metadata: {
-            features: ['cross-realm'],
-            flags: ['noStrict'],
-            includes: [],
-          },
-          includeFeatures: [],
-        },
-      ];
-      const executionRecords = [
-        {
-          type: 'test',
-          file: h0Path,
-          variant: 'default',
-          status: 'passed',
-        },
-      ];
-      const baseline = buildEs2015H0Baseline({
-        finalBaseCommit: '1'.repeat(40),
-        taxonomyText: preservedTaxonomyText,
-        pathsManifestText,
-      });
-      const disposition = buildEs2015H0Disposition({
-        pathsManifestText,
-        baselineTaxonomyText: preservedTaxonomyText,
-        executionEvidenceText: prettyJson({
-          version: 1,
-          repository: pin.repository,
-          revision: pin.revision,
-          records: executionRecords,
-        }),
-        ownerMapText,
-        pin,
-        inventory,
-      });
-      const dispositionText = prettyJson(disposition);
-      const promotion = buildEs2015Promotion({
-        sourceTaxonomyText: preservedTaxonomyText,
-        dispositionText,
-        pin,
-        inventory,
-      });
-      const promotionText = prettyJson(promotion);
-      const currentBase = /** @type {any} */ (
-        structuredClone(preservedTaxonomy)
+      const fixture = syntheticReviewedP0H0Fixture();
+      assertSame(REVIEWED_P0_PATHS.length, 83);
+      assertSame(
+        REVIEWED_P0_PATHS.reduce(
+          (total, path) =>
+            total + (REVIEWED_P0_SINGLE_VARIANT_PATHS.has(path) ? 1 : 2),
+          0,
+        ),
+        164,
       );
-      currentBase.classifications[1] = {
-        ...currentBase.classifications[1],
-        status: 'selected-passing',
-        blocker: null,
-        provenance: ['reviewed-p0-movement'],
-      };
-      const after = /** @type {any} */ (structuredClone(currentBase));
-      after.classifications[0] = {
-        ...after.classifications[0],
-        status: 'selected-passing',
-        blocker: null,
-      };
-      const currentBaseText = prettyJson(currentBase);
-      const afterText = prettyJson(after);
-      const ownerDeltas = buildEs2015H0OwnerDeltas({
-        beforeTaxonomyText: currentBaseText,
-        afterTaxonomyText: afterText,
-        dispositionText,
-        promotionText,
-        sourceTaxonomySha256: sha256(preservedTaxonomyText),
-      });
-      const options = {
-        baseline: prettyJson(baseline),
-        after: afterText,
-        disposition: dispositionText,
-        promotion: promotionText,
-        ownerDeltas,
-        pathsManifest: pathsManifestText,
-        ownerMap: ownerMapText,
-      };
+      assertSame(
+        sha256(`${REVIEWED_P0_PATHS.join('\n')}\n`),
+        REVIEWED_P0_PATH_SHA256,
+      );
+      assertEs2015H0BaselineMatchesTaxonomy(fixture.baselineOptions);
+      assertExactH0DispositionDelta(fixture.compactOptions);
 
-      assertExactH0DispositionDelta(options);
-
-      const extraH0 = structuredClone(after);
+      const extraH0 = structuredClone(fixture.afterTaxonomy);
       extraH0.classifications.push({
         ...extraH0.classifications[0],
         path: 'test/language/unreviewed-h0.js',
@@ -3354,13 +3506,13 @@ export default [
       assertThrows(
         () =>
           assertExactH0DispositionDelta({
-            ...options,
+            ...fixture.compactOptions,
             after: prettyJson(extraH0),
           }),
         Error,
       );
 
-      const unbalancedPartition = structuredClone(after);
+      const unbalancedPartition = structuredClone(fixture.afterTaxonomy);
       unbalancedPartition.classifications[1] = {
         ...unbalancedPartition.classifications[1],
         partition: 'annex-b',
@@ -3368,11 +3520,139 @@ export default [
       assertThrows(
         () =>
           assertExactH0DispositionDelta({
-            ...options,
+            ...fixture.compactOptions,
             after: prettyJson(unbalancedPartition),
           }),
         Error,
       );
+    },
+  },
+  {
+    name: 'ES2015 compact H0 baseline requires exact preserved taxonomy for non-H0 movement',
+    run: () => {
+      const fixture = syntheticReviewedP0H0Fixture();
+      const compactOptions = /** @type {any} */ ({
+        ...fixture.compactOptions,
+      });
+      delete compactOptions.preservedTaxonomyText;
+      const baselineOptions = {
+        baselineText: fixture.baselineOptions.baselineText,
+        taxonomyText: fixture.baselineOptions.taxonomyText,
+        pathsManifestText: fixture.baselineOptions.pathsManifestText,
+        pin: fixture.baselineOptions.pin,
+      };
+
+      assertThrows(() => assertExactH0DispositionDelta(compactOptions), Error);
+      assertThrows(
+        () => assertEs2015H0BaselineMatchesTaxonomy(baselineOptions),
+        Error,
+      );
+      assertThrows(
+        () =>
+          assertEs2015H0BaselineMatchesTaxonomy({
+            ...fixture.baselineOptions,
+            preservedTaxonomyText: `${fixture.baselineOptions.preservedTaxonomyText}\n`,
+          }),
+        Error,
+      );
+    },
+  },
+  {
+    name: 'ES2015 compact H0 baseline rejects arbitrary non-H0 status, blocker, and provenance drift',
+    run: () => {
+      const fixture = syntheticReviewedP0H0Fixture();
+      const statusDrift = structuredClone(fixture.afterTaxonomy);
+      statusDrift.classifications[2] = {
+        ...statusDrift.classifications[2],
+        status: 'blocked:proxy-and-reflect-metaobject',
+        blocker: 'proxy-and-reflect-metaobject',
+      };
+      const blockerDrift = structuredClone(fixture.afterTaxonomy);
+      blockerDrift.classifications[3] = {
+        ...blockerDrift.classifications[3],
+        blocker: 'remaining-language-runtime-semantics',
+      };
+      const changedProvenance = structuredClone(fixture.afterTaxonomy);
+      changedProvenance.classifications[4] = {
+        ...changedProvenance.classifications[4],
+        provenance: ['unreviewed-drift'],
+      };
+      const unchangedProvenance = structuredClone(fixture.afterTaxonomy);
+      const unchangedIndex = unchangedProvenance.classifications.length - 1;
+      unchangedProvenance.classifications[unchangedIndex] = {
+        ...unchangedProvenance.classifications[unchangedIndex],
+        provenance: ['unreviewed-drift'],
+      };
+
+      for (const after of [
+        statusDrift,
+        blockerDrift,
+        changedProvenance,
+        unchangedProvenance,
+      ]) {
+        assertThrows(
+          () =>
+            assertExactH0DispositionDelta({
+              ...fixture.compactOptions,
+              after: prettyJson(after),
+            }),
+          Error,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 compact H0 baseline rejects wrong reviewed P0 path set, hash, and variant counts',
+    run: () => {
+      const fixture = syntheticReviewedP0H0Fixture();
+      const preservedByPath = new Map(
+        fixture.preservedTaxonomy.classifications.map((entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      const wrongCount = structuredClone(fixture.afterTaxonomy);
+      const revertedPath = REVIEWED_P0_PATHS[0];
+      const revertedIndex = wrongCount.classifications.findIndex(
+        (/** @type {any} */ entry) => entry.path === revertedPath,
+      );
+      const reverted = preservedByPath.get(revertedPath);
+      if (reverted === undefined) {
+        throw new Error('expected reviewed P0 path in preserved taxonomy');
+      }
+      wrongCount.classifications[revertedIndex] = structuredClone(reverted);
+
+      const wrongHash = structuredClone(wrongCount);
+      const unchangedIndex = wrongHash.classifications.length - 1;
+      wrongHash.classifications[unchangedIndex] = {
+        ...wrongHash.classifications[unchangedIndex],
+        status: 'selected-passing',
+        blocker: null,
+      };
+
+      const wrongVariants = structuredClone(fixture.afterTaxonomy);
+      const firstP0Index = wrongVariants.classifications.findIndex(
+        (/** @type {any} */ entry) => entry.path === REVIEWED_P0_PATHS[0],
+      );
+      wrongVariants.classifications[firstP0Index] = {
+        ...wrongVariants.classifications[firstP0Index],
+        variants: wrongVariants.classifications[firstP0Index].variants + 1,
+      };
+      wrongVariants.classifications[unchangedIndex] = {
+        ...wrongVariants.classifications[unchangedIndex],
+        variants: wrongVariants.classifications[unchangedIndex].variants - 1,
+      };
+
+      for (const after of [wrongCount, wrongHash, wrongVariants]) {
+        assertThrows(
+          () =>
+            assertExactH0DispositionDelta({
+              ...fixture.compactOptions,
+              after: prettyJson(after),
+            }),
+          Error,
+        );
+      }
     },
   },
   {

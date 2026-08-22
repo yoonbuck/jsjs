@@ -200,6 +200,15 @@ const H0_EVIDENCE_BUNDLE_KEYS = Object.freeze([
 ]);
 const REVISION_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const REVIEWED_P0_ROOT_COUNT = 83;
+const REVIEWED_P0_VARIANT_COUNT = 164;
+const REVIEWED_P0_PATH_SHA256 =
+  'b2657db74331391b156f87e1e831665ef4ae3a738d48836e476c13828b1aeff4';
+const REVIEWED_P0_SOURCE_STATUS = 'blocked:lexical-grammar-and-new-target';
+const REVIEWED_P0_SOURCE_BLOCKER = 'lexical-grammar-and-new-target';
+const REVIEWED_P0_REASSIGNED_STATUS =
+  'blocked:remaining-standard-library-additions';
+const REVIEWED_P0_REASSIGNED_BLOCKER = 'remaining-standard-library-additions';
 /** @type {readonly string[]} */
 const EMPTY_FEATURES = Object.freeze([]);
 const entriesByManifest = new WeakMap();
@@ -1811,6 +1820,7 @@ function h0VariantEvidenceSha256(entries) {
  * @param {{
  *   before?: string,
  *   baseline?: string,
+ *   preservedTaxonomyText?: string,
  *   after: string,
  *   disposition: string,
  *   promotion: string,
@@ -1823,6 +1833,8 @@ export function assertExactH0DispositionDelta(options) {
   if (
     (options.before !== undefined && typeof options.before !== 'string') ||
     (options.baseline !== undefined && typeof options.baseline !== 'string') ||
+    (options.preservedTaxonomyText !== undefined &&
+      typeof options.preservedTaxonomyText !== 'string') ||
     (options.before === undefined && options.baseline === undefined) ||
     typeof options.after !== 'string' ||
     typeof options.disposition !== 'string' ||
@@ -1830,6 +1842,14 @@ export function assertExactH0DispositionDelta(options) {
   ) {
     throw new Es2015PromotionError(
       `${ES2015_H0_OWNER_DELTAS_FILE} exact validation requires final-base artifact text or compact baseline identity`,
+    );
+  }
+  if (
+    options.preservedTaxonomyText !== undefined &&
+    options.baseline === undefined
+  ) {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_OWNER_DELTAS_FILE} preserved taxonomy requires compact baseline identity`,
     );
   }
   if (
@@ -1916,20 +1936,21 @@ export function assertExactH0DispositionDelta(options) {
       `${ES2015_H0_PROMOTION_FILE} must contain exactly passed H0 dispositions`,
     );
   }
-  const beforeEntries =
+  const currentBeforeEntries =
     options.before === undefined
-      ? reconstructFinalBaseEntries(afterEntries, disposition)
+      ? reconstructCurrentBaseEntries(afterEntries, disposition)
       : taxonomyClassifications(options.before);
-  const beforeText =
+  const currentBeforeText =
     options.before === undefined
-      ? `${JSON.stringify({ classifications: beforeEntries })}\n`
+      ? `${JSON.stringify({ classifications: currentBeforeEntries })}\n`
       : options.before;
   if (baseline !== null && pathsManifest !== null) {
     if (options.before === undefined) {
       assertCompactH0BaselineMatchesEntries({
         baseline,
-        entries: beforeEntries,
+        entries: currentBeforeEntries,
         pathsManifest,
+        preservedTaxonomyText: options.preservedTaxonomyText,
         pin: {
           repository: pathsManifest.repository,
           revision: pathsManifest.revision,
@@ -1942,12 +1963,15 @@ export function assertExactH0DispositionDelta(options) {
         typeof options.pathsManifest !== 'string'
       ) {
         throw new Es2015PromotionError(
-          `${ES2015_H0_OWNER_DELTAS_FILE} exact validation requires full final-base artifact text`,
+          `${ES2015_H0_OWNER_DELTAS_FILE} exact validation requires current-base taxonomy text`,
         );
       }
       assertEs2015H0BaselineMatchesTaxonomy({
         baselineText: options.baseline,
         taxonomyText: options.before,
+        ...(options.preservedTaxonomyText === undefined
+          ? {}
+          : { preservedTaxonomyText: options.preservedTaxonomyText }),
         pathsManifestText: options.pathsManifest,
         pin: {
           repository: pathsManifest.repository,
@@ -1956,7 +1980,9 @@ export function assertExactH0DispositionDelta(options) {
       });
     }
   }
-  const before = new Map(beforeEntries.map((entry) => [entry.path, entry]));
+  const currentBefore = new Map(
+    currentBeforeEntries.map((entry) => [entry.path, entry]),
+  );
   const after = new Map(afterEntries.map((entry) => [entry.path, entry]));
   if (
     pathsManifest !== null &&
@@ -1964,7 +1990,9 @@ export function assertExactH0DispositionDelta(options) {
     typeof ownerMapText === 'string'
   ) {
     const sourceTaxonomySha256 =
-      baseline === null ? sha256(beforeText) : baseline.finalBaseTaxonomySha256;
+      baseline === null
+        ? sha256(currentBeforeText)
+        : baseline.finalBaseTaxonomySha256;
     if (
       disposition.repository !== pathsManifest.repository ||
       disposition.revision !== pathsManifest.revision ||
@@ -1978,7 +2006,7 @@ export function assertExactH0DispositionDelta(options) {
         `${ES2015_H0_DISPOSITION_FILE} does not match the immutable final-base H0 selector`,
       );
     }
-    const finalBaseSelector = beforeEntries
+    const currentBaseSelector = currentBeforeEntries
       .filter(
         (entry) =>
           entry.partition === 'core' &&
@@ -1987,14 +2015,16 @@ export function assertExactH0DispositionDelta(options) {
       .sort((left, right) => compareStrings(left.path, right.path));
     if (
       !sameStrings(
-        finalBaseSelector.map((entry) => entry.path),
+        currentBaseSelector.map((entry) => entry.path),
         pathsManifest.paths,
       ) ||
-      finalBaseSelector.reduce((total, entry) => total + entry.variants, 0) !==
-        pathsManifest.variantCount
+      currentBaseSelector.reduce(
+        (total, entry) => total + entry.variants,
+        0,
+      ) !== pathsManifest.variantCount
     ) {
       throw new Es2015PromotionError(
-        `${ES2015_H0_DISPOSITION_FILE} final-base core selector differs from immutable H0`,
+        `${ES2015_H0_DISPOSITION_FILE} current-base core selector differs from immutable H0`,
       );
     }
     const executionRecords = disposition.dispositions.flatMap((entry) =>
@@ -2020,18 +2050,18 @@ export function assertExactH0DispositionDelta(options) {
     });
   }
   for (const [path] of after) {
-    if (!before.has(path)) {
+    if (!currentBefore.has(path)) {
       throw new Es2015PromotionError(
         `${ES2015_H0_DISPOSITION_FILE} after taxonomy added unexpected root ${path}`,
       );
     }
   }
   for (const entry of disposition.dispositions) {
-    const beforeEntry = before.get(entry.path);
+    const beforeEntry = currentBefore.get(entry.path);
     const afterEntry = after.get(entry.path);
     if (beforeEntry?.blocker !== 'test262-cross-realm-host') {
       throw new Es2015PromotionError(
-        `${ES2015_H0_DISPOSITION_FILE} before taxonomy is not the immutable H0 selector for ${entry.path}`,
+        `${ES2015_H0_DISPOSITION_FILE} current-base taxonomy is not the immutable H0 selector for ${entry.path}`,
       );
     }
     if (
@@ -2062,7 +2092,7 @@ export function assertExactH0DispositionDelta(options) {
       );
     }
   }
-  for (const [path, beforeEntry] of before) {
+  for (const [path, beforeEntry] of currentBefore) {
     if (h0.has(path)) continue;
     const afterEntry = after.get(path);
     if (JSON.stringify(beforeEntry) !== JSON.stringify(afterEntry)) {
@@ -2087,9 +2117,9 @@ export function assertExactH0DispositionDelta(options) {
       `${ES2015_H0_DISPOSITION_FILE} post-H0 core selector is not zero`,
     );
   }
-  assertExactH0TaxonomyTotals(beforeEntries, afterEntries, disposition);
+  assertExactH0TaxonomyTotals(currentBeforeEntries, afterEntries, disposition);
   const expectedOwnerDeltas = buildEs2015H0OwnerDeltas({
-    beforeTaxonomyText: beforeText,
+    beforeTaxonomyText: currentBeforeText,
     afterTaxonomyText: options.after,
     dispositionText: options.disposition,
     promotionText: options.promotion,
@@ -2108,7 +2138,7 @@ export function assertExactH0DispositionDelta(options) {
  * @param {readonly any[]} afterEntries
  * @param {ReturnType<typeof parseEs2015H0Disposition>} disposition
  */
-function reconstructFinalBaseEntries(afterEntries, disposition) {
+function reconstructCurrentBaseEntries(afterEntries, disposition) {
   const byPath = new Map(
     disposition.dispositions.map((entry) => [entry.path, entry]),
   );
@@ -2651,6 +2681,7 @@ export function parseEs2015H0Baseline(text, pin) {
  * @param {{
  *   baselineText: string,
  *   taxonomyText: string,
+ *   preservedTaxonomyText?: string,
  *   pathsManifestText: string,
  *   pin: { repository: string, revision: string },
  * }} options
@@ -2658,31 +2689,61 @@ export function parseEs2015H0Baseline(text, pin) {
 export function assertEs2015H0BaselineMatchesTaxonomy(options) {
   const baseline = parseEs2015H0Baseline(options.baselineText);
   const pathsManifest = parseH0PathsManifest(options.pathsManifestText);
-  const taxonomy = baselineTaxonomy(options.taxonomyText);
-  assertH0BaselineMatchesEntries({
+  const current = baselineTaxonomy(options.taxonomyText);
+  assertPinMatches(current.pin, options.pin, ES2015_H0_BASELINE_FILE);
+  if (sha256(options.taxonomyText) === baseline.finalBaseTaxonomySha256) {
+    assertH0BaselineMatchesEntries({
+      baseline,
+      entries: current.classifications,
+      pathsManifest,
+      pin: options.pin,
+    });
+    return;
+  }
+  if (typeof options.preservedTaxonomyText !== 'string') {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_BASELINE_FILE} current taxonomy differs from the final base and requires preserved taxonomy text`,
+    );
+  }
+  const preserved = assertPreservedH0BaselineTaxonomy({
     baseline,
-    entries: taxonomy.classifications,
     pathsManifest,
     pin: options.pin,
+    preservedTaxonomyText: options.preservedTaxonomyText,
   });
-  if (sha256(options.taxonomyText) !== baseline.finalBaseTaxonomySha256) {
-    throw new Es2015PromotionError(
-      `${ES2015_H0_BASELINE_FILE} final-base taxonomy hash does not match`,
-    );
-  }
-  if (pathsManifest.sourceTaxonomySha256 !== baseline.finalBaseTaxonomySha256) {
-    throw new Es2015PromotionError(
-      `${ES2015_H0_BASELINE_FILE} H0 paths do not match the final-base taxonomy`,
-    );
-  }
+  assertReviewedP0Transition(
+    preserved.classifications,
+    current.classifications,
+    pathsManifest,
+  );
+}
+
+/**
+ * @param {{
+ *   baseline: ReturnType<typeof parseEs2015H0Baseline>,
+ *   pathsManifest: ReturnType<typeof parseH0PathsManifest>,
+ *   pin: { repository: string, revision: string },
+ *   preservedTaxonomyText: string,
+ * }} options
+ */
+function assertPreservedH0BaselineTaxonomy(options) {
+  const preserved = baselineTaxonomy(options.preservedTaxonomyText);
+  assertH0BaselineMatchesEntries({
+    baseline: options.baseline,
+    entries: preserved.classifications,
+    pathsManifest: options.pathsManifest,
+    pin: options.pin,
+  });
   if (
-    taxonomy.pin.repository !== baseline.repository ||
-    taxonomy.pin.revision !== baseline.revision
+    sha256(options.preservedTaxonomyText) !==
+    options.baseline.finalBaseTaxonomySha256
   ) {
     throw new Es2015PromotionError(
-      `${ES2015_H0_BASELINE_FILE} final-base taxonomy does not match the pinned Test262 revision`,
+      `${ES2015_H0_BASELINE_FILE} preserved taxonomy hash does not match the pinned final base`,
     );
   }
+  assertPinMatches(preserved.pin, options.pin, ES2015_H0_BASELINE_FILE);
+  return preserved;
 }
 
 /**
@@ -2736,14 +2797,14 @@ function assertH0BaselineMatchesEntries(options) {
 }
 
 /**
- * Reconciles the compact preserved identity with a reviewed current taxonomy.
- * H0 classifications and membership stay exact while independently balanced
- * non-H0 status movement is allowed.
+ * Reconciles the compact preserved identity with the exact reviewed P0
+ * transition into the current taxonomy while H0 remains byte-identical.
  *
  * @param {{
  *   baseline: ReturnType<typeof parseEs2015H0Baseline>,
  *   entries: readonly any[],
  *   pathsManifest: ReturnType<typeof parseH0PathsManifest>,
+ *   preservedTaxonomyText?: string,
  *   pin: { repository: string, revision: string },
  * }} options
  */
@@ -2782,16 +2843,183 @@ function assertCompactH0BaselineMatchesEntries(options) {
       `${ES2015_H0_BASELINE_FILE} H0 classification hash does not match`,
     );
   }
-  const summary = h0PartitionStatusSummary(entries);
+  if (facts.nonH0ClassificationSha256 === baseline.nonH0ClassificationSha256) {
+    assertH0BaselineMatchesEntries({
+      baseline,
+      entries,
+      pathsManifest,
+      pin,
+    });
+    return;
+  }
+  if (typeof options.preservedTaxonomyText !== 'string') {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_BASELINE_FILE} current taxonomy differs from the final base and requires preserved taxonomy text`,
+    );
+  }
+  const preserved = assertPreservedH0BaselineTaxonomy({
+    baseline,
+    pathsManifest,
+    pin,
+    preservedTaxonomyText: options.preservedTaxonomyText,
+  });
+  assertReviewedP0Transition(preserved.classifications, entries, pathsManifest);
+}
+
+/**
+ * @param {readonly any[]} preservedEntries
+ * @param {readonly any[]} currentEntries
+ * @param {ReturnType<typeof parseH0PathsManifest>} pathsManifest
+ */
+function assertReviewedP0Transition(
+  preservedEntries,
+  currentEntries,
+  pathsManifest,
+) {
+  const preservedPaths = preservedEntries.map((entry) => entry.path);
+  const currentPaths = currentEntries.map((entry) => entry.path);
+  if (!sameStrings(preservedPaths, currentPaths)) {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_BASELINE_FILE} reviewed P0 transition must preserve the exact taxonomy key set`,
+    );
+  }
+
+  /** @type {{ preserved: any, current: any }[]} */
+  const changed = [];
+  for (let index = 0; index < preservedEntries.length; index += 1) {
+    const preserved = preservedEntries[index];
+    const current = currentEntries[index];
+    if (preserved.variants !== current.variants) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 transition changed variant count for ${preserved.path}`,
+      );
+    }
+    if (pathsManifest.pathSet.has(preserved.path)) {
+      if (JSON.stringify(preserved) !== JSON.stringify(current)) {
+        throw new Es2015PromotionError(
+          `${ES2015_H0_BASELINE_FILE} reviewed P0 transition changed H0 record ${preserved.path}`,
+        );
+      }
+      continue;
+    }
+    if (JSON.stringify(preserved) !== JSON.stringify(current)) {
+      changed.push({ preserved, current });
+    }
+  }
+
+  const changedPaths = changed.map(({ preserved }) => preserved.path);
+  const changedVariants = changed.reduce(
+    (total, { preserved }) => total + preserved.variants,
+    0,
+  );
   if (
-    summary.roots !== baseline.partitionStatusSummary.roots ||
-    summary.variants !== baseline.partitionStatusSummary.variants ||
-    canonicalJson(summary.partitions) !==
-      canonicalJson(baseline.partitionStatusSummary.partitions)
+    changed.length !== REVIEWED_P0_ROOT_COUNT ||
+    changedVariants !== REVIEWED_P0_VARIANT_COUNT ||
+    sha256(`${changedPaths.join('\n')}\n`) !== REVIEWED_P0_PATH_SHA256
   ) {
     throw new Es2015PromotionError(
-      `${ES2015_H0_BASELINE_FILE} current taxonomy partition totals do not balance`,
+      `${ES2015_H0_BASELINE_FILE} current taxonomy does not match the reviewed P0 path ledger`,
     );
+  }
+
+  let remainingStandardLibraryReassignments = 0;
+  for (const { preserved, current } of changed) {
+    if (
+      preserved.partition !== 'core' ||
+      preserved.status !== REVIEWED_P0_SOURCE_STATUS ||
+      preserved.blocker !== REVIEWED_P0_SOURCE_BLOCKER
+    ) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 source is invalid at ${preserved.path}`,
+      );
+    }
+    const selected =
+      current.status === 'selected-passing' && current.blocker === null;
+    const auditPassing =
+      current.status === 'audit-passing-unselected' && current.blocker === null;
+    const reassigned =
+      current.status === REVIEWED_P0_REASSIGNED_STATUS &&
+      current.blocker === REVIEWED_P0_REASSIGNED_BLOCKER;
+    if (!selected && !auditPassing && !reassigned) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 destination is invalid at ${preserved.path}`,
+      );
+    }
+    if (reassigned) {
+      remainingStandardLibraryReassignments += 1;
+    }
+    const expected = {
+      ...preserved,
+      status: current.status,
+      blocker: current.blocker,
+    };
+    if (JSON.stringify(expected) !== JSON.stringify(current)) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 transition changed non-status facts at ${preserved.path}`,
+      );
+    }
+  }
+  if (remainingStandardLibraryReassignments !== 1) {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_BASELINE_FILE} reviewed P0 transition must contain one remaining-standard-library-additions reassignment`,
+    );
+  }
+
+  assertSameReviewedP0CountTable(
+    taxonomyCountTable(preservedEntries, (entry) => entry.partition),
+    taxonomyCountTable(currentEntries, (entry) => entry.partition),
+    'partition',
+  );
+  const expectedStatuses = taxonomyCountTable(
+    preservedEntries,
+    (entry) => `${entry.status}\u0000${entry.blocker ?? ''}`,
+  );
+  for (const { preserved, current } of changed) {
+    addTaxonomyCount(
+      expectedStatuses,
+      `${preserved.status}\u0000${preserved.blocker ?? ''}`,
+      -1,
+      -preserved.variants,
+    );
+    addTaxonomyCount(
+      expectedStatuses,
+      `${current.status}\u0000${current.blocker ?? ''}`,
+      1,
+      current.variants,
+    );
+  }
+  assertSameReviewedP0CountTable(
+    expectedStatuses,
+    taxonomyCountTable(
+      currentEntries,
+      (entry) => `${entry.status}\u0000${entry.blocker ?? ''}`,
+    ),
+    'status',
+  );
+}
+
+/**
+ * @param {ReadonlyMap<string, { roots: number, variants: number }>} expected
+ * @param {ReadonlyMap<string, { roots: number, variants: number }>} actual
+ * @param {string} label
+ */
+function assertSameReviewedP0CountTable(expected, actual, label) {
+  if (expected.size !== actual.size) {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_BASELINE_FILE} reviewed P0 ${label} totals do not balance`,
+    );
+  }
+  for (const [key, count] of expected) {
+    const actualCount = actual.get(key);
+    if (
+      actualCount === undefined ||
+      actualCount.roots !== count.roots ||
+      actualCount.variants !== count.variants
+    ) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 ${label} totals do not balance`,
+      );
+    }
   }
 }
 
