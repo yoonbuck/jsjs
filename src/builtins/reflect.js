@@ -1,6 +1,12 @@
 import { EngineArray } from '../runtime/array-object.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
 import { EngineObject, defineOwnPropertyOrThrow } from '../runtime/object.js';
-import { requireObjectReceiver } from './shared.js';
+import { toPropertyKey } from '../runtime/conversion.js';
+import {
+  fromPropertyDescriptor,
+  requireObjectReceiver,
+  toPropertyDescriptor,
+} from './shared.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -60,6 +66,53 @@ export function createReflectIntrinsics(realm) {
   defineReflectMethod(
     realm,
     reflectObject,
+    'defineProperty',
+    3,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.defineProperty requires an object',
+      );
+      const key = toPropertyKey(args[1], realm);
+      const descriptor = toPropertyDescriptor(args[2]);
+      return target.defineOwnProperty(key, descriptor);
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'deleteProperty',
+    2,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.deleteProperty requires an object',
+      );
+      return target.delete(toPropertyKey(args[1], realm));
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'getOwnPropertyDescriptor',
+    2,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.getOwnPropertyDescriptor requires an object',
+      );
+      return fromPropertyDescriptor(
+        realm,
+        target.getOwnProperty(toPropertyKey(args[1], realm)),
+      );
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
     'getPrototypeOf',
     1,
     (_this, args) =>
@@ -68,6 +121,14 @@ export function createReflectIntrinsics(realm) {
         'Reflect.getPrototypeOf requires an object',
       ).getPrototypeOf(),
   );
+
+  defineReflectMethod(realm, reflectObject, 'has', 2, (_this, args) => {
+    const target = requireObjectReceiver(
+      args[0],
+      'Reflect.has requires an object',
+    );
+    return target.hasProperty(toPropertyKey(args[1], realm));
+  });
 
   defineReflectMethod(realm, reflectObject, 'isExtensible', 1, (_this, args) =>
     requireObjectReceiver(
@@ -96,6 +157,29 @@ export function createReflectIntrinsics(realm) {
         args[0],
         'Reflect.preventExtensions requires an object',
       ).preventExtensions(),
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'setPrototypeOf',
+    2,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.setPrototypeOf requires an object',
+      );
+      const prototype = args[1];
+
+      if (prototype !== null && !(prototype instanceof EngineObject)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          'Reflect.setPrototypeOf prototype must be an object or null',
+        );
+      }
+
+      return target.setPrototypeOf(prototype);
+    },
   );
 
   return { reflectObject };

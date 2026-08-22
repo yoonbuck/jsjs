@@ -17,8 +17,13 @@ export class HostileExotic extends EngineObject {
     /** @type {Map<string | symbol, unknown>} */
     this.virtual = new Map();
     this.prototypeResult = prototype;
+    this.setPrototypeResult = false;
     this.extensibleResult = true;
+    this.preventExtensionsResult = false;
     this.iterator = iterator;
+    this.setResult = false;
+    this.deleteResult = false;
+    this.defineOwnPropertyResult = false;
     /** @type {Map<string, unknown>} */
     this.abrupt = new Map();
     /** @type {(import('../../src/runtime/realm.js').Realm | null)[]} */
@@ -54,7 +59,9 @@ export class HostileExotic extends EngineObject {
    * @returns {boolean}
    */
   setPrototypeOf(value) {
-    return /** @type {boolean} */ (this.record('setPrototypeOf', false, value));
+    return /** @type {boolean} */ (
+      this.record('setPrototypeOf', this.setPrototypeResult, value)
+    );
   }
 
   /**
@@ -70,7 +77,9 @@ export class HostileExotic extends EngineObject {
    * @returns {boolean}
    */
   preventExtensions() {
-    return /** @type {boolean} */ (this.record('preventExtensions', false));
+    return /** @type {boolean} */ (
+      this.record('preventExtensions', this.preventExtensionsResult)
+    );
   }
 
   /**
@@ -108,7 +117,7 @@ export class HostileExotic extends EngineObject {
    */
   set(key, value, receiver) {
     return /** @type {boolean} */ (
-      this.record('set', false, key, value, receiver)
+      this.record('set', this.setResult, key, value, receiver)
     );
   }
 
@@ -117,7 +126,9 @@ export class HostileExotic extends EngineObject {
    * @returns {boolean}
    */
   delete(key) {
-    return /** @type {boolean} */ (this.record('delete', false, key));
+    return /** @type {boolean} */ (
+      this.record('delete', this.deleteResult, key)
+    );
   }
 
   /**
@@ -127,7 +138,12 @@ export class HostileExotic extends EngineObject {
    */
   defineOwnProperty(key, descriptor) {
     return /** @type {boolean} */ (
-      this.record('defineOwnProperty', false, key, descriptor)
+      this.record(
+        'defineOwnProperty',
+        this.defineOwnPropertyResult,
+        key,
+        descriptor,
+      )
     );
   }
 
