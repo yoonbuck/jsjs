@@ -8,40 +8,90 @@ import { requireObjectReceiver } from './shared.js';
 
 /**
  * @param {Realm} realm
- * @returns {{ reflectObject: EngineObject }}
+ * @param {EngineObject} target
+ * @param {string} name
+ * @param {number} length
+ * @param {import('./shared.js').NativeFunctionOptions['call']} call
+ * @returns {void}
  */
-export function createReflectIntrinsics(realm) {
-  const reflectObject = new EngineObject(realm.intrinsics.objectPrototype);
-  const ownKeys = realm.createNativeFunction({
-    name: 'ownKeys',
-    length: 1,
-    call(_thisValue, args) {
-      const target = requireObjectReceiver(
-        args[0],
-        'Reflect.ownKeys requires an object',
-      );
-      const keys = target.ownPropertyKeys();
-      const result = new EngineArray(realm.intrinsics.arrayPrototype);
-
-      for (let index = 0; index < keys.length; index += 1) {
-        defineOwnPropertyOrThrow(result, String(index), {
-          value: keys[index],
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
-      }
-
-      return result;
-    },
-  });
-
-  reflectObject.defineOwnProperty('ownKeys', {
-    value: ownKeys,
+function defineReflectMethod(realm, target, name, length, call) {
+  target.defineOwnProperty(name, {
+    value: realm.createNativeFunction({ name, length, call }),
     writable: true,
     enumerable: false,
     configurable: true,
   });
+}
+
+/**
+ * @param {Realm} realm
+ * @param {readonly unknown[]} values
+ * @returns {EngineArray}
+ */
+function createArrayFromList(realm, values) {
+  const result = new EngineArray(realm.intrinsics.arrayPrototype);
+
+  for (let index = 0; index < values.length; index += 1) {
+    defineOwnPropertyOrThrow(result, String(index), {
+      value: values[index],
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * @param {Realm} realm
+ * @returns {{ reflectObject: EngineObject }}
+ */
+export function createReflectIntrinsics(realm) {
+  const reflectObject = new EngineObject(realm.intrinsics.objectPrototype);
+
+  reflectObject.defineOwnProperty(realm.agent.wellKnownSymbols.toStringTag, {
+    value: 'Reflect',
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
+
+  defineReflectMethod(realm, reflectObject, 'getPrototypeOf', 1, (_this, args) =>
+    requireObjectReceiver(
+      args[0],
+      'Reflect.getPrototypeOf requires an object',
+    ).getPrototypeOf(),
+  );
+
+  defineReflectMethod(realm, reflectObject, 'isExtensible', 1, (_this, args) =>
+    requireObjectReceiver(
+      args[0],
+      'Reflect.isExtensible requires an object',
+    ).isExtensible(),
+  );
+
+  defineReflectMethod(realm, reflectObject, 'ownKeys', 1, (_this, args) =>
+    createArrayFromList(
+      realm,
+      requireObjectReceiver(
+        args[0],
+        'Reflect.ownKeys requires an object',
+      ).ownPropertyKeys(),
+    ),
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'preventExtensions',
+    1,
+    (_this, args) =>
+      requireObjectReceiver(
+        args[0],
+        'Reflect.preventExtensions requires an object',
+      ).preventExtensions(),
+  );
 
   return { reflectObject };
 }
