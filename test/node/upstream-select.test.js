@@ -1264,11 +1264,15 @@ export default [
     },
   },
   {
-    name: 'checked-in ES2015 promotion exactly matches the durable ledger and one new subset group',
+    name: 'checked-in ES2015 promotions exactly match their durable ledgers and generated subset groups',
     run: async () => {
-      const [promotionText, subsetText] = await Promise.all([
+      const [promotionText, h0PromotionText, subsetText] = await Promise.all([
         readFile(
           new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+        readFile(
+          new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
           'utf8',
         ),
         readFile(
@@ -1277,14 +1281,21 @@ export default [
         ),
       ]);
       const manifest = parseEs2015Promotion(promotionText);
+      const h0Manifest = parseEs2015Promotion(h0PromotionText);
       const subset = parseUpstreamSubset(subsetText);
       const promotion = subset.groups.filter(
         (group) => group.name === 'es2015/audit-passing-promotion',
       );
+      const h0Promotion = subset.groups.filter(
+        (group) => group.name === ES2015_H0_PROMOTION_GROUP,
+      );
       const preExistingGroups = subset.groups.filter(
-        (group) => group.name !== 'es2015/audit-passing-promotion',
+        (group) =>
+          group.name !== 'es2015/audit-passing-promotion' &&
+          group.name !== ES2015_H0_PROMOTION_GROUP,
       );
       const paths = promotionPaths(manifest);
+      const h0Paths = promotionPaths(h0Manifest);
 
       assertSame(manifest.rootCount, 6323);
       assertSame(manifest.variantCount, 11955);
@@ -1293,6 +1304,11 @@ export default [
       assertSame(sha256(`${paths.join('\n')}\n`), DURABLE_LEDGER_SHA256);
       assertSame(promotion.length, 1);
       assertSame(JSON.stringify(promotion[0]?.paths), JSON.stringify(paths));
+      assertSame(h0Promotion.length, 1);
+      assertSame(
+        JSON.stringify(h0Promotion[0]?.paths),
+        JSON.stringify(h0Paths),
+      );
       assertSame(
         JSON.stringify(
           upstreamSubsetPaths(subset).filter((path) => paths.includes(path)),
