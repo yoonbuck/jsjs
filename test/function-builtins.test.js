@@ -158,6 +158,73 @@ const tests = [
         ),
         'TypeError',
       );
+      assertSame(
+        run(
+          'function count() { return arguments.length; }' +
+            'count.apply(null, {length: -1});',
+        ),
+        0,
+      );
+      assertSame(
+        run(
+          'function list() { return arguments.length + ":" + arguments[0]; }' +
+            'list.apply(null, {0: "x", length: 1.9});',
+        ),
+        '1:x',
+      );
+      assertSame(
+        run(
+          'var coercions = 0;' +
+            'var length = {valueOf: function () { coercions += 1; return 1; }};' +
+            'function count() { return arguments.length; }' +
+            'count.apply(null, {0: "x", length: length}) + ":" + coercions;',
+        ),
+        '1:1',
+      );
+      assertSame(
+        run(
+          'var called = 0;' +
+            'var list = {length: 4294967296};' +
+            'Object.defineProperty(list, "0", {' +
+            'get: function () { throw "index-zero"; }' +
+            '});' +
+            'function target() { called += 1; }' +
+            'var caught;' +
+            'try { target.apply(null, list); } catch (error) { caught = error; }' +
+            'caught + ":" + called;',
+        ),
+        'index-zero:0',
+      );
+      assertSame(
+        run(
+          'var touched = 0;' +
+            'var list = {get length() { touched += 1; throw "length"; }};' +
+            'var caught;' +
+            'try { Function.prototype.apply.call({}, null, list); }' +
+            'catch (error) { caught = error.name; }' +
+            'caught + ":" + touched;',
+        ),
+        'TypeError:0',
+      );
+      assertSame(
+        run(
+          'var log = [];' +
+            'var list = {};' +
+            'Object.defineProperty(list, "length", {' +
+            'get: function () { log.push("length"); return 2; }' +
+            '});' +
+            'Object.defineProperty(list, "0", {' +
+            'get: function () { log.push("0"); return "a"; }' +
+            '});' +
+            'Object.defineProperty(list, "1", {' +
+            'get: function () { log.push("1"); return "b"; }' +
+            '});' +
+            'function target() { log.push("call"); }' +
+            'target.apply(null, list);' +
+            'log.join(",");',
+        ),
+        'length,0,1,call',
+      );
     },
   },
   {

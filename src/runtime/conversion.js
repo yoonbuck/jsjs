@@ -290,6 +290,23 @@ export function toInteger(value, callerRealm) {
 }
 
 /**
+ * Implements ES2015 §7.1.15 ToLength.
+ *
+ * @param {unknown} value
+ * @param {import('./realm.js').Realm} [callerRealm]
+ * @returns {number}
+ */
+export function toLength(value, callerRealm) {
+  const length = toInteger(value, callerRealm);
+
+  if (length <= 0) {
+    return 0;
+  }
+
+  return Math.min(length, Number.MAX_SAFE_INTEGER);
+}
+
+/**
  * @param {unknown} value
  * @param {import('./realm.js').Realm} [callerRealm]
  * @returns {string}

@@ -3,6 +3,7 @@ import {
   checkObjectCoercible,
   toNumber,
   toPrimitive,
+  toLength,
   toString,
   toUint16,
 } from '../src/runtime/conversion.js';
@@ -96,6 +97,33 @@ const tests = [
       assertThrows(() => checkObjectCoercible(null), GuestErrorSignal);
       assertThrows(() => checkObjectCoercible(undefined), GuestErrorSignal);
       assertSame(checkObjectCoercible('ready'), 'ready');
+    },
+  },
+  {
+    name: 'toLength clamps without 32-bit wrapping and coerces once',
+    run() {
+      assertSame(toLength(undefined), 0);
+      assertSame(toLength(NaN), 0);
+      assertSame(Object.is(toLength(-0), 0), true);
+      assertSame(toLength(-1), 0);
+      assertSame(toLength(3.9), 3);
+      assertSame(toLength(Infinity), Number.MAX_SAFE_INTEGER);
+      assertSame(toLength(Number.MAX_SAFE_INTEGER + 100), Number.MAX_SAFE_INTEGER);
+
+      let calls = 0;
+      const length = createConversionObject();
+      length.defineOwnProperty('valueOf', {
+        value() {
+          calls += 1;
+          return 2.8;
+        },
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      assertSame(toLength(length), 2);
+      assertSame(calls, 1);
     },
   },
   {

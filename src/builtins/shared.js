@@ -12,7 +12,7 @@ import {
 } from '../runtime/object.js';
 import { GeneratorObject } from '../runtime/generator-object.js';
 import { withLinkedActiveExecutionRealm } from '../runtime/reference.js';
-import { toBoolean, toUint32 } from '../runtime/conversion.js';
+import { toBoolean, toLength } from '../runtime/conversion.js';
 
 /**
  * @typedef {import('../runtime/descriptors.js').CallableLike} CallableLike
@@ -500,28 +500,23 @@ export function fromPropertyDescriptor(realm, descriptor) {
 }
 
 /**
+ * Implements ES2015 §7.3.17 CreateListFromArrayLike with the default
+ * element-type set.
+ *
  * @param {unknown} value
- * @param {{ preserveHoles?: boolean }} [options]
  * @param {Realm} [callerRealm]
  * @returns {unknown[]}
  */
-export function createListFromArrayLike(value, options = {}, callerRealm) {
+export function createListFromArrayLike(value, callerRealm) {
   const object = requireObjectReceiver(
     value,
     'Array-like value must be an object',
   );
-  const preserveHoles = options.preserveHoles === true;
-  const length = toUint32(object.get('length', object), callerRealm);
-  const list = new Array(length);
+  const length = toLength(object.get('length', object), callerRealm);
+  const list = [];
 
   for (let index = 0; index < length; index += 1) {
-    const name = String(index);
-
-    if (preserveHoles && !object.hasProperty(name)) {
-      continue;
-    }
-
-    list[index] = object.get(name, object);
+    list.push(object.get(String(index), object));
   }
 
   return list;

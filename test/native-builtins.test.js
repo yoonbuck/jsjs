@@ -427,7 +427,7 @@ const tests = [
     },
   },
   {
-    name: 'createListFromArrayLike can preserve inherited values and sparse holes',
+    name: 'createListFromArrayLike reads inherited values and creates a dense list',
     async run() {
       const realm = createRealm();
       const { createListFromArrayLike } =
@@ -460,14 +460,6 @@ const tests = [
       assertSame(dense[1], 'inherited');
       assertSame(dense[2], undefined);
       assertSame(2 in dense, true);
-
-      const sparse = createListFromArrayLike(arrayLike, {
-        preserveHoles: true,
-      });
-      assertSame(sparse.length, 3);
-      assertSame(sparse[0], 'zero');
-      assertSame(sparse[1], 'inherited');
-      assertSame(2 in sparse, false);
     },
   },
   {
