@@ -125,6 +125,29 @@ export function getIteratorRecord(iterator, realm) {
     );
   }
 
+  const record = createIteratorRecord(iterator, realm);
+
+  if (!isCallable(record.nextMethod)) {
+    throw new GuestErrorSignal(
+      'TypeError',
+      'Enumerate iterator next is not callable',
+    );
+  }
+
+  return record;
+}
+
+/**
+ * Captures `next` without eagerly validating callability. `GetIterator`
+ * performs only `Get(iterator, "next")`; `IteratorNext` owns the later
+ * callable check. This distinction lets an abrupt destructuring target close
+ * an iterator through `return` before any `next` call is required.
+ *
+ * @param {EngineObject} iterator
+ * @param {Realm} [realm]
+ * @returns {IteratorRecord}
+ */
+function createIteratorRecord(iterator, realm) {
   if (realm !== undefined) {
     linkGeneratorHostChainToAgent(realm.agent, iterator.agent);
   }
@@ -138,13 +161,6 @@ export function getIteratorRecord(iterator, realm) {
 
   if (realm !== undefined) {
     linkGeneratorHostChainToValue(realm.agent, nextMethod);
-  }
-
-  if (!isCallable(nextMethod)) {
-    throw new GuestErrorSignal(
-      'TypeError',
-      'Enumerate iterator next is not callable',
-    );
   }
 
   return {
@@ -232,7 +248,7 @@ export function getIterator(realm, obj, method) {
     );
   }
 
-  return getIteratorRecord(iterator, realm);
+  return createIteratorRecord(iterator, realm);
 }
 
 /**

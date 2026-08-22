@@ -264,12 +264,10 @@ export function evaluateExpressionValue(node, context) {
 
     return linkValueToGeneratorHostChain(
       context.realm,
-      getIdentifierBindingValue(
-        context.env,
-        node.name,
-        context.strict,
-        context.realm,
-      ),
+      // Match getValue(getIdentifierReference(...)): result linking belongs to
+      // the caller, but binding access itself must not add an object-operation
+      // guard frame around an accessor reached by the fused read.
+      getIdentifierBindingValue(context.env, node.name, context.strict),
     );
   }
 

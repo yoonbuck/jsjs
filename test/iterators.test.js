@@ -381,6 +381,35 @@ const tests = [
     },
   },
   {
+    name: 'GetIterator defers next callability so IteratorClose can run first',
+    run() {
+      const realm = createRealm();
+      let returnCalls = 0;
+      const iterator = new EngineObject(realm.intrinsics.objectPrototype);
+      iterator.defineOwnProperty('return', {
+        value: realm.createNativeFunction({
+          name: 'return',
+          length: 0,
+          call(thisValue) {
+            assertSame(thisValue, iterator);
+            returnCalls += 1;
+            return createIterResultObject(realm, undefined, true);
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const record = getIterator(realm, makeIterable(realm, iterator));
+
+      assertSame(record.nextMethod, undefined);
+      iteratorClose(realm, record, false);
+      assertSame(returnCalls, 1);
+      const error = captureGuestTypeError(() => iteratorStep(record));
+      assertSame(error.guestMessage, 'iterator.next is not a function');
+    },
+  },
+  {
     name: 'IteratorStep/IteratorValue drive an iterator to completion',
     run() {
       const realm = createRealm();
