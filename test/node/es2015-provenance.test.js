@@ -58,6 +58,11 @@ import {
   summarizeEs2015Classification,
 } from '../../tools/test262/es2015-taxonomy.js';
 import {
+  assertExactH0DispositionDelta,
+  buildEs2015H0Baseline,
+  buildEs2015H0Disposition,
+  buildEs2015H0OwnerDeltas,
+  buildEs2015Promotion,
   mergePromotionSubset,
   parseEs2015Promotion,
 } from '../../tools/test262/es2015-promotion.js';
@@ -3183,6 +3188,190 @@ export default [
             driftedAuthority,
           ),
         Es2015ProvenanceError,
+      );
+    },
+  },
+  {
+    name: 'ES2015 compact H0 baseline permits reviewed non-H0 movement without weakening H0 membership or balance',
+    run: () => {
+      const pin = {
+        repository: TEST262_REPOSITORY,
+        revision: TEST262_REVISION,
+      };
+      const h0Path = 'test/language/h0-compact.js';
+      const nonH0Path = 'test/language/p0-reviewed.js';
+      const preservedTaxonomy = {
+        version: 3,
+        pin,
+        classifications: [
+          {
+            path: h0Path,
+            variants: 1,
+            partition: 'core',
+            status: 'blocked:test262-cross-realm-host',
+            blocker: 'test262-cross-realm-host',
+            features: ['cross-realm'],
+            flags: ['noStrict'],
+            includes: [],
+            provenance: ['feature:cross-realm'],
+          },
+          {
+            path: nonH0Path,
+            variants: 1,
+            partition: 'core',
+            status: 'blocked:lexical-grammar-and-new-target',
+            blocker: 'lexical-grammar-and-new-target',
+            features: [],
+            flags: ['noStrict'],
+            includes: [],
+            provenance: ['es6id'],
+          },
+        ],
+      };
+      const preservedTaxonomyText = prettyJson(preservedTaxonomy);
+      const pathsManifestText = prettyJson({
+        version: 1,
+        repository: pin.repository,
+        revision: pin.revision,
+        sourceTaxonomySha256: sha256(preservedTaxonomyText),
+        ledgerSha256: sha256(`${h0Path}\n`),
+        rootCount: 1,
+        variantCount: 1,
+        paths: [h0Path],
+      });
+      const ownerMapText = prettyJson({
+        version: 1,
+        repository: pin.repository,
+        revision: pin.revision,
+        owners: [
+          {
+            code: 'M2',
+            issue: 81,
+            blocker: 'proxy-and-reflect-metaobject',
+            title: 'Implement ES2015 Proxy traps, revocation, and invariants',
+          },
+        ],
+        rules: [
+          {
+            name: 'unused-proxy-rule',
+            primaryOwner: 'M2',
+            pathPrefix: 'test/built-ins/Proxy/',
+            failureSignatures: ['unexpected-throw:Object'],
+            secondaryEvidence: [],
+          },
+        ],
+      });
+      const inventory = [
+        {
+          path: h0Path,
+          variants: 1,
+          executionVariants: ['default'],
+          metadata: {
+            features: ['cross-realm'],
+            flags: ['noStrict'],
+            includes: [],
+          },
+          includeFeatures: [],
+        },
+      ];
+      const executionRecords = [
+        {
+          type: 'test',
+          file: h0Path,
+          variant: 'default',
+          status: 'passed',
+        },
+      ];
+      const baseline = buildEs2015H0Baseline({
+        finalBaseCommit: '1'.repeat(40),
+        taxonomyText: preservedTaxonomyText,
+        pathsManifestText,
+      });
+      const disposition = buildEs2015H0Disposition({
+        pathsManifestText,
+        baselineTaxonomyText: preservedTaxonomyText,
+        executionEvidenceText: prettyJson({
+          version: 1,
+          repository: pin.repository,
+          revision: pin.revision,
+          records: executionRecords,
+        }),
+        ownerMapText,
+        pin,
+        inventory,
+      });
+      const dispositionText = prettyJson(disposition);
+      const promotion = buildEs2015Promotion({
+        sourceTaxonomyText: preservedTaxonomyText,
+        dispositionText,
+        pin,
+        inventory,
+      });
+      const promotionText = prettyJson(promotion);
+      const currentBase = /** @type {any} */ (
+        structuredClone(preservedTaxonomy)
+      );
+      currentBase.classifications[1] = {
+        ...currentBase.classifications[1],
+        status: 'selected-passing',
+        blocker: null,
+        provenance: ['reviewed-p0-movement'],
+      };
+      const after = /** @type {any} */ (structuredClone(currentBase));
+      after.classifications[0] = {
+        ...after.classifications[0],
+        status: 'selected-passing',
+        blocker: null,
+      };
+      const currentBaseText = prettyJson(currentBase);
+      const afterText = prettyJson(after);
+      const ownerDeltas = buildEs2015H0OwnerDeltas({
+        beforeTaxonomyText: currentBaseText,
+        afterTaxonomyText: afterText,
+        dispositionText,
+        promotionText,
+        sourceTaxonomySha256: sha256(preservedTaxonomyText),
+      });
+      const options = {
+        baseline: prettyJson(baseline),
+        after: afterText,
+        disposition: dispositionText,
+        promotion: promotionText,
+        ownerDeltas,
+        pathsManifest: pathsManifestText,
+        ownerMap: ownerMapText,
+      };
+
+      assertExactH0DispositionDelta(options);
+
+      const extraH0 = structuredClone(after);
+      extraH0.classifications.push({
+        ...extraH0.classifications[0],
+        path: 'test/language/unreviewed-h0.js',
+        status: 'blocked:test262-cross-realm-host',
+        blocker: 'test262-cross-realm-host',
+      });
+      assertThrows(
+        () =>
+          assertExactH0DispositionDelta({
+            ...options,
+            after: prettyJson(extraH0),
+          }),
+        Error,
+      );
+
+      const unbalancedPartition = structuredClone(after);
+      unbalancedPartition.classifications[1] = {
+        ...unbalancedPartition.classifications[1],
+        partition: 'annex-b',
+      };
+      assertThrows(
+        () =>
+          assertExactH0DispositionDelta({
+            ...options,
+            after: prettyJson(unbalancedPartition),
+          }),
+        Error,
       );
     },
   },
