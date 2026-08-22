@@ -16,6 +16,15 @@ const TARGET_ONLY_SIGNATURES = Object.freeze([
   ['preventExtensions', 1],
 ]);
 
+const PRIMITIVE_TARGET_SOURCES = Object.freeze([
+  'undefined',
+  'null',
+  'true',
+  '0',
+  "''",
+  'Symbol("s")',
+]);
+
 const tests = [
   {
     name: 'Reflect is an ordinary tagged non-callable object',
@@ -39,9 +48,7 @@ const tests = [
       );
       assertSame(run('Reflect.enumerate;'), undefined);
       assertSame(
-        run(
-          'try { Reflect(); } catch (error) { error instanceof TypeError; }',
-        ),
+        run('try { Reflect(); } catch (error) { error instanceof TypeError; }'),
         true,
       );
       assertSame(
@@ -89,10 +96,7 @@ const tests = [
   {
     name: 'target-only Reflect methods use object targets and boolean results',
     run() {
-      assertSame(
-        run('Reflect.getPrototypeOf({}) === Object.prototype;'),
-        true,
-      );
+      assertSame(run('Reflect.getPrototypeOf({}) === Object.prototype;'), true);
       assertSame(run('Reflect.getPrototypeOf(Object.create(null));'), null);
       assertSame(run('Reflect.isExtensible({});'), true);
       assertSame(
@@ -118,6 +122,23 @@ const tests = [
         ),
         '2:a:true',
       );
+    },
+  },
+  {
+    name: 'target-only Reflect methods reject primitive targets',
+    run() {
+      for (const [name] of TARGET_ONLY_SIGNATURES) {
+        for (const targetSource of PRIMITIVE_TARGET_SOURCES) {
+          assertSame(
+            run(
+              `try { Reflect.${name}(${targetSource}); } catch (error) {` +
+                'error instanceof TypeError;' +
+                '}',
+            ),
+            true,
+          );
+        }
+      }
     },
   },
 ];
