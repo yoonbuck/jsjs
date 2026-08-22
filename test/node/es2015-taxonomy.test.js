@@ -1761,6 +1761,7 @@ export default [
   {
     name: 'ES2015 audit default H0 reconciliation accepts the reviewed P0 taxonomy movement',
     run: async () => {
+      /** @type {string[]} */
       const revisions = [];
       await validateDefaultH0AuditReconciliation({
         ...productionH0AuditReconciliationFixture(),

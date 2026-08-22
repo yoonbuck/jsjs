@@ -552,12 +552,16 @@ export function createAuditDependencies(options = {}) {
     readGitFile: async (revision, path) => {
       try {
         return /** @type {string} */ (
-          execFileSync('git', ['show', `${revision}:${path}`], {
-            cwd: repositoryRootPath,
-            encoding: 'utf8',
-            maxBuffer: 64 * 1024 * 1024,
-            stdio: ['ignore', 'pipe', 'pipe'],
-          })
+          execFileSync(
+            'git',
+            ['show', `${revision}:${path}`],
+            /** @type {any} */ ({
+              cwd: repositoryRootPath,
+              encoding: 'utf8',
+              maxBuffer: 64 * 1024 * 1024,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            }),
+          )
         );
       } catch (error) {
         if (/** @type {any} */ (error)?.status === 128) return null;
@@ -1609,7 +1613,10 @@ function parsePromotion(
   }
 
   const promotion = parseEs2015Promotion(text);
-  if ((promotion.groupName ?? PROMOTION_GROUP) !== groupName) {
+  if (
+    ('h0LedgerSha256' in promotion ? promotion.groupName : PROMOTION_GROUP) !==
+    groupName
+  ) {
     throw new Es2015AuditError(`${fileName} must declare ${groupName}`);
   }
   const paths = promotionPaths(promotion);
@@ -1671,8 +1678,8 @@ function assertH0PromotionMatchesDisposition(
     0,
   );
   if (
-    promotion.groupName !== ES2015_H0_PROMOTION_GROUP ||
     !('h0LedgerSha256' in promotion) ||
+    promotion.groupName !== ES2015_H0_PROMOTION_GROUP ||
     promotion.sourceTaxonomySha256 !== disposition.sourceTaxonomySha256 ||
     promotion.h0LedgerSha256 !== disposition.h0LedgerSha256 ||
     promotion.h0RootCount !== disposition.h0RootCount ||
