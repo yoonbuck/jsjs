@@ -246,6 +246,14 @@ contributes `undefined`, as required for argument lists. If a separate internal
 consumer ever needs sparse preservation, it must use a separately named helper
 rather than changing this abstract operation.
 
+The implementation must also migrate the existing direct regression in
+`test/native-builtins.test.js`. Rename that case to describe dense
+`CreateListFromArrayLike` behavior, retain its assertions for the own value,
+inherited value, missing-index `undefined`, and `2 in dense === true`, and
+remove the second call with `{ preserveHoles: true }` plus its sparse-hole
+assertions. Do not add an unused sparse helper merely to preserve that obsolete
+test-only option.
+
 ### Realm allocation
 
 The Reflect method's closure captures its owning Realm:
@@ -668,7 +676,8 @@ They keep the shared `proxy-and-reflect-metaobject` blocker and move to issue
 #81 in owner evidence. The blocker name is not changed merely to make a
 path-only query reach zero.
 
-A bounded M1 runner:
+The bounded runner is `tools/test262/es2015-m1.js`, exposed through the
+`test262:es2015:m1` package script. It:
 
 - requires `TZ=UTC`;
 - verifies the package pin and clean pinned checkout;
@@ -792,9 +801,10 @@ A named generic promotion schema-v2 document with group
   include-derived features.
 
 Only complete-pass roots appear. The expected document contains 103 roots /
-206 variants. The generic schema remains valid if reviewed execution changes
-that count; authority preparation pins the actual complete evidence rather than
-the expectation.
+206 variants. If exact execution changes that count or the reviewed destination
+set, authority preparation stops until the discrepancy is fixed or this design
+is explicitly amended and reviewed; it is not silently pinned as a different
+M1 result.
 
 The 113-source ledger hash and promotion-ledger hash are different identities
 and must never be interchanged.
@@ -880,10 +890,33 @@ That PR:
 - uses source root count 113, variant count 226, and path SHA
   `65529ed8f9bdf88576314e95f4f164ac2c613e9ec44f0aae042a79aa5f8706b4`;
 - uses `source.entryLedgerSha256: null`;
+- uses `reconciliation: null`, matching the M0 precedent because the M1
+  baseline is generated directly from the exact authority-preparation BASE
+  taxonomy rather than reconciled across two taxonomy bases;
 - pins the six immutable evidence hashes and the closed protected projection;
 - preserves every existing authority, profile, fragment, and checker byte; and
 - contains no source, test, evidence, generated output, workflow, or checker
   change.
+
+Its canonical destination data is:
+
+```json
+[
+  {
+    "status": "blocked",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "status": "selected-passing",
+    "blocker": null,
+    "issue": 80
+  }
+]
+```
+
+The authority preparation is invalid if scratch evidence does not reproduce
+exactly that destination set.
 
 It is inert until merged. It receives independent review as authority data.
 
@@ -1016,10 +1049,14 @@ Before semantic merge:
   identity;
 - ToLength no longer wraps at 32 bits;
 - Function apply regressions pass;
+- the direct native helper regression is dense-only and contains no
+  `preserveHoles` call or unused sparse helper;
 - hostile exotic and cross-Realm/cross-Agent probes pass on all portable hosts;
 - exact 113-root execution is complete and disposition-reviewed;
+- `tools/test262/es2015-m1.js` is the sole bounded M1 runner;
 - the six evidence files reproduce byte-for-byte from scratch inputs;
-- the pending authority was prepared and merged separately;
+- the separately prepared pending authority uses `reconciliation: null` and the
+  exact #80/#81 destination data;
 - the consumer protected projection is exact and nonzero;
 - ordinary CI, exact-head CI, and CodeQL are clean; and
 - whole-branch correctness, performance, and security review finds no
