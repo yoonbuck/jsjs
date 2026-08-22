@@ -18,6 +18,7 @@ import {
   createAuditDependencies,
   Es2015AuditError,
   main as auditEs2015Taxonomy,
+  validateDefaultH0AuditReconciliation,
 } from '../../tools/test262/es2015-audit.js';
 import {
   ES2015_PROVENANCE_DECISION_CODES,
@@ -135,6 +136,7 @@ const AUDIT_ROOTS = new Map([
   ],
 ]);
 const AUDIT_EVIDENCE_PATH = 'tools/test262/es2015-audit-evidence.json';
+const H0_REPAIRED_BASE = '144f49f7bde1179d1b1d523f5048eca70c54a9de';
 const REAL_AUDIT_SELECTED = 'test/built-ins/Array/15.4.5-1.js';
 const REAL_AUDIT_UNSELECTED =
   'test/built-ins/Array/from/items-is-null-throws.js';
@@ -182,6 +184,36 @@ let cachedApprovedProvenanceManifest;
 /** @param {string} text */
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
+}
+
+/** @param {string} revision @param {string} path */
+function readRepositoryGitFile(revision, path) {
+  const result = spawnSync('git', ['show', `${revision}:${path}`], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return result.status === 0 ? result.stdout : null;
+}
+
+function productionH0AuditReconciliationFixture() {
+  const readRepositoryText = (/** @type {string} */ path) =>
+    readFileSyncText(new URL(`../../${path}`, import.meta.url), 'utf8');
+  return {
+    baselineIdentityText: readRepositoryText(
+      'tools/test262/es2015-h0-baseline.json',
+    ),
+    afterTaxonomyText: readRepositoryText('tools/test262/es2015-taxonomy.json'),
+    dispositionText: readRepositoryText(
+      'tools/test262/es2015-h0-disposition.json',
+    ),
+    promotionText: readRepositoryText('tools/test262/es2015-h0-promotion.json'),
+    ownerDeltasText: readRepositoryText(
+      'tools/test262/es2015-h0-owner-deltas.json',
+    ),
+    pathsManifestText: readRepositoryText('tools/test262/es2015-h0-paths.json'),
+    ownerMapText: readRepositoryText('tools/test262/es2015-h0-owner-map.json'),
+  };
 }
 
 /** @param {ReturnType<typeof buildProvenanceFoundation>} manifest @param {string} code */
@@ -761,6 +793,7 @@ function fixtureAuditDependencies(fixture, options = {}) {
  *   roots?: Map<string, string>,
  *   auditEvidence?: string,
  *   assertPinnedCheckout?: (pin: any) => Promise<void>,
+ *   readGitFile?: (revision: string, path: string) => Promise<string | null>,
  *   readProvenanceManifest?: () => Promise<string>,
  *   readDecisionFragments?: () => Promise<ReadonlyMap<string, string>>,
  *   subset?: string,
@@ -820,6 +853,9 @@ function auditDependencies(options = {}) {
       }
       return value;
     },
+    ...(options.readGitFile === undefined
+      ? {}
+      : { readGitFile: options.readGitFile }),
     writeRepositoryFile: async (
       /** @type {string} */ path,
       /** @type {string} */ value,
@@ -1723,6 +1759,91 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit default H0 reconciliation accepts the reviewed P0 taxonomy movement',
+    run: async () => {
+      const revisions = [];
+      await validateDefaultH0AuditReconciliation({
+        ...productionH0AuditReconciliationFixture(),
+        readGitFile: async (revision, path) => {
+          revisions.push(`${revision}:${path}`);
+          return readRepositoryGitFile(revision, path);
+        },
+      });
+      assertSame(
+        JSON.stringify(revisions),
+        JSON.stringify([
+          '99c439f2efd287479f40d8d0e6ac2dd9aab81e10:tools/test262/es2015-taxonomy.json',
+          `${H0_REPAIRED_BASE}:tools/test262/es2015-taxonomy.json`,
+        ]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit default H0 reconciliation fails explicitly when preserved Git history is unavailable',
+    run: async () => {
+      const error = await rejected(() =>
+        validateDefaultH0AuditReconciliation({
+          ...productionH0AuditReconciliationFixture(),
+          readGitFile: async (revision, path) =>
+            revision === H0_REPAIRED_BASE
+              ? readRepositoryGitFile(revision, path)
+              : null,
+        }),
+      );
+      assertSame(error instanceof Es2015AuditError, true);
+      assertSame(
+        error.message,
+        'tools/test262/es2015-taxonomy.json is unavailable at 99c439f2efd287479f40d8d0e6ac2dd9aab81e10; full Git history is required for H0 audit reconciliation',
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit default H0 reconciliation rejects arbitrary non-H0 taxonomy drift',
+    run: async () => {
+      const preservedText = readRepositoryGitFile(
+        '99c439f2efd287479f40d8d0e6ac2dd9aab81e10',
+        AUDIT_PATH,
+      );
+      const currentText = readRepositoryGitFile(H0_REPAIRED_BASE, AUDIT_PATH);
+      if (preservedText === null || currentText === null) {
+        throw new Error('production H0 taxonomy history is unavailable');
+      }
+      const preservedByPath = new Map(
+        JSON.parse(preservedText).classifications.map(
+          (/** @type {any} */ entry) => [entry.path, entry],
+        ),
+      );
+      const driftedCurrent = JSON.parse(currentText);
+      const unchanged = driftedCurrent.classifications.find(
+        (/** @type {any} */ entry) =>
+          entry.blocker !== 'test262-cross-realm-host' &&
+          JSON.stringify(entry) ===
+            JSON.stringify(preservedByPath.get(entry.path)),
+      );
+      if (unchanged === undefined) {
+        throw new Error('no unchanged non-H0 production classification found');
+      }
+      unchanged.provenance = [...unchanged.provenance, 'arbitrary-drift'];
+      const error = await rejected(() =>
+        validateDefaultH0AuditReconciliation({
+          ...productionH0AuditReconciliationFixture(),
+          readGitFile: async (revision, path) => {
+            if (revision === H0_REPAIRED_BASE) {
+              return `${JSON.stringify(driftedCurrent, null, 2)}\n`;
+            }
+            return readRepositoryGitFile(revision, path);
+          },
+        }),
+      );
+      assertSame(
+        error.message.includes(
+          'current taxonomy text does not match the reconstructed pre-H0 classifications',
+        ),
+        true,
+      );
+    },
+  },
+  {
     name: 'ES2015 audit default check enforces the compact H0 baseline delta proof',
     run: async () => {
       const roots = new Map([
@@ -1748,6 +1869,12 @@ export default [
           ['docs/test262-report.jsonl', ''],
         ]),
         runPromotion: async () => H0_AUDIT_RECORDS,
+        readGitFile: async (revision, path) =>
+          path === AUDIT_PATH &&
+          (revision === '1111111111111111111111111111111111111111' ||
+            revision === H0_REPAIRED_BASE)
+            ? H0_AUDIT_TAXONOMY
+            : null,
       });
       const dispositionOptions = [
         '--baseline-taxonomy=final-base-taxonomy.json',
@@ -1785,9 +1912,10 @@ export default [
       );
       assertSame(
         stalePathsIdentity.message.includes(
-          'H0 paths do not match the final-base taxonomy',
+          'does not match the immutable H0 ledger',
         ),
         true,
+        'stale H0 path identity',
       );
       dependencies.files.set(
         'tools/test262/es2015-h0-paths.json',
@@ -1813,9 +1941,10 @@ export default [
       );
       assertSame(
         mismatchedFullBaseline.message.includes(
-          'final-base taxonomy hash does not match',
+          'requires preserved taxonomy text',
         ),
         true,
+        'mismatched explicit full baseline',
       );
       dependencies.files.set('final-base-taxonomy.json', H0_AUDIT_TAXONOMY);
 
@@ -1833,7 +1962,11 @@ export default [
       const staleDelta = await rejected(() =>
         auditEs2015Taxonomy(['--check'], dependencies),
       );
-      assertSame(staleDelta.message.includes('stale or tampered'), true);
+      assertSame(
+        staleDelta.message.includes('stale or tampered'),
+        true,
+        'tampered owner delta',
+      );
 
       tamperedDeltas.crossRealm.remainingRoots = 0;
       dependencies.files.set(
@@ -1849,7 +1982,11 @@ export default [
       const invalidBaseline = await rejected(() =>
         auditEs2015Taxonomy(['--check'], dependencies),
       );
-      assertSame(invalidBaseline.message.includes('H0 classification'), true);
+      assertSame(
+        invalidBaseline.message.includes('H0 classification'),
+        true,
+        'tampered compact baseline',
+      );
     },
   },
   {

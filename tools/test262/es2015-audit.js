@@ -2,6 +2,7 @@
  * Node boundary for the checked-in ES2015 Test262 taxonomy.
  */
 
+import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   lstat,
@@ -48,6 +49,7 @@ import {
   ES2015_H0_PROMOTION_FILE,
   ES2015_H0_PROMOTION_GROUP,
   parseEs2015Promotion,
+  parseEs2015H0Baseline,
   parseEs2015H0Disposition,
   promotionPaths,
   supportedFeaturesForPromotedPath,
@@ -94,6 +96,8 @@ const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
 const ES2015_H0_PATHS_FILE = 'tools/test262/es2015-h0-paths.json';
+const H0_AUDIT_RECONCILIATION_BASE_COMMIT =
+  '144f49f7bde1179d1b1d523f5048eca70c54a9de';
 const AUDIT_EVIDENCE_KEYS = Object.freeze([
   'version',
   'repository',
@@ -125,6 +129,7 @@ const EXECUTION_STATUSES = new Set(['passed', 'failed', 'skipped']);
  *   environment: Record<string, string | undefined>,
  *   readPin: () => Promise<any>,
  *   readFile: (path: string) => Promise<string>,
+ *   readGitFile: (revision: string, path: string) => Promise<string | null>,
  *   writeRepositoryFile: (path: string, text: string) => Promise<void>,
  *   writePhysicalFile: (path: string, text: string) => Promise<void>,
  *   writeFilesAtomically: (files: readonly { path: string, text: string }[]) => Promise<void>,
@@ -453,18 +458,29 @@ export async function main(argv = [], dependencies = {}) {
       deps.readFile(ES2015_H0_OWNER_MAP_FILE),
       deps.readFile(ES2015_H0_OWNER_DELTAS_FILE),
     ]);
-    assertExactH0DispositionDelta({
-      ...(baselineTaxonomyText === null
-        ? {}
-        : { before: baselineTaxonomyText }),
-      baseline: baselineIdentityText,
-      after: output,
-      disposition: h0DispositionText,
-      promotion: h0PromotionText,
-      ownerDeltas: ownerDeltasText,
-      pathsManifest: pathsManifestText,
-      ownerMap: ownerMapText,
-    });
+    if (baselineTaxonomyText === null) {
+      await validateDefaultH0AuditReconciliation({
+        readGitFile: deps.readGitFile,
+        baselineIdentityText,
+        afterTaxonomyText: output,
+        dispositionText: h0DispositionText,
+        promotionText: h0PromotionText,
+        ownerDeltasText,
+        pathsManifestText,
+        ownerMapText,
+      });
+    } else {
+      assertExactH0DispositionDelta({
+        before: baselineTaxonomyText,
+        baseline: baselineIdentityText,
+        after: output,
+        disposition: h0DispositionText,
+        promotion: h0PromotionText,
+        ownerDeltas: ownerDeltasText,
+        pathsManifest: pathsManifestText,
+        ownerMap: ownerMapText,
+      });
+    }
   }
 
   /** @type {string | null} */
@@ -504,6 +520,7 @@ export async function main(argv = [], dependencies = {}) {
  */
 export function createAuditDependencies(options = {}) {
   const repositoryRootUrl = options.repositoryRootUrl ?? REPOSITORY_ROOT_URL;
+  const repositoryRootPath = fileURLToPath(repositoryRootUrl);
   const readRepositoryFile = (/** @type {string} */ path) =>
     readFile(new URL(path, repositoryRootUrl), 'utf8');
   const readPin = () => readTest262Pin(repositoryRootUrl);
@@ -532,6 +549,21 @@ export function createAuditDependencies(options = {}) {
     readFile: /** @type {(path: string) => Promise<string>} */ (
       readRepositoryFile
     ),
+    readGitFile: async (revision, path) => {
+      try {
+        return /** @type {string} */ (
+          execFileSync('git', ['show', `${revision}:${path}`], {
+            cwd: repositoryRootPath,
+            encoding: 'utf8',
+            maxBuffer: 64 * 1024 * 1024,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+        );
+      } catch (error) {
+        if (/** @type {any} */ (error)?.status === 128) return null;
+        throw error;
+      }
+    },
     writeRepositoryFile: (path, text) =>
       writeFile(new URL(path, repositoryRootUrl), text, 'utf8'),
     writePhysicalFile: (path, text) => writeFile(path, text, 'utf8'),
@@ -575,6 +607,56 @@ export function createAuditDependencies(options = {}) {
     },
     stderr: options.stderr ?? ((text) => process.stderr.write(text)),
   };
+}
+
+/**
+ * @param {{
+ *   readGitFile: AuditDependencies['readGitFile'],
+ *   baselineIdentityText: string,
+ *   afterTaxonomyText: string,
+ *   dispositionText: string,
+ *   promotionText: string,
+ *   ownerDeltasText: string,
+ *   pathsManifestText: string,
+ *   ownerMapText: string,
+ * }} options
+ */
+export async function validateDefaultH0AuditReconciliation(options) {
+  const baseline = parseEs2015H0Baseline(options.baselineIdentityText);
+  const [preservedTaxonomyText, currentTaxonomyText] = await Promise.all([
+    readRequiredGitTaxonomy(options.readGitFile, baseline.finalBaseCommit),
+    readRequiredGitTaxonomy(
+      options.readGitFile,
+      H0_AUDIT_RECONCILIATION_BASE_COMMIT,
+    ),
+  ]);
+  assertExactH0DispositionDelta({
+    baseline: options.baselineIdentityText,
+    preservedTaxonomyText,
+    ...(currentTaxonomyText === preservedTaxonomyText
+      ? {}
+      : { currentTaxonomyText }),
+    after: options.afterTaxonomyText,
+    disposition: options.dispositionText,
+    promotion: options.promotionText,
+    ownerDeltas: options.ownerDeltasText,
+    pathsManifest: options.pathsManifestText,
+    ownerMap: options.ownerMapText,
+  });
+}
+
+/**
+ * @param {AuditDependencies['readGitFile']} readGitFile
+ * @param {string} revision
+ */
+async function readRequiredGitTaxonomy(readGitFile, revision) {
+  const text = await readGitFile(revision, ES2015_TAXONOMY_ARTIFACT);
+  if (text === null) {
+    throw new Es2015AuditError(
+      `${ES2015_TAXONOMY_ARTIFACT} is unavailable at ${revision}; full Git history is required for H0 audit reconciliation`,
+    );
+  }
+  return text;
 }
 
 /**
