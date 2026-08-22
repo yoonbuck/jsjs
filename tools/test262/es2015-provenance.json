@@ -14822,6 +14822,146 @@
       ]
     },
     {
+      "code": "M0",
+      "issue": 79,
+      "parentIssue": 70,
+      "state": "pending",
+      "source": {
+        "baseTaxonomySha256": "6f60af3b4416b537257cc7c3d418ed918978b7e14b1e5fc6567db9e379dc5908",
+        "rootCount": 240,
+        "variantCount": 459,
+        "pathSha256": "4ef97681d7e5208a3ec04e2f4281908877f5f61dd42ee20c0f282ac4dc205309",
+        "entryLedgerSha256": null
+      },
+      "reconciliation": null,
+      "evidence": [
+        {
+          "path": "tools/test262/es2015-m0-baseline.json",
+          "sha256": "3a580aa5b0d0de7949bf44708775f0fc9c3a2570d8d86ad40d304d066b10a911"
+        },
+        {
+          "path": "tools/test262/es2015-m0-disposition.json",
+          "sha256": "1177196cf776907d73b23aebb686cfceaa849ff67677bcbe127ef304c90c8e0b"
+        },
+        {
+          "path": "tools/test262/es2015-m0-owner-deltas.json",
+          "sha256": "d07149a833985cbc73fc02acd7825bc7b57f184f4596ef8acfa8681dd3d03625"
+        },
+        {
+          "path": "tools/test262/es2015-m0-owner-map.json",
+          "sha256": "9ae104b5061fefc8ca58b83c21ebe8581a2a4c0dd962dab794bd48ff3def6192"
+        },
+        {
+          "path": "tools/test262/es2015-m0-paths.json",
+          "sha256": "6dee3e1dbd9a8da34bc9687b2676b9738aab5a04f312871a854ea0211097166d"
+        },
+        {
+          "path": "tools/test262/es2015-m0-promotion.json",
+          "sha256": "ac8971dc3438fe3717818b75b9e30fa1ac5f68766f0992583998a41daf2df4ba"
+        }
+      ],
+      "protectedOutputs": [
+        {
+          "path": "tools/test262/es2015-audit-evidence.json",
+          "operation": "replace-exact",
+          "baseSha256": "58f92e072306bfe99f8b9a57bf959469100b0e54816bef3263ec9b6c075a4990",
+          "headSha256": "dce8672a50cb33c782951cf12bd8d6104a066bebe5eb355e10889bd445cacee8",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m0-baseline.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "3a580aa5b0d0de7949bf44708775f0fc9c3a2570d8d86ad40d304d066b10a911",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m0-disposition.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "1177196cf776907d73b23aebb686cfceaa849ff67677bcbe127ef304c90c8e0b",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m0-owner-deltas.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "d07149a833985cbc73fc02acd7825bc7b57f184f4596ef8acfa8681dd3d03625",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m0-owner-map.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "9ae104b5061fefc8ca58b83c21ebe8581a2a4c0dd962dab794bd48ff3def6192",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m0-paths.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "6dee3e1dbd9a8da34bc9687b2676b9738aab5a04f312871a854ea0211097166d",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m0-promotion.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "ac8971dc3438fe3717818b75b9e30fa1ac5f68766f0992583998a41daf2df4ba",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-taxonomy.json",
+          "operation": "project",
+          "baseSha256": "6f60af3b4416b537257cc7c3d418ed918978b7e14b1e5fc6567db9e379dc5908",
+          "headSha256": null,
+          "projectionSha256": "7106b398520debc013b9c4f62faf5e07153b70f2a93ad49c652f9d468fb58410"
+        }
+      ],
+      "destinations": [
+        {
+          "status": "blocked",
+          "blocker": "keyed-collections",
+          "issue": 83
+        },
+        {
+          "status": "blocked",
+          "blocker": "proxy-and-reflect-metaobject",
+          "issue": 80
+        },
+        {
+          "status": "blocked",
+          "blocker": "proxy-and-reflect-metaobject",
+          "issue": 81
+        },
+        {
+          "status": "blocked",
+          "blocker": "regexp-unicode-and-sticky",
+          "issue": 91
+        },
+        {
+          "status": "blocked",
+          "blocker": "remaining-language-runtime-semantics",
+          "issue": 96
+        },
+        {
+          "status": "blocked",
+          "blocker": "remaining-standard-library-additions",
+          "issue": 93
+        },
+        {
+          "status": "blocked",
+          "blocker": "remaining-standard-library-additions",
+          "issue": 95
+        },
+        {
+          "status": "blocked",
+          "blocker": "symbol-protocol-dispatch",
+          "issue": 82
+        }
+      ]
+    },
+    {
       "code": "P0",
       "issue": 77,
       "parentIssue": 70,
