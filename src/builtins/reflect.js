@@ -57,11 +57,16 @@ export function createReflectIntrinsics(realm) {
     configurable: true,
   });
 
-  defineReflectMethod(realm, reflectObject, 'getPrototypeOf', 1, (_this, args) =>
-    requireObjectReceiver(
-      args[0],
-      'Reflect.getPrototypeOf requires an object',
-    ).getPrototypeOf(),
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'getPrototypeOf',
+    1,
+    (_this, args) =>
+      requireObjectReceiver(
+        args[0],
+        'Reflect.getPrototypeOf requires an object',
+      ).getPrototypeOf(),
   );
 
   defineReflectMethod(realm, reflectObject, 'isExtensible', 1, (_this, args) =>
