@@ -1,0 +1,1444 @@
+{
+  "destinations": [
+    {
+      "path": "test/built-ins/Array/from/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Array/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Array/isArray/proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/isArray/proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/length/define-own-prop-length-coercion-order-set.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Array/length/define-own-prop-length-coercion-order.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Array/length/define-own-prop-length-no-value-order.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Array/of/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Array/of/return-abrupt-from-data-property-using-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/arg-length-exceeding-integer-limit.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/create-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/create-revoked-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/create-species-non-ctor.js",
+      "status": "blocked:symbol-protocol-dispatch",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 82
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/is-concat-spreadable-is-array-proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/is-concat-spreadable-proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/concat/is-concat-spreadable-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/copyWithin/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-proxy-target.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/copyWithin/return-abrupt-from-has-start.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/fill/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Array/prototype/filter/create-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/filter/create-revoked-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/filter/create-species-non-ctor.js",
+      "status": "blocked:symbol-protocol-dispatch",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 82
+    },
+    {
+      "path": "test/built-ins/Array/prototype/find/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Array/prototype/findIndex/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Array/prototype/indexOf/calls-only-has-on-prototype-after-length-zeroed.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/lastIndexOf/calls-only-has-on-prototype-after-length-zeroed.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/map/create-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/map/create-revoked-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/map/create-species-non-ctor.js",
+      "status": "blocked:symbol-protocol-dispatch",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 82
+    },
+    {
+      "path": "test/built-ins/Array/prototype/map/create-species-undef-invalid-len.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/slice/create-proxied-array-invalid-len.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/slice/create-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/slice/create-revoked-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/slice/create-species-non-ctor.js",
+      "status": "blocked:symbol-protocol-dispatch",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 82
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/create-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/create-revoked-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/create-species-non-ctor.js",
+      "status": "blocked:symbol-protocol-dispatch",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 82
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/create-species-undef-invalid-len.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Array/prototype/splice/property-traps-order-with-species.js",
+      "status": "blocked:symbol-protocol-dispatch",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 82
+    },
+    {
+      "path": "test/built-ins/Boolean/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Date/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Date/subclassing.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Error/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Function/internals/Construct/base-ctor-revoked-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Function/prototype/Symbol.hasInstance/value-get-prototype-of-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-boundtarget-bound.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-boundtarget.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-reflect.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Function/prototype/toString/proxy-arrow-function.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/prototype/toString/proxy-bound-function.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/prototype/toString/proxy-class.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/prototype/toString/proxy-function-expression.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/prototype/toString/proxy-generator-function.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/prototype/toString/proxy-method-definition.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Function/prototype/toString/proxy-non-callable-throws.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/GeneratorFunction/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/JSON/parse/revived-proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/revived-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/reviver-array-define-prop-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/reviver-array-delete-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/reviver-array-length-coerce-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/reviver-array-length-get-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/reviver-object-define-prop-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/reviver-object-delete-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/parse/reviver-object-own-keys-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/replacer-array-abrupt.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/replacer-array-proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/replacer-array-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/replacer-array-wrong-type.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/value-array-abrupt.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/value-array-proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/value-array-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/value-object-proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/JSON/stringify/value-object-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Map/is-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/Symbol.iterator/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/clear/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/delete/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/entries/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/forEach/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/get/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/has/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/keys/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/set/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Map/prototype/values/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Math/acosh/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/asinh/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/atanh/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/cbrt/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/clz32/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/cosh/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/expm1/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/fround/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/hypot/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/imul/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/log10/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/log1p/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/log2/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/sign/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/sinh/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/tanh/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Math/trunc/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/NativeErrors/EvalError/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/NativeErrors/RangeError/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/NativeErrors/ReferenceError/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/NativeErrors/SyntaxError/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/NativeErrors/TypeError/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/NativeErrors/URIError/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Number/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Number/isFinite/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Number/isInteger/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Number/isNaN/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Number/isSafeInteger/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Number/parseFloat/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Number/parseInt/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Object/assign/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Object/assign/source-own-prop-desc-missing.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/assign/source-own-prop-error.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/assign/source-own-prop-keys-error.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/assign/strings-and-symbol-order-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/defineProperties/proxy-no-ownkeys-returned-keys-order.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/freeze/abrupt-completion.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/freeze/proxy-no-ownkeys-returned-keys-order.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/freeze/proxy-with-defineProperty-handler.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/freeze/throws-when-false.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-absent-not-configurable-symbol-key.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-duplicate-symbol-entry.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-not-extensible-absent-symbol-key.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertyNames/proxy-invariant-not-extensible-extra-symbol-key.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-absent-not-configurable-string-key.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-duplicate-string-entry.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-not-extensible-absent-string-key.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/getOwnPropertySymbols/proxy-invariant-not-extensible-extra-string-key.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Object/isFrozen/proxy-no-ownkeys-returned-keys-order.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/isSealed/proxy-no-ownkeys-returned-keys-order.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/keys/property-traps-order-with-proxied-array.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/keys/proxy-keys.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/keys/proxy-non-enumerable-prop-invariant-1.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/keys/proxy-non-enumerable-prop-invariant-2.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/keys/proxy-non-enumerable-prop-invariant-3.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/preventExtensions/abrupt-completion.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/preventExtensions/throws-when-false.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__defineGetter__/define-abrupt.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__defineSetter__/define-abrupt.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-own-get-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-own-proto-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-proto-get-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupGetter__/lookup-proto-proto-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-own-get-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-own-proto-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-proto-get-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__lookupSetter__/lookup-proto-proto-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__proto__/get-abrupt.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 93
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__proto__/set-abrupt.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/__proto__/set-cycle-shadowed.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/isPrototypeOf/arg-is-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/setPrototypeOf-with-different-values.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js",
+      "status": "blocked:remaining-language-runtime-semantics",
+      "blocker": "remaining-language-runtime-semantics",
+      "issue": 96
+    },
+    {
+      "path": "test/built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js",
+      "status": "blocked:remaining-language-runtime-semantics",
+      "blocker": "remaining-language-runtime-semantics",
+      "issue": 96
+    },
+    {
+      "path": "test/built-ins/Object/prototype/setPrototypeOf-with-same-value.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Object/prototype/toString/proxy-array.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/toString/proxy-revoked-during-get-call.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/prototype/toString/proxy-revoked.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/seal/abrupt-completion.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/seal/proxy-no-ownkeys-returned-keys-order.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/seal/proxy-with-defineProperty-handler.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/seal/seal-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/seal/throws-when-false.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/setPrototypeOf/set-error.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/built-ins/Object/subclass-object-arg.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Promise/get-prototype-abrupt.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/Promise/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/RegExp/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/Symbol.match/not-a-constructor.js",
+      "status": "blocked:regexp-unicode-and-sticky",
+      "blocker": "regexp-unicode-and-sticky",
+      "issue": 91
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/Symbol.replace/not-a-constructor.js",
+      "status": "blocked:regexp-unicode-and-sticky",
+      "blocker": "regexp-unicode-and-sticky",
+      "issue": 91
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/Symbol.search/not-a-constructor.js",
+      "status": "blocked:regexp-unicode-and-sticky",
+      "blocker": "regexp-unicode-and-sticky",
+      "issue": 91
+    },
+    {
+      "path": "test/built-ins/RegExp/prototype/Symbol.split/not-a-constructor.js",
+      "status": "blocked:regexp-unicode-and-sticky",
+      "blocker": "regexp-unicode-and-sticky",
+      "issue": 91
+    },
+    {
+      "path": "test/built-ins/Set/is-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/Symbol.iterator/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/add/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/clear/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/delete/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/entries/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/forEach/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/has/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/Set/prototype/values/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/String/fromCodePoint/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/is-a-constructor.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/built-ins/String/prototype/codePointAt/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/prototype/endsWith/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/prototype/includes/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/prototype/normalize/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/prototype/repeat/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/prototype/replaceAll/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/prototype/startsWith/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/String/raw/not-a-constructor.js",
+      "status": "blocked:remaining-standard-library-additions",
+      "blocker": "remaining-standard-library-additions",
+      "issue": 95
+    },
+    {
+      "path": "test/built-ins/Symbol/is-constructor.js",
+      "status": "blocked:symbol-protocol-dispatch",
+      "blocker": "symbol-protocol-dispatch",
+      "issue": 82
+    },
+    {
+      "path": "test/built-ins/WeakMap/is-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakMap/prototype/delete/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakMap/prototype/get/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakMap/prototype/has/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakMap/prototype/set/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakSet/is-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakSet/prototype/add/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakSet/prototype/delete/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/built-ins/WeakSet/prototype/has/not-a-constructor.js",
+      "status": "blocked:keyed-collections",
+      "blocker": "keyed-collections",
+      "issue": 83
+    },
+    {
+      "path": "test/language/destructuring/binding/keyed-destructuring-property-reference-target-evaluation-order-with-bindings.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/expressions/assignment/destructuring/keyed-destructuring-property-reference-target-evaluation-order-with-bindings.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/expressions/new.target/value-via-reflect-apply.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/expressions/new.target/value-via-reflect-construct.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/expressions/object/prop-def-id-eval-error-2.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/expressions/super/call-construct-invocation.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/expressions/typeof/proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/define-own-property.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/delete-exported-init.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/delete-exported-uninit.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/delete-non-exported.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/has-property-str-found-init.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/has-property-str-found-uninit.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/has-property-str-not-found.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/has-property-sym-found.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/has-property-sym-not-found.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/prevent-extensions.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/module-code/namespace/internals/set.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 80
+    },
+    {
+      "path": "test/language/statements/class/subclass/superclass-arrow-function.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/class/subclass/superclass-generator-function.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/for-of/iterator-as-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/for-of/iterator-next-result-type.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/with/get-binding-value-call-with-proxy-env.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/with/get-binding-value-idref-with-proxy-env.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/with/has-binding-call-with-proxy-env.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/with/has-binding-idref-with-proxy-env.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/with/has-property-err.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/with/set-mutable-binding-idref-compound-assign-with-proxy-env.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/statements/with/set-mutable-binding-idref-with-proxy-env.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/language/types/reference/put-value-prop-base-primitive.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    },
+    {
+      "path": "test/staging/sm/object/propertyIsEnumerable-proxy.js",
+      "status": "blocked:proxy-and-reflect-metaobject",
+      "blocker": "proxy-and-reflect-metaobject",
+      "issue": 81
+    }
+  ]
+}

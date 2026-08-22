@@ -179,6 +179,18 @@ const ALLOWED_FORMAT_EXCLUSIONS = Object.freeze({
     'generated H0 owner-delta evidence, whose canonical bytes are owned by the pinned ES2015 audit',
   'tools/test262/es2015-h0-promotion.json':
     'generated H0 promotion evidence, whose canonical bytes are owned by the pinned ES2015 audit',
+  'tools/test262/es2015-m0-baseline.json':
+    'Generated M0 baseline evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m0-disposition.json':
+    'Generated M0 disposition evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m0-owner-deltas.json':
+    'Generated M0 owner-delta evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m0-owner-map.json':
+    'Generated M0 owner-map evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m0-paths.json':
+    'Generated M0 path evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m0-promotion.json':
+    'Generated M0 promotion evidence, whose exact bytes are owned by the applied roadmap authority.',
 });
 
 const PROVENANCE_OWNERSHIP_REASON_FRAGMENT =

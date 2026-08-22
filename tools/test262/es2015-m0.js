@@ -16,6 +16,8 @@ import { parseUpstreamSubset } from './upstream.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
+const M0_BASELINE_FILE = 'tools/test262/es2015-m0-baseline.json';
+const M0_DISPOSITION_FILE = 'tools/test262/es2015-m0-disposition.json';
 export const M0_PROMOTION_GROUP = 'es2015/m0-object-internal-methods';
 /** @type {Readonly<Record<number, string>>} */
 const M0_BLOCKER_BY_ISSUE = Object.freeze({
@@ -132,6 +134,8 @@ export function verifyM0Ledger(text, taxonomy) {
  *   environment?: Record<string, string | undefined>,
  *   ledgerText?: string,
  *   taxonomy?: any,
+ *   baseline?: readonly M0Classification[],
+ *   disposition?: { destinations?: readonly M0Destination[] },
  *   pin?: { repository: string, revision: string },
  *   host?: import('./runner.js').Test262Host,
  *   engine?: import('./runner.js').Test262Engine,
@@ -159,9 +163,16 @@ export async function runM0Focused(options) {
     throw new Error('Focused M0 execution requires a Test262 host and engine');
   }
 
-  const paths = verifyM0Ledger(options.ledgerText ?? '', taxonomy);
+  const ledgerText = options.ledgerText ?? '';
+  const executionTaxonomy = m0ExecutionTaxonomy(
+    ledgerText,
+    taxonomy,
+    options?.baseline,
+    options?.disposition,
+  );
+  const paths = verifyM0Ledger(ledgerText, executionTaxonomy);
   const byPath = new Map(
-    taxonomy.classifications.map((entry) => [entry.path, entry]),
+    executionTaxonomy.classifications.map((entry) => [entry.path, entry]),
   );
   const { records } = await runTest262Suite({
     engine: options.engine,
@@ -213,6 +224,58 @@ export async function runM0Focused(options) {
     },
     records,
   };
+}
+
+/**
+ * @param {string} ledgerText
+ * @param {{ classifications: readonly M0Classification[] }} taxonomy
+ * @param {readonly M0Classification[] | undefined} baseline
+ * @param {{ destinations?: readonly M0Destination[] } | undefined} disposition
+ */
+function m0ExecutionTaxonomy(ledgerText, taxonomy, baseline, disposition) {
+  if (baseline === undefined && disposition === undefined) return taxonomy;
+  if (
+    !Array.isArray(baseline) ||
+    baseline.length !== M0.roots ||
+    disposition === undefined
+  ) {
+    throw new Error(
+      'Focused M0 execution requires exact baseline and disposition evidence',
+    );
+  }
+
+  const paths = verifyM0Ledger(ledgerText, { classifications: baseline });
+  const destinations = parseM0Destinations(disposition, paths);
+  const currentByPath = new Map(
+    taxonomy.classifications.map((entry) => [entry.path, entry]),
+  );
+  for (let index = 0; index < paths.length; index += 1) {
+    const path = paths[index];
+    const current = currentByPath.get(path);
+    const source = baseline[index];
+    const destination = destinations[index];
+    if (
+      current === undefined ||
+      current.status !== destination.status ||
+      current.blocker !== destination.blocker
+    ) {
+      throw new Error(`M0 applied classification mismatch: ${path}`);
+    }
+    const sourceStable = stableM0Classification(source);
+    const currentStable = stableM0Classification(current);
+    if (JSON.stringify(sourceStable) !== JSON.stringify(currentStable)) {
+      throw new Error(`M0 applied classification drift: ${path}`);
+    }
+  }
+  return { ...taxonomy, classifications: baseline };
+}
+
+/** @param {M0Classification} entry */
+function stableM0Classification(entry) {
+  const stable = { ...entry };
+  Reflect.deleteProperty(stable, 'status');
+  Reflect.deleteProperty(stable, 'blocker');
+  return stable;
 }
 
 /**
@@ -695,21 +758,29 @@ function parseOptions(argv) {
 /** @param {readonly string[]} argv */
 export async function main(argv = []) {
   const options = parseOptions(argv);
-  const [ledgerPath, taxonomyPath, outputPath] = await Promise.all([
-    resolveM0InputPath(REPOSITORY_ROOT_URL, options.ledger),
-    resolveM0InputPath(REPOSITORY_ROOT_URL, TAXONOMY_FILE),
-    resolveM0OutputPath(REPOSITORY_ROOT_URL, options.output),
-  ]);
+  const [ledgerPath, taxonomyPath, baselinePath, dispositionPath, outputPath] =
+    await Promise.all([
+      resolveM0InputPath(REPOSITORY_ROOT_URL, options.ledger),
+      resolveM0InputPath(REPOSITORY_ROOT_URL, TAXONOMY_FILE),
+      resolveM0InputPath(REPOSITORY_ROOT_URL, M0_BASELINE_FILE),
+      resolveM0InputPath(REPOSITORY_ROOT_URL, M0_DISPOSITION_FILE),
+      resolveM0OutputPath(REPOSITORY_ROOT_URL, options.output),
+    ]);
   const pin = await readTest262Pin(REPOSITORY_ROOT_URL);
   await assertPinnedCheckout(pin, REPOSITORY_ROOT_URL);
-  const [ledgerText, taxonomyText] = await Promise.all([
-    readFile(ledgerPath, 'utf8'),
-    readFile(taxonomyPath, 'utf8'),
-  ]);
+  const [ledgerText, taxonomyText, baselineText, dispositionText] =
+    await Promise.all([
+      readFile(ledgerPath, 'utf8'),
+      readFile(taxonomyPath, 'utf8'),
+      readFile(baselinePath, 'utf8'),
+      readFile(dispositionPath, 'utf8'),
+    ]);
   const document = await runM0Focused({
     environment: process.env,
     ledgerText,
     taxonomy: JSON.parse(taxonomyText),
+    baseline: JSON.parse(baselineText),
+    disposition: JSON.parse(dispositionText),
     pin,
     host: createNodeTest262Host({
       root: new URL(

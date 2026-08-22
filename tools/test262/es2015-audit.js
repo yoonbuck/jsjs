@@ -96,6 +96,8 @@ const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
 const ES2015_H0_PATHS_FILE = 'tools/test262/es2015-h0-paths.json';
+const ES2015_M0_DISPOSITION_FILE = 'tools/test262/es2015-m0-disposition.json';
+const ES2015_M0_PROMOTION_FILE = 'tools/test262/es2015-m0-promotion.json';
 const H0_AUDIT_RECONCILIATION_BASE_COMMIT =
   '144f49f7bde1179d1b1d523f5048eca70c54a9de';
 const AUDIT_EVIDENCE_KEYS = Object.freeze([
@@ -204,6 +206,7 @@ export async function main(argv = [], dependencies = {}) {
   const provenanceManifest = parseEs2015ProvenanceManifest(
     provenanceManifestText,
   );
+  const roadmapAuthorities = provenanceManifest.roadmapAuthorities ?? [];
   const parsedDecisionFragments = parseDecisionFragments(decisionFragmentTexts);
   const reviewedProvenance = withDecisionCodes(
     validateDecisionFragments(provenanceManifest, parsedDecisionFragments, {
@@ -227,6 +230,35 @@ export async function main(argv = [], dependencies = {}) {
   const h0DispositionText = regeneratingH0Artifacts
     ? null
     : await readOptionalFile(deps, ES2015_H0_DISPOSITION_FILE);
+  const m0Authority = roadmapAuthorities.find(
+    (/** @type {any} */ authority) =>
+      authority.code === 'M0' && authority.state === 'applied',
+  );
+  const [m0DispositionText, m0PromotionText] =
+    m0Authority === undefined
+      ? [null, null]
+      : await Promise.all([
+          deps.readFile(ES2015_M0_DISPOSITION_FILE),
+          deps.readFile(ES2015_M0_PROMOTION_FILE),
+        ]);
+  if (m0Authority !== undefined) {
+    const evidenceByPath = new Map(
+      m0Authority.evidence.map((/** @type {any} */ entry) => [
+        entry.path,
+        entry,
+      ]),
+    );
+    if (
+      sha256(/** @type {string} */ (m0DispositionText)) !==
+        evidenceByPath.get(ES2015_M0_DISPOSITION_FILE)?.sha256 ||
+      sha256(/** @type {string} */ (m0PromotionText)) !==
+        evidenceByPath.get(ES2015_M0_PROMOTION_FILE)?.sha256
+    ) {
+      throw new Es2015AuditError(
+        'Applied M0 taxonomy inputs do not match their roadmap authority',
+      );
+    }
+  }
   const h0Promotion = regeneratingH0Artifacts
     ? null
     : parsePromotion(
@@ -432,6 +464,8 @@ export async function main(argv = [], dependencies = {}) {
     promotionText,
     h0DispositionText,
     h0PromotionText,
+    m0DispositionText,
+    m0PromotionText,
     classifications,
   });
   validateArtifact(artifact);
@@ -461,6 +495,8 @@ export async function main(argv = [], dependencies = {}) {
     if (baselineTaxonomyText === null) {
       await validateDefaultH0AuditReconciliation({
         readGitFile: deps.readGitFile,
+        readFile: deps.readFile,
+        roadmapAuthorities,
         baselineIdentityText,
         afterTaxonomyText: output,
         dispositionText: h0DispositionText,
@@ -616,6 +652,8 @@ export function createAuditDependencies(options = {}) {
 /**
  * @param {{
  *   readGitFile: AuditDependencies['readGitFile'],
+ *   readFile?: AuditDependencies['readFile'],
+ *   roadmapAuthorities?: readonly Record<string, any>[],
  *   baselineIdentityText: string,
  *   afterTaxonomyText: string,
  *   dispositionText: string,
@@ -634,19 +672,144 @@ export async function validateDefaultH0AuditReconciliation(options) {
       H0_AUDIT_RECONCILIATION_BASE_COMMIT,
     ),
   ]);
+  const afterTaxonomyText = await taxonomyBeforeM0Authority({
+    afterTaxonomyText: options.afterTaxonomyText,
+    readFile: options.readFile,
+    roadmapAuthorities: options.roadmapAuthorities ?? [],
+  });
   assertExactH0DispositionDelta({
     baseline: options.baselineIdentityText,
     preservedTaxonomyText,
     ...(currentTaxonomyText === preservedTaxonomyText
       ? {}
       : { currentTaxonomyText }),
-    after: options.afterTaxonomyText,
+    after: afterTaxonomyText,
     disposition: options.dispositionText,
     promotion: options.promotionText,
     ownerDeltas: options.ownerDeltasText,
     pathsManifest: options.pathsManifestText,
     ownerMap: options.ownerMapText,
   });
+}
+
+/**
+ * Reconstructs the exact pre-M0 classifications for the historical H0 proof
+ * while independently validating the applied M0 projection.
+ *
+ * @param {{
+ *   afterTaxonomyText: string,
+ *   readFile?: AuditDependencies['readFile'],
+ *   roadmapAuthorities: readonly Record<string, any>[],
+ * }} options
+ */
+async function taxonomyBeforeM0Authority(options) {
+  const authority = options.roadmapAuthorities.find(
+    (candidate) => candidate.code === 'M0' && candidate.state === 'applied',
+  );
+  if (authority === undefined) return options.afterTaxonomyText;
+  if (options.readFile === undefined) {
+    throw new Es2015AuditError(
+      'Applied M0 H0 reconciliation requires tracked authority evidence',
+    );
+  }
+
+  const baselinePath = 'tools/test262/es2015-m0-baseline.json';
+  const dispositionPath = 'tools/test262/es2015-m0-disposition.json';
+  const evidenceByPath = new Map(
+    authority.evidence.map((/** @type {any} */ entry) => [entry.path, entry]),
+  );
+  const [baselineText, dispositionText] = await Promise.all([
+    options.readFile(baselinePath),
+    options.readFile(dispositionPath),
+  ]);
+  if (
+    sha256(baselineText) !== evidenceByPath.get(baselinePath)?.sha256 ||
+    sha256(dispositionText) !== evidenceByPath.get(dispositionPath)?.sha256
+  ) {
+    throw new Es2015AuditError(
+      'Applied M0 H0 reconciliation evidence does not match its authority',
+    );
+  }
+
+  const baseline = JSON.parse(baselineText);
+  const disposition = JSON.parse(dispositionText);
+  const destinations = disposition?.destinations;
+  if (
+    !Array.isArray(baseline) ||
+    !Array.isArray(destinations) ||
+    baseline.length !== authority.source.rootCount ||
+    destinations.length !== authority.source.rootCount
+  ) {
+    throw new Es2015AuditError(
+      'Applied M0 H0 reconciliation evidence has the wrong root count',
+    );
+  }
+  const paths = baseline.map((/** @type {any} */ entry) => entry.path);
+  if (
+    paths.some(
+      (/** @type {string} */ path, /** @type {number} */ index) =>
+        destinations[index]?.path !== path,
+    ) ||
+    sha256(`${paths.join('\n')}\n`) !== authority.source.pathSha256 ||
+    baseline.reduce(
+      (/** @type {number} */ total, /** @type {any} */ entry) =>
+        total + entry.variants,
+      0,
+    ) !== authority.source.variantCount
+  ) {
+    throw new Es2015AuditError(
+      'Applied M0 H0 reconciliation evidence has the wrong source identity',
+    );
+  }
+
+  const after = JSON.parse(options.afterTaxonomyText);
+  if (!Array.isArray(after.classifications)) {
+    throw new Es2015AuditError(
+      'Applied M0 H0 reconciliation requires taxonomy classifications',
+    );
+  }
+  const afterByPath = new Map(
+    after.classifications.map((/** @type {any} */ entry) => [
+      entry.path,
+      entry,
+    ]),
+  );
+  const baselineByPath = new Map();
+  for (let index = 0; index < baseline.length; index += 1) {
+    const source = baseline[index];
+    const destination = destinations[index];
+    const current = afterByPath.get(source.path);
+    if (
+      current === undefined ||
+      current.status !== destination.status ||
+      current.blocker !== destination.blocker
+    ) {
+      throw new Es2015AuditError(
+        `Applied M0 taxonomy projection mismatch: ${source.path}`,
+      );
+    }
+    const sourceStable = stableM0Classification(source);
+    const currentStable = stableM0Classification(current);
+    if (JSON.stringify(sourceStable) !== JSON.stringify(currentStable)) {
+      throw new Es2015AuditError(
+        `Applied M0 taxonomy projection drift: ${source.path}`,
+      );
+    }
+    baselineByPath.set(source.path, source);
+  }
+  return `${JSON.stringify({
+    classifications: after.classifications.map(
+      (/** @type {any} */ entry) => baselineByPath.get(entry.path) ?? entry,
+    ),
+  })}\n`;
+}
+
+/** @param {Record<string, any>} entry */
+function stableM0Classification(entry) {
+  const stable = { ...entry };
+  Reflect.deleteProperty(stable, 'status');
+  Reflect.deleteProperty(stable, 'blocker');
+  return stable;
 }
 
 /**
@@ -2569,6 +2732,8 @@ async function listFiles(directory, prefix = '') {
  *   promotionText: string | null,
  *   h0DispositionText?: string | null,
  *   h0PromotionText?: string | null,
+ *   m0DispositionText?: string | null,
+ *   m0PromotionText?: string | null,
  *   classifications: readonly any[],
  * }} options
  */
@@ -2602,6 +2767,12 @@ function buildArtifact(options) {
       ...(options.h0PromotionText == null
         ? {}
         : { h0PromotionSha256: sha256(options.h0PromotionText) }),
+      ...(options.m0DispositionText == null
+        ? {}
+        : { m0DispositionSha256: sha256(options.m0DispositionText) }),
+      ...(options.m0PromotionText == null
+        ? {}
+        : { m0PromotionSha256: sha256(options.m0PromotionText) }),
     },
     summary,
     statusTables: statusTables(options.classifications),

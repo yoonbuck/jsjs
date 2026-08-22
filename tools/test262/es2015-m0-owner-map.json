@@ -1,0 +1,42 @@
+[
+  {
+    "status": "blocked",
+    "blocker": "keyed-collections",
+    "issue": 83
+  },
+  {
+    "status": "blocked",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 80
+  },
+  {
+    "status": "blocked",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "status": "blocked",
+    "blocker": "regexp-unicode-and-sticky",
+    "issue": 91
+  },
+  {
+    "status": "blocked",
+    "blocker": "remaining-language-runtime-semantics",
+    "issue": 96
+  },
+  {
+    "status": "blocked",
+    "blocker": "remaining-standard-library-additions",
+    "issue": 93
+  },
+  {
+    "status": "blocked",
+    "blocker": "remaining-standard-library-additions",
+    "issue": 95
+  },
+  {
+    "status": "blocked",
+    "blocker": "symbol-protocol-dispatch",
+    "issue": 82
+  }
+]

@@ -41,19 +41,21 @@ export default [
     },
   },
   {
-    name: 'checked-in M0 ledger matches the exact current BASE selector',
+    name: 'checked-in M0 ledger matches the exact tracked baseline',
     run: async () => {
-      const [ledgerText, taxonomyText] = await Promise.all([
+      const [ledgerText, baselineText] = await Promise.all([
         readFile(
           new URL('tools/test262/es2015-m0-paths.txt', REPOSITORY_ROOT),
           'utf8',
         ),
         readFile(
-          new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
+          new URL('tools/test262/es2015-m0-baseline.json', REPOSITORY_ROOT),
           'utf8',
         ),
       ]);
-      const paths = verifyM0Ledger(ledgerText, JSON.parse(taxonomyText));
+      const paths = verifyM0Ledger(ledgerText, {
+        classifications: JSON.parse(baselineText),
+      });
 
       assertSame(paths.length, M0.roots);
       assertSame(paths[0], 'test/built-ins/Array/from/not-a-constructor.js');
@@ -143,22 +145,32 @@ export default [
   {
     name: 'focused M0 runner executes every reviewed variant and no foreign root',
     run: async () => {
-      const [ledgerText, taxonomyText] = await Promise.all([
-        readFile(
-          new URL('tools/test262/es2015-m0-paths.txt', REPOSITORY_ROOT),
-          'utf8',
-        ),
-        readFile(
-          new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
-          'utf8',
-        ),
-      ]);
+      const [ledgerText, taxonomyText, baselineText, dispositionText] =
+        await Promise.all([
+          readFile(
+            new URL('tools/test262/es2015-m0-paths.txt', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-m0-baseline.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL(
+              'tools/test262/es2015-m0-disposition.json',
+              REPOSITORY_ROOT,
+            ),
+            'utf8',
+          ),
+        ]);
       const taxonomy = JSON.parse(taxonomyText);
+      const baseline = JSON.parse(baselineText);
       const byPath = new Map(
-        taxonomy.classifications.map((/** @type {any} */ entry) => [
-          entry.path,
-          entry,
-        ]),
+        baseline.map((/** @type {any} */ entry) => [entry.path, entry]),
       );
       const host = {
         readTest(/** @type {string} */ file) {
@@ -195,6 +207,8 @@ export default [
         environment: { TZ: 'UTC' },
         ledgerText,
         taxonomy,
+        baseline,
+        disposition: JSON.parse(dispositionText),
         pin: taxonomy.pin,
         host,
         engine,
@@ -250,7 +264,7 @@ export default [
   {
     name: 'M0 authority evidence uses the generic six-file schemas',
     run: async () => {
-      const [ledgerText, taxonomyText] = await Promise.all([
+      const [ledgerText, taxonomyText, baselineText] = await Promise.all([
         readFile(
           new URL('tools/test262/es2015-m0-paths.txt', REPOSITORY_ROOT),
           'utf8',
@@ -259,14 +273,20 @@ export default [
           new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
           'utf8',
         ),
+        readFile(
+          new URL('tools/test262/es2015-m0-baseline.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
       ]);
       const taxonomy = JSON.parse(taxonomyText);
+      const baseline = JSON.parse(baselineText);
+      const sourceTaxonomyText = JSON.stringify({
+        ...taxonomy,
+        classifications: baseline,
+      });
       const paths = parseM0Ledger(ledgerText);
       const byPath = new Map(
-        taxonomy.classifications.map((/** @type {any} */ entry) => [
-          entry.path,
-          entry,
-        ]),
+        baseline.map((/** @type {any} */ entry) => [entry.path, entry]),
       );
       const records = paths.flatMap((file) => {
         const variants = byPath.get(file).variants;
@@ -281,7 +301,7 @@ export default [
       });
       const evidence = buildM0AuthorityEvidence({
         ledgerText,
-        taxonomyText,
+        taxonomyText: sourceTaxonomyText,
         execution: {
           version: 1,
           ledger: M0,
@@ -315,7 +335,7 @@ export default [
     },
   },
   {
-    name: 'M0 projection changes only exact reviewed taxonomy and audit roots',
+    name: 'tracked M0 evidence reproduces the exact applied projection',
     run: async () => {
       const [
         ledgerText,
@@ -324,6 +344,11 @@ export default [
         subsetText,
         reportText,
         conformanceText,
+        baselineText,
+        dispositionText,
+        ownerDeltasText,
+        ownerMapText,
+        promotionText,
       ] = await Promise.all(
         [
           'tools/test262/es2015-m0-paths.txt',
@@ -332,75 +357,53 @@ export default [
           'tools/test262/upstream-subset.json',
           'docs/test262-report.jsonl',
           'docs/conformance.md',
+          'tools/test262/es2015-m0-baseline.json',
+          'tools/test262/es2015-m0-disposition.json',
+          'tools/test262/es2015-m0-owner-deltas.json',
+          'tools/test262/es2015-m0-owner-map.json',
+          'tools/test262/es2015-m0-promotion.json',
         ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
       );
-      const baseAudit = JSON.parse(auditEvidenceText);
       const paths = parseM0Ledger(ledgerText);
+      const pathSet = new Set(paths);
+      const taxonomy = JSON.parse(taxonomyText);
+      const audit = JSON.parse(auditEvidenceText);
+      const baseline = JSON.parse(baselineText);
+      const baselineByPath = new Map(
+        baseline.map((/** @type {any} */ entry) => [entry.path, entry]),
+      );
+      const sourceTaxonomy = {
+        ...taxonomy,
+        classifications: taxonomy.classifications.map(
+          (/** @type {any} */ entry) => baselineByPath.get(entry.path) ?? entry,
+        ),
+      };
       const execution = {
         version: 1,
         ledger: M0,
-        records: paths.flatMap((file) =>
-          baseAudit.auditRecords
-            .filter((/** @type {any} */ record) => record.file === file)
-            .map((/** @type {any} */ record) => ({
-              type: 'test',
-              file,
-              variant: record.variant,
-              status: 'failed',
-            })),
+        records: audit.auditRecords.filter((/** @type {any} */ record) =>
+          pathSet.has(record.file),
         ),
       };
-      const evidence = buildM0AuthorityEvidence({
-        ledgerText,
-        taxonomyText,
-        execution,
-        disposition: {
-          destinations: paths.map((path) => ({
-            path,
-            status: 'blocked:proxy-and-reflect-metaobject',
-            blocker: 'proxy-and-reflect-metaobject',
-            issue: 81,
-          })),
-        },
-      });
       const projected = projectM0AuthorityOutputs({
-        taxonomyText,
+        taxonomyText: `${JSON.stringify(sourceTaxonomy, null, 2)}\n`,
         auditEvidenceText,
         subsetText,
         reportText,
         conformanceText,
-        evidence,
+        evidence: {
+          paths,
+          baseline,
+          disposition: JSON.parse(dispositionText),
+          ownerDeltas: JSON.parse(ownerDeltasText),
+          ownerMap: JSON.parse(ownerMapText),
+          promotion: JSON.parse(promotionText),
+        },
         execution,
       });
-      const projectedTaxonomy = JSON.parse(projected.taxonomyText);
-      const projectedByPath = new Map(
-        projectedTaxonomy.classifications.map((/** @type {any} */ entry) => [
-          entry.path,
-          entry,
-        ]),
-      );
-      const projectedAudit = JSON.parse(projected.auditEvidenceText);
 
-      assertSame(
-        paths.every(
-          (path) =>
-            projectedByPath.get(path).status ===
-            'blocked:proxy-and-reflect-metaobject',
-        ),
-        true,
-      );
-      assertSame(
-        projectedByPath.get(
-          'test/built-ins/Function/internals/Construct/base-ctor-revoked-proxy-realm.js',
-        ).status,
-        'blocked:proxy-and-reflect-metaobject',
-      );
-      assertSame(
-        projectedAudit.blockers[
-          'test/built-ins/Array/from/not-a-constructor.js'
-        ],
-        'proxy-and-reflect-metaobject',
-      );
+      assertSame(projected.taxonomyText, taxonomyText);
+      assertSame(projected.auditEvidenceText, auditEvidenceText);
       assertSame(projected.subsetText, subsetText);
       assertSame(projected.reportText, reportText);
       assertSame(projected.conformanceText, conformanceText);
@@ -409,60 +412,32 @@ export default [
   {
     name: 'roadmap authority destinations retain shared Reflect and Proxy ownership',
     run: async () => {
-      const manifest = JSON.parse(
+      const manifest = parseEs2015ProvenanceManifest(
         await readFile(
           new URL('tools/test262/es2015-provenance.json', REPOSITORY_ROOT),
           'utf8',
         ),
       );
-      manifest.roadmapAuthorities = [
-        ...manifest.roadmapAuthorities,
-        {
-          code: 'M0',
-          issue: 79,
-          parentIssue: 70,
-          state: 'pending',
-          source: {
-            baseTaxonomySha256:
-              '1111111111111111111111111111111111111111111111111111111111111111',
-            rootCount: 240,
-            variantCount: 459,
-            pathSha256: M0.sha256,
-            entryLedgerSha256: null,
-          },
-          reconciliation: null,
-          evidence: [],
-          protectedOutputs: [],
-          destinations: [
-            {
-              status: 'blocked',
-              blocker: 'proxy-and-reflect-metaobject',
-              issue: 80,
-            },
-            {
-              status: 'blocked',
-              blocker: 'proxy-and-reflect-metaobject',
-              issue: 81,
-            },
-          ],
-        },
-      ].sort((left, right) =>
-        left.code < right.code ? -1 : left.code > right.code ? 1 : 0,
-      );
-      const parsed = parseEs2015ProvenanceManifest(
-        `${JSON.stringify(manifest, null, 2)}\n`,
-      );
-      const m0 = parsed.roadmapAuthorities.find(
+      const m0 = manifest.roadmapAuthorities.find(
         (/** @type {any} */ authority) => authority.code === 'M0',
       );
+      if (m0 === undefined) throw new Error('expected M0 roadmap authority');
+      const reflect = m0.destinations.find(
+        (/** @type {any} */ destination) => destination.issue === 80,
+      );
+      const proxy = m0.destinations.find(
+        (/** @type {any} */ destination) => destination.issue === 81,
+      );
+      if (reflect === undefined || proxy === undefined) {
+        throw new Error('expected Reflect and Proxy M0 destinations');
+      }
 
-      assertSame(m0.destinations[0].blocker, 'proxy-and-reflect-metaobject');
-      assertSame(m0.destinations[0].issue, 80);
-      assertSame(m0.destinations[1].blocker, 'proxy-and-reflect-metaobject');
-      assertSame(m0.destinations[1].issue, 81);
+      assertSame(m0.state, 'applied');
+      assertSame(reflect.blocker, 'proxy-and-reflect-metaobject');
+      assertSame(proxy.blocker, 'proxy-and-reflect-metaobject');
       assertSame(
-        /^[0-9a-f]{64}$/u.test(canonicalRoadmapAuthoritySha256(m0)),
-        true,
+        canonicalRoadmapAuthoritySha256(m0),
+        '25c098732714e08678de4016e88e259560a6552cd90891363e0d47c906425698',
       );
       for (const [blocker, issue] of [
         ['reflect-metaobject', 80],

@@ -553,14 +553,16 @@ TZ=UTC npm run test262:es2015:m0 -- \
   --output=.superpowers/issue-79/m0-execution.json
 ```
 
-The entry point verifies the package pin, clean checkout, exact current BASE
-classification records, ledger hash/counts, and per-root variant coverage
-before writing. It calls the shared focused runner directly and cannot reach
-`test262:upstream`, `test262:upstream:check`,
+The entry point verifies the package pin, clean checkout, exact immutable
+baseline records in `tools/test262/es2015-m0-baseline.json`, the applied
+taxonomy against `tools/test262/es2015-m0-disposition.json`, ledger
+hash/counts, and per-root variant coverage before writing. This keeps the exact
+240-root execution reproducible after the M0 authority projects its reviewed
+ownership changes into the taxonomy. It calls the shared focused runner
+directly and cannot reach `test262:upstream`, `test262:upstream:check`,
 `test262:es2015-release`, or an unbounded selector. Do not run the broad
-upstream suite or regenerate protected taxonomy/report/conformance artifacts
-while collecting M0 evidence. Those bytes are consumed only after a separate
-BASE-owned pending M0 roadmap authority exists.
+upstream suite or regenerate the unchanged subset, report, or conformance
+outputs while collecting M0 evidence.
 
 Destinations owned by issues #80 and #81 retain the existing
 `proxy-and-reflect-metaobject` blocker. The issue number distinguishes the
