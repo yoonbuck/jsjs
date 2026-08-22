@@ -12,6 +12,7 @@ import {
   UNSUPPORTED_FLAGS,
   decideSkip,
   runTest262,
+  runTest262File,
   runTest262Suite,
 } from '../tools/test262/runner.js';
 import {
@@ -50,6 +51,10 @@ import { createFixtureTest262Host } from './harness/test262-host.js';
  */
 
 const engine = createJsjsTest262Engine();
+const missingInstallHostBindingsEngine = /** @type {any} */ ({
+  createRealm,
+  evaluateScript,
+});
 
 const FIXTURE_TESTS = [
   'test/async-promise.js',
@@ -167,6 +172,20 @@ function runMemorySuite(tests, options = {}) {
     skipFeatures: options.skipFeatures ?? [],
     supportedFeaturesForPath: options.supportedFeaturesForPath,
   });
+}
+
+/**
+ * @param {() => Promise<unknown>} run
+ * @returns {Promise<unknown>}
+ */
+async function captureAsyncError(run) {
+  try {
+    await run();
+  } catch (error) {
+    return error;
+  }
+
+  return null;
 }
 
 /**
@@ -499,6 +518,10 @@ export default [
             engineHooks += 1;
             throw new Error('createRealm must not run');
           },
+          installHostBindings() {
+            engineHooks += 1;
+            throw new Error('installHostBindings must not run');
+          },
           evaluateScript() {
             engineHooks += 1;
             throw new Error('evaluateScript must not run');
@@ -531,6 +554,98 @@ export default [
         records[0].message,
         'unsupported flag combination: module and async',
       );
+    },
+  },
+  {
+    name: 'runTest262 rejects an engine without installHostBindings before path resolution',
+    run: async () => {
+      let hostReads = 0;
+      const contractError = await captureAsyncError(() =>
+        runTest262({
+          engine: missingInstallHostBindingsEngine,
+          host: {
+            readTest() {
+              hostReads += 1;
+              return fixture('must not load', 'var a = 1;');
+            },
+            readInclude() {
+              hostReads += 1;
+              return '';
+            },
+            readModule() {
+              hostReads += 1;
+              return '';
+            },
+            listTests() {
+              hostReads += 1;
+              throw new Error('path resolution must not run');
+            },
+          },
+        }),
+      );
+
+      assertSame(contractError instanceof TypeError, true);
+      assertSame(
+        /** @type {Error} */ (contractError).message,
+        'Test262 execution requires an installHostBindings engine hook',
+      );
+      assertSame(hostReads, 0);
+    },
+  },
+  {
+    name: 'runTest262Suite rejects an engine without installHostBindings before root validation',
+    run: async () => {
+      let hostReads = 0;
+      const contractError = await captureAsyncError(() =>
+        runTest262Suite({
+          engine: missingInstallHostBindingsEngine,
+          host: {
+            ...createMemoryHost({}),
+            readTest() {
+              hostReads += 1;
+              return fixture('must not load', 'var a = 1;');
+            },
+          },
+          paths: ['test/query?.js'],
+          supportedFeatures: [],
+          skipFeatures: [],
+        }),
+      );
+
+      assertSame(contractError instanceof TypeError, true);
+      assertSame(
+        /** @type {Error} */ (contractError).message,
+        'Test262 execution requires an installHostBindings engine hook',
+      );
+      assertSame(hostReads, 0);
+    },
+  },
+  {
+    name: 'runTest262File rejects an engine without installHostBindings before root validation',
+    run: async () => {
+      let hostReads = 0;
+      const contractError = await captureAsyncError(() =>
+        runTest262File({
+          engine: missingInstallHostBindingsEngine,
+          host: {
+            ...createMemoryHost({}),
+            readTest() {
+              hostReads += 1;
+              return fixture('must not load', 'var a = 1;');
+            },
+          },
+          file: 'test/query?.js',
+          supportedFeatures: [],
+          skipFeatures: [],
+        }),
+      );
+
+      assertSame(contractError instanceof TypeError, true);
+      assertSame(
+        /** @type {Error} */ (contractError).message,
+        'Test262 execution requires an installHostBindings engine hook',
+      );
+      assertSame(hostReads, 0);
     },
   },
   {
@@ -878,17 +993,131 @@ export default [
     },
   },
   {
+    name: 'script roots install host bindings before harness includes and test evaluation',
+    run: async () => {
+      /** @type {string[]} */
+      const calls = [];
+      const realm = { name: 'script-root' };
+      const scriptSource = fixture(
+        'script root order',
+        'SCRIPT_ROOT_BODY;',
+        'flags: [noStrict]\n',
+      );
+      const { records } = await runTest262Suite({
+        engine: {
+          createRealm() {
+            calls.push('createRealm');
+            return realm;
+          },
+          installHostBindings(installedRealm) {
+            assertSame(installedRealm, realm);
+            calls.push('installHostBindings');
+          },
+          evaluateScript(currentRealm, source) {
+            assertSame(currentRealm, realm);
+            calls.push(
+              source === 'TRACE_ASSERT'
+                ? 'evaluateScript:assert.js'
+                : source === 'TRACE_STA'
+                  ? 'evaluateScript:sta.js'
+                  : 'evaluateScript:test',
+            );
+            return { type: 'normal', value: undefined };
+          },
+        },
+        host: createMemoryHost(
+          { 'script-root.js': scriptSource },
+          {
+            'assert.js': 'TRACE_ASSERT',
+            'sta.js': 'TRACE_STA',
+          },
+        ),
+        paths: ['script-root.js'],
+        supportedFeatures: [],
+        skipFeatures: [],
+      });
+
+      assertSame(records[0].status, 'passed');
+      assertSame(
+        JSON.stringify(calls),
+        JSON.stringify([
+          'createRealm',
+          'installHostBindings',
+          'evaluateScript:assert.js',
+          'evaluateScript:sta.js',
+          'evaluateScript:test',
+        ]),
+      );
+    },
+  },
+  {
     name: 'raw tests run once without harness includes',
     run: async () => {
-      const { records } = await runMemorySuite({
-        'raw.js': fixture(
-          'raw test',
-          "if (typeof assert !== 'undefined') { throw 'harness leaked'; }",
-          'flags: [raw]\n',
+      const baseEngine = createJsjsTest262Engine();
+      /** @type {string[]} */
+      const calls = [];
+      const rawSource = fixture(
+        'raw test',
+        "if (typeof assert !== 'undefined') { throw 'harness leaked'; }",
+        'flags: [raw]\n',
+      );
+      const { records } = await runTest262Suite({
+        engine: {
+          ...baseEngine,
+          createRealm() {
+            calls.push('createRealm');
+            return baseEngine.createRealm();
+          },
+          installHostBindings() {
+            calls.push('installHostBindings');
+          },
+          evaluateScript(realm, source) {
+            assertSame(source, rawSource);
+            calls.push('evaluateScript:test');
+            return baseEngine.evaluateScript(realm, source);
+          },
+        },
+        host: createMemoryHost(
+          { 'raw.js': rawSource },
+          {
+            'assert.js':
+              "throw new Error('assert.js must not run for raw tests');",
+            'sta.js': "throw new Error('sta.js must not run for raw tests');",
+          },
         ),
+        paths: ['raw.js'],
+        supportedFeatures: [],
+        skipFeatures: [],
       });
 
       assertSame(summarizeRecords(records), 'raw.js|raw|passed|');
+      assertSame(
+        JSON.stringify(calls),
+        JSON.stringify([
+          'createRealm',
+          'installHostBindings',
+          'evaluateScript:test',
+        ]),
+      );
+    },
+  },
+  {
+    name: 'raw roots receive host bindings but no harness',
+    run: async () => {
+      const rawSource = fixture(
+        'raw roots receive host bindings but no harness',
+        [
+          "if (typeof $262 !== 'object') throw 'missing host';",
+          "if (typeof assert !== 'undefined') throw 'harness leaked';",
+        ].join('\n'),
+        'flags: [raw]\n',
+      );
+      const { records } = await runMemorySuite(
+        { 'raw-host-bindings.js': rawSource },
+        { paths: ['raw-host-bindings.js'] },
+      );
+
+      assertSame(summarizeRecords(records), 'raw-host-bindings.js|raw|passed|');
     },
   },
   {
@@ -1041,8 +1270,9 @@ export default [
       // `evaluateScript` throws a host error (not a SyntaxError) for the test
       // body must be classified as engine-error and failed, never silently
       // passed. Harness includes still run through the real engine.
+      const baseEngine = createJsjsTest262Engine();
       const limitedEngine = {
-        createRealm,
+        ...baseEngine,
         /**
          * @param {any} realm
          * @param {string} source
@@ -1052,7 +1282,7 @@ export default [
           if (source.includes('ENGINE_LIMITATION')) {
             throw new Error('synthetic engine limitation');
           }
-          return evaluateScript(realm, source);
+          return baseEngine.evaluateScript(realm, source);
         },
       };
 

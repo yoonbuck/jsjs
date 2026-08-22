@@ -37,8 +37,9 @@ import {
   upstreamSubsetPaths,
 } from './upstream.js';
 import {
+  ES2015_H0_PROMOTION_FILE,
   ES2015_PROMOTION_FILE,
-  mergePromotionSubset,
+  mergePromotionSubsets,
   parseEs2015Promotion,
 } from './es2015-promotion.js';
 import { assertPinnedCheckout, readTest262Pin } from './upstream-run.js';
@@ -146,14 +147,19 @@ export async function main(argv = []) {
 
   await assertPinnedCheckout(pin);
 
-  const [policyText, knownGoodText, promotionText] = await Promise.all([
-    readRepositoryFile(ES5_SELECTION_FILE),
-    readRepositoryFile(KNOWN_GOOD_SUBSET_FILE),
-    readRepositoryFile(ES2015_PROMOTION_FILE),
-  ]);
+  const [policyText, knownGoodText, promotionText, h0PromotionText] =
+    await Promise.all([
+      readRepositoryFile(ES5_SELECTION_FILE),
+      readRepositoryFile(KNOWN_GOOD_SUBSET_FILE),
+      readRepositoryFile(ES2015_PROMOTION_FILE),
+      readRepositoryFile(ES2015_H0_PROMOTION_FILE),
+    ]);
   const policy = parseEs5Selection(policyText);
   const knownGoodSubset = parseUpstreamSubset(knownGoodText);
-  const promotion = parseEs2015Promotion(promotionText);
+  const promotions = [
+    parseEs2015Promotion(promotionText),
+    parseEs2015Promotion(h0PromotionText),
+  ];
 
   if (
     knownGoodSubset.repository !== pin.repository ||
@@ -175,13 +181,13 @@ export async function main(argv = []) {
     harnessParsing,
     readSource: (path) => readRepositoryFile(`${pin.checkoutPath}/${path}`),
   });
-  const subset = mergePromotionSubset(
+  const subset = mergePromotionSubsets(
     buildUpstreamSubset({
       repository: pin.repository,
       revision: pin.revision,
       paths,
     }),
-    promotion,
+    promotions,
   );
   const manifest = serializeUpstreamSubset(subset);
   const selectedPaths = upstreamSubsetPaths(subset);

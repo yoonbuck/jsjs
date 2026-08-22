@@ -72,6 +72,7 @@ export { DEFAULT_INCLUDES };
  *
  * @typedef {{
  *   createRealm(): any,
+ *   installHostBindings(realm: any): unknown,
  *   evaluateScript(realm: any, source: string): CompletionRecord,
  *   evaluateModule?: (
  *     realm: any,
@@ -212,6 +213,18 @@ export function decideSkip(metadata, options = {}) {
 }
 
 /**
+ * @param {Test262Engine} engine
+ * @returns {void}
+ */
+function assertTest262Engine(engine) {
+  if (typeof engine?.installHostBindings !== 'function') {
+    throw new TypeError(
+      'Test262 execution requires an installHostBindings engine hook',
+    );
+  }
+}
+
+/**
  * Selects, runs, and formats in one shared step: the whole of what an adapter
  * does beyond file access and printing. Adapters call this rather than
  * `runTest262Suite` so selection, execution, and report formatting can never
@@ -226,6 +239,7 @@ export function decideSkip(metadata, options = {}) {
  * }>}
  */
 export async function runTest262(options) {
+  assertTest262Engine(options.engine);
   const paths = await resolveTest262Paths({
     host: options.host,
     paths: options.paths,
@@ -253,6 +267,7 @@ export async function runTest262(options) {
  * @returns {Promise<{ records: readonly Test262TestRecord[], summary: Test262SummaryRecord }>}
  */
 export async function runTest262Suite(options) {
+  assertTest262Engine(options.engine);
   /** @type {Test262TestRecord[]} */
   const records = [];
 
@@ -272,6 +287,7 @@ export async function runTest262Suite(options) {
  * @returns {Promise<Test262TestRecord[]>}
  */
 export async function runTest262File(options) {
+  assertTest262Engine(options.engine);
   const { engine, host, file } = options;
 
   try {
@@ -419,6 +435,7 @@ async function runVariant({
     });
 
   const realm = engine.createRealm();
+  engine.installHostBindings(realm);
 
   if (metadata.flags.includes('module')) {
     return runModuleVariant({

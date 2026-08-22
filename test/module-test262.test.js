@@ -41,6 +41,21 @@ ${source}
 }
 
 /**
+ * @param {string} description
+ * @param {string} source
+ * @param {string} [metadata]
+ * @returns {string}
+ */
+function rawModuleFixture(description, source, metadata = '') {
+  return `/*---
+description: ${description}
+flags: [module, raw]
+${metadata}---*/
+${source}
+`;
+}
+
+/**
  * @param {Map<string, string>} files
  * @param {Map<string, number>} reads
  * @returns {import('../tools/test262/runner.js').Test262Host}
@@ -79,12 +94,17 @@ function createModuleHost(files, reads) {
 /**
  * @param {Map<string, string>} files
  * @param {readonly string[]} [paths]
+ * @param {import('../tools/test262/runner.js').Test262Engine} [engine]
  * @returns {Promise<{ run: Awaited<ReturnType<typeof runTest262>>, reads: Map<string, number> }>}
  */
-async function runModuleFixture(files, paths = [ROOT]) {
+async function runModuleFixture(
+  files,
+  paths = [ROOT],
+  engine = createJsjsTest262Engine(),
+) {
   const reads = new Map();
   const run = await runTest262({
-    engine: createJsjsTest262Engine(),
+    engine,
     host: createModuleHost(files, reads),
     paths,
     supportedFeatures: [],
@@ -203,6 +223,145 @@ export default [
 
       assertSame(run.summary.passed, 1);
       assertSame(run.summary.failed, 0);
+    },
+  },
+  {
+    name: 'module roots install host bindings once on the realm passed to evaluateModule',
+    run: async () => {
+      const moduleSource = moduleFixture(
+        'module hook order',
+        'export const value = 42;',
+      );
+      /** @type {string[]} */
+      const calls = [];
+      /** @type {any} */
+      let createdRealm = null;
+      /** @type {any} */
+      let installedRealm = null;
+      /** @type {any} */
+      let moduleRealm = null;
+      const { run } = await runModuleFixture(
+        new Map([[ROOT, moduleSource]]),
+        [ROOT],
+        {
+          createRealm() {
+            calls.push('createRealm');
+            createdRealm = { name: 'module-root' };
+            return createdRealm;
+          },
+          installHostBindings(realm) {
+            installedRealm = realm;
+            calls.push('installHostBindings');
+          },
+          evaluateScript(realm, source) {
+            assertSame(realm, createdRealm);
+            calls.push(
+              source === HARNESS['assert.js']
+                ? 'evaluateScript:assert.js'
+                : 'evaluateScript:sta.js',
+            );
+            return { type: 'normal', value: undefined };
+          },
+          async evaluateModule(realm, source, identifier) {
+            moduleRealm = realm;
+            calls.push('evaluateModule');
+            assertSame(source, moduleSource);
+            assertSame(identifier, ROOT);
+            return { phase: null };
+          },
+        },
+      );
+
+      assertSame(run.summary.passed, 1);
+      assertSame(installedRealm, createdRealm);
+      assertSame(moduleRealm, createdRealm);
+      assertSame(
+        JSON.stringify(calls),
+        JSON.stringify([
+          'createRealm',
+          'installHostBindings',
+          'evaluateScript:assert.js',
+          'evaluateScript:sta.js',
+          'evaluateModule',
+        ]),
+      );
+    },
+  },
+  {
+    name: 'raw module roots install host bindings once and pass the prepared realm to evaluateModule',
+    run: async () => {
+      const rawRoot = 'test/language/module-code/raw-order.js';
+      const rawSource = rawModuleFixture(
+        'raw module hook order',
+        'export const value = 42;',
+      );
+      /** @type {string[]} */
+      const calls = [];
+      /** @type {any} */
+      let createdRealm = null;
+      /** @type {any} */
+      let installedRealm = null;
+      /** @type {any} */
+      let moduleRealm = null;
+      const { run } = await runModuleFixture(
+        new Map([[rawRoot, rawSource]]),
+        [rawRoot],
+        {
+          createRealm() {
+            calls.push('createRealm');
+            createdRealm = { name: 'raw-module-root' };
+            return createdRealm;
+          },
+          installHostBindings(realm) {
+            installedRealm = realm;
+            calls.push('installHostBindings');
+          },
+          evaluateScript() {
+            throw new Error(
+              'raw module roots must not evaluate harness includes',
+            );
+          },
+          async evaluateModule(realm, source, identifier) {
+            moduleRealm = realm;
+            calls.push('evaluateModule');
+            assertSame(source, rawSource);
+            assertSame(identifier, rawRoot);
+            return { phase: null };
+          },
+        },
+      );
+
+      assertSame(run.summary.passed, 1);
+      assertSame(installedRealm, createdRealm);
+      assertSame(moduleRealm, createdRealm);
+      assertSame(
+        JSON.stringify(calls),
+        JSON.stringify([
+          'createRealm',
+          'installHostBindings',
+          'evaluateModule',
+        ]),
+      );
+    },
+  },
+  {
+    name: 'raw module roots receive host bindings but no harness',
+    run: async () => {
+      const rawRoot = 'test/language/module-code/raw-host-bindings.js';
+      const rawSource = rawModuleFixture(
+        'raw module roots receive host bindings but no harness',
+        [
+          "if (typeof $262 !== 'object') throw 'missing host';",
+          "if (typeof assert !== 'undefined') throw 'harness leaked';",
+        ].join('\n'),
+      );
+      const { run } = await runModuleFixture(new Map([[rawRoot, rawSource]]), [
+        rawRoot,
+      ]);
+
+      assertSame(run.summary.passed, 1);
+      assertSame(run.summary.failed, 0);
+      assertSame(run.records[0].variant, 'raw');
     },
   },
   {

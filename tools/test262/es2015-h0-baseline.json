@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "finalBaseCommit": "99c439f2efd287479f40d8d0e6ac2dd9aab81e10",
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "finalBaseTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
+  "h0LedgerSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+  "h0RootCount": 135,
+  "h0VariantCount": 267,
+  "h0ClassificationSha256": "7d77ab62f96de66b8533628cee09fe49f3d39342e6109f5420a7969141472634",
+  "nonH0ClassificationSha256": "e600971b3b8efa7bb5a02f9bd782364f9873c29b6dcd03f58eda7c52b27f624d",
+  "partitionStatusSummary": {
+    "roots": 53575,
+    "variants": 102912,
+    "partitions": [
+      {
+        "name": "annex-b",
+        "roots": 725,
+        "variants": 960
+      },
+      {
+        "name": "core",
+        "roots": 24250,
+        "variants": 46424
+      },
+      {
+        "name": "harness-validation",
+        "roots": 116,
+        "variants": 232
+      },
+      {
+        "name": "later-or-non-es2015",
+        "roots": 26172,
+        "variants": 51242
+      },
+      {
+        "name": "unknown-edition",
+        "roots": 2312,
+        "variants": 4054
+      }
+    ],
+    "statuses": [
+      {
+        "status": "audit-passing-unselected",
+        "blocker": null,
+        "roots": 23,
+        "variants": 42
+      },
+      {
+        "status": "blocked:annex-b-web-compatibility",
+        "blocker": "annex-b-web-compatibility",
+        "roots": 386,
+        "variants": 480
+      },
+      {
+        "status": "blocked:binary-data-and-typed-arrays",
+        "blocker": "binary-data-and-typed-arrays",
+        "roots": 1502,
+        "variants": 2996
+      },
+      {
+        "status": "blocked:early-errors-and-declaration-instantiation",
+        "blocker": "early-errors-and-declaration-instantiation",
+        "roots": 674,
+        "variants": 1153
+      },
+      {
+        "status": "blocked:keyed-collections",
+        "blocker": "keyed-collections",
+        "roots": 534,
+        "variants": 1064
+      },
+      {
+        "status": "blocked:lexical-grammar-and-new-target",
+        "blocker": "lexical-grammar-and-new-target",
+        "roots": 84,
+        "variants": 166
+      },
+      {
+        "status": "blocked:proper-tail-calls",
+        "blocker": "proper-tail-calls",
+        "roots": 32,
+        "variants": 32
+      },
+      {
+        "status": "blocked:proxy-and-reflect-metaobject",
+        "blocker": "proxy-and-reflect-metaobject",
+        "roots": 636,
+        "variants": 1237
+      },
+      {
+        "status": "blocked:regexp-unicode-and-sticky",
+        "blocker": "regexp-unicode-and-sticky",
+        "roots": 54,
+        "variants": 108
+      },
+      {
+        "status": "blocked:remaining-language-runtime-semantics",
+        "blocker": "remaining-language-runtime-semantics",
+        "roots": 132,
+        "variants": 215
+      },
+      {
+        "status": "blocked:remaining-standard-library-additions",
+        "blocker": "remaining-standard-library-additions",
+        "roots": 775,
+        "variants": 1537
+      },
+      {
+        "status": "blocked:symbol-protocol-dispatch",
+        "blocker": "symbol-protocol-dispatch",
+        "roots": 296,
+        "variants": 578
+      },
+      {
+        "status": "blocked:test262-cross-realm-host",
+        "blocker": "test262-cross-realm-host",
+        "roots": 171,
+        "variants": 329
+      },
+      {
+        "status": "harness-validation",
+        "blocker": null,
+        "roots": 116,
+        "variants": 232
+      },
+      {
+        "status": "intentional-deviation",
+        "blocker": null,
+        "roots": 2,
+        "variants": 4
+      },
+      {
+        "status": "later-or-non-es2015",
+        "blocker": null,
+        "roots": 26172,
+        "variants": 51242
+      },
+      {
+        "status": "selected-passing",
+        "blocker": null,
+        "roots": 19674,
+        "variants": 37443
+      },
+      {
+        "status": "unknown-edition",
+        "blocker": null,
+        "roots": 2312,
+        "variants": 4054
+      }
+    ]
+  },
+  "partitionStatusSummarySha256": "0b05f6513c4fe8754d24fd6e53897905bbf97b6469bb20c5a89361035bf3f21d"
+}

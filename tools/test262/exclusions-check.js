@@ -2,8 +2,10 @@
  * Stale-exclusion check for the ES5 Test262 selection.
  *
  * Runs the engine against every per-file exclusion in `es5-selection.json` and
- * reports any that now **pass** — meaning the exclusion is stale and should be
- * removed.
+ * reports any non-host-dependent exclusion that now **passes** — meaning the
+ * exclusion is stale and should be removed. Host-dependent exclusions remain
+ * intentionally outside the ES5 selection even when the portable host can run
+ * them successfully.
  *
  * **Scope:** every per-file `path` exclusion must exist in the pinned checkout
  * and is checked. A missing path is a policy error, never a skip. `prefix`
@@ -319,10 +321,13 @@ export function evaluateExclusionGate(results, approvals) {
   }
 
   const correctlyExcluded = results.filter(
-    (result) => result.verdict === 'failed',
+    (result) =>
+      result.verdict === 'failed' ||
+      (result.verdict === 'passed' && result.category === 'host-dependent'),
   );
   const staleExclusions = results.filter(
-    (result) => result.verdict === 'passed',
+    (result) =>
+      result.verdict === 'passed' && result.category !== 'host-dependent',
   );
   const staleApprovals = approvals.filter(
     (approval) => !matchedApprovalPaths.has(approval.path),

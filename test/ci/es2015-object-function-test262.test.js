@@ -18,9 +18,9 @@
  * `tools/test262/features.json`.
  */
 
-import { createRealm, evaluateScript } from '../../src/index.js';
 import { runTest262 } from '../../tools/test262/runner.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
+import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
 import {
   assertPinnedCheckout,
   readTest262Pin,
@@ -65,7 +65,7 @@ export default [
 
       const host = createNodeTest262Host({ root: pin.checkoutPath });
       const { summary, records } = await runTest262({
-        engine: { createRealm, evaluateScript },
+        engine: createJsjsTest262Engine(),
         host,
         paths: FOCUSED_PATHS,
         supportedFeatures: ['arrow-function', 'for-in-order'],

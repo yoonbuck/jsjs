@@ -41,6 +41,7 @@ import enhancedObjectLiterals from './enhanced-object-literals.test.js';
 import templateLiterals from './template-literals.test.js';
 import arrowFunctions from './arrow-functions.test.js';
 import classes from './classes.test.js';
+import test262HostBindings from './test262-host-bindings.test.js';
 import test262Runner from './test262-runner.test.js';
 import test262Async from './test262-async.test.js';
 import moduleTest262 from './module-test262.test.js';
@@ -182,6 +183,10 @@ export const PORTABLE_SUITES = Object.freeze([
     tests: arrowFunctions,
   }),
   Object.freeze({ file: 'test/classes.test.js', tests: classes }),
+  Object.freeze({
+    file: 'test/test262-host-bindings.test.js',
+    tests: test262HostBindings,
+  }),
   Object.freeze({
     file: 'test/test262-runner.test.js',
     tests: test262Runner,

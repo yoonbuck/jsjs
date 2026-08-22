@@ -14617,7 +14617,7 @@
       "code": "H0",
       "issue": 76,
       "parentIssue": 70,
-      "state": "pending",
+      "state": "applied",
       "source": {
         "baseTaxonomySha256": "dcc14a00a21c8e76351f75a24ec6e2ff52db9bd02f63d3ece0e4d6634121d662",
         "rootCount": 135,

@@ -10,6 +10,10 @@ declare module 'node:fs/promises' {
     isFile(): boolean;
   }
 
+  export interface Stats {
+    isSymbolicLink(): boolean;
+  }
+
   export function readFile(
     path: string | URL,
     encoding: string,
@@ -38,7 +42,13 @@ declare module 'node:fs/promises' {
   ): Promise<void>;
   export function access(path: string | URL, mode?: number): Promise<void>;
   export function realpath(path: string | URL): Promise<string>;
+  export function lstat(path: string | URL): Promise<Stats>;
   export function stat(path: string | URL): Promise<{ mtimeMs: number }>;
+  export function symlink(
+    target: string | URL,
+    path: string | URL,
+    type?: 'dir' | 'file' | 'junction',
+  ): Promise<void>;
 }
 
 declare module 'node:crypto' {
@@ -60,8 +70,11 @@ declare module 'node:path' {
   const path: {
     delimiter: string;
     sep: string;
+    basename(path: string): string;
+    dirname(path: string): string;
     isAbsolute(path: string): boolean;
     join(...paths: string[]): string;
+    relative(from: string, to: string): string;
     resolve(...paths: string[]): string;
   };
   export default path;

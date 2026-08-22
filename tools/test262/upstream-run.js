@@ -43,7 +43,8 @@ import {
 } from './es2015-taxonomy.js';
 import { createJsjsTest262Engine } from './engine.js';
 import {
-  createEs2015PromotionAuthorization,
+  ES2015_H0_PROMOTION_FILE,
+  createEs2015PromotionAuthorizations,
   ES2015_PROMOTION_FILE,
   parseEs2015Promotion,
   promotionPaths,
@@ -199,19 +200,24 @@ export async function main(argv = []) {
   );
   const host = createNodeTest262Host({ root: pin.checkoutPath });
   const paths = upstreamSubsetPaths(subset);
-  const promotionText = await readRepositoryFile(ES2015_PROMOTION_FILE);
-  const promotion = parseEs2015Promotion(promotionText);
+  const promotionTexts = await Promise.all([
+    readRepositoryFile(ES2015_PROMOTION_FILE),
+    readRepositoryFile(ES2015_H0_PROMOTION_FILE),
+  ]);
+  const promotions = promotionTexts.map((text) => parseEs2015Promotion(text));
   const promotionRoots = [];
-  for (const path of promotionPaths(promotion)) {
-    promotionRoots.push({ path, source: await host.readTest(path) });
+  for (const promotion of promotions) {
+    for (const path of promotionPaths(promotion)) {
+      promotionRoots.push({ path, source: await host.readTest(path) });
+    }
   }
   const promotionInventory = buildEs2015Inventory({
     roots: promotionRoots,
     includeDefinitions:
       await createAuditDependencies().readIncludeDefinitions(),
   });
-  const supportedFeaturesForPath = createEs2015PromotionAuthorization({
-    promotionText,
+  const supportedFeaturesForPath = createEs2015PromotionAuthorizations({
+    promotionTexts,
     pin,
     policy: parseEs2015Policy(await readRepositoryFile(ES2015_POLICY_FILE)),
     subset,

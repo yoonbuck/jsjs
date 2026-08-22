@@ -19,7 +19,6 @@ import { readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { assertSame } from '../harness/assert.js';
-import { createRealm, evaluateScript } from '../../src/index.js';
 import { parseTest262Metadata } from '../../tools/test262/metadata.js';
 import { runTest262File } from '../../tools/test262/runner.js';
 import {
@@ -81,7 +80,7 @@ const TAGGED_UPSTREAM_EXAMPLE = Object.freeze({
   feature: 'Reflect',
 });
 
-const engine = { createRealm, evaluateScript };
+const engine = createJsjsTest262Engine();
 
 const ES2015_SYNTAX_FEATURES = Object.freeze([
   'arrow-function',
@@ -687,11 +686,13 @@ const FULL_CI_CONTRACT_TESTS = [
         throw new Error('the focused Promise suite must retain async roots');
       }
 
+      const engineWithoutDoneHooks = {
+        ...promiseEngine,
+      };
+      delete engineWithoutDoneHooks.installDone;
+      delete engineWithoutDoneHooks.runJobs;
       const recordsWithoutDoneHooks = await runTest262File({
-        engine: {
-          createRealm: promiseEngine.createRealm,
-          evaluateScript: promiseEngine.evaluateScript,
-        },
+        engine: engineWithoutDoneHooks,
         host,
         file: asyncPromisePath,
         supportedFeatures: promiseRelease.supportedFeatures,

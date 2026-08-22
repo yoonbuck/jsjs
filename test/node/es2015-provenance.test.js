@@ -98,6 +98,7 @@ const { structuredClone } = globalThis;
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
 const H0_BOOTSTRAP_BASE_SHA = '03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd';
+const H0_REPAIRED_BASE_SHA = '144f49f7bde1179d1b1d523f5048eca70c54a9de';
 const H0_EVIDENCE_PATHS = Object.freeze([
   'tools/test262/es2015-h0-baseline.json',
   'tools/test262/es2015-h0-disposition.json',
@@ -641,10 +642,6 @@ function capturedDecisionRangeProfile(code) {
     generatedPaths: DECISION_GENERATED_PATHS,
   });
 }
-const PRODUCTION_TAXONOMY_TEXT = readFileSyncText(
-  new URL('../../tools/test262/es2015-taxonomy.json', import.meta.url),
-  'utf8',
-);
 /** @param {string} revision @param {string} path */
 function readGitFixtureText(revision, path) {
   return execFileSync(
@@ -687,6 +684,11 @@ function readOptionalGitFixtureBuffer(revision, path) {
   }
 }
 
+const PRODUCTION_TAXONOMY_TEXT = readGitFixtureText(
+  H0_REPAIRED_BASE_SHA,
+  'tools/test262/es2015-taxonomy.json',
+);
+
 /** @param {ReadonlyMap<string, string>} files @param {string} path @returns {string} */
 function requiredFixtureText(files, path) {
   const text = files.get(path);
@@ -710,25 +712,25 @@ const P0_BASE_ES5_SELECTION_TEXT = readGitFixtureText(
   ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
   'tools/test262/es5-selection.json',
 );
-const PRODUCTION_UPSTREAM_SUBSET_TEXT = readFileSyncText(
-  new URL('../../tools/test262/upstream-subset.json', import.meta.url),
-  'utf8',
+const PRODUCTION_UPSTREAM_SUBSET_TEXT = readGitFixtureText(
+  H0_REPAIRED_BASE_SHA,
+  'tools/test262/upstream-subset.json',
 );
-const PRODUCTION_ES5_SELECTION_TEXT = readFileSyncText(
-  new URL('../../tools/test262/es5-selection.json', import.meta.url),
-  'utf8',
+const PRODUCTION_ES5_SELECTION_TEXT = readGitFixtureText(
+  H0_REPAIRED_BASE_SHA,
+  'tools/test262/es5-selection.json',
 );
-const PRODUCTION_AUDIT_EVIDENCE_TEXT = readFileSyncText(
-  new URL('../../tools/test262/es2015-audit-evidence.json', import.meta.url),
-  'utf8',
+const PRODUCTION_AUDIT_EVIDENCE_TEXT = readGitFixtureText(
+  H0_REPAIRED_BASE_SHA,
+  'tools/test262/es2015-audit-evidence.json',
 );
-const PRODUCTION_REPORT_TEXT = readFileSyncText(
-  new URL('../../docs/test262-report.jsonl', import.meta.url),
-  'utf8',
+const PRODUCTION_REPORT_TEXT = readGitFixtureText(
+  H0_REPAIRED_BASE_SHA,
+  'docs/test262-report.jsonl',
 );
-const PRODUCTION_CONFORMANCE_TEXT = readFileSyncText(
-  new URL('../../docs/conformance.md', import.meta.url),
-  'utf8',
+const PRODUCTION_CONFORMANCE_TEXT = readGitFixtureText(
+  H0_REPAIRED_BASE_SHA,
+  'docs/conformance.md',
 );
 const PRODUCTION_UL3_PATH =
   'test/language/expressions/await/await-BindingIdentifier-in-global.js';
@@ -9540,7 +9542,10 @@ export default [
           H0_BOOTSTRAP_BASE_SHA,
           path,
         );
-        const headBytes = readOptionalGitFixtureBuffer('HEAD', path);
+        const headBytes = readOptionalGitFixtureBuffer(
+          H0_REPAIRED_BASE_SHA,
+          path,
+        );
         assertSame(
           baseBytes === null
             ? headBytes === null
@@ -9553,7 +9558,7 @@ export default [
         readGitFixtureText(H0_BOOTSTRAP_BASE_SHA, ES2015_PROVENANCE_FILE),
       );
       const headManifest = JSON.parse(
-        readGitFixtureText('HEAD', ES2015_PROVENANCE_FILE),
+        readGitFixtureText(H0_REPAIRED_BASE_SHA, ES2015_PROVENANCE_FILE),
       );
       assertSame(
         json(baseManifest.roadmapAuthorities),

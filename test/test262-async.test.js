@@ -1,4 +1,3 @@
-import { createRealm, evaluateScript } from '../src/index.js';
 import { createThrowCompletion } from '../src/runtime/completion.js';
 import { assertSame } from './harness/assert.js';
 import { runTest262 } from '../tools/test262/runner.js';
@@ -227,6 +226,81 @@ export default [
     },
   },
   {
+    name: 'async Test262 mode installs host bindings before async hooks, includes, test evaluation, and job drain',
+    run: async () => {
+      /** @type {string[]} */
+      const calls = [];
+      const realm = { name: 'async-root' };
+      /** @type {((value: unknown) => void) | null} */
+      let onDone = null;
+      const result = await runTest262({
+        engine: {
+          createRealm() {
+            calls.push('createRealm');
+            return realm;
+          },
+          installHostBindings(installedRealm) {
+            assertSame(installedRealm, realm);
+            calls.push('installHostBindings');
+          },
+          installDone(installedRealm, nextOnDone) {
+            assertSame(installedRealm, realm);
+            onDone = nextOnDone;
+            calls.push('installDone');
+          },
+          evaluateScript(currentRealm, source) {
+            assertSame(currentRealm, realm);
+            calls.push(
+              source === 'TRACE_ASSERT'
+                ? 'evaluateScript:assert.js'
+                : source === 'TRACE_STA'
+                  ? 'evaluateScript:sta.js'
+                  : source === 'TRACE_DONE'
+                    ? 'evaluateScript:done.js'
+                    : 'evaluateScript:test',
+            );
+            return { type: 'normal', value: undefined };
+          },
+          runJobs(currentRealm) {
+            assertSame(currentRealm, realm);
+            calls.push('runJobs');
+            onDone?.(undefined);
+            return { processed: 1, failures: [] };
+          },
+        },
+        host: inMemoryHost(
+          {
+            'test/trace-order.js': asyncFixture(
+              'TRACE_ASYNC_BODY;',
+              'includes: [done.js]\n',
+            ),
+          },
+          {
+            'assert.js': 'TRACE_ASSERT',
+            'sta.js': 'TRACE_STA',
+            'done.js': 'TRACE_DONE',
+          },
+        ),
+        paths: ['test/trace-order.js'],
+      });
+
+      assertSame(result.records[0].status, 'passed');
+      assertSame(
+        JSON.stringify(calls),
+        JSON.stringify([
+          'createRealm',
+          'installHostBindings',
+          'installDone',
+          'evaluateScript:assert.js',
+          'evaluateScript:sta.js',
+          'evaluateScript:done.js',
+          'evaluateScript:test',
+          'runJobs',
+        ]),
+      );
+    },
+  },
+  {
     name: 'async Test262 negative expectations retain their existing path without a job drain',
     run: async () => {
       let drainCount = 0;
@@ -261,8 +335,13 @@ export default [
   {
     name: 'async Test262 mode reports an engine error when the portable hooks are absent',
     run: async () => {
+      const engineWithoutAsyncHooks = {
+        ...createJsjsTest262Engine(),
+      };
+      delete engineWithoutAsyncHooks.installDone;
+      delete engineWithoutAsyncHooks.runJobs;
       const result = await runTest262({
-        engine: { createRealm, evaluateScript },
+        engine: engineWithoutAsyncHooks,
         host: inMemoryHost({
           'test/missing-hooks.js': asyncFixture('$DONE();'),
         }),

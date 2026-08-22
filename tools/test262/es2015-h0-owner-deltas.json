@@ -1,0 +1,464 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "h0LedgerSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+  "dispositionSha256": "a48db4417e1ad41298e0d24bb6e1ef1925d6a812ab59a1541ce14ec2a06df857",
+  "promotionSha256": "a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c",
+  "trackingIssue": 70,
+  "provenance": {
+    "sourceTaxonomySha256": "e7746b6da6038c1fda83e1e6cbecbe9fb3e7b97bdf89a311c0a3f34a686c7953",
+    "executionEvidenceSha256": "22b80429109136a0686bf845c83c01ccd8b23b5d05fec891872ef83160f84de6",
+    "ownerMapSha256": "d50f58ed621eac896fceb325f54480d33c9680c0f6b264a6cbce5812c7f4f44b"
+  },
+  "crossRealm": {
+    "blocker": "test262-cross-realm-host",
+    "removedRoots": 135,
+    "removedVariants": 267,
+    "remainingRoots": 0,
+    "remainingVariants": 0
+  },
+  "deltas": [
+    {
+      "owner": {
+        "code": "H0",
+        "issue": 76,
+        "blocker": "test262-cross-realm-host",
+        "title": "Implement portable harness-only Test262 cross-Realm support"
+      },
+      "direction": "removed",
+      "roots": 135,
+      "variants": 267,
+      "paths": [
+        "test/built-ins/Array/from/proto-from-ctor-realm.js",
+        "test/built-ins/Array/length/define-own-prop-length-overflow-realm.js",
+        "test/built-ins/Array/of/proto-from-ctor-realm.js",
+        "test/built-ins/Array/proto-from-ctor-realm-one.js",
+        "test/built-ins/Array/proto-from-ctor-realm-two.js",
+        "test/built-ins/Array/proto-from-ctor-realm-zero.js",
+        "test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-array.js",
+        "test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/filter/create-proto-from-ctor-realm-array.js",
+        "test/built-ins/Array/prototype/filter/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/map/create-proto-from-ctor-realm-array.js",
+        "test/built-ins/Array/prototype/map/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/slice/create-proto-from-ctor-realm-array.js",
+        "test/built-ins/Array/prototype/slice/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/splice/create-proto-from-ctor-realm-array.js",
+        "test/built-ins/Array/prototype/splice/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/ArrayBuffer/proto-from-ctor-realm.js",
+        "test/built-ins/Boolean/proto-from-ctor-realm.js",
+        "test/built-ins/DataView/proto-from-ctor-realm.js",
+        "test/built-ins/Date/proto-from-ctor-realm-one.js",
+        "test/built-ins/Date/proto-from-ctor-realm-two.js",
+        "test/built-ins/Date/proto-from-ctor-realm-zero.js",
+        "test/built-ins/Error/proto-from-ctor-realm.js",
+        "test/built-ins/Function/call-bind-this-realm-undef.js",
+        "test/built-ins/Function/call-bind-this-realm-value.js",
+        "test/built-ins/Function/internals/Call/class-ctor-realm.js",
+        "test/built-ins/Function/internals/Construct/base-ctor-revoked-proxy-realm.js",
+        "test/built-ins/Function/internals/Construct/derived-return-val-realm.js",
+        "test/built-ins/Function/internals/Construct/derived-this-uninitialized-realm.js",
+        "test/built-ins/Function/proto-from-ctor-realm-prototype.js",
+        "test/built-ins/Function/proto-from-ctor-realm.js",
+        "test/built-ins/Function/prototype/apply/argarray-not-object-realm.js",
+        "test/built-ins/Function/prototype/apply/this-not-callable-realm.js",
+        "test/built-ins/Function/prototype/bind/get-fn-realm-recursive.js",
+        "test/built-ins/Function/prototype/bind/get-fn-realm.js",
+        "test/built-ins/Function/prototype/bind/proto-from-ctor-realm.js",
+        "test/built-ins/GeneratorFunction/proto-from-ctor-realm-prototype.js",
+        "test/built-ins/GeneratorFunction/proto-from-ctor-realm.js",
+        "test/built-ins/JSON/stringify/replacer-array-proxy-revoked-realm.js",
+        "test/built-ins/Map/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/EvalError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/RangeError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/ReferenceError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/SyntaxError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/TypeError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/URIError/proto-from-ctor-realm.js",
+        "test/built-ins/Number/proto-from-ctor-realm.js",
+        "test/built-ins/Object/proto-from-ctor-realm.js",
+        "test/built-ins/Promise/proto-from-ctor-realm.js",
+        "test/built-ins/Proxy/apply/arguments-realm.js",
+        "test/built-ins/Proxy/apply/null-handler-realm.js",
+        "test/built-ins/Proxy/apply/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/construct/arguments-realm.js",
+        "test/built-ins/Proxy/construct/null-handler-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-boolean-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-null-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-number-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-string-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-symbol-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-undefined-realm.js",
+        "test/built-ins/Proxy/construct/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/construct/trap-is-undefined-proto-from-cross-realm-newtarget.js",
+        "test/built-ins/Proxy/construct/trap-is-undefined-proto-from-newtarget-realm.js",
+        "test/built-ins/Proxy/defineProperty/desc-realm.js",
+        "test/built-ins/Proxy/defineProperty/null-handler-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-configurable-desc-not-configurable-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-not-configurable-target-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-undefined-not-configurable-descriptor-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-undefined-target-is-not-extensible-realm.js",
+        "test/built-ins/Proxy/defineProperty/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/deleteProperty/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/get-fn-realm-recursive.js",
+        "test/built-ins/Proxy/get-fn-realm.js",
+        "test/built-ins/Proxy/get/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/getOwnPropertyDescriptor/result-type-is-not-object-nor-undefined-realm.js",
+        "test/built-ins/Proxy/getOwnPropertyDescriptor/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/getPrototypeOf/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/has/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/isExtensible/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/ownKeys/return-not-list-object-throws-realm.js",
+        "test/built-ins/Proxy/ownKeys/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/preventExtensions/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/revocable/tco-fn-realm.js",
+        "test/built-ins/Proxy/set/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/setPrototypeOf/trap-is-not-callable-realm.js",
+        "test/built-ins/RegExp/proto-from-ctor-realm.js",
+        "test/built-ins/RegExp/prototype/Symbol.split/splitter-proto-from-ctor-realm.js",
+        "test/built-ins/RegExp/prototype/global/cross-realm.js",
+        "test/built-ins/RegExp/prototype/ignoreCase/cross-realm.js",
+        "test/built-ins/RegExp/prototype/multiline/cross-realm.js",
+        "test/built-ins/RegExp/prototype/source/cross-realm.js",
+        "test/built-ins/RegExp/prototype/sticky/cross-realm.js",
+        "test/built-ins/RegExp/prototype/unicode/cross-realm.js",
+        "test/built-ins/Set/proto-from-ctor-realm.js",
+        "test/built-ins/String/proto-from-ctor-realm.js",
+        "test/built-ins/String/prototype/toString/non-generic-realm.js",
+        "test/built-ins/String/prototype/valueOf/non-generic-realm.js",
+        "test/built-ins/Symbol/for/cross-realm.js",
+        "test/built-ins/Symbol/hasInstance/cross-realm.js",
+        "test/built-ins/Symbol/isConcatSpreadable/cross-realm.js",
+        "test/built-ins/Symbol/iterator/cross-realm.js",
+        "test/built-ins/Symbol/keyFor/cross-realm.js",
+        "test/built-ins/Symbol/match/cross-realm.js",
+        "test/built-ins/Symbol/replace/cross-realm.js",
+        "test/built-ins/Symbol/search/cross-realm.js",
+        "test/built-ins/Symbol/species/cross-realm.js",
+        "test/built-ins/Symbol/split/cross-realm.js",
+        "test/built-ins/Symbol/toPrimitive/cross-realm.js",
+        "test/built-ins/Symbol/toStringTag/cross-realm.js",
+        "test/built-ins/Symbol/unscopables/cross-realm.js",
+        "test/built-ins/ThrowTypeError/distinct-cross-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/buffer-arg/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/length-arg/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/no-args/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/object-arg/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/typedarray-arg/proto-from-ctor-realm.js",
+        "test/built-ins/WeakMap/proto-from-ctor-realm.js",
+        "test/built-ins/WeakSet/proto-from-ctor-realm.js",
+        "test/language/eval-code/indirect/realm.js",
+        "test/language/expressions/call/eval-realm-indirect.js",
+        "test/language/expressions/generators/eval-body-proto-realm.js",
+        "test/language/expressions/new/non-ctor-err-realm.js",
+        "test/language/expressions/super/realm.js",
+        "test/language/expressions/tagged-template/cache-realm.js",
+        "test/language/global-code/script-decl-func-dups.js",
+        "test/language/global-code/script-decl-func.js",
+        "test/language/global-code/script-decl-lex-deletion.js",
+        "test/language/global-code/script-decl-lex-restricted-global.js",
+        "test/language/global-code/script-decl-lex-var-declared-via-eval.js",
+        "test/language/global-code/script-decl-lex.js",
+        "test/language/global-code/script-decl-var-collision.js",
+        "test/language/global-code/script-decl-var.js",
+        "test/language/types/reference/get-value-prop-base-primitive-realm.js",
+        "test/language/types/reference/put-value-prop-base-primitive-realm.js"
+      ],
+      "pathsSha256": "3aeb254de8d996e0b5c3c383d0e5df56d651e4d32a2fb181bf2138040b4e3950",
+      "variantEvidenceSha256": "db8805f378f1182172cb2b6764f8eaa8a47e9acd23a77b3afb06b731d3f85e14"
+    },
+    {
+      "owner": {
+        "code": "B0",
+        "issue": 87,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement Data Blocks, byte codecs, and ES2015 ArrayBuffer"
+      },
+      "direction": "added",
+      "roots": 2,
+      "variants": 4,
+      "paths": [
+        "test/built-ins/ArrayBuffer/proto-from-ctor-realm.js",
+        "test/built-ins/DataView/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "edea7f4aa74231aedad8cc01d907767f75d63f775fcd63a13caf1ad5d55b51e5",
+      "variantEvidenceSha256": "624955733dfe4a39b38877e3aedf450ea84627ab8e88c6363a3fbf9597045dfe"
+    },
+    {
+      "owner": {
+        "code": "B2",
+        "issue": 89,
+        "blocker": "binary-data-and-typed-arrays",
+        "title": "Implement integer-indexed exotica and TypedArray constructors"
+      },
+      "direction": "added",
+      "roots": 5,
+      "variants": 10,
+      "paths": [
+        "test/built-ins/TypedArrayConstructors/ctors/buffer-arg/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/length-arg/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/no-args/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/object-arg/proto-from-ctor-realm.js",
+        "test/built-ins/TypedArrayConstructors/ctors/typedarray-arg/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "e8a9a7396b029a5f72ded88e736392747ea692ffe8ffced897f1e38303a13f1c",
+      "variantEvidenceSha256": "23af05598050083cf5337aeab6bc6e8094c7e3f4c15dc24d69cd1dd66308851b"
+    },
+    {
+      "owner": {
+        "code": "C0",
+        "issue": 83,
+        "blocker": "keyed-collections",
+        "title": "Implement the ordered collection kernel and ES2015 Map"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "paths": [
+        "test/built-ins/Map/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "b5b569f2db6a20a2e5b1aa26b305920dc7bea2952ec4b9bb649cb2f53348fa06",
+      "variantEvidenceSha256": "87619c3d6491d878e2908f0684ff3fa26660c452a460f3a7aa6db9fb88c3e488"
+    },
+    {
+      "owner": {
+        "code": "C1",
+        "issue": 84,
+        "blocker": "keyed-collections",
+        "title": "Implement ES2015 Set and live collection iterators"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "paths": [
+        "test/built-ins/Set/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "1c06f01b93d6be694366be4d0e987a39a9fba0996b9acdb191a122fc60b2dd84",
+      "variantEvidenceSha256": "06e7f520bc0f432a6cfdca31c95d09197b9394ee7bb3b798b6b9b49706b2cfa8"
+    },
+    {
+      "owner": {
+        "code": "C2",
+        "issue": 85,
+        "blocker": "keyed-collections",
+        "title": "Implement ES2015 WeakMap and WeakSet with private weak storage"
+      },
+      "direction": "added",
+      "roots": 2,
+      "variants": 4,
+      "paths": [
+        "test/built-ins/WeakMap/proto-from-ctor-realm.js",
+        "test/built-ins/WeakSet/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "248aebee124bb45894839e5638f44398b33083da59dc53929ae34ee29a7af6a0",
+      "variantEvidenceSha256": "57f9e6f428054b55d38b9724e0adb1046f960baa296f12683542debbc90adde6"
+    },
+    {
+      "owner": {
+        "code": "G0",
+        "issue": 96,
+        "blocker": "remaining-language-runtime-semantics",
+        "title": "Complete remaining core ES2015 language runtime semantics"
+      },
+      "direction": "added",
+      "roots": 5,
+      "variants": 10,
+      "paths": [
+        "test/built-ins/Function/internals/Construct/derived-return-val-realm.js",
+        "test/built-ins/Function/internals/Construct/derived-this-uninitialized-realm.js",
+        "test/built-ins/GeneratorFunction/proto-from-ctor-realm-prototype.js",
+        "test/built-ins/GeneratorFunction/proto-from-ctor-realm.js",
+        "test/language/expressions/super/realm.js"
+      ],
+      "pathsSha256": "f4a9cfead2e3b892f728fff6a3c1bedd89435d1d86b62d8b473cb720d0d087c1",
+      "variantEvidenceSha256": "19761ab97f7b32f7ee01f62c2872605ce6a09c9bda567ba1127e6301b51c865e"
+    },
+    {
+      "owner": {
+        "code": "L0",
+        "issue": 93,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Array and Object additions"
+      },
+      "direction": "added",
+      "roots": 11,
+      "variants": 22,
+      "paths": [
+        "test/built-ins/Array/from/proto-from-ctor-realm.js",
+        "test/built-ins/Array/of/proto-from-ctor-realm.js",
+        "test/built-ins/Array/proto-from-ctor-realm-one.js",
+        "test/built-ins/Array/proto-from-ctor-realm-two.js",
+        "test/built-ins/Array/proto-from-ctor-realm-zero.js",
+        "test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/filter/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/map/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/slice/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Array/prototype/splice/create-proto-from-ctor-realm-non-array.js",
+        "test/built-ins/Object/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "666d80434aaeee949f774fa14fb7105eaea5442d10a6dcd5675367e14842ea48",
+      "variantEvidenceSha256": "6ebe19b35549c55647e7531d3483a706eb8c3cdc55cd6bd112bad1fe6cbd7d91"
+    },
+    {
+      "owner": {
+        "code": "L1",
+        "issue": 94,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 String, Number, and Math additions"
+      },
+      "direction": "added",
+      "roots": 2,
+      "variants": 4,
+      "paths": [
+        "test/built-ins/Number/proto-from-ctor-realm.js",
+        "test/built-ins/String/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "b3cc497bc61615929f842601f1f95a29e34cc382203fe5ad9e68e2e2d4b72e33",
+      "variantEvidenceSha256": "bb78973a06ddc8566fd1038dd55dc89ad44bad21a1e1b6408f154263355d14db"
+    },
+    {
+      "owner": {
+        "code": "L2",
+        "issue": 95,
+        "blocker": "remaining-standard-library-additions",
+        "title": "Complete ES2015 Function, Date, Error, and JSON additions"
+      },
+      "direction": "added",
+      "roots": 17,
+      "variants": 34,
+      "paths": [
+        "test/built-ins/Boolean/proto-from-ctor-realm.js",
+        "test/built-ins/Date/proto-from-ctor-realm-one.js",
+        "test/built-ins/Date/proto-from-ctor-realm-two.js",
+        "test/built-ins/Date/proto-from-ctor-realm-zero.js",
+        "test/built-ins/Error/proto-from-ctor-realm.js",
+        "test/built-ins/Function/proto-from-ctor-realm-prototype.js",
+        "test/built-ins/Function/proto-from-ctor-realm.js",
+        "test/built-ins/Function/prototype/bind/get-fn-realm-recursive.js",
+        "test/built-ins/Function/prototype/bind/get-fn-realm.js",
+        "test/built-ins/Function/prototype/bind/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/EvalError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/RangeError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/ReferenceError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/SyntaxError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/TypeError/proto-from-ctor-realm.js",
+        "test/built-ins/NativeErrors/URIError/proto-from-ctor-realm.js",
+        "test/built-ins/Promise/proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "8426899dc521b32170e3bea64f9a8e368562e0cc75eb4d0df08a55d37d171c4d",
+      "variantEvidenceSha256": "19e2c47b97c4c99e4c91ec7ff5d7f47d709af1bc402e3f67287aabc4c4f9794d"
+    },
+    {
+      "owner": {
+        "code": "M2",
+        "issue": 81,
+        "blocker": "proxy-and-reflect-metaobject",
+        "title": "Implement ES2015 Proxy traps, revocation, and invariants"
+      },
+      "direction": "added",
+      "roots": 40,
+      "variants": 79,
+      "paths": [
+        "test/built-ins/Function/internals/Construct/base-ctor-revoked-proxy-realm.js",
+        "test/built-ins/JSON/stringify/replacer-array-proxy-revoked-realm.js",
+        "test/built-ins/Proxy/apply/arguments-realm.js",
+        "test/built-ins/Proxy/apply/null-handler-realm.js",
+        "test/built-ins/Proxy/apply/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/construct/arguments-realm.js",
+        "test/built-ins/Proxy/construct/null-handler-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-boolean-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-null-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-number-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-string-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-symbol-realm.js",
+        "test/built-ins/Proxy/construct/return-not-object-throws-undefined-realm.js",
+        "test/built-ins/Proxy/construct/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/construct/trap-is-undefined-proto-from-cross-realm-newtarget.js",
+        "test/built-ins/Proxy/construct/trap-is-undefined-proto-from-newtarget-realm.js",
+        "test/built-ins/Proxy/defineProperty/desc-realm.js",
+        "test/built-ins/Proxy/defineProperty/null-handler-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-configurable-desc-not-configurable-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-not-configurable-target-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-undefined-not-configurable-descriptor-realm.js",
+        "test/built-ins/Proxy/defineProperty/targetdesc-undefined-target-is-not-extensible-realm.js",
+        "test/built-ins/Proxy/defineProperty/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/deleteProperty/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/get-fn-realm-recursive.js",
+        "test/built-ins/Proxy/get-fn-realm.js",
+        "test/built-ins/Proxy/get/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/getOwnPropertyDescriptor/result-type-is-not-object-nor-undefined-realm.js",
+        "test/built-ins/Proxy/getOwnPropertyDescriptor/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/getPrototypeOf/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/has/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/isExtensible/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/ownKeys/return-not-list-object-throws-realm.js",
+        "test/built-ins/Proxy/ownKeys/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/preventExtensions/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/revocable/tco-fn-realm.js",
+        "test/built-ins/Proxy/set/trap-is-not-callable-realm.js",
+        "test/built-ins/Proxy/setPrototypeOf/trap-is-not-callable-realm.js",
+        "test/language/types/reference/put-value-prop-base-primitive-realm.js"
+      ],
+      "pathsSha256": "b6c0ff16fde3dffbf58384105f6bd718f48470e4832c5a9077778e1508680766",
+      "variantEvidenceSha256": "94eed7903b838f854ab863d4a8bc5993edd346353e309bc1fc850e48ff318b8d"
+    },
+    {
+      "owner": {
+        "code": "P1",
+        "issue": 78,
+        "blocker": "early-errors-and-declaration-instantiation",
+        "title": "Complete core ES2015 early errors and declaration instantiation"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "paths": [
+        "test/language/global-code/script-decl-lex-var-declared-via-eval.js"
+      ],
+      "pathsSha256": "80c9e4c41001ea0382bea315dab951927f670b5c9c32ba2db7dea6e509bd1aee",
+      "variantEvidenceSha256": "67e39dc448988ad6b89da6c181e5a95af1528516f3e52010ecd9e1dbab6690c7"
+    },
+    {
+      "owner": {
+        "code": "R0",
+        "issue": 91,
+        "blocker": "regexp-unicode-and-sticky",
+        "title": "Implement ES2015 RegExp grammar, u/y, state, and probed backend"
+      },
+      "direction": "added",
+      "roots": 7,
+      "variants": 14,
+      "paths": [
+        "test/built-ins/RegExp/proto-from-ctor-realm.js",
+        "test/built-ins/RegExp/prototype/global/cross-realm.js",
+        "test/built-ins/RegExp/prototype/ignoreCase/cross-realm.js",
+        "test/built-ins/RegExp/prototype/multiline/cross-realm.js",
+        "test/built-ins/RegExp/prototype/source/cross-realm.js",
+        "test/built-ins/RegExp/prototype/sticky/cross-realm.js",
+        "test/built-ins/RegExp/prototype/unicode/cross-realm.js"
+      ],
+      "pathsSha256": "26c700ec8285dad07875cf02a977f25131e6432e26cae9ded5e8bd628edc2b5a",
+      "variantEvidenceSha256": "34787357fdb2c8be70bb4f8989d5c8f29dd9c778f821c769ca576b80b3fcc1b6"
+    },
+    {
+      "owner": {
+        "code": "R1",
+        "issue": 92,
+        "blocker": "symbol-protocol-dispatch",
+        "title": "Complete RegExp/String Symbol protocol integration"
+      },
+      "direction": "added",
+      "roots": 1,
+      "variants": 2,
+      "paths": [
+        "test/built-ins/RegExp/prototype/Symbol.split/splitter-proto-from-ctor-realm.js"
+      ],
+      "pathsSha256": "155de047e0673869076931fb2451546798fc0821634eff4a206a3a685459287f",
+      "variantEvidenceSha256": "c75dced8e9deea4a1d2470dce99c37c8794ce096463cfe89f5f9dcba49c119e7"
+    }
+  ],
+  "promotionGroup": "es2015/h0-cross-realm-passed"
+}

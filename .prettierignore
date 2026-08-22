@@ -34,3 +34,15 @@ tools/test262/es2015-taxonomy.json
 
 # Generated immutable promotion evidence, whose intentional formatting it owns.
 tools/test262/es2015-promotion.json
+
+# Generated H0 disposition evidence, whose canonical bytes are owned by the
+# pinned ES2015 audit.
+tools/test262/es2015-h0-disposition.json
+
+# Generated H0 owner-delta evidence, whose canonical bytes are owned by the
+# pinned ES2015 audit.
+tools/test262/es2015-h0-owner-deltas.json
+
+# Generated H0 promotion evidence, whose canonical bytes are owned by the
+# pinned ES2015 audit.
+tools/test262/es2015-h0-promotion.json

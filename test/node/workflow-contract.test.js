@@ -20,6 +20,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 // @ts-expect-error node:fs's sync fixture helpers (mkdir/mkdtemp/rm/writeFile)
 // are not declared in this repo's Node shim (types/host.d.ts only covers the
 // async fs/promises surface plus existsSync/constants).
@@ -32,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { load as parseYaml, dump as dumpYaml } from 'js-yaml';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createRealm, evaluateScript } from '../../src/index.js';
+import { createJsjsTest262Engine } from '../../tools/test262/engine.js';
 import {
   UNSUPPORTED_FLAGS,
   decideSkip,
@@ -62,6 +64,7 @@ import {
   resolveSupportedFeatures,
   runFeatureProbe,
 } from '../../tools/test262/features.js';
+import { parseEs2015H0Baseline } from '../../tools/test262/es2015-promotion.js';
 import {
   UPSTREAM_SUBSET_FILE,
   Test262UpstreamSubsetError,
@@ -714,7 +717,7 @@ function runGuardShellCommand(command, cwd, env) {
   });
 }
 
-const engine = { createRealm, evaluateScript };
+const engine = createJsjsTest262Engine();
 
 const GENERATOR_PROBE =
   "function* sequence() {\n  var input = yield 1;\n  return input + 1;\n}\nvar iterator = sequence();\nif (iterator[Symbol.iterator]() !== iterator) {\n  throw new Error('generator is not iterable');\n}\nvar first = iterator.next();\nvar second = iterator.next(2);\nif (first.value !== 1 || first.done || second.value !== 3 || !second.done) {\n  throw new Error('generator resume semantics failed');\n}";
@@ -924,6 +927,32 @@ function stderrText(result) {
   }
 
   return '';
+}
+
+/** @param {string} text */
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+/** @param {readonly any[]} entries */
+function h0VariantEvidenceSha256(entries) {
+  const records = entries.flatMap((entry) =>
+    entry.evidence.map((/** @type {any} */ evidence) => ({
+      path: entry.path,
+      variant: evidence.variant,
+      status: evidence.status,
+      ...(evidence.status === 'failed'
+        ? {
+            reason: evidence.reason,
+            message: evidence.message,
+            signature: evidence.signature,
+          }
+        : {}),
+    })),
+  );
+  return sha256(
+    `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+  );
 }
 
 /**
@@ -1285,6 +1314,226 @@ export default [
     },
   },
   {
+    name: 'the H0 workflow artifacts bind final-base, disposition, and promotion identities',
+    run: async () => {
+      const [
+        pathsText,
+        ownerMapText,
+        dispositionText,
+        promotionText,
+        deltasText,
+        baselineText,
+      ] = await Promise.all([
+        readRepositoryFile('tools/test262/es2015-h0-paths.json'),
+        readRepositoryFile('tools/test262/es2015-h0-owner-map.json'),
+        readRepositoryFile('tools/test262/es2015-h0-disposition.json'),
+        readRepositoryFile('tools/test262/es2015-h0-promotion.json'),
+        readRepositoryFile('tools/test262/es2015-h0-owner-deltas.json'),
+        readRepositoryFile('tools/test262/es2015-h0-baseline.json'),
+      ]);
+      const paths = JSON.parse(pathsText);
+      const ownerMap = JSON.parse(ownerMapText);
+      const disposition = JSON.parse(dispositionText);
+      const promotion = JSON.parse(promotionText);
+      const deltas = JSON.parse(deltasText);
+      const baseline = parseEs2015H0Baseline(baselineText);
+
+      assertSame(paths.rootCount, 135);
+      assertSame(paths.variantCount, 267);
+      assertSame(paths.ledgerSha256, sha256(`${paths.paths.join('\n')}\n`));
+      assertSame(ownerMap.repository, paths.repository);
+      assertSame(ownerMap.revision, paths.revision);
+      assertSame(
+        sha256(baselineText),
+        '01c9f90704fe9ea6d892c4e758817fbe9bc30368486a58f12b47068e6b2080ec',
+      );
+      assertSame(
+        baseline.finalBaseCommit,
+        '99c439f2efd287479f40d8d0e6ac2dd9aab81e10',
+      );
+      assertSame(baseline.repository, paths.repository);
+      assertSame(baseline.revision, paths.revision);
+      assertSame(
+        baseline.finalBaseTaxonomySha256,
+        disposition.sourceTaxonomySha256,
+      );
+      assertSame(baseline.h0LedgerSha256, paths.ledgerSha256);
+      assertSame(baseline.h0RootCount, paths.rootCount);
+      assertSame(baseline.h0VariantCount, paths.variantCount);
+      assertSame(
+        baseline.h0ClassificationSha256,
+        '7d77ab62f96de66b8533628cee09fe49f3d39342e6109f5420a7969141472634',
+      );
+      assertSame(
+        baseline.nonH0ClassificationSha256,
+        'e600971b3b8efa7bb5a02f9bd782364f9873c29b6dcd03f58eda7c52b27f624d',
+      );
+      assertSame(
+        baseline.partitionStatusSummarySha256,
+        '0b05f6513c4fe8754d24fd6e53897905bbf97b6469bb20c5a89361035bf3f21d',
+      );
+      assertSame(baseline.partitionStatusSummary.roots, 53575);
+      assertSame(baseline.partitionStatusSummary.variants, 102912);
+      assertSame(
+        baseline.partitionStatusSummary.partitions.reduce(
+          (total, partition) => total + partition.roots,
+          0,
+        ),
+        baseline.partitionStatusSummary.roots,
+      );
+      assertSame(
+        baseline.partitionStatusSummary.statuses.reduce(
+          (total, status) => total + status.variants,
+          0,
+        ),
+        baseline.partitionStatusSummary.variants,
+      );
+      assertSame(
+        JSON.stringify(
+          baseline.partitionStatusSummary.statuses.map(
+            (status) => `${status.status}\u0000${status.blocker ?? ''}`,
+          ),
+        ),
+        JSON.stringify(
+          [...baseline.partitionStatusSummary.statuses]
+            .map((status) => `${status.status}\u0000${status.blocker ?? ''}`)
+            .sort(),
+        ),
+      );
+      assertSame(disposition.ownerMapSha256, sha256(ownerMapText));
+      assertSame(disposition.h0LedgerSha256, paths.ledgerSha256);
+      assertSame(disposition.h0RootCount, paths.rootCount);
+      assertSame(disposition.h0VariantCount, paths.variantCount);
+      assertSame(
+        disposition.completePassedRootCount + disposition.reassignedRootCount,
+        paths.rootCount,
+      );
+      assertSame(
+        disposition.executionPassedVariantCount +
+          disposition.executionFailedVariantCount,
+        paths.variantCount,
+      );
+      assertSame(
+        disposition.completePassedVariantCount +
+          disposition.reassignedVariantCount,
+        paths.variantCount,
+      );
+      assertSame(
+        disposition.allFailedRootCount + disposition.mixedRootCount,
+        disposition.reassignedRootCount,
+      );
+      assertSame(
+        disposition.allFailedVariantCount + disposition.mixedVariantCount,
+        disposition.reassignedVariantCount,
+      );
+      assertSame(promotion.h0LedgerSha256, paths.ledgerSha256);
+      assertSame(promotion.h0RootCount, paths.rootCount);
+      assertSame(promotion.h0VariantCount, paths.variantCount);
+      assertSame(promotion.dispositionSha256, sha256(dispositionText));
+      assertSame(
+        promotion.promotedRootCount,
+        disposition.completePassedRootCount,
+        'only complete-root passed H0 dispositions are promoted',
+      );
+      assertSame(
+        promotion.promotedVariantCount,
+        disposition.completePassedVariantCount,
+        'promoted variant count follows complete-root passed disposition variants',
+      );
+      assertSame(deltas.dispositionSha256, sha256(dispositionText));
+      assertSame(deltas.promotionSha256, sha256(promotionText));
+      assertSame(deltas.crossRealm.remainingRoots, 0);
+      assertSame(deltas.crossRealm.remainingVariants, 0);
+      assertSame(
+        JSON.stringify(deltas.provenance),
+        JSON.stringify({
+          sourceTaxonomySha256: disposition.sourceTaxonomySha256,
+          executionEvidenceSha256: disposition.executionEvidenceSha256,
+          ownerMapSha256: disposition.ownerMapSha256,
+        }),
+      );
+      assertSame(deltas.promotionGroup, 'es2015/h0-cross-realm-passed');
+
+      const byPath = new Map(
+        disposition.dispositions.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      const h0Delta = deltas.deltas.find(
+        (/** @type {any} */ delta) => delta.owner.code === 'H0',
+      );
+      assertSame(JSON.stringify(h0Delta?.paths), JSON.stringify(paths.paths));
+      assertSame(h0Delta?.pathsSha256, paths.ledgerSha256);
+      assertSame(
+        h0Delta?.variantEvidenceSha256,
+        h0VariantEvidenceSha256(disposition.dispositions),
+      );
+
+      for (const delta of deltas.deltas.filter(
+        (/** @type {any} */ entry) => entry.direction === 'added',
+      )) {
+        const entries = delta.paths.map((/** @type {string} */ path) => {
+          const entry = byPath.get(path);
+          if (entry === undefined || entry.status !== 'reassigned') {
+            throw new Error(
+              `owner delta has an unreviewed reassigned path: ${path}`,
+            );
+          }
+          assertSame(entry.primaryOwner.code, delta.owner.code);
+          return entry;
+        });
+        assertSame(
+          JSON.stringify(delta.paths),
+          JSON.stringify([...delta.paths].sort()),
+        );
+        assertSame(delta.roots, delta.paths.length);
+        assertSame(
+          delta.variants,
+          entries.reduce(
+            (/** @type {number} */ total, /** @type {any} */ entry) =>
+              total + entry.variants,
+            0,
+          ),
+        );
+        assertSame(delta.pathsSha256, sha256(`${delta.paths.join('\n')}\n`));
+        assertSame(
+          delta.variantEvidenceSha256,
+          h0VariantEvidenceSha256(entries),
+        );
+      }
+
+      const p1Path =
+        'test/language/global-code/script-decl-lex-var-declared-via-eval.js';
+      const p1Delta = deltas.deltas.find(
+        (/** @type {any} */ delta) => delta.owner.code === 'P1',
+      );
+      const p1Disposition = byPath.get(p1Path);
+      if (p1Disposition === undefined) {
+        throw new Error(`missing P1 disposition for ${p1Path}`);
+      }
+      assertSame(JSON.stringify(p1Delta?.paths), JSON.stringify([p1Path]));
+      assertSame(p1Delta?.roots, 1);
+      assertSame(p1Delta?.variants, 2);
+      assertSame(
+        p1Delta?.variantEvidenceSha256,
+        h0VariantEvidenceSha256([p1Disposition]),
+      );
+      assertSame(
+        JSON.stringify(
+          p1Disposition?.evidence.map((/** @type {any} */ entry) => [
+            entry.variant,
+            entry.status,
+          ]),
+        ),
+        JSON.stringify([
+          ['non-strict', 'failed'],
+          ['strict', 'passed'],
+        ]),
+      );
+    },
+  },
+  {
     name: 'the focused ES2015 Test262 release job checks out the pinned revision and runs every focused suite',
     run: async () => {
       const { workflow } = await readWorkflow();
@@ -1325,7 +1574,7 @@ export default [
 
       assertSame(
         packageManifest.scripts['test262:es2015-release'],
-        'node test/run-node.js test/ci/es2015-promise-test262.test.js test/ci/es2015-generator-test262.test.js test/ci/es2015-module-test262.test.js test/ci/es2015-object-function-test262.test.js test/ci/es2015-syntax-test262.test.js',
+        'node test/run-node.js test/ci/es2015-promise-test262.test.js test/ci/es2015-generator-test262.test.js test/ci/es2015-module-test262.test.js test/ci/es2015-object-function-test262.test.js test/ci/es2015-syntax-test262.test.js test/ci/es2015-cross-realm-test262.test.js',
         'the release script must run every focused ES2015 suite',
       );
       // Amended for the trusted provenance base guard: see the JavaScriptCore
@@ -2109,6 +2358,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2144,6 +2394,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2182,6 +2433,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2220,6 +2472,7 @@ export default [
 
             return realm;
           },
+          installHostBindings() {},
           evaluateScript,
         },
         feature,
@@ -2317,6 +2570,7 @@ export default [
           // never silently accepted as `completed`.
           engine: {
             createRealm,
+            installHostBindings() {},
             evaluateScript() {
               throw new Error('synthetic engine limitation');
             },
