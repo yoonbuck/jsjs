@@ -264,10 +264,16 @@ export function evaluateExpressionValue(node, context) {
 
     return linkValueToGeneratorHostChain(
       context.realm,
-      // Match getValue(getIdentifierReference(...)): result linking belongs to
-      // the caller, but binding access itself must not add an object-operation
-      // guard frame around an accessor reached by the fused read.
-      getIdentifierBindingValue(context.env, node.name, context.strict),
+      getIdentifierBindingValue(
+        context.env,
+        node.name,
+        context.strict,
+        context.realm,
+        // Keep the caller Realm for foreign Agent linking, but omit the
+        // redundant same-Agent object-operation guard that the reference path
+        // does not hold around an accessor invocation.
+        { withObjectOperationStackGuard: false },
+      ),
     );
   }
 

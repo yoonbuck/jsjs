@@ -1,4 +1,5 @@
 import { assertSame, assertThrows } from './harness/assert.js';
+import { createAgent } from '../src/runtime/agent.js';
 import { EngineObject } from '../src/runtime/object.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
@@ -13,7 +14,7 @@ import {
   getIdentifierBindingValue,
   getIdentifierReference,
 } from '../src/runtime/environment.js';
-import { GuestErrorSignal } from '../src/runtime/completion.js';
+import { GuestErrorSignal, ThrowSignal } from '../src/runtime/completion.js';
 
 /**
  * The invariant this whole suite exists to defend: resolving an identifier to
@@ -537,6 +538,225 @@ const tests = [
         'getter stack-guard depth through a block scope (fused vs reference)',
       );
       assertSame(realm.stackGuard.depth, 0, 'guard balanced after fused path');
+    },
+  },
+  {
+    name: 'foreign object environment fused reads preserve caller links through bare and block scopes',
+    run() {
+      const evaluatingAgent = createAgent();
+      const foreignAgent = createAgent();
+      const evaluatingRealm = createRealm({ agent: evaluatingAgent });
+      const foreignRealm = createRealm({ agent: foreignAgent });
+      const foreign = new EngineObject(foreignRealm.intrinsics.objectPrototype);
+      /** @type {{
+       *   caller: import('../src/runtime/realm.js').Realm | null,
+       *   synchronous: boolean,
+       *   generator: boolean,
+       *   depth: number,
+       * }[]} */
+      const observations = [];
+      foreign.defineOwnProperty('value', {
+        get: foreignRealm.createNativeFunction({
+          name: 'get value',
+          length: 0,
+          call(_thisValue, _args, _functionObject, caller) {
+            const evaluatingChain = evaluatingAgent.synchronousCallChainRoot();
+            observations.push({
+              caller: caller ?? null,
+              synchronous:
+                evaluatingChain !== null &&
+                evaluatingChain === foreignAgent.synchronousCallChainRoot(),
+              generator:
+                evaluatingAgent._generatorHostChain !== null &&
+                evaluatingAgent._generatorHostChain ===
+                  foreignAgent._generatorHostChain,
+              depth: evaluatingRealm.stackGuard.depth,
+            });
+            return 73;
+          },
+        }),
+        enumerable: true,
+        configurable: true,
+      });
+      evaluatingRealm.globalObject.defineOwnProperty('foreign', {
+        value: foreign,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      const objectEnv = new ObjectEnvironmentRecord(foreign);
+      const blockEnv = new DeclarativeEnvironmentRecord(objectEnv);
+      blockEnv.createMutableBinding('local', false);
+      blockEnv.initializeBinding('local', 1);
+      const node = { type: 'Identifier', name: 'value' };
+
+      /**
+       * @param {() => unknown} body
+       * @returns {unknown}
+       */
+      const linkedRead = (body) => {
+        const chain = evaluatingAgent.enterGeneratorHostChain(
+          evaluatingRealm.stackGuard.maxDepth,
+        );
+        try {
+          return body();
+        } finally {
+          evaluatingAgent.exitGeneratorHostChain(chain);
+        }
+      };
+      /** @type {import('../src/evaluator/index.js').EvaluationContext} */
+      const baseContext = {
+        realm: evaluatingRealm,
+        env: objectEnv,
+        variableEnv: evaluatingRealm.globalEnvironment,
+        strict: false,
+        thisValue: evaluatingRealm.globalObject,
+      };
+
+      const referenceValue = linkedRead(() =>
+        getValue(
+          getIdentifierReference(objectEnv, 'value', false),
+          evaluatingRealm,
+        ),
+      );
+      const fusedValue = linkedRead(() =>
+        evaluateExpressionValue(node, baseContext),
+      );
+      const blockValue = linkedRead(() =>
+        evaluateExpressionValue(node, { ...baseContext, env: blockEnv }),
+      );
+      const withValue = linkedRead(
+        () =>
+          evaluateScript(evaluatingRealm, 'with (foreign) { value; }').value,
+      );
+      const withBlockValue = linkedRead(
+        () =>
+          evaluateScript(
+            evaluatingRealm,
+            'with (foreign) { { let local = 1; value; } }',
+          ).value,
+      );
+
+      assertSame(referenceValue, 73);
+      assertSame(fusedValue, referenceValue);
+      assertSame(blockValue, referenceValue);
+      assertSame(withValue, referenceValue);
+      assertSame(withBlockValue, referenceValue);
+      assertSame(observations.length, 5);
+      const referenceDepth = observations[0].depth;
+      for (const observation of observations) {
+        assertSame(observation.caller, evaluatingRealm);
+        assertSame(observation.synchronous, true);
+        assertSame(observation.generator, true);
+      }
+      for (const observation of observations.slice(0, 3)) {
+        assertSame(observation.depth, referenceDepth);
+      }
+      assertSame(evaluatingAgent.activeExecutionRealm, null);
+      assertSame(foreignAgent.activeExecutionRealm, null);
+      assertSame(evaluatingAgent.synchronousCallChainRoot(), null);
+      assertSame(foreignAgent.synchronousCallChainRoot(), null);
+      assertSame(evaluatingAgent._generatorHostChain, null);
+      assertSame(foreignAgent._generatorHostChain, null);
+    },
+  },
+  {
+    name: 'foreign object environment abrupt fused reads preserve error Realm and clean links',
+    run() {
+      const evaluatingAgent = createAgent();
+      const foreignAgent = createAgent();
+      const evaluatingRealm = createRealm({ agent: evaluatingAgent });
+      const foreignRealm = createRealm({ agent: foreignAgent });
+      const foreign = new EngineObject(foreignRealm.intrinsics.objectPrototype);
+      /** @type {{
+       *   caller: import('../src/runtime/realm.js').Realm | null,
+       *   synchronous: boolean,
+       *   generator: boolean,
+       * }[]} */
+      const observations = [];
+      foreign.defineOwnProperty('value', {
+        get: foreignRealm.createNativeFunction({
+          name: 'get value',
+          length: 0,
+          call(_thisValue, _args, _functionObject, caller) {
+            const evaluatingChain = evaluatingAgent.synchronousCallChainRoot();
+            observations.push({
+              caller: caller ?? null,
+              synchronous:
+                evaluatingChain !== null &&
+                evaluatingChain === foreignAgent.synchronousCallChainRoot(),
+              generator:
+                evaluatingAgent._generatorHostChain !== null &&
+                evaluatingAgent._generatorHostChain ===
+                  foreignAgent._generatorHostChain,
+            });
+            throw new GuestErrorSignal('TypeError', 'foreign accessor');
+          },
+        }),
+        enumerable: true,
+        configurable: true,
+      });
+      const objectEnv = new ObjectEnvironmentRecord(foreign);
+      const blockEnv = new DeclarativeEnvironmentRecord(objectEnv);
+      blockEnv.createMutableBinding('local', false);
+      blockEnv.initializeBinding('local', 1);
+      const node = { type: 'Identifier', name: 'value' };
+      /** @type {import('../src/evaluator/index.js').EvaluationContext} */
+      const context = {
+        realm: evaluatingRealm,
+        env: objectEnv,
+        variableEnv: evaluatingRealm.globalEnvironment,
+        strict: false,
+        thisValue: evaluatingRealm.globalObject,
+      };
+
+      /**
+       * @param {() => unknown} body
+       * @returns {ThrowSignal}
+       */
+      const abruptRead = (body) => {
+        const chain = evaluatingAgent.enterGeneratorHostChain(
+          evaluatingRealm.stackGuard.maxDepth,
+        );
+        try {
+          return /** @type {ThrowSignal} */ (assertThrows(body, ThrowSignal));
+        } finally {
+          evaluatingAgent.exitGeneratorHostChain(chain);
+        }
+      };
+      const referenceError = abruptRead(() =>
+        getValue(
+          getIdentifierReference(objectEnv, 'value', false),
+          evaluatingRealm,
+        ),
+      );
+      const fusedError = abruptRead(() =>
+        evaluateExpressionValue(node, context),
+      );
+      const blockError = abruptRead(() =>
+        evaluateExpressionValue(node, { ...context, env: blockEnv }),
+      );
+
+      for (const error of [referenceError, fusedError, blockError]) {
+        const value = /** @type {EngineObject} */ (error.value);
+        assertSame(
+          value.getPrototypeOf(),
+          foreignRealm.intrinsics.typeErrorPrototype,
+        );
+        assertSame(value.get('message', value), 'foreign accessor');
+      }
+      assertSame(observations.length, 3);
+      for (const observation of observations) {
+        assertSame(observation.caller, evaluatingRealm);
+        assertSame(observation.synchronous, true);
+        assertSame(observation.generator, true);
+      }
+      assertSame(evaluatingAgent.activeExecutionRealm, null);
+      assertSame(foreignAgent.activeExecutionRealm, null);
+      assertSame(evaluatingAgent.synchronousCallChainRoot(), null);
+      assertSame(foreignAgent.synchronousCallChainRoot(), null);
+      assertSame(evaluatingAgent._generatorHostChain, null);
+      assertSame(foreignAgent._generatorHostChain, null);
     },
   },
 ];

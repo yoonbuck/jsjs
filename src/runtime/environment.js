@@ -1034,15 +1034,31 @@ function globalObjectOf(env) {
  * @param {string | symbol} name
  * @param {boolean} strict
  * @param {import('./realm.js').Realm} [callerRealm]
+ * @param {{ withObjectOperationStackGuard?: boolean }} [options]
  * @returns {unknown}
  */
-export function getIdentifierBindingValue(env, name, strict, callerRealm) {
+export function getIdentifierBindingValue(
+  env,
+  name,
+  strict,
+  callerRealm,
+  options = {},
+) {
   /** @type {EnvironmentRecordLike | null} */
   let record = env;
 
   while (record !== null) {
     if (record.hasBinding(name)) {
-      return record.getBindingValue(name, strict, callerRealm);
+      return record.getBindingValue(
+        name,
+        strict,
+        identifierBindingCallerRealm(
+          record,
+          name,
+          callerRealm,
+          options.withObjectOperationStackGuard !== false,
+        ),
+      );
     }
 
     record = record.outer;
@@ -1052,4 +1068,43 @@ export function getIdentifierBindingValue(env, name, strict, callerRealm) {
     'ReferenceError',
     `${String(name)} is not defined`,
   );
+}
+
+/**
+ * Fused reads may omit the same-Agent object-operation guard while still
+ * carrying the evaluating Realm across an Agent boundary. Other environment
+ * records keep the caller Realm because they do not add that object guard.
+ *
+ * @param {EnvironmentRecordLike} record
+ * @param {string | symbol} name
+ * @param {import('./realm.js').Realm | undefined} callerRealm
+ * @param {boolean} withObjectOperationStackGuard
+ * @returns {import('./realm.js').Realm | undefined}
+ */
+function identifierBindingCallerRealm(
+  record,
+  name,
+  callerRealm,
+  withObjectOperationStackGuard,
+) {
+  if (callerRealm === undefined || withObjectOperationStackGuard) {
+    return callerRealm;
+  }
+
+  if (record instanceof ObjectEnvironmentRecord) {
+    return record.bindingObject.agent === callerRealm.agent
+      ? undefined
+      : callerRealm;
+  }
+
+  if (
+    record instanceof GlobalEnvironmentRecord &&
+    !record.declarativeRecord.hasBinding(name)
+  ) {
+    return record.globalObject.agent === callerRealm.agent
+      ? undefined
+      : callerRealm;
+  }
+
+  return callerRealm;
 }
