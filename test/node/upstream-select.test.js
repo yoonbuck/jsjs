@@ -11,6 +11,7 @@ import {
 } from '../../tools/test262/es5-selection.js';
 import {
   ES2015_H0_PROMOTION_GROUP,
+  ES2015_PROMOTION_GROUP,
   assertExactH0DispositionDelta,
   assertEs2015H0BaselineMatchesTaxonomy,
   assertEs2015H0ExecutionMatchesDisposition,
@@ -81,6 +82,8 @@ const PROMOTION_PATHS = Object.freeze([
 ]);
 const PROMOTION_LEDGER_SHA256 =
   'eaeedcaba2a38a70dddc59794e093318d1edc1dacb41ba64966a593c5dea43ff';
+const EMPTY_LEDGER_SHA256 =
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const DURABLE_LEDGER_SHA256 =
   '3f2c617b8639c8048afb1a42b95218250b20b6d51b9313f39473b4ddc1c7c646';
 const PRE_PROMOTION_TAXONOMY_SHA256 =
@@ -90,6 +93,18 @@ const PRE_PROMOTION_GROUPS_SHA256 =
 const H0_PIN = Object.freeze({
   repository: 'https://github.com/tc39/test262.git',
   revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
+});
+const M0_PROMOTION = Object.freeze({
+  groupName: 'es2015/m0-object-internal-methods',
+  version: 2,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  sourceTaxonomySha256:
+    '6f60af3b4416b537257cc7c3d418ed918978b7e14b1e5fc6567db9e379dc5908',
+  ledgerSha256: EMPTY_LEDGER_SHA256,
+  rootCount: 0,
+  variantCount: 0,
+  entries: Object.freeze([]),
 });
 const H0_REASSIGNED_PATH = 'test/built-ins/Proxy/h0-failed.js';
 const H0_PASSED_PATH = 'test/language/h0-passed.js';
@@ -502,6 +517,31 @@ function promotionFixture(overrides = {}) {
 
 /**
  * @param {Partial<{
+ *   groupName: string,
+ *   entries: object[],
+ *   rootCount: number,
+ *   variantCount: number,
+ *   ledgerSha256: string,
+ * }>} [overrides]
+ */
+function namedPromotionFixture(overrides = {}) {
+  return {
+    groupName: 'es2015/m1-proxy-runtime',
+    version: 2,
+    repository: PROMOTION_PIN.repository,
+    revision: PROMOTION_PIN.revision,
+    sourceTaxonomySha256:
+      '1111111111111111111111111111111111111111111111111111111111111111',
+    ledgerSha256: PROMOTION_LEDGER_SHA256,
+    rootCount: 2,
+    variantCount: 3,
+    entries: promotionFixture().entries,
+    ...overrides,
+  };
+}
+
+/**
+ * @param {Partial<{
  *   pin: { repository: string, revision: string },
  *   policy: {
  *     es2015Features: readonly string[],
@@ -806,6 +846,113 @@ export default [
           ),
         Es2015PromotionError,
       );
+    },
+  },
+  {
+    name: 'ES2015 named version-2 promotions accept exact empty and non-empty ledgers',
+    run: () => {
+      const empty = parseEs2015Promotion(json(M0_PROMOTION));
+      const named = /** @type {any} */ (
+        parseEs2015Promotion(json(namedPromotionFixture()))
+      );
+      const base = parseUpstreamSubset(
+        json({
+          version: 1,
+          repository: H0_PIN.repository,
+          revision: H0_PIN.revision,
+          groups: [
+            {
+              name: 'baseline',
+              summary: 'Synthetic baseline.',
+              paths: ['test/language/base.js'],
+            },
+          ],
+        }),
+      );
+      const merged = mergePromotionSubset(base, empty);
+
+      assertSame(JSON.stringify(empty), JSON.stringify(M0_PROMOTION));
+      assertSame(Object.isFrozen(empty), true);
+      assertSame(Object.isFrozen(empty.entries), true);
+      assertSame(JSON.stringify(promotionPaths(empty)), '[]');
+      validateEs2015Promotion(empty, {
+        pin: H0_PIN,
+        policy: {
+          es2015Features: [],
+          neutralFeatures: [],
+          laterFeatures: [],
+        },
+        selectedPaths: [],
+        inventory: [],
+      });
+      assertSame(
+        JSON.stringify(
+          merged.groups.find((group) => group.name === M0_PROMOTION.groupName)
+            ?.paths,
+        ),
+        '[]',
+      );
+
+      assertSame(named.groupName, 'es2015/m1-proxy-runtime');
+      assertSame(
+        JSON.stringify(promotionPaths(named)),
+        JSON.stringify(PROMOTION_PATHS),
+      );
+      validateEs2015Promotion(named, promotionValidationOptions());
+    },
+  },
+  {
+    name: 'ES2015 named version-2 promotions reject malformed schemas and ledgers',
+    run: () => {
+      const exact = /** @type {any} */ (promotionFixture().entries[0]);
+      const neighbor = /** @type {any} */ (promotionFixture().entries[1]);
+      const missingGroupName = /** @type {any} */ (
+        structuredClone(M0_PROMOTION)
+      );
+      delete missingGroupName.groupName;
+      const malformed = [
+        missingGroupName,
+        { ...M0_PROMOTION, unexpected: true },
+        { ...M0_PROMOTION, groupName: 'es2015/M0-object-internal-methods' },
+        { ...M0_PROMOTION, groupName: 'es2015/' },
+        { ...M0_PROMOTION, groupName: 'm0-object-internal-methods' },
+        { ...M0_PROMOTION, groupName: ES2015_PROMOTION_GROUP },
+        { ...M0_PROMOTION, groupName: ES2015_H0_PROMOTION_GROUP },
+        { ...M0_PROMOTION, rootCount: -1 },
+        { ...M0_PROMOTION, variantCount: -1 },
+        { ...M0_PROMOTION, rootCount: 1 },
+        { ...M0_PROMOTION, variantCount: 1 },
+        { ...M0_PROMOTION, ledgerSha256: '0'.repeat(64) },
+        namedPromotionFixture({
+          entries: [exact, exact],
+          rootCount: 2,
+          variantCount: 4,
+          ledgerSha256: sha256(`${exact.path}\n${exact.path}\n`),
+        }),
+        namedPromotionFixture({
+          entries: [neighbor, exact],
+          ledgerSha256: sha256(`${neighbor.path}\n${exact.path}\n`),
+        }),
+        namedPromotionFixture({ rootCount: 3 }),
+        namedPromotionFixture({ variantCount: 4 }),
+        namedPromotionFixture({ ledgerSha256: '0'.repeat(64) }),
+        namedPromotionFixture({
+          entries: [{ ...exact, unexpected: true }, neighbor],
+        }),
+        promotionFixture({
+          rootCount: 0,
+          variantCount: 0,
+          ledgerSha256: EMPTY_LEDGER_SHA256,
+          entries: [],
+        }),
+      ];
+
+      for (const value of malformed) {
+        assertThrows(
+          () => parseEs2015Promotion(json(value)),
+          Es2015PromotionError,
+        );
+      }
     },
   },
   {

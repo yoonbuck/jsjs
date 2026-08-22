@@ -25,7 +25,19 @@ export const ES2015_PROMOTION_VERSION = 1;
 export const ES2015_PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 export const ES2015_H0_PROMOTION_GROUP = 'es2015/h0-cross-realm-passed';
 
+const NAMED_PROMOTION_VERSION = 2;
 const MANIFEST_KEYS = Object.freeze([
+  'version',
+  'repository',
+  'revision',
+  'sourceTaxonomySha256',
+  'ledgerSha256',
+  'rootCount',
+  'variantCount',
+  'entries',
+]);
+const NAMED_PROMOTION_KEYS = Object.freeze([
+  'groupName',
   'version',
   'repository',
   'revision',
@@ -218,6 +230,11 @@ const REVIEWED_TAXONOMY_INPUT_KEYS = Object.freeze([
 ]);
 const REVISION_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const NAMED_PROMOTION_GROUP_PATTERN = /^es2015\/[a-z0-9][a-z0-9-]*$/u;
+const RESERVED_PROMOTION_GROUPS = new Set([
+  ES2015_PROMOTION_GROUP,
+  ES2015_H0_PROMOTION_GROUP,
+]);
 const REVIEWED_P0_ROOT_COUNT = 83;
 const REVIEWED_P0_VARIANT_COUNT = 164;
 const REVIEWED_P0_PATH_SHA256 =
@@ -449,7 +466,19 @@ const ROADMAP_OWNERS = Object.freeze({
  *   entries: readonly Es2015PromotionEntry[],
  * }>} Es2015H0Promotion
  *
- * @typedef {Es2015T0Promotion | Es2015H0Promotion} Es2015Promotion
+ * @typedef {Readonly<{
+ *   groupName: string,
+ *   version: number,
+ *   repository: string,
+ *   revision: string,
+ *   sourceTaxonomySha256: string,
+ *   ledgerSha256: string,
+ *   rootCount: number,
+ *   variantCount: number,
+ *   entries: readonly Es2015PromotionEntry[],
+ * }>} Es2015NamedPromotion
+ *
+ * @typedef {Es2015T0Promotion | Es2015H0Promotion | Es2015NamedPromotion} Es2015Promotion
  */
 
 export class Es2015PromotionError extends Error {
@@ -473,8 +502,11 @@ export function parseEs2015Promotion(text) {
       `${ES2015_PROMOTION_FILE} must not mix T0 and H0 promotion discriminators`,
     );
   }
-  return hasH0Ledger
-    ? parseH0PromotionRecord(record)
+  if (hasH0Ledger) {
+    return parseH0PromotionRecord(record);
+  }
+  return record.version === NAMED_PROMOTION_VERSION
+    ? parseNamedPromotionRecord(record)
     : parseT0PromotionRecord(record);
 }
 
@@ -563,6 +595,117 @@ function parseT0PromotionRecord(record) {
   const manifest = /** @type {Es2015T0Promotion} */ (
     Object.freeze({
       version: ES2015_PROMOTION_VERSION,
+      repository: record.repository,
+      revision: record.revision,
+      sourceTaxonomySha256: record.sourceTaxonomySha256,
+      ledgerSha256: record.ledgerSha256,
+      rootCount: record.rootCount,
+      variantCount: record.variantCount,
+      entries: Object.freeze(entries),
+    })
+  );
+  entriesByManifest.set(
+    manifest,
+    new Map(entries.map((entry) => [entry.path, entry])),
+  );
+  return manifest;
+}
+
+/**
+ * @param {Record<string, any>} record
+ */
+function parseNamedPromotionRecord(record) {
+  requireExactKeys(record, NAMED_PROMOTION_KEYS, ES2015_PROMOTION_FILE);
+  if (record.version !== NAMED_PROMOTION_VERSION) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} must declare version ${NAMED_PROMOTION_VERSION}`,
+    );
+  }
+  if (
+    typeof record.groupName !== 'string' ||
+    !NAMED_PROMOTION_GROUP_PATTERN.test(record.groupName) ||
+    RESERVED_PROMOTION_GROUPS.has(record.groupName)
+  ) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} must name a non-reserved ES2015 promotion group`,
+    );
+  }
+  if (typeof record.repository !== 'string' || record.repository === '') {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} must name the Test262 repository`,
+    );
+  }
+  if (
+    typeof record.revision !== 'string' ||
+    !REVISION_PATTERN.test(record.revision)
+  ) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} must pin a full Test262 revision`,
+    );
+  }
+  for (const key of ['sourceTaxonomySha256', 'ledgerSha256']) {
+    if (
+      typeof record[key] !== 'string' ||
+      !SHA256_PATTERN.test(/** @type {string} */ (record[key]))
+    ) {
+      throw new Es2015PromotionError(
+        `${ES2015_PROMOTION_FILE} ${key} must be a SHA-256 digest`,
+      );
+    }
+  }
+  if (
+    !nonNegativeInteger(record.rootCount) ||
+    !nonNegativeInteger(record.variantCount)
+  ) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} rootCount and variantCount must be non-negative integers`,
+    );
+  }
+  if (!Array.isArray(record.entries)) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} must contain exact promotion entries`,
+    );
+  }
+
+  const entries = record.entries.map((entry, index) =>
+    parseEntry(entry, index),
+  );
+  const paths = entries.map((entry) => entry.path);
+  if (new Set(paths).size !== paths.length) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} must not repeat a promoted path`,
+    );
+  }
+  if (!sameStrings(paths, sortStrings([...paths]))) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} entries must be code-unit sorted by path`,
+    );
+  }
+  if (record.rootCount !== entries.length) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} rootCount does not match its entries`,
+    );
+  }
+  const variantCount = entries.reduce(
+    (total, entry) => total + entry.variants,
+    0,
+  );
+  if (record.variantCount !== variantCount) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} variantCount does not match its entries`,
+    );
+  }
+  const ledgerText = paths.length === 0 ? '' : `${paths.join('\n')}\n`;
+  if (sha256(ledgerText) !== record.ledgerSha256) {
+    throw new Es2015PromotionError(
+      `${ES2015_PROMOTION_FILE} ledgerSha256 does not match its exact paths`,
+    );
+  }
+
+  const manifest = /** @type {Es2015NamedPromotion} */ (
+    Object.freeze({
+      groupName: record.groupName,
+      version: NAMED_PROMOTION_VERSION,
       repository: record.repository,
       revision: record.revision,
       sourceTaxonomySha256: record.sourceTaxonomySha256,
@@ -704,7 +847,7 @@ function parseH0PromotionRecord(record) {
 
 /** @param {Es2015Promotion} promotion */
 function promotionGroupName(promotion) {
-  return isH0Promotion(promotion)
+  return 'groupName' in promotion
     ? promotion.groupName
     : ES2015_PROMOTION_GROUP;
 }
