@@ -227,10 +227,14 @@ automatically.
 ### Public `[[Enumerate]]` iterator (`src/runtime/iterator-object.js`)
 
 `enumerate()` returns a public `ForInIterator`, not a host iterator or raw key
-array. Its own callable `next` returns ordinary IteratorResult objects, and
-`for-in` consumes it through the same `IteratorStep`/`IteratorValue` protocol
-used elsewhere. Ordinary chains snapshot candidate string keys but recheck
-live descriptors before yielding; duplicate suppression, deletion,
+array. It inherits the evaluating Realm's `%IteratorPrototype%`, so inherited
+`@@iterator` is callable and returns the iterator itself. Its own callable
+`next` returns ordinary IteratorResult objects, and its own `return` closes any
+unfinished delegated prototype enumerator exactly once before clearing retained
+state. `for-in` consumes it through the same
+`IteratorStep`/`IteratorValue`/`IteratorClose` protocol used elsewhere.
+Ordinary chains snapshot candidate string keys but recheck live descriptors
+before yielding; duplicate suppression, deletion,
 reconfiguration, and prototype replacement remain observable. Encountering an
 exotic `enumerate` override forms a boundary and the iterator delegates the
 remainder through that public protocol.

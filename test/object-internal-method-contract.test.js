@@ -1358,7 +1358,29 @@ export default [
         object.enumerate(),
       );
       const next = iterator.get('next', iterator);
+      const iteratorMethod = iterator.get(
+        realm.agent.wellKnownSymbols.iterator,
+        iterator,
+      );
       assertSame(isCallable(next), true);
+      assertSame(iterator.getPrototypeOf(), realm.intrinsics.iteratorPrototype);
+      assertSame(
+        iterator.getOwnProperty(realm.agent.wellKnownSymbols.iterator),
+        undefined,
+      );
+      assertSame(isCallable(iteratorMethod), true);
+      assertSame(/** @type {any} */ (iteratorMethod).realm, realm);
+      assertSame(
+        callCallable(
+          /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+            iteratorMethod
+          ),
+          iterator,
+          [],
+          realm,
+        ),
+        iterator,
+      );
 
       const first = /** @type {EngineObject} */ (
         callCallable(next, iterator, [])
@@ -1372,7 +1394,6 @@ export default [
       );
       assertSame(done.get('done', done), true);
       assertSame(done.getPrototypeOf(), realm.intrinsics.objectPrototype);
-      assertSame(iterator.getPrototypeOf(), realm.intrinsics.objectPrototype);
 
       assertThrows(() => object.enumerate(), TypeError);
     },
@@ -1404,6 +1425,322 @@ export default [
           ),
         ThrowSignal,
       );
+    },
+  },
+  {
+    name: 'ordinary Enumerate return closes an unfinished delegated iterator once',
+    run() {
+      const evaluatingRealm = createRealm({ agent: createAgent() });
+      const boundaryRealm = createRealm({ agent: createAgent() });
+      let nextCalls = 0;
+      let returnCalls = 0;
+      /** @type {(import('../src/runtime/realm.js').Realm | null)[]} */
+      const returnRealms = [];
+      const remainder = new EngineObject(
+        /** @type {EngineObject} */ (
+          boundaryRealm.intrinsics.iteratorPrototype
+        ),
+      );
+      remainder.defineOwnProperty('next', {
+        value: boundaryRealm.createNativeFunction({
+          name: 'next',
+          length: 0,
+          call() {
+            nextCalls += 1;
+            return createIterResultObject(boundaryRealm, 'tail', false);
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      remainder.defineOwnProperty('return', {
+        value: boundaryRealm.createNativeFunction({
+          name: 'return',
+          length: 0,
+          call(thisValue) {
+            assertSame(thisValue, remainder);
+            returnCalls += 1;
+            returnRealms.push(boundaryRealm.agent.activeExecutionRealm);
+            return createIterResultObject(boundaryRealm, undefined, true);
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const boundary = new HostileExotic(
+        boundaryRealm.intrinsics.objectPrototype,
+        remainder,
+      );
+      const source = new EngineObject(
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+      source.defineOwnProperty('own', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(source.setPrototypeOf(boundary), true);
+
+      const iterator = evaluatingRealm.agent.withActiveExecutionRealm(
+        evaluatingRealm,
+        () => source.enumerate(),
+      );
+      const next = /** @type {any} */ (iterator.get('next', iterator));
+      const returnMethod = iterator.get('return', iterator);
+      assertSame(isCallable(returnMethod), true);
+      assertSame(iterator.getOwnProperty('return')?.value, returnMethod);
+
+      const first = /** @type {EngineObject} */ (
+        callCallable(next, iterator, [], evaluatingRealm)
+      );
+      assertSame(first.get('value', first), 'own');
+      assertSame(first.get('done', first), false);
+
+      const closed = /** @type {EngineObject} */ (
+        callCallable(
+          /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+            returnMethod
+          ),
+          iterator,
+          [],
+          evaluatingRealm,
+        )
+      );
+      assertSame(closed.get('value', closed), undefined);
+      assertSame(closed.get('done', closed), true);
+      assertSame(
+        closed.getPrototypeOf(),
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+      assertSame(returnCalls, 1);
+      assertSame(nextCalls, 0);
+      assertSame(returnRealms.length, 1);
+      assertSame(returnRealms[0], boundaryRealm);
+
+      const repeated = /** @type {EngineObject} */ (
+        callCallable(
+          /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+            returnMethod
+          ),
+          iterator,
+          [],
+          evaluatingRealm,
+        )
+      );
+      const afterClose = /** @type {EngineObject} */ (
+        callCallable(next, iterator, [], evaluatingRealm)
+      );
+      assertSame(repeated.get('done', repeated), true);
+      assertSame(afterClose.get('done', afterClose), true);
+      assertSame(returnCalls, 1);
+      assertSame(nextCalls, 0);
+      assertSame(/** @type {any} */ (iterator).target, null);
+      assertSame(/** @type {any} */ (iterator).remainder, null);
+      assertSame(/** @type {any} */ (iterator).remainderBoundary, null);
+      assertSame(evaluatingRealm.agent.activeExecutionRealm, null);
+      assertSame(boundaryRealm.agent.activeExecutionRealm, null);
+      assertSame(evaluatingRealm.agent._synchronousCallChain, null);
+      assertSame(boundaryRealm.agent._synchronousCallChain, null);
+      assertSame(evaluatingRealm.agent._generatorHostChain, null);
+      assertSame(boundaryRealm.agent._generatorHostChain, null);
+    },
+  },
+  {
+    name: 'ordinary Enumerate return clears delegated state after abrupt cleanup',
+    run() {
+      const evaluatingRealm = createRealm({ agent: createAgent() });
+      const boundaryRealm = createRealm({ agent: createAgent() });
+      let returnCalls = 0;
+      const remainder = new EngineObject(
+        /** @type {EngineObject} */ (
+          boundaryRealm.intrinsics.iteratorPrototype
+        ),
+      );
+      remainder.defineOwnProperty('next', {
+        value: boundaryRealm.createNativeFunction({
+          name: 'next',
+          length: 0,
+          call() {
+            return createIterResultObject(boundaryRealm, 'tail', false);
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      remainder.defineOwnProperty('return', {
+        value: boundaryRealm.createNativeFunction({
+          name: 'return',
+          length: 0,
+          call() {
+            returnCalls += 1;
+            throw new GuestErrorSignal('TypeError', 'delegated close');
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const boundary = new HostileExotic(
+        boundaryRealm.intrinsics.objectPrototype,
+        remainder,
+      );
+      const source = new EngineObject(
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+      source.defineOwnProperty('own', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(source.setPrototypeOf(boundary), true);
+
+      const iterator = evaluatingRealm.agent.withActiveExecutionRealm(
+        evaluatingRealm,
+        () => source.enumerate(),
+      );
+      const next = /** @type {any} */ (iterator.get('next', iterator));
+      const returnMethod =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          iterator.get('return', iterator)
+        );
+      const first = /** @type {EngineObject} */ (
+        callCallable(next, iterator, [], evaluatingRealm)
+      );
+      assertSame(first.get('value', first), 'own');
+
+      const abrupt = /** @type {ThrowSignal} */ (
+        assertThrows(
+          () => callCallable(returnMethod, iterator, [], evaluatingRealm),
+          ThrowSignal,
+        )
+      );
+      assertSame(
+        /** @type {EngineObject} */ (abrupt.value).get('message'),
+        'delegated close',
+      );
+      const repeated = /** @type {EngineObject} */ (
+        callCallable(returnMethod, iterator, [], evaluatingRealm)
+      );
+      const afterClose = /** @type {EngineObject} */ (
+        callCallable(next, iterator, [], evaluatingRealm)
+      );
+      assertSame(repeated.get('done', repeated), true);
+      assertSame(afterClose.get('done', afterClose), true);
+      assertSame(returnCalls, 1);
+      assertSame(/** @type {any} */ (iterator).target, null);
+      assertSame(/** @type {any} */ (iterator).remainder, null);
+      assertSame(/** @type {any} */ (iterator).remainderBoundary, null);
+      assertSame(evaluatingRealm.agent.activeExecutionRealm, null);
+      assertSame(boundaryRealm.agent.activeExecutionRealm, null);
+      assertSame(evaluatingRealm.agent._synchronousCallChain, null);
+      assertSame(boundaryRealm.agent._synchronousCallChain, null);
+      assertSame(evaluatingRealm.agent._generatorHostChain, null);
+      assertSame(boundaryRealm.agent._generatorHostChain, null);
+    },
+  },
+  {
+    name: 'ordinary Enumerate return is inert during delegated cleanup reentrancy',
+    run() {
+      const evaluatingRealm = createRealm({ agent: createAgent() });
+      const boundaryRealm = createRealm({ agent: createAgent() });
+      let nextCalls = 0;
+      let returnCalls = 0;
+      /** @type {EngineObject | null} */
+      let outerIterator = null;
+      /** @type {import('../src/runtime/descriptors.js').CallableLike | null} */
+      let outerNext = null;
+      /** @type {import('../src/runtime/descriptors.js').CallableLike | null} */
+      let outerReturn = null;
+      /** @type {{ next: EngineObject | null, return: EngineObject | null }} */
+      const nestedResults = { next: null, return: null };
+      const remainder = new EngineObject(
+        /** @type {EngineObject} */ (
+          boundaryRealm.intrinsics.iteratorPrototype
+        ),
+      );
+      remainder.defineOwnProperty('next', {
+        value: boundaryRealm.createNativeFunction({
+          name: 'next',
+          length: 0,
+          call() {
+            nextCalls += 1;
+            return createIterResultObject(boundaryRealm, 'tail', false);
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      remainder.defineOwnProperty('return', {
+        value: boundaryRealm.createNativeFunction({
+          name: 'return',
+          length: 0,
+          call() {
+            returnCalls += 1;
+            if (
+              returnCalls === 1 &&
+              outerIterator !== null &&
+              outerNext !== null &&
+              outerReturn !== null
+            ) {
+              nestedResults.next = /** @type {EngineObject} */ (
+                callCallable(outerNext, outerIterator, [], evaluatingRealm)
+              );
+              nestedResults.return = /** @type {EngineObject} */ (
+                callCallable(outerReturn, outerIterator, [], evaluatingRealm)
+              );
+            }
+            return createIterResultObject(boundaryRealm, undefined, true);
+          },
+        }),
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      const boundary = new HostileExotic(
+        boundaryRealm.intrinsics.objectPrototype,
+        remainder,
+      );
+      const source = new EngineObject(
+        evaluatingRealm.intrinsics.objectPrototype,
+      );
+      source.defineOwnProperty('own', {
+        value: 1,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      assertSame(source.setPrototypeOf(boundary), true);
+      outerIterator = evaluatingRealm.agent.withActiveExecutionRealm(
+        evaluatingRealm,
+        () => source.enumerate(),
+      );
+      outerNext =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          outerIterator.get('next', outerIterator)
+        );
+      outerReturn =
+        /** @type {import('../src/runtime/descriptors.js').CallableLike} */ (
+          outerIterator.get('return', outerIterator)
+        );
+      const first = /** @type {EngineObject} */ (
+        callCallable(outerNext, outerIterator, [], evaluatingRealm)
+      );
+      assertSame(first.get('value', first), 'own');
+
+      const closed = /** @type {EngineObject} */ (
+        callCallable(outerReturn, outerIterator, [], evaluatingRealm)
+      );
+      assertSame(closed.get('done', closed), true);
+      assertSame(nestedResults.next?.get('done', nestedResults.next), true);
+      assertSame(nestedResults.return?.get('done', nestedResults.return), true);
+      assertSame(nextCalls, 0);
+      assertSame(returnCalls, 1);
     },
   },
   {

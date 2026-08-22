@@ -5,6 +5,8 @@ import { EngineObject } from '../src/runtime/object.js';
 import { createAgent } from '../src/runtime/agent.js';
 import { GuestErrorSignal } from '../src/runtime/completion.js';
 import { createIterResultObject } from '../src/runtime/iterator.js';
+import { callCallable } from '../src/runtime/capabilities.js';
+import { HostileExotic } from './harness/hostile-exotic.js';
 
 /**
  * @param {string} source
@@ -73,6 +75,7 @@ function createEnumeratingTarget(realm, iterator, onEnumerate = () => {}) {
  *     nextCalls: number,
  *     returnGets: number,
  *     returnCalls: number,
+ *     returnRealms: (import('../src/runtime/realm.js').Realm | null)[],
  *   },
  * }}
  */
@@ -82,6 +85,8 @@ function createForInIterator(realm, values, options = {}) {
     nextCalls: 0,
     returnGets: 0,
     returnCalls: 0,
+    returnRealms:
+      /** @type {(import('../src/runtime/realm.js').Realm | null)[]} */ ([]),
   };
   const iterator = new EngineObject(realm.intrinsics.objectPrototype);
   iterator.defineOwnProperty('next', {
@@ -111,6 +116,7 @@ function createForInIterator(realm, values, options = {}) {
         length: 0,
         call() {
           state.returnGets += 1;
+          state.returnRealms.push(realm.agent.activeExecutionRealm);
           throw new GuestErrorSignal('TypeError', 'return getter');
         },
       }),
@@ -124,6 +130,7 @@ function createForInIterator(realm, values, options = {}) {
         length: 0,
         call() {
           state.returnCalls += 1;
+          state.returnRealms.push(realm.agent.activeExecutionRealm);
           if (returnBehavior === 'call-throw') {
             throw new GuestErrorSignal('TypeError', 'return call');
           }
@@ -140,6 +147,36 @@ function createForInIterator(realm, values, options = {}) {
   }
 
   return { iterator, state };
+}
+
+/**
+ * @param {import('../src/runtime/realm.js').Realm} evaluatingRealm
+ * @param {import('../src/runtime/realm.js').Realm} boundaryRealm
+ * @param {'object' | 'getter-throw' | 'call-throw' | 'non-object'} returnBehavior
+ */
+function createDelegatedForInSource(
+  evaluatingRealm,
+  boundaryRealm,
+  returnBehavior,
+) {
+  const { iterator, state } = createForInIterator(boundaryRealm, ['tail'], {
+    returnBehavior,
+  });
+  const boundary = new HostileExotic(
+    boundaryRealm.intrinsics.objectPrototype,
+    iterator,
+  );
+  const source = new EngineObject(evaluatingRealm.intrinsics.objectPrototype);
+  source.defineOwnProperty('own', {
+    value: 1,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+  if (!source.setPrototypeOf(boundary)) {
+    throw new Error('Expected delegated for-in prototype installation');
+  }
+  return { boundary, source, state };
 }
 
 /** @type {import('./harness/runner.js').TestCase[]} */
@@ -702,6 +739,92 @@ const tests = [
     },
   },
   {
+    name: 'generator for-in closes a hostile prototype remainder on every early exit',
+    run() {
+      const cases = [
+        {
+          label: 'break',
+          source:
+            'function* loop() { for (var key in source) { break; yield key; } return "break"; } ' +
+            'var step = loop().next(); step.value + "|" + step.done;',
+          returnBehavior: 'object',
+          value: 'break|true',
+        },
+        {
+          label: 'return',
+          source:
+            'function* loop() { for (var key in source) { return "returned"; yield key; } } ' +
+            'var step = loop().next(); step.value + "|" + step.done;',
+          returnBehavior: 'object',
+          value: 'returned|true',
+        },
+        {
+          label: 'throw precedence',
+          source:
+            'function* loop() { for (var key in source) { throw new Error("body"); yield key; } } ' +
+            'var message; try { loop().next(); } catch (error) { message = error.message; } message;',
+          returnBehavior: 'call-throw',
+          value: 'body',
+        },
+        {
+          label: 'abrupt close',
+          source:
+            'function* loop() { for (var key in source) { break; yield key; } } ' +
+            'var message; try { loop().next(); } catch (error) { message = error.message; } message;',
+          returnBehavior: 'call-throw',
+          value: 'return call',
+        },
+      ];
+
+      for (const entry of cases) {
+        const evaluatingRealm = createRealm({ agent: createAgent() });
+        const boundaryRealm = createRealm({ agent: createAgent() });
+        const { boundary, source, state } = createDelegatedForInSource(
+          evaluatingRealm,
+          boundaryRealm,
+          /** @type {'object' | 'call-throw'} */ (entry.returnBehavior),
+        );
+        defineGlobal(evaluatingRealm, 'source', source);
+
+        const completion = evaluateScript(evaluatingRealm, entry.source);
+        assertSame(completion.type, 'normal', entry.label);
+        assertSame(completion.value, entry.value, entry.label);
+        assertSame(state.nextCalls, 0, entry.label);
+        assertSame(state.returnCalls, 1, entry.label);
+        assertSame(state.returnGets, 0, entry.label);
+        assertSame(state.returnRealms.length, 1, entry.label);
+        assertSame(state.returnRealms[0], boundaryRealm, entry.label);
+        assertSame(
+          JSON.stringify(boundary.calls),
+          '[["enumerate"]]',
+          entry.label,
+        );
+        assertSame(
+          evaluatingRealm.agent.activeExecutionRealm,
+          null,
+          entry.label,
+        );
+        assertSame(boundaryRealm.agent.activeExecutionRealm, null, entry.label);
+        assertSame(
+          evaluatingRealm.agent._synchronousCallChain,
+          null,
+          entry.label,
+        );
+        assertSame(
+          boundaryRealm.agent._synchronousCallChain,
+          null,
+          entry.label,
+        );
+        assertSame(
+          evaluatingRealm.agent._generatorHostChain,
+          null,
+          entry.label,
+        );
+        assertSame(boundaryRealm.agent._generatorHostChain, null, entry.label);
+      }
+    },
+  },
+  {
     name: 'generator for-in leaves IteratorStep and IteratorValue failures unclosed',
     run() {
       /** @type {{
@@ -807,12 +930,6 @@ const tests = [
       }
 
       const boundary = new EnumerateBoundary(realm.intrinsics.objectPrototype);
-      boundary.defineOwnProperty('duplicate', {
-        value: 1,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
       const source = new EngineObject(boundary);
       source.defineOwnProperty('first', {
         value: 1,
@@ -940,7 +1057,19 @@ const tests = [
       }
       assertSame(
         iterator.getPrototypeOf(),
-        evaluatingRealm.intrinsics.objectPrototype,
+        evaluatingRealm.intrinsics.iteratorPrototype,
+      );
+      const iteratorMethod = /** @type {any} */ (
+        iterator.get(
+          evaluatingAgent.wellKnownSymbols.iterator,
+          iterator,
+          evaluatingRealm,
+        )
+      );
+      assertSame(iteratorMethod.realm, evaluatingRealm);
+      assertSame(
+        callCallable(iteratorMethod, iterator, [], evaluatingRealm),
+        iterator,
       );
       const next = /** @type {any} */ (iterator.get('next', iterator));
       assertSame(next.realm, evaluatingRealm);
@@ -1057,7 +1186,7 @@ const tests = [
       }
       assertSame(
         iterator.getPrototypeOf(),
-        evaluatingRealm.intrinsics.objectPrototype,
+        evaluatingRealm.intrinsics.iteratorPrototype,
       );
       const next = /** @type {any} */ (iterator.get('next', iterator));
       assertSame(next.realm, evaluatingRealm);
@@ -1123,7 +1252,7 @@ const tests = [
       }
       assertSame(
         abruptIterator.getPrototypeOf(),
-        evaluatingRealm.intrinsics.objectPrototype,
+        evaluatingRealm.intrinsics.iteratorPrototype,
       );
       const abruptNext = /** @type {any} */ (
         abruptIterator.get('next', abruptIterator)

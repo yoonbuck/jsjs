@@ -3,6 +3,7 @@ import { GuestErrorSignal } from './completion.js';
 import {
   createIterResultObject,
   getEnumerateIteratorRecord,
+  iteratorClose,
   iteratorStep,
   iteratorValue,
 } from './iterator.js';
@@ -60,8 +61,9 @@ export class StringIterator extends EngineObject {
 
 /**
  * An ordinary ES2015 `[[Enumerate]]` iterator. Its state remains private, but
- * its sole consumer-facing operation is an own public `next` method that
- * returns ordinary IteratorResult objects.
+ * its consumer-facing operations are own public `next` and `return` methods.
+ * Both return ordinary IteratorResult objects; `return` also closes an
+ * unfinished delegated prototype iterator before releasing retained state.
  */
 export class ForInIterator extends EngineObject {
   /**
@@ -69,11 +71,19 @@ export class ForInIterator extends EngineObject {
    * @param {EngineObject} target
    */
   constructor(realm, target) {
-    super(realm.intrinsics.objectPrototype, 'Object', realm.agent);
+    const iteratorPrototype = realm.intrinsics.iteratorPrototype;
+
+    if (!(iteratorPrototype instanceof EngineObject)) {
+      throw new TypeError(
+        'Realm is missing required %IteratorPrototype% intrinsic',
+      );
+    }
+
+    super(iteratorPrototype, 'Object', realm.agent);
 
     /** @type {import('./realm.js').Realm} */
     this.realm = realm;
-    /** @type {EngineObject} */
+    /** @type {EngineObject | null} */
     this.target = target;
     /** @type {string[]} */
     this.candidates = [];
@@ -109,6 +119,24 @@ export class ForInIterator extends EngineObject {
       enumerable: false,
       configurable: true,
     });
+    this.defineOwnProperty('return', {
+      value: realm.createNativeFunction({
+        name: 'return',
+        length: 0,
+        call(thisValue) {
+          if (thisValue !== iterator) {
+            throw new GuestErrorSignal(
+              'TypeError',
+              'For-in iterator return called on an incompatible receiver',
+            );
+          }
+          return iterator.close();
+        },
+      }),
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
   }
 
   /**
@@ -128,7 +156,7 @@ export class ForInIterator extends EngineObject {
       }
 
       const descriptor = findLiveForInDescriptor(
-        this.target,
+        /** @type {EngineObject} */ (this.target),
         key,
         this.remainderBoundary,
       );
@@ -144,6 +172,32 @@ export class ForInIterator extends EngineObject {
     }
 
     return nextForInRemainder(this);
+  }
+
+  /**
+   * @returns {EngineObject}
+   */
+  close() {
+    if (this.exhausted) {
+      return createIterResultObject(this.realm, undefined, true);
+    }
+    const record = this.remainder;
+    const shouldClose = record !== null && !record.done;
+
+    if (record !== null) {
+      record.done = true;
+    }
+    finishForInIterator(this);
+
+    if (shouldClose) {
+      iteratorClose(
+        this.realm,
+        /** @type {import('./iterator.js').IteratorRecord} */ (record),
+        false,
+      );
+    }
+
+    return createIterResultObject(this.realm, undefined, true);
   }
 }
 
@@ -217,7 +271,7 @@ function nextForInRemainder(iterator) {
   const record = iterator.remainder;
 
   if (record === null) {
-    iterator.exhausted = true;
+    finishForInIterator(iterator);
     return createIterResultObject(iterator.realm, undefined, true);
   }
 
@@ -226,7 +280,7 @@ function nextForInRemainder(iterator) {
 
     if (step === false) {
       record.done = true;
-      iterator.exhausted = true;
+      finishForInIterator(iterator);
       return createIterResultObject(iterator.realm, undefined, true);
     }
 
@@ -241,4 +295,18 @@ function nextForInRemainder(iterator) {
 
     return createIterResultObject(iterator.realm, value, false);
   }
+}
+
+/**
+ * @param {ForInIterator} iterator
+ * @returns {void}
+ */
+function finishForInIterator(iterator) {
+  iterator.exhausted = true;
+  iterator.target = null;
+  iterator.candidates = [];
+  iterator.candidateIndex = 0;
+  iterator.visited.clear();
+  iterator.remainder = null;
+  iterator.remainderBoundary = null;
 }
