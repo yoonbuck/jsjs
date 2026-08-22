@@ -715,7 +715,7 @@ const tests = [
       const completion = runIn(realmB, 'Function("return }");');
       assertGuestThrow(completion, 'SyntaxError', realmA);
       assertSame(
-        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+        /** @type {EngineObject} */ (completion.value).getPrototypeOf() ===
           realmB.intrinsics.syntaxErrorPrototype,
         false,
       );
@@ -740,7 +740,7 @@ const tests = [
       );
       assertGuestThrow(completion, 'ReferenceError', realmA);
       assertSame(
-        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+        /** @type {EngineObject} */ (completion.value).getPrototypeOf() ===
           realmB.intrinsics.referenceErrorPrototype,
         false,
       );

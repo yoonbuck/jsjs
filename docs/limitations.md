@@ -430,6 +430,27 @@ implementation falls short of what a hosted engine should do. They are written
 down for the same reason the deviations are — an undocumented shortfall is
 indistinguishable from a bug.
 
+### The object internal-method contract is not Reflect or Proxy
+
+The runtime now has the Sixth Edition Table 5 object-operation boundary and
+private Table 6 callable/constructor brands. That foundation makes ordinary
+and existing exotic dispatch explicit; it does **not** implement the ES2015
+Reflect API or Proxy construction, traps, revocation, and invariants.
+`Reflect.ownKeys` remains the only exposed Reflect method and `Proxy` remains
+absent. Exact M0 Test262 failures are therefore evidence for the future
+Reflect/Proxy and later semantic owners, not a claim that those features work.
+
+Immutable Prototype Exotic Object behavior for `Object.prototype` also remains
+outside this foundation. In particular, non-circular prototype replacements
+that an ordinary object would accept are not yet rejected solely because the
+target is `Object.prototype`.
+
+**Backing code:** `src/runtime/object.js`, `src/runtime/capabilities.js`,
+`src/builtins/reflect.js`.
+**Verification:** the exact UTC M0 command documented in
+[`docs/testing.md`](testing.md#exact-m0-object-internal-method-evidence-79)
+records only the reviewed 240-root ledger.
+
 ### Well-known symbols are defined but only @@toPrimitive, @@toStringTag, @@iterator and @@species are honoured
 
 The engine implements ES2015 Symbols (see

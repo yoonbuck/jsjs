@@ -508,7 +508,7 @@ const tests = [
       const completion = runIn(realmB, 'foreignEvalParseFailure();');
       assertGuestThrow(completion, 'SyntaxError', realmA);
       assertSame(
-        /** @type {EngineObject} */ (completion.value).getPrototype() ===
+        /** @type {EngineObject} */ (completion.value).getPrototypeOf() ===
           realmB.intrinsics.syntaxErrorPrototype,
         false,
       );
