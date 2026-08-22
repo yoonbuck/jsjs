@@ -244,6 +244,84 @@ export default [
     },
   },
   {
+    name: 'the exclusion gate retains passing host-dependent exclusions',
+    run: () => {
+      const gate = evaluateExclusionGate(
+        [
+          {
+            path: 'test/host-dependent.js',
+            category: 'host-dependent',
+            verdict: 'passed',
+          },
+        ],
+        [],
+      );
+
+      assertSame(gate.exitCode, 0);
+      assertSame(
+        JSON.stringify(gate.correctlyExcluded),
+        JSON.stringify([
+          {
+            path: 'test/host-dependent.js',
+            category: 'host-dependent',
+            verdict: 'passed',
+          },
+        ]),
+      );
+      assertSame(gate.staleExclusions.length, 0);
+      assertSame(gate.staleApprovals.length, 0);
+    },
+  },
+  {
+    name: 'the exclusion gate rejects passing exclusions in every non-host-dependent category',
+    run: () => {
+      /** @type {Parameters<typeof evaluateExclusionGate>[0]} */
+      const results = [
+        {
+          path: 'test/post-es5-semantics.js',
+          category: 'post-es5-semantics',
+          verdict: 'passed',
+        },
+        {
+          path: 'test/post-es5-builtin.js',
+          category: 'post-es5-builtin',
+          verdict: 'passed',
+        },
+        {
+          path: 'test/post-es5-syntax.js',
+          category: 'post-es5-syntax',
+          verdict: 'passed',
+        },
+        {
+          path: 'test/engine-deviation.js',
+          category: 'engine-deviation',
+          verdict: 'passed',
+        },
+      ];
+      const approvals = [
+        {
+          path: 'test/unused-b.js',
+          diagnostics: ['unflagged: harness-error: unused b'],
+          reason: 'Second unused approval.',
+        },
+        {
+          path: 'test/unused-a.js',
+          diagnostics: ['unflagged: harness-error: unused a'],
+          reason: 'First unused approval.',
+        },
+      ];
+      const gate = evaluateExclusionGate(results, approvals);
+
+      assertSame(gate.exitCode, 1);
+      assertSame(gate.correctlyExcluded.length, 0);
+      assertSame(JSON.stringify(gate.staleExclusions), JSON.stringify(results));
+      assertSame(
+        JSON.stringify(gate.staleApprovals),
+        JSON.stringify(approvals),
+      );
+    },
+  },
+  {
     name: 'the exclusion gate rejects stale, unapproved, mismatched, and unused approvals',
     run: () => {
       assertSame(typeof evaluateExclusionGate, 'function');
@@ -626,7 +704,7 @@ export default [
     },
   },
   {
-    name: 'checkExclusions reports no stale exclusions in the committed policy',
+    name: 'checkExclusions retains passing host-dependent exclusions in the committed policy',
     run: async () => {
       const pin = await readTest262Pin();
       const supportedFeatures = featureNames(
@@ -638,13 +716,25 @@ export default [
         supportedFeatures,
       });
 
-      const stale = results.filter((r) => r.verdict === 'passed');
-
-      assertSame(
-        stale.length,
-        0,
-        `Expected no stale exclusions, found: ${stale.map((r) => r.path).join(', ')}`,
+      const passing = results.filter((result) => result.verdict === 'passed');
+      const gate = evaluateExclusionGate(
+        results,
+        parseUnverifiableAllowlist(
+          await readRepositoryFile(EXCLUSIONS_UNVERIFIABLE_FILE),
+        ),
       );
+
+      assertSame(passing.length, 18);
+      assertSame(
+        passing.every((result) => result.category === 'host-dependent'),
+        true,
+        `Expected only host-dependent exclusions to pass, found: ${passing
+          .filter((result) => result.category !== 'host-dependent')
+          .map((result) => `${result.path} [${result.category}]`)
+          .join(', ')}`,
+      );
+      assertSame(gate.staleExclusions.length, 0);
+      assertSame(gate.exitCode, 0);
     },
   },
   {
@@ -667,8 +757,8 @@ export default [
         ),
       );
 
-      assertSame(results.length, 538);
-      assertSame(gate.correctlyExcluded.length, 524);
+      assertSame(results.length, 537);
+      assertSame(gate.correctlyExcluded.length, 523);
       assertSame(gate.approvedUnverifiable.length, 14);
       assertSame(gate.unapprovedUnverifiable.length, 0);
       assertSame(gate.staleExclusions.length, 0);

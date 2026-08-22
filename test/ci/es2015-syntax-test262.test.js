@@ -36,8 +36,10 @@ const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 
 const KNOWN_GOOD_PATH_COUNT = 12434;
 
-const GENERATED_PATH_COUNT = 14129;
+const GENERATED_PATH_COUNT = 14169;
 const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
+const H0_PROMOTION_GROUP = 'es2015/h0-cross-realm-passed';
+const H0_PROMOTION_ROOT_COUNT = 40;
 
 const ISSUE_25_EXPANSION_PATH_COUNT = 1684;
 
@@ -212,7 +214,7 @@ export default [
     },
   },
   {
-    name: 'generated selection retains issue #25 and layer-4 generator expansion',
+    name: 'generated selection retains issue #25, generator, and H0 promotion roots',
     run: async () => {
       const pin = await readTest262Pin();
       const [policyText, baselineText, currentText, symbolSpeciesSource] =
@@ -233,6 +235,12 @@ export default [
       const promotion = currentSubset.groups.filter(
         (group) => group.name === PROMOTION_GROUP,
       );
+      const h0Promotion = currentSubset.groups.filter(
+        (group) => group.name === H0_PROMOTION_GROUP,
+      );
+      const h0PromotionPaths = new Set(
+        h0Promotion.flatMap((group) => group.paths),
+      );
       const currentPaths = new Set(
         currentSubset.groups
           .filter((group) => group.name !== PROMOTION_GROUP)
@@ -244,7 +252,8 @@ export default [
         (path) => !baselinePathSet.has(path),
       );
       const issue25ExpansionPaths = nonbaselinePaths.filter(
-        (path) => !GENERATOR_ROOTS.includes(path),
+        (path) =>
+          !GENERATOR_ROOTS.includes(path) && !h0PromotionPaths.has(path),
       );
       const nonbaselineSources = await Promise.all(
         nonbaselinePaths.map((path) =>
@@ -255,6 +264,7 @@ export default [
       const nonbaselineWithoutExpansionFeature = nonbaselinePaths.filter(
         (path, index) =>
           !GENERATOR_ROOTS.includes(path) &&
+          !h0PromotionPaths.has(path) &&
           !nonbaselineFrontmatter[index].features.some((feature) =>
             policy.expansionFeatures.includes(feature),
           ),
@@ -270,6 +280,10 @@ export default [
       });
       const nonbaselineOutsideClaimedFeatureArea = nonbaselinePaths.filter(
         (path, index) => {
+          if (h0PromotionPaths.has(path)) {
+            return false;
+          }
+
           const frontmatter = nonbaselineFrontmatter[index];
 
           return !isCandidatePath(
@@ -309,14 +323,26 @@ export default [
         'the exact ES2015 promotion must retain its reviewed root count',
       );
       assertSame(
+        h0Promotion.length,
+        1,
+        'the exact H0 promotion group must remain unique',
+      );
+      assertSame(
+        h0Promotion[0]?.paths.length,
+        H0_PROMOTION_ROOT_COUNT,
+        'the exact H0 promotion must retain its complete-pass root count',
+      );
+      assertSame(
         issue25ExpansionPaths.length,
         ISSUE_25_EXPANSION_PATH_COUNT,
         'the generated selection must retain every pinned issue #25 expansion path',
       );
       assertSame(
         currentPaths.size - baselinePaths.length,
-        ISSUE_25_EXPANSION_PATH_COUNT + GENERATOR_ROOTS.length,
-        'the generated total must consist of the pinned baseline, issue #25 expansion, and layer-4 generator roots',
+        ISSUE_25_EXPANSION_PATH_COUNT +
+          GENERATOR_ROOTS.length +
+          H0_PROMOTION_ROOT_COUNT,
+        'the generated total must consist of the pinned baseline, issue #25 expansion, layer-4 generator roots, and H0 complete-pass promotion roots',
       );
       assertSame(
         missing.length,
