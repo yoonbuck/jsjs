@@ -108,7 +108,7 @@ export default [
     },
   },
   {
-    name: 'generic promotion schema version 2 represents an empty exact promotion',
+    name: 'generic promotion schema version 2 creates an empty exact promotion group',
     run() {
       const subset = {
         version: 1,
@@ -134,10 +134,10 @@ export default [
 
       assertSame(promotion.rootCount, 0);
       assertSame(promotion.variantCount, 0);
-      assertSame(
-        JSON.stringify(mergePromotionSubset(subset, promotion)),
-        JSON.stringify(subset),
-      );
+      const merged = mergePromotionSubset(subset, promotion);
+      assertSame(merged.groups.length, 1);
+      assertSame(merged.groups[0].name, 'es2015/m0-object-internal-methods');
+      assertSame(JSON.stringify(merged.groups[0].paths), '[]');
     },
   },
   {
