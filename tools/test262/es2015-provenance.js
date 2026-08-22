@@ -466,11 +466,6 @@ const BLOCKER_ISSUES = new Map(
     new Set(entry.issues),
   ]),
 );
-const ROADMAP_DESTINATION_BLOCKER_ISSUES = new Map([
-  ...BLOCKER_ISSUES,
-  ['proxy-metaobject', new Set([81])],
-  ['reflect-metaobject', new Set([80])],
-]);
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
 const FOUNDATION_ALLOWED_PATHS = Object.freeze([
@@ -3316,7 +3311,7 @@ function normalizeRoadmapDestination(value, label) {
         `${label}.blocker must name an approved blocker`,
       );
     }
-    const issues = ROADMAP_DESTINATION_BLOCKER_ISSUES.get(blocker);
+    const issues = BLOCKER_ISSUES.get(blocker);
     if (issues === undefined || !issues.has(issue)) {
       throw new Es2015ProvenanceError(
         `${label}.blocker must map to the exact approved issue`,

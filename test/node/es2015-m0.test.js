@@ -13,7 +13,10 @@ import {
   mergePromotionSubset,
   parseEs2015Promotion,
 } from '../../tools/test262/es2015-promotion.js';
-import { parseEs2015ProvenanceManifest } from '../../tools/test262/es2015-provenance.js';
+import {
+  canonicalRoadmapAuthoritySha256,
+  parseEs2015ProvenanceManifest,
+} from '../../tools/test262/es2015-provenance.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 
@@ -287,8 +290,8 @@ export default [
         disposition: {
           destinations: paths.map((path) => ({
             path,
-            status: 'blocked:proxy-metaobject',
-            blocker: 'proxy-metaobject',
+            status: 'blocked:proxy-and-reflect-metaobject',
+            blocker: 'proxy-and-reflect-metaobject',
             issue: 81,
           })),
         },
@@ -300,7 +303,7 @@ export default [
       assertSame(evidence.ownerDeltas.length, 240);
       assertSame(evidence.ownerMap.length, 1);
       assertSame(evidence.ownerMap[0].issue, 81);
-      assertSame(evidence.ownerMap[0].blocker, 'proxy-metaobject');
+      assertSame(evidence.ownerMap[0].blocker, 'proxy-and-reflect-metaobject');
       assertSame(evidence.promotion.version, 2);
       assertSame(
         evidence.promotion.groupName,
@@ -354,8 +357,8 @@ export default [
         disposition: {
           destinations: paths.map((path) => ({
             path,
-            status: 'blocked:proxy-metaobject',
-            blocker: 'proxy-metaobject',
+            status: 'blocked:proxy-and-reflect-metaobject',
+            blocker: 'proxy-and-reflect-metaobject',
             issue: 81,
           })),
         },
@@ -381,7 +384,8 @@ export default [
       assertSame(
         paths.every(
           (path) =>
-            projectedByPath.get(path).status === 'blocked:proxy-metaobject',
+            projectedByPath.get(path).status ===
+            'blocked:proxy-and-reflect-metaobject',
         ),
         true,
       );
@@ -395,7 +399,7 @@ export default [
         projectedAudit.blockers[
           'test/built-ins/Array/from/not-a-constructor.js'
         ],
-        'proxy-metaobject',
+        'proxy-and-reflect-metaobject',
       );
       assertSame(projected.subsetText, subsetText);
       assertSame(projected.reportText, reportText);
@@ -403,7 +407,7 @@ export default [
     },
   },
   {
-    name: 'roadmap authority destinations accept split Reflect and Proxy ownership',
+    name: 'roadmap authority destinations retain shared Reflect and Proxy ownership',
     run: async () => {
       const manifest = JSON.parse(
         await readFile(
@@ -432,13 +436,13 @@ export default [
           destinations: [
             {
               status: 'blocked',
-              blocker: 'proxy-metaobject',
-              issue: 81,
+              blocker: 'proxy-and-reflect-metaobject',
+              issue: 80,
             },
             {
               status: 'blocked',
-              blocker: 'reflect-metaobject',
-              issue: 80,
+              blocker: 'proxy-and-reflect-metaobject',
+              issue: 81,
             },
           ],
         },
@@ -452,8 +456,27 @@ export default [
         (/** @type {any} */ authority) => authority.code === 'M0',
       );
 
-      assertSame(m0.destinations[0].blocker, 'proxy-metaobject');
-      assertSame(m0.destinations[1].blocker, 'reflect-metaobject');
+      assertSame(m0.destinations[0].blocker, 'proxy-and-reflect-metaobject');
+      assertSame(m0.destinations[0].issue, 80);
+      assertSame(m0.destinations[1].blocker, 'proxy-and-reflect-metaobject');
+      assertSame(m0.destinations[1].issue, 81);
+      assertSame(
+        /^[0-9a-f]{64}$/u.test(canonicalRoadmapAuthoritySha256(m0)),
+        true,
+      );
+      for (const [blocker, issue] of [
+        ['reflect-metaobject', 80],
+        ['proxy-metaobject', 81],
+      ]) {
+        assertThrows(
+          () =>
+            canonicalRoadmapAuthoritySha256({
+              ...m0,
+              destinations: [{ status: 'blocked', blocker, issue }],
+            }),
+          Error,
+        );
+      }
     },
   },
 ];

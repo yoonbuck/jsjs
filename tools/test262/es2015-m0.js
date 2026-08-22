@@ -19,8 +19,8 @@ const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
 export const M0_PROMOTION_GROUP = 'es2015/m0-object-internal-methods';
 /** @type {Readonly<Record<number, string>>} */
 const M0_BLOCKER_BY_ISSUE = Object.freeze({
-  80: 'reflect-metaobject',
-  81: 'proxy-metaobject',
+  80: 'proxy-and-reflect-metaobject',
+  81: 'proxy-and-reflect-metaobject',
   82: 'symbol-protocol-dispatch',
   83: 'keyed-collections',
   87: 'binary-data-and-typed-arrays',

@@ -1588,7 +1588,7 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 - Consumes: exact issue-comment ledger `https://github.com/yoonbuck/jsjs/issues/79#issuecomment-5347038655`, the pinned Test262 checkout, taxonomy artifact, M0 runtime evidence, and benchmark captures.
 - Produces: `parseM0Ledger(text)`, `verifyM0Ledger(text, taxonomy, dispositions)`, `compareM0Taxonomies(original, reconciledPre, post, dispositions, concurrentExplanations)`, and `runM0Focused(options)` from `tools/test262/es2015-m0.js`.
 - Produces: exact-path execution records, `summarizeM0Dispositions(entries)`, and `parseM0Dispositions(text, execution)` for a reviewer-approved disposition of every non-passing root; passing paths may be promoted only when every executable variant passes.
-- Produces: `reflect-metaobject` and `proxy-metaobject` blocker identifiers only for exact M0 consumer roots reassigned to #80/#81. Existing direct Reflect/Proxy roots retain their current classification so the #79 taxonomy delta remains exactly the immutable 240-root ledger.
+- Produces: the existing `proxy-and-reflect-metaobject` blocker for exact M0 consumer roots reassigned to #80/#81, with the issue number retaining the distinct Reflect versus Proxy follow-up ownership. Existing direct Reflect/Proxy roots retain their current classification so the #79 taxonomy delta remains exactly the immutable 240-root ledger.
 
 - [ ] **Step 1: Add exact-ledger RED tests**
 
@@ -1672,8 +1672,8 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
   });
 
   export const M0_BLOCKER_BY_OWNER = Object.freeze({
-    80: 'reflect-metaobject',
-    81: 'proxy-metaobject',
+    80: 'proxy-and-reflect-metaobject',
+    81: 'proxy-and-reflect-metaobject',
     82: 'symbol-protocol-dispatch',
     83: 'keyed-collections',
     87: 'binary-data-and-typed-arrays',
@@ -1864,9 +1864,9 @@ agent.withLinkedActiveExecutionRealm(sourceAgent, callback);
 
 - [ ] **Step 7: Reclassify every exact M0 root**
 
-  Create `tools/test262/es2015-m0-dispositions.json` with exact keys `version`, `ledgerSha256`, and `entries`. Each entry has exact keys `path`, `variants`, `outcome`, `owner`, and `reason`; every ledger path appears once, `owner` is one of `passed`, `80`, `81`, `82`, `83`, `87`, `91`, `93`, `95`, or `96`, and its `variants` equals the pinned inventory. For each root/variant that passes, set `outcome` to `passed` and promote only that exact root through the immutable promotion mechanism after all of its variants pass. For every root that does not pass, set `outcome` to `reassigned`, identify #80 for Reflect-dependent behavior, #81 for Proxy-dependent behavior, or the reviewed later semantic owner (#82, #83, #87, #91, #93, #95, or #96), and write its concrete reason. Do not leave any M0 root with `blocker === "proxy-and-reflect-metaobject"`.
+  Create `tools/test262/es2015-m0-dispositions.json` with exact keys `version`, `ledgerSha256`, and `entries`. Each entry has exact keys `path`, `variants`, `outcome`, `owner`, and `reason`; every ledger path appears once, `owner` is one of `passed`, `80`, `81`, `82`, `83`, `87`, `91`, `93`, `95`, or `96`, and its `variants` equals the pinned inventory. For each root/variant that passes, set `outcome` to `passed` and promote only that exact root through the immutable promotion mechanism after all of its variants pass. For every root that does not pass, set `outcome` to `reassigned`, identify #80 for Reflect-dependent behavior, #81 for Proxy-dependent behavior, or the reviewed later semantic owner (#82, #83, #87, #91, #93, #95, or #96), and write its concrete reason. Roots assigned to #80/#81 retain `blocker === "proxy-and-reflect-metaobject"`; do not invent issue-specific blocker identifiers.
 
-  Reclassify only exact M0 roots. M0 roots assigned to #80 use `reflect-metaobject`; M0 roots assigned to #81 use `proxy-metaobject`; later-owner dispositions use `M0_BLOCKER_BY_OWNER`. Existing direct `test/built-ins/Reflect/` and `test/built-ins/Proxy/` classifications do not change in this PR. Update #80/#81 readable ownership queries and ledgers to union their unchanged direct roots with the newly assigned M0 consumer roots. This changes ownership for exact M0 paths only, not implementation status, and preserves the dynamically derived complete core denominator.
+  Reclassify only exact M0 roots. M0 roots assigned to #80 or #81 use `proxy-and-reflect-metaobject`, while the issue number preserves the distinct owner; later-owner dispositions use `M0_BLOCKER_BY_OWNER`. Existing direct `test/built-ins/Reflect/` and `test/built-ins/Proxy/` classifications do not change in this PR. Update #80/#81 readable ownership queries and ledgers to union their unchanged direct roots with the newly assigned M0 consumer roots. This changes ownership for exact M0 paths only, not implementation status, and preserves the dynamically derived complete core denominator.
 
   Regenerate only classification/evidence artifacts:
 

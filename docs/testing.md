@@ -125,8 +125,8 @@ Thirteen suites need a filesystem and cannot run in the browser or `jsc`:
   base ledger, all 13 batch identities, exact ledger/issue rendering, strict
   versus draft review validation, and the filesystem CLI boundary.
 - `test/node/es2015-m0.test.js` — validates the exact M0 ledger, bounded focused
-  execution, generic authority evidence/projection schemas, and split
-  Reflect/Proxy roadmap destinations.
+  execution, generic authority evidence/projection schemas, and issue-specific
+  destinations under the existing shared Reflect/Proxy roadmap blocker.
 - `test/node/es2015-taxonomy.test.js` — validates the deterministic ES2015
   taxonomy, exact promotion evidence, and metadata-only audit/check boundary.
 - `test/node/upstream-select.test.js` — validates the generated upstream subset
@@ -561,6 +561,11 @@ before writing. It calls the shared focused runner directly and cannot reach
 upstream suite or regenerate protected taxonomy/report/conformance artifacts
 while collecting M0 evidence. Those bytes are consumed only after a separate
 BASE-owned pending M0 roadmap authority exists.
+
+Destinations owned by issues #80 and #81 retain the existing
+`proxy-and-reflect-metaobject` blocker. The issue number distinguishes the
+Reflect and Proxy follow-up ownership; no issue-specific blocker names are
+introduced.
 
 ### Focused ES2015 syntax suite
 
