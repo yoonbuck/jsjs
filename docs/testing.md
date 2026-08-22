@@ -407,6 +407,24 @@ artifacts, and every H0/P0 protected output remain byte-identical. The old
 active range guard is expected to reject that repair because schema-v3 has no
 self-maintenance operation; no other failed check is waivable.
 
+Ordinary unprivileged `pull_request` CI uses this exact one-time HEAD-only
+marker so its defense-in-depth range check can continue to the pinned Test262
+subset:
+
+```text
+<!-- es2015-h0-bootstrap-repair base:03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd base-manifest-sha256:a2b0b43085376ab65069829252b8a8dae2da538e5e3cf4a0a0e937725ca72974 -->
+```
+
+This is not a schema-v3 authority marker and is never accepted through local
+`--profile/--marker` mode or on `pull_request_target`. The HEAD checker accepts
+it only for the exact nine-file repair range, requires all three production
+tooling files, rejects rename/copy/delete or any foreign path, and requires
+workflow, pipeline, manifest, all 15 profiles, P0/H0 records, 13 fragments, six
+H0 evidence paths, every protected output, and `features.json` to remain
+BASE-byte-identical. The detached old BASE checker does not recognize this
+marker and must continue to report that the provenance-owned range lacks an
+authoritative marker.
+
 ### Deterministic ES2015 taxonomy and exact promotion
 
 The taxonomy is a timestamp-free, code-unit-sorted classification of the

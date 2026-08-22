@@ -27,6 +27,9 @@
 - Dynamic/runtime repository module loading is forbidden in gate-owner code.
 - The old active guard is expected to fail only because BASE has no authorization
   for gate-owner repair. Ordinary CI and both CodeQL categories must pass.
+- Ordinary `pull_request` CI may use only the exact HEAD-only
+  `es2015-h0-bootstrap-repair` marker pinned to BASE and its manifest; the
+  active `pull_request_target` BASE guard must not recognize it.
 - Never run broad/full Test262, `test262:upstream`,
   `test262:upstream:check`, `ci:contract`, full Node, full browser, or full JSC
   locally.
@@ -324,6 +327,23 @@ manifest, or unrelated failure must be fixed before delivery.
 In an isolated temporary repository/object range, execute HEAD checker/module
 against the exact reconciled #76 consumer data. Require full H0 protected projection
 success.
+
+- [ ] **Step 2A: Keep ordinary CI running under the bootstrap exception**
+
+Add strict RED/GREEN coverage and the exact PR marker:
+
+```text
+<!-- es2015-h0-bootstrap-repair base:03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd base-manifest-sha256:a2b0b43085376ab65069829252b8a8dae2da538e5e3cf4a0a0e937725ca72974 -->
+```
+
+The repaired HEAD checker may recognize it only from unprivileged
+`pull_request` PR-body mode. Require the exact nine-path allowlist, all three
+production tooling paths, no rename/copy/delete, and BASE byte identity for
+workflow, pipeline, manifest/15 profiles/P0-H0 records, 13 fragments, six H0
+evidence paths, every protected output, and `features.json`. Duplicate,
+malformed, wrong-base/hash, missing-tooling, foreign-path, or data-drift cases
+must fail. The detached old BASE guard must continue to report a missing
+authoritative marker.
 
 - [ ] **Step 3: Independent reviews**
 

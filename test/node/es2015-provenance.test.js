@@ -123,6 +123,57 @@ const H0_PROJECTED_OUTPUT_SHA256 = Object.freeze({
   'tools/test262/upstream-subset.json':
     'f7840957b181a3497eb3bb0eac349f08e54b7dd075276088652295fba1778a2b',
 });
+const H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256 =
+  'a2b0b43085376ab65069829252b8a8dae2da538e5e3cf4a0a0e937725ca72974';
+const H0_BOOTSTRAP_REPAIR_PRODUCTION_PATHS = Object.freeze([
+  'tools/test262/es2015-promotion.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+]);
+const H0_BOOTSTRAP_REPAIR_CHANGES = Object.freeze([
+  {
+    status: 'A',
+    path: 'docs/superpowers/plans/2026-08-21-h0-policy-bootstrap-repair.md',
+  },
+  {
+    status: 'A',
+    path: 'docs/superpowers/specs/2026-08-21-h0-policy-bootstrap-repair-design.md',
+  },
+  { status: 'M', path: 'docs/testing.md' },
+  { status: 'M', path: 'test/node/es2015-provenance.test.js' },
+  { status: 'M', path: 'test/node/repository-invariants.test.js' },
+  { status: 'M', path: 'test/node/upstream-select.test.js' },
+  ...H0_BOOTSTRAP_REPAIR_PRODUCTION_PATHS.map((path) => ({
+    status: 'M',
+    path,
+  })),
+]);
+const H0_BOOTSTRAP_REPAIR_IMMUTABLE_PATHS = Object.freeze([
+  '.github/workflows/ci.yml',
+  'tools/ci/pipeline.js',
+  ES2015_PROVENANCE_FILE,
+  'tools/test262/es2015-provenance-decisions/UA.json',
+  'tools/test262/es2015-provenance-decisions/UB.json',
+  'tools/test262/es2015-provenance-decisions/UL1.json',
+  'tools/test262/es2015-provenance-decisions/UL2.json',
+  'tools/test262/es2015-provenance-decisions/UL3.json',
+  'tools/test262/es2015-provenance-decisions/UL4.json',
+  'tools/test262/es2015-provenance-decisions/US1.json',
+  'tools/test262/es2015-provenance-decisions/US2.json',
+  'tools/test262/es2015-provenance-decisions/US3.json',
+  'tools/test262/es2015-provenance-decisions/US4.json',
+  'tools/test262/es2015-provenance-decisions/US5.json',
+  'tools/test262/es2015-provenance-decisions/US6.json',
+  'tools/test262/es2015-provenance-decisions/US7.json',
+  ...H0_EVIDENCE_PATHS,
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/es5-selection.json',
+  'tools/test262/upstream-subset.json',
+  'tools/test262/features.json',
+]);
 // Keep the exact reviewed evidence hermetic without adding protected artifacts.
 const H0_EXACT_FIXTURE_GZIP_BASE64 = `
 H4sIAAAAAAACA+19S5PbOLLuX2HUZmYiihafIOndcY27T5/bHjvsPn0X417gkVBxTJG6IFVVmon+RfMTZte/7AZISsWqEiWKpF7l3PghCYlEIpEfkMhM/OsK
@@ -1754,6 +1805,16 @@ source-path-sha256:${options.sourcePathSha256 ?? '3aeb254de8d996e0b5c3c383d0e5df
 source-entry-sha256:${options.sourceEntrySha256 ?? 'null'}
 protected-projection-sha256:${options.protectedProjectionSha256 ?? '8e16b33ffdbd8a2089567e9a8bdb1c654619b8bd00021c54ac74c0ab02f2c5fd'}
 -->`;
+}
+
+/**
+ * @param {{
+ *   base?: string,
+ *   baseManifestSha256?: string,
+ * }} [options]
+ */
+function h0BootstrapRepairMarker(options = {}) {
+  return `<!-- es2015-h0-bootstrap-repair base:${options.base ?? H0_BOOTSTRAP_BASE_SHA} base-manifest-sha256:${options.baseManifestSha256 ?? H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256} -->`;
 }
 
 /** @param {readonly { path: string, operation: string, headSha256: string | null, projectionSha256: string | null }[]} outputs */
@@ -3623,6 +3684,68 @@ function rangeCheckDependencies(options) {
       throw new Error(`unexpected fixture commit ${revision}`);
     },
   };
+}
+
+/** @type {ReadonlyMap<string, string> | null} */
+let h0BootstrapRepairBaseFilesCache = null;
+
+function h0BootstrapRepairBaseFiles() {
+  if (h0BootstrapRepairBaseFilesCache !== null) {
+    return h0BootstrapRepairBaseFilesCache;
+  }
+  const files = new Map();
+  for (const path of H0_BOOTSTRAP_REPAIR_IMMUTABLE_PATHS) {
+    const bytes = readOptionalGitFixtureBuffer(H0_BOOTSTRAP_BASE_SHA, path);
+    if (bytes !== null) files.set(path, bytes.toString('utf8'));
+  }
+  h0BootstrapRepairBaseFilesCache = files;
+  return files;
+}
+
+/**
+ * @param {{
+ *   baseManifestText?: string,
+ *   baseSha?: string,
+ *   body?: string,
+ *   changes?: readonly { status: string, path: string, sourcePath?: string }[],
+ *   eventName?: string,
+ *   headFiles?: ReadonlyMap<string, string>,
+ *   headManifestText?: string,
+ * }} [options]
+ */
+function h0BootstrapRepairRangeDependencies(options = {}) {
+  const baseManifestText =
+    options.baseManifestText ??
+    readGitFixtureText(H0_BOOTSTRAP_BASE_SHA, ES2015_PROVENANCE_FILE);
+  const baseFiles = h0BootstrapRepairBaseFiles();
+  const headFiles = new Map(baseFiles);
+  for (const [path, text] of options.headFiles ?? []) {
+    headFiles.set(path, text);
+  }
+  const dependencies = rangeCheckDependencies({
+    changes: options.changes ?? H0_BOOTSTRAP_REPAIR_CHANGES,
+    baseSha: options.baseSha ?? H0_BOOTSTRAP_BASE_SHA,
+    baseFiles,
+    baseManifestText,
+    headManifestText: options.headManifestText ?? baseManifestText,
+    headFiles,
+  });
+  dependencies.environment = {
+    TZ: 'UTC',
+    GITHUB_EVENT_NAME: options.eventName ?? 'pull_request',
+    PROVENANCE_PR_BODY: options.body ?? h0BootstrapRepairMarker(),
+  };
+  return dependencies;
+}
+
+/** @param {string} [base] */
+function h0BootstrapRepairCiArgs(base = H0_BOOTSTRAP_BASE_SHA) {
+  return [
+    '--check-range',
+    `--base=${base}`,
+    `--head=${RANGE_HEAD_SHA}`,
+    '--pr-body-env=PROVENANCE_PR_BODY',
+  ];
 }
 
 export default [
@@ -9435,6 +9558,255 @@ export default [
       assertSame(
         json(baseManifest.roadmapAuthorities),
         json(headManifest.roadmapAuthorities),
+      );
+    },
+  },
+  {
+    name: 'ES2015 HEAD ordinary range preserves the missing-marker failure for the H0 bootstrap repair',
+    run: async () => {
+      const dependencies = h0BootstrapRepairRangeDependencies({
+        body: 'H0 bootstrap repair without a marker.\n',
+      });
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(h0BootstrapRepairCiArgs(), dependencies),
+          )
+        ).message,
+        'A provenance-owned PR range requires one authoritative provenance marker',
+      );
+    },
+  },
+  {
+    name: 'ES2015 HEAD ordinary range accepts only the exact H0 bootstrap repair marker',
+    run: async () => {
+      assertSame(
+        await provenanceCheck(
+          h0BootstrapRepairCiArgs(),
+          h0BootstrapRepairRangeDependencies(),
+        ),
+        0,
+      );
+    },
+  },
+  {
+    name: 'ES2015 H0 bootstrap repair marker pins the exact BASE and manifest bytes',
+    run: async () => {
+      for (const scenario of [
+        {
+          args: h0BootstrapRepairCiArgs(RANGE_BASE_SHA),
+          dependencies: h0BootstrapRepairRangeDependencies({
+            baseSha: RANGE_BASE_SHA,
+          }),
+          message: `H0 bootstrap repair range requires base ${H0_BOOTSTRAP_BASE_SHA}`,
+        },
+        {
+          args: h0BootstrapRepairCiArgs(),
+          dependencies: h0BootstrapRepairRangeDependencies({
+            body: h0BootstrapRepairMarker({ base: 'c'.repeat(40) }),
+          }),
+          message: `H0 bootstrap repair marker base must be ${H0_BOOTSTRAP_BASE_SHA}`,
+        },
+        {
+          args: h0BootstrapRepairCiArgs(),
+          dependencies: h0BootstrapRepairRangeDependencies({
+            body: h0BootstrapRepairMarker({
+              baseManifestSha256: 'f'.repeat(64),
+            }),
+          }),
+          message:
+            'H0 bootstrap repair marker base-manifest-sha256 does not match BASE manifest bytes',
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(scenario.args, scenario.dependencies),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 H0 bootstrap repair range is closed to the nine reviewed paths and requires all tooling',
+    run: async () => {
+      const foreignPath = 'docs/unreviewed-bootstrap.md';
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              h0BootstrapRepairCiArgs(),
+              h0BootstrapRepairRangeDependencies({
+                changes: [
+                  ...H0_BOOTSTRAP_REPAIR_CHANGES,
+                  { status: 'M', path: foreignPath },
+                ],
+              }),
+            ),
+          )
+        ).message,
+        `H0 bootstrap repair range includes unexpected path ${foreignPath}`,
+      );
+
+      for (const path of H0_BOOTSTRAP_REPAIR_PRODUCTION_PATHS) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                h0BootstrapRepairCiArgs(),
+                h0BootstrapRepairRangeDependencies({
+                  changes: H0_BOOTSTRAP_REPAIR_CHANGES.filter(
+                    (change) => change.path !== path,
+                  ),
+                }),
+              ),
+            )
+          ).message,
+          `H0 bootstrap repair range requires changed path ${path}`,
+        );
+      }
+
+      for (const scenario of [
+        {
+          change: { status: 'D', path: 'docs/testing.md' },
+          message:
+            'H0 bootstrap repair range forbids deleted path docs/testing.md',
+        },
+        {
+          change: {
+            status: 'R100',
+            sourcePath: 'docs/testing.md',
+            path: 'docs/testing-copy.md',
+          },
+          message:
+            'H0 bootstrap repair range forbids rename docs/testing.md -> docs/testing-copy.md',
+        },
+        {
+          change: {
+            status: 'C100',
+            sourcePath: 'docs/testing.md',
+            path: 'docs/testing-copy.md',
+          },
+          message:
+            'H0 bootstrap repair range forbids copy docs/testing.md -> docs/testing-copy.md',
+        },
+      ]) {
+        const changes = H0_BOOTSTRAP_REPAIR_CHANGES.filter(
+          (change) => change.path !== 'docs/testing.md',
+        );
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                h0BootstrapRepairCiArgs(),
+                h0BootstrapRepairRangeDependencies({
+                  changes: [...changes, scenario.change],
+                }),
+              ),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 H0 bootstrap repair range rejects every protected data drift',
+    run: async () => {
+      for (const path of H0_BOOTSTRAP_REPAIR_IMMUTABLE_PATHS) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                h0BootstrapRepairCiArgs(),
+                h0BootstrapRepairRangeDependencies({
+                  headFiles: new Map([[path, `drifted ${path}\n`]]),
+                }),
+              ),
+            )
+          ).message,
+          `H0 bootstrap repair path ${path} must remain byte-identical between BASE and HEAD`,
+          path,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 H0 bootstrap repair marker is exact, unique, lowercase, and pull-request-only',
+    run: async () => {
+      const marker = h0BootstrapRepairMarker();
+      for (const body of [
+        `${marker}\n${marker}`,
+        `${maintenanceRangeMarker()}\n${marker}`,
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                h0BootstrapRepairCiArgs(),
+                h0BootstrapRepairRangeDependencies({ body }),
+              ),
+            )
+          ).message,
+          'PR body must contain exactly one authoritative provenance marker',
+        );
+      }
+
+      for (const body of [
+        marker.replace('es2015-h0', 'es2015-H0'),
+        marker.replace('03a4cca', '03A4CCA'),
+        marker.replace(
+          H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256,
+          H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256.toUpperCase(),
+        ),
+        marker.replace(' -->', '  -->'),
+        `prefix ${marker}`,
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                h0BootstrapRepairCiArgs(),
+                h0BootstrapRepairRangeDependencies({ body }),
+              ),
+            )
+          ).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+          body,
+        );
+      }
+
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              h0BootstrapRepairCiArgs(),
+              h0BootstrapRepairRangeDependencies({
+                eventName: 'pull_request_target',
+              }),
+            ),
+          )
+        ).message,
+        'A provenance-owned PR range requires one authoritative provenance marker',
+      );
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              [
+                '--check-range',
+                `--base=${H0_BOOTSTRAP_BASE_SHA}`,
+                `--head=${RANGE_HEAD_SHA}`,
+                '--profile=h0-bootstrap-repair',
+                `--marker=${marker}`,
+              ],
+              h0BootstrapRepairRangeDependencies(),
+            ),
+          )
+        ).message,
+        'Provenance PR marker is not authoritative',
       );
     },
   },

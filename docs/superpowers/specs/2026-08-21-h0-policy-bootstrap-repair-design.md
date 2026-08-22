@@ -92,6 +92,23 @@ The old BASE guard must fail because it sees changed gate-owner paths without a
 recognized marker. This failure is expected evidence, not a check to bypass
 silently.
 
+Ordinary unprivileged `pull_request` CI may use exactly:
+
+```text
+<!-- es2015-h0-bootstrap-repair base:03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd base-manifest-sha256:a2b0b43085376ab65069829252b8a8dae2da538e5e3cf4a0a0e937725ca72974 -->
+```
+
+This marker is a distinct HEAD-checker bootstrap kind, not a legacy or
+schema-v3 roadmap authority. It is scanned only from the PR body on
+`pull_request`, never on `pull_request_target` and never through local
+`--profile/--marker` mode. It pins exact BASE and BASE manifest bytes; closes
+the range to the current nine repair paths with all three production tooling
+paths required; forbids rename, copy, and delete; and requires workflow,
+pipeline, manifest/15 profiles/P0-H0 records, 13 fragments, six H0 evidence
+paths, all protected outputs, and `features.json` to remain byte-identical.
+The old BASE checker does not recognize it, so the active trusted-base guard
+continues to fail for the missing schema-v3 authorization.
+
 The PR may merge only after:
 
 - exact base/head identities are recorded;
@@ -344,6 +361,9 @@ Strict RED-first tests cover:
 
 - markerless changes to every workflow/pipeline/checker/transitive dependency fail;
 - no legacy or roadmap marker authorizes those changes on schema-v3 BASE;
+- the exact HEAD-only bootstrap marker passes only on unprivileged
+  `pull_request` for the nine reviewed paths and rejects malformed, duplicate,
+  wrong-base/hash, foreign-path, missing-tooling, or immutable-data drift;
 - bootstrap workflow/pipeline/manifest/authority/fragment/evidence/protected-output
   bytes remain unchanged;
 - the old BASE guard fails the bootstrap range for the expected missing

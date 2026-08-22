@@ -150,6 +150,26 @@ const ROADMAP_AUTHORITY_MIGRATION_PROFILE = 'roadmap-authority-migration';
 const ROADMAP_AUTHORITY_PREPARATION_PROFILE = 'roadmap-authority-prepare';
 const ROADMAP_AUTHORITY_RECLASSIFICATION_PROFILE_PREFIX =
   'roadmap-reclassification:';
+const H0_BOOTSTRAP_REPAIR_BASE = '03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd';
+const H0_BOOTSTRAP_REPAIR_PROFILE = 'h0-bootstrap-repair';
+const H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256 =
+  'a2b0b43085376ab65069829252b8a8dae2da538e5e3cf4a0a0e937725ca72974';
+const H0_BOOTSTRAP_REPAIR_PATHS = Object.freeze([
+  'docs/superpowers/plans/2026-08-21-h0-policy-bootstrap-repair.md',
+  'docs/superpowers/specs/2026-08-21-h0-policy-bootstrap-repair-design.md',
+  'docs/testing.md',
+  'test/node/es2015-provenance.test.js',
+  'test/node/repository-invariants.test.js',
+  'test/node/upstream-select.test.js',
+  'tools/test262/es2015-promotion.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+]);
+const H0_BOOTSTRAP_REPAIR_REQUIRED_PATHS = Object.freeze([
+  'tools/test262/es2015-promotion.js',
+  'tools/test262/es2015-provenance-check.js',
+  'tools/test262/es2015-provenance.js',
+]);
 const CHECKER_PATH = 'tools/test262/es2015-provenance-check.js';
 const WORKFLOW_PATH = '.github/workflows/ci.yml';
 const ROADMAP_AUTHORITY_DESIGN_PATH =
@@ -197,8 +217,9 @@ export class Es2015ProvenanceCheckError extends Error {
  * @typedef {{ kind: 'prepare', text: string, code: string, issue: number, base: string, baseManifestSha256: string, recordSha256: string }} RoadmapPreparationMarker
  * @typedef {{ kind: 'consume', text: string, code: string, issue: number, profile: string, base: string, sourcePathSha256: string, sourceEntrySha256: string | null, protectedProjectionSha256: string }} RoadmapConsumptionMarker
  * @typedef {RoadmapMigrationMarker | RoadmapPreparationMarker | RoadmapConsumptionMarker} RoadmapMarker
+ * @typedef {{ kind: 'h0-bootstrap-repair', text: string, base: string, baseManifestSha256: string }} H0BootstrapRepairMarker
  * @typedef {{ text: string, profile: string, baseLedgerSha256: string }} LegacyRangeMarker
- * @typedef {LegacyRangeMarker | RoadmapMarker} ProvenanceRangeMarker
+ * @typedef {LegacyRangeMarker | RoadmapMarker | H0BootstrapRepairMarker} ProvenanceRangeMarker
  */
 
 /**
@@ -672,6 +693,16 @@ async function checkRange(deps, options) {
   if (marker === null) return;
 
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
+  if (isH0BootstrapRepairMarker(marker)) {
+    await validateH0BootstrapRepairRange(marker, {
+      deps,
+      base,
+      head,
+      changes,
+      baseManifestText,
+    });
+    return;
+  }
   if (isRoadmapMarker(marker)) {
     if (marker.kind === 'migration') {
       if (baseManifestText === null) {
@@ -832,13 +863,29 @@ async function checkRange(deps, options) {
   await validateRangeContent(deps, head, manifest, profile);
 }
 
+/** @param {ProvenanceRangeMarker} marker @returns {marker is H0BootstrapRepairMarker} */
+function isH0BootstrapRepairMarker(marker) {
+  return (
+    Object.prototype.hasOwnProperty.call(marker, 'kind') &&
+    /** @type {{ kind?: unknown }} */ (marker).kind === 'h0-bootstrap-repair'
+  );
+}
+
 /** @param {ProvenanceRangeMarker} marker @returns {marker is RoadmapMarker} */
 function isRoadmapMarker(marker) {
-  return Object.prototype.hasOwnProperty.call(marker, 'kind');
+  return (
+    Object.prototype.hasOwnProperty.call(marker, 'kind') &&
+    ['migration', 'prepare', 'consume'].includes(
+      /** @type {{ kind?: any }} */ (marker).kind,
+    )
+  );
 }
 
 /** @param {ProvenanceRangeMarker} marker */
 function rangeProfileForMarker(marker) {
+  if (isH0BootstrapRepairMarker(marker)) {
+    return H0_BOOTSTRAP_REPAIR_PROFILE;
+  }
   if (!isRoadmapMarker(marker)) return marker.profile;
   switch (marker.kind) {
     case 'migration':
@@ -849,6 +896,141 @@ function rangeProfileForMarker(marker) {
       return marker.profile;
     default:
       throw new Error('Unhandled roadmap marker kind');
+  }
+}
+
+/**
+ * @param {H0BootstrapRepairMarker} marker
+ * @param {{
+ *   deps: ProvenanceCheckDependencies,
+ *   base: string,
+ *   head: string,
+ *   changes: readonly { status: string, path: string, sourcePath: string | null }[],
+ *   baseManifestText: string | null,
+ * }} options
+ */
+async function validateH0BootstrapRepairRange(marker, options) {
+  const { deps, base, head, changes, baseManifestText } = options;
+  if (deps.environment.GITHUB_EVENT_NAME !== 'pull_request') {
+    throw new Es2015ProvenanceCheckError(
+      'H0 bootstrap repair marker is available only to ordinary pull_request CI',
+    );
+  }
+  if (base !== H0_BOOTSTRAP_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `H0 bootstrap repair range requires base ${H0_BOOTSTRAP_REPAIR_BASE}`,
+    );
+  }
+  if (marker.base !== H0_BOOTSTRAP_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `H0 bootstrap repair marker base must be ${H0_BOOTSTRAP_REPAIR_BASE}`,
+    );
+  }
+  if (
+    baseManifestText === null ||
+    marker.baseManifestSha256 !== H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256 ||
+    sha256(baseManifestText) !== H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'H0 bootstrap repair marker base-manifest-sha256 does not match BASE manifest bytes',
+    );
+  }
+
+  const baseManifest = parseRangeManifest(
+    baseManifestText,
+    'H0 bootstrap repair base',
+  );
+  if (baseManifest.version !== 3 || baseManifest.rangeProfiles.length !== 15) {
+    throw new Es2015ProvenanceCheckError(
+      'H0 bootstrap repair requires the exact schema-v3 BASE profiles',
+    );
+  }
+  validateProvenanceFoundation(baseManifest, undefined, {
+    expectedRoadmapAuthorities: APPROVED_INITIAL_ROADMAP_AUTHORITIES,
+  });
+  const h0Authority = baseManifest.roadmapAuthorities?.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'H0',
+  );
+  if (h0Authority?.evidence.length !== 6) {
+    throw new Es2015ProvenanceCheckError(
+      'H0 bootstrap repair requires the exact six H0 evidence records',
+    );
+  }
+
+  validateH0BootstrapRepairChanges(changes);
+  const immutablePaths = new Set([
+    WORKFLOW_PATH,
+    'tools/ci/pipeline.js',
+    ES2015_PROVENANCE_FILE,
+    FEATURES_FILE,
+    ...ES2015_PROVENANCE_DECISION_CODES.map(decisionFragmentPath),
+    ...(baseManifest.roadmapAuthorities ?? []).flatMap(
+      (
+        /** @type {{ evidence: readonly { path: string }[], protectedOutputs: readonly { path: string }[] }} */ authority,
+      ) => [
+        ...authority.evidence.map((entry) => entry.path),
+        ...authority.protectedOutputs.map((entry) => entry.path),
+      ],
+    ),
+  ]);
+  for (const path of immutablePaths) {
+    const [baseText, headText] = await Promise.all([
+      deps.readGitFile(base, path),
+      deps.readGitFile(head, path),
+    ]);
+    if (baseText !== headText) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair path ${path} must remain byte-identical between BASE and HEAD`,
+      );
+    }
+  }
+}
+
+/**
+ * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ */
+function validateH0BootstrapRepairChanges(changes) {
+  const allowedPaths = new Set(H0_BOOTSTRAP_REPAIR_PATHS);
+  const changedPaths = new Set();
+  for (const change of changes) {
+    if (change.status.startsWith('R')) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair range forbids rename ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (change.status.startsWith('C')) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair range forbids copy ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (change.status === 'D') {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair range forbids deleted path ${change.path}`,
+      );
+    }
+    if (!['A', 'M'].includes(change.status)) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair range has unknown git status ${change.status}`,
+      );
+    }
+    if (!allowedPaths.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair range includes unexpected path ${change.path}`,
+      );
+    }
+    if (changedPaths.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair range repeats changed path ${change.path}`,
+      );
+    }
+    changedPaths.add(change.path);
+  }
+  for (const path of H0_BOOTSTRAP_REPAIR_REQUIRED_PATHS) {
+    if (!changedPaths.has(path)) {
+      throw new Es2015ProvenanceCheckError(
+        `H0 bootstrap repair range requires changed path ${path}`,
+      );
+    }
   }
 }
 
@@ -3768,7 +3950,7 @@ async function markerForRange(deps, options, changes, base, head) {
       `Provenance PR body environment ${options.prBodyEnvironment} is missing`,
     );
   }
-  const markers = authoritativeRangeMarkers(body);
+  const markers = authoritativeRangeMarkers(body, eventName === 'pull_request');
   if (markers.length === 0) {
     if (await provenanceOwnedRange(deps, changes, base, head)) {
       throw new Es2015ProvenanceCheckError(
@@ -3797,6 +3979,22 @@ function parseProvenanceRangeMarker(text) {
     );
   }
   return { text, profile: match[1], baseLedgerSha256: match[2] };
+}
+
+/** @param {string} text @returns {H0BootstrapRepairMarker} */
+function parseH0BootstrapRepairMarker(text) {
+  const match = h0BootstrapRepairMarkerPattern().exec(text);
+  if (match === null) {
+    throw new Es2015ProvenanceCheckError(
+      'H0 bootstrap repair marker is not authoritative',
+    );
+  }
+  return {
+    kind: 'h0-bootstrap-repair',
+    text,
+    base: match[1],
+    baseManifestSha256: match[2],
+  };
 }
 
 /** @param {string} text @returns {RoadmapMarker} */
@@ -3854,8 +4052,8 @@ export function parseRoadmapAuthorityMarker(text) {
   );
 }
 
-/** @param {string} body */
-function authoritativeRangeMarkers(body) {
+/** @param {string} body @param {boolean} includeH0BootstrapRepair */
+function authoritativeRangeMarkers(body, includeH0BootstrapRepair) {
   const markers = [];
   for (const match of body.matchAll(
     /(^|\n)(<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:[A-Za-z0-9:-]+ base-ledger-sha256:[0-9a-f]{64} -->)(?=\n|$)/gu,
@@ -3864,6 +4062,14 @@ function authoritativeRangeMarkers(body) {
       index: match.index ?? 0,
       marker: parseProvenanceRangeMarker(match[2]),
     });
+  }
+  if (includeH0BootstrapRepair) {
+    for (const match of body.matchAll(h0BootstrapRepairBodyPattern())) {
+      markers.push({
+        index: match.index ?? 0,
+        marker: parseH0BootstrapRepairMarker(match[2]),
+      });
+    }
   }
   for (const matcher of [
     roadmapMigrationBodyPattern(),
@@ -3880,6 +4086,14 @@ function authoritativeRangeMarkers(body) {
   return markers
     .sort((left, right) => left.index - right.index)
     .map((entry) => entry.marker);
+}
+
+function h0BootstrapRepairMarkerPattern() {
+  return /^<!-- es2015-h0-bootstrap-repair base:([0-9a-f]{40}) base-manifest-sha256:([0-9a-f]{64}) -->$/u;
+}
+
+function h0BootstrapRepairBodyPattern() {
+  return /(^|\n)(<!-- es2015-h0-bootstrap-repair base:[0-9a-f]{40} base-manifest-sha256:[0-9a-f]{64} -->)(?=\n|$)/gu;
 }
 
 function roadmapMigrationMarkerPattern() {
