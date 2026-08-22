@@ -381,10 +381,15 @@ Never run broad/full Test262, `test262:upstream`, `test262:upstream:check`,
    bootstrap is absent from the final #76 consumer diff. The bootstrap's compact
    baseline reconciliation must accept current reviewed P0 non-H0 movement while
    retaining exact H0 selector/evidence.
-6. Regenerate H0 protected outputs over the repaired BASE and change only H0
+6. Update the non-gate-owner #76 audit caller so default `--check` reads the
+   preserved taxonomy from the compact baseline's exact `finalBase` commit and
+   supplies both preserved and current taxonomy texts to the bootstrap
+   reconciliation API. CI/local Git history must be present; missing commit/file
+   fails explicitly.
+7. Regenerate H0 protected outputs over the repaired BASE and change only H0
    `pending -> applied`.
-7. Require repaired exact BASE checker GREEN, no gate-owner diff, focused reviews,
+8. Require repaired exact BASE checker GREEN, no gate-owner diff, focused reviews,
    exact-head active
    guard/CI/CodeQL, squash merge, and exact-main verification.
-8. Update and close #76; update #70 and #75. Keep #75/#70 open until their broader
+9. Update and close #76; update #70 and #75. Keep #75/#70 open until their broader
    scopes complete.

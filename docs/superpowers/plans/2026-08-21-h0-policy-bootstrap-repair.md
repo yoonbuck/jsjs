@@ -384,6 +384,21 @@ pending. Expected: pending-to-applied failure only.
 
 - [ ] **Step 3: Regenerate and apply H0**
 
+First modify retained non-gate-owner `tools/test262/es2015-audit.js` so default
+H0 `--check`:
+
+- parses `es2015-h0-baseline.json`;
+- reads `tools/test262/es2015-taxonomy.json` from `baseline.finalBase` through an
+  injected `readGitFile(revision, path)` dependency;
+- passes that preserved text plus current taxonomy text into the BASE
+  reconciliation API;
+- fails explicitly when the commit/path is unavailable;
+- has focused tests for valid P0 movement, missing history, and arbitrary non-H0
+  drift.
+
+The CI job already fetches full project history; local recovery uses the full
+checkout.
+
 Run exact H0 corpus and reviewed generators over repaired BASE. Preserve non-H0
 classifications. Change only H0 state to applied with canonical renderer.
 
