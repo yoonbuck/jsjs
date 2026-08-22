@@ -97,6 +97,31 @@ const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
 const REVIEWED_P0_PATH_SHA256 =
   'b2657db74331391b156f87e1e831665ef4ae3a738d48836e476c13828b1aeff4';
+const REVIEWED_P0_PRESERVED_INPUTS = Object.freeze({
+  policySha256:
+    'f5a41c0743fc5e37e2a8110fe11f9d405952d5bcd4a235f085edf9e02df963ab',
+  anchorsSha256:
+    '3513c140106fde4874bdfaec48000f243f35ac926de33bf1433ae6450baaee40',
+  subsetSha256:
+    'cceaaf9807c0d32c32be5b0800a140612afddf9acf49bcdc0cf8f0102562fb39',
+  featuresSha256:
+    'ee10cc484226fbcc70950c4ce09fc601a827d1ce92fe40870f5e66c6656a7de2',
+  selectedEvidenceSha256:
+    '9de8674a603263d5d80d9e48d255879efa061b648cc9cb32eff399941a6927df',
+  auditEvidenceSha256:
+    'd560df3e1a9af905115324d529a0a101943d30fa0af8a8102b2dd344121ba9e4',
+  promotionSha256:
+    'a5f567e5f27981f943adfd116b8a88be7501f0f59763573ce9b701fae390c4ac',
+});
+const REVIEWED_P0_CURRENT_INPUTS = Object.freeze({
+  ...REVIEWED_P0_PRESERVED_INPUTS,
+  subsetSha256:
+    'e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8',
+  selectedEvidenceSha256:
+    'c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27',
+  auditEvidenceSha256:
+    '58f92e072306bfe99f8b9a57bf959469100b0e54816bef3263ec9b6c075a4990',
+});
 const REVIEWED_P0_PATHS = Object.freeze([
   'test/built-ins/Function/prototype/bind/instance-construct-newtarget-self-new.js',
   'test/built-ins/Function/prototype/toString/unicode.js',
@@ -2221,7 +2246,13 @@ function syntheticRoadmapProjectionFixture() {
   };
 }
 
-function syntheticReviewedP0H0Fixture() {
+/**
+ * @param {{
+ *   forgePreservedStatusTables?: boolean,
+ *   forgeCurrentStatusTables?: boolean,
+ * }} [options]
+ */
+function syntheticReviewedP0H0Fixture(options = {}) {
   const pin = {
     repository: TEST262_REPOSITORY,
     revision: TEST262_REVISION,
@@ -2264,9 +2295,72 @@ function syntheticReviewedP0H0Fixture() {
     includes: [],
     provenance: ['es6id'],
   };
+  const policy = {
+    version: 1,
+    source: SPECIFICATION_SOURCE,
+    sourceSha256: SPECIFICATION_SHA256,
+    anchors: 3,
+  };
+  const summary = {
+    roots: 85,
+    variants: 167,
+    partitions: [
+      {
+        name: 'core',
+        roots: 85,
+        variants: 167,
+        rootsPercent: 100,
+        variantsPercent: 100,
+      },
+    ],
+  };
+  const preservedStatusTables = {
+    core: [
+      {
+        name: 'blocked:lexical-grammar-and-new-target',
+        roots: 83,
+        variants: 164,
+      },
+      {
+        name: 'blocked:proxy-and-reflect-metaobject',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'blocked:test262-cross-realm-host',
+        roots: 1,
+        variants: 1,
+      },
+    ],
+    annexB: [],
+    blockers: [
+      {
+        name: 'lexical-grammar-and-new-target',
+        roots: 83,
+        variants: 164,
+      },
+      {
+        name: 'proxy-and-reflect-metaobject',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'test262-cross-realm-host',
+        roots: 1,
+        variants: 1,
+      },
+    ],
+  };
+  if (options.forgePreservedStatusTables === true) {
+    preservedStatusTables.core[0].roots += 1;
+  }
   const preservedTaxonomy = {
     version: 3,
     pin,
+    policy,
+    inputs: REVIEWED_P0_PRESERVED_INPUTS,
+    summary,
+    statusTables: preservedStatusTables,
     classifications: [
       h0Classification,
       ...p0Classifications,
@@ -2294,6 +2388,57 @@ function syntheticReviewedP0H0Fixture() {
       return { ...entry, status: 'audit-passing-unselected', blocker: null };
     },
   );
+  currentTaxonomy.inputs = REVIEWED_P0_CURRENT_INPUTS;
+  currentTaxonomy.statusTables = {
+    core: [
+      {
+        name: 'audit-passing-unselected',
+        roots: 60,
+        variants: 120,
+      },
+      {
+        name: 'blocked:proxy-and-reflect-metaobject',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'blocked:remaining-standard-library-additions',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'blocked:test262-cross-realm-host',
+        roots: 1,
+        variants: 1,
+      },
+      {
+        name: 'selected-passing',
+        roots: 22,
+        variants: 42,
+      },
+    ],
+    annexB: [],
+    blockers: [
+      {
+        name: 'proxy-and-reflect-metaobject',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'remaining-standard-library-additions',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'test262-cross-realm-host',
+        roots: 1,
+        variants: 1,
+      },
+    ],
+  };
+  if (options.forgeCurrentStatusTables === true) {
+    currentTaxonomy.statusTables.core[0].variants += 1;
+  }
   const currentTaxonomyText = prettyJson(currentTaxonomy);
   const pathsManifestText = prettyJson({
     version: 1,
@@ -2382,6 +2527,43 @@ function syntheticReviewedP0H0Fixture() {
     status: 'selected-passing',
     blocker: null,
   };
+  afterTaxonomy.statusTables = {
+    core: [
+      {
+        name: 'audit-passing-unselected',
+        roots: 60,
+        variants: 120,
+      },
+      {
+        name: 'blocked:proxy-and-reflect-metaobject',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'blocked:remaining-standard-library-additions',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'selected-passing',
+        roots: 23,
+        variants: 43,
+      },
+    ],
+    annexB: [],
+    blockers: [
+      {
+        name: 'proxy-and-reflect-metaobject',
+        roots: 1,
+        variants: 2,
+      },
+      {
+        name: 'remaining-standard-library-additions',
+        roots: 1,
+        variants: 2,
+      },
+    ],
+  };
   const afterText = prettyJson(afterTaxonomy);
   const ownerDeltas = buildEs2015H0OwnerDeltas({
     beforeTaxonomyText: currentTaxonomyText,
@@ -2402,6 +2584,7 @@ function syntheticReviewedP0H0Fixture() {
     compactOptions: {
       baseline: baselineText,
       preservedTaxonomyText,
+      currentTaxonomyText,
       after: afterText,
       disposition: dispositionText,
       promotion: promotionText,
@@ -3477,7 +3660,7 @@ export default [
     },
   },
   {
-    name: 'ES2015 compact H0 baseline accepts only the exact reviewed P0 transition',
+    name: 'ES2015 compact H0 baseline accepts the production reviewed P0 document transition',
     run: () => {
       const fixture = syntheticReviewedP0H0Fixture();
       assertSame(REVIEWED_P0_PATHS.length, 83);
@@ -3492,6 +3675,14 @@ export default [
       assertSame(
         sha256(`${REVIEWED_P0_PATHS.join('\n')}\n`),
         REVIEWED_P0_PATH_SHA256,
+      );
+      assertSame(
+        fixture.preservedTaxonomy.inputs.subsetSha256,
+        REVIEWED_P0_PRESERVED_INPUTS.subsetSha256,
+      );
+      assertSame(
+        fixture.currentTaxonomy.inputs.subsetSha256,
+        REVIEWED_P0_CURRENT_INPUTS.subsetSha256,
       );
       assertEs2015H0BaselineMatchesTaxonomy(fixture.baselineOptions);
       assertExactH0DispositionDelta(fixture.compactOptions);
@@ -3653,6 +3844,82 @@ export default [
           Error,
         );
       }
+    },
+  },
+  {
+    name: 'ES2015 reviewed P0 document transition rejects policy, input, summary, and key drift',
+    run: () => {
+      const fixture = syntheticReviewedP0H0Fixture();
+      const versionDrift = {
+        ...structuredClone(fixture.currentTaxonomy),
+        version: 4,
+      };
+      const pinDrift = structuredClone(fixture.currentTaxonomy);
+      pinDrift.pin = { ...pinDrift.pin, revision: '0'.repeat(40) };
+      const policyDrift = structuredClone(fixture.currentTaxonomy);
+      policyDrift.policy = { ...policyDrift.policy, anchors: 4 };
+      const summaryDrift = structuredClone(fixture.currentTaxonomy);
+      summaryDrift.summary = { ...summaryDrift.summary, roots: 84 };
+      const staticInputDrift = structuredClone(fixture.currentTaxonomy);
+      staticInputDrift.inputs = {
+        ...staticInputDrift.inputs,
+        policySha256: '0'.repeat(64),
+      };
+      const unauthorizedInput = structuredClone(fixture.currentTaxonomy);
+      unauthorizedInput.inputs = {
+        ...unauthorizedInput.inputs,
+        subsetSha256: '0'.repeat(64),
+      };
+      const extraTopLevel = {
+        ...structuredClone(fixture.currentTaxonomy),
+        unexpected: true,
+      };
+      const missingInput = structuredClone(fixture.currentTaxonomy);
+      delete missingInput.inputs.auditEvidenceSha256;
+
+      for (const taxonomy of [
+        versionDrift,
+        pinDrift,
+        policyDrift,
+        summaryDrift,
+        staticInputDrift,
+        unauthorizedInput,
+        extraTopLevel,
+        missingInput,
+      ]) {
+        assertThrows(
+          () =>
+            assertEs2015H0BaselineMatchesTaxonomy({
+              ...fixture.baselineOptions,
+              taxonomyText: prettyJson(taxonomy),
+            }),
+          Error,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 reviewed P0 document transition derives both status tables from classifications',
+    run: () => {
+      const forgedCurrent = syntheticReviewedP0H0Fixture({
+        forgeCurrentStatusTables: true,
+      });
+      const forgedPreserved = syntheticReviewedP0H0Fixture({
+        forgePreservedStatusTables: true,
+      });
+
+      assertThrows(
+        () =>
+          assertEs2015H0BaselineMatchesTaxonomy(forgedCurrent.baselineOptions),
+        Error,
+      );
+      assertThrows(
+        () =>
+          assertEs2015H0BaselineMatchesTaxonomy(
+            forgedPreserved.baselineOptions,
+          ),
+        Error,
+      );
     },
   },
   {

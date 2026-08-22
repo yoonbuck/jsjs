@@ -198,6 +198,24 @@ const H0_EVIDENCE_BUNDLE_KEYS = Object.freeze([
   'ownerDeltasText',
   'promotionText',
 ]);
+const REVIEWED_TAXONOMY_DOCUMENT_KEYS = Object.freeze([
+  'version',
+  'pin',
+  'policy',
+  'inputs',
+  'summary',
+  'statusTables',
+  'classifications',
+]);
+const REVIEWED_TAXONOMY_INPUT_KEYS = Object.freeze([
+  'policySha256',
+  'anchorsSha256',
+  'subsetSha256',
+  'featuresSha256',
+  'selectedEvidenceSha256',
+  'auditEvidenceSha256',
+  'promotionSha256',
+]);
 const REVISION_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const REVIEWED_P0_ROOT_COUNT = 83;
@@ -209,6 +227,26 @@ const REVIEWED_P0_SOURCE_BLOCKER = 'lexical-grammar-and-new-target';
 const REVIEWED_P0_REASSIGNED_STATUS =
   'blocked:remaining-standard-library-additions';
 const REVIEWED_P0_REASSIGNED_BLOCKER = 'remaining-standard-library-additions';
+const REVIEWED_P0_INPUT_TRANSITIONS = Object.freeze({
+  subsetSha256: Object.freeze([
+    'cceaaf9807c0d32c32be5b0800a140612afddf9acf49bcdc0cf8f0102562fb39',
+    'e76d5624e999b852df2c8c1bdb7dfebdcc5952083eb175f7ab67bd39ad75e4d8',
+  ]),
+  selectedEvidenceSha256: Object.freeze([
+    '9de8674a603263d5d80d9e48d255879efa061b648cc9cb32eff399941a6927df',
+    'c559d673e7ff2af88343eadf58b292db45d71ef99915699cc5d8e5310a73fc27',
+  ]),
+  auditEvidenceSha256: Object.freeze([
+    'd560df3e1a9af905115324d529a0a101943d30fa0af8a8102b2dd344121ba9e4',
+    '58f92e072306bfe99f8b9a57bf959469100b0e54816bef3263ec9b6c075a4990',
+  ]),
+});
+const REVIEWED_P0_STATIC_INPUT_KEYS = Object.freeze([
+  'policySha256',
+  'anchorsSha256',
+  'featuresSha256',
+  'promotionSha256',
+]);
 /** @type {readonly string[]} */
 const EMPTY_FEATURES = Object.freeze([]);
 const entriesByManifest = new WeakMap();
@@ -1821,6 +1859,7 @@ function h0VariantEvidenceSha256(entries) {
  *   before?: string,
  *   baseline?: string,
  *   preservedTaxonomyText?: string,
+ *   currentTaxonomyText?: string,
  *   after: string,
  *   disposition: string,
  *   promotion: string,
@@ -1835,6 +1874,8 @@ export function assertExactH0DispositionDelta(options) {
     (options.baseline !== undefined && typeof options.baseline !== 'string') ||
     (options.preservedTaxonomyText !== undefined &&
       typeof options.preservedTaxonomyText !== 'string') ||
+    (options.currentTaxonomyText !== undefined &&
+      typeof options.currentTaxonomyText !== 'string') ||
     (options.before === undefined && options.baseline === undefined) ||
     typeof options.after !== 'string' ||
     typeof options.disposition !== 'string' ||
@@ -1845,11 +1886,20 @@ export function assertExactH0DispositionDelta(options) {
     );
   }
   if (
-    options.preservedTaxonomyText !== undefined &&
+    (options.preservedTaxonomyText !== undefined ||
+      options.currentTaxonomyText !== undefined) &&
     options.baseline === undefined
   ) {
     throw new Es2015PromotionError(
-      `${ES2015_H0_OWNER_DELTAS_FILE} preserved taxonomy requires compact baseline identity`,
+      `${ES2015_H0_OWNER_DELTAS_FILE} taxonomy transition text requires compact baseline identity`,
+    );
+  }
+  if (
+    options.before !== undefined &&
+    options.currentTaxonomyText !== undefined
+  ) {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_OWNER_DELTAS_FILE} current taxonomy must be supplied through before or currentTaxonomyText, not both`,
     );
   }
   if (
@@ -1951,6 +2001,7 @@ export function assertExactH0DispositionDelta(options) {
         entries: currentBeforeEntries,
         pathsManifest,
         preservedTaxonomyText: options.preservedTaxonomyText,
+        currentTaxonomyText: options.currentTaxonomyText,
         pin: {
           repository: pathsManifest.repository,
           revision: pathsManifest.revision,
@@ -2705,15 +2756,19 @@ export function assertEs2015H0BaselineMatchesTaxonomy(options) {
       `${ES2015_H0_BASELINE_FILE} current taxonomy differs from the final base and requires preserved taxonomy text`,
     );
   }
+  const currentDocument = reviewedTaxonomyDocument(
+    options.taxonomyText,
+    `${ES2015_H0_BASELINE_FILE} current taxonomy`,
+  );
   const preserved = assertPreservedH0BaselineTaxonomy({
     baseline,
     pathsManifest,
     pin: options.pin,
     preservedTaxonomyText: options.preservedTaxonomyText,
   });
-  assertReviewedP0Transition(
-    preserved.classifications,
-    current.classifications,
+  assertReviewedTaxonomyDocumentTransition(
+    preserved,
+    currentDocument,
     pathsManifest,
   );
 }
@@ -2727,7 +2782,10 @@ export function assertEs2015H0BaselineMatchesTaxonomy(options) {
  * }} options
  */
 function assertPreservedH0BaselineTaxonomy(options) {
-  const preserved = baselineTaxonomy(options.preservedTaxonomyText);
+  const preserved = reviewedTaxonomyDocument(
+    options.preservedTaxonomyText,
+    `${ES2015_H0_BASELINE_FILE} preserved taxonomy`,
+  );
   assertH0BaselineMatchesEntries({
     baseline: options.baseline,
     entries: preserved.classifications,
@@ -2805,6 +2863,7 @@ function assertH0BaselineMatchesEntries(options) {
  *   entries: readonly any[],
  *   pathsManifest: ReturnType<typeof parseH0PathsManifest>,
  *   preservedTaxonomyText?: string,
+ *   currentTaxonomyText?: string,
  *   pin: { repository: string, revision: string },
  * }} options
  */
@@ -2844,6 +2903,22 @@ function assertCompactH0BaselineMatchesEntries(options) {
     );
   }
   if (facts.nonH0ClassificationSha256 === baseline.nonH0ClassificationSha256) {
+    if (options.currentTaxonomyText !== undefined) {
+      const currentDocument = reviewedTaxonomyDocument(
+        options.currentTaxonomyText,
+        `${ES2015_H0_BASELINE_FILE} current taxonomy`,
+      );
+      if (
+        sha256(options.currentTaxonomyText) !==
+          baseline.finalBaseTaxonomySha256 ||
+        JSON.stringify(currentDocument.classifications) !==
+          JSON.stringify(entries)
+      ) {
+        throw new Es2015PromotionError(
+          `${ES2015_H0_BASELINE_FILE} current taxonomy text does not match the exact final base`,
+        );
+      }
+    }
     assertH0BaselineMatchesEntries({
       baseline,
       entries,
@@ -2852,9 +2927,23 @@ function assertCompactH0BaselineMatchesEntries(options) {
     });
     return;
   }
-  if (typeof options.preservedTaxonomyText !== 'string') {
+  if (
+    typeof options.preservedTaxonomyText !== 'string' ||
+    typeof options.currentTaxonomyText !== 'string'
+  ) {
     throw new Es2015PromotionError(
-      `${ES2015_H0_BASELINE_FILE} current taxonomy differs from the final base and requires preserved taxonomy text`,
+      `${ES2015_H0_BASELINE_FILE} current taxonomy differs from the final base and requires preserved and current taxonomy text`,
+    );
+  }
+  const currentDocument = reviewedTaxonomyDocument(
+    options.currentTaxonomyText,
+    `${ES2015_H0_BASELINE_FILE} current taxonomy`,
+  );
+  if (
+    JSON.stringify(currentDocument.classifications) !== JSON.stringify(entries)
+  ) {
+    throw new Es2015PromotionError(
+      `${ES2015_H0_BASELINE_FILE} current taxonomy text does not match the reconstructed pre-H0 classifications`,
     );
   }
   const preserved = assertPreservedH0BaselineTaxonomy({
@@ -2863,7 +2952,142 @@ function assertCompactH0BaselineMatchesEntries(options) {
     pin,
     preservedTaxonomyText: options.preservedTaxonomyText,
   });
-  assertReviewedP0Transition(preserved.classifications, entries, pathsManifest);
+  assertReviewedTaxonomyDocumentTransition(
+    preserved,
+    currentDocument,
+    pathsManifest,
+  );
+}
+
+/**
+ * @param {string} text
+ * @param {string} label
+ */
+function reviewedTaxonomyDocument(text, label) {
+  const record = parseJson(text, label);
+  requireExactKeys(record, REVIEWED_TAXONOMY_DOCUMENT_KEYS, label);
+  const inputs = object(record.inputs, `${label} inputs`);
+  requireExactKeys(inputs, REVIEWED_TAXONOMY_INPUT_KEYS, `${label} inputs`);
+  for (const key of REVIEWED_TAXONOMY_INPUT_KEYS) {
+    if (
+      typeof inputs[key] !== 'string' ||
+      !SHA256_PATTERN.test(/** @type {string} */ (inputs[key]))
+    ) {
+      throw new Es2015PromotionError(
+        `${label} input ${key} must be a SHA-256 digest`,
+      );
+    }
+  }
+  object(record.policy, `${label} policy`);
+  object(record.summary, `${label} summary`);
+  object(record.statusTables, `${label} statusTables`);
+  const taxonomy = baselineTaxonomy(text);
+  const expectedStatusTables = reviewedTaxonomyStatusTables(
+    taxonomy.classifications,
+  );
+  if (
+    JSON.stringify(record.statusTables) !== JSON.stringify(expectedStatusTables)
+  ) {
+    throw new Es2015PromotionError(
+      `${label} statusTables are not the canonical classification aggregate`,
+    );
+  }
+  return Object.freeze({
+    version: record.version,
+    pin: taxonomy.pin,
+    policy: record.policy,
+    inputs,
+    summary: record.summary,
+    statusTables: record.statusTables,
+    classifications: taxonomy.classifications,
+  });
+}
+
+/**
+ * @param {ReturnType<typeof reviewedTaxonomyDocument>} preserved
+ * @param {ReturnType<typeof reviewedTaxonomyDocument>} current
+ * @param {ReturnType<typeof parseH0PathsManifest>} pathsManifest
+ */
+function assertReviewedTaxonomyDocumentTransition(
+  preserved,
+  current,
+  pathsManifest,
+) {
+  const exactKeys =
+    /** @type {readonly ('version' | 'pin' | 'policy' | 'summary')[]} */ ([
+      'version',
+      'pin',
+      'policy',
+      'summary',
+    ]);
+  for (const key of exactKeys) {
+    if (JSON.stringify(preserved[key]) !== JSON.stringify(current[key])) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 transition changed taxonomy ${key}`,
+      );
+    }
+  }
+  for (const key of REVIEWED_P0_STATIC_INPUT_KEYS) {
+    if (preserved.inputs[key] !== current.inputs[key]) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 transition changed unrelated input ${key}`,
+      );
+    }
+  }
+  for (const [key, [preservedSha256, currentSha256]] of Object.entries(
+    REVIEWED_P0_INPUT_TRANSITIONS,
+  )) {
+    if (
+      preserved.inputs[key] !== preservedSha256 ||
+      current.inputs[key] !== currentSha256
+    ) {
+      throw new Es2015PromotionError(
+        `${ES2015_H0_BASELINE_FILE} reviewed P0 transition has unauthorized input ${key}`,
+      );
+    }
+  }
+  assertReviewedP0Transition(
+    preserved.classifications,
+    current.classifications,
+    pathsManifest,
+  );
+}
+
+/** @param {readonly any[]} classifications */
+function reviewedTaxonomyStatusTables(classifications) {
+  return {
+    core: reviewedTaxonomyCountTable(
+      classifications.filter((entry) => entry.partition === 'core'),
+      (entry) => entry.status,
+    ),
+    annexB: reviewedTaxonomyCountTable(
+      classifications.filter((entry) => entry.partition === 'annex-b'),
+      (entry) => entry.status,
+    ),
+    blockers: reviewedTaxonomyCountTable(
+      classifications.filter((entry) => entry.blocker !== null),
+      (entry) => entry.blocker,
+    ),
+  };
+}
+
+/**
+ * @param {readonly any[]} entries
+ * @param {(entry: any) => string} nameFor
+ */
+function reviewedTaxonomyCountTable(entries, nameFor) {
+  const totals = new Map();
+  for (const entry of entries) {
+    const name = nameFor(entry);
+    const total = totals.get(name) ?? { roots: 0, variants: 0 };
+    total.roots += 1;
+    total.variants += entry.variants;
+    totals.set(name, total);
+  }
+  return sortStrings([...totals.keys()]).map((name) => ({
+    name,
+    ...totals.get(name),
+  }));
 }
 
 /**
