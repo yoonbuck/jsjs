@@ -108,7 +108,10 @@ const tests = [
       assertSame(toLength(-1), 0);
       assertSame(toLength(3.9), 3);
       assertSame(toLength(Infinity), Number.MAX_SAFE_INTEGER);
-      assertSame(toLength(Number.MAX_SAFE_INTEGER + 100), Number.MAX_SAFE_INTEGER);
+      assertSame(
+        toLength(Number.MAX_SAFE_INTEGER + 100),
+        Number.MAX_SAFE_INTEGER,
+      );
 
       let calls = 0;
       const length = createConversionObject();
