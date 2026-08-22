@@ -380,6 +380,33 @@ work, do **not** run `TZ=UTC npm run test262:es2015:audit`,
 `npm run ci:contract`, browser suites, or JavaScriptCore locally. Commands that
 execute broad upstream Test262 run only in exact-head CI.
 
+### H0 roadmap projection bootstrap
+
+Schema-v3 main records H0 as pending with six exact evidence files: paths,
+compact baseline, disposition, owner map, owner deltas, and promotion. The
+roadmap checker verifies each authority-pinned byte hash before parsing, loads
+the bundle once, and cross-validates its repository pin, source selector,
+counts, dispositions, owners, deltas, and promoted paths. H0 taxonomy, subset,
+report, audit, and conformance validation consumes those normalized facts; it
+does not coerce the H0 objects into the older array or T0 promotion schemas.
+
+Every repository file read from HEAD during a protected projection must already
+be roadmap evidence, a protected output, or an immutable gate-owned input.
+`tools/test262/features.json` is the immutable input and must be byte-identical
+between BASE and HEAD. The checker and its complete recursive static import
+closure are provenance gate owners, including `metadata.js` and
+`module-paths.js`. Gate-owner modules may use only literal static imports:
+dynamic `import()`, CommonJS `require`, `createRequire`, computed specifiers,
+and URL/data module loading are rejected by repository invariants.
+
+The one-time repair from BASE
+`03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd` changes checker code, focused
+tests, and this documentation only. The workflow, pipeline, provenance
+manifest and authorities, all 13 decision fragments, all six H0 evidence
+artifacts, and every H0/P0 protected output remain byte-identical. The old
+active range guard is expected to reject that repair because schema-v3 has no
+self-maintenance operation; no other failed check is waivable.
+
 ### Deterministic ES2015 taxonomy and exact promotion
 
 The taxonomy is a timestamp-free, code-unit-sorted classification of the

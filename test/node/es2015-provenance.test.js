@@ -66,6 +66,8 @@ import {
   buildEs2015Promotion,
   mergePromotionSubset,
   parseEs2015Promotion,
+  promotionPaths,
+  validateEs2015H0EvidenceBundle,
 } from '../../tools/test262/es2015-promotion.js';
 import { serializeUpstreamSubset } from '../../tools/test262/es5-selection.js';
 import {
@@ -95,6 +97,175 @@ const { structuredClone } = globalThis;
 
 const TEST262_REPOSITORY = 'https://github.com/tc39/test262.git';
 const TEST262_REVISION = 'b363f29d3c43c626dc852744ad64a0b48a003693';
+const H0_BOOTSTRAP_BASE_SHA = '03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd';
+const H0_EVIDENCE_PATHS = Object.freeze([
+  'tools/test262/es2015-h0-baseline.json',
+  'tools/test262/es2015-h0-disposition.json',
+  'tools/test262/es2015-h0-owner-deltas.json',
+  'tools/test262/es2015-h0-owner-map.json',
+  'tools/test262/es2015-h0-paths.json',
+  'tools/test262/es2015-h0-promotion.json',
+]);
+const H0_PROTECTED_OUTPUT_PATHS = Object.freeze([
+  'docs/conformance.md',
+  'docs/test262-report.jsonl',
+  ...H0_EVIDENCE_PATHS,
+  'tools/test262/es2015-taxonomy.json',
+  'tools/test262/upstream-subset.json',
+]);
+const H0_PROJECTED_OUTPUT_SHA256 = Object.freeze({
+  'docs/conformance.md':
+    'b334793aba47b475dd0f8090e6da9f73c0b2b0c75964e5562995f6deb144a7c2',
+  'docs/test262-report.jsonl':
+    '21db3f9e84a17c79389945b879a6359b8a661a35a8b06a947322f53e2b6440cd',
+  'tools/test262/es2015-taxonomy.json':
+    '6f60af3b4416b537257cc7c3d418ed918978b7e14b1e5fc6567db9e379dc5908',
+  'tools/test262/upstream-subset.json':
+    'f7840957b181a3497eb3bb0eac349f08e54b7dd075276088652295fba1778a2b',
+});
+// Keep the exact reviewed evidence hermetic without adding protected artifacts.
+const H0_EXACT_FIXTURE_GZIP_BASE64 = `
+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
+`;
 const REVIEWED_P0_PATH_SHA256 =
   'b2657db74331391b156f87e1e831665ef4ae3a738d48836e476c13828b1aeff4';
 const REVIEWED_P0_PRESERVED_INPUTS = Object.freeze({
@@ -435,6 +606,36 @@ function readGitFixtureText(revision, path) {
   );
 }
 
+/** @param {string} revision @param {string} path @returns {any} */
+function readGitFixtureBuffer(revision, path) {
+  return execFileSync(
+    'git',
+    ['-c', 'core.pager=cat', 'show', `${revision}:${path}`],
+    /** @type {any} */ ({
+      encoding: 'buffer',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }),
+  );
+}
+
+/** @param {string} revision @param {string} path @returns {any | null} */
+function readOptionalGitFixtureBuffer(revision, path) {
+  try {
+    return readGitFixtureBuffer(revision, path);
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'status' in error &&
+      error.status === 128
+    ) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /** @param {ReadonlyMap<string, string>} files @param {string} path @returns {string} */
 function requiredFixtureText(files, path) {
   const text = files.get(path);
@@ -635,6 +836,29 @@ function prettyJson(value) {
 /** @param {string} text */
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
+}
+
+/** @type {any} */
+let exactH0FixtureCache;
+
+function exactH0FixtureData() {
+  if (exactH0FixtureCache !== undefined) return exactH0FixtureCache;
+  exactH0FixtureCache = JSON.parse(
+    execFileSync(
+      'node',
+      [
+        '--input-type=module',
+        '--eval',
+        "import { gunzipSync } from 'node:zlib'; let input = ''; for await (const chunk of process.stdin) input += chunk; process.stdout.write(gunzipSync(Buffer.from(input.replace(/\\s/gu, ''), 'base64')));",
+      ],
+      /** @type {any} */ ({
+        encoding: 'utf8',
+        input: H0_EXACT_FIXTURE_GZIP_BASE64,
+        maxBuffer: 2 * 1024 * 1024,
+      }),
+    ),
+  );
+  return exactH0FixtureCache;
 }
 
 /** @param {readonly ProvenanceBatchEntry[]} entries */
@@ -1744,6 +1968,44 @@ function canonicalReportText(options) {
   ].join('\n')}\n`;
 }
 
+/** @param {string} text */
+function reportTestRecords(text) {
+  return text
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+    .filter((record) => record.type === 'test')
+    .map((record) =>
+      createTestRecord({
+        file: record.file,
+        variant: record.variant,
+        status: record.status,
+        ...(record.features === undefined ? {} : { features: record.features }),
+      }),
+    );
+}
+
+/**
+ * @param {readonly string[]} selectedPaths
+ * @param {readonly ReturnType<typeof createTestRecord>[]} records
+ */
+function orderSelectedReportRecords(selectedPaths, records) {
+  const byFile = new Map();
+  for (const record of records) {
+    const entries = byFile.get(record.file) ?? [];
+    entries.push(record);
+    byFile.set(record.file, entries);
+  }
+  return selectedPaths.flatMap((path) =>
+    (byFile.get(path) ?? []).sort(
+      (
+        /** @type {ReturnType<typeof createTestRecord>} */ left,
+        /** @type {ReturnType<typeof createTestRecord>} */ right,
+      ) => String(left.variant).localeCompare(String(right.variant)),
+    ),
+  );
+}
+
 /**
  * @param {{
  *   baseDocument: string,
@@ -2243,6 +2505,195 @@ function syntheticRoadmapProjectionFixture() {
     headManifestText,
     headManifestValue,
     prefix,
+  };
+}
+
+function exactAppliedH0ProjectionFixture() {
+  const fixture = exactH0FixtureData();
+  const evidence = fixture.evidence;
+  const baseManifestText = readGitFixtureText(
+    H0_BOOTSTRAP_BASE_SHA,
+    ES2015_PROVENANCE_FILE,
+  );
+  const baseManifestValue = JSON.parse(baseManifestText);
+  const headManifestValue = structuredClone(baseManifestValue);
+  headManifestValue.roadmapAuthorities[0].state = 'applied';
+  const headManifestText = renderEs2015ProvenanceManifest(headManifestValue);
+  const authority = baseManifestValue.roadmapAuthorities.find(
+    (/** @type {{ code: string }} */ candidate) => candidate.code === 'H0',
+  );
+  if (authority === undefined) {
+    throw new Error('exact H0 fixture is missing its BASE authority');
+  }
+  const evidenceByPath = new Map(
+    authority.evidence.map((/** @type {any} */ entry) => [entry.path, entry]),
+  );
+  for (const [suffix, text] of Object.entries(evidence)) {
+    const path = `tools/test262/es2015-h0-${suffix}.json`;
+    assertSame(sha256(String(text)), evidenceByPath.get(path)?.sha256, path);
+  }
+  const bundle = validateEs2015H0EvidenceBundle({
+    pin: {
+      repository: TEST262_REPOSITORY,
+      revision: TEST262_REVISION,
+    },
+    pathsText: evidence.paths,
+    baselineText: evidence.baseline,
+    dispositionText: evidence.disposition,
+    ownerMapText: evidence['owner-map'],
+    ownerDeltasText: evidence['owner-deltas'],
+    promotionText: evidence.promotion,
+  });
+  const baseConformanceText = readGitFixtureText(
+    H0_BOOTSTRAP_BASE_SHA,
+    'docs/conformance.md',
+  );
+  const baseReportText = readGitFixtureText(
+    H0_BOOTSTRAP_BASE_SHA,
+    'docs/test262-report.jsonl',
+  );
+  const baseTaxonomyText = readGitFixtureText(
+    H0_BOOTSTRAP_BASE_SHA,
+    TAXONOMY_PATH,
+  );
+  const baseSubsetText = readGitFixtureText(
+    H0_BOOTSTRAP_BASE_SHA,
+    'tools/test262/upstream-subset.json',
+  );
+  const featuresText = readGitFixtureText(
+    H0_BOOTSTRAP_BASE_SHA,
+    'tools/test262/features.json',
+  );
+  const auditEvidenceText = readGitFixtureText(
+    H0_BOOTSTRAP_BASE_SHA,
+    'tools/test262/es2015-audit-evidence.json',
+  );
+  const headSubsetText = serializeUpstreamSubset(
+    mergePromotionSubset(parseUpstreamSubset(baseSubsetText), bundle.promotion),
+  );
+  const baseTaxonomy = JSON.parse(baseTaxonomyText);
+  const dispositionByPath = new Map(
+    bundle.disposition.dispositions.map((entry) => [entry.path, entry]),
+  );
+  const classifications = baseTaxonomy.classifications.map(
+    (/** @type {any} */ entry) => {
+      const disposition = dispositionByPath.get(entry.path);
+      if (disposition === undefined) return entry;
+      return {
+        ...entry,
+        ...(disposition.status === 'passed'
+          ? { status: 'selected-passing', blocker: null }
+          : {
+              status: `blocked:${disposition.primaryOwner.blocker}`,
+              blocker: disposition.primaryOwner.blocker,
+            }),
+      };
+    },
+  );
+  const promoted = new Set(promotionPaths(bundle.promotion));
+  const records = orderSelectedReportRecords(
+    upstreamSubsetPaths(parseUpstreamSubset(headSubsetText)),
+    [
+      ...reportTestRecords(baseReportText).filter(
+        (record) => !promoted.has(record.file),
+      ),
+      ...fixture.promotionRecords.map((/** @type {any} */ record) =>
+        createTestRecord({
+          file: record.file,
+          variant: record.variant,
+          status: record.status,
+          features: record.features,
+        }),
+      ),
+    ],
+  );
+  const headTaxonomyValue = {
+    ...baseTaxonomy,
+    inputs: {
+      ...baseTaxonomy.inputs,
+      subsetSha256: sha256(headSubsetText),
+      selectedEvidenceSha256: '0'.repeat(64),
+      h0DispositionSha256: sha256(evidence.disposition),
+      h0PromotionSha256: sha256(evidence.promotion),
+    },
+    summary: summarizeEs2015Classification(classifications),
+    statusTables: taxonomyStatusTables(classifications),
+    classifications,
+  };
+  const headReportText = canonicalReportText({
+    subsetText: headSubsetText,
+    taxonomyText: prettyJson(headTaxonomyValue),
+    featuresText,
+    records,
+  });
+  headTaxonomyValue.inputs.selectedEvidenceSha256 = sha256(headReportText);
+  const headTaxonomyText = prettyJson(headTaxonomyValue);
+  assertSame(
+    canonicalReportText({
+      subsetText: headSubsetText,
+      taxonomyText: headTaxonomyText,
+      featuresText,
+      records,
+    }),
+    headReportText,
+  );
+  const headConformanceText = canonicalConformanceText({
+    baseDocument: baseConformanceText,
+    subsetText: headSubsetText,
+    taxonomyText: headTaxonomyText,
+    reportText: headReportText,
+  });
+  const projectedOutputs = new Map([
+    ['docs/conformance.md', headConformanceText],
+    ['docs/test262-report.jsonl', headReportText],
+    [TAXONOMY_PATH, headTaxonomyText],
+    ['tools/test262/upstream-subset.json', headSubsetText],
+  ]);
+  for (const [path, expected] of Object.entries(H0_PROJECTED_OUTPUT_SHA256)) {
+    assertSame(sha256(requiredFixtureText(projectedOutputs, path)), expected);
+  }
+  const baseFiles = new Map([
+    [ES2015_PROVENANCE_FILE, baseManifestText],
+    ['docs/conformance.md', baseConformanceText],
+    ['docs/test262-report.jsonl', baseReportText],
+    ['tools/test262/es2015-audit-evidence.json', auditEvidenceText],
+    [TAXONOMY_PATH, baseTaxonomyText],
+    ['tools/test262/features.json', featuresText],
+    ['tools/test262/upstream-subset.json', baseSubsetText],
+  ]);
+  const headFiles = new Map([
+    [ES2015_PROVENANCE_FILE, headManifestText],
+    ...projectedOutputs,
+    ['tools/test262/es2015-audit-evidence.json', auditEvidenceText],
+    ['tools/test262/features.json', featuresText],
+  ]);
+  for (const [suffix, text] of Object.entries(evidence)) {
+    headFiles.set(`tools/test262/es2015-h0-${suffix}.json`, String(text));
+  }
+  const changes = [
+    { status: 'M', path: ES2015_PROVENANCE_FILE },
+    ...authority.protectedOutputs.map(
+      (/** @type {{ operation: string, path: string }} */ output) => ({
+        status: output.operation === 'add-exact' ? 'A' : 'M',
+        path: output.path,
+      }),
+    ),
+  ];
+  return {
+    authority,
+    baseFiles,
+    baseManifestText,
+    baseManifestValue,
+    changes,
+    headFiles,
+    headManifestText,
+    headManifestValue,
+    historicalFiles: new Map([
+      [
+        ISSUE_77_LEXICAL_MAINTENANCE_BASE_SHA,
+        new Map([[TAXONOMY_PATH, PRESERVED_H0_SOURCE_TAXONOMY_TEXT]]),
+      ],
+    ]),
   };
 }
 
@@ -3069,6 +3520,7 @@ function rangeArguments(profile, options = {}) {
  *   headSha?: string,
  *   headFiles?: ReadonlyMap<string, string>,
  *   headModes?: ReadonlyMap<string, string>,
+ *   historicalFiles?: ReadonlyMap<string, ReadonlyMap<string, string>>,
  *   mergeBase?: string,
  *   validateRoadmapProtectedOutputs?: typeof validateRoadmapProtectedOutputs,
  * }} options
@@ -3152,6 +3604,9 @@ function rangeCheckDependencies(options) {
     ) => {
       if (revision === baseSha) return baseFiles.get(path) ?? null;
       if (revision === headSha) return headFiles.get(path) ?? null;
+      if (options.historicalFiles?.has(revision)) {
+        return options.historicalFiles.get(revision)?.get(path) ?? null;
+      }
       throw new Error(`unexpected fixture commit ${revision}`);
     },
     readGitMode: async (
@@ -3160,6 +3615,11 @@ function rangeCheckDependencies(options) {
     ) => {
       if (revision === baseSha) return baseModes.get(path) ?? null;
       if (revision === headSha) return headModes.get(path) ?? null;
+      if (options.historicalFiles?.has(revision)) {
+        return options.historicalFiles.get(revision)?.has(path)
+          ? '100644'
+          : null;
+      }
       throw new Error(`unexpected fixture commit ${revision}`);
     },
   };
@@ -6627,8 +7087,8 @@ export default [
         [
           {
             status: 'C100',
-            sourcePath: 'tools/test262/es2015-taxonomy.js',
-            path: 'docs/copied-taxonomy.js',
+            sourcePath: 'tools/test262/es2015-audit.js',
+            path: 'docs/copied-audit.js',
           },
         ],
       ]) {
@@ -8755,6 +9215,227 @@ export default [
         );
         assertSame(error.message, scenario.message);
       }
+    },
+  },
+  {
+    name: 'ES2015 provenance accepts the exact reconciled H0 protected projection and rejects immutable input drift',
+    run: async () => {
+      const fixture = exactAppliedH0ProjectionFixture();
+      const marker =
+        /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: 'H0',
+              issue: fixture.authority.issue,
+              base: H0_BOOTSTRAP_BASE_SHA,
+              sourcePathSha256: fixture.authority.source.pathSha256,
+              sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
+              protectedProjectionSha256:
+                provenance.roadmapAggregateProjectionSha256(fixture.authority),
+            }),
+          )
+        );
+      const changes = fixture.changes.map((change) => ({
+        ...change,
+        sourcePath: null,
+      }));
+      const dependencies = rangeCheckDependencies({
+        changes: fixture.changes,
+        baseSha: H0_BOOTSTRAP_BASE_SHA,
+        headSha: RANGE_HEAD_SHA,
+        baseManifestText: fixture.baseManifestText,
+        headManifestText: fixture.headManifestText,
+        baseFiles: fixture.baseFiles,
+        headFiles: fixture.headFiles,
+        historicalFiles: fixture.historicalFiles,
+      });
+      /** @type {string[]} */
+      const headReads = [];
+      const readGitFile = dependencies.readGitFile;
+      dependencies.readGitFile = async (revision, path) => {
+        if (revision === RANGE_HEAD_SHA) headReads.push(path);
+        return readGitFile(revision, path);
+      };
+      assertSame(
+        json(
+          await validateRoadmapProtectedOutputs(fixture.authority, changes, {
+            deps: dependencies,
+            base: H0_BOOTSTRAP_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            baseManifest: fixture.baseManifestValue,
+            headManifest: fixture.headManifestValue,
+            marker,
+          }),
+        ),
+        json(roadmapProjectionEntries(fixture.authority.protectedOutputs)),
+      );
+      const permittedHeadReads = new Set([
+        'tools/test262/features.json',
+        ...fixture.authority.evidence.map(
+          (/** @type {{ path: string }} */ entry) => entry.path,
+        ),
+        ...fixture.authority.protectedOutputs.map(
+          (/** @type {{ path: string }} */ entry) => entry.path,
+        ),
+      ]);
+      for (const path of headReads) {
+        assertSame(permittedHeadReads.has(path), true, path);
+      }
+      for (const path of H0_EVIDENCE_PATHS) {
+        assertSame(
+          headReads.filter((candidate) => candidate === path).length,
+          1,
+          path,
+        );
+      }
+
+      const invalidEvidenceFiles = new Map(fixture.headFiles);
+      invalidEvidenceFiles.set(
+        'tools/test262/es2015-h0-paths.json',
+        `${requiredFixtureText(
+          fixture.headFiles,
+          'tools/test262/es2015-h0-paths.json',
+        )}{`,
+      );
+      const hashError = await rejected(() =>
+        validateRoadmapProtectedOutputs(fixture.authority, changes, {
+          deps: rangeCheckDependencies({
+            changes: fixture.changes,
+            baseSha: H0_BOOTSTRAP_BASE_SHA,
+            headSha: RANGE_HEAD_SHA,
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: invalidEvidenceFiles,
+            historicalFiles: fixture.historicalFiles,
+          }),
+          base: H0_BOOTSTRAP_BASE_SHA,
+          head: RANGE_HEAD_SHA,
+          baseManifest: fixture.baseManifestValue,
+          headManifest: fixture.headManifestValue,
+          marker,
+        }),
+      );
+      assertSame(
+        hashError.message,
+        'roadmap-reclassification:H0 evidence tools/test262/es2015-h0-paths.json HEAD bytes do not match H0 roadmap authority',
+      );
+
+      const staleOwnerMapFiles = new Map(fixture.headFiles);
+      const staleOwnerMapText = `${requiredFixtureText(
+        fixture.headFiles,
+        'tools/test262/es2015-h0-owner-map.json',
+      )} `;
+      staleOwnerMapFiles.set(
+        'tools/test262/es2015-h0-owner-map.json',
+        staleOwnerMapText,
+      );
+      const staleOwnerMapAuthority = structuredClone(fixture.authority);
+      staleOwnerMapAuthority.evidence.find(
+        (/** @type {{ path: string }} */ entry) =>
+          entry.path === 'tools/test262/es2015-h0-owner-map.json',
+      ).sha256 = sha256(staleOwnerMapText);
+      staleOwnerMapAuthority.protectedOutputs.find(
+        (/** @type {{ path: string }} */ entry) =>
+          entry.path === 'tools/test262/es2015-h0-owner-map.json',
+      ).headSha256 = sha256(staleOwnerMapText);
+      const ownerMapError = await rejected(() =>
+        validateRoadmapProtectedOutputs(staleOwnerMapAuthority, changes, {
+          deps: rangeCheckDependencies({
+            changes: fixture.changes,
+            baseSha: H0_BOOTSTRAP_BASE_SHA,
+            headSha: RANGE_HEAD_SHA,
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: staleOwnerMapFiles,
+            historicalFiles: fixture.historicalFiles,
+          }),
+          base: H0_BOOTSTRAP_BASE_SHA,
+          head: RANGE_HEAD_SHA,
+          baseManifest: fixture.baseManifestValue,
+          headManifest: fixture.headManifestValue,
+          marker,
+        }),
+      );
+      assertSame(
+        ownerMapError.message,
+        'tools/test262/es2015-h0-disposition.json owner-map evidence is stale',
+      );
+
+      const driftedHeadFiles = new Map(fixture.headFiles);
+      driftedHeadFiles.set(
+        'tools/test262/features.json',
+        `${requiredFixtureText(
+          fixture.headFiles,
+          'tools/test262/features.json',
+        )} `,
+      );
+      const error = await rejected(() =>
+        validateRoadmapProtectedOutputs(fixture.authority, changes, {
+          deps: rangeCheckDependencies({
+            changes: fixture.changes,
+            baseSha: H0_BOOTSTRAP_BASE_SHA,
+            headSha: RANGE_HEAD_SHA,
+            baseManifestText: fixture.baseManifestText,
+            headManifestText: fixture.headManifestText,
+            baseFiles: fixture.baseFiles,
+            headFiles: driftedHeadFiles,
+            historicalFiles: fixture.historicalFiles,
+          }),
+          base: H0_BOOTSTRAP_BASE_SHA,
+          head: RANGE_HEAD_SHA,
+          baseManifest: fixture.baseManifestValue,
+          headManifest: fixture.headManifestValue,
+          marker,
+        }),
+      );
+      assertSame(
+        error.message,
+        'roadmap-reclassification:H0 immutable projection input tools/test262/features.json must remain byte-identical between BASE and HEAD',
+      );
+    },
+  },
+  {
+    name: 'H0 bootstrap leaves trust-root authorities, fragments, evidence, and protected data byte-identical',
+    run: () => {
+      const unchangedPaths = [
+        '.github/workflows/ci.yml',
+        'tools/ci/pipeline.js',
+        ES2015_PROVENANCE_FILE,
+        ...ES2015_PROVENANCE_DECISION_CODES.map(
+          (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+        ),
+        ...H0_EVIDENCE_PATHS,
+        ...H0_PROTECTED_OUTPUT_PATHS,
+        ...provenance.P0_APPLIED_ROADMAP_AUTHORITY.protectedOutputs.map(
+          (/** @type {{ path: string }} */ output) => output.path,
+        ),
+      ];
+      for (const path of new Set(unchangedPaths)) {
+        const baseBytes = readOptionalGitFixtureBuffer(
+          H0_BOOTSTRAP_BASE_SHA,
+          path,
+        );
+        const headBytes = readOptionalGitFixtureBuffer('HEAD', path);
+        assertSame(
+          baseBytes === null
+            ? headBytes === null
+            : headBytes !== null && baseBytes.equals(headBytes),
+          true,
+          path,
+        );
+      }
+      const baseManifest = JSON.parse(
+        readGitFixtureText(H0_BOOTSTRAP_BASE_SHA, ES2015_PROVENANCE_FILE),
+      );
+      const headManifest = JSON.parse(
+        readGitFixtureText('HEAD', ES2015_PROVENANCE_FILE),
+      );
+      assertSame(
+        json(baseManifest.roadmapAuthorities),
+        json(headManifest.roadmapAuthorities),
+      );
     },
   },
   {
