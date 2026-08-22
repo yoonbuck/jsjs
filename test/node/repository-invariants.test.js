@@ -13,6 +13,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '../../vendor/acorn/acorn.mjs';
 import { assertSame, assertThrows } from '../harness/assert.js';
@@ -34,6 +35,7 @@ import {
 import {
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
+  PROVENANCE_RANGE_GATE_OWNER_PATHS,
 } from '../../tools/test262/es2015-provenance.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
@@ -439,6 +441,126 @@ function parseJavaScriptModule(source) {
     ecmaVersion: 2020,
     sourceType: 'module',
   });
+}
+
+/**
+ * @param {string} file
+ * @param {string} specifier
+ */
+function resolveRepositoryImport(file, specifier) {
+  const slash = file.lastIndexOf('/');
+  const directory = slash < 0 ? '' : file.slice(0, slash);
+  let resolved = path.join(directory, specifier).replace(/\\/gu, '/');
+  if (!/\/[^/]+\.[^/]+$/u.test(`/${resolved}`)) resolved += '.js';
+  return resolved;
+}
+
+const ALLOWED_PROVENANCE_GATE_OWNER_EXTERNAL_MODULES = new Set([
+  'node:child_process',
+  'node:crypto',
+  'node:fs/promises',
+  'node:url',
+]);
+
+/**
+ * @param {any} source
+ * @param {string} file
+ * @param {string[]} imports
+ * @param {string[]} violations
+ */
+function analyzeGateOwnerModuleSource(source, file, imports, violations) {
+  if (typeof source?.value !== 'string') {
+    violations.push(`${file}: computed static import`);
+  } else if (source.value.startsWith('.')) {
+    imports.push(resolveRepositoryImport(file, source.value));
+  } else if (/^(?:data|file|https?):/u.test(source.value)) {
+    violations.push(`${file}: URL module import`);
+  } else if (['module', 'node:module'].includes(source.value)) {
+    violations.push(`${file}: createRequire runtime loading`);
+  } else if (
+    !ALLOWED_PROVENANCE_GATE_OWNER_EXTERNAL_MODULES.has(source.value)
+  ) {
+    violations.push(
+      source.value.startsWith('node:')
+        ? `${file}: forbidden node builtin`
+        : `${file}: unowned external module import`,
+    );
+  }
+}
+
+/**
+ * @param {string} source
+ * @param {string} file
+ */
+function gateOwnerModuleAnalysis(source, file) {
+  const program = parseJavaScriptModule(source);
+  /** @type {string[]} */
+  const imports = [];
+  /** @type {string[]} */
+  const violations = [];
+
+  /**
+   * @param {any} node
+   */
+  function visit(node) {
+    if (!isAstNode(node)) return;
+    const candidate = /** @type {any} */ (node);
+    if (
+      (candidate.type === 'ImportDeclaration' ||
+        candidate.type === 'ExportAllDeclaration' ||
+        candidate.type === 'ExportNamedDeclaration') &&
+      candidate.source !== null &&
+      candidate.source !== undefined
+    ) {
+      analyzeGateOwnerModuleSource(candidate.source, file, imports, violations);
+    } else if (candidate.type === 'ImportExpression') {
+      violations.push(`${file}: dynamic import`);
+    } else if (
+      candidate.type === 'CallExpression' &&
+      ((candidate.callee?.type === 'Identifier' &&
+        ['require', 'createRequire'].includes(candidate.callee.name)) ||
+        (candidate.callee?.type === 'MemberExpression' &&
+          ['require', 'createRequire'].includes(
+            candidate.callee.property?.name ?? candidate.callee.property?.value,
+          )))
+    ) {
+      violations.push(`${file}: runtime module loading`);
+    }
+    for (const value of Object.values(candidate)) {
+      if (Array.isArray(value)) {
+        for (const entry of value) visit(entry);
+      } else {
+        visit(value);
+      }
+    }
+  }
+
+  visit(program);
+  return { imports, violations };
+}
+
+/**
+ * @param {(file: string) => Promise<string>} sourceFor
+ */
+async function provenanceGateOwnerClosure(sourceFor) {
+  const pending = ['tools/test262/es2015-provenance-check.js'];
+  const visited = new Set();
+  /** @type {string[]} */
+  const violations = [];
+  while (pending.length > 0) {
+    const file = /** @type {string} */ (pending.shift());
+    if (visited.has(file)) continue;
+    visited.add(file);
+    const analysis = gateOwnerModuleAnalysis(await sourceFor(file), file);
+    violations.push(...analysis.violations);
+    for (const dependency of analysis.imports) {
+      if (!visited.has(dependency)) pending.push(dependency);
+    }
+  }
+  return {
+    files: [...visited].sort(),
+    violations,
+  };
 }
 
 /**
@@ -3125,6 +3247,114 @@ export default [
       }
 
       assertSame(violations.join(' | '), '');
+    },
+  },
+  {
+    name: 'the provenance checker static import closure is fully gate-owned and forbids runtime loading',
+    run: async () => {
+      const executableOwners = PROVENANCE_RANGE_GATE_OWNER_PATHS.filter(
+        (path) => path.endsWith('.js') && path.startsWith('tools/test262/'),
+      ).sort();
+      const closure = await provenanceGateOwnerClosure(readSource);
+      assertSame(closure.violations.join('\n'), '');
+      assertSame(closure.files.join('\n'), executableOwners.join('\n'));
+      assertSame(closure.files.includes('tools/test262/metadata.js'), true);
+      assertSame(closure.files.includes('tools/test262/module-paths.js'), true);
+
+      const checker = await readSource(
+        'tools/test262/es2015-provenance-check.js',
+      );
+      const unowned = await provenanceGateOwnerClosure(async (file) => {
+        if (file === 'tools/test262/es2015-provenance-check.js') {
+          return `${checker}\nimport './synthetic-unowned.js';\n`;
+        }
+        if (file === 'tools/test262/synthetic-unowned.js')
+          return 'export {};\n';
+        return readSource(file);
+      });
+      assertSame(
+        unowned.files.includes('tools/test262/synthetic-unowned.js'),
+        true,
+      );
+      assertSame(
+        executableOwners.includes('tools/test262/synthetic-unowned.js'),
+        false,
+      );
+
+      for (const source of [
+        "import('./runtime.js');",
+        "require('./runtime.js');",
+        "createRequire(import.meta.url)('./runtime.js');",
+        "import { createRequire as makeRequire } from 'node:module';",
+        "module.createRequire(import.meta.url)('./runtime.js');",
+        "const specifier = './runtime.js'; import(specifier);",
+        "import 'data:text/javascript,export default 1';",
+        "import 'file:///repo/runtime.js';",
+        "import thing from 'unowned-package';",
+      ]) {
+        const analysis = gateOwnerModuleAnalysis(
+          source,
+          'tools/test262/synthetic-owner.js',
+        );
+        assertSame(analysis.violations.length > 0, true, source);
+      }
+    },
+  },
+  {
+    name: 'provenance gate-owner analysis treats static re-exports as executable dependencies',
+    run: async () => {
+      const checker = await readSource(
+        'tools/test262/es2015-provenance-check.js',
+      );
+      for (const declaration of [
+        "export * from './helper.js';",
+        "export { x } from './helper.js';",
+      ]) {
+        const helperPath = 'tools/test262/helper.js';
+        const closure = await provenanceGateOwnerClosure(async (file) => {
+          if (file === 'tools/test262/es2015-provenance-check.js') {
+            return `${checker}\n${declaration}\n`;
+          }
+          if (file === helperPath) return 'export const x = 1;\n';
+          return readSource(file);
+        });
+        assertSame(closure.files.includes(helperPath), true, declaration);
+      }
+
+      for (const source of [
+        "export * from 'unowned-package';",
+        "export { x } from 'data:text/javascript,export const x = 1';",
+        "export * from 'https://example.invalid/helper.js';",
+        "export { createRequire } from 'node:module';",
+        "export * from 'node:worker_threads';",
+      ]) {
+        const analysis = gateOwnerModuleAnalysis(
+          source,
+          'tools/test262/synthetic-owner.js',
+        );
+        assertSame(analysis.violations.length > 0, true, source);
+      }
+
+      for (const source of [
+        "import { execFileSync } from 'node:child_process';",
+        "export { execFileSync } from 'node:child_process';",
+        "export * from 'node:crypto';",
+      ]) {
+        const analysis = gateOwnerModuleAnalysis(
+          source,
+          'tools/test262/synthetic-owner.js',
+        );
+        assertSame(analysis.violations.join('\n'), '', source);
+      }
+
+      assertThrows(
+        () =>
+          gateOwnerModuleAnalysis(
+            'export * from specifier;',
+            'tools/test262/synthetic-owner.js',
+          ),
+        SyntaxError,
+      );
     },
   },
   {

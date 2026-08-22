@@ -10,12 +10,28 @@ import {
   parseEs5Selection,
 } from '../../tools/test262/es5-selection.js';
 import {
+  ES2015_H0_PROMOTION_GROUP,
+  assertExactH0DispositionDelta,
+  assertEs2015H0BaselineMatchesTaxonomy,
+  assertEs2015H0ExecutionMatchesDisposition,
+  buildEs2015H0Baseline,
+  buildEs2015H0Disposition,
+  buildEs2015H0OwnerDeltas,
+  buildEs2015Promotion,
   createEs2015PromotionAuthorization,
+  createEs2015PromotionAuthorizations,
   Es2015PromotionError,
   mergePromotionSubset,
+  mergePromotionSubsets,
+  parseEs2015H0Baseline,
+  parseEs2015H0Disposition,
+  parseEs2015H0OwnerDeltas,
+  parseEs2015H0OwnerMap,
+  parseEs2015H0Paths,
   parseEs2015Promotion,
   promotionPaths,
   supportedFeaturesForPromotedPath,
+  validateEs2015H0EvidenceBundle,
   validateEs2015Promotion,
 } from '../../tools/test262/es2015-promotion.js';
 import {
@@ -28,6 +44,7 @@ import {
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
 
+const { structuredClone } = globalThis;
 const EXCLUDED_PATH = 'test/staging/not-read.js';
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 const MODULE_PATH = 'test/built-ins/Array/module.js';
@@ -70,6 +87,377 @@ const PRE_PROMOTION_TAXONOMY_SHA256 =
   'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
 const PRE_PROMOTION_GROUPS_SHA256 =
   '064be556b3e98debaca2287097c2ab431283906df57a82dd5c6aba01227440f8';
+const H0_PIN = Object.freeze({
+  repository: 'https://github.com/tc39/test262.git',
+  revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
+});
+const H0_REASSIGNED_PATH = 'test/built-ins/Proxy/h0-failed.js';
+const H0_PASSED_PATH = 'test/language/h0-passed.js';
+const H0_PATHS = Object.freeze([H0_REASSIGNED_PATH, H0_PASSED_PATH]);
+const H0_TAXONOMY_SHA256 =
+  '885db168f02087d727cc430c8de2716fed6f74f5c6df9d5a963c979f15a07fa1';
+const H0_LEDGER_SHA256 =
+  '8b6f637f9a636c8db6560041c76a741e91536d0d11c353fcca1213c8c452b6b7';
+const H0_OWNER_MAP_SHA256 =
+  '892246f02ee8896c05c13117b1b2b5dbe77355eaf33856df3e32af88b0365c8e';
+const H0_EXECUTION_SHA256 =
+  '421f6411484e7dca2590b9420aefae11884db6ee0d2e4a90a6b6972d80af95a4';
+const H0_DISPOSITION_SHA256 =
+  '4fbe4e446bf58199040c7b0d89935a3f67451b52521378249e2a4c69d465b654';
+const H0_PROMOTION_SHA256 =
+  'b4673dbda18a9d67c24776f59389d64f1ce15571296d399aaf2f9aac78971d1f';
+const H0_PROMOTED_LEDGER_SHA256 =
+  '95bc15dcd19a543fa370209a7cb09ccb9437dd56c91e653e9577332e36d45a31';
+const H0_FAILED_PATH_SHA256 =
+  '980d4332f61451f311f3e04658b090ad004b10b06daba4bfcf0add538fa9536a';
+const H0_ALL_VARIANT_EVIDENCE_SHA256 =
+  'ae2a9fd795897df281758cc64427a5f6b40a2b97b57941208ab0c730c2cf0051';
+const H0_FAILED_VARIANT_EVIDENCE_SHA256 =
+  'ade673e2f2be79207c29dd25df277c9ec7970c5c22d8f568d83d5f5284dae380';
+const H0_CLASSIFICATION_SHA256 =
+  '8c2d82e05def877841245c04308c1cf3f7d8b7b8cbe2ee2ee577d75185ba6218';
+const H0_NON_CLASSIFICATION_SHA256 =
+  '38c567f65c770b1988a07b8faa3a9d633acf67cfb1e2ce8616df83e6f721c160';
+const H0_SUMMARY_SHA256 =
+  'b390c131025312e26680454888fe0af3737e2f21c2f07513854b2dc4eeac4ce0';
+const H0_FINAL_BASE_COMMIT = '1'.repeat(40);
+const H0_OWNER_M0 = Object.freeze({
+  code: 'M0',
+  issue: 79,
+  blocker: 'proxy-and-reflect-metaobject',
+  title: 'Formalize the ES2015 object internal-method contract',
+});
+const H0_OWNER_M2 = Object.freeze({
+  code: 'M2',
+  issue: 81,
+  blocker: 'proxy-and-reflect-metaobject',
+  title: 'Implement ES2015 Proxy traps, revocation, and invariants',
+});
+const H0_OWNER = Object.freeze({
+  code: 'H0',
+  issue: 76,
+  blocker: 'test262-cross-realm-host',
+  title: 'Implement portable harness-only Test262 cross-Realm support',
+});
+
+/** @param {unknown} value */
+function json(value) {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+const H0_SOURCE_TAXONOMY = Object.freeze({
+  version: 3,
+  pin: H0_PIN,
+  classifications: Object.freeze([
+    Object.freeze({
+      path: H0_REASSIGNED_PATH,
+      variants: 2,
+      partition: 'core',
+      status: 'blocked:test262-cross-realm-host',
+      blocker: 'test262-cross-realm-host',
+      features: Object.freeze([]),
+      flags: Object.freeze([]),
+      includes: Object.freeze([]),
+      provenance: Object.freeze(['es6id']),
+    }),
+    Object.freeze({
+      path: H0_PASSED_PATH,
+      variants: 2,
+      partition: 'core',
+      status: 'blocked:test262-cross-realm-host',
+      blocker: 'test262-cross-realm-host',
+      features: Object.freeze(['cross-realm']),
+      flags: Object.freeze([]),
+      includes: Object.freeze([]),
+      provenance: Object.freeze(['feature:cross-realm']),
+    }),
+    Object.freeze({
+      path: 'test/language/unrelated.js',
+      variants: 1,
+      partition: 'core',
+      status: 'blocked:proxy-and-reflect-metaobject',
+      blocker: 'proxy-and-reflect-metaobject',
+      features: Object.freeze([]),
+      flags: Object.freeze(['noStrict']),
+      includes: Object.freeze([]),
+      provenance: Object.freeze(['es6id']),
+    }),
+  ]),
+});
+const H0_SOURCE_TAXONOMY_TEXT = json(H0_SOURCE_TAXONOMY);
+const H0_PATHS_MANIFEST = Object.freeze({
+  version: 1,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  sourceTaxonomySha256: H0_TAXONOMY_SHA256,
+  ledgerSha256: H0_LEDGER_SHA256,
+  rootCount: 2,
+  variantCount: 4,
+  paths: H0_PATHS,
+});
+const H0_PATHS_TEXT = json(H0_PATHS_MANIFEST);
+const H0_OWNER_MAP = Object.freeze({
+  version: 1,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  owners: Object.freeze([H0_OWNER_M0, H0_OWNER_M2]),
+  rules: Object.freeze([
+    Object.freeze({
+      name: 'proxy-ordinary-object-throw',
+      primaryOwner: 'M2',
+      pathPrefix: 'test/built-ins/Proxy/',
+      failureSignatures: Object.freeze(['unexpected-throw:Object']),
+      secondaryEvidence: Object.freeze([
+        Object.freeze({
+          owner: 'M0',
+          signature: 'ordinary-object-internal-method-contract',
+        }),
+      ]),
+    }),
+  ]),
+});
+const H0_OWNER_MAP_TEXT = json(H0_OWNER_MAP);
+const H0_EXECUTION_RECORDS = Object.freeze([
+  Object.freeze({
+    type: 'test',
+    file: H0_REASSIGNED_PATH,
+    variant: 'non-strict',
+    status: 'failed',
+    reason: 'unexpected-throw',
+    message: 'Object',
+  }),
+  Object.freeze({
+    type: 'test',
+    file: H0_REASSIGNED_PATH,
+    variant: 'strict',
+    status: 'failed',
+    reason: 'unexpected-throw',
+    message: 'Object',
+  }),
+  Object.freeze({
+    type: 'test',
+    file: H0_PASSED_PATH,
+    variant: 'non-strict',
+    status: 'passed',
+  }),
+  Object.freeze({
+    type: 'test',
+    file: H0_PASSED_PATH,
+    variant: 'strict',
+    status: 'passed',
+  }),
+]);
+const H0_EXECUTION_TEXT = json({
+  version: 1,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  records: H0_EXECUTION_RECORDS,
+});
+const H0_DISPOSITIONS = Object.freeze([
+  Object.freeze({
+    path: H0_REASSIGNED_PATH,
+    status: 'reassigned',
+    variants: 2,
+    requiredVariants: Object.freeze(['non-strict', 'strict']),
+    primaryOwner: H0_OWNER_M2,
+    failureSignatures: Object.freeze(['unexpected-throw:Object']),
+    secondaryEvidence: Object.freeze([
+      Object.freeze({
+        owner: H0_OWNER_M0,
+        signature: 'ordinary-object-internal-method-contract',
+      }),
+    ]),
+    evidence: Object.freeze([
+      Object.freeze({
+        variant: 'non-strict',
+        status: 'failed',
+        reason: 'unexpected-throw',
+        message: 'Object',
+        signature: 'unexpected-throw:Object',
+      }),
+      Object.freeze({
+        variant: 'strict',
+        status: 'failed',
+        reason: 'unexpected-throw',
+        message: 'Object',
+        signature: 'unexpected-throw:Object',
+      }),
+    ]),
+  }),
+  Object.freeze({
+    path: H0_PASSED_PATH,
+    status: 'passed',
+    variants: 2,
+    requiredVariants: Object.freeze(['non-strict', 'strict']),
+    evidence: Object.freeze([
+      Object.freeze({ variant: 'non-strict', status: 'passed' }),
+      Object.freeze({ variant: 'strict', status: 'passed' }),
+    ]),
+  }),
+]);
+const H0_DISPOSITION = Object.freeze({
+  version: 1,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  sourceTaxonomySha256: H0_TAXONOMY_SHA256,
+  h0LedgerSha256: H0_LEDGER_SHA256,
+  h0RootCount: 2,
+  h0VariantCount: 4,
+  executionEvidenceSha256: H0_EXECUTION_SHA256,
+  ownerMapSha256: H0_OWNER_MAP_SHA256,
+  executionPassedVariantCount: 2,
+  executionFailedVariantCount: 2,
+  completePassedRootCount: 1,
+  completePassedVariantCount: 2,
+  reassignedRootCount: 1,
+  reassignedVariantCount: 2,
+  allFailedRootCount: 1,
+  allFailedVariantCount: 2,
+  mixedRootCount: 0,
+  mixedVariantCount: 0,
+  dispositions: H0_DISPOSITIONS,
+});
+const H0_DISPOSITION_TEXT = json(H0_DISPOSITION);
+const H0_PROMOTION = Object.freeze({
+  version: 1,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  sourceTaxonomySha256: H0_TAXONOMY_SHA256,
+  h0LedgerSha256: H0_LEDGER_SHA256,
+  h0RootCount: 2,
+  h0VariantCount: 4,
+  dispositionSha256: H0_DISPOSITION_SHA256,
+  promotedLedgerSha256: H0_PROMOTED_LEDGER_SHA256,
+  promotedRootCount: 1,
+  promotedVariantCount: 2,
+  entries: Object.freeze([
+    Object.freeze({
+      path: H0_PASSED_PATH,
+      variants: 2,
+      features: Object.freeze(['cross-realm']),
+      includeFeatures: Object.freeze([]),
+    }),
+  ]),
+});
+const H0_PROMOTION_TEXT = json(H0_PROMOTION);
+const H0_BASELINE = Object.freeze({
+  version: 1,
+  finalBaseCommit: H0_FINAL_BASE_COMMIT,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  finalBaseTaxonomySha256: H0_TAXONOMY_SHA256,
+  h0LedgerSha256: H0_LEDGER_SHA256,
+  h0RootCount: 2,
+  h0VariantCount: 4,
+  h0ClassificationSha256: H0_CLASSIFICATION_SHA256,
+  nonH0ClassificationSha256: H0_NON_CLASSIFICATION_SHA256,
+  partitionStatusSummary: Object.freeze({
+    roots: 3,
+    variants: 5,
+    partitions: Object.freeze([
+      Object.freeze({ name: 'core', roots: 3, variants: 5 }),
+    ]),
+    statuses: Object.freeze([
+      Object.freeze({
+        status: 'blocked:proxy-and-reflect-metaobject',
+        blocker: 'proxy-and-reflect-metaobject',
+        roots: 1,
+        variants: 1,
+      }),
+      Object.freeze({
+        status: 'blocked:test262-cross-realm-host',
+        blocker: 'test262-cross-realm-host',
+        roots: 2,
+        variants: 4,
+      }),
+    ]),
+  }),
+  partitionStatusSummarySha256: H0_SUMMARY_SHA256,
+});
+const H0_BASELINE_TEXT = json(H0_BASELINE);
+const H0_OWNER_DELTAS = Object.freeze({
+  version: 1,
+  repository: H0_PIN.repository,
+  revision: H0_PIN.revision,
+  h0LedgerSha256: H0_LEDGER_SHA256,
+  dispositionSha256: H0_DISPOSITION_SHA256,
+  promotionSha256: H0_PROMOTION_SHA256,
+  trackingIssue: 70,
+  provenance: Object.freeze({
+    sourceTaxonomySha256: H0_TAXONOMY_SHA256,
+    executionEvidenceSha256: H0_EXECUTION_SHA256,
+    ownerMapSha256: H0_OWNER_MAP_SHA256,
+  }),
+  crossRealm: Object.freeze({
+    blocker: 'test262-cross-realm-host',
+    removedRoots: 2,
+    removedVariants: 4,
+    remainingRoots: 0,
+    remainingVariants: 0,
+  }),
+  deltas: Object.freeze([
+    Object.freeze({
+      owner: H0_OWNER,
+      direction: 'removed',
+      roots: 2,
+      variants: 4,
+      paths: H0_PATHS,
+      pathsSha256: H0_LEDGER_SHA256,
+      variantEvidenceSha256: H0_ALL_VARIANT_EVIDENCE_SHA256,
+    }),
+    Object.freeze({
+      owner: H0_OWNER_M2,
+      direction: 'added',
+      roots: 1,
+      variants: 2,
+      paths: Object.freeze([H0_REASSIGNED_PATH]),
+      pathsSha256: H0_FAILED_PATH_SHA256,
+      variantEvidenceSha256: H0_FAILED_VARIANT_EVIDENCE_SHA256,
+    }),
+  ]),
+  promotionGroup: ES2015_H0_PROMOTION_GROUP,
+});
+const H0_OWNER_DELTAS_TEXT = json(H0_OWNER_DELTAS);
+const H0_AFTER_TAXONOMY_TEXT = json({
+  ...H0_SOURCE_TAXONOMY,
+  classifications: [
+    {
+      ...H0_SOURCE_TAXONOMY.classifications[0],
+      status: 'blocked:proxy-and-reflect-metaobject',
+      blocker: 'proxy-and-reflect-metaobject',
+    },
+    {
+      ...H0_SOURCE_TAXONOMY.classifications[1],
+      status: 'selected-passing',
+      blocker: null,
+    },
+    H0_SOURCE_TAXONOMY.classifications[2],
+  ],
+});
+const H0_INVENTORY = Object.freeze([
+  Object.freeze({
+    path: H0_REASSIGNED_PATH,
+    variants: 2,
+    executionVariants: Object.freeze(['non-strict', 'strict']),
+    metadata: Object.freeze({
+      features: Object.freeze([]),
+      flags: Object.freeze([]),
+      includes: Object.freeze([]),
+    }),
+    includeFeatures: Object.freeze([]),
+  }),
+  Object.freeze({
+    path: H0_PASSED_PATH,
+    variants: 2,
+    executionVariants: Object.freeze(['non-strict', 'strict']),
+    metadata: Object.freeze({
+      features: Object.freeze(['cross-realm']),
+      flags: Object.freeze([]),
+      includes: Object.freeze([]),
+    }),
+    includeFeatures: Object.freeze([]),
+  }),
+]);
 
 /** @param {string} text */
 function sha256(text) {
@@ -421,6 +809,322 @@ export default [
     },
   },
   {
+    name: 'ES2015 H0 evidence adapters parse exact synthetic schemas without changing T0 output',
+    run: () => {
+      const t0 = parseEs2015Promotion(json(promotionFixture()));
+      const promotion = parseEs2015Promotion(H0_PROMOTION_TEXT);
+      const paths = parseEs2015H0Paths(H0_PATHS_TEXT, H0_PIN);
+      const baseline = parseEs2015H0Baseline(H0_BASELINE_TEXT, H0_PIN);
+      const disposition = parseEs2015H0Disposition(H0_DISPOSITION_TEXT, {
+        pin: H0_PIN,
+        paths,
+        ownerMapText: H0_OWNER_MAP_TEXT,
+      });
+      const ownerMap = parseEs2015H0OwnerMap(H0_OWNER_MAP_TEXT, H0_PIN);
+      const ownerDeltas = parseEs2015H0OwnerDeltas(H0_OWNER_DELTAS_TEXT, {
+        pin: H0_PIN,
+        paths,
+        dispositionText: H0_DISPOSITION_TEXT,
+        promotionText: H0_PROMOTION_TEXT,
+      });
+      const h0Promotion = /** @type {any} */ (promotion);
+
+      assertSame(Object.prototype.hasOwnProperty.call(t0, 'groupName'), false);
+      assertSame(JSON.stringify(t0), JSON.stringify(promotionFixture()));
+      assertSame(h0Promotion.groupName, ES2015_H0_PROMOTION_GROUP);
+      assertSame(promotion.ledgerSha256, H0_PROMOTED_LEDGER_SHA256);
+      assertSame(promotion.rootCount, 1);
+      assertSame(promotion.variantCount, 2);
+      assertSame(
+        JSON.stringify(promotionPaths(promotion)),
+        `["${H0_PASSED_PATH}"]`,
+      );
+      assertSame(JSON.stringify(paths.paths), JSON.stringify(H0_PATHS));
+      assertSame(paths.rootCount, 2);
+      assertSame(paths.variantCount, 4);
+      assertSame(baseline.finalBaseCommit, H0_FINAL_BASE_COMMIT);
+      assertSame(baseline.partitionStatusSummary.roots, 3);
+      assertSame(disposition.dispositions[0].primaryOwner.code, 'M2');
+      assertSame(disposition.completePassedRootCount, 1);
+      assertSame(ownerMap.repository, H0_PIN.repository);
+      assertSame(ownerMap.revision, H0_PIN.revision);
+      assertSame(ownerMap.ownersByCode.get('M2')?.issue, 81);
+      assertSame(ownerDeltas.deltas[0].owner.code, 'H0');
+      assertSame(ownerDeltas.deltas[1].owner.code, 'M2');
+      assertSame(Object.isFrozen(promotion), true);
+      assertSame(Object.isFrozen(paths.paths), true);
+      assertSame(Object.isFrozen(baseline.partitionStatusSummary), true);
+      assertSame(Object.isFrozen(disposition.dispositions), true);
+      assertSame(Object.isFrozen(ownerMap.rules), true);
+      assertSame(Object.isFrozen(ownerDeltas.deltas), true);
+    },
+  },
+  {
+    name: 'ES2015 H0 evidence adapters reject mixed, incomplete, stale, unordered, and duplicate facts',
+    run: () => {
+      const mixed = {
+        ...promotionFixture(),
+        h0LedgerSha256: H0_LEDGER_SHA256,
+      };
+      assertSame(
+        assertThrows(
+          () => parseEs2015Promotion(json(mixed)),
+          Es2015PromotionError,
+        ).message,
+        'tools/test262/es2015-promotion.json must not mix T0 and H0 promotion discriminators',
+      );
+
+      const partial = /** @type {any} */ (structuredClone(H0_PROMOTION));
+      delete partial.promotedLedgerSha256;
+      assertSame(
+        assertThrows(
+          () => parseEs2015Promotion(json(partial)),
+          Es2015PromotionError,
+        ).message,
+        'tools/test262/es2015-promotion.json must not mix T0 and H0 promotion discriminators',
+      );
+
+      const unknownPaths = {
+        ...H0_PATHS_MANIFEST,
+        unexpected: true,
+      };
+      const missingBaseline = /** @type {any} */ (structuredClone(H0_BASELINE));
+      delete missingBaseline.h0ClassificationSha256;
+      const badPromotionCount = {
+        ...H0_PROMOTION,
+        promotedRootCount: 2,
+      };
+      const badDispositionOrder = {
+        ...H0_DISPOSITION,
+        dispositions: [...H0_DISPOSITIONS].reverse(),
+      };
+      const badBaselineHash = {
+        ...H0_BASELINE,
+        partitionStatusSummarySha256: '0'.repeat(64),
+      };
+      const duplicatePaths = {
+        ...H0_PATHS_MANIFEST,
+        paths: [H0_REASSIGNED_PATH, H0_REASSIGNED_PATH],
+        ledgerSha256: sha256(`${H0_REASSIGNED_PATH}\n${H0_REASSIGNED_PATH}\n`),
+      };
+      const duplicateVariants = /** @type {any} */ (
+        structuredClone(H0_DISPOSITION)
+      );
+      duplicateVariants.dispositions[0].requiredVariants = [
+        'non-strict',
+        'non-strict',
+      ];
+      const duplicateOwners = {
+        ...H0_OWNER_MAP,
+        owners: [H0_OWNER_M0, H0_OWNER_M0],
+      };
+
+      const malformed = [
+        () => parseEs2015H0Paths(json(unknownPaths), H0_PIN),
+        () => parseEs2015H0Baseline(json(missingBaseline), H0_PIN),
+        () => parseEs2015Promotion(json(badPromotionCount)),
+        () => parseEs2015H0Disposition(json(badDispositionOrder)),
+        () => parseEs2015H0Baseline(json(badBaselineHash), H0_PIN),
+        () => parseEs2015H0Paths(json(duplicatePaths), H0_PIN),
+        () => parseEs2015H0Disposition(json(duplicateVariants)),
+        () => parseEs2015H0OwnerMap(json(duplicateOwners), H0_PIN),
+        () =>
+          parseEs2015H0Paths(H0_PATHS_TEXT, {
+            ...H0_PIN,
+            revision: '0'.repeat(40),
+          }),
+      ];
+      for (const parse of malformed) {
+        assertThrows(parse, Es2015PromotionError);
+      }
+    },
+  },
+  {
+    name: 'ES2015 H0 compatibility builders and assertions preserve literal evidence identities',
+    run: () => {
+      const baseline = buildEs2015H0Baseline({
+        finalBaseCommit: H0_FINAL_BASE_COMMIT,
+        taxonomyText: H0_SOURCE_TAXONOMY_TEXT,
+        pathsManifestText: H0_PATHS_TEXT,
+      });
+      const disposition = buildEs2015H0Disposition({
+        pathsManifestText: H0_PATHS_TEXT,
+        baselineTaxonomyText: H0_SOURCE_TAXONOMY_TEXT,
+        executionEvidenceText: H0_EXECUTION_TEXT,
+        ownerMapText: H0_OWNER_MAP_TEXT,
+        pin: H0_PIN,
+        inventory: H0_INVENTORY,
+      });
+      const promotion = buildEs2015Promotion({
+        sourceTaxonomyText: H0_SOURCE_TAXONOMY_TEXT,
+        dispositionText: H0_DISPOSITION_TEXT,
+        pin: H0_PIN,
+        inventory: H0_INVENTORY,
+      });
+      const ownerDeltas = buildEs2015H0OwnerDeltas({
+        beforeTaxonomyText: H0_SOURCE_TAXONOMY_TEXT,
+        afterTaxonomyText: H0_AFTER_TAXONOMY_TEXT,
+        dispositionText: H0_DISPOSITION_TEXT,
+        promotionText: H0_PROMOTION_TEXT,
+      });
+
+      assertSame(json(baseline), H0_BASELINE_TEXT);
+      assertSame(json(disposition), H0_DISPOSITION_TEXT);
+      assertSame(json(promotion), H0_PROMOTION_TEXT);
+      assertSame(json(ownerDeltas), H0_OWNER_DELTAS_TEXT);
+      assertEs2015H0BaselineMatchesTaxonomy({
+        baselineText: H0_BASELINE_TEXT,
+        taxonomyText: H0_SOURCE_TAXONOMY_TEXT,
+        pathsManifestText: H0_PATHS_TEXT,
+        pin: H0_PIN,
+      });
+      assertSame(
+        JSON.stringify(
+          assertEs2015H0ExecutionMatchesDisposition({
+            pathsManifestText: H0_PATHS_TEXT,
+            disposition,
+            records: H0_EXECUTION_RECORDS,
+            ownerMapText: H0_OWNER_MAP_TEXT,
+            pin: H0_PIN,
+          }),
+        ),
+        '{"total":4,"passed":2,"failed":2,"skipped":0}',
+      );
+      assertExactH0DispositionDelta({
+        before: H0_SOURCE_TAXONOMY_TEXT,
+        after: H0_AFTER_TAXONOMY_TEXT,
+        disposition: H0_DISPOSITION_TEXT,
+        promotion: H0_PROMOTION_TEXT,
+        ownerDeltas: H0_OWNER_DELTAS_TEXT,
+        pathsManifest: H0_PATHS_TEXT,
+        ownerMap: H0_OWNER_MAP_TEXT,
+      });
+    },
+  },
+  {
+    name: 'ES2015 H0 compatibility authorization and merge APIs compose T0 and H0 promotions',
+    run: () => {
+      const t0Text = json({
+        ...promotionFixture(),
+        repository: H0_PIN.repository,
+        revision: H0_PIN.revision,
+      });
+      const t0 = parseEs2015Promotion(t0Text);
+      const h0 = parseEs2015Promotion(H0_PROMOTION_TEXT);
+      const base = parseUpstreamSubset(
+        json({
+          version: 1,
+          repository: H0_PIN.repository,
+          revision: H0_PIN.revision,
+          groups: [
+            {
+              name: 'baseline',
+              summary: 'Synthetic baseline.',
+              paths: ['test/language/base.js'],
+            },
+          ],
+        }),
+      );
+      const h0Only = mergePromotionSubset(base, h0);
+      const merged = mergePromotionSubsets(base, [t0, h0]);
+      const inventory = [
+        ...promotionValidationOptions().inventory,
+        H0_INVENTORY[1],
+      ];
+      const policy = {
+        es2015Features: ['cross-realm', 'exact-path-feature'],
+        neutralFeatures: ['include-path-feature'],
+        laterFeatures: ['later-path-feature'],
+      };
+      const h0Authorization = createEs2015PromotionAuthorization({
+        promotionText: H0_PROMOTION_TEXT,
+        pin: H0_PIN,
+        policy,
+        subset: h0Only,
+        inventory: [H0_INVENTORY[1]],
+      });
+      const authorizations = createEs2015PromotionAuthorizations({
+        promotionTexts: [t0Text, H0_PROMOTION_TEXT],
+        pin: H0_PIN,
+        policy,
+        subset: merged,
+        inventory,
+      });
+
+      assertSame(
+        JSON.stringify(h0Only.groups.map((group) => group.name)),
+        '["baseline","es2015/h0-cross-realm-passed"]',
+      );
+      assertSame(
+        JSON.stringify(merged.groups.map((group) => group.name)),
+        '["baseline","es2015/audit-passing-promotion","es2015/h0-cross-realm-passed"]',
+      );
+      assertSame(
+        JSON.stringify(
+          h0Authorization(H0_PASSED_PATH, { features: ['cross-realm'] }),
+        ),
+        '["cross-realm"]',
+      );
+      assertSame(
+        JSON.stringify(
+          authorizations('test/language/exact.js', {
+            features: ['exact-path-feature'],
+          }),
+        ),
+        '["exact-path-feature","include-path-feature"]',
+      );
+      assertSame(
+        JSON.stringify(
+          authorizations(H0_PASSED_PATH, { features: ['cross-realm'] }),
+        ),
+        '["cross-realm"]',
+      );
+    },
+  },
+  {
+    name: 'ES2015 H0 evidence bundle validates every cross-artifact identity',
+    run: () => {
+      const bundle = validateEs2015H0EvidenceBundle({
+        pin: H0_PIN,
+        pathsText: H0_PATHS_TEXT,
+        baselineText: H0_BASELINE_TEXT,
+        dispositionText: H0_DISPOSITION_TEXT,
+        ownerMapText: H0_OWNER_MAP_TEXT,
+        ownerDeltasText: H0_OWNER_DELTAS_TEXT,
+        promotionText: H0_PROMOTION_TEXT,
+      });
+
+      assertSame(bundle.paths.ledgerSha256, H0_LEDGER_SHA256);
+      assertSame(bundle.baseline.finalBaseCommit, H0_FINAL_BASE_COMMIT);
+      assertSame(bundle.disposition.dispositions.length, 2);
+      assertSame(bundle.ownerMap.owners.length, 2);
+      assertSame(bundle.ownerDeltas.deltas.length, 2);
+      assertSame(
+        /** @type {any} */ (bundle.promotion).groupName,
+        ES2015_H0_PROMOTION_GROUP,
+      );
+      assertSame(Object.isFrozen(bundle), true);
+
+      const stalePromotion = {
+        ...H0_PROMOTION,
+        dispositionSha256: '9'.repeat(64),
+      };
+      assertThrows(
+        () =>
+          validateEs2015H0EvidenceBundle({
+            pin: H0_PIN,
+            pathsText: H0_PATHS_TEXT,
+            baselineText: H0_BASELINE_TEXT,
+            dispositionText: H0_DISPOSITION_TEXT,
+            ownerMapText: H0_OWNER_MAP_TEXT,
+            ownerDeltasText: H0_OWNER_DELTAS_TEXT,
+            promotionText: json(stalePromotion),
+          }),
+        Es2015PromotionError,
+      );
+    },
+  },
+  {
     name: 'upstream promotion authorization verifies the exact selected group before a runner uses it',
     run: () => {
       const subset = parseUpstreamSubset(
@@ -529,6 +1233,13 @@ export default [
         JSON.stringify(PROMOTION_PATHS),
       );
       assertSame(JSON.stringify(base.groups), before);
+      assertSame(
+        assertThrows(
+          () => mergePromotionSubset(merged, promotion),
+          Es2015PromotionError,
+        ).message,
+        'tools/test262/es2015-promotion.json promotion group is already present',
+      );
       assertThrows(
         () =>
           mergePromotionSubset(
