@@ -80,29 +80,54 @@
   - `parseEs2015H0OwnerMap(text, pin)`
   - `parseEs2015H0OwnerDeltas(text, options)`
   - `validateEs2015H0EvidenceBundle(bundle)`
+  - complete reviewed pure compatibility API used by retained #76 tooling:
+    `assertExactH0DispositionDelta`,
+    `assertEs2015H0BaselineMatchesTaxonomy`,
+    `assertEs2015H0ExecutionMatchesDisposition`,
+    `buildEs2015H0Baseline`,
+    `buildEs2015H0Disposition`,
+    `buildEs2015H0OwnerDeltas`,
+    `buildEs2015Promotion`,
+    `createEs2015PromotionAuthorization`,
+    `createEs2015PromotionAuthorizations`,
+    `mergePromotionSubset`, and `mergePromotionSubsets`
 
-- [ ] **Step 1: Write RED tests using exact authority-pinned H0 files**
+- [ ] **Step 1: Write CI-safe RED schema/API tests**
 
-Read fixture bytes from the preserved branch/ref, not generated expectations:
+Use independent inline synthetic fixtures with literal expected objects and hashes.
+Tracked tests must not use a local-only branch/ref or require repository history.
 
 ```js
-const h0PromotionText = readGitFixtureText(
-  'refs/heads/recovery/issue-76-pre-reconcile-0398d77',
-  'tools/test262/es2015-h0-promotion.json',
-);
-assertSame(
-  sha256(h0PromotionText),
-  'a5ad87badd75c547f4f4e2fb0b5d0536b4969ea3bf97676333f970434e5cfa2c',
-);
+const h0PromotionText = json({
+  version: 1,
+  repository: TEST262_REPOSITORY,
+  revision: TEST262_REVISION,
+  sourceTaxonomySha256: '1'.repeat(64),
+  h0LedgerSha256: '2'.repeat(64),
+  h0RootCount: 1,
+  h0VariantCount: 2,
+  dispositionSha256: '3'.repeat(64),
+  promotedLedgerSha256: sha256('test/example.js\n'),
+  promotedRootCount: 1,
+  promotedVariantCount: 2,
+  entries: [
+    {
+      path: 'test/example.js',
+      variants: 2,
+      features: ['cross-realm'],
+      includeFeatures: [],
+    },
+  ],
+});
 const promotion = parseEs2015Promotion(h0PromotionText);
 assertSame(promotion.groupName, 'es2015/h0-cross-realm-passed');
-assertSame(promotion.rootCount, 40);
-assertSame(promotion.variantCount, 78);
+assertSame(promotion.rootCount, 1);
+assertSame(promotion.variantCount, 2);
 ```
 
-Add equivalent exact tests for paths, baseline, disposition, owner map, and owner
-deltas. Add mixed discriminator, unknown/missing key, bad hash/count/order,
-duplicate path/variant/owner, and cross-artifact mismatch cases.
+Add equivalent synthetic tests for paths, baseline, disposition, owner map, owner
+deltas, every compatibility export, mixed discriminator, unknown/missing key, bad
+hash/count/order, duplicate path/variant/owner, and cross-artifact mismatch.
 
 - [ ] **Step 2: Run focused RED**
 
@@ -112,13 +137,15 @@ TZ=UTC node test/run-node.js \
   test/node/es2015-provenance.test.js
 ```
 
-Expected: H0 exact artifacts fail legacy parsing.
+Expected: H0 schemas/APIs fail because BASE lacks the reviewed compatibility API.
 
-- [ ] **Step 3: Port minimal pure parsers**
+- [ ] **Step 3: Port the complete reviewed pure promotion module**
 
-Port only the reviewed parser/normalizer helpers from
-`recovery/issue-76-pre-reconcile-0398d77:tools/test262/es2015-promotion.js`.
-Keep existing T0 parser output unchanged.
+Replace the BASE module with the reviewed pure
+`recovery/issue-76-pre-reconcile-0398d77:tools/test262/es2015-promotion.js`
+implementation, then reconcile only current-main style/type differences. This
+module supplies every API retained #76 audit/select/run code imports. Keep existing
+T0 tests and output unchanged.
 
 `parseEs2015Promotion()` must dispatch only when both H0 discriminators exist:
 
@@ -141,7 +168,14 @@ checks.
 
 Run the focused command from Step 2. Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Verify exact preserved artifacts locally**
+
+Outside committed tests, read all six exact files from
+`recovery/issue-76-pre-reconcile-0398d77` and parse/cross-validate them with the
+new module. Require the authority-pinned byte hashes. Record the command/output in
+the task report; do not add a local-ref dependency to tracked tests.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add tools/test262/es2015-promotion.js \
